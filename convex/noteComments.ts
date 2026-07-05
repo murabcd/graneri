@@ -251,6 +251,40 @@ const requireOwnedThread = async (
 	return thread;
 };
 
+const requireOwnedComment = async (
+	ctx: MutationCtx,
+	{
+		commentId,
+		noteId,
+		ownerTokenIdentifier,
+		threadId,
+		workspaceId,
+	}: {
+		commentId: Id<"noteComments">;
+		noteId: Id<"notes">;
+		ownerTokenIdentifier: string;
+		threadId: Id<"noteCommentThreads">;
+		workspaceId: Id<"workspaces">;
+	},
+) => {
+	const comment = await ctx.db.get(commentId);
+
+	if (
+		!comment ||
+		comment.threadId !== threadId ||
+		comment.ownerTokenIdentifier !== ownerTokenIdentifier ||
+		comment.workspaceId !== workspaceId ||
+		comment.noteId !== noteId
+	) {
+		throw new ConvexError({
+			code: "COMMENT_NOT_FOUND",
+			message: "Comment not found.",
+		});
+	}
+
+	return comment;
+};
+
 const resolveParentCommentId = async (
 	ctx: MutationCtx,
 	{
@@ -736,20 +770,13 @@ export const updateComment = mutation({
 			threadId: args.threadId,
 			ownerTokenIdentifier: identity.tokenIdentifier,
 		});
-		const comment = await ctx.db.get(args.commentId);
-
-		if (
-			!comment ||
-			comment.threadId !== thread._id ||
-			comment.ownerTokenIdentifier !== identity.tokenIdentifier ||
-			comment.workspaceId !== args.workspaceId ||
-			comment.noteId !== args.noteId
-		) {
-			throw new ConvexError({
-				code: "COMMENT_NOT_FOUND",
-				message: "Comment not found.",
-			});
-		}
+		const comment = await requireOwnedComment(ctx, {
+			commentId: args.commentId,
+			noteId: args.noteId,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			threadId: thread._id,
+			workspaceId: args.workspaceId,
+		});
 
 		const body = normalizeCommentBody(args.body);
 		const now = Date.now();
@@ -808,20 +835,13 @@ export const deleteComment = mutation({
 			threadId: args.threadId,
 			ownerTokenIdentifier: identity.tokenIdentifier,
 		});
-		const comment = await ctx.db.get(args.commentId);
-
-		if (
-			!comment ||
-			comment.threadId !== thread._id ||
-			comment.ownerTokenIdentifier !== identity.tokenIdentifier ||
-			comment.workspaceId !== args.workspaceId ||
-			comment.noteId !== args.noteId
-		) {
-			throw new ConvexError({
-				code: "COMMENT_NOT_FOUND",
-				message: "Comment not found.",
-			});
-		}
+		const comment = await requireOwnedComment(ctx, {
+			commentId: args.commentId,
+			noteId: args.noteId,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			threadId: thread._id,
+			workspaceId: args.workspaceId,
+		});
 
 		const threadComments = await ctx.db
 			.query("noteComments")
