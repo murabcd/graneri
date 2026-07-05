@@ -1,11 +1,4 @@
 import { Bubble, BubbleContent } from "@workspace/ui/components/bubble";
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogDescription,
-	DialogTitle,
-} from "@workspace/ui/components/dialog";
 import { Marker, MarkerContent } from "@workspace/ui/components/marker";
 import { Message, MessageContent } from "@workspace/ui/components/message";
 import {
@@ -14,8 +7,9 @@ import {
 } from "@workspace/ui/components/message-scroller";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import { FileText, Paperclip, X } from "lucide-react";
+import { FileText, Paperclip } from "lucide-react";
 import * as React from "react";
+import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
 import { Reasoning } from "@/components/ai-elements/reasoning";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 import {
@@ -794,48 +788,10 @@ function ChatMessageFileAttachments({
 					),
 				)}
 			</div>
-			<Dialog
-				open={previewImage !== null}
-				onOpenChange={(open) => {
-					if (!open) {
-						setPreviewImage(null);
-					}
-				}}
-			>
-				<DialogContent
-					showCloseButton={false}
-					className="!top-0 !left-0 !flex !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 items-center justify-center !rounded-none !border-0 !bg-transparent p-10 !shadow-none !ring-0 sm:!max-w-none"
-					style={
-						{
-							"--tw-enter-scale": "1",
-							"--tw-exit-scale": "1",
-						} as React.CSSProperties
-					}
-					onPointerDown={(event) => {
-						if (event.target === event.currentTarget) {
-							setPreviewImage(null);
-						}
-					}}
-				>
-					<DialogTitle className="sr-only">
-						{previewImage?.filename || "Attached image preview"}
-					</DialogTitle>
-					<DialogDescription className="sr-only">
-						Image attachment preview.
-					</DialogDescription>
-					{previewImage ? (
-						<img
-							src={previewImage.url}
-							alt={previewImage.filename || "Attached image preview"}
-							className="max-h-full max-w-full object-contain shadow-2xl"
-						/>
-					) : null}
-					<DialogClose className="absolute top-4 right-4 cursor-pointer rounded-full bg-background/90 p-2 text-foreground shadow-lg transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-						<X className="size-5" />
-						<span className="sr-only">Close</span>
-					</DialogClose>
-				</DialogContent>
-			</Dialog>
+			<AttachmentImagePreviewDialog
+				image={previewImage}
+				onClose={() => setPreviewImage(null)}
+			/>
 		</>
 	);
 }
