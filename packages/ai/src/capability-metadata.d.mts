@@ -12,6 +12,24 @@ export type AppSourceProvider =
 	| "zoom";
 
 export type ChatAppSourceProvider = AppSourceProvider | "jira";
+export type AppConnectionProvider =
+	| "context7"
+	| "figma"
+	| "jira"
+	| "jira-mcp"
+	| "linear"
+	| "notion"
+	| "posthog"
+	| "yandex-calendar"
+	| "yandex-tracker"
+	| "zoom";
+export type McpOAuthConnectionProvider =
+	| "figma"
+	| "jira-mcp"
+	| "linear"
+	| "notion"
+	| "posthog"
+	| "zoom";
 
 export type AppSourceInstructionConnection = {
 	id?: string;
@@ -48,6 +66,45 @@ export declare function isChatAppSourceProvider(
 export declare function getChatAppSourceLabel(
 	provider: ChatAppSourceProvider,
 ): string;
+export declare const appConnectionProviders: readonly [
+	"yandex-tracker",
+	"yandex-calendar",
+	"jira",
+	"jira-mcp",
+	"posthog",
+	"notion",
+	"zoom",
+	"context7",
+	"figma",
+	"linear",
+];
+export declare const mcpOAuthConnectionProviders: readonly [
+	"figma",
+	"jira-mcp",
+	"linear",
+	"notion",
+	"posthog",
+	"zoom",
+];
+export declare const chatSourceAppConnectionProviders: readonly [
+	"yandex-calendar",
+	"yandex-tracker",
+	"jira-mcp",
+	"posthog",
+	"notion",
+	"zoom",
+	"context7",
+	"figma",
+	"linear",
+];
+export declare const tokenRequiredChatSourceAppConnectionProviders: readonly [
+	"figma",
+	"linear",
+];
+export declare const appConnectionProviderLabels: Record<
+	AppConnectionProvider,
+	string
+>;
 export declare const remoteMcpToolPrefixes: readonly {
 	prefix: string;
 	provider: AppSourceProvider;

@@ -171,6 +171,52 @@ export const isChatAppSourceProvider = (value) =>
 export const getChatAppSourceLabel = (provider) =>
 	chatAppSourceLabels[provider];
 
+export const appConnectionProviders = [
+	"yandex-tracker",
+	"yandex-calendar",
+	"jira",
+	"jira-mcp",
+	"posthog",
+	"notion",
+	"zoom",
+	"context7",
+	"figma",
+	"linear",
+];
+
+export const mcpOAuthConnectionProviders = [
+	"figma",
+	"jira-mcp",
+	"linear",
+	"notion",
+	"posthog",
+	"zoom",
+];
+
+export const chatSourceAppConnectionProviders = [
+	"yandex-calendar",
+	"yandex-tracker",
+	"jira-mcp",
+	"posthog",
+	"notion",
+	"zoom",
+	"context7",
+	"figma",
+	"linear",
+];
+
+export const tokenRequiredChatSourceAppConnectionProviders = [
+	"figma",
+	"linear",
+];
+
+export const appConnectionProviderLabels = Object.fromEntries(
+	appConnectionProviders.map((provider) => [
+		provider,
+		provider === "jira" ? "Jira" : chatAppSourceLabels[provider],
+	]),
+);
+
 export const remoteMcpToolPrefixes = capabilityMetadataDefinitions
 	.filter((capability) => capability.toolPrefix)
 	.map((capability) => ({
