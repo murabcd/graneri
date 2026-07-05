@@ -24,6 +24,57 @@ private func encodeNativeAudioPcm16(_ samples: [Float]) -> Data {
 	return encoded
 }
 
+private func readNativeAudioSamples(from buffer: AVAudioPCMBuffer) -> [Float]? {
+	guard let floatChannel = buffer.floatChannelData?[0] else {
+		return nil
+	}
+
+	let frameCount = Int(buffer.frameLength)
+	guard frameCount > 0 else {
+		return nil
+	}
+
+	return Array(UnsafeBufferPointer(start: floatChannel, count: frameCount))
+}
+
+private final class NativeAudioChunkFlushScheduler: @unchecked Sendable {
+	private let flushIntervalNanoseconds: UInt64
+	private let queue: DispatchQueue
+	private var timer: DispatchSourceTimer?
+
+	init(queue: DispatchQueue, flushIntervalMilliseconds: UInt64) {
+		self.flushIntervalNanoseconds = flushIntervalMilliseconds * 1_000_000
+		self.queue = queue
+	}
+
+	func start(onFlush: @escaping @Sendable () -> Void) {
+		queue.sync {
+			guard timer == nil else {
+				return
+			}
+
+			let nextTimer = DispatchSource.makeTimerSource(queue: queue)
+			nextTimer.schedule(
+				deadline: .now() + .nanoseconds(Int(flushIntervalNanoseconds)),
+				repeating: .nanoseconds(Int(flushIntervalNanoseconds))
+			)
+			nextTimer.setEventHandler {
+				onFlush()
+			}
+			nextTimer.resume()
+			timer = nextTimer
+		}
+	}
+
+	func stop(onFlush: () -> Void) {
+		queue.sync {
+			timer?.cancel()
+			timer = nil
+			onFlush()
+		}
+	}
+}
+
 final class NativeAudioStdoutEmitter: @unchecked Sendable {
 	private let queue: DispatchQueue
 	private let fileHandle = FileHandle.standardOutput
@@ -67,12 +118,11 @@ final class NativeAudioStderrLogger: @unchecked Sendable {
 
 final class NativeAudioPcmChunkEncoder: NativeAudioPcmSink, @unchecked Sendable {
 	private let emitter: NativeAudioStdoutEmitter
-	private let flushIntervalNanoseconds: UInt64
+	private let flushScheduler: NativeAudioChunkFlushScheduler
 	private let queue: DispatchQueue
 	private let source: String?
 	private var pendingBytes = Data()
 	private var pendingCapturedAtMilliseconds: Int?
-	private var timer: DispatchSourceTimer?
 
 	init(
 		emitter: NativeAudioStdoutEmitter,
@@ -81,48 +131,31 @@ final class NativeAudioPcmChunkEncoder: NativeAudioPcmSink, @unchecked Sendable 
 		source: String? = nil
 	) {
 		self.emitter = emitter
-		self.flushIntervalNanoseconds = flushIntervalMilliseconds * 1_000_000
 		self.source = source
-		queue = DispatchQueue(label: label)
+		let encoderQueue = DispatchQueue(label: label)
+		queue = encoderQueue
+		flushScheduler = NativeAudioChunkFlushScheduler(
+			queue: encoderQueue,
+			flushIntervalMilliseconds: flushIntervalMilliseconds
+		)
 	}
 
 	func start() {
-		queue.sync {
-			guard timer == nil else {
-				return
-			}
-
-			let nextTimer = DispatchSource.makeTimerSource(queue: queue)
-			nextTimer.schedule(
-				deadline: .now() + .nanoseconds(Int(flushIntervalNanoseconds)),
-				repeating: .nanoseconds(Int(flushIntervalNanoseconds))
-			)
-			nextTimer.setEventHandler { [weak self] in
-				self?.flushLocked()
-			}
-			nextTimer.resume()
-			timer = nextTimer
+		flushScheduler.start { [weak self] in
+			self?.flushLocked()
 		}
 	}
 
 	func stop() {
-		queue.sync {
-			timer?.cancel()
-			timer = nil
+		flushScheduler.stop {
 			flushLocked()
 		}
 	}
 
 	func append(buffer: AVAudioPCMBuffer) {
-		guard let floatChannel = buffer.floatChannelData?[0] else {
+		guard let samples = readNativeAudioSamples(from: buffer) else {
 			return
 		}
-
-		let frameCount = Int(buffer.frameLength)
-		guard frameCount > 0 else {
-			return
-		}
-		let samples = Array(UnsafeBufferPointer(start: floatChannel, count: frameCount))
 
 		let capturedAtMilliseconds = Int(Date().timeIntervalSince1970 * 1000)
 
@@ -166,12 +199,11 @@ final class NativeAudioPairedPcmChunkEncoder: @unchecked Sendable {
 	}
 
 	private let emitter: NativeAudioStdoutEmitter
-	private let flushIntervalNanoseconds: UInt64
+	private let flushScheduler: NativeAudioChunkFlushScheduler
 	private let queue: DispatchQueue
 	private var pendingMicrophoneBytes = Data()
 	private var pendingSystemAudioBytes = Data()
 	private var pendingCapturedAtMilliseconds: Int?
-	private var timer: DispatchSourceTimer?
 
 	private(set) lazy var microphoneSink: NativeAudioPcmSink = SourceSink {
 		[weak self] buffer in
@@ -188,47 +220,30 @@ final class NativeAudioPairedPcmChunkEncoder: @unchecked Sendable {
 		flushIntervalMilliseconds: UInt64 = 100
 	) {
 		self.emitter = emitter
-		self.flushIntervalNanoseconds = flushIntervalMilliseconds * 1_000_000
-		queue = DispatchQueue(label: label)
+		let encoderQueue = DispatchQueue(label: label)
+		queue = encoderQueue
+		flushScheduler = NativeAudioChunkFlushScheduler(
+			queue: encoderQueue,
+			flushIntervalMilliseconds: flushIntervalMilliseconds
+		)
 	}
 
 	func start() {
-		queue.sync {
-			guard timer == nil else {
-				return
-			}
-
-			let nextTimer = DispatchSource.makeTimerSource(queue: queue)
-			nextTimer.schedule(
-				deadline: .now() + .nanoseconds(Int(flushIntervalNanoseconds)),
-				repeating: .nanoseconds(Int(flushIntervalNanoseconds))
-			)
-			nextTimer.setEventHandler { [weak self] in
-				self?.flushLocked()
-			}
-			nextTimer.resume()
-			timer = nextTimer
+		flushScheduler.start { [weak self] in
+			self?.flushLocked()
 		}
 	}
 
 	func stop() {
-		queue.sync {
-			timer?.cancel()
-			timer = nil
+		flushScheduler.stop {
 			flushLocked()
 		}
 	}
 
 	private func append(buffer: AVAudioPCMBuffer, source: String) {
-		guard let floatChannel = buffer.floatChannelData?[0] else {
+		guard let samples = readNativeAudioSamples(from: buffer) else {
 			return
 		}
-
-		let frameCount = Int(buffer.frameLength)
-		guard frameCount > 0 else {
-			return
-		}
-		let samples = Array(UnsafeBufferPointer(start: floatChannel, count: frameCount))
 		let capturedAtMilliseconds = Int(Date().timeIntervalSince1970 * 1000)
 
 		queue.async {
