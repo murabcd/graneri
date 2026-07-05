@@ -613,29 +613,66 @@ const toCalendarToolResponse = ({
 	};
 };
 
+const getGoogleCalendarToolResponse = async (
+	ctx: ActionCtx,
+	args: {
+		limit?: number;
+		meetingsOnly?: boolean;
+		query?: string;
+	},
+) => {
+	const authContext = await getGoogleAuthContext(ctx);
+	const { now, timeMin, timeMax } = getCalendarToolWindow();
+	const result = await fetchGoogleUpcomingEvents({
+		authContext,
+		now,
+		timeMin: new Date(timeMin).toISOString(),
+		timeMax: new Date(timeMax).toISOString(),
+	});
+
+	return toCalendarToolResponse({
+		connection: "Google Calendar",
+		events: dedupeUpcomingEvents(result.events),
+		limit: args.limit,
+		meetingsOnly: args.meetingsOnly,
+		query: args.query,
+	});
+};
+
+const getYandexCalendarToolResponse = async (
+	ctx: ActionCtx,
+	args: {
+		workspaceId: Id<"workspaces">;
+		limit?: number;
+		meetingsOnly?: boolean;
+		query?: string;
+	},
+) => {
+	const { now, timeMin, timeMax } = getCalendarToolWindow();
+	const result = await fetchYandexUpcomingEvents({
+		ctx,
+		now,
+		timeMin,
+		timeMax,
+		workspaceId: args.workspaceId,
+	});
+
+	return toCalendarToolResponse({
+		connection: "Yandex Calendar",
+		events: dedupeUpcomingEvents(result.events),
+		limit: args.limit,
+		meetingsOnly: args.meetingsOnly,
+		query: args.query,
+	});
+};
+
 export const listGoogleCalendarEventsForTool = action({
 	args: {
 		limit: v.optional(v.number()),
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => {
-		const authContext = await getGoogleAuthContext(ctx);
-		const { now, timeMin, timeMax } = getCalendarToolWindow();
-		const result = await fetchGoogleUpcomingEvents({
-			authContext,
-			now,
-			timeMin: new Date(timeMin).toISOString(),
-			timeMax: new Date(timeMax).toISOString(),
-		});
-
-		return toCalendarToolResponse({
-			connection: "Google Calendar",
-			events: dedupeUpcomingEvents(result.events),
-			limit: args.limit,
-			meetingsOnly: args.meetingsOnly,
-		});
-	},
+	handler: async (ctx, args) => await getGoogleCalendarToolResponse(ctx, args),
 });
 
 export const searchGoogleCalendarEventsForTool = action({
@@ -645,24 +682,7 @@ export const searchGoogleCalendarEventsForTool = action({
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => {
-		const authContext = await getGoogleAuthContext(ctx);
-		const { now, timeMin, timeMax } = getCalendarToolWindow();
-		const result = await fetchGoogleUpcomingEvents({
-			authContext,
-			now,
-			timeMin: new Date(timeMin).toISOString(),
-			timeMax: new Date(timeMax).toISOString(),
-		});
-
-		return toCalendarToolResponse({
-			connection: "Google Calendar",
-			events: dedupeUpcomingEvents(result.events),
-			limit: args.limit,
-			meetingsOnly: args.meetingsOnly,
-			query: args.query,
-		});
-	},
+	handler: async (ctx, args) => await getGoogleCalendarToolResponse(ctx, args),
 });
 
 export const listYandexCalendarEventsForTool = action({
@@ -672,23 +692,7 @@ export const listYandexCalendarEventsForTool = action({
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => {
-		const { now, timeMin, timeMax } = getCalendarToolWindow();
-		const result = await fetchYandexUpcomingEvents({
-			ctx,
-			now,
-			timeMin,
-			timeMax,
-			workspaceId: args.workspaceId,
-		});
-
-		return toCalendarToolResponse({
-			connection: "Yandex Calendar",
-			events: dedupeUpcomingEvents(result.events),
-			limit: args.limit,
-			meetingsOnly: args.meetingsOnly,
-		});
-	},
+	handler: async (ctx, args) => await getYandexCalendarToolResponse(ctx, args),
 });
 
 export const searchYandexCalendarEventsForTool = action({
@@ -699,22 +703,5 @@ export const searchYandexCalendarEventsForTool = action({
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => {
-		const { now, timeMin, timeMax } = getCalendarToolWindow();
-		const result = await fetchYandexUpcomingEvents({
-			ctx,
-			now,
-			timeMin,
-			timeMax,
-			workspaceId: args.workspaceId,
-		});
-
-		return toCalendarToolResponse({
-			connection: "Yandex Calendar",
-			events: dedupeUpcomingEvents(result.events),
-			limit: args.limit,
-			meetingsOnly: args.meetingsOnly,
-			query: args.query,
-		});
-	},
+	handler: async (ctx, args) => await getYandexCalendarToolResponse(ctx, args),
 });
