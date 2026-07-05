@@ -133,6 +133,8 @@ const REMOVE_CHAT_RUNTIME_BATCH_SIZE = 100;
 const NOTE_CHAT_BATCH_SIZE = 25;
 const CONVEX_STORAGE_PATH_SEGMENT = "/api/storage/";
 
+type ChatArchiveState = "archived" | "active";
+
 const requireIdentity = async (ctx: QueryCtx | MutationCtx) =>
 	await requireDomainIdentity(ctx, "chats");
 
@@ -232,6 +234,64 @@ const moveAutomationToFreshChat = async (
 		chat.chatId,
 		now,
 	);
+};
+
+const patchChatArchiveState = async (
+	ctx: MutationCtx,
+	chat: Doc<"chats">,
+	state: ChatArchiveState,
+	timestamp: number,
+) => {
+	await ctx.db.patch(chat._id, {
+		isArchived: state === "archived",
+		archivedAt: state === "archived" ? timestamp : undefined,
+		updatedAt: timestamp,
+	});
+};
+
+const setOwnedChatArchiveState = async (
+	ctx: MutationCtx,
+	args: {
+		workspaceId: Id<"workspaces">;
+		chatId: string;
+	},
+	state: ChatArchiveState,
+) => {
+	const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+	await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
+	const chat = await getOwnedChatById(
+		ctx,
+		ownerTokenIdentifier,
+		args.workspaceId,
+		args.chatId,
+	);
+
+	if (!chat) {
+		return null;
+	}
+
+	const timestamp = Date.now();
+	await patchChatArchiveState(ctx, chat, state, timestamp);
+
+	if (state === "archived") {
+		await pauseLinkedAutomationForChat(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			chat.chatId,
+			timestamp,
+		);
+	} else {
+		await resumeLinkedAutomationForChat(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			chat.chatId,
+			timestamp,
+		);
+	}
+
+	return null;
 };
 
 const getStoredChatMessages = async (
@@ -1181,11 +1241,7 @@ export const archiveForNote = internalMutation({
 
 		await Promise.all(
 			chats.map((chat) =>
-				ctx.db.patch(chat._id, {
-					isArchived: true,
-					archivedAt: timestamp,
-					updatedAt: timestamp,
-				}),
+				patchChatArchiveState(ctx, chat, "archived", timestamp),
 			),
 		);
 
@@ -1216,11 +1272,7 @@ export const restoreForNote = internalMutation({
 
 		await Promise.all(
 			chats.map((chat) =>
-				ctx.db.patch(chat._id, {
-					isArchived: false,
-					archivedAt: undefined,
-					updatedAt: timestamp,
-				}),
+				patchChatArchiveState(ctx, chat, "active", timestamp),
 			),
 		);
 
@@ -2093,34 +2145,7 @@ export const moveToTrash = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const chat = await getOwnedChatById(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			return null;
-		}
-
-		const now = Date.now();
-		await ctx.db.patch(chat._id, {
-			isArchived: true,
-			archivedAt: now,
-			updatedAt: now,
-		});
-		await pauseLinkedAutomationForChat(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			chat.chatId,
-			now,
-		);
-
-		return null;
+		return await setOwnedChatArchiveState(ctx, args, "archived");
 	},
 });
 
@@ -2131,34 +2156,7 @@ export const restore = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const chat = await getOwnedChatById(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			return null;
-		}
-
-		const now = Date.now();
-		await ctx.db.patch(chat._id, {
-			isArchived: false,
-			archivedAt: undefined,
-			updatedAt: now,
-		});
-		await resumeLinkedAutomationForChat(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			chat.chatId,
-			now,
-		);
-
-		return null;
+		return await setOwnedChatArchiveState(ctx, args, "active");
 	},
 });
 
