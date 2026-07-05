@@ -109,3 +109,80 @@ test("Notion settings support endpoint-only connections", async () => {
 		endpoint: "https://mcp.notion.com/mcp",
 	});
 });
+
+test("selected chat sources include token-backed MCP OAuth connections", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const [posthogConnectionId, notionConnectionId, zoomConnectionId] =
+		await t.run(async (ctx) => {
+			const commonFields = {
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				workspaceId,
+				status: "connected" as const,
+				token: "access-token",
+				accountId: "client-id",
+				envJson: JSON.stringify({ "X-Team": "growth" }),
+				createdAt: 1_000,
+				updatedAt: 1_000,
+			};
+
+			return await Promise.all([
+				ctx.db.insert("appConnections", {
+					...commonFields,
+					provider: "posthog",
+					displayName: "PostHog Cloud",
+					baseUrl: "https://us.posthog.com/mcp",
+				}),
+				ctx.db.insert("appConnections", {
+					...commonFields,
+					provider: "notion",
+					displayName: "Notion",
+					baseUrl: "https://mcp.notion.com/mcp",
+				}),
+				ctx.db.insert("appConnections", {
+					...commonFields,
+					provider: "zoom",
+					displayName: "Zoom",
+					baseUrl: "https://mcp.zoom.us/mcp/zoom/streamable",
+				}),
+			]);
+		});
+
+	const selected = await asOwner.query(api.appConnections.getSelectedForChat, {
+		workspaceId,
+		sourceIds: [
+			`app:${posthogConnectionId}`,
+			`app:${notionConnectionId}`,
+			`app:${zoomConnectionId}`,
+		],
+	});
+
+	expect(selected).toEqual([
+		{
+			sourceId: `app:${posthogConnectionId}`,
+			provider: "posthog",
+			displayName: "PostHog Cloud",
+			baseUrl: "https://us.posthog.com/mcp",
+			env: { "X-Team": "growth" },
+			oauthClientId: "client-id",
+			oauthAccessToken: "access-token",
+		},
+		{
+			sourceId: `app:${notionConnectionId}`,
+			provider: "notion",
+			displayName: "Notion",
+			baseUrl: "https://mcp.notion.com/mcp",
+			env: { "X-Team": "growth" },
+			oauthClientId: "client-id",
+			oauthAccessToken: "access-token",
+		},
+		{
+			sourceId: `app:${zoomConnectionId}`,
+			provider: "zoom",
+			displayName: "Zoom",
+			baseUrl: "https://mcp.zoom.us/mcp/zoom/streamable",
+			env: { "X-Team": "growth" },
+			oauthClientId: "client-id",
+			oauthAccessToken: "access-token",
+		},
+	]);
+});

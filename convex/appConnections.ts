@@ -1,5 +1,9 @@
 import { ConvexError, v } from "convex/values";
-import { APP_SOURCE_PREFIX } from "../packages/ai/src/capability-metadata.mjs";
+import type { McpOAuthConnectionProvider } from "../packages/ai/src/capability-metadata.mjs";
+import {
+	APP_SOURCE_PREFIX,
+	mcpOAuthConnectionProviders,
+} from "../packages/ai/src/capability-metadata.mjs";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -514,6 +518,11 @@ export type ChatToolConnection =
 			oauthAccessToken: string;
 	  };
 
+type McpOAuthChatToolConnection = Extract<
+	ChatToolConnection,
+	{ provider: McpOAuthConnectionProvider }
+>;
+
 const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
 	const identity = await ctx.auth.getUserIdentity();
 
@@ -636,6 +645,33 @@ const parseConnectionEnv = (connection: Doc<"appConnections">) => {
 	);
 
 	return Object.keys(env).length > 0 ? { env } : {};
+};
+
+const isMcpOAuthConnectionProvider = (
+	provider: string,
+): provider is McpOAuthConnectionProvider =>
+	(mcpOAuthConnectionProviders as readonly string[]).includes(provider);
+
+const toMcpOAuthChatToolConnection = (
+	connection: Doc<"appConnections">,
+): McpOAuthChatToolConnection | null => {
+	if (
+		!isMcpOAuthConnectionProvider(connection.provider) ||
+		!connection.baseUrl ||
+		!connection.token
+	) {
+		return null;
+	}
+
+	return {
+		sourceId: toAppSourceId(connection._id),
+		provider: connection.provider,
+		displayName: connection.displayName,
+		baseUrl: connection.baseUrl,
+		...parseConnectionEnv(connection),
+		...(connection.accountId ? { oauthClientId: connection.accountId } : {}),
+		oauthAccessToken: connection.token,
+	};
 };
 
 const generateWebhookSecret = () =>
@@ -902,55 +938,9 @@ const toChatToolConnection = (
 		};
 	}
 
-	if (
-		(connection.provider === "figma" ||
-			connection.provider === "jira-mcp" ||
-			connection.provider === "linear" ||
-			connection.provider === "posthog") &&
-		connection.baseUrl &&
-		connection.token
-	) {
-		return {
-			sourceId: toAppSourceId(connection._id),
-			provider: connection.provider,
-			displayName: connection.displayName,
-			baseUrl: connection.baseUrl,
-			...parseConnectionEnv(connection),
-			...(connection.accountId ? { oauthClientId: connection.accountId } : {}),
-			oauthAccessToken: connection.token,
-		};
-	}
-
-	if (
-		connection.provider === "notion" &&
-		connection.baseUrl &&
-		connection.token
-	) {
-		return {
-			sourceId: toAppSourceId(connection._id),
-			provider: "notion",
-			displayName: connection.displayName,
-			baseUrl: connection.baseUrl,
-			...parseConnectionEnv(connection),
-			...(connection.accountId ? { oauthClientId: connection.accountId } : {}),
-			oauthAccessToken: connection.token,
-		};
-	}
-
-	if (
-		connection.provider === "zoom" &&
-		connection.baseUrl &&
-		connection.token
-	) {
-		return {
-			sourceId: toAppSourceId(connection._id),
-			provider: "zoom",
-			displayName: connection.displayName,
-			baseUrl: connection.baseUrl,
-			...parseConnectionEnv(connection),
-			...(connection.accountId ? { oauthClientId: connection.accountId } : {}),
-			oauthAccessToken: connection.token,
-		};
+	const mcpOAuthChatConnection = toMcpOAuthChatToolConnection(connection);
+	if (mcpOAuthChatConnection) {
+		return mcpOAuthChatConnection;
 	}
 
 	if (connection.provider === "context7" && connection.baseUrl) {
