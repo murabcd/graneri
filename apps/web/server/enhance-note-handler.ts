@@ -10,7 +10,7 @@ import {
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
-	emitServerWideEvent,
+	createServerWideEventEmitter,
 	recordServerError,
 } from "./server-logger.js";
 
@@ -43,15 +43,10 @@ export const handleEnhanceNoteRequest = async (
 		event: "enhance_note.request",
 		request,
 	});
-	let wideEventEmitted = false;
-	const emitWideEvent = (level: "error" | "info") => {
-		if (wideEventEmitted) {
-			return;
-		}
-
-		wideEventEmitted = true;
-		emitServerWideEvent({ event: wideEvent, level, startedAt });
-	};
+	const emitWideEvent = createServerWideEventEmitter({
+		event: wideEvent,
+		startedAt,
+	});
 
 	if (!process.env.OPENAI_API_KEY) {
 		wideEvent.outcome = "error";

@@ -45,7 +45,7 @@ import {
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
-	emitServerWideEvent,
+	createServerWideEventEmitter,
 	recordServerError,
 } from "./server-logger.js";
 
@@ -255,37 +255,35 @@ export const handleChatRequest = async (
 		request,
 	});
 	let acceptedSteerTurnId: string | null = null;
-	let wideEventEmitted = false;
-	const emitWideEvent = (level: "error" | "info") => {
-		if (wideEventEmitted) {
-			return;
-		}
-
-		const steerTelemetry = getHostedChatSteerTelemetry({
-			acceptedTurnId: acceptedSteerTurnId,
-			errorCode:
-				typeof wideEvent.error_code === "string" ? wideEvent.error_code : null,
-			expectedTurnId:
-				typeof wideEvent.continue_run_id === "string"
-					? wideEvent.continue_run_id
-					: null,
-			isSteerRoute: wideEvent.is_steer_route === true,
-			outcome:
-				wideEvent.outcome === "success" || wideEvent.outcome === "error"
-					? wideEvent.outcome
-					: null,
-			queuedMessageId:
-				typeof wideEvent.steer_queued_message_id === "string"
-					? wideEvent.steer_queued_message_id
-					: null,
-		});
-		if (steerTelemetry) {
-			Object.assign(wideEvent, steerTelemetry);
-		}
-
-		wideEventEmitted = true;
-		emitServerWideEvent({ event: wideEvent, level, startedAt });
-	};
+	const emitWideEvent = createServerWideEventEmitter({
+		event: wideEvent,
+		startedAt,
+		beforeEmit: () => {
+			const steerTelemetry = getHostedChatSteerTelemetry({
+				acceptedTurnId: acceptedSteerTurnId,
+				errorCode:
+					typeof wideEvent.error_code === "string"
+						? wideEvent.error_code
+						: null,
+				expectedTurnId:
+					typeof wideEvent.continue_run_id === "string"
+						? wideEvent.continue_run_id
+						: null,
+				isSteerRoute: wideEvent.is_steer_route === true,
+				outcome:
+					wideEvent.outcome === "success" || wideEvent.outcome === "error"
+						? wideEvent.outcome
+						: null,
+				queuedMessageId:
+					typeof wideEvent.steer_queued_message_id === "string"
+						? wideEvent.steer_queued_message_id
+						: null,
+			});
+			if (steerTelemetry) {
+				Object.assign(wideEvent, steerTelemetry);
+			}
+		},
+	});
 
 	if (!process.env.OPENAI_API_KEY) {
 		wideEvent.outcome = "error";

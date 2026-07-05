@@ -13,6 +13,8 @@ export type ServerWideEvent = Record<string, unknown> & {
 	timestamp: string;
 };
 
+export type ServerWideEventLevel = "error" | "info";
+
 const serializeError = (error: unknown) => {
 	if (!(error instanceof Error)) {
 		return { message: String(error), type: "UnknownError" };
@@ -79,7 +81,7 @@ export const emitServerWideEvent = ({
 	startedAt,
 }: {
 	event: ServerWideEvent;
-	level?: "error" | "info";
+	level?: ServerWideEventLevel;
 	startedAt: number;
 }) => {
 	event.duration_ms = Date.now() - startedAt;
@@ -90,4 +92,26 @@ export const emitServerWideEvent = ({
 	}
 
 	serverLogger.info(event);
+};
+
+export const createServerWideEventEmitter = ({
+	beforeEmit,
+	event,
+	startedAt,
+}: {
+	beforeEmit?: () => void;
+	event: ServerWideEvent;
+	startedAt: number;
+}) => {
+	let emitted = false;
+
+	return (level: ServerWideEventLevel = "info") => {
+		if (emitted) {
+			return;
+		}
+
+		beforeEmit?.();
+		emitted = true;
+		emitServerWideEvent({ event, level, startedAt });
+	};
 };
