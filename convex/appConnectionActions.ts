@@ -568,6 +568,32 @@ const refreshMcpTokensForWorkspace = async (
 	);
 };
 
+const chatMcpOAuthRefreshProviders: McpOAuthRedirectProvider[] = [
+	"figma",
+	"jira-mcp",
+	"notion",
+	"posthog",
+	"linear",
+];
+
+const refreshChatConnectionTokensForWorkspace = async (
+	ctx: ActionCtx,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+) => {
+	await Promise.all([
+		...chatMcpOAuthRefreshProviders.map((provider) =>
+			refreshMcpTokensForWorkspace(
+				ctx,
+				ownerTokenIdentifier,
+				workspaceId,
+				provider,
+			),
+		),
+		refreshZoomTokensForWorkspace(ctx, ownerTokenIdentifier, workspaceId),
+	]);
+};
+
 type JiraCurrentUserResponse = {
 	accountId?: unknown;
 };
@@ -1375,43 +1401,11 @@ export const getSelectedForChatWithFreshTokens = action({
 	returns: v.array(chatToolConnectionValidator),
 	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
 		const identity = await requireIdentity(ctx);
-		await Promise.all([
-			refreshMcpTokensForWorkspace(
-				ctx,
-				identity.tokenIdentifier,
-				args.workspaceId,
-				"figma",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				identity.tokenIdentifier,
-				args.workspaceId,
-				"jira-mcp",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				identity.tokenIdentifier,
-				args.workspaceId,
-				"notion",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				identity.tokenIdentifier,
-				args.workspaceId,
-				"posthog",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				identity.tokenIdentifier,
-				args.workspaceId,
-				"linear",
-			),
-			refreshZoomTokensForWorkspace(
-				ctx,
-				identity.tokenIdentifier,
-				args.workspaceId,
-			),
-		]);
+		await refreshChatConnectionTokensForWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		return await ctx.runQuery(
 			internal.appConnections.getSelectedForChatInternal,
 			{
@@ -1431,43 +1425,11 @@ export const getSelectedForChatInternalWithFreshTokens = internalAction({
 	},
 	returns: v.array(chatToolConnectionValidator),
 	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
-		await Promise.all([
-			refreshMcpTokensForWorkspace(
-				ctx,
-				args.ownerTokenIdentifier,
-				args.workspaceId,
-				"figma",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				args.ownerTokenIdentifier,
-				args.workspaceId,
-				"jira-mcp",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				args.ownerTokenIdentifier,
-				args.workspaceId,
-				"notion",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				args.ownerTokenIdentifier,
-				args.workspaceId,
-				"posthog",
-			),
-			refreshMcpTokensForWorkspace(
-				ctx,
-				args.ownerTokenIdentifier,
-				args.workspaceId,
-				"linear",
-			),
-			refreshZoomTokensForWorkspace(
-				ctx,
-				args.ownerTokenIdentifier,
-				args.workspaceId,
-			),
-		]);
+		await refreshChatConnectionTokensForWorkspace(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.workspaceId,
+		);
 		return await ctx.runQuery(
 			internal.appConnections.getSelectedForChatInternal,
 			{
