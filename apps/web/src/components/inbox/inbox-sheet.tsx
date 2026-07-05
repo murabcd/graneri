@@ -86,6 +86,7 @@ import { useDesktopPanelPin } from "@/components/layout/use-desktop-panel-pin";
 import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
 import { getAvatarSrc } from "@/lib/avatar";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
+import { getErrorMessage } from "@/lib/error-message";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
@@ -103,11 +104,6 @@ const INBOX_VIEW_OPTIONS: Array<{
 	{ value: "unread", label: "Unread", icon: Square },
 	{ value: "archived", label: "Archived", icon: Archive },
 ];
-
-const getErrorMessage = (error: unknown, fallback: string) =>
-	error instanceof Error && error.message.trim().length > 0
-		? error.message.replace(/\.$/, "")
-		: fallback;
 
 export type InboxSheetProps = {
 	open: boolean;

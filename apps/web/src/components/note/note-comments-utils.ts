@@ -1,5 +1,8 @@
 import { getAvatarSrc } from "@/lib/avatar";
 import { isSameCalendarDay } from "@/lib/calendar-day";
+
+export { getErrorMessage } from "@/lib/error-message";
+
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export type CommentViewer = {
@@ -59,11 +62,6 @@ type CommentTreeRecord = {
 	_id: string;
 	parentCommentId?: string | null;
 };
-
-export const getErrorMessage = (error: unknown, fallback: string) =>
-	error instanceof Error && error.message.trim().length > 0
-		? error.message.replace(/\.$/, "")
-		: fallback;
 
 export const commentsUiReducer = (
 	state: CommentsUiState,
