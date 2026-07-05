@@ -139,6 +139,12 @@ type McpOAuthClientCredentials = {
 	oauthClientId?: string;
 	oauthClientSecret?: string;
 };
+type RemoteMcpOAuthConnectionInput = McpOAuthClientCredentials & {
+	workspaceId: Id<"workspaces">;
+	displayName: string;
+	baseUrl: string;
+	env: Record<string, string>;
+};
 type McpOAuthClient = {
 	clientId: string;
 	clientSecret?: string;
@@ -726,6 +732,13 @@ const sanitizeRemoteMcpEnv = (env?: Record<string, string>) =>
 			.filter(([key, value]) => key.length > 0 && value.length > 0),
 	);
 
+const filterRemoteMcpEnv = (env?: Record<string, string>) =>
+	Object.fromEntries(
+		Object.entries(env ?? {}).filter(
+			([key, value]) => key.trim().length > 0 && value.length > 0,
+		),
+	);
+
 const getRequestedMcpOAuthClient = ({
 	oauthClientId,
 	oauthClientSecret,
@@ -782,37 +795,22 @@ const persistMcpSdkOAuthState = async ({
 
 const startRemoteMcpOAuthConnection = async ({
 	ctx,
-	args,
+	connection,
 	provider,
 	label,
-	defaultEndpoint,
 	errorCode,
 	errorMessage,
 }: {
 	ctx: ActionCtx;
-	args: {
-		workspaceId: Id<"workspaces">;
-		displayName: string;
-		baseUrl: string;
-		env?: Record<string, string>;
-		oauthClientId?: string;
-		oauthClientSecret?: string;
-	};
+	connection: RemoteMcpOAuthConnectionInput;
 	provider: McpSdkOAuthConnectionProvider;
 	label: string;
-	defaultEndpoint: string;
 	errorCode: string;
 	errorMessage: string;
 }): Promise<McpOAuthStartResult> => {
 	const identity = await requireIdentity(ctx);
 	const redirectUri = getMcpOAuthRedirectUri(provider);
-	const baseUrl = normalizeRemoteMcpEndpoint(
-		args.baseUrl.trim() || defaultEndpoint,
-		{ provider, label },
-	);
-	const displayName = args.displayName.trim() || label;
-	const env = sanitizeRemoteMcpEnv(args.env);
-	const requestedClient = getRequestedMcpOAuthClient(args);
+	const requestedClient = getRequestedMcpOAuthClient(connection);
 
 	if (!redirectUri.startsWith("http")) {
 		throw new ConvexError({
@@ -825,7 +823,7 @@ const startRemoteMcpOAuthConnection = async ({
 	let oauthStart: McpSdkOAuthStart;
 	try {
 		oauthStart = await startMcpSdkOAuth({
-			baseUrl,
+			baseUrl: connection.baseUrl,
 			redirectUri,
 			client: requestedClient,
 			createState: createMcpOAuthState,
@@ -844,10 +842,10 @@ const startRemoteMcpOAuthConnection = async ({
 		ctx,
 		provider,
 		ownerTokenIdentifier: identity.tokenIdentifier,
-		workspaceId: args.workspaceId,
-		displayName,
-		baseUrl,
-		env,
+		workspaceId: connection.workspaceId,
+		displayName: connection.displayName,
+		baseUrl: connection.baseUrl,
+		env: connection.env,
 		client,
 		oauthStart,
 	});
@@ -1085,8 +1083,6 @@ export const connectJiraMcp = action({
 	returns: mcpOAuthStartResultValidator,
 	handler: async (ctx, args): Promise<McpOAuthStartResult> => {
 		const defaults = remoteMcpConnectionDefaults["jira-mcp"];
-		const identity = await requireIdentity(ctx);
-		const redirectUri = getMcpOAuthRedirectUri("jira-mcp");
 		const baseUrl = normalizeRemoteMcpEndpoint(
 			args.baseUrl.trim() || defaults.endpoint,
 			{
@@ -1094,52 +1090,22 @@ export const connectJiraMcp = action({
 				label: defaults.displayName,
 			},
 		);
-		const displayName = args.displayName.trim() || defaults.displayName;
-		const env = Object.fromEntries(
-			Object.entries(args.env ?? {}).filter(
-				([key, value]) => key.trim().length > 0 && value.length > 0,
-			),
-		);
-		const requestedClient = getRequestedMcpOAuthClient(args);
 
-		if (!redirectUri.startsWith("http")) {
-			throw new ConvexError({
-				code: "JIRA_MCP_OAUTH_NOT_CONFIGURED",
-				message: "Jira OAuth is not configured.",
-			});
-		}
-
-		let client: McpOAuthClient;
-		let oauthStart: McpSdkOAuthStart;
-		try {
-			oauthStart = await startMcpSdkOAuth({
-				baseUrl,
-				redirectUri,
-				client: requestedClient,
-				createState: createMcpOAuthState,
-			});
-			client = oauthStart.client;
-		} catch (error) {
-			console.error("Failed to prepare Jira MCP OAuth connection", error);
-			throw new ConvexError({
-				code: "JIRA_MCP_OAUTH_NOT_CONFIGURED",
-				message: "Failed to start Jira OAuth.",
-			});
-		}
-
-		await persistMcpSdkOAuthState({
+		return await startRemoteMcpOAuthConnection({
 			ctx,
 			provider: "jira-mcp",
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-			displayName,
-			baseUrl,
-			env,
-			client,
-			oauthStart,
+			label: defaults.displayName,
+			connection: {
+				workspaceId: args.workspaceId,
+				displayName: args.displayName.trim() || defaults.displayName,
+				baseUrl,
+				env: filterRemoteMcpEnv(args.env),
+				oauthClientId: args.oauthClientId,
+				oauthClientSecret: args.oauthClientSecret,
+			},
+			errorCode: "JIRA_MCP_OAUTH_NOT_CONFIGURED",
+			errorMessage: "Failed to start Jira OAuth.",
 		});
-
-		return { authorizationUrl: oauthStart.authorizationUrl };
 	},
 });
 
@@ -1186,16 +1152,32 @@ export const connectLinear = action({
 		oauthClientSecret: v.optional(v.string()),
 	},
 	returns: mcpOAuthStartResultValidator,
-	handler: async (ctx, args): Promise<McpOAuthStartResult> =>
-		await startRemoteMcpOAuthConnection({
+	handler: async (ctx, args): Promise<McpOAuthStartResult> => {
+		const defaults = remoteMcpConnectionDefaults.linear;
+		const baseUrl = normalizeRemoteMcpEndpoint(
+			args.baseUrl.trim() || defaults.endpoint,
+			{
+				provider: "linear",
+				label: defaults.displayName,
+			},
+		);
+
+		return await startRemoteMcpOAuthConnection({
 			ctx,
-			args,
 			provider: "linear",
-			label: remoteMcpConnectionDefaults.linear.displayName,
-			defaultEndpoint: remoteMcpConnectionDefaults.linear.endpoint,
+			label: defaults.displayName,
+			connection: {
+				workspaceId: args.workspaceId,
+				displayName: args.displayName.trim() || defaults.displayName,
+				baseUrl,
+				env: sanitizeRemoteMcpEnv(args.env),
+				oauthClientId: args.oauthClientId,
+				oauthClientSecret: args.oauthClientSecret,
+			},
 			errorCode: "LINEAR_MCP_OAUTH_NOT_CONFIGURED",
 			errorMessage: "Failed to start Linear OAuth.",
-		}),
+		});
+	},
 });
 
 export const connectPostHog = action({
@@ -1210,61 +1192,26 @@ export const connectPostHog = action({
 	returns: mcpOAuthStartResultValidator,
 	handler: async (ctx, args): Promise<McpOAuthStartResult> => {
 		const defaults = remoteMcpConnectionDefaults.posthog;
-		const identity = await requireIdentity(ctx);
-		const redirectUri = getMcpOAuthRedirectUri("posthog");
 		const baseUrl = normalizeRemoteMcpEndpoint(args.baseUrl, {
 			provider: "posthog",
 			label: defaults.displayName,
 		});
-		const displayName = args.displayName.trim() || defaults.displayName;
-		const env = Object.fromEntries(
-			Object.entries(args.env ?? {}).filter(
-				([key, value]) => key.trim().length > 0 && value.length > 0,
-			),
-		);
-		const requestedClient = getRequestedMcpOAuthClient(args);
 
-		if (!redirectUri.startsWith("http")) {
-			throw new ConvexError({
-				code: "POSTHOG_OAUTH_NOT_CONFIGURED",
-				message: "PostHog OAuth is not configured.",
-			});
-		}
-
-		let client: McpOAuthClient;
-		let oauthStart: McpSdkOAuthStart;
-		try {
-			oauthStart = await startMcpSdkOAuth({
-				baseUrl,
-				redirectUri,
-				client: requestedClient,
-				createState: createMcpOAuthState,
-			});
-			client = oauthStart.client;
-		} catch (error) {
-			console.error(
-				`Failed to prepare ${defaults.displayName} MCP OAuth connection`,
-				error,
-			);
-			throw new ConvexError({
-				code: "POSTHOG_OAUTH_NOT_CONFIGURED",
-				message: "Failed to start PostHog OAuth.",
-			});
-		}
-
-		await persistMcpSdkOAuthState({
+		return await startRemoteMcpOAuthConnection({
 			ctx,
 			provider: "posthog",
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-			displayName,
-			baseUrl,
-			env,
-			client,
-			oauthStart,
+			label: defaults.displayName,
+			connection: {
+				workspaceId: args.workspaceId,
+				displayName: args.displayName.trim() || defaults.displayName,
+				baseUrl,
+				env: filterRemoteMcpEnv(args.env),
+				oauthClientId: args.oauthClientId,
+				oauthClientSecret: args.oauthClientSecret,
+			},
+			errorCode: "POSTHOG_OAUTH_NOT_CONFIGURED",
+			errorMessage: "Failed to start PostHog OAuth.",
 		});
-
-		return { authorizationUrl: oauthStart.authorizationUrl };
 	},
 });
 
@@ -1287,11 +1234,7 @@ export const connectNotion = action({
 			label: defaults.displayName,
 		});
 		const displayName = args.displayName.trim() || defaults.displayName;
-		const env = Object.fromEntries(
-			Object.entries(args.env ?? {}).filter(
-				([key, value]) => key.trim().length > 0 && value.length > 0,
-			),
-		);
+		const env = filterRemoteMcpEnv(args.env);
 		const requestedClient = getRequestedMcpOAuthClient(args);
 
 		if (!redirectUri.startsWith("http")) {
@@ -1376,11 +1319,7 @@ export const connectZoom = action({
 			oauthClientId: args.oauthClientId,
 			oauthClientSecret: args.oauthClientSecret,
 		});
-		const env = Object.fromEntries(
-			Object.entries(args.env ?? {}).filter(
-				([key, value]) => key.trim().length > 0 && value.length > 0,
-			),
-		);
+		const env = filterRemoteMcpEnv(args.env);
 
 		const state = createMcpOAuthState();
 		await ctx.runMutation(internal.appConnections.createMcpOAuthState, {
