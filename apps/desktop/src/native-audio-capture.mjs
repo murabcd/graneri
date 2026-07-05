@@ -5,6 +5,7 @@ import { createCombinedAudioCaptureController } from "./combined-audio-capture-s
 import { resolveDesktopRuntimeExecutablePath } from "./desktop-runtime-paths.mjs";
 import { isHelperStderrError } from "./line-event-helper-session.mjs";
 import { logError, logInfo } from "./logger.mjs";
+import { stopNativeAudioHelperSession } from "./native-audio-helper-session.mjs";
 
 const captureHealthTimeoutMs = 3_000;
 
@@ -98,30 +99,13 @@ export const createNativeAudioCapture = ({
 
 		const session = microphoneCaptureSession;
 		microphoneCaptureSession = null;
-		session.isStopping = true;
-		if (!session.hasStarted) {
-			session.rejectStart?.(
-				new Error("macOS microphone capture stopped before it became ready."),
-			);
-		}
-		clearTimeout(session.cleanupTimeout);
-		session.cleanupTimeout = null;
-		clearCaptureHealthTimeout(session);
-
-		await new Promise((resolvePromise) => {
-			const finish = () => resolvePromise();
-			session.process.once("exit", finish);
-			session.process.once("error", finish);
-			session.process.kill("SIGTERM");
-			setTimeout(() => {
-				if (!session.process.killed) {
-					session.process.kill("SIGKILL");
-				}
-				resolvePromise();
-			}, 1_000);
+		await stopNativeAudioHelperSession({
+			clearSessionTimeouts: clearCaptureHealthTimeout,
+			notReadyMessage:
+				"macOS microphone capture stopped before it became ready.",
+			session,
 		});
 
-		session.lineReader.close();
 		emitMicrophoneCaptureEvent({ type: "stopped" });
 		return { ok: true };
 	};
@@ -133,30 +117,13 @@ export const createNativeAudioCapture = ({
 
 		const session = systemAudioCaptureSession;
 		systemAudioCaptureSession = null;
-		session.isStopping = true;
-		if (!session.hasStarted) {
-			session.rejectStart?.(
-				new Error("macOS system audio capture stopped before it became ready."),
-			);
-		}
-		clearTimeout(session.cleanupTimeout);
-		session.cleanupTimeout = null;
-		clearCaptureHealthTimeout(session);
-
-		await new Promise((resolvePromise) => {
-			const finish = () => resolvePromise();
-			session.process.once("exit", finish);
-			session.process.once("error", finish);
-			session.process.kill("SIGTERM");
-			setTimeout(() => {
-				if (!session.process.killed) {
-					session.process.kill("SIGKILL");
-				}
-				resolvePromise();
-			}, 1_000);
+		await stopNativeAudioHelperSession({
+			clearSessionTimeouts: clearCaptureHealthTimeout,
+			notReadyMessage:
+				"macOS system audio capture stopped before it became ready.",
+			session,
 		});
 
-		session.lineReader.close();
 		emitSystemAudioCaptureEvent({ type: "stopped" });
 		return { ok: true };
 	};

@@ -2,6 +2,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { createAudioVolumeStats } from "./audio-volume-stats.mjs";
 import { logError, logInfo } from "./logger.mjs";
+import { stopNativeAudioHelperSession } from "./native-audio-helper-session.mjs";
 
 const captureHealthTimeoutMs = 3_000;
 const combinedAudioInterruptionReason = "combined_audio_interrupted";
@@ -81,34 +82,18 @@ export const createCombinedAudioCaptureController = ({
 
 		const session = activeSession;
 		activeSession = null;
-		session.isStopping = true;
-		if (!session.hasStarted) {
-			session.rejectStart?.(
-				new Error(
-					"macOS combined audio capture stopped before it became ready.",
-				),
-			);
-		}
-		clearTimeout(session.cleanupTimeout);
-		session.cleanupTimeout = null;
-		clearCaptureHealthTimeout(session);
-		clearHelperRestartResetTimeout(session);
-		audioDebugRecorder.stop();
 
-		await new Promise((resolvePromise) => {
-			const finish = () => resolvePromise();
-			session.process.once("exit", finish);
-			session.process.once("error", finish);
-			session.process.kill("SIGTERM");
-			setTimeout(() => {
-				if (!session.process.killed) {
-					session.process.kill("SIGKILL");
-				}
-				resolvePromise();
-			}, 1_000);
+		await stopNativeAudioHelperSession({
+			clearSessionTimeouts: () => {
+				clearCaptureHealthTimeout(session);
+				clearHelperRestartResetTimeout(session);
+				audioDebugRecorder.stop();
+			},
+			notReadyMessage:
+				"macOS combined audio capture stopped before it became ready.",
+			session,
 		});
 
-		session.lineReader.close();
 		emitMicrophoneCaptureEvent({ type: "stopped" });
 		emitSystemAudioCaptureEvent({ type: "stopped" });
 		return { ok: true };
