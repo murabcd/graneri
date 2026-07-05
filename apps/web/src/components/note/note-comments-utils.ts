@@ -1,8 +1,5 @@
 import { getAvatarSrc } from "@/lib/avatar";
 import { isSameCalendarDay } from "@/lib/calendar-day";
-
-export { getErrorMessage } from "@/lib/error-message";
-
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export type CommentViewer = {

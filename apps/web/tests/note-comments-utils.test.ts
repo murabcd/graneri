@@ -6,7 +6,6 @@ import {
 	formatDiscussionTitle,
 	getAvatarLabel,
 	getDisplayName,
-	getErrorMessage,
 	INITIAL_COMMENTS_UI_STATE,
 	resolveAuthorIdentity,
 	THREAD_VIEW_OPTIONS,
@@ -68,14 +67,6 @@ describe("note comments utilities", () => {
 	it("formats discussion titles", () => {
 		expect(formatDiscussionTitle("Ada", false)).toBe("Ada commented in");
 		expect(formatDiscussionTitle("Ada", true)).toBe("Ada replied in");
-	});
-
-	it("normalizes thrown error messages for comment actions", () => {
-		expect(getErrorMessage(new Error("Failed to reply."), "Fallback")).toBe(
-			"Failed to reply",
-		);
-		expect(getErrorMessage(new Error("  "), "Fallback")).toBe("Fallback");
-		expect(getErrorMessage("unknown", "Fallback")).toBe("Fallback");
 	});
 
 	it("defines comment thread filter options in display order", () => {
