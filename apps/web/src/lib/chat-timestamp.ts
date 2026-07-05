@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import { isSameCalendarDay } from "@/lib/calendar-day";
 
 const timestampTimeFormatter = new Intl.DateTimeFormat("en-US", {
 	hour: "numeric",
@@ -13,11 +14,6 @@ const timestampDateFormatter = new Intl.DateTimeFormat("en-US", {
 	minute: "2-digit",
 	month: "short",
 });
-
-const isSameCalendarDay = (left: Date, right: Date) =>
-	left.getFullYear() === right.getFullYear() &&
-	left.getMonth() === right.getMonth() &&
-	left.getDate() === right.getDate();
 
 type TimestampedUIMessage = UIMessage & {
 	createdAt?: Date | string | number;

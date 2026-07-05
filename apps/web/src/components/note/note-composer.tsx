@@ -137,6 +137,7 @@ import {
 	storeReasoningEffort,
 } from "@/lib/ai/reasoning-effort";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
+import { isSameCalendarDay } from "@/lib/calendar-day";
 import { stopActiveChatStream } from "@/lib/chat-active-stream";
 import { getPendingAutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
 import { submitAutomationConfirmationChatTurn } from "@/lib/chat-automation-confirmation-submit";
@@ -297,11 +298,6 @@ type NoteComposerProps = {
 	onEnhanceTranscript?: (transcript: string) => Promise<void>;
 	stopTranscriptionWhenMeetingEnds?: boolean;
 };
-
-const isSameCalendarDay = (left: Date, right: Date) =>
-	left.getFullYear() === right.getFullYear() &&
-	left.getMonth() === right.getMonth() &&
-	left.getDate() === right.getDate();
 
 const groupChatsForSelector = (chats: NoteChatSummary[]) => {
 	const now = new Date();

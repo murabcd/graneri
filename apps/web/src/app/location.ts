@@ -1,5 +1,6 @@
 import type { AppLocationState, UpcomingCalendarEvent } from "@/app/app-types";
 import type { SettingsPage } from "@/components/settings/settings-types";
+import { isSameCalendarDay } from "@/lib/calendar-day";
 
 const SETTINGS_PAGE_BY_SLUG = {
 	profile: "Profile",
@@ -42,11 +43,6 @@ const upcomingEventTimeFormatter = new Intl.DateTimeFormat(undefined, {
 	hour: "numeric",
 	minute: "2-digit",
 });
-
-const isSameCalendarDay = (left: Date, right: Date) =>
-	left.getFullYear() === right.getFullYear() &&
-	left.getMonth() === right.getMonth() &&
-	left.getDate() === right.getDate();
 
 const appendCalendarEventSearchParams = ({
 	event,

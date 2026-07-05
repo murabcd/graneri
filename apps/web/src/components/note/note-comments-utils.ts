@@ -1,4 +1,5 @@
 import { getAvatarSrc } from "@/lib/avatar";
+import { isSameCalendarDay } from "@/lib/calendar-day";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export type CommentViewer = {
@@ -127,11 +128,6 @@ const commentDateFormatter = new Intl.DateTimeFormat(undefined, {
 	month: "short",
 	day: "numeric",
 });
-
-const isSameCalendarDay = (left: Date, right: Date) =>
-	left.getFullYear() === right.getFullYear() &&
-	left.getMonth() === right.getMonth() &&
-	left.getDate() === right.getDate();
 
 export const formatCommentTimestamp = (value: number, now = new Date()) => {
 	const timestamp = new Date(value);
