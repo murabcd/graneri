@@ -8,8 +8,8 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
-import { appendAssistantRunEvent } from "./assistantRunEvents";
 import { discardQueuedForRunInternal } from "./assistantQueuedMessages";
+import { appendAssistantRunEvent } from "./assistantRunEvents";
 import {
 	getOwnedActiveChatById,
 	nonTerminalRunStatuses,
@@ -429,6 +429,41 @@ const withActiveStreamSnapshot = async <T extends StoredUiMessageSnapshot>(
 	}
 
 	return [...messages, toActiveMessage(stream)];
+};
+
+const getStoredUiMessagesForOwner = async (
+	ctx: QueryCtx,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+	chatId: string,
+): Promise<StoredUiMessage[]> => {
+	const chat = await getOwnedActiveChatById(
+		ctx,
+		ownerTokenIdentifier,
+		workspaceId,
+		chatId,
+	);
+
+	if (!chat) {
+		return [];
+	}
+
+	const messages = await getStoredChatMessages(ctx, chat._id);
+	const storedMessages = messages.reverse().map((message) => ({
+		...toStoredUiMessageSnapshot(message),
+		text: message.text,
+		createdAt: message.createdAt,
+	}));
+
+	return await withActiveStreamSnapshot(
+		ctx,
+		chat._id,
+		storedMessages,
+		(stream): StoredUiMessage => ({
+			...toActiveStreamMessageSnapshot(stream),
+			text: stream.text,
+		}),
+	);
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -979,32 +1014,11 @@ export const getMessages = query({
 	returns: v.array(storedUiMessageValidator),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const chat = await getOwnedActiveChatById(
+		return await getStoredUiMessagesForOwner(
 			ctx,
 			ownerTokenIdentifier,
 			args.workspaceId,
 			args.chatId,
-		);
-
-		if (!chat) {
-			return [];
-		}
-
-		const messages = await getStoredChatMessages(ctx, chat._id);
-		const storedMessages = messages.reverse().map((message) => ({
-			...toStoredUiMessageSnapshot(message),
-			text: message.text,
-			createdAt: message.createdAt,
-		}));
-
-		return await withActiveStreamSnapshot(
-			ctx,
-			chat._id,
-			storedMessages,
-			(stream): StoredUiMessage => ({
-				...toActiveStreamMessageSnapshot(stream),
-				text: stream.text,
-			}),
 		);
 	},
 });
@@ -1047,32 +1061,11 @@ export const getMessagesForOwner = internalQuery({
 	},
 	returns: v.array(storedUiMessageValidator),
 	handler: async (ctx, args) => {
-		const chat = await getOwnedActiveChatById(
+		return await getStoredUiMessagesForOwner(
 			ctx,
 			args.ownerTokenIdentifier,
 			args.workspaceId,
 			args.chatId,
-		);
-
-		if (!chat) {
-			return [];
-		}
-
-		const messages = await getStoredChatMessages(ctx, chat._id);
-		const storedMessages = messages.reverse().map((message) => ({
-			...toStoredUiMessageSnapshot(message),
-			text: message.text,
-			createdAt: message.createdAt,
-		}));
-
-		return await withActiveStreamSnapshot(
-			ctx,
-			chat._id,
-			storedMessages,
-			(stream): StoredUiMessage => ({
-				...toActiveStreamMessageSnapshot(stream),
-				text: stream.text,
-			}),
 		);
 	},
 });
