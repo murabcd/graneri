@@ -252,6 +252,18 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		format: AVAudioFormat,
 		logger: NativeAudioStderrLogger
 	) -> Double {
+		runActiveRenderMicrophonePassthroughSelfTest(
+			format: format,
+			logger: logger,
+			microphoneAmplitude: 0.2
+		)
+	}
+
+	private static func runActiveRenderMicrophonePassthroughSelfTest(
+		format: AVAudioFormat,
+		logger: NativeAudioStderrLogger,
+		microphoneAmplitude: Double
+	) -> Double {
 		let microphoneOutput = CollectingSink()
 		let systemAudioOutput = CollectingSink()
 		let pipeline = CombinedAudioProcessingPipeline(
@@ -264,7 +276,10 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			Float(sin(Double(frameIndex) * 2.0 * .pi * 440.0 / format.sampleRate) * 0.35)
 		}
 		let microphoneSamples = (0..<frameCount).map { frameIndex in
-			Float(sin(Double(frameIndex) * 2.0 * .pi * 1_370.0 / format.sampleRate) * 0.2)
+			Float(
+				sin(Double(frameIndex) * 2.0 * .pi * 1_370.0 / format.sampleRate) *
+					microphoneAmplitude
+			)
 		}
 
 		pipeline.systemAudioSink.append(
@@ -315,33 +330,10 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		format: AVAudioFormat,
 		logger: NativeAudioStderrLogger
 	) -> Double {
-		let microphoneOutput = CollectingSink()
-		let systemAudioOutput = CollectingSink()
-		let pipeline = CombinedAudioProcessingPipeline(
+		runActiveRenderMicrophonePassthroughSelfTest(
+			format: format,
 			logger: logger,
-			microphoneOutput: microphoneOutput,
-			systemAudioOutput: systemAudioOutput
-		)
-		let frameCount = 960
-		let renderSamples = (0..<frameCount).map { frameIndex in
-			Float(sin(Double(frameIndex) * 2.0 * .pi * 440.0 / format.sampleRate) * 0.35)
-		}
-		let microphoneSamples = (0..<frameCount).map { frameIndex in
-			Float(sin(Double(frameIndex) * 2.0 * .pi * 1_370.0 / format.sampleRate) * 0.0015)
-		}
-
-		pipeline.systemAudioSink.append(
-			buffer: makeBuffer(format: format, samples: renderSamples)
-		)
-		pipeline.microphoneSink.append(
-			buffer: makeBuffer(format: format, samples: microphoneSamples)
-		)
-
-		let processedSamples = microphoneOutput.snapshot()
-		let comparableCount = min(processedSamples.count, microphoneSamples.count)
-		return rmsError(
-			Array(processedSamples[0..<comparableCount]),
-			Array(microphoneSamples[0..<comparableCount])
+			microphoneAmplitude: 0.0015
 		)
 	}
 
