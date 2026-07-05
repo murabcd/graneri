@@ -2015,6 +2015,19 @@ const requireOAuthClientId = (value: string) => {
 	return oauthClientId;
 };
 
+const mcpOAuthConnectionUpsertArgs = {
+	ownerTokenIdentifier: v.string(),
+	workspaceId: v.id("workspaces"),
+	displayName: v.string(),
+	baseUrl: v.string(),
+	env: v.optional(v.record(v.string(), v.string())),
+	oauthClientId: v.string(),
+	oauthClientSecret: v.optional(v.string()),
+	oauthAccessToken: v.string(),
+	oauthRefreshToken: v.optional(v.string()),
+	tokenExpiresAt: v.optional(v.number()),
+};
+
 const upsertPreservedSecretMcpOAuthConnection = async <
 	TProvider extends PreservedSecretMcpOAuthProvider,
 >(
@@ -2099,54 +2112,21 @@ const upsertPreservedSecretMcpOAuthConnection = async <
 };
 
 export const upsertJiraMcp = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		displayName: v.string(),
-		baseUrl: v.string(),
-		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.string(),
-		oauthClientSecret: v.optional(v.string()),
-		oauthAccessToken: v.string(),
-		oauthRefreshToken: v.optional(v.string()),
-		tokenExpiresAt: v.optional(v.number()),
-	},
+	args: mcpOAuthConnectionUpsertArgs,
 	returns: jiraMcpConnectionSettingsValidator,
 	handler: async (ctx, args): Promise<JiraMcpConnectionSettings> =>
 		await upsertPreservedSecretMcpOAuthConnection(ctx, args, "jira-mcp"),
 });
 
 export const upsertPostHog = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		displayName: v.string(),
-		baseUrl: v.string(),
-		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.string(),
-		oauthClientSecret: v.optional(v.string()),
-		oauthAccessToken: v.string(),
-		oauthRefreshToken: v.optional(v.string()),
-		tokenExpiresAt: v.optional(v.number()),
-	},
+	args: mcpOAuthConnectionUpsertArgs,
 	returns: posthogConnectionSettingsValidator,
 	handler: async (ctx, args): Promise<PostHogConnectionSettings> =>
 		await upsertPreservedSecretMcpOAuthConnection(ctx, args, "posthog"),
 });
 
 export const upsertNotion = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		displayName: v.string(),
-		baseUrl: v.string(),
-		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.string(),
-		oauthClientSecret: v.optional(v.string()),
-		oauthAccessToken: v.string(),
-		oauthRefreshToken: v.optional(v.string()),
-		tokenExpiresAt: v.optional(v.number()),
-	},
+	args: mcpOAuthConnectionUpsertArgs,
 	returns: notionConnectionSettingsValidator,
 	handler: async (ctx, args): Promise<NotionConnectionSettings> =>
 		await upsertPreservedSecretMcpOAuthConnection(ctx, args, "notion"),
@@ -2419,36 +2399,14 @@ export const upsertContext7 = internalMutation({
 });
 
 export const upsertFigma = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		displayName: v.string(),
-		baseUrl: v.string(),
-		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.string(),
-		oauthClientSecret: v.optional(v.string()),
-		oauthAccessToken: v.string(),
-		oauthRefreshToken: v.optional(v.string()),
-		tokenExpiresAt: v.optional(v.number()),
-	},
+	args: mcpOAuthConnectionUpsertArgs,
 	returns: figmaConnectionSettingsValidator,
 	handler: async (ctx, args): Promise<FigmaConnectionSettings> =>
 		await upsertMcpOAuthConnection(ctx, args, "figma"),
 });
 
 export const upsertLinear = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		displayName: v.string(),
-		baseUrl: v.string(),
-		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.string(),
-		oauthClientSecret: v.optional(v.string()),
-		oauthAccessToken: v.string(),
-		oauthRefreshToken: v.optional(v.string()),
-		tokenExpiresAt: v.optional(v.number()),
-	},
+	args: mcpOAuthConnectionUpsertArgs,
 	returns: linearConnectionSettingsValidator,
 	handler: async (ctx, args): Promise<LinearConnectionSettings> =>
 		await upsertMcpOAuthConnection(ctx, args, "linear"),
