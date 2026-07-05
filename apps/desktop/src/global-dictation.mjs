@@ -44,16 +44,55 @@ const createOverlayHtml = () => `<!doctype html>
 				margin: 0;
 				overflow: hidden;
 				background: transparent;
-				color: #fafafa;
+				color: var(--overlay-foreground);
 				font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
 			}
 
 			body {
+				--overlay-foreground: #fafafa;
+				--overlay-hint: hsl(0 0% 98% / 0.86);
+				--overlay-kbd-border: hsl(0 0% 100% / 0.14);
+				--overlay-kbd-background: hsl(0 0% 100% / 0.09);
+				--overlay-kbd-foreground: hsl(0 0% 98% / 0.92);
+				--overlay-dot: hsl(0 0% 98% / 0.9);
+				--overlay-target-border: hsl(0 0% 98% / 0.42);
+				--overlay-mic: hsl(0 0% 98% / 0.82);
+				--overlay-spinner-track: hsl(0 0% 98% / 0.24);
+				--overlay-spinner-active: hsl(0 0% 98% / 0.9);
+				--overlay-error-background: hsl(240 10% 3.9% / 0.82);
+				--overlay-error-border: hsl(0 0% 100% / 0.12);
+				--overlay-error-shadow: hsl(0 0% 0% / 0.24);
+				--overlay-error-highlight: hsl(0 0% 100% / 0.03);
+				--overlay-icon-button: hsl(0 0% 98% / 0.8);
+				--overlay-icon-button-hover: hsl(0 0% 98% / 0.96);
+				--overlay-icon-button-hover-background: hsl(0 0% 100% / 0.09);
 				display: flex;
 				align-items: flex-end;
 				justify-content: center;
 				position: relative;
 				padding-bottom: 18px;
+			}
+
+			@media (prefers-color-scheme: light) {
+				body {
+					--overlay-foreground: hsl(240 10% 3.9%);
+					--overlay-hint: hsl(240 10% 3.9% / 0.82);
+					--overlay-kbd-border: hsl(240 5.9% 10% / 0.16);
+					--overlay-kbd-background: hsl(240 5.9% 10% / 0.08);
+					--overlay-kbd-foreground: hsl(240 10% 3.9% / 0.9);
+					--overlay-dot: hsl(240 10% 3.9% / 0.84);
+					--overlay-target-border: hsl(240 5.9% 10% / 0.34);
+					--overlay-mic: hsl(240 10% 3.9% / 0.78);
+					--overlay-spinner-track: hsl(240 5.9% 10% / 0.2);
+					--overlay-spinner-active: hsl(240 10% 3.9% / 0.86);
+					--overlay-error-background: hsl(0 0% 100% / 0.86);
+					--overlay-error-border: hsl(240 5.9% 10% / 0.14);
+					--overlay-error-shadow: hsl(240 10% 3.9% / 0.16);
+					--overlay-error-highlight: hsl(0 0% 100% / 0.5);
+					--overlay-icon-button: hsl(240 10% 3.9% / 0.68);
+					--overlay-icon-button-hover: hsl(240 10% 3.9% / 0.9);
+					--overlay-icon-button-hover-background: hsl(240 5.9% 10% / 0.08);
+				}
 			}
 
 			.dictation-target {
@@ -87,7 +126,7 @@ const createOverlayHtml = () => `<!doctype html>
 				transition:
 					opacity 120ms ease,
 					transform 120ms ease;
-				color: hsl(0 0% 98% / 0.86);
+				color: var(--overlay-hint);
 				font-size: 12px;
 				font-weight: 500;
 				line-height: 16px;
@@ -110,9 +149,9 @@ const createOverlayHtml = () => `<!doctype html>
 				min-width: 28px;
 				padding: 0 6px;
 				border-radius: 5px;
-				border: 1px solid hsl(0 0% 100% / 0.14);
-				background: hsl(0 0% 100% / 0.09);
-				color: hsl(0 0% 98% / 0.92);
+				border: 1px solid var(--overlay-kbd-border);
+				background: var(--overlay-kbd-background);
+				color: var(--overlay-kbd-foreground);
 				font-size: 11px;
 				font-weight: 500;
 				line-height: 16px;
@@ -143,7 +182,7 @@ const createOverlayHtml = () => `<!doctype html>
 				position: absolute;
 				width: 34px;
 				height: 6px;
-				border: 1px solid hsl(0 0% 98% / 0.42);
+				border: 1px solid var(--overlay-target-border);
 				border-radius: 4px;
 				background: transparent;
 				content: "";
@@ -178,7 +217,7 @@ const createOverlayHtml = () => `<!doctype html>
 				height: 4px;
 				flex: 0 0 auto;
 				border-radius: 999px;
-				background: hsl(0 0% 98% / 0.9);
+				background: var(--overlay-dot);
 			}
 
 			body[data-status="recording"] .dots {
@@ -189,7 +228,7 @@ const createOverlayHtml = () => `<!doctype html>
 				position: absolute;
 				width: 14px;
 				height: 14px;
-				color: hsl(0 0% 98% / 0.82);
+				color: var(--overlay-mic);
 				opacity: 0;
 				transform: scale(0.75);
 				transition:
@@ -227,8 +266,8 @@ const createOverlayHtml = () => `<!doctype html>
 			.spinner {
 				width: 12px;
 				height: 12px;
-				border: 2px solid hsl(0 0% 98% / 0.24);
-				border-top-color: hsl(0 0% 98% / 0.9);
+				border: 2px solid var(--overlay-spinner-track);
+				border-top-color: var(--overlay-spinner-active);
 				border-radius: 999px;
 				animation: spin 720ms linear infinite;
 			}
@@ -242,11 +281,11 @@ const createOverlayHtml = () => `<!doctype html>
 				height: 32px;
 				padding: 0 8px;
 				border-radius: 16px;
-				border: 1px solid hsl(0 0% 100% / 0.12);
-				background: hsl(240 10% 3.9% / 0.82);
+				border: 1px solid var(--overlay-error-border);
+				background: var(--overlay-error-background);
 				box-shadow:
-					0 18px 40px hsl(0 0% 0% / 0.24),
-					inset 0 1px 0 hsl(0 0% 100% / 0.03);
+					0 18px 40px var(--overlay-error-shadow),
+					inset 0 1px 0 var(--overlay-error-highlight);
 				-webkit-backdrop-filter: blur(18px);
 				backdrop-filter: blur(18px);
 			}
@@ -279,13 +318,13 @@ const createOverlayHtml = () => `<!doctype html>
 				border: 0;
 				border-radius: 999px;
 				background: transparent;
-				color: hsl(0 0% 98% / 0.8);
+				color: var(--overlay-icon-button);
 				cursor: default;
 			}
 
 			.icon-button:hover {
-				background: hsl(0 0% 100% / 0.09);
-				color: hsl(0 0% 98% / 0.96);
+				background: var(--overlay-icon-button-hover-background);
+				color: var(--overlay-icon-button-hover);
 			}
 
 			.icon-button svg {
