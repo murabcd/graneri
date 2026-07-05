@@ -285,6 +285,49 @@ const requireOwnedComment = async (
 	return comment;
 };
 
+const setThreadReadState = async (
+	ctx: MutationCtx,
+	{
+		isRead,
+		noteId,
+		threadId,
+		workspaceId,
+	}: {
+		isRead: boolean;
+		noteId: Id<"notes">;
+		threadId: Id<"noteCommentThreads">;
+		workspaceId: Id<"workspaces">;
+	},
+) => {
+	const identity = await requireIdentity(ctx);
+	await requireOwnedWorkspace(ctx, identity.tokenIdentifier, workspaceId);
+	await requireOwnedNote(ctx, noteId, workspaceId);
+	const thread = await requireOwnedThread(ctx, {
+		workspaceId,
+		noteId,
+		threadId,
+		ownerTokenIdentifier: identity.tokenIdentifier,
+	});
+
+	if (thread.isRead === isRead) {
+		return null;
+	}
+
+	await ctx.db.patch(thread._id, {
+		isRead,
+		readAt: isRead ? Date.now() : undefined,
+	});
+	await ctx.runMutation(internal.inboxItems.setReadState, {
+		ownerTokenIdentifier: identity.tokenIdentifier,
+		workspaceId,
+		provider: NOTE_COMMENT_INBOX_PROVIDER,
+		externalId: getThreadInboxExternalId(thread._id),
+		isRead,
+	});
+
+	return null;
+};
+
 const resolveParentCommentId = async (
 	ctx: MutationCtx,
 	{
@@ -682,34 +725,12 @@ export const markRead = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
-		await requireOwnedNote(ctx, args.noteId, args.workspaceId);
-		const thread = await requireOwnedThread(ctx, {
-			workspaceId: args.workspaceId,
+		return await setThreadReadState(ctx, {
+			isRead: true,
 			noteId: args.noteId,
 			threadId: args.threadId,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-		});
-
-		if (thread.isRead) {
-			return null;
-		}
-
-		const now = Date.now();
-		await ctx.db.patch(thread._id, {
-			isRead: true,
-			readAt: now,
-		});
-		await ctx.runMutation(internal.inboxItems.setReadState, {
-			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
-			provider: NOTE_COMMENT_INBOX_PROVIDER,
-			externalId: getThreadInboxExternalId(thread._id),
-			isRead: true,
 		});
-
-		return null;
 	},
 });
 
@@ -721,33 +742,12 @@ export const markUnread = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
-		await requireOwnedNote(ctx, args.noteId, args.workspaceId);
-		const thread = await requireOwnedThread(ctx, {
-			workspaceId: args.workspaceId,
+		return await setThreadReadState(ctx, {
+			isRead: false,
 			noteId: args.noteId,
 			threadId: args.threadId,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-		});
-
-		if (!thread.isRead) {
-			return null;
-		}
-
-		await ctx.db.patch(thread._id, {
-			isRead: false,
-			readAt: undefined,
-		});
-		await ctx.runMutation(internal.inboxItems.setReadState, {
-			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
-			provider: NOTE_COMMENT_INBOX_PROVIDER,
-			externalId: getThreadInboxExternalId(thread._id),
-			isRead: false,
 		});
-
-		return null;
 	},
 });
 
