@@ -944,6 +944,36 @@ const normalizeConnectionId = (
 	);
 };
 
+const getSelectedChatToolConnections = async (
+	ctx: QueryCtx,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+	sourceIds: string[],
+): Promise<ChatToolConnection[]> => {
+	const normalizedIds = sourceIds
+		.map((sourceId) => normalizeConnectionId(ctx, sourceId))
+		.filter(
+			(id, index, values): id is Id<"appConnections"> =>
+				Boolean(id) && values.indexOf(id) === index,
+		);
+
+	if (normalizedIds.length === 0) {
+		return [];
+	}
+
+	const connections = await Promise.all(
+		normalizedIds.map((id) => ctx.db.get(id)),
+	);
+
+	return connections
+		.map((connection) =>
+			toChatToolConnection(connection, ownerTokenIdentifier, workspaceId),
+		)
+		.filter((connection): connection is ChatToolConnection =>
+			Boolean(connection),
+		);
+};
+
 export const listSources = query({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -1530,32 +1560,12 @@ export const getSelectedForChat = query({
 			identity.tokenIdentifier,
 			args.workspaceId,
 		);
-		const normalizedIds = args.sourceIds
-			.map((sourceId) => normalizeConnectionId(ctx, sourceId))
-			.filter(
-				(id, index, values): id is Id<"appConnections"> =>
-					Boolean(id) && values.indexOf(id) === index,
-			);
-
-		if (normalizedIds.length === 0) {
-			return [];
-		}
-
-		const connections = await Promise.all(
-			normalizedIds.map((id) => ctx.db.get(id)),
+		return await getSelectedChatToolConnections(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+			args.sourceIds,
 		);
-
-		return connections
-			.map((connection) =>
-				toChatToolConnection(
-					connection,
-					identity.tokenIdentifier,
-					args.workspaceId,
-				),
-			)
-			.filter((connection): connection is ChatToolConnection =>
-				Boolean(connection),
-			);
 	},
 });
 
@@ -1567,32 +1577,12 @@ export const getSelectedForChatInternal = internalQuery({
 	},
 	returns: v.array(chatToolConnectionValidator),
 	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
-		const normalizedIds = args.sourceIds
-			.map((sourceId) => normalizeConnectionId(ctx, sourceId))
-			.filter(
-				(id, index, values): id is Id<"appConnections"> =>
-					Boolean(id) && values.indexOf(id) === index,
-			);
-
-		if (normalizedIds.length === 0) {
-			return [];
-		}
-
-		const connections = await Promise.all(
-			normalizedIds.map((id) => ctx.db.get(id)),
+		return await getSelectedChatToolConnections(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.workspaceId,
+			args.sourceIds,
 		);
-
-		return connections
-			.map((connection) =>
-				toChatToolConnection(
-					connection,
-					args.ownerTokenIdentifier,
-					args.workspaceId,
-				),
-			)
-			.filter((connection): connection is ChatToolConnection =>
-				Boolean(connection),
-			);
 	},
 });
 
