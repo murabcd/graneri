@@ -407,6 +407,10 @@ type LinearConnectionSettings = {
 type RemoteHeaderMcpProvider = "context7";
 type RemoteHeaderMcpConnectionSettings = Context7ConnectionSettings;
 type PreservedSecretMcpOAuthProvider = "jira-mcp" | "posthog" | "notion";
+type StoredMcpOAuthProvider =
+	| PreservedSecretMcpOAuthProvider
+	| "figma"
+	| "linear";
 type EndpointConnectionSettings =
 	| JiraMcpConnectionSettings
 	| PostHogConnectionSettings
@@ -2028,22 +2032,61 @@ const mcpOAuthConnectionUpsertArgs = {
 	tokenExpiresAt: v.optional(v.number()),
 };
 
+type McpOAuthConnectionUpsertArgs = {
+	ownerTokenIdentifier: string;
+	workspaceId: Id<"workspaces">;
+	displayName: string;
+	baseUrl: string;
+	env?: Record<string, string>;
+	oauthClientId: string;
+	oauthClientSecret?: string;
+	oauthAccessToken: string;
+	oauthRefreshToken?: string;
+	tokenExpiresAt?: number;
+};
+
+type PreparedMcpOAuthConnectionValues = {
+	displayName: string;
+	baseUrl: string;
+	envJson?: string;
+	oauthClientId: string;
+	oauthClientSecret?: string;
+	oauthRefreshToken?: string;
+	now: number;
+};
+
+const createMcpOAuthConnectionInsert = <
+	TProvider extends StoredMcpOAuthProvider,
+>(
+	args: McpOAuthConnectionUpsertArgs,
+	provider: TProvider,
+	values: PreparedMcpOAuthConnectionValues,
+) => ({
+	ownerTokenIdentifier: args.ownerTokenIdentifier,
+	workspaceId: args.workspaceId,
+	provider,
+	status: "connected" as const,
+	displayName: values.displayName,
+	baseUrl: values.baseUrl,
+	...(values.envJson ? { envJson: values.envJson } : {}),
+	accountId: values.oauthClientId,
+	...(values.oauthClientSecret
+		? { oauthClientSecret: values.oauthClientSecret }
+		: {}),
+	token: args.oauthAccessToken,
+	...(values.oauthRefreshToken
+		? { oauthRefreshToken: values.oauthRefreshToken }
+		: {}),
+	...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
+	createdAt: values.now,
+	updatedAt: values.now,
+});
+
 const upsertPreservedSecretMcpOAuthConnection = async <
 	TProvider extends PreservedSecretMcpOAuthProvider,
 >(
 	ctx: MutationCtx,
-	args: {
-		ownerTokenIdentifier: string;
-		workspaceId: Id<"workspaces">;
-		displayName: string;
-		baseUrl: string;
-		env?: Record<string, string>;
-		oauthClientId: string;
-		oauthClientSecret?: string;
-		oauthAccessToken: string;
-		oauthRefreshToken?: string;
-		tokenExpiresAt?: number;
-	},
+	args: McpOAuthConnectionUpsertArgs,
 	provider: TProvider,
 ): Promise<Extract<EndpointConnectionSettings, { provider: TProvider }>> => {
 	await requireOwnedWorkspace(ctx, args.ownerTokenIdentifier, args.workspaceId);
@@ -2085,22 +2128,18 @@ const upsertPreservedSecretMcpOAuthConnection = async <
 		);
 	}
 
-	const id = await ctx.db.insert("appConnections", {
-		ownerTokenIdentifier: args.ownerTokenIdentifier,
-		workspaceId: args.workspaceId,
-		provider,
-		status: "connected",
-		displayName,
-		baseUrl,
-		...(envJson ? { envJson } : {}),
-		accountId: oauthClientId,
-		...(oauthClientSecret ? { oauthClientSecret } : {}),
-		token: args.oauthAccessToken,
-		...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-		...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
-		createdAt: now,
-		updatedAt: now,
-	});
+	const id = await ctx.db.insert(
+		"appConnections",
+		createMcpOAuthConnectionInsert(args, provider, {
+			displayName,
+			baseUrl,
+			envJson,
+			oauthClientId,
+			oauthClientSecret,
+			oauthRefreshToken,
+			now,
+		}),
+	);
 
 	return toPreservedSecretMcpOAuthConnectionSettings(
 		id,
@@ -2294,18 +2333,7 @@ const upsertRemoteHeaderMcpConnection = async (
 
 const upsertMcpOAuthConnection = async <TProvider extends "figma" | "linear">(
 	ctx: MutationCtx,
-	args: {
-		ownerTokenIdentifier: string;
-		workspaceId: Id<"workspaces">;
-		displayName: string;
-		baseUrl: string;
-		env?: Record<string, string>;
-		oauthClientId: string;
-		oauthClientSecret?: string;
-		oauthAccessToken: string;
-		oauthRefreshToken?: string;
-		tokenExpiresAt?: number;
-	},
+	args: McpOAuthConnectionUpsertArgs,
 	provider: TProvider,
 ): Promise<
 	TProvider extends "figma" ? FigmaConnectionSettings : LinearConnectionSettings
@@ -2352,22 +2380,18 @@ const upsertMcpOAuthConnection = async <TProvider extends "figma" | "linear">(
 			: LinearConnectionSettings;
 	}
 
-	const id = await ctx.db.insert("appConnections", {
-		ownerTokenIdentifier: args.ownerTokenIdentifier,
-		workspaceId: args.workspaceId,
-		provider,
-		status: "connected",
-		displayName,
-		baseUrl,
-		...(envJson ? { envJson } : {}),
-		accountId: oauthClientId,
-		...(oauthClientSecret ? { oauthClientSecret } : {}),
-		token: args.oauthAccessToken,
-		...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-		...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
-		createdAt: now,
-		updatedAt: now,
-	});
+	const id = await ctx.db.insert(
+		"appConnections",
+		createMcpOAuthConnectionInsert(args, provider, {
+			displayName,
+			baseUrl,
+			envJson,
+			oauthClientId,
+			oauthClientSecret,
+			oauthRefreshToken,
+			now,
+		}),
+	);
 
 	return {
 		sourceId: toAppSourceId(id),
