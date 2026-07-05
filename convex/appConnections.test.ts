@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -185,4 +185,51 @@ test("selected chat sources include token-backed MCP OAuth connections", async (
 			oauthAccessToken: "access-token",
 		},
 	]);
+});
+
+test("MCP OAuth upsert preserves an existing optional client secret", async () => {
+	const { t, workspaceId } = await createWorkspace();
+	const initial = await t.mutation(internal.appConnections.upsertPostHog, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+		displayName: "PostHog Cloud",
+		baseUrl: "https://us.posthog.com/mcp",
+		oauthClientId: "client-id",
+		oauthClientSecret: "client-secret",
+		oauthAccessToken: "access-token",
+		oauthRefreshToken: "refresh-token",
+		tokenExpiresAt: 2_000,
+	});
+
+	const updated = await t.mutation(internal.appConnections.upsertPostHog, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+		displayName: "PostHog Cloud",
+		baseUrl: "https://us.posthog.com/mcp",
+		oauthClientId: "client-id",
+		oauthAccessToken: "new-access-token",
+		oauthRefreshToken: "new-refresh-token",
+		tokenExpiresAt: 3_000,
+	});
+	const storedConnection = await t.run((ctx) => {
+		const appConnectionId = ctx.db.normalizeId(
+			"appConnections",
+			initial.sourceId.slice("app:".length),
+		);
+
+		if (!appConnectionId) {
+			throw new Error(`Invalid app connection source id ${initial.sourceId}`);
+		}
+
+		return ctx.db.get(appConnectionId);
+	});
+
+	expect(updated).toEqual(initial);
+	expect(storedConnection).toMatchObject({
+		accountId: "client-id",
+		oauthClientSecret: "client-secret",
+		token: "new-access-token",
+		oauthRefreshToken: "new-refresh-token",
+		tokenExpiresAt: 3_000,
+	});
 });

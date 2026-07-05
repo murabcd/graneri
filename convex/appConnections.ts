@@ -406,6 +406,7 @@ type LinearConnectionSettings = {
 
 type RemoteHeaderMcpProvider = "context7";
 type RemoteHeaderMcpConnectionSettings = Context7ConnectionSettings;
+type PreservedSecretMcpOAuthProvider = "jira-mcp" | "posthog" | "notion";
 type EndpointConnectionSettings =
 	| JiraMcpConnectionSettings
 	| PostHogConnectionSettings
@@ -733,26 +734,6 @@ const getOwnedJiraConnection = async (
 	workspaceId: Id<"workspaces">,
 ) => await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, "jira");
 
-const getOwnedJiraMcpConnection = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) =>
-	await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, "jira-mcp");
-
-const getOwnedPostHogConnection = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) =>
-	await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, "posthog");
-
-const getOwnedNotionConnection = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) => await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, "notion");
-
 const getOwnedZoomConnection = async (
 	ctx: QueryCtx | MutationCtx,
 	ownerTokenIdentifier: string,
@@ -778,7 +759,9 @@ const getOwnedRemoteHeaderMcpConnection = async (
 	provider: RemoteHeaderMcpProvider,
 ) => await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, provider);
 
-const toEndpointConnectionSettings = <TProvider extends EndpointConnectionProvider>(
+const toEndpointConnectionSettings = <
+	TProvider extends EndpointConnectionProvider,
+>(
 	connection: Doc<"appConnections"> | null,
 	provider: TProvider,
 	{
@@ -820,7 +803,10 @@ const getOwnedEndpointConnectionSettings = async <
 	provider: TProvider;
 	requiresToken?: boolean;
 	workspaceId: Id<"workspaces">;
-}): Promise<Extract<EndpointConnectionSettings, { provider: TProvider }> | null> =>
+}): Promise<Extract<
+	EndpointConnectionSettings,
+	{ provider: TProvider }
+> | null> =>
 	toEndpointConnectionSettings(
 		await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, provider),
 		provider,
@@ -2020,6 +2006,120 @@ export const upsertJira = internalMutation({
 	},
 });
 
+const toPreservedSecretMcpOAuthConnectionSettings = <
+	TProvider extends PreservedSecretMcpOAuthProvider,
+>(
+	id: Id<"appConnections">,
+	provider: TProvider,
+	displayName: string,
+	endpoint: string,
+	oauthClientId: string,
+): Extract<EndpointConnectionSettings, { provider: TProvider }> =>
+	({
+		sourceId: toAppSourceId(id),
+		provider,
+		status: "connected",
+		displayName,
+		endpoint,
+		oauthClientId,
+	}) as Extract<EndpointConnectionSettings, { provider: TProvider }>;
+
+const requireOAuthClientId = (value: string) => {
+	const oauthClientId = value.trim();
+
+	if (!oauthClientId) {
+		throw new ConvexError({
+			code: "INVALID_CONNECTION_DETAILS",
+			message: "OAuth client ID is required.",
+		});
+	}
+
+	return oauthClientId;
+};
+
+const upsertPreservedSecretMcpOAuthConnection = async <
+	TProvider extends PreservedSecretMcpOAuthProvider,
+>(
+	ctx: MutationCtx,
+	args: {
+		ownerTokenIdentifier: string;
+		workspaceId: Id<"workspaces">;
+		displayName: string;
+		baseUrl: string;
+		env?: Record<string, string>;
+		oauthClientId: string;
+		oauthClientSecret?: string;
+		oauthAccessToken: string;
+		oauthRefreshToken?: string;
+		tokenExpiresAt?: number;
+	},
+	provider: TProvider,
+): Promise<Extract<EndpointConnectionSettings, { provider: TProvider }>> => {
+	await requireOwnedWorkspace(ctx, args.ownerTokenIdentifier, args.workspaceId);
+	const now = Date.now();
+	const displayName =
+		args.displayName.trim() || getDefaultAppConnectionDisplayName(provider);
+	const baseUrl = args.baseUrl.trim();
+	const envJson = args.env ? JSON.stringify(args.env) : undefined;
+	const oauthClientId = requireOAuthClientId(args.oauthClientId);
+	const oauthClientSecret = args.oauthClientSecret?.trim() || undefined;
+	const oauthRefreshToken = args.oauthRefreshToken?.trim() || undefined;
+	const existingConnection = await getOwnedConnection(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		provider,
+	);
+
+	if (existingConnection) {
+		await ctx.db.patch(existingConnection._id, {
+			status: "connected",
+			displayName,
+			baseUrl,
+			envJson,
+			accountId: oauthClientId,
+			...(oauthClientSecret ? { oauthClientSecret } : {}),
+			token: args.oauthAccessToken,
+			...(oauthRefreshToken ? { oauthRefreshToken } : {}),
+			tokenExpiresAt: args.tokenExpiresAt,
+			updatedAt: now,
+		});
+
+		return toPreservedSecretMcpOAuthConnectionSettings(
+			existingConnection._id,
+			provider,
+			displayName,
+			baseUrl,
+			oauthClientId,
+		);
+	}
+
+	const id = await ctx.db.insert("appConnections", {
+		ownerTokenIdentifier: args.ownerTokenIdentifier,
+		workspaceId: args.workspaceId,
+		provider,
+		status: "connected",
+		displayName,
+		baseUrl,
+		...(envJson ? { envJson } : {}),
+		accountId: oauthClientId,
+		...(oauthClientSecret ? { oauthClientSecret } : {}),
+		token: args.oauthAccessToken,
+		...(oauthRefreshToken ? { oauthRefreshToken } : {}),
+		...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
+		createdAt: now,
+		updatedAt: now,
+	});
+
+	return toPreservedSecretMcpOAuthConnectionSettings(
+		id,
+		provider,
+		displayName,
+		baseUrl,
+		oauthClientId,
+	);
+};
+
 export const upsertJiraMcp = internalMutation({
 	args: {
 		ownerTokenIdentifier: v.string(),
@@ -2027,83 +2127,15 @@ export const upsertJiraMcp = internalMutation({
 		displayName: v.string(),
 		baseUrl: v.string(),
 		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.optional(v.string()),
+		oauthClientId: v.string(),
 		oauthClientSecret: v.optional(v.string()),
 		oauthAccessToken: v.string(),
 		oauthRefreshToken: v.optional(v.string()),
 		tokenExpiresAt: v.optional(v.number()),
 	},
 	returns: jiraMcpConnectionSettingsValidator,
-	handler: async (ctx, args): Promise<JiraMcpConnectionSettings> => {
-		await requireOwnedWorkspace(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-		);
-		const now = Date.now();
-		const displayName =
-			args.displayName.trim() || getDefaultAppConnectionDisplayName("jira-mcp");
-		const baseUrl = args.baseUrl.trim();
-		const envJson = args.env ? JSON.stringify(args.env) : undefined;
-		const oauthClientId = args.oauthClientId?.trim() || undefined;
-		const oauthClientSecret = args.oauthClientSecret?.trim() || undefined;
-		const oauthRefreshToken = args.oauthRefreshToken?.trim() || undefined;
-		const existingConnection = await getOwnedJiraMcpConnection(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-		);
-
-		if (existingConnection) {
-			await ctx.db.patch(existingConnection._id, {
-				status: "connected",
-				displayName,
-				baseUrl,
-				envJson,
-				...(oauthClientId ? { accountId: oauthClientId } : {}),
-				...(oauthClientSecret ? { oauthClientSecret } : {}),
-				token: args.oauthAccessToken,
-				...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-				tokenExpiresAt: args.tokenExpiresAt,
-				updatedAt: now,
-			});
-
-			return {
-				sourceId: toAppSourceId(existingConnection._id),
-				provider: "jira-mcp" as const,
-				status: "connected" as const,
-				displayName,
-				endpoint: baseUrl,
-				...(oauthClientId ? { oauthClientId } : {}),
-			};
-		}
-
-		const id = await ctx.db.insert("appConnections", {
-			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			provider: "jira-mcp",
-			status: "connected",
-			displayName,
-			baseUrl,
-			...(envJson ? { envJson } : {}),
-			...(oauthClientId ? { accountId: oauthClientId } : {}),
-			...(oauthClientSecret ? { oauthClientSecret } : {}),
-			token: args.oauthAccessToken,
-			...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-			...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
-			createdAt: now,
-			updatedAt: now,
-		});
-
-		return {
-			sourceId: toAppSourceId(id),
-			provider: "jira-mcp" as const,
-			status: "connected" as const,
-			displayName,
-			endpoint: baseUrl,
-			...(oauthClientId ? { oauthClientId } : {}),
-		};
-	},
+	handler: async (ctx, args): Promise<JiraMcpConnectionSettings> =>
+		await upsertPreservedSecretMcpOAuthConnection(ctx, args, "jira-mcp"),
 });
 
 export const upsertPostHog = internalMutation({
@@ -2113,83 +2145,15 @@ export const upsertPostHog = internalMutation({
 		displayName: v.string(),
 		baseUrl: v.string(),
 		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.optional(v.string()),
+		oauthClientId: v.string(),
 		oauthClientSecret: v.optional(v.string()),
 		oauthAccessToken: v.string(),
 		oauthRefreshToken: v.optional(v.string()),
 		tokenExpiresAt: v.optional(v.number()),
 	},
 	returns: posthogConnectionSettingsValidator,
-	handler: async (ctx, args): Promise<PostHogConnectionSettings> => {
-		await requireOwnedWorkspace(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-		);
-		const now = Date.now();
-		const displayName =
-			args.displayName.trim() || getDefaultAppConnectionDisplayName("posthog");
-		const baseUrl = args.baseUrl.trim();
-		const envJson = args.env ? JSON.stringify(args.env) : undefined;
-		const oauthClientId = args.oauthClientId?.trim() || undefined;
-		const oauthClientSecret = args.oauthClientSecret?.trim() || undefined;
-		const oauthRefreshToken = args.oauthRefreshToken?.trim() || undefined;
-		const existingConnection = await getOwnedPostHogConnection(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-		);
-
-		if (existingConnection) {
-			await ctx.db.patch(existingConnection._id, {
-				status: "connected",
-				displayName,
-				baseUrl,
-				envJson,
-				...(oauthClientId ? { accountId: oauthClientId } : {}),
-				...(oauthClientSecret ? { oauthClientSecret } : {}),
-				token: args.oauthAccessToken,
-				...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-				tokenExpiresAt: args.tokenExpiresAt,
-				updatedAt: now,
-			});
-
-			return {
-				sourceId: toAppSourceId(existingConnection._id),
-				provider: "posthog" as const,
-				status: "connected" as const,
-				displayName,
-				endpoint: baseUrl,
-				...(oauthClientId ? { oauthClientId } : {}),
-			};
-		}
-
-		const id = await ctx.db.insert("appConnections", {
-			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			provider: "posthog",
-			status: "connected",
-			displayName,
-			baseUrl,
-			...(envJson ? { envJson } : {}),
-			...(oauthClientId ? { accountId: oauthClientId } : {}),
-			...(oauthClientSecret ? { oauthClientSecret } : {}),
-			token: args.oauthAccessToken,
-			...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-			...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
-			createdAt: now,
-			updatedAt: now,
-		});
-
-		return {
-			sourceId: toAppSourceId(id),
-			provider: "posthog" as const,
-			status: "connected" as const,
-			displayName,
-			endpoint: baseUrl,
-			...(oauthClientId ? { oauthClientId } : {}),
-		};
-	},
+	handler: async (ctx, args): Promise<PostHogConnectionSettings> =>
+		await upsertPreservedSecretMcpOAuthConnection(ctx, args, "posthog"),
 });
 
 export const upsertNotion = internalMutation({
@@ -2199,83 +2163,15 @@ export const upsertNotion = internalMutation({
 		displayName: v.string(),
 		baseUrl: v.string(),
 		env: v.optional(v.record(v.string(), v.string())),
-		oauthClientId: v.optional(v.string()),
+		oauthClientId: v.string(),
 		oauthClientSecret: v.optional(v.string()),
 		oauthAccessToken: v.string(),
 		oauthRefreshToken: v.optional(v.string()),
 		tokenExpiresAt: v.optional(v.number()),
 	},
 	returns: notionConnectionSettingsValidator,
-	handler: async (ctx, args): Promise<NotionConnectionSettings> => {
-		await requireOwnedWorkspace(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-		);
-		const now = Date.now();
-		const displayName =
-			args.displayName.trim() || getDefaultAppConnectionDisplayName("notion");
-		const baseUrl = args.baseUrl.trim();
-		const envJson = args.env ? JSON.stringify(args.env) : undefined;
-		const oauthClientId = args.oauthClientId?.trim() || undefined;
-		const oauthClientSecret = args.oauthClientSecret?.trim() || undefined;
-		const oauthRefreshToken = args.oauthRefreshToken?.trim() || undefined;
-		const existingConnection = await getOwnedNotionConnection(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-		);
-
-		if (existingConnection) {
-			await ctx.db.patch(existingConnection._id, {
-				status: "connected",
-				displayName,
-				baseUrl,
-				envJson,
-				...(oauthClientId ? { accountId: oauthClientId } : {}),
-				...(oauthClientSecret ? { oauthClientSecret } : {}),
-				token: args.oauthAccessToken,
-				...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-				tokenExpiresAt: args.tokenExpiresAt,
-				updatedAt: now,
-			});
-
-			return {
-				sourceId: toAppSourceId(existingConnection._id),
-				provider: "notion" as const,
-				status: "connected" as const,
-				displayName,
-				endpoint: baseUrl,
-				...(oauthClientId ? { oauthClientId } : {}),
-			};
-		}
-
-		const id = await ctx.db.insert("appConnections", {
-			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			provider: "notion",
-			status: "connected",
-			displayName,
-			baseUrl,
-			...(envJson ? { envJson } : {}),
-			...(oauthClientId ? { accountId: oauthClientId } : {}),
-			...(oauthClientSecret ? { oauthClientSecret } : {}),
-			token: args.oauthAccessToken,
-			...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-			...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
-			createdAt: now,
-			updatedAt: now,
-		});
-
-		return {
-			sourceId: toAppSourceId(id),
-			provider: "notion" as const,
-			status: "connected" as const,
-			displayName,
-			endpoint: baseUrl,
-			...(oauthClientId ? { oauthClientId } : {}),
-		};
-	},
+	handler: async (ctx, args): Promise<NotionConnectionSettings> =>
+		await upsertPreservedSecretMcpOAuthConnection(ctx, args, "notion"),
 });
 
 export const upsertZoom = internalMutation({
