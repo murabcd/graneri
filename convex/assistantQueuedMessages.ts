@@ -68,9 +68,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const getQueuedTextPartCharCount = (parts: unknown[]) =>
 	parts.reduce<number>(
 		(count, part) =>
-			isRecord(part) &&
-			part.type === "text" &&
-			typeof part.text === "string"
+			isRecord(part) && part.type === "text" && typeof part.text === "string"
 				? count + Array.from(part.text).length
 				: count,
 		0,
@@ -176,8 +174,7 @@ const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 	) {
 		throw new ConvexError({
 			code: "QUEUED_MESSAGE_LOCAL_FOLDERS_UNSAFE",
-			message:
-				"Queued messages cannot persist local folder selections.",
+			message: "Queued messages cannot persist local folder selections.",
 		});
 	}
 };
@@ -250,6 +247,50 @@ const requireValidSavedQueuedMessage = (
 		requestBodyJson: queuedMessage.requestBodyJson,
 		text: queuedMessage.text,
 	});
+};
+
+const getScopedQueuedMessageForChat = async (
+	ctx: QueryCtx | MutationCtx,
+	{
+		chatId,
+		ownerTokenIdentifier,
+		queuedMessageId,
+		workspaceId,
+	}: {
+		chatId: string;
+		ownerTokenIdentifier: string;
+		queuedMessageId: Id<"assistantQueuedMessages">;
+		workspaceId: Id<"workspaces">;
+	},
+) => {
+	const chat = await getOwnedActiveChatById(
+		ctx,
+		ownerTokenIdentifier,
+		workspaceId,
+		chatId,
+	);
+
+	if (!chat) {
+		throw new ConvexError({
+			code: "CHAT_NOT_FOUND",
+			message: "Chat not found.",
+		});
+	}
+
+	const queuedMessage = await ctx.db.get(queuedMessageId);
+	if (
+		!queuedMessage ||
+		queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
+		queuedMessage.workspaceId !== workspaceId ||
+		queuedMessage.chatId !== chat._id
+	) {
+		throw new ConvexError({
+			code: "QUEUED_MESSAGE_NOT_FOUND",
+			message: "Queued message is no longer available.",
+		});
+	}
+
+	return { chat, queuedMessage };
 };
 
 const isStaleClaimedMessage = (
@@ -646,26 +687,26 @@ export const claimNextForChat = mutation({
 			.query("assistantQueuedMessages")
 			.withIndex("by_chatId_and_status_and_createdAt", (q) =>
 				q.eq("chatId", chat._id).eq("status", "queued"),
-				)
-				.first();
+			)
+			.first();
 
-			if (!nextQueuedMessage) {
-				return null;
-			}
-			if (
-				nextQueuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-				nextQueuedMessage.workspaceId !== args.workspaceId ||
-				nextQueuedMessage.chatId !== chat._id ||
-				nextQueuedMessage.status !== "queued"
-			) {
-				return null;
-			}
-			requireValidSavedQueuedMessage(nextQueuedMessage);
+		if (!nextQueuedMessage) {
+			return null;
+		}
+		if (
+			nextQueuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
+			nextQueuedMessage.workspaceId !== args.workspaceId ||
+			nextQueuedMessage.chatId !== chat._id ||
+			nextQueuedMessage.status !== "queued"
+		) {
+			return null;
+		}
+		requireValidSavedQueuedMessage(nextQueuedMessage);
 
-			await ctx.db.patch(nextQueuedMessage._id, {
-				status: "claimed",
-				updatedAt: now,
-				claimedAt: now,
+		await ctx.db.patch(nextQueuedMessage._id, {
+			status: "claimed",
+			updatedAt: now,
+			claimedAt: now,
 		});
 
 		return await requireSavedQueuedMessage(ctx, nextQueuedMessage._id);
@@ -684,34 +725,13 @@ export const getClaimedForChat = query({
 			ctx,
 			"assistantQueuedMessages",
 		);
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { chat, queuedMessage } = await getScopedQueuedMessageForChat(ctx, {
+			chatId: args.chatId,
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
+			queuedMessageId: args.queuedMessageId,
+			workspaceId: args.workspaceId,
+		});
 		await requireNoDuplicateActiveRunsForChat(ctx, chat._id);
-
-		const queuedMessage = await ctx.db.get(args.queuedMessageId);
-		if (
-			!queuedMessage ||
-			queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			queuedMessage.workspaceId !== args.workspaceId ||
-			queuedMessage.chatId !== chat._id
-		) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_NOT_FOUND",
-				message: "Queued message is no longer available.",
-			});
-		}
 
 		if (queuedMessage.status !== "claimed") {
 			throw new ConvexError({
@@ -737,31 +757,12 @@ export const discardClaimed = mutation({
 			ctx,
 			"assistantQueuedMessages",
 		);
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { queuedMessage } = await getScopedQueuedMessageForChat(ctx, {
+			chatId: args.chatId,
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-		const queuedMessage = await ctx.db.get(args.queuedMessageId);
-
-		if (
-			!queuedMessage ||
-			queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			queuedMessage.workspaceId !== args.workspaceId ||
-			queuedMessage.chatId !== chat._id
-		) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_NOT_FOUND",
-				message: "Queued message is no longer available.",
-			});
-		}
+			queuedMessageId: args.queuedMessageId,
+			workspaceId: args.workspaceId,
+		});
 
 		if (queuedMessage.status !== "claimed") {
 			throw new ConvexError({
@@ -788,31 +789,12 @@ export const discardQueued = mutation({
 			ctx,
 			"assistantQueuedMessages",
 		);
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { queuedMessage } = await getScopedQueuedMessageForChat(ctx, {
+			chatId: args.chatId,
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-		const queuedMessage = await ctx.db.get(args.queuedMessageId);
-
-		if (
-			!queuedMessage ||
-			queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			queuedMessage.workspaceId !== args.workspaceId ||
-			queuedMessage.chatId !== chat._id
-		) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_NOT_FOUND",
-				message: "Queued message is no longer available.",
-			});
-		}
+			queuedMessageId: args.queuedMessageId,
+			workspaceId: args.workspaceId,
+		});
 
 		if (queuedMessage.status !== "queued") {
 			throw new ConvexError({
