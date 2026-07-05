@@ -107,7 +107,7 @@ import { AppearanceSettings } from "@/components/settings/appearance-settings";
 import { ConnectionDialogFooter } from "@/components/settings/connection-dialog-footer";
 import {
 	getConnectionErrorMessage,
-	withoutTrailingPeriod,
+	getErrorMessageWithoutTrailingPeriod as getToastErrorMessage,
 } from "@/components/settings/connection-error-message";
 import {
 	calendarSettingsReducer,
@@ -1031,9 +1031,7 @@ function useYandexCalendarConnectionDialog({
 				message: "Failed to connect Yandex Calendar",
 			});
 			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to connect Yandex Calendar",
+				getToastErrorMessage(error, "Failed to connect Yandex Calendar"),
 			);
 		} finally {
 			setIsSavingYandexCalendarConnection(false);
@@ -1593,9 +1591,7 @@ function useConnectionsSettingsController() {
 			.catch((error) => {
 				lastPreparedJiraSyncKeyRef.current = null;
 				toast.error(
-					error instanceof Error
-						? withoutTrailingPeriod(error.message)
-						: "Failed to prepare Jira mention sync",
+					getToastErrorMessage(error, "Failed to prepare Jira mention sync"),
 				);
 			})
 			.finally(() => {
@@ -1650,9 +1646,7 @@ function useConnectionsSettingsController() {
 				message: "Failed to connect Yandex Tracker",
 			});
 			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to connect Yandex Tracker",
+				getToastErrorMessage(error, "Failed to connect Yandex Tracker"),
 			);
 		} finally {
 			dispatch({ type: "setIsSavingYandexTrackerConnection", value: false });
@@ -1710,11 +1704,7 @@ function useConnectionsSettingsController() {
 				error: error,
 				message: "Failed to connect Jira",
 			});
-			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to connect Jira",
-			);
+			toast.error(getToastErrorMessage(error, "Failed to connect Jira"));
 		} finally {
 			dispatch({ type: "setIsSavingJiraConnection", value: false });
 		}
@@ -1998,11 +1988,7 @@ function useConnectionsSettingsController() {
 				error: error,
 				message: "Failed to disable connection",
 			});
-			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to disable connection",
-			);
+			toast.error(getToastErrorMessage(error, "Failed to disable connection"));
 		} finally {
 			dispatch({ type: "setIsDisablingConnection", value: false });
 		}
@@ -2467,9 +2453,7 @@ function useConnectionsSettingsController() {
 				message: "Failed to connect Google tool",
 			});
 			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to connect Google account",
+				getToastErrorMessage(error, "Failed to connect Google account"),
 			);
 		} finally {
 			onStateChange(false);
@@ -3349,9 +3333,7 @@ function WorkspaceSettings({
 				message: "Failed to upload workspace icon",
 			});
 			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to upload workspace icon",
+				getToastErrorMessage(error, "Failed to upload workspace icon"),
 			);
 		} finally {
 			setIsUploadingIcon(false);
@@ -3382,11 +3364,7 @@ function WorkspaceSettings({
 				error: error,
 				message: "Failed to update workspace",
 			});
-			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to update workspace",
-			);
+			toast.error(getToastErrorMessage(error, "Failed to update workspace"));
 		} finally {
 			setIsSaving(false);
 		}
@@ -3580,11 +3558,7 @@ function DataControlsSettings({
 				message: "Failed to delete workspace",
 			});
 			setShowDeleteWorkspaceDialog(false);
-			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to delete workspace",
-			);
+			toast.error(getToastErrorMessage(error, "Failed to delete workspace"));
 		} finally {
 			setIsDeletingWorkspace(false);
 		}
@@ -3937,9 +3911,7 @@ function useManageAccountFormElement({
 				message: "Failed to upload profile avatar",
 			});
 			toast.error(
-				error instanceof Error
-					? withoutTrailingPeriod(error.message)
-					: "Failed to upload profile avatar",
+				getToastErrorMessage(error, "Failed to upload profile avatar"),
 			);
 		} finally {
 			setIsUploadingAvatar(false);
@@ -4111,9 +4083,7 @@ function useManageAccountFormElement({
 								message: "Failed to update profile",
 							});
 							toast.error(
-								error instanceof Error
-									? withoutTrailingPeriod(error.message)
-									: "Failed to update profile",
+								getToastErrorMessage(error, "Failed to update profile"),
 							);
 						} finally {
 							setIsSavingPreferences(false);

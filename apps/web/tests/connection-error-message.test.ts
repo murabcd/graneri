@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	getConnectionErrorMessage,
 	getConvexErrorDataMessage,
+	getErrorMessageWithoutTrailingPeriod,
 	withoutTrailingPeriod,
 } from "@/components/settings/connection-error-message";
 
@@ -30,6 +31,15 @@ describe("connection error messages", () => {
 		expect(
 			getConnectionErrorMessage(new Error("OAuth popup blocked."), "Fallback"),
 		).toBe("OAuth popup blocked");
+		expect(
+			getErrorMessageWithoutTrailingPeriod(
+				new Error("OAuth popup blocked."),
+				"Fallback",
+			),
+		).toBe("OAuth popup blocked");
+		expect(getErrorMessageWithoutTrailingPeriod("unknown", "Fallback")).toBe(
+			"Fallback",
+		);
 		expect(getConnectionErrorMessage("unknown", "Fallback")).toBe("Fallback");
 	});
 

@@ -1,6 +1,11 @@
 export const withoutTrailingPeriod = (message: string) =>
 	message.trimEnd().replace(/\.+$/u, "");
 
+export const getErrorMessageWithoutTrailingPeriod = (
+	error: unknown,
+	fallback: string,
+) => (error instanceof Error ? withoutTrailingPeriod(error.message) : fallback);
+
 export const getConvexErrorDataMessage = (error: unknown) => {
 	if (!(error instanceof Error)) {
 		return "";
@@ -30,7 +35,5 @@ export const getConnectionErrorMessage = (error: unknown, fallback: string) => {
 		return withoutTrailingPeriod(convexMessage);
 	}
 
-	return error instanceof Error
-		? withoutTrailingPeriod(error.message)
-		: fallback;
+	return getErrorMessageWithoutTrailingPeriod(error, fallback);
 };
