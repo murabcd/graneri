@@ -7,13 +7,11 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { isRecord } from "./object-record.mjs";
 
 const authStoreFileMode = 0o600;
 const authStoreDirMode = 0o700;
 const authStoreFileName = "desktop-auth-cookies.json";
-
-const isRecord = (value) =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
 
 const parseCookieJar = (value, origin) => {
 	if (!isRecord(value)) {

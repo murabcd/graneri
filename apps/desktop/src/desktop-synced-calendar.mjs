@@ -1,5 +1,4 @@
-const isRecord = (value) =>
-	Boolean(value) && typeof value === "object" && !Array.isArray(value);
+import { isRecord } from "./object-record.mjs";
 
 const trimString = (value) => (typeof value === "string" ? value.trim() : "");
 
