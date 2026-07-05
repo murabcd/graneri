@@ -88,6 +88,23 @@ const requireTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
 	return await requireDomainTokenIdentifier(ctx, "notes");
 };
 
+const getNotesByArchivedState = async (
+	ctx: QueryCtx,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+	isArchived: boolean,
+) =>
+	await ctx.db
+		.query("notes")
+		.withIndex("by_owner_ws_arch_upd", (q) =>
+			q
+				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+				.eq("workspaceId", workspaceId)
+				.eq("isArchived", isArchived),
+		)
+		.order("desc")
+		.take(100);
+
 export const ensureOwnedNote = ({
 	note,
 	ownerTokenIdentifier,
@@ -409,16 +426,12 @@ export const list = query({
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const notes = await ctx.db
-			.query("notes")
-			.withIndex("by_owner_ws_arch_upd", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId)
-					.eq("isArchived", false),
-			)
-			.order("desc")
-			.take(100);
+		const notes = await getNotesByArchivedState(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			false,
+		);
 
 		return notes.map(normalizeNote);
 	},
@@ -456,16 +469,12 @@ export const listArchived = query({
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const notes = await ctx.db
-			.query("notes")
-			.withIndex("by_owner_ws_arch_upd", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId)
-					.eq("isArchived", true),
-			)
-			.order("desc")
-			.take(100);
+		const notes = await getNotesByArchivedState(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			true,
+		);
 
 		return notes.map(normalizeNote);
 	},
