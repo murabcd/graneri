@@ -135,6 +135,14 @@ type StandardRemoteMcpConnectionProvider = Exclude<
 	RemoteMcpConnectionProvider,
 	"zoom"
 >;
+type McpOAuthClientCredentials = {
+	oauthClientId?: string;
+	oauthClientSecret?: string;
+};
+type McpOAuthClient = {
+	clientId: string;
+	clientSecret?: string;
+};
 
 const ZOOM_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const MCP_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -717,6 +725,24 @@ const sanitizeRemoteMcpEnv = (env?: Record<string, string>) =>
 			.filter(([key, value]) => key.length > 0 && value.length > 0),
 	);
 
+const getRequestedMcpOAuthClient = ({
+	oauthClientId,
+	oauthClientSecret,
+}: McpOAuthClientCredentials): McpOAuthClient | undefined => {
+	const clientId = oauthClientId?.trim();
+
+	if (!clientId) {
+		return undefined;
+	}
+
+	const clientSecret = oauthClientSecret?.trim();
+
+	return {
+		clientId,
+		...(clientSecret ? { clientSecret } : {}),
+	};
+};
+
 const startRemoteMcpOAuthConnection = async ({
 	ctx,
 	args,
@@ -749,9 +775,7 @@ const startRemoteMcpOAuthConnection = async ({
 	);
 	const displayName = args.displayName.trim() || label;
 	const env = sanitizeRemoteMcpEnv(args.env);
-	const requestedOAuthClientId = args.oauthClientId?.trim() || undefined;
-	const requestedOAuthClientSecret =
-		args.oauthClientSecret?.trim() || undefined;
+	const requestedClient = getRequestedMcpOAuthClient(args);
 
 	if (!redirectUri.startsWith("http")) {
 		throw new ConvexError({
@@ -760,21 +784,13 @@ const startRemoteMcpOAuthConnection = async ({
 		});
 	}
 
-	let client: { clientId: string; clientSecret?: string };
+	let client: McpOAuthClient;
 	let oauthStart: Awaited<ReturnType<typeof startMcpSdkOAuth>>;
 	try {
-		client = requestedOAuthClientId
-			? {
-					clientId: requestedOAuthClientId,
-					...(requestedOAuthClientSecret
-						? { clientSecret: requestedOAuthClientSecret }
-						: {}),
-				}
-			: { clientId: "" };
 		oauthStart = await startMcpSdkOAuth({
 			baseUrl,
 			redirectUri,
-			client: client.clientId ? client : undefined,
+			client: requestedClient,
 			createState: createMcpOAuthState,
 		});
 		client = oauthStart.client;
@@ -1049,9 +1065,7 @@ export const connectJiraMcp = action({
 				([key, value]) => key.trim().length > 0 && value.length > 0,
 			),
 		);
-		const requestedOAuthClientId = args.oauthClientId?.trim() || undefined;
-		const requestedOAuthClientSecret =
-			args.oauthClientSecret?.trim() || undefined;
+		const requestedClient = getRequestedMcpOAuthClient(args);
 
 		if (!redirectUri.startsWith("http")) {
 			throw new ConvexError({
@@ -1060,21 +1074,13 @@ export const connectJiraMcp = action({
 			});
 		}
 
-		let client: { clientId: string; clientSecret?: string };
+		let client: McpOAuthClient;
 		let oauthStart: Awaited<ReturnType<typeof startMcpSdkOAuth>>;
 		try {
-			client = requestedOAuthClientId
-				? {
-						clientId: requestedOAuthClientId,
-						...(requestedOAuthClientSecret
-							? { clientSecret: requestedOAuthClientSecret }
-							: {}),
-					}
-				: { clientId: "" };
 			oauthStart = await startMcpSdkOAuth({
 				baseUrl,
 				redirectUri,
-				client: client.clientId ? client : undefined,
+				client: requestedClient,
 				createState: createMcpOAuthState,
 			});
 			client = oauthStart.client;
@@ -1185,9 +1191,7 @@ export const connectPostHog = action({
 				([key, value]) => key.trim().length > 0 && value.length > 0,
 			),
 		);
-		const requestedOAuthClientId = args.oauthClientId?.trim() || undefined;
-		const requestedOAuthClientSecret =
-			args.oauthClientSecret?.trim() || undefined;
+		const requestedClient = getRequestedMcpOAuthClient(args);
 
 		if (!redirectUri.startsWith("http")) {
 			throw new ConvexError({
@@ -1196,21 +1200,13 @@ export const connectPostHog = action({
 			});
 		}
 
-		let client: { clientId: string; clientSecret?: string };
+		let client: McpOAuthClient;
 		let oauthStart: Awaited<ReturnType<typeof startMcpSdkOAuth>>;
 		try {
-			client = requestedOAuthClientId
-				? {
-						clientId: requestedOAuthClientId,
-						...(requestedOAuthClientSecret
-							? { clientSecret: requestedOAuthClientSecret }
-							: {}),
-					}
-				: { clientId: "" };
 			oauthStart = await startMcpSdkOAuth({
 				baseUrl,
 				redirectUri,
-				client: client.clientId ? client : undefined,
+				client: requestedClient,
 				createState: createMcpOAuthState,
 			});
 			client = oauthStart.client;
@@ -1269,9 +1265,7 @@ export const connectNotion = action({
 				([key, value]) => key.trim().length > 0 && value.length > 0,
 			),
 		);
-		const requestedOAuthClientId = args.oauthClientId?.trim() || undefined;
-		const requestedOAuthClientSecret =
-			args.oauthClientSecret?.trim() || undefined;
+		const requestedClient = getRequestedMcpOAuthClient(args);
 
 		if (!redirectUri.startsWith("http")) {
 			throw new ConvexError({
@@ -1281,21 +1275,16 @@ export const connectNotion = action({
 		}
 
 		let metadata: Awaited<ReturnType<typeof discoverMcpOAuthMetadata>>;
-		let client: { clientId: string; clientSecret?: string };
+		let client: McpOAuthClient;
 		try {
 			metadata = await discoverMcpOAuthMetadata(baseUrl, defaults.displayName);
-			client = requestedOAuthClientId
-				? {
-						clientId: requestedOAuthClientId,
-						...(requestedOAuthClientSecret
-							? { clientSecret: requestedOAuthClientSecret }
-							: {}),
-					}
-				: await registerMcpOAuthClient({
-						registrationEndpoint: metadata.registrationEndpoint,
-						redirectUri,
-						displayName: defaults.displayName,
-					});
+			client =
+				requestedClient ??
+				(await registerMcpOAuthClient({
+					registrationEndpoint: metadata.registrationEndpoint,
+					redirectUri,
+					displayName: defaults.displayName,
+				}));
 		} catch (error) {
 			console.error(
 				`Failed to prepare ${defaults.displayName} MCP OAuth connection`,
