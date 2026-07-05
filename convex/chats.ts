@@ -262,6 +262,49 @@ const getActiveStreamByRunId = async (
 		.withIndex("by_runId", (q) => q.eq("runId", runId))
 		.unique();
 
+const requireOwnedActiveChatAndRun = async (
+	ctx: MutationCtx,
+	args: {
+		ownerTokenIdentifier: string;
+		workspaceId: Id<"workspaces">;
+		chatId: string;
+		runId: Id<"assistantRuns">;
+		runNotFoundMessage?: string;
+	},
+): Promise<{
+	chat: Doc<"chats">;
+	run: Doc<"assistantRuns">;
+}> => {
+	const chat = await getOwnedActiveChatById(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		args.chatId,
+	);
+
+	if (!chat) {
+		throw new ConvexError({
+			code: "CHAT_NOT_FOUND",
+			message: "Chat not found.",
+		});
+	}
+
+	const run = await ctx.db.get(args.runId);
+	if (
+		!run ||
+		run.ownerTokenIdentifier !== args.ownerTokenIdentifier ||
+		run.workspaceId !== args.workspaceId ||
+		run.chatId !== chat._id
+	) {
+		throw new ConvexError({
+			code: "ASSISTANT_RUN_NOT_FOUND",
+			message: args.runNotFoundMessage ?? "Assistant run not found.",
+		});
+	}
+
+	return { chat, run };
+};
+
 const stopActiveRunsForChat = async (
 	ctx: MutationCtx,
 	chatId: Doc<"chats">["_id"],
@@ -1285,32 +1328,12 @@ export const acceptSteeredUserMessage = mutation({
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
 		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
-		const run = await ctx.db.get(args.runId);
-		if (
-			!run ||
-			run.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			run.workspaceId !== args.workspaceId ||
-			run.chatId !== chat._id
-		) {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_NOT_FOUND",
-				message: "Assistant run not found.",
-			});
-		}
+			workspaceId: args.workspaceId,
+			chatId: args.chatId,
+			runId: args.runId,
+		});
 
 		if (run.status !== "running" && run.status !== "waiting_for_user") {
 			throw new ConvexError({
@@ -1419,32 +1442,12 @@ export const acceptSteeredUserMessages = mutation({
 
 		const identity = await requireIdentity(ctx);
 		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
-		const run = await ctx.db.get(args.runId);
-		if (
-			!run ||
-			run.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			run.workspaceId !== args.workspaceId ||
-			run.chatId !== chat._id
-		) {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_NOT_FOUND",
-				message: "Assistant run not found.",
-			});
-		}
+			workspaceId: args.workspaceId,
+			chatId: args.chatId,
+			runId: args.runId,
+		});
 
 		if (run.status !== "running" && run.status !== "waiting_for_user") {
 			throw new ConvexError({
@@ -1642,28 +1645,15 @@ export const startActiveStream = mutation({
 	returns: chatActiveStreamValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
+			workspaceId: args.workspaceId,
+			chatId: args.chatId,
+			runId: args.runId,
+			runNotFoundMessage: "Active assistant run not found.",
+		});
 
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
-		const run = await ctx.db.get(args.runId);
-		if (
-			!run ||
-			run.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			run.workspaceId !== args.workspaceId ||
-			run.chatId !== chat._id ||
-			run.status !== "running"
-		) {
+		if (run.status !== "running") {
 			throw new ConvexError({
 				code: "ASSISTANT_RUN_NOT_FOUND",
 				message: "Active assistant run not found.",
@@ -1718,32 +1708,13 @@ export const appendActiveStreamText = mutation({
 		}
 
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
-		const run = await ctx.db.get(args.runId);
-		if (
-			!run ||
-			run.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			run.workspaceId !== args.workspaceId ||
-			run.chatId !== chat._id
-		) {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_NOT_FOUND",
-				message: "Active assistant run not found.",
-			});
-		}
+			workspaceId: args.workspaceId,
+			chatId: args.chatId,
+			runId: args.runId,
+			runNotFoundMessage: "Active assistant run not found.",
+		});
 
 		if (run.status !== "running") {
 			throw new ConvexError({
@@ -1831,32 +1802,12 @@ export const saveAssistantMessageForRun = mutation({
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
 		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		const { run } = await requireOwnedActiveChatAndRun(ctx, {
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
-		const run = await ctx.db.get(args.runId);
-		if (
-			!run ||
-			run.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			run.workspaceId !== args.workspaceId ||
-			run.chatId !== chat._id
-		) {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_NOT_FOUND",
-				message: "Assistant run not found.",
-			});
-		}
+			workspaceId: args.workspaceId,
+			chatId: args.chatId,
+			runId: args.runId,
+		});
 
 		if (
 			run.status === "stopping" ||
