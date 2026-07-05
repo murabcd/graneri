@@ -3,7 +3,7 @@ import {
 	validateRemoteMcpConnection,
 } from "./remote-mcp-tools.mjs";
 
-export const DEFAULT_CONTEXT7_MCP_ENDPOINT = "https://mcp.context7.com/mcp";
+export { DEFAULT_CONTEXT7_MCP_ENDPOINT } from "./capability-metadata.mjs";
 
 export const validateContext7McpConnection = async (connection) =>
 	await validateRemoteMcpConnection({

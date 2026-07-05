@@ -3,6 +3,7 @@ import type {
 	RemoteMcpConnectionFormState,
 	RemoteMcpOAuthFields,
 } from "@/lib/remote-mcp-connection-form";
+import { remoteMcpConnectionDefaults } from "../../../../../packages/ai/src/capability-metadata.mjs";
 
 export type YandexTrackerOrgType = "x-org-id" | "x-cloud-org-id";
 
@@ -414,54 +415,54 @@ export const initialJiraConnectionFormState: JiraConnectionFormState = {
 };
 
 export const initialJiraMcpConnectionFormState: JiraMcpConnectionFormState = {
-	name: "Jira",
-	baseUrl: "https://mcp.atlassian.com/v1/mcp",
+	name: remoteMcpConnectionDefaults["jira-mcp"].displayName,
+	baseUrl: remoteMcpConnectionDefaults["jira-mcp"].endpoint,
 	envVars: [],
 	oauthClientId: "",
 	oauthClientSecret: "",
 };
 
 export const initialPostHogConnectionFormState: PostHogConnectionFormState = {
-	name: "PostHog",
-	baseUrl: "https://mcp.posthog.com/mcp",
+	name: remoteMcpConnectionDefaults.posthog.displayName,
+	baseUrl: remoteMcpConnectionDefaults.posthog.endpoint,
 	envVars: [],
 	oauthClientId: "",
 	oauthClientSecret: "",
 };
 
 export const initialContext7ConnectionFormState: Context7ConnectionFormState = {
-	name: "Context7",
-	baseUrl: "https://mcp.context7.com/mcp",
+	name: remoteMcpConnectionDefaults.context7.displayName,
+	baseUrl: remoteMcpConnectionDefaults.context7.endpoint,
 	envVars: [],
 };
 
 export const initialFigmaConnectionFormState: FigmaConnectionFormState = {
-	name: "Figma",
-	baseUrl: "https://mcp.figma.com/mcp",
+	name: remoteMcpConnectionDefaults.figma.displayName,
+	baseUrl: remoteMcpConnectionDefaults.figma.endpoint,
 	envVars: [],
 	oauthClientId: "",
 	oauthClientSecret: "",
 };
 
 export const initialLinearConnectionFormState: LinearConnectionFormState = {
-	name: "Linear",
-	baseUrl: "https://mcp.linear.app/mcp",
+	name: remoteMcpConnectionDefaults.linear.displayName,
+	baseUrl: remoteMcpConnectionDefaults.linear.endpoint,
 	envVars: [],
 	oauthClientId: "",
 	oauthClientSecret: "",
 };
 
 export const initialNotionConnectionFormState: NotionConnectionFormState = {
-	name: "Notion",
-	baseUrl: "https://mcp.notion.com/mcp",
+	name: remoteMcpConnectionDefaults.notion.displayName,
+	baseUrl: remoteMcpConnectionDefaults.notion.endpoint,
 	envVars: [],
 	oauthClientId: "",
 	oauthClientSecret: "",
 };
 
 export const initialZoomConnectionFormState: ZoomConnectionFormState = {
-	name: "Zoom",
-	baseUrl: "https://mcp.zoom.us/mcp/zoom/streamable",
+	name: remoteMcpConnectionDefaults.zoom.displayName,
+	baseUrl: remoteMcpConnectionDefaults.zoom.endpoint,
 	envVars: [],
 	oauthClientId: "",
 	oauthClientSecret: "",

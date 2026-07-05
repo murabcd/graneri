@@ -3,7 +3,7 @@ import {
 	validateRemoteMcpConnection,
 } from "./remote-mcp-tools.mjs";
 
-export const DEFAULT_FIGMA_MCP_ENDPOINT = "https://mcp.figma.com/mcp";
+export { DEFAULT_FIGMA_MCP_ENDPOINT } from "./capability-metadata.mjs";
 
 export const validateFigmaMcpConnection = async (connection) =>
 	await validateRemoteMcpConnection({

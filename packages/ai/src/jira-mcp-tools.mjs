@@ -3,7 +3,7 @@ import {
 	validateRemoteMcpConnection,
 } from "./remote-mcp-tools.mjs";
 
-export const DEFAULT_JIRA_MCP_ENDPOINT = "https://mcp.atlassian.com/v1/mcp";
+export { DEFAULT_JIRA_MCP_ENDPOINT } from "./capability-metadata.mjs";
 
 export const validateJiraMcpConnection = async (connection) =>
 	await validateRemoteMcpConnection({

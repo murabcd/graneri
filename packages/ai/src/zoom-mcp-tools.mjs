@@ -3,8 +3,7 @@ import {
 	validateRemoteMcpConnection,
 } from "./remote-mcp-tools.mjs";
 
-export const DEFAULT_ZOOM_MCP_ENDPOINT =
-	"https://mcp.zoom.us/mcp/zoom/streamable";
+export { DEFAULT_ZOOM_MCP_ENDPOINT } from "./capability-metadata.mjs";
 
 export const validateZoomMcpConnection = async (connection) =>
 	await validateRemoteMcpConnection({

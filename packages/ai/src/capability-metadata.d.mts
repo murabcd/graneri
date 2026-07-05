@@ -30,6 +30,13 @@ export type McpOAuthConnectionProvider =
 	| "notion"
 	| "posthog"
 	| "zoom";
+export type RemoteMcpConnectionProvider =
+	| "context7"
+	| McpOAuthConnectionProvider;
+export type RemoteMcpConnectionDefaults = {
+	displayName: string;
+	endpoint: string;
+};
 
 export type AppSourceInstructionConnection = {
 	id?: string;
@@ -50,6 +57,13 @@ export type CapabilityMetadata = {
 };
 
 export declare const APP_SOURCE_PREFIX: "app:";
+export declare const DEFAULT_CONTEXT7_MCP_ENDPOINT: string;
+export declare const DEFAULT_FIGMA_MCP_ENDPOINT: string;
+export declare const DEFAULT_JIRA_MCP_ENDPOINT: string;
+export declare const DEFAULT_LINEAR_MCP_ENDPOINT: string;
+export declare const DEFAULT_NOTION_MCP_ENDPOINT: string;
+export declare const DEFAULT_POSTHOG_MCP_ENDPOINT: string;
+export declare const DEFAULT_ZOOM_MCP_ENDPOINT: string;
 export declare const capabilityMetadataDefinitions: readonly CapabilityMetadata[];
 export declare const capabilityMetadataRegistry: Record<
 	AppSourceProvider,
@@ -104,6 +118,10 @@ export declare const tokenRequiredChatSourceAppConnectionProviders: readonly [
 export declare const appConnectionProviderLabels: Record<
 	AppConnectionProvider,
 	string
+>;
+export declare const remoteMcpConnectionDefaults: Record<
+	RemoteMcpConnectionProvider,
+	RemoteMcpConnectionDefaults
 >;
 export declare const remoteMcpToolPrefixes: readonly {
 	prefix: string;

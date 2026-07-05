@@ -1,5 +1,16 @@
 export const APP_SOURCE_PREFIX = "app:";
-const GOOGLE_APP_SOURCE_IDS = new Set(["app:google-calendar", "app:google-drive"]);
+export const DEFAULT_CONTEXT7_MCP_ENDPOINT = "https://mcp.context7.com/mcp";
+export const DEFAULT_FIGMA_MCP_ENDPOINT = "https://mcp.figma.com/mcp";
+export const DEFAULT_JIRA_MCP_ENDPOINT = "https://mcp.atlassian.com/v1/mcp";
+export const DEFAULT_LINEAR_MCP_ENDPOINT = "https://mcp.linear.app/mcp";
+export const DEFAULT_NOTION_MCP_ENDPOINT = "https://mcp.notion.com/mcp";
+export const DEFAULT_POSTHOG_MCP_ENDPOINT = "https://mcp.posthog.com/mcp";
+export const DEFAULT_ZOOM_MCP_ENDPOINT =
+	"https://mcp.zoom.us/mcp/zoom/streamable";
+const GOOGLE_APP_SOURCE_IDS = new Set([
+	"app:google-calendar",
+	"app:google-drive",
+]);
 
 const getConnectionDisplayName = (connection, capability) =>
 	connection.displayName ??
@@ -127,7 +138,10 @@ export const capabilityMetadataDefinitions = [
 ];
 
 export const capabilityMetadataRegistry = Object.fromEntries(
-	capabilityMetadataDefinitions.map((capability) => [capability.id, capability]),
+	capabilityMetadataDefinitions.map((capability) => [
+		capability.id,
+		capability,
+	]),
 );
 
 export const appSourceProviders = capabilityMetadataDefinitions.map(
@@ -216,6 +230,37 @@ export const appConnectionProviderLabels = Object.fromEntries(
 		provider === "jira" ? "Jira" : chatAppSourceLabels[provider],
 	]),
 );
+
+export const remoteMcpConnectionDefaults = {
+	context7: {
+		displayName: appConnectionProviderLabels.context7,
+		endpoint: DEFAULT_CONTEXT7_MCP_ENDPOINT,
+	},
+	figma: {
+		displayName: appConnectionProviderLabels.figma,
+		endpoint: DEFAULT_FIGMA_MCP_ENDPOINT,
+	},
+	"jira-mcp": {
+		displayName: appConnectionProviderLabels["jira-mcp"],
+		endpoint: DEFAULT_JIRA_MCP_ENDPOINT,
+	},
+	linear: {
+		displayName: appConnectionProviderLabels.linear,
+		endpoint: DEFAULT_LINEAR_MCP_ENDPOINT,
+	},
+	notion: {
+		displayName: appConnectionProviderLabels.notion,
+		endpoint: DEFAULT_NOTION_MCP_ENDPOINT,
+	},
+	posthog: {
+		displayName: appConnectionProviderLabels.posthog,
+		endpoint: DEFAULT_POSTHOG_MCP_ENDPOINT,
+	},
+	zoom: {
+		displayName: appConnectionProviderLabels.zoom,
+		endpoint: DEFAULT_ZOOM_MCP_ENDPOINT,
+	},
+};
 
 export const remoteMcpToolPrefixes = capabilityMetadataDefinitions
 	.filter((capability) => capability.toolPrefix)

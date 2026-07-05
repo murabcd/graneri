@@ -3,6 +3,7 @@ import {
 	appConnectionProviderLabels,
 	appConnectionProviders,
 	chatSourceAppConnectionProviders,
+	remoteMcpConnectionDefaults,
 	tokenRequiredChatSourceAppConnectionProviders,
 } from "../../../packages/ai/src/capability-metadata.mjs";
 
@@ -24,5 +25,38 @@ describe("capability metadata", () => {
 			"figma",
 			"linear",
 		]);
+	});
+
+	it("defines remote MCP defaults from the provider catalog", () => {
+		expect(remoteMcpConnectionDefaults).toMatchObject({
+			context7: {
+				displayName: appConnectionProviderLabels.context7,
+				endpoint: "https://mcp.context7.com/mcp",
+			},
+			figma: {
+				displayName: appConnectionProviderLabels.figma,
+				endpoint: "https://mcp.figma.com/mcp",
+			},
+			"jira-mcp": {
+				displayName: appConnectionProviderLabels["jira-mcp"],
+				endpoint: "https://mcp.atlassian.com/v1/mcp",
+			},
+			linear: {
+				displayName: appConnectionProviderLabels.linear,
+				endpoint: "https://mcp.linear.app/mcp",
+			},
+			notion: {
+				displayName: appConnectionProviderLabels.notion,
+				endpoint: "https://mcp.notion.com/mcp",
+			},
+			posthog: {
+				displayName: appConnectionProviderLabels.posthog,
+				endpoint: "https://mcp.posthog.com/mcp",
+			},
+			zoom: {
+				displayName: appConnectionProviderLabels.zoom,
+				endpoint: "https://mcp.zoom.us/mcp/zoom/streamable",
+			},
+		});
 	});
 });

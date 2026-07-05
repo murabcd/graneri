@@ -2,28 +2,21 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { ConvexError, v } from "convex/values";
+import type {
+	McpOAuthConnectionProvider,
+	RemoteMcpConnectionProvider,
+} from "../packages/ai/src/capability-metadata.mjs";
+import { remoteMcpConnectionDefaults } from "../packages/ai/src/capability-metadata.mjs";
+import { validateContext7McpConnection } from "../packages/ai/src/context7-tools.mjs";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction } from "./_generated/server";
 import {
-	chatToolConnectionValidator,
 	type ChatToolConnection,
+	chatToolConnectionValidator,
 } from "./appConnections";
-import {
-	DEFAULT_CONTEXT7_MCP_ENDPOINT,
-	validateContext7McpConnection,
-} from "../packages/ai/src/context7-tools.mjs";
-import {
-	DEFAULT_JIRA_MCP_ENDPOINT,
-} from "../packages/ai/src/jira-mcp-tools.mjs";
-import {
-	DEFAULT_LINEAR_MCP_ENDPOINT,
-} from "../packages/ai/src/linear-tools.mjs";
-import {
-	refreshMcpSdkOAuthToken,
-	startMcpSdkOAuth,
-} from "./mcpOAuth";
+import { refreshMcpSdkOAuthToken, startMcpSdkOAuth } from "./mcpOAuth";
 import {
 	verifyYandexCalendarConnection,
 	YANDEX_CALENDAR_SERVER_ADDRESS,
@@ -74,9 +67,7 @@ const mcpOAuthStartResultValidator = v.object({
 	authorizationUrl: v.string(),
 });
 
-const remoteHeaderMcpConnectionResultValidator = <
-	TProvider extends "context7",
->(
+const remoteHeaderMcpConnectionResultValidator = <TProvider extends "context7">(
 	provider: TProvider,
 ) =>
 	v.object({
@@ -127,15 +118,20 @@ type McpOAuthStartResult = {
 	authorizationUrl: string;
 };
 
-type RemoteHeaderMcpConnectionResult<
-	TProvider extends "context7",
-> = {
+type RemoteHeaderMcpConnectionResult<TProvider extends "context7"> = {
 	sourceId: string;
 	provider: TProvider;
 	status: "connected" | "disconnected";
 	displayName: string;
 	endpoint: string;
 };
+
+type McpOAuthRedirectProvider = Exclude<McpOAuthConnectionProvider, "zoom">;
+type StandardRemoteMcpConnectionProvider = Exclude<
+	RemoteMcpConnectionProvider,
+	"zoom"
+>;
+type McpSdkOAuthProvider = Exclude<McpOAuthRedirectProvider, "notion">;
 
 const ZOOM_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const MCP_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -160,9 +156,7 @@ const getZoomOAuthRedirectUri = () =>
 
 const createMcpOAuthState = () => randomBytes(32).toString("hex");
 
-const getMcpOAuthRedirectUri = (
-	provider: "figma" | "jira-mcp" | "linear" | "notion" | "posthog",
-) =>
+const getMcpOAuthRedirectUri = (provider: McpOAuthRedirectProvider) =>
 	`${getConvexSiteUrl()}/api/oauth/${provider}/callback`;
 
 const getZoomOAuthConfig = (overrides: {
@@ -170,8 +164,7 @@ const getZoomOAuthConfig = (overrides: {
 	oauthClientSecret?: string;
 }) => {
 	const oauthClientId =
-		overrides.oauthClientId?.trim() ||
-		process.env.ZOOM_OAUTH_CLIENT_ID?.trim();
+		overrides.oauthClientId?.trim() || process.env.ZOOM_OAUTH_CLIENT_ID?.trim();
 	const oauthClientSecret =
 		overrides.oauthClientSecret?.trim() ||
 		process.env.ZOOM_OAUTH_CLIENT_SECRET?.trim();
@@ -312,7 +305,10 @@ const createPkceVerifier = () => base64UrlEncode(randomBytes(32));
 const createPkceChallenge = (verifier: string) =>
 	base64UrlEncode(createHash("sha256").update(verifier).digest());
 
-const discoverMcpOAuthMetadata = async (baseUrl: string, displayName: string) => {
+const discoverMcpOAuthMetadata = async (
+	baseUrl: string,
+	displayName: string,
+) => {
 	const mcpUrl = new URL(baseUrl);
 	const resourceMetadataUrls = [
 		new URL(`/.well-known/oauth-protected-resource${mcpUrl.pathname}`, mcpUrl),
@@ -456,7 +452,10 @@ const refreshMcpOAuthToken = async ({
 	refreshToken: string;
 	displayName: string;
 }) => {
-	const { tokenEndpoint } = await discoverMcpOAuthMetadata(baseUrl, displayName);
+	const { tokenEndpoint } = await discoverMcpOAuthMetadata(
+		baseUrl,
+		displayName,
+	);
 	const params = new URLSearchParams({
 		grant_type: "refresh_token",
 		refresh_token: refreshToken,
@@ -509,23 +508,14 @@ const refreshMcpTokensForWorkspace = async (
 	ctx: ActionCtx,
 	ownerTokenIdentifier: string,
 	workspaceId: Id<"workspaces">,
-	provider: "figma" | "jira-mcp" | "linear" | "notion" | "posthog",
+	provider: McpOAuthRedirectProvider,
 ) => {
 	const refreshSkewMs = 2 * 60 * 1000;
 	const connections = await ctx.runQuery(
 		internal.appConnections.getMcpOAuthConnectionsForWorkspace,
 		{ ownerTokenIdentifier, workspaceId, provider },
 	);
-	const displayName =
-		provider === "jira-mcp"
-			? "Jira"
-			: provider === "figma"
-				? "Figma"
-				: provider === "linear"
-					? "Linear"
-			: provider === "posthog"
-				? "PostHog"
-				: "Notion";
+	const { displayName } = remoteMcpConnectionDefaults[provider];
 
 	await Promise.all(
 		connections
@@ -639,13 +629,7 @@ const normalizeRemoteMcpEndpoint = (
 		provider,
 		label,
 	}: {
-		provider:
-			| "context7"
-			| "figma"
-			| "jira-mcp"
-			| "linear"
-			| "notion"
-			| "posthog";
+		provider: StandardRemoteMcpConnectionProvider;
 		label: string;
 	},
 ) => {
@@ -726,7 +710,7 @@ const startRemoteMcpOAuthConnection = async ({
 		oauthClientId?: string;
 		oauthClientSecret?: string;
 	};
-	provider: "figma" | "jira-mcp" | "linear" | "posthog";
+	provider: McpSdkOAuthProvider;
 	label: string;
 	defaultEndpoint: string;
 	errorCode: string;
@@ -797,11 +781,11 @@ const startRemoteMcpOAuthConnection = async ({
 
 const remoteHeaderMcpConfigs = {
 	context7: {
-		defaultEndpoint: DEFAULT_CONTEXT7_MCP_ENDPOINT,
-		defaultName: "Context7",
+		defaultEndpoint: remoteMcpConnectionDefaults.context7.endpoint,
+		defaultName: remoteMcpConnectionDefaults.context7.displayName,
 		errorCode: "CONTEXT7_MCP_CONNECTION_FAILED",
 		failedMessage: "Failed to connect Context7 MCP.",
-		label: "Context7",
+		label: remoteMcpConnectionDefaults.context7.displayName,
 		validateConnection: validateContext7McpConnection,
 		upsert: internal.appConnections.upsertContext7,
 	},
@@ -1024,16 +1008,17 @@ export const connectJiraMcp = action({
 	},
 	returns: mcpOAuthStartResultValidator,
 	handler: async (ctx, args): Promise<McpOAuthStartResult> => {
+		const defaults = remoteMcpConnectionDefaults["jira-mcp"];
 		const identity = await requireIdentity(ctx);
 		const redirectUri = getMcpOAuthRedirectUri("jira-mcp");
 		const baseUrl = normalizeRemoteMcpEndpoint(
-			args.baseUrl.trim() || DEFAULT_JIRA_MCP_ENDPOINT,
+			args.baseUrl.trim() || defaults.endpoint,
 			{
 				provider: "jira-mcp",
-				label: "Jira",
+				label: defaults.displayName,
 			},
 		);
-		const displayName = args.displayName.trim() || "Jira";
+		const displayName = args.displayName.trim() || defaults.displayName;
 		const env = Object.fromEntries(
 			Object.entries(args.env ?? {}).filter(
 				([key, value]) => key.trim().length > 0 && value.length > 0,
@@ -1144,8 +1129,8 @@ export const connectLinear = action({
 			ctx,
 			args,
 			provider: "linear",
-			label: "Linear",
-			defaultEndpoint: DEFAULT_LINEAR_MCP_ENDPOINT,
+			label: remoteMcpConnectionDefaults.linear.displayName,
+			defaultEndpoint: remoteMcpConnectionDefaults.linear.endpoint,
 			errorCode: "LINEAR_MCP_OAUTH_NOT_CONFIGURED",
 			errorMessage: "Failed to start Linear OAuth.",
 		}),
@@ -1162,13 +1147,14 @@ export const connectPostHog = action({
 	},
 	returns: mcpOAuthStartResultValidator,
 	handler: async (ctx, args): Promise<McpOAuthStartResult> => {
+		const defaults = remoteMcpConnectionDefaults.posthog;
 		const identity = await requireIdentity(ctx);
 		const redirectUri = getMcpOAuthRedirectUri("posthog");
 		const baseUrl = normalizeRemoteMcpEndpoint(args.baseUrl, {
 			provider: "posthog",
-			label: "PostHog",
+			label: defaults.displayName,
 		});
-		const displayName = args.displayName.trim() || "PostHog";
+		const displayName = args.displayName.trim() || defaults.displayName;
 		const env = Object.fromEntries(
 			Object.entries(args.env ?? {}).filter(
 				([key, value]) => key.trim().length > 0 && value.length > 0,
@@ -1204,7 +1190,10 @@ export const connectPostHog = action({
 			});
 			client = oauthStart.client;
 		} catch (error) {
-			console.error("Failed to prepare PostHog MCP OAuth connection", error);
+			console.error(
+				`Failed to prepare ${defaults.displayName} MCP OAuth connection`,
+				error,
+			);
 			throw new ConvexError({
 				code: "POSTHOG_OAUTH_NOT_CONFIGURED",
 				message: "Failed to start PostHog OAuth.",
@@ -1242,13 +1231,14 @@ export const connectNotion = action({
 	},
 	returns: mcpOAuthStartResultValidator,
 	handler: async (ctx, args): Promise<McpOAuthStartResult> => {
+		const defaults = remoteMcpConnectionDefaults.notion;
 		const identity = await requireIdentity(ctx);
 		const redirectUri = getMcpOAuthRedirectUri("notion");
 		const baseUrl = normalizeRemoteMcpEndpoint(args.baseUrl, {
 			provider: "notion",
-			label: "Notion",
+			label: defaults.displayName,
 		});
-		const displayName = args.displayName.trim() || "Notion";
+		const displayName = args.displayName.trim() || defaults.displayName;
 		const env = Object.fromEntries(
 			Object.entries(args.env ?? {}).filter(
 				([key, value]) => key.trim().length > 0 && value.length > 0,
@@ -1268,7 +1258,7 @@ export const connectNotion = action({
 		let metadata: Awaited<ReturnType<typeof discoverMcpOAuthMetadata>>;
 		let client: { clientId: string; clientSecret?: string };
 		try {
-			metadata = await discoverMcpOAuthMetadata(baseUrl, "Notion");
+			metadata = await discoverMcpOAuthMetadata(baseUrl, defaults.displayName);
 			client = requestedOAuthClientId
 				? {
 						clientId: requestedOAuthClientId,
@@ -1279,10 +1269,13 @@ export const connectNotion = action({
 				: await registerMcpOAuthClient({
 						registrationEndpoint: metadata.registrationEndpoint,
 						redirectUri,
-						displayName: "Notion",
+						displayName: defaults.displayName,
 					});
 		} catch (error) {
-			console.error("Failed to prepare Notion MCP OAuth connection", error);
+			console.error(
+				`Failed to prepare ${defaults.displayName} MCP OAuth connection`,
+				error,
+			);
 			throw new ConvexError({
 				code: "NOTION_OAUTH_NOT_CONFIGURED",
 				message: "Failed to start Notion OAuth.",
@@ -1334,9 +1327,10 @@ export const connectZoom = action({
 	},
 	returns: zoomOAuthStartResultValidator,
 	handler: async (ctx, args): Promise<ZoomOAuthStartResult> => {
+		const defaults = remoteMcpConnectionDefaults.zoom;
 		const identity = await requireIdentity(ctx);
 		const baseUrl = normalizeZoomMcpEndpoint(args.baseUrl);
-		const displayName = args.displayName.trim() || "Zoom";
+		const displayName = args.displayName.trim() || defaults.displayName;
 		const { oauthClientId, oauthClientSecret } = getZoomOAuthConfig({
 			oauthClientId: args.oauthClientId,
 			oauthClientSecret: args.oauthClientSecret,
@@ -1364,7 +1358,10 @@ export const connectZoom = action({
 		const authorizationUrl = new URL("https://zoom.us/oauth/authorize");
 		authorizationUrl.searchParams.set("response_type", "code");
 		authorizationUrl.searchParams.set("client_id", oauthClientId);
-		authorizationUrl.searchParams.set("redirect_uri", getZoomOAuthRedirectUri());
+		authorizationUrl.searchParams.set(
+			"redirect_uri",
+			getZoomOAuthRedirectUri(),
+		);
 		authorizationUrl.searchParams.set("state", state);
 
 		return { authorizationUrl: authorizationUrl.toString() };

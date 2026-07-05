@@ -3,7 +3,7 @@ import {
 	validateRemoteMcpConnection,
 } from "./remote-mcp-tools.mjs";
 
-export const DEFAULT_LINEAR_MCP_ENDPOINT = "https://mcp.linear.app/mcp";
+export { DEFAULT_LINEAR_MCP_ENDPOINT } from "./capability-metadata.mjs";
 
 export const validateLinearMcpConnection = async (connection) =>
 	await validateRemoteMcpConnection({

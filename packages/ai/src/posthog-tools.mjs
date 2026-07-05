@@ -3,7 +3,7 @@ import {
 	validateRemoteMcpConnection,
 } from "./remote-mcp-tools.mjs";
 
-export const DEFAULT_POSTHOG_MCP_ENDPOINT = "https://mcp.posthog.com/mcp";
+export { DEFAULT_POSTHOG_MCP_ENDPOINT } from "./capability-metadata.mjs";
 
 export const validatePostHogMcpConnection = async (connection) =>
 	await validateRemoteMcpConnection({
