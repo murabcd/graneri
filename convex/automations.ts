@@ -741,6 +741,34 @@ const getNextScheduleAfterRun = async (
 	return { nextRunAt, scheduledFunctionId };
 };
 
+const clearActiveRunAndScheduleNext = async (
+	ctx: MutationCtx,
+	args: {
+		automation: Doc<"automations"> | null;
+		run: Doc<"automationRuns"> | null;
+		runId: Id<"automationRuns">;
+		now: number;
+	},
+) => {
+	if (!args.automation || args.automation.activeRunId !== args.runId) {
+		return;
+	}
+
+	const { nextRunAt, scheduledFunctionId } = await getNextScheduleAfterRun(
+		ctx,
+		args.automation,
+		args.run,
+		args.now,
+	);
+
+	await ctx.db.patch(args.automation._id, {
+		activeRunId: undefined,
+		nextRunAt,
+		scheduledFunctionId,
+		updatedAt: args.now,
+	});
+};
+
 export const list = query({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -1418,22 +1446,11 @@ export const completeRun = internalMutation({
 			});
 		}
 
-		if (!automation || automation.activeRunId !== args.runId) {
-			return null;
-		}
-
-		const { nextRunAt, scheduledFunctionId } = await getNextScheduleAfterRun(
-			ctx,
+		await clearActiveRunAndScheduleNext(ctx, {
 			automation,
 			run,
+			runId: args.runId,
 			now,
-		);
-
-		await ctx.db.patch(automation._id, {
-			activeRunId: undefined,
-			nextRunAt,
-			scheduledFunctionId,
-			updatedAt: now,
 		});
 
 		return null;
@@ -1465,22 +1482,11 @@ export const failRun = internalMutation({
 			});
 		}
 
-		if (!automation || automation.activeRunId !== args.runId) {
-			return null;
-		}
-
-		const { nextRunAt, scheduledFunctionId } = await getNextScheduleAfterRun(
-			ctx,
+		await clearActiveRunAndScheduleNext(ctx, {
 			automation,
 			run,
+			runId: args.runId,
 			now,
-		);
-
-		await ctx.db.patch(automation._id, {
-			activeRunId: undefined,
-			nextRunAt,
-			scheduledFunctionId,
-			updatedAt: now,
 		});
 
 		return null;
