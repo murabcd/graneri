@@ -13,6 +13,7 @@ import {
 	Video,
 } from "lucide-react";
 import type React from "react";
+import { asRecord } from "@/lib/object-record";
 import { remoteMcpToolPrefixes } from "../../../../../../packages/ai/src/capability-metadata.mjs";
 import { toolUiMetadata } from "../../../../../../packages/ai/src/tool-ui-metadata.mjs";
 
@@ -172,11 +173,6 @@ function getRemoteMcpPrefixMeta(part: ToolPartLike): ToolMeta | null {
 			),
 	};
 }
-
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-	value && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: null;
 
 const getStringArray = (value: unknown) =>
 	Array.isArray(value)
