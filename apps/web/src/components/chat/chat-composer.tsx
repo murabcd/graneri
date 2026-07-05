@@ -1080,42 +1080,7 @@ function MentionPicker({
 			}}
 		>
 			<div className="max-h-72 overflow-y-auto p-1">
-				{!shouldSearchDocuments && appSources.length > 0 ? (
-					<div>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-							Tools
-						</div>
-						<div>
-							{appSources.map((source, index) => {
-								const selected = index === selectedIndex;
-								return (
-									<button
-										key={source.id}
-										type="button"
-										onMouseEnter={() => onSelectedIndexChange(index)}
-										onPointerDown={(event) => {
-											event.preventDefault();
-											event.stopPropagation();
-											onAddTool(source.id);
-										}}
-										className={`flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground ${selected ? "bg-accent text-accent-foreground" : "text-popover-foreground"}`}
-									>
-										<div className="flex size-4 shrink-0 items-center justify-center">
-											<AppSourceIcon
-												provider={source.provider}
-												className="size-4"
-											/>
-										</div>
-										<div className="min-w-0 flex-1 truncate">
-											{getAppSourceLabel(source.provider)}
-										</div>
-									</button>
-								);
-							})}
-						</div>
-					</div>
-				) : null}
-				{shouldSearchDocuments && appSources.length > 0 ? (
+				{appSources.length > 0 ? (
 					<div>
 						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
 							Tools
