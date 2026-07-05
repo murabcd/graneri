@@ -143,6 +143,7 @@ type McpOAuthClient = {
 	clientId: string;
 	clientSecret?: string;
 };
+type McpSdkOAuthStart = Awaited<ReturnType<typeof startMcpSdkOAuth>>;
 
 const ZOOM_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const MCP_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -743,6 +744,42 @@ const getRequestedMcpOAuthClient = ({
 	};
 };
 
+const persistMcpSdkOAuthState = async ({
+	ctx,
+	provider,
+	ownerTokenIdentifier,
+	workspaceId,
+	displayName,
+	baseUrl,
+	env,
+	client,
+	oauthStart,
+}: {
+	ctx: ActionCtx;
+	provider: McpSdkOAuthConnectionProvider;
+	ownerTokenIdentifier: string;
+	workspaceId: Id<"workspaces">;
+	displayName: string;
+	baseUrl: string;
+	env: Record<string, string>;
+	client: McpOAuthClient;
+	oauthStart: McpSdkOAuthStart;
+}) => {
+	await ctx.runMutation(internal.appConnections.createMcpOAuthState, {
+		provider,
+		ownerTokenIdentifier,
+		workspaceId,
+		displayName,
+		baseUrl,
+		...(Object.keys(env).length > 0 ? { env } : {}),
+		oauthClientId: client.clientId,
+		...(client.clientSecret ? { oauthClientSecret: client.clientSecret } : {}),
+		codeVerifier: oauthStart.codeVerifier,
+		state: oauthStart.state,
+		expiresAt: Date.now() + MCP_OAUTH_STATE_TTL_MS,
+	});
+};
+
 const startRemoteMcpOAuthConnection = async ({
 	ctx,
 	args,
@@ -785,7 +822,7 @@ const startRemoteMcpOAuthConnection = async ({
 	}
 
 	let client: McpOAuthClient;
-	let oauthStart: Awaited<ReturnType<typeof startMcpSdkOAuth>>;
+	let oauthStart: McpSdkOAuthStart;
 	try {
 		oauthStart = await startMcpSdkOAuth({
 			baseUrl,
@@ -803,18 +840,16 @@ const startRemoteMcpOAuthConnection = async ({
 		});
 	}
 
-	await ctx.runMutation(internal.appConnections.createMcpOAuthState, {
+	await persistMcpSdkOAuthState({
+		ctx,
 		provider,
 		ownerTokenIdentifier: identity.tokenIdentifier,
 		workspaceId: args.workspaceId,
 		displayName,
 		baseUrl,
-		...(Object.keys(env).length > 0 ? { env } : {}),
-		oauthClientId: client.clientId,
-		...(client.clientSecret ? { oauthClientSecret: client.clientSecret } : {}),
-		codeVerifier: oauthStart.codeVerifier,
-		state: oauthStart.state,
-		expiresAt: Date.now() + MCP_OAUTH_STATE_TTL_MS,
+		env,
+		client,
+		oauthStart,
 	});
 
 	return { authorizationUrl: oauthStart.authorizationUrl };
@@ -1075,7 +1110,7 @@ export const connectJiraMcp = action({
 		}
 
 		let client: McpOAuthClient;
-		let oauthStart: Awaited<ReturnType<typeof startMcpSdkOAuth>>;
+		let oauthStart: McpSdkOAuthStart;
 		try {
 			oauthStart = await startMcpSdkOAuth({
 				baseUrl,
@@ -1092,20 +1127,16 @@ export const connectJiraMcp = action({
 			});
 		}
 
-		await ctx.runMutation(internal.appConnections.createMcpOAuthState, {
+		await persistMcpSdkOAuthState({
+			ctx,
 			provider: "jira-mcp",
 			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
 			displayName,
 			baseUrl,
-			...(Object.keys(env).length > 0 ? { env } : {}),
-			oauthClientId: client.clientId,
-			...(client.clientSecret
-				? { oauthClientSecret: client.clientSecret }
-				: {}),
-			codeVerifier: oauthStart.codeVerifier,
-			state: oauthStart.state,
-			expiresAt: Date.now() + MCP_OAUTH_STATE_TTL_MS,
+			env,
+			client,
+			oauthStart,
 		});
 
 		return { authorizationUrl: oauthStart.authorizationUrl };
@@ -1201,7 +1232,7 @@ export const connectPostHog = action({
 		}
 
 		let client: McpOAuthClient;
-		let oauthStart: Awaited<ReturnType<typeof startMcpSdkOAuth>>;
+		let oauthStart: McpSdkOAuthStart;
 		try {
 			oauthStart = await startMcpSdkOAuth({
 				baseUrl,
@@ -1221,20 +1252,16 @@ export const connectPostHog = action({
 			});
 		}
 
-		await ctx.runMutation(internal.appConnections.createMcpOAuthState, {
+		await persistMcpSdkOAuthState({
+			ctx,
 			provider: "posthog",
 			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
 			displayName,
 			baseUrl,
-			...(Object.keys(env).length > 0 ? { env } : {}),
-			oauthClientId: client.clientId,
-			...(client.clientSecret
-				? { oauthClientSecret: client.clientSecret }
-				: {}),
-			codeVerifier: oauthStart.codeVerifier,
-			state: oauthStart.state,
-			expiresAt: Date.now() + MCP_OAUTH_STATE_TTL_MS,
+			env,
+			client,
+			oauthStart,
 		});
 
 		return { authorizationUrl: oauthStart.authorizationUrl };
