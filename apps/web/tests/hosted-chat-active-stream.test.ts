@@ -3,12 +3,12 @@ import {
 	createHostedActiveChatStreamSession,
 	createHostedActiveStreamKey,
 	createHostedActiveStreamSession,
-	HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX,
-	HOSTED_ACTIVE_STREAM_ACTIVITY_STEER,
 	HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS,
 	HostedActiveChatStreamPersister,
 	pipeHostedActiveStreamText,
 } from "../../../packages/ai/src/hosted-chat-active-stream.mjs";
+import type { HostedTurnInputBuffer } from "../../../packages/ai/src/hosted-chat-turn-input-buffer.mjs";
+import { createHostedTurnInputBuffer } from "../../../packages/ai/src/hosted-chat-turn-input-buffer.mjs";
 
 const collectStream = async <T>(stream: ReadableStream<T>) => {
 	const reader = stream.getReader();
@@ -22,6 +22,17 @@ const collectStream = async <T>(stream: ReadableStream<T>) => {
 		chunks.push(value);
 	}
 };
+
+const createTestActiveStreamSession = (
+	args: Omit<
+		Parameters<typeof createHostedActiveStreamSession>[0],
+		"turnInput"
+	> & { turnInput?: HostedTurnInputBuffer },
+) =>
+	createHostedActiveStreamSession({
+		...args,
+		turnInput: args.turnInput ?? createHostedTurnInputBuffer(),
+	});
 
 describe("hosted active chat stream", () => {
 	it("creates stable stream keys for active stream controllers", () => {
@@ -241,14 +252,25 @@ describe("hosted active chat stream", () => {
 
 	it("owns active stream controller replacement and cleanup", async () => {
 		const controllers = new Map();
-		const existingController = new AbortController();
+		const existingPersister = {
+			start: vi.fn().mockResolvedValue(undefined),
+			append: vi.fn(),
+			closePersistence: vi.fn().mockResolvedValue(undefined),
+			finish: vi.fn().mockResolvedValue(undefined),
+			discardPending: vi.fn(),
+		};
 		const start = vi.fn().mockResolvedValue(undefined);
 		const append = vi.fn();
 		const closePersistence = vi.fn().mockResolvedValue(undefined);
 		const finish = vi.fn().mockResolvedValue(undefined);
 		const streamKey = "workspace-1:chat-1";
-		controllers.set(streamKey, existingController);
-		const session = createHostedActiveStreamSession({
+		const existingSession = createTestActiveStreamSession({
+			controllers,
+			streamKey,
+			persister: existingPersister,
+		});
+		await existingSession.start();
+		const session = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: {
@@ -264,152 +286,17 @@ describe("hosted active chat stream", () => {
 		session.append("hello");
 		await session.finish();
 
-		expect(existingController.signal.aborted).toBe(true);
 		expect(start).toHaveBeenCalledOnce();
 		expect(append).toHaveBeenCalledWith("hello");
 		expect(finish).toHaveBeenCalledWith();
 
+		expect(existingSession.abortSignal.aborted).toBe(true);
+		expect(existingPersister.discardPending).toHaveBeenCalledOnce();
 		expect(controllers.has(streamKey)).toBe(false);
 	});
 
-	it("buffers active-turn pending input in order and drains it once", () => {
-		const session = createHostedActiveStreamSession({
-			controllers: new Map(),
-			streamKey: "workspace-1:chat-1",
-			persister: {
-				start: vi.fn().mockResolvedValue(undefined),
-				append: vi.fn(),
-				closePersistence: vi.fn().mockResolvedValue(undefined),
-				finish: vi.fn().mockResolvedValue(undefined),
-			},
-		});
-
-		expect(session.hasPendingInput()).toBe(false);
-
-		session.extendPendingInput({ id: "queued-1", role: "user" });
-		session.extendPendingInput([
-			{ id: "queued-2", role: "user" },
-			{ id: "queued-3", role: "user" },
-		]);
-
-		expect(session.hasPendingInput()).toBe(true);
-		expect(session.takePendingInput()).toEqual([
-			{ id: "queued-1", role: "user" },
-			{ id: "queued-2", role: "user" },
-			{ id: "queued-3", role: "user" },
-		]);
-		expect(session.hasPendingInput()).toBe(false);
-		expect(session.takePendingInput()).toEqual([]);
-	});
-
-	it("notifies active-turn subscribers for mailbox and steer activity", () => {
-		const session = createHostedActiveStreamSession({
-			controllers: new Map(),
-			streamKey: "workspace-1:chat-1",
-			persister: {
-				start: vi.fn().mockResolvedValue(undefined),
-				append: vi.fn(),
-				closePersistence: vi.fn().mockResolvedValue(undefined),
-				finish: vi.fn().mockResolvedValue(undefined),
-			},
-		});
-		const listener = vi.fn();
-		const subscription = session.subscribePendingInputActivity(listener);
-
-		expect(subscription.pendingActivity).toBeNull();
-
-		session.enqueueMailboxInput({ id: "mailbox-1", role: "system" });
-		session.extendPendingInput({ id: "queued-1", role: "user" });
-
-		expect(listener).toHaveBeenNthCalledWith(
-			1,
-			HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX,
-		);
-		expect(listener).toHaveBeenNthCalledWith(
-			2,
-			HOSTED_ACTIVE_STREAM_ACTIVITY_STEER,
-		);
-
-		subscription.unsubscribe();
-		session.extendPendingInput({ id: "queued-2", role: "user" });
-
-		expect(listener).toHaveBeenCalledTimes(2);
-	});
-
-	it("reports already pending steer activity when subscribing", () => {
-		const session = createHostedActiveStreamSession({
-			controllers: new Map(),
-			streamKey: "workspace-1:chat-1",
-			persister: {
-				start: vi.fn().mockResolvedValue(undefined),
-				append: vi.fn(),
-				closePersistence: vi.fn().mockResolvedValue(undefined),
-				finish: vi.fn().mockResolvedValue(undefined),
-			},
-		});
-
-		session.extendPendingInput({ id: "queued-1", role: "user" });
-
-		const subscription = session.subscribePendingInputActivity(vi.fn());
-
-		expect(subscription.pendingActivity).toBe(
-			HOSTED_ACTIVE_STREAM_ACTIVITY_STEER,
-		);
-	});
-
-	it("defers mailbox input past the current turn until delivery is accepted", () => {
-		const session = createHostedActiveStreamSession({
-			controllers: new Map(),
-			streamKey: "workspace-1:chat-1",
-			persister: {
-				start: vi.fn().mockResolvedValue(undefined),
-				append: vi.fn(),
-				closePersistence: vi.fn().mockResolvedValue(undefined),
-				finish: vi.fn().mockResolvedValue(undefined),
-			},
-		});
-
-		session.deferMailboxDeliveryToNextTurn();
-		session.enqueueMailboxInput({ id: "mailbox-1", role: "system" });
-
-		expect(session.hasPendingMailboxInput()).toBe(true);
-		expect(session.hasPendingInput()).toBe(false);
-		expect(session.takePendingInput()).toEqual([]);
-
-		session.acceptMailboxDeliveryForCurrentTurn();
-
-		expect(session.hasPendingInput()).toBe(true);
-		expect(session.takePendingInput()).toEqual([
-			{ id: "mailbox-1", role: "system" },
-		]);
-		expect(session.hasPendingMailboxInput()).toBe(false);
-	});
-
-	it("steered input reopens mailbox delivery for the current turn", () => {
-		const session = createHostedActiveStreamSession({
-			controllers: new Map(),
-			streamKey: "workspace-1:chat-1",
-			persister: {
-				start: vi.fn().mockResolvedValue(undefined),
-				append: vi.fn(),
-				closePersistence: vi.fn().mockResolvedValue(undefined),
-				finish: vi.fn().mockResolvedValue(undefined),
-			},
-		});
-
-		session.deferMailboxDeliveryToNextTurn();
-		session.enqueueMailboxInput({ id: "mailbox-1", role: "system" });
-		session.extendPendingInput({ id: "queued-1", role: "user" });
-		session.deferMailboxDeliveryToNextTurn();
-
-		expect(session.takePendingInput()).toEqual([
-			{ id: "queued-1", role: "user" },
-			{ id: "mailbox-1", role: "system" },
-		]);
-	});
-
 	it("clears active-turn pending input during cleanup", () => {
-		const session = createHostedActiveStreamSession({
+		const session = createTestActiveStreamSession({
 			controllers: new Map(),
 			streamKey: "workspace-1:chat-1",
 			persister: {
@@ -420,11 +307,11 @@ describe("hosted active chat stream", () => {
 			},
 		});
 
-		session.extendPendingInput({ id: "queued-1", role: "user" });
+		session.turnInput.extendSteerInput({ id: "queued-1", role: "user" });
 		session.cleanup();
 
-		expect(session.hasPendingInput()).toBe(false);
-		expect(session.takePendingInput()).toEqual([]);
+		expect(session.turnInput.hasPendingInput()).toBe(false);
+		expect(session.turnInput.takeForCurrentTurn()).toEqual([]);
 	});
 
 	it("carries all pending input to a replacement active stream session", async () => {
@@ -437,20 +324,23 @@ describe("hosted active chat stream", () => {
 			finish: vi.fn().mockResolvedValue(undefined),
 			discardPending: vi.fn(),
 		};
-		const oldSession = createHostedActiveStreamSession({
+		const oldSession = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: oldPersister,
 		});
 		await oldSession.start();
-		oldSession.deferMailboxDeliveryToNextTurn();
-		oldSession.enqueueMailboxInput({ id: "mailbox-1", role: "system" });
-		oldSession.extendPendingInput([
+		oldSession.turnInput.deferMailboxDeliveryToNextTurn();
+		oldSession.turnInput.enqueueMailboxInput({
+			id: "mailbox-1",
+			role: "system",
+		});
+		oldSession.turnInput.extendSteerInput([
 			{ id: "queued-1", role: "user" },
 			{ id: "queued-2", role: "user" },
 		]);
 
-		const newSession = createHostedActiveStreamSession({
+		const newSession = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: {
@@ -465,8 +355,8 @@ describe("hosted active chat stream", () => {
 
 		expect(oldSession.abortSignal.aborted).toBe(true);
 		expect(oldPersister.discardPending).toHaveBeenCalled();
-		expect(oldSession.hasPendingInput()).toBe(false);
-		expect(newSession.takePendingInput()).toEqual([
+		expect(oldSession.turnInput.hasPendingInput()).toBe(false);
+		expect(newSession.turnInput.takeForCurrentTurn()).toEqual([
 			{ id: "queued-1", role: "user" },
 			{ id: "queued-2", role: "user" },
 			{ id: "mailbox-1", role: "system" },
@@ -483,7 +373,7 @@ describe("hosted active chat stream", () => {
 			finish: vi.fn().mockResolvedValue(undefined),
 			discardPending: vi.fn(),
 		};
-		const oldSession = createHostedActiveStreamSession({
+		const oldSession = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: oldPersister,
@@ -506,7 +396,7 @@ describe("hosted active chat stream", () => {
 			closePersistence: vi.fn().mockResolvedValue(undefined),
 			finish: vi.fn().mockResolvedValue(undefined),
 		};
-		const newSession = createHostedActiveStreamSession({
+		const newSession = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: newPersister,
@@ -523,7 +413,7 @@ describe("hosted active chat stream", () => {
 		const controllers = new Map();
 		const streamKey = "workspace-1:chat-1";
 		const finish = vi.fn().mockRejectedValue(new Error("finish failed"));
-		const session = createHostedActiveStreamSession({
+		const session = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: {
@@ -543,7 +433,7 @@ describe("hosted active chat stream", () => {
 	it("broadcasts active stream chunks to original and reconnect subscribers", async () => {
 		const controllers = new Map();
 		const streamKey = "workspace-1:chat-1";
-		const session = createHostedActiveStreamSession({
+		const session = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: {
@@ -582,7 +472,7 @@ describe("hosted active chat stream", () => {
 	it("replays prior stream chunks to late reconnect subscribers", async () => {
 		const controllers = new Map();
 		const streamKey = "workspace-1:chat-1";
-		const session = createHostedActiveStreamSession({
+		const session = createTestActiveStreamSession({
 			controllers,
 			streamKey,
 			persister: {

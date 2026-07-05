@@ -1,14 +1,6 @@
-import {
-	createHostedTurnInputBuffer,
-	HOSTED_TURN_INPUT_ACTIVITY_MAILBOX,
-	HOSTED_TURN_INPUT_ACTIVITY_STEER,
-} from "./hosted-chat-turn-input-buffer.mjs";
+import { createHostedTurnInputBuffer } from "./hosted-chat-turn-input-buffer.mjs";
 
 export const HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS = 250;
-export const HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX =
-	HOSTED_TURN_INPUT_ACTIVITY_MAILBOX;
-export const HOSTED_ACTIVE_STREAM_ACTIVITY_STEER =
-	HOSTED_TURN_INPUT_ACTIVITY_STEER;
 
 export const createHostedActiveStreamKey = ({ workspaceId, chatId }) =>
 	`${workspaceId}:${chatId}`;
@@ -206,11 +198,11 @@ export const createHostedActiveStreamSession = ({
 	controllers,
 	persister,
 	streamKey,
+	turnInput,
 }) => {
 	const abortController = new AbortController();
 	const subscribers = new Set();
 	const replayChunks = [];
-	const turnInput = createHostedTurnInputBuffer();
 	let broadcastStarted = false;
 	let broadcastClosed = false;
 	let broadcastError = null;
@@ -262,13 +254,12 @@ export const createHostedActiveStreamSession = ({
 		abortSignal: abortController.signal,
 		persister,
 		streamKey,
+		turnInput,
 		async start() {
 			const existingSession = controllers.get(streamKey);
 			if (existingSession && !existingSession.isBroadcastClosed?.()) {
-				session.extendPendingInput(
-					existingSession.takeAllPendingInputForReplacement?.() ??
-						existingSession.takePendingInput?.() ??
-						[],
+				session.turnInput.extendSteerInput(
+					existingSession.turnInput.takeAllForReplacement(),
 				);
 				existingSession.abort("superseded");
 				existingSession.cleanup?.();
@@ -278,36 +269,6 @@ export const createHostedActiveStreamSession = ({
 		},
 		isBroadcastClosed() {
 			return broadcastClosed;
-		},
-		extendPendingInput(input) {
-			turnInput.extendSteerInput(input);
-		},
-		enqueueMailboxInput(input) {
-			turnInput.enqueueMailboxInput(input);
-		},
-		subscribePendingInputActivity(listener) {
-			return turnInput.subscribeActivity(listener);
-		},
-		takePendingInput() {
-			return turnInput.takeForCurrentTurn();
-		},
-		takeAllPendingInputForReplacement() {
-			return turnInput.takeAllForReplacement();
-		},
-		hasPendingInput() {
-			return turnInput.hasPendingInput();
-		},
-		hasPendingMailboxInput() {
-			return turnInput.hasPendingMailboxInput();
-		},
-		deferMailboxDeliveryToNextTurn() {
-			turnInput.deferMailboxDeliveryToNextTurn();
-		},
-		acceptMailboxDeliveryForCurrentTurn() {
-			turnInput.acceptMailboxDeliveryForCurrentTurn();
-		},
-		clearPendingInput() {
-			turnInput.clear();
 		},
 		append(delta) {
 			persister.append(delta);
@@ -335,7 +296,7 @@ export const createHostedActiveStreamSession = ({
 			}
 		},
 		cleanup() {
-			session.clearPendingInput();
+			turnInput.clear();
 			persister.discardPending?.();
 			closeBroadcast();
 			if (controllers.get(streamKey) === session) {
@@ -413,6 +374,7 @@ export const createHostedActiveChatStreamSession = ({
 			workspaceId,
 			chatId,
 		}),
+		turnInput: createHostedTurnInputBuffer(),
 		persister: new HostedActiveChatStreamPersister({
 			workspaceId,
 			chatId,

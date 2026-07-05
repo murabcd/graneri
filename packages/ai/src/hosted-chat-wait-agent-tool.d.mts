@@ -10,7 +10,7 @@ export type HostedWaitAgentResult = {
 	timed_out: boolean;
 };
 
-export declare const waitForHostedActiveStreamActivity: (args: {
+export declare const waitForHostedTurnInputActivity: (args: {
 	session?: HostedActiveStreamSession | null;
 	signal?: AbortSignal;
 	timeoutMs?: number;

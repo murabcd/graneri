@@ -1,9 +1,6 @@
+import type { HostedTurnInputBuffer } from "./hosted-chat-turn-input-buffer.mjs";
+
 export declare const HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS = 250;
-export declare const HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX = "mailbox";
-export declare const HOSTED_ACTIVE_STREAM_ACTIVITY_STEER = "steer";
-export type HostedActiveStreamActivity =
-	| typeof HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX
-	| typeof HOSTED_ACTIVE_STREAM_ACTIVITY_STEER;
 
 export type HostedActiveToolCallStatus = "completed" | "failed" | "denied";
 
@@ -110,22 +107,8 @@ export type HostedActiveStreamSession = {
 	abortSignal: AbortSignal;
 	persister: HostedActiveStreamPersisterLike;
 	streamKey: string;
+	turnInput: HostedTurnInputBuffer;
 	start(): Promise<void>;
-	extendPendingInput(input: unknown | readonly unknown[]): void;
-	enqueueMailboxInput(input: unknown | readonly unknown[]): void;
-	subscribePendingInputActivity(
-		listener: (activity: HostedActiveStreamActivity) => void,
-	): {
-		pendingActivity: HostedActiveStreamActivity | null;
-		unsubscribe(): void;
-	};
-	takePendingInput(): unknown[];
-	takeAllPendingInputForReplacement(): unknown[];
-	hasPendingInput(): boolean;
-	hasPendingMailboxInput(): boolean;
-	deferMailboxDeliveryToNextTurn(): void;
-	acceptMailboxDeliveryForCurrentTurn(): void;
-	clearPendingInput(): void;
 	append(delta: string): void;
 	startToolCall(args: {
 		toolCallId: string;
@@ -170,6 +153,7 @@ export declare const createHostedActiveStreamSession: (args: {
 		discardPending?(): void;
 	};
 	streamKey: string;
+	turnInput: HostedTurnInputBuffer;
 }) => HostedActiveStreamSession;
 
 export declare const createHostedActiveChatStreamSession: <

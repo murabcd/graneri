@@ -109,9 +109,10 @@ const interruptActiveChatRun = async ({
 	});
 	const activeSession = activeChatStreamControllers.get(streamKey);
 	if (pendingInput.length > 0) {
-		activeSession?.extendPendingInput([...pendingInput]);
+		activeSession?.turnInput.extendSteerInput([...pendingInput]);
 	}
-	const drainedPendingInput = activeSession?.takePendingInput() ?? [];
+	const drainedPendingInput =
+		activeSession?.turnInput.takeForCurrentTurn() ?? [];
 	activeSession?.abort("stopped");
 	if (activeSession) {
 		activeSession.cleanup();

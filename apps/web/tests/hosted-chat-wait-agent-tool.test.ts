@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-	HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX,
-	HOSTED_ACTIVE_STREAM_ACTIVITY_STEER,
-} from "../../../packages/ai/src/hosted-chat-active-stream.mjs";
+	HOSTED_TURN_INPUT_ACTIVITY_MAILBOX,
+	HOSTED_TURN_INPUT_ACTIVITY_STEER,
+} from "../../../packages/ai/src/hosted-chat-turn-input-buffer.mjs";
 import {
 	createHostedWaitAgentTool,
-	waitForHostedActiveStreamActivity,
+	waitForHostedTurnInputActivity,
 } from "../../../packages/ai/src/hosted-chat-wait-agent-tool.mjs";
 
 type PendingActivity =
-	| typeof HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX
-	| typeof HOSTED_ACTIVE_STREAM_ACTIVITY_STEER;
+	| typeof HOSTED_TURN_INPUT_ACTIVITY_MAILBOX
+	| typeof HOSTED_TURN_INPUT_ACTIVITY_STEER;
 
 const createSessionHarness = () => {
 	const abortController = new AbortController();
@@ -19,14 +19,14 @@ const createSessionHarness = () => {
 
 	const session = {
 		abortSignal: abortController.signal,
-		subscribePendingInputActivity: (
-			listener: (activity: PendingActivity) => void,
-		) => {
-			listeners.add(listener);
-			return {
-				pendingActivity,
-				unsubscribe: () => listeners.delete(listener),
-			};
+		turnInput: {
+			subscribeActivity: (listener: (activity: PendingActivity) => void) => {
+				listeners.add(listener);
+				return {
+					pendingActivity,
+					unsubscribe: () => listeners.delete(listener),
+				};
+			},
 		},
 	};
 
@@ -48,10 +48,10 @@ const createSessionHarness = () => {
 describe("hosted wait_agent tool", () => {
 	it("returns immediately when steer activity is already pending", async () => {
 		const harness = createSessionHarness();
-		harness.setPending(HOSTED_ACTIVE_STREAM_ACTIVITY_STEER);
+		harness.setPending(HOSTED_TURN_INPUT_ACTIVITY_STEER);
 
 		await expect(
-			waitForHostedActiveStreamActivity({
+			waitForHostedTurnInputActivity({
 				session: harness.session,
 				timeoutMs: 1_000,
 			}),
@@ -65,12 +65,12 @@ describe("hosted wait_agent tool", () => {
 	it("wakes a pending wait when mailbox activity arrives", async () => {
 		const harness = createSessionHarness();
 
-		const promise = waitForHostedActiveStreamActivity({
+		const promise = waitForHostedTurnInputActivity({
 			session: harness.session,
 			timeoutMs: 1_000,
 		});
 		expect(harness.listenerCount()).toBe(1);
-		harness.emit(HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX);
+		harness.emit(HOSTED_TURN_INPUT_ACTIVITY_MAILBOX);
 
 		await expect(promise).resolves.toEqual({
 			message: "Wait completed.",
@@ -84,7 +84,7 @@ describe("hosted wait_agent tool", () => {
 		try {
 			const harness = createSessionHarness();
 
-			const promise = waitForHostedActiveStreamActivity({
+			const promise = waitForHostedTurnInputActivity({
 				session: harness.session,
 				timeoutMs: 25,
 			});
@@ -104,7 +104,7 @@ describe("hosted wait_agent tool", () => {
 		const harness = createSessionHarness();
 		const abortController = new AbortController();
 
-		const promise = waitForHostedActiveStreamActivity({
+		const promise = waitForHostedTurnInputActivity({
 			session: harness.session,
 			signal: abortController.signal,
 			timeoutMs: 1_000,
@@ -130,7 +130,7 @@ describe("hosted wait_agent tool", () => {
 				messages: [],
 			},
 		);
-		harness.emit(HOSTED_ACTIVE_STREAM_ACTIVITY_STEER);
+		harness.emit(HOSTED_TURN_INPUT_ACTIVITY_STEER);
 
 		await expect(promise).resolves.toEqual({
 			message: "Wait interrupted by new input.",

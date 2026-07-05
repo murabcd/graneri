@@ -1,9 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 import {
-	HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX,
-	HOSTED_ACTIVE_STREAM_ACTIVITY_STEER,
-} from "./hosted-chat-active-stream.mjs";
+	HOSTED_TURN_INPUT_ACTIVITY_MAILBOX,
+	HOSTED_TURN_INPUT_ACTIVITY_STEER,
+} from "./hosted-chat-turn-input-buffer.mjs";
 
 export const HOSTED_WAIT_AGENT_MIN_TIMEOUT_MS = 100;
 export const HOSTED_WAIT_AGENT_DEFAULT_TIMEOUT_MS = 1_000;
@@ -19,13 +19,13 @@ const waitAgentInputSchema = z.object({
 });
 
 const resultForActivity = (activity) => {
-	if (activity === HOSTED_ACTIVE_STREAM_ACTIVITY_MAILBOX) {
+	if (activity === HOSTED_TURN_INPUT_ACTIVITY_MAILBOX) {
 		return {
 			message: "Wait completed.",
 			timed_out: false,
 		};
 	}
-	if (activity === HOSTED_ACTIVE_STREAM_ACTIVITY_STEER) {
+	if (activity === HOSTED_TURN_INPUT_ACTIVITY_STEER) {
 		return {
 			message: "Wait interrupted by new input.",
 			timed_out: false,
@@ -40,13 +40,13 @@ const resultForActivity = (activity) => {
 const abortError = () =>
 	new DOMException("wait_agent was aborted.", "AbortError");
 
-export const waitForHostedActiveStreamActivity = ({
+export const waitForHostedTurnInputActivity = ({
 	session,
 	signal,
 	timeoutMs = HOSTED_WAIT_AGENT_DEFAULT_TIMEOUT_MS,
 }) =>
 	new Promise((resolve, reject) => {
-		if (!session?.subscribePendingInputActivity) {
+		if (!session?.turnInput?.subscribeActivity) {
 			reject(new Error("wait_agent requires an active assistant turn."));
 			return;
 		}
@@ -86,7 +86,7 @@ export const waitForHostedActiveStreamActivity = ({
 			return;
 		}
 
-		subscription = session.subscribePendingInputActivity(settle);
+		subscription = session.turnInput.subscribeActivity(settle);
 		if (subscription.pendingActivity) {
 			settle(subscription.pendingActivity);
 			return;
@@ -103,7 +103,7 @@ export const createHostedWaitAgentTool = ({ getActiveStreamSession }) =>
 			"Wait for active-turn mailbox activity or new user input. Returns a short summary and whether the wait timed out. Use this only when waiting for more activity is useful.",
 		inputSchema: waitAgentInputSchema,
 		execute: async ({ timeout_ms: timeoutMs }, options = {}) =>
-			await waitForHostedActiveStreamActivity({
+			await waitForHostedTurnInputActivity({
 				session: getActiveStreamSession(),
 				signal: options.abortSignal,
 				timeoutMs: timeoutMs ?? HOSTED_WAIT_AGENT_DEFAULT_TIMEOUT_MS,
