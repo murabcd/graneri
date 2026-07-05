@@ -42,6 +42,7 @@ import {
 	pipeHostedActiveStreamSessionToResponse,
 	runHostedChatTurnStreamRuntime,
 } from "./chat-turn-stream-runtime.js";
+import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
 	emitServerWideEvent,
@@ -210,36 +211,6 @@ const getSelectedRecipe = async ({
 	return recipes.find((recipe) => recipe.slug === recipeSlug) ?? null;
 };
 
-const readJsonBody = async (request: IncomingMessage) => {
-	const chunks: Uint8Array[] = [];
-
-	for await (const chunk of request) {
-		chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-	}
-
-	const rawBody = Buffer.concat(chunks).toString("utf8");
-
-	if (!rawBody) {
-		return {};
-	}
-
-	return JSON.parse(rawBody) as ChatRequestBody;
-};
-
-const sendJson = (
-	response: ServerResponse,
-	statusCode: number,
-	payload: Record<string, unknown>,
-	headers?: Record<string, string> | null,
-) => {
-	response.statusCode = statusCode;
-	response.setHeader("Content-Type", "application/json");
-	for (const [header, value] of Object.entries(headers ?? {})) {
-		response.setHeader(header, value);
-	}
-	response.end(JSON.stringify(payload));
-};
-
 const sendHostedChatConvexRouteError = (
 	response: ServerResponse,
 	error: unknown,
@@ -348,7 +319,7 @@ export const handleChatRequest = async (
 		replayQueuedMessageId,
 		supersedeActiveRun = false,
 		steerQueuedMessageId,
-	} = await readJsonBody(request);
+	} = await readJsonBody<ChatRequestBody>(request);
 	wideEvent.chat_id = id ?? null;
 	wideEvent.workspace_id = workspaceId ?? null;
 	wideEvent.trigger = trigger ?? null;
@@ -897,7 +868,7 @@ export const handleChatStopRequest = async (
 		workspaceId,
 		convexToken,
 		interruptActiveRun = false,
-	} = await readJsonBody(request);
+	} = await readJsonBody<ChatRequestBody>(request);
 	const resolvedWorkspaceId =
 		(workspaceId as Id<"workspaces"> | null | undefined) ?? null;
 

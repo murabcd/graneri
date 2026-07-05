@@ -10,6 +10,7 @@ import {
 	parseTemplateStreamToStructuredNote,
 	validateTemplateStream,
 } from "../src/lib/note-template-stream.js";
+import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
 	emitServerWideEvent,
@@ -40,34 +41,12 @@ class ApplyTemplateRequestError extends Error {
 	}
 }
 
-const readJsonBody = async (request: IncomingMessage) => {
-	const chunks: Uint8Array[] = [];
-
-	for await (const chunk of request) {
-		chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-	}
-
-	const rawBody = Buffer.concat(chunks).toString("utf8");
-
-	if (!rawBody) {
-		return {};
-	}
-
-	return JSON.parse(rawBody) as ApplyTemplateRequestBody;
-};
-
-const sendJson = (
-	response: ServerResponse,
-	statusCode: number,
-	payload: Record<string, unknown>,
-) => {
-	response.statusCode = statusCode;
-	response.setHeader("Content-Type", "application/json");
-	response.end(JSON.stringify(payload));
-};
-
 const getApplyTemplatePayload = async (request: IncomingMessage) => {
-	const { title = "", noteText = "", template } = await readJsonBody(request);
+	const {
+		title = "",
+		noteText = "",
+		template,
+	} = await readJsonBody<ApplyTemplateRequestBody>(request);
 
 	if (!noteText.trim()) {
 		throw new ApplyTemplateRequestError("Note text is required.", 400);

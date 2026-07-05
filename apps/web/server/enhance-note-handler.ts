@@ -7,6 +7,7 @@ import {
 	buildEnhancedNotePrompt,
 	ENHANCED_NOTE_SYSTEM_PROMPT,
 } from "../../../packages/ai/src/prompts.mjs";
+import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
 	emitServerWideEvent,
@@ -32,32 +33,6 @@ const structuredNoteSchema = z.object({
 		)
 		.min(1),
 });
-
-const readJsonBody = async (request: IncomingMessage) => {
-	const chunks: Uint8Array[] = [];
-
-	for await (const chunk of request) {
-		chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-	}
-
-	const rawBody = Buffer.concat(chunks).toString("utf8");
-
-	if (!rawBody) {
-		return {};
-	}
-
-	return JSON.parse(rawBody) as EnhanceNoteRequestBody;
-};
-
-const sendJson = (
-	response: ServerResponse,
-	statusCode: number,
-	payload: Record<string, unknown>,
-) => {
-	response.statusCode = statusCode;
-	response.setHeader("Content-Type", "application/json");
-	response.end(JSON.stringify(payload));
-};
 
 export const handleEnhanceNoteRequest = async (
 	request: IncomingMessage,
@@ -91,7 +66,7 @@ export const handleEnhanceNoteRequest = async (
 
 	let requestBody: EnhanceNoteRequestBody;
 	try {
-		requestBody = await readJsonBody(request);
+		requestBody = await readJsonBody<EnhanceNoteRequestBody>(request);
 	} catch (error) {
 		recordServerError({
 			error,

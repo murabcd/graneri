@@ -5,36 +5,13 @@ import {
 	createRealtimeTranscriptionSessionOptions,
 	normalizeTranscriptionLanguage,
 } from "../../../packages/ai/src/transcription.mjs";
+import { readJsonBody, sendJson } from "./http-utils.js";
 import { createServerWideEvent, emitServerWideEvent } from "./server-logger.js";
 
-const sendJson = (
-	response: ServerResponse,
-	statusCode: number,
-	payload: Record<string, string | number | null>,
-) => {
-	response.statusCode = statusCode;
-	response.setHeader("Content-Type", "application/json");
-	response.end(JSON.stringify(payload));
-};
-
-const readJsonBody = async (request: IncomingMessage) => {
-	const chunks: Uint8Array[] = [];
-
-	for await (const chunk of request) {
-		chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-	}
-
-	const rawBody = Buffer.concat(chunks).toString("utf8");
-
-	if (!rawBody) {
-		return {};
-	}
-
-	return JSON.parse(rawBody) as {
-		lang?: string;
-		speaker?: string;
-		source?: string;
-	};
+type RealtimeSessionRequestBody = {
+	lang?: string;
+	speaker?: string;
+	source?: string;
 };
 
 const trim = (value: unknown) =>
@@ -61,7 +38,11 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		return;
 	}
 
-	const { lang, source, speaker: rawSpeaker } = await readJsonBody(request);
+	const {
+		lang,
+		source,
+		speaker: rawSpeaker,
+	} = await readJsonBody<RealtimeSessionRequestBody>(request);
 	const language = normalizeTranscriptionLanguage(lang);
 	const requestId = randomUUID();
 	const speaker = trim(rawSpeaker);
