@@ -4,9 +4,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { ConvexError, v } from "convex/values";
 import type {
 	McpOAuthConnectionProvider,
+	McpSdkOAuthConnectionProvider,
 	RemoteMcpConnectionProvider,
 } from "../packages/ai/src/capability-metadata.mjs";
-import { remoteMcpConnectionDefaults } from "../packages/ai/src/capability-metadata.mjs";
+import {
+	isMcpSdkOAuthConnectionProvider,
+	remoteMcpConnectionDefaults,
+} from "../packages/ai/src/capability-metadata.mjs";
 import { validateContext7McpConnection } from "../packages/ai/src/context7-tools.mjs";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -131,7 +135,6 @@ type StandardRemoteMcpConnectionProvider = Exclude<
 	RemoteMcpConnectionProvider,
 	"zoom"
 >;
-type McpSdkOAuthProvider = Exclude<McpOAuthRedirectProvider, "notion">;
 
 const ZOOM_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const MCP_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -525,32 +528,28 @@ const refreshMcpTokensForWorkspace = async (
 					connection.tokenExpiresAt <= Date.now() + refreshSkewMs,
 			)
 			.map(async (connection) => {
-				const tokens =
-					provider === "jira-mcp" ||
-					provider === "posthog" ||
-					provider === "figma" ||
-					provider === "linear"
-						? await refreshMcpSdkOAuthToken({
-								baseUrl: connection.baseUrl,
-								redirectUri: getMcpOAuthRedirectUri(provider),
-								client: {
-									clientId: connection.oauthClientId,
-									...(connection.oauthClientSecret
-										? { clientSecret: connection.oauthClientSecret }
-										: {}),
-								},
-								refreshToken: connection.oauthRefreshToken,
-								displayName,
-							})
-						: await refreshMcpOAuthToken({
-								baseUrl: connection.baseUrl,
+				const tokens = isMcpSdkOAuthConnectionProvider(provider)
+					? await refreshMcpSdkOAuthToken({
+							baseUrl: connection.baseUrl,
+							redirectUri: getMcpOAuthRedirectUri(provider),
+							client: {
 								clientId: connection.oauthClientId,
 								...(connection.oauthClientSecret
 									? { clientSecret: connection.oauthClientSecret }
 									: {}),
-								refreshToken: connection.oauthRefreshToken,
-								displayName,
-							});
+							},
+							refreshToken: connection.oauthRefreshToken,
+							displayName,
+						})
+					: await refreshMcpOAuthToken({
+							baseUrl: connection.baseUrl,
+							clientId: connection.oauthClientId,
+							...(connection.oauthClientSecret
+								? { clientSecret: connection.oauthClientSecret }
+								: {}),
+							refreshToken: connection.oauthRefreshToken,
+							displayName,
+						});
 
 				await ctx.runMutation(internal.appConnections.updateMcpOAuthTokens, {
 					connectionId: connection.connectionId,
@@ -710,7 +709,7 @@ const startRemoteMcpOAuthConnection = async ({
 		oauthClientId?: string;
 		oauthClientSecret?: string;
 	};
-	provider: McpSdkOAuthProvider;
+	provider: McpSdkOAuthConnectionProvider;
 	label: string;
 	defaultEndpoint: string;
 	errorCode: string;

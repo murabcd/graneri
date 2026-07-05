@@ -1,11 +1,16 @@
-import { auth as mcpSdkAuth } from "@ai-sdk/mcp";
 import type { OAuthTokens } from "@ai-sdk/mcp";
+import { auth as mcpSdkAuth } from "@ai-sdk/mcp";
+import type { McpOAuthConnectionProvider } from "../packages/ai/src/capability-metadata.mjs";
+import {
+	isMcpSdkOAuthConnectionProvider,
+	remoteMcpConnectionDefaults,
+} from "../packages/ai/src/capability-metadata.mjs";
 import { validateRemoteMcpConnection } from "../packages/ai/src/remote-mcp-tools.mjs";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import { oauthCallbackHtmlResponse } from "./oauthCallbackHtml";
 
-type McpOAuthProvider = "figma" | "jira-mcp" | "linear" | "notion" | "posthog";
+type McpOAuthProvider = Exclude<McpOAuthConnectionProvider, "zoom">;
 
 type McpSdkOAuthClient = {
 	clientId: string;
@@ -18,23 +23,13 @@ type McpSdkOAuthTokenResult = {
 	expiresIn?: number;
 };
 
-type ProviderConfig = {
-	displayName: string;
-};
-
-const PROVIDER_CONFIG: Record<McpOAuthProvider, ProviderConfig> = {
-	figma: { displayName: "Figma" },
-	"jira-mcp": { displayName: "Jira" },
-	linear: { displayName: "Linear" },
-	notion: { displayName: "Notion" },
-	posthog: { displayName: "PostHog" },
-};
-
-const usesMcpSdkOAuth = (provider: McpOAuthProvider) =>
-	provider === "figma" ||
-	provider === "jira-mcp" ||
-	provider === "linear" ||
-	provider === "posthog";
+const mcpOAuthConnectionUpsertMutations = {
+	figma: internal.appConnections.upsertFigma,
+	"jira-mcp": internal.appConnections.upsertJiraMcp,
+	linear: internal.appConnections.upsertLinear,
+	notion: internal.appConnections.upsertNotion,
+	posthog: internal.appConnections.upsertPostHog,
+} as const;
 
 const ensureUrlCanParse = () => {
 	if (typeof URL.canParse === "function") {
@@ -352,7 +347,7 @@ export const handleMcpOAuthCallbackRequest = async (
 	request: Request,
 	provider: McpOAuthProvider,
 ) => {
-	const { displayName } = PROVIDER_CONFIG[provider];
+	const { displayName } = remoteMcpConnectionDefaults[provider];
 	const url = new URL(request.url);
 	const code = url.searchParams.get("code")?.trim();
 	const state = url.searchParams.get("state")?.trim();
@@ -398,7 +393,8 @@ export const handleMcpOAuthCallbackRequest = async (
 
 	if (
 		!pendingState.codeVerifier ||
-		(!usesMcpSdkOAuth(provider) && !pendingState.oauthTokenEndpoint)
+		(!isMcpSdkOAuthConnectionProvider(provider) &&
+			!pendingState.oauthTokenEndpoint)
 	) {
 		return oauthCallbackHtmlResponse(
 			`${displayName} connection failed`,
@@ -414,7 +410,7 @@ export const handleMcpOAuthCallbackRequest = async (
 		}
 		const tokenEndpoint = pendingState.oauthTokenEndpoint;
 		const tokens = await (async () => {
-			if (usesMcpSdkOAuth(provider)) {
+			if (isMcpSdkOAuthConnectionProvider(provider)) {
 				return await exchangeMcpSdkOAuthCode({
 					baseUrl: pendingState.baseUrl,
 					redirectUri,
@@ -460,18 +456,7 @@ export const handleMcpOAuthCallbackRequest = async (
 			oauthAccessToken: tokens.accessToken,
 		});
 
-		const mutation =
-			provider === "figma"
-				? internal.appConnections.upsertFigma
-				: provider === "jira-mcp"
-					? internal.appConnections.upsertJiraMcp
-					: provider === "linear"
-						? internal.appConnections.upsertLinear
-						: provider === "posthog"
-							? internal.appConnections.upsertPostHog
-							: internal.appConnections.upsertNotion;
-
-		await ctx.runMutation(mutation, {
+		await ctx.runMutation(mcpOAuthConnectionUpsertMutations[provider], {
 			ownerTokenIdentifier: pendingState.ownerTokenIdentifier,
 			workspaceId: pendingState.workspaceId,
 			displayName: pendingState.displayName,
@@ -482,13 +467,18 @@ export const handleMcpOAuthCallbackRequest = async (
 				? { oauthClientSecret: pendingState.oauthClientSecret }
 				: {}),
 			oauthAccessToken: tokens.accessToken,
-			...(tokens.refreshToken ? { oauthRefreshToken: tokens.refreshToken } : {}),
+			...(tokens.refreshToken
+				? { oauthRefreshToken: tokens.refreshToken }
+				: {}),
 			...(tokens.expiresIn
 				? { tokenExpiresAt: Date.now() + tokens.expiresIn * 1000 }
 				: {}),
 		});
 	} catch (connectionError) {
-		console.error(`Failed to complete ${displayName} OAuth connection`, connectionError);
+		console.error(
+			`Failed to complete ${displayName} OAuth connection`,
+			connectionError,
+		);
 		return oauthCallbackHtmlResponse(
 			`${displayName} connection failed`,
 			`Graneri could not complete the ${displayName} connection.`,

@@ -207,6 +207,17 @@ export const mcpOAuthConnectionProviders = [
 	"zoom",
 ];
 
+export const mcpSdkOAuthConnectionProviders = [
+	"figma",
+	"jira-mcp",
+	"linear",
+	"posthog",
+];
+
+export const isMcpSdkOAuthConnectionProvider = (provider) =>
+	typeof provider === "string" &&
+	mcpSdkOAuthConnectionProviders.includes(provider);
+
 export const chatSourceAppConnectionProviders = [
 	"yandex-calendar",
 	"yandex-tracker",

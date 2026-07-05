@@ -3,6 +3,8 @@ import {
 	appConnectionProviderLabels,
 	appConnectionProviders,
 	chatSourceAppConnectionProviders,
+	isMcpSdkOAuthConnectionProvider,
+	mcpSdkOAuthConnectionProviders,
 	remoteMcpConnectionDefaults,
 	tokenRequiredChatSourceAppConnectionProviders,
 } from "../../../packages/ai/src/capability-metadata.mjs";
@@ -25,6 +27,18 @@ describe("capability metadata", () => {
 			"figma",
 			"linear",
 		]);
+	});
+
+	it("defines providers that use the MCP SDK OAuth flow", () => {
+		expect(mcpSdkOAuthConnectionProviders).toEqual([
+			"figma",
+			"jira-mcp",
+			"linear",
+			"posthog",
+		]);
+		expect(isMcpSdkOAuthConnectionProvider("figma")).toBe(true);
+		expect(isMcpSdkOAuthConnectionProvider("notion")).toBe(false);
+		expect(isMcpSdkOAuthConnectionProvider("zoom")).toBe(false);
 	});
 
 	it("defines remote MCP defaults from the provider catalog", () => {

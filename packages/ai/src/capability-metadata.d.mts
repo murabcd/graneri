@@ -30,6 +30,11 @@ export type McpOAuthConnectionProvider =
 	| "notion"
 	| "posthog"
 	| "zoom";
+export type McpSdkOAuthConnectionProvider =
+	| "figma"
+	| "jira-mcp"
+	| "linear"
+	| "posthog";
 export type RemoteMcpConnectionProvider =
 	| "context7"
 	| McpOAuthConnectionProvider;
@@ -100,6 +105,15 @@ export declare const mcpOAuthConnectionProviders: readonly [
 	"posthog",
 	"zoom",
 ];
+export declare const mcpSdkOAuthConnectionProviders: readonly [
+	"figma",
+	"jira-mcp",
+	"linear",
+	"posthog",
+];
+export declare function isMcpSdkOAuthConnectionProvider(
+	provider: unknown,
+): provider is McpSdkOAuthConnectionProvider;
 export declare const chatSourceAppConnectionProviders: readonly [
 	"yandex-calendar",
 	"yandex-tracker",
