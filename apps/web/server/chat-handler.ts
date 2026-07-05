@@ -38,6 +38,7 @@ import {
 	normalizeReasoningEffort,
 } from "../src/lib/ai/models.js";
 import { createHostedChatAutomationActions } from "./chat-automation-actions.js";
+import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import {
 	pipeHostedActiveStreamSessionToResponse,
 	runHostedChatTurnStreamRuntime,
@@ -528,38 +529,22 @@ export const handleChatRequest = async (
 			}
 		},
 	});
-	const cleanupClaimedSteerQueuedMessageForRoute = async (
-		operation: string,
-		options: { tolerateMissing?: boolean } = {},
-	) => {
-		const cleanupResult =
-			await turnController.cleanupClaimedSteerQueuedMessage(options);
-		if (cleanupResult.ok) {
-			return true;
-		}
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 500;
-		wideEvent.error_code = "steer_queue_cleanup_failed";
-		recordServerError({
-			details: {
-				queued_message_ids: cleanupResult.queuedMessageIds,
-			},
-			error: cleanupResult.error,
-			event: wideEvent,
-			operation,
-		});
-		emitWideEvent("error");
-		sendJson(response, 500, {
-			error: "Failed to clean up claimed steered message.",
-		});
-		return false;
-	};
+	const turnRouteErrors = createHostedChatTurnRouteErrorResponder({
+		continueRunId,
+		emitWideEvent,
+		response,
+		sendJson,
+		turnController,
+		wideEvent,
+	});
 	const failClaimedSteerPreparation = async (
 		error: unknown,
 		operation: string,
 	) => {
 		if (
-			!(await cleanupClaimedSteerQueuedMessageForRoute(`${operation}_cleanup`))
+			!(await turnRouteErrors.cleanupClaimedSteerQueuedMessage(
+				`${operation}_cleanup`,
+			))
 		) {
 			return;
 		}
@@ -574,38 +559,6 @@ export const handleChatRequest = async (
 		emitWideEvent("error");
 		sendJson(response, 500, {
 			error: "Failed to prepare steered assistant run.",
-		});
-	};
-	const sendTurnControllerError = (turnError: {
-		cause?: unknown;
-		cleanupError?: unknown;
-		error: string;
-		errorCode?: string;
-		logMessage?: string;
-		phase: string;
-		statusCode: 400 | 409 | 500;
-	}) => {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = turnError.statusCode;
-		wideEvent.error_code = turnError.errorCode ?? turnError.phase;
-		if (turnError.cleanupError) {
-			recordServerError({
-				error: turnError.cleanupError,
-				event: wideEvent,
-				operation: turnError.logMessage ?? turnError.phase,
-			});
-		} else if (turnError.cause || turnError.logMessage) {
-			recordServerError({
-				details: continueRunId ? { run_id: continueRunId } : undefined,
-				error: turnError.cause,
-				event: wideEvent,
-				operation: turnError.logMessage ?? turnError.phase,
-			});
-		}
-		emitWideEvent("error");
-		sendJson(response, turnError.statusCode, {
-			error: turnError.error,
-			...(turnError.errorCode ? { errorCode: turnError.errorCode } : {}),
 		});
 	};
 	let preparedTurnInput: Awaited<
@@ -634,7 +587,7 @@ export const handleChatRequest = async (
 		return;
 	}
 	if (!preparedTurnInput.ok) {
-		sendTurnControllerError(preparedTurnInput);
+		turnRouteErrors.sendTurnControllerError(preparedTurnInput);
 		return;
 	}
 	const { effectiveMessage, pendingSteerMessages, steeredUserMessages } =
@@ -642,7 +595,8 @@ export const handleChatRequest = async (
 	const cleanupClaimedSteerQueuedMessage = async (
 		operation: string,
 		options: { tolerateMissing?: boolean } = {},
-	) => await cleanupClaimedSteerQueuedMessageForRoute(operation, options);
+	) =>
+		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(operation, options);
 	let preparedBranch: {
 		incomingMessages: UIMessage[];
 	};

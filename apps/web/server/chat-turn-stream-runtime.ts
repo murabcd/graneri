@@ -29,6 +29,7 @@ import {
 	persistHostedChatUserMessage,
 } from "../../../packages/ai/src/hosted-chat-user-message-persistence.mjs";
 import type { ReasoningEffort } from "../../../packages/ai/src/models.mjs";
+import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 
 type AttachableAssistantRun = {
@@ -153,64 +154,19 @@ export const runHostedChatTurnStreamRuntime = async ({
 	wideEvent: ServerWideEvent;
 	workspaceId: Id<"workspaces">;
 }): Promise<HostedChatTurnStreamRuntimeResult> => {
+	const turnRouteErrors = createHostedChatTurnRouteErrorResponder({
+		continueRunId,
+		emitWideEvent,
+		response,
+		sendJson,
+		turnController,
+		wideEvent,
+	});
 	const cleanupClaimedSteerQueuedMessage = async (
 		operation: string,
 		options: { tolerateMissing?: boolean } = {},
-	) => {
-		const cleanupResult =
-			await turnController.cleanupClaimedSteerQueuedMessage(options);
-		if (cleanupResult.ok) {
-			return true;
-		}
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 500;
-		wideEvent.error_code = "steer_queue_cleanup_failed";
-		recordServerError({
-			details: {
-				queued_message_ids: cleanupResult.queuedMessageIds,
-			},
-			error: cleanupResult.error,
-			event: wideEvent,
-			operation,
-		});
-		emitWideEvent("error");
-		sendJson(response, 500, {
-			error: "Failed to clean up claimed steered message.",
-		});
-		return false;
-	};
-
-	const sendTurnControllerError = (
-		turnError: Awaited<
-			ReturnType<HostedTurnController["requireSameActiveRun"]>
-		>,
-	) => {
-		if (turnError.ok) {
-			return;
-		}
-		wideEvent.outcome = "error";
-		wideEvent.status_code = turnError.statusCode;
-		wideEvent.error_code = turnError.errorCode ?? turnError.phase;
-		if (turnError.cleanupError) {
-			recordServerError({
-				error: turnError.cleanupError,
-				event: wideEvent,
-				operation: turnError.logMessage ?? turnError.phase,
-			});
-		} else if (turnError.cause || turnError.logMessage) {
-			recordServerError({
-				details: continueRunId ? { run_id: continueRunId } : undefined,
-				error: turnError.cause,
-				event: wideEvent,
-				operation: turnError.logMessage ?? turnError.phase,
-			});
-		}
-		emitWideEvent("error");
-		sendJson(response, turnError.statusCode, {
-			error: turnError.error,
-			...(turnError.errorCode ? { errorCode: turnError.errorCode } : {}),
-		});
-	};
+	) =>
+		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(operation, options);
 
 	const activeRunPolicyError = validateHostedChatActiveRunPolicy({
 		attachableRun,
@@ -234,7 +190,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 		continueRunId,
 	});
 	if (!sameActiveRun.ok) {
-		sendTurnControllerError(sameActiveRun);
+		turnRouteErrors.sendTurnControllerError(sameActiveRun);
 		return { activeStreamSession: null, ok: false };
 	}
 
