@@ -763,7 +763,6 @@ enum SystemAudioCaptureCLI {
 				exit(EXIT_FAILURE)
 			}
 		)
-		var signalSources: [DispatchSourceSignal] = []
 		logger.log("[helper] process launched")
 
 		func stopCaptureAndExit(_ signal: Int32) -> Never {
@@ -777,14 +776,8 @@ enum SystemAudioCaptureCLI {
 			exit(signal == SIGTERM || signal == SIGINT ? 0 : 1)
 		}
 
-		for handledSignal in [SIGINT, SIGTERM] {
-			signal(handledSignal, SIG_IGN)
-			let source = DispatchSource.makeSignalSource(signal: handledSignal)
-			source.setEventHandler {
-				stopCaptureAndExit(handledSignal)
-			}
-			source.resume()
-			signalSources.append(source)
+		let signalSources = installNativeAudioSignalHandlers { handledSignal in
+			stopCaptureAndExit(handledSignal)
 		}
 
 		do {
@@ -797,7 +790,9 @@ enum SystemAudioCaptureCLI {
 				"debug": capture.debugInfo,
 				"sampleRate": format.sampleRate,
 			])
-			RunLoop.main.run()
+			withExtendedLifetime(signalSources) {
+				RunLoop.main.run()
+			}
 		} catch {
 			logger.log("[helper] startup failed: \(error.localizedDescription)")
 			emitter.send(event: [

@@ -450,7 +450,6 @@ enum MicrophoneCaptureCLI {
 				exit(EXIT_FAILURE)
 			}
 		)
-		var signalSources: [DispatchSourceSignal] = []
 
 		func stopCaptureAndExit(_ signal: Int32) -> Never {
 			logger.log("[helper] received signal \(signal)")
@@ -463,14 +462,8 @@ enum MicrophoneCaptureCLI {
 			exit(signal == SIGTERM || signal == SIGINT ? 0 : 1)
 		}
 
-		for handledSignal in [SIGINT, SIGTERM] {
-			signal(handledSignal, SIG_IGN)
-			let source = DispatchSource.makeSignalSource(signal: handledSignal)
-			source.setEventHandler {
-				stopCaptureAndExit(handledSignal)
-			}
-			source.resume()
-			signalSources.append(source)
+		let signalSources = installNativeAudioSignalHandlers { handledSignal in
+			stopCaptureAndExit(handledSignal)
 		}
 
 		do {

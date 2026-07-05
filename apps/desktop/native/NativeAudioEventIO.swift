@@ -37,6 +37,24 @@ private func readNativeAudioSamples(from buffer: AVAudioPCMBuffer) -> [Float]? {
 	return Array(UnsafeBufferPointer(start: floatChannel, count: frameCount))
 }
 
+func installNativeAudioSignalHandlers(
+	onSignal: @escaping (Int32) -> Void
+) -> [DispatchSourceSignal] {
+	var signalSources: [DispatchSourceSignal] = []
+
+	for handledSignal in [SIGINT, SIGTERM] {
+		signal(handledSignal, SIG_IGN)
+		let source = DispatchSource.makeSignalSource(signal: handledSignal)
+		source.setEventHandler {
+			onSignal(handledSignal)
+		}
+		source.resume()
+		signalSources.append(source)
+	}
+
+	return signalSources
+}
+
 private final class NativeAudioChunkFlushScheduler: @unchecked Sendable {
 	private let flushIntervalNanoseconds: UInt64
 	private let queue: DispatchQueue
