@@ -11,6 +11,8 @@ export type AppSourceProvider =
 	| "yandex-tracker"
 	| "zoom";
 
+export type ChatAppSourceProvider = AppSourceProvider | "jira";
+
 export type AppSourceInstructionConnection = {
 	id?: string;
 	sourceId?: string;
@@ -38,6 +40,14 @@ export declare const capabilityMetadataRegistry: Record<
 export declare const appSourceProviders: readonly AppSourceProvider[];
 export declare const automationAppSourceProviders: readonly AppSourceProvider[];
 export declare const appSourceLabels: Record<AppSourceProvider, string>;
+export declare const chatAppSourceProviders: readonly ChatAppSourceProvider[];
+export declare const chatAppSourceLabels: Record<ChatAppSourceProvider, string>;
+export declare function isChatAppSourceProvider(
+	value: unknown,
+): value is ChatAppSourceProvider;
+export declare function getChatAppSourceLabel(
+	provider: ChatAppSourceProvider,
+): string;
 export declare const remoteMcpToolPrefixes: readonly {
 	prefix: string;
 	provider: AppSourceProvider;

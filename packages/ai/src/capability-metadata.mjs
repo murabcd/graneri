@@ -143,6 +143,34 @@ export const appSourceLabels = Object.fromEntries(
 	]),
 );
 
+export const chatAppSourceProviders = [
+	"context7",
+	"figma",
+	"google-calendar",
+	"google-drive",
+	"jira",
+	"jira-mcp",
+	"linear",
+	"notion",
+	"posthog",
+	"zoom",
+	"yandex-calendar",
+	"yandex-tracker",
+];
+
+export const chatAppSourceLabels = Object.fromEntries(
+	chatAppSourceProviders.map((provider) => [
+		provider,
+		provider === "jira" ? "Jira" : appSourceLabels[provider],
+	]),
+);
+
+export const isChatAppSourceProvider = (value) =>
+	typeof value === "string" && chatAppSourceProviders.includes(value);
+
+export const getChatAppSourceLabel = (provider) =>
+	chatAppSourceLabels[provider];
+
 export const remoteMcpToolPrefixes = capabilityMetadataDefinitions
 	.filter((capability) => capability.toolPrefix)
 	.map((capability) => ({
