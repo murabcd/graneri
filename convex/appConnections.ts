@@ -740,18 +740,6 @@ const getOwnedZoomConnection = async (
 	workspaceId: Id<"workspaces">,
 ) => await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, "zoom");
 
-const getOwnedFigmaConnection = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) => await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, "figma");
-
-const getOwnedLinearConnection = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) => await getOwnedConnection(ctx, ownerTokenIdentifier, workspaceId, "linear");
-
 const getOwnedRemoteHeaderMcpConnection = async (
 	ctx: QueryCtx | MutationCtx,
 	ownerTokenIdentifier: string,
@@ -2361,18 +2349,12 @@ const upsertMcpOAuthConnection = async <TProvider extends "figma" | "linear">(
 	const oauthClientId = args.oauthClientId.trim();
 	const oauthClientSecret = args.oauthClientSecret?.trim() || undefined;
 	const oauthRefreshToken = args.oauthRefreshToken?.trim() || undefined;
-	const existingConnection =
-		provider === "figma"
-			? await getOwnedFigmaConnection(
-					ctx,
-					args.ownerTokenIdentifier,
-					args.workspaceId,
-				)
-			: await getOwnedLinearConnection(
-					ctx,
-					args.ownerTokenIdentifier,
-					args.workspaceId,
-				);
+	const existingConnection = await getOwnedConnection(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		provider,
+	);
 
 	if (existingConnection) {
 		await ctx.db.patch(existingConnection._id, {
