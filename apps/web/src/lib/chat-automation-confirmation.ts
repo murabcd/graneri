@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import { extractToolParts } from "@/lib/chat-message";
 import { asRecord } from "@/lib/object-record";
+import { getTrimmedString } from "@/lib/string-value";
 
 export type AutomationDeleteConfirmation = {
 	automationId: string;
@@ -16,9 +17,6 @@ const getToolPartOutput = (part: UIMessage["parts"][number]) => {
 	return asRecord(part.output);
 };
 
-const getString = (value: unknown) =>
-	typeof value === "string" ? value.trim() : "";
-
 const parseOptions = (
 	value: unknown,
 ): AutomationDeleteConfirmation["options"] => {
@@ -33,7 +31,7 @@ const parseOptions = (
 		(item) => {
 			const option = asRecord(item);
 			const id = option?.id;
-			const label = getString(option?.label);
+			const label = getTrimmedString(option?.label);
 			if ((id !== "confirm" && id !== "cancel") || !label) {
 				return [];
 			}
@@ -61,10 +59,10 @@ const parseAutomationDeleteConfirmation = (
 		return null;
 	}
 
-	const automationId = getString(output.id);
-	const title = getString(confirmation.title) || "Delete automation?";
+	const automationId = getTrimmedString(output.id);
+	const title = getTrimmedString(confirmation.title) || "Delete automation?";
 	const message =
-		getString(confirmation.message) ||
+		getTrimmedString(confirmation.message) ||
 		"This automation will stop running and be removed.";
 	const options = parseOptions(confirmation.options);
 

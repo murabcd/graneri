@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { asRecord } from "@/lib/object-record";
+import { getTrimmedString } from "@/lib/string-value";
 import { remoteMcpToolPrefixes } from "../../../../../../packages/ai/src/capability-metadata.mjs";
 import { toolUiMetadata } from "../../../../../../packages/ai/src/tool-ui-metadata.mjs";
 
@@ -43,9 +44,6 @@ export type ToolPartLike = {
 const isPending = (part: ToolPartLike) =>
 	part.state !== "output-available" && part.state !== "output-error";
 
-const getString = (value: unknown) =>
-	typeof value === "string" ? value.trim() : "";
-
 const getFirstString = (
 	value: Record<string, unknown> | undefined,
 	keys: string[],
@@ -55,7 +53,7 @@ const getFirstString = (
 	}
 
 	for (const key of keys) {
-		const candidate = getString(value[key]);
+		const candidate = getTrimmedString(value[key]);
 		if (candidate) {
 			return candidate;
 		}
@@ -133,7 +131,8 @@ const getStaticToolMeta = (part: ToolPartLike) => {
 };
 
 function getRemoteMcpPrefixMeta(part: ToolPartLike): ToolMeta | null {
-	const toolName = getString(part.toolName) || getString(part.type);
+	const toolName =
+		getTrimmedString(part.toolName) || getTrimmedString(part.type);
 	const provider = remoteMcpToolPrefixes.find(({ prefix }) =>
 		toolName.startsWith(prefix),
 	);
@@ -187,10 +186,10 @@ function getMetadataToolMeta(part: ToolPartLike): ToolMeta | null {
 		return null;
 	}
 
-	const running = getString(ui.running);
-	const complete = getString(ui.complete);
-	const error = getString(ui.error);
-	const iconKey = getString(ui.icon);
+	const running = getTrimmedString(ui.running);
+	const complete = getTrimmedString(ui.complete);
+	const error = getTrimmedString(ui.error);
+	const iconKey = getTrimmedString(ui.icon);
 
 	if (!running || !complete || !(iconKey in toolIconRegistry)) {
 		return null;
@@ -198,10 +197,10 @@ function getMetadataToolMeta(part: ToolPartLike): ToolMeta | null {
 
 	const icon = toolIconRegistry[iconKey as keyof typeof toolIconRegistry];
 	const subtitleKeys = getStringArray(ui.subtitleKeys);
-	const groupKey = getString(ui.groupKey) || undefined;
-	const groupLabel = getString(ui.groupLabel) || undefined;
-	const isRemoteMcpTool = getString(metadata?.source) === "mcp";
-	const mcpToolName = getString(metadata?.mcpToolName);
+	const groupKey = getTrimmedString(ui.groupKey) || undefined;
+	const groupLabel = getTrimmedString(ui.groupLabel) || undefined;
+	const isRemoteMcpTool = getTrimmedString(metadata?.source) === "mcp";
+	const mcpToolName = getTrimmedString(metadata?.mcpToolName);
 	const operationLabel =
 		isRemoteMcpTool && mcpToolName ? getReadableToolName(mcpToolName) : "";
 
