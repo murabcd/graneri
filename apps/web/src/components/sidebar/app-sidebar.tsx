@@ -916,7 +916,7 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	});
 
 	return (
-		<SidebarContent>
+		<SidebarContent viewportClassName="scroll-fade-b">
 			<NavPlatform
 				items={navItems}
 				onViewChange={onViewChange}
