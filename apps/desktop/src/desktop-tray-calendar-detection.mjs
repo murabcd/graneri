@@ -1,4 +1,4 @@
-export const scheduledMeetingNotificationLeadTimeMs = 60 * 1000;
+export const scheduledMeetingReminderLeadTimeMs = 60 * 1000;
 export const detectedMeetingCalendarPostStartWindowMs = 15 * 60 * 1000;
 
 export const createInitialTrayCalendarState = () => ({

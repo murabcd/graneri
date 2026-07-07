@@ -1,13 +1,15 @@
-import { Notification, shell } from "electron";
+import electron from "electron";
 import {
 	createInitialTrayCalendarState,
 	createLoadingTrayCalendarState,
 	createUnavailableTrayCalendarState,
 	getDetectedMeetingCalendarEventFromEvents,
-	scheduledMeetingNotificationLeadTimeMs,
+	scheduledMeetingReminderLeadTimeMs,
 } from "./desktop-tray-calendar-detection.mjs";
 import { logError } from "./logger.mjs";
 import { toErrorLogDetails } from "./network.mjs";
+
+const { shell: electronShell } = electron;
 
 export {
 	createInitialTrayCalendarState,
@@ -30,14 +32,8 @@ export const isTrayEventLive = (event, currentDate) => {
 	return now >= startAt && now <= endAt;
 };
 
-const createScheduledMeetingNotificationKey = (event) =>
+const createScheduledMeetingReminderKey = (event) =>
 	`${event.id}:${event.startAt}`;
-
-const formatScheduledMeetingNotificationTime = (value) =>
-	new Intl.DateTimeFormat(undefined, {
-		hour: "numeric",
-		minute: "2-digit",
-	}).format(new Date(value));
 
 const createCalendarEventNoteSearch = (event, options = {}) => {
 	const searchParams = new URLSearchParams();
@@ -78,16 +74,18 @@ const createCalendarEventNoteSearch = (event, options = {}) => {
 
 export const createDesktopTrayCalendar = ({
 	calendarSource,
-	dockIconPath,
 	getNotificationPreferences,
 	onOpenMainWindow,
+	onShowScheduledMeetingReminder,
 	onStateChange,
+	shellApi = electronShell,
+	shouldMaintainCalendar = () => process.platform === "darwin",
 }) => {
 	let state = createInitialTrayCalendarState();
 	let refreshTimeoutId = null;
 	let refreshPromise = null;
 	let queuedRefreshOptions = null;
-	const shownScheduledMeetingNotificationKeys = new Set();
+	const shownScheduledMeetingReminderKeys = new Set();
 
 	const notifyStateChange = () => {
 		try {
@@ -105,7 +103,7 @@ export const createDesktopTrayCalendar = ({
 			return;
 		}
 
-		await shell.openExternal(event.meetingUrl);
+		await shellApi.openExternal(event.meetingUrl);
 	};
 
 	const openCalendarEventNote = async (event, options = {}) => {
@@ -144,8 +142,6 @@ export const createDesktopTrayCalendar = ({
 			refreshTimeoutId = null;
 		}
 	};
-
-	const shouldMaintainCalendar = () => process.platform === "darwin";
 
 	const shouldUseActiveRefresh = (events) => {
 		const now = Date.now();
@@ -200,28 +196,25 @@ export const createDesktopTrayCalendar = ({
 		}, resolvedDelayMs);
 	};
 
-	const syncShownScheduledMeetingNotifications = (events) => {
+	const syncShownScheduledMeetingReminders = (events) => {
 		const activeEventKeys = new Set(
-			events.map((event) => createScheduledMeetingNotificationKey(event)),
+			events.map((event) => createScheduledMeetingReminderKey(event)),
 		);
 
-		for (const key of shownScheduledMeetingNotificationKeys) {
+		for (const key of shownScheduledMeetingReminderKeys) {
 			if (!activeEventKeys.has(key)) {
-				shownScheduledMeetingNotificationKeys.delete(key);
+				shownScheduledMeetingReminderKeys.delete(key);
 			}
 		}
 	};
 
-	const maybeShowScheduledMeetingNotifications = (events) => {
-		if (
-			!getNotificationPreferences().notifyForScheduledMeetings ||
-			!Notification.isSupported()
-		) {
+	const maybeShowScheduledMeetingReminders = async (events) => {
+		if (!getNotificationPreferences().notifyForScheduledMeetings) {
 			return;
 		}
 
 		const now = Date.now();
-		syncShownScheduledMeetingNotifications(events);
+		syncShownScheduledMeetingReminders(events);
 
 		for (const event of events) {
 			if (!event?.isMeeting || event.isAllDay) {
@@ -235,43 +228,26 @@ export const createDesktopTrayCalendar = ({
 				!Number.isFinite(startAt) ||
 				!Number.isFinite(endAt) ||
 				endAt <= now ||
-				startAt - now > scheduledMeetingNotificationLeadTimeMs
+				startAt - now > scheduledMeetingReminderLeadTimeMs
 			) {
 				continue;
 			}
 
-			const notificationKey = createScheduledMeetingNotificationKey(event);
+			const reminderKey = createScheduledMeetingReminderKey(event);
 
-			if (shownScheduledMeetingNotificationKeys.has(notificationKey)) {
+			if (shownScheduledMeetingReminderKeys.has(reminderKey)) {
 				continue;
 			}
 
-			shownScheduledMeetingNotificationKeys.add(notificationKey);
-
-			const isStartingNow = startAt <= now;
-			const notification = new Notification({
-				title: isStartingNow ? "Meeting started" : "Meeting starting soon",
-				body: `${event.title}\n${event.calendarName} • ${
-					isStartingNow
-						? "In progress now"
-						: `Starts at ${formatScheduledMeetingNotificationTime(event.startAt)}`
-				}`,
-				icon: dockIconPath,
-			});
+			shownScheduledMeetingReminderKeys.add(reminderKey);
 
 			try {
-				notification.on("click", () => {
-					void openCalendarEventNote(event, {
-						autoStartCapture: isStartingNow,
-						openMeetingLink: true,
-						stopCaptureWhenMeetingEnds: true,
-					});
-				});
-				notification.show();
+				await onShowScheduledMeetingReminder(event);
 			} catch (error) {
+				shownScheduledMeetingReminderKeys.delete(reminderKey);
 				logError({
-					error: error,
-					message: "Failed to show scheduled meeting notification.",
+					error: toErrorLogDetails(error),
+					message: "Failed to show scheduled meeting reminder.",
 				});
 			}
 		}
@@ -314,9 +290,9 @@ export const createDesktopTrayCalendar = ({
 							});
 
 				if (state.status === "ready") {
-					maybeShowScheduledMeetingNotifications(state.events);
+					await maybeShowScheduledMeetingReminders(state.events);
 				} else {
-					syncShownScheduledMeetingNotifications([]);
+					syncShownScheduledMeetingReminders([]);
 				}
 			} catch (error) {
 				logError({

@@ -252,6 +252,14 @@ Production desktop packages default to the `com.graneri.desktop` bundle
 identifier. Local/dev packages keep `dev.graneri.desktop` so installed
 production builds and repo-built verification bundles do not share macOS app
 identity.
+Official macOS production packages must be Developer ID signed and notarized so
+macOS treats Graneri as a stable, trusted app identity for system surfaces such
+as notifications, login items, and permission prompts. Local verification
+packages may remain ad-hoc signed, but production packaging must not. Signing
+identities and notarization credentials must come from the CI keychain or
+environment and must never be embedded in the packaged runtime. CI may set
+`GRANERI_MAC_SIGNING_IDENTITY` when it needs to choose a specific certificate
+instead of Electron Builder's automatic discovery.
 
 ## Desktop AI
 
@@ -370,16 +378,15 @@ debounce, dismissal, suppression, and widget window visibility stay in
 may render it or send user actions back through `packages/platform`. Renderer
 code must not inspect running applications, microphone activity, calendar state,
 or desktop windows directly to decide whether a meeting exists.
-Auto-detected meeting prompts intentionally use a desktop-owned custom
-notification-like window rather than OS notification delivery. On macOS this
-surface must be a panel-style window hidden from Mission Control, kept out of
-the task switcher, and visible across spaces/full-screen contexts. The custom
-surface is part of the detection state machine: Electron owns prompt debounce,
-dismissal, suppression, full-screen/workspace visibility, and action handling so
-the prompt remains predictable under Focus modes, Notification Center settings,
-and transcription state changes. Scheduled calendar reminders may use native OS
-notifications because they are fire-and-forget reminders, not the live
-meeting-detection prompt state.
+Meeting prompts and scheduled calendar reminders intentionally use a
+desktop-owned custom notification-like window rather than OS notification
+delivery. On macOS this surface must be a panel-style window hidden from Mission
+Control, kept out of the task switcher, and visible across spaces/full-screen
+contexts. The custom surface is part of the desktop meeting state machine:
+Electron owns prompt debounce, scheduled-reminder de-duplication, dismissal,
+suppression, full-screen/workspace visibility, and action handling so the prompt
+remains predictable under Focus modes, Notification Center settings, and
+transcription state changes.
 
 Proxy response handling must match the body strategy. Streamed routes may pipe
 the upstream body with upstream headers. Buffered or decoded proxy responses

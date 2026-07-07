@@ -77,11 +77,11 @@ const formatTrayEventMenuLabel = (event) =>
 export const createDesktopTray = ({
 	app,
 	confirmAndQuitCompletely,
-	dockIconPath,
 	getNotificationPreferences,
 	initialStatusLabel,
 	onCheckForUpdates,
 	onOpenMainWindow,
+	onShowScheduledMeetingReminder,
 	onQuit,
 	trayIconPath,
 	traySettingsPath,
@@ -93,9 +93,9 @@ export const createDesktopTray = ({
 	const calendarSource = createDesktopSyncedCalendar();
 	const calendar = createDesktopTrayCalendar({
 		calendarSource,
-		dockIconPath,
 		getNotificationPreferences,
 		onOpenMainWindow,
+		onShowScheduledMeetingReminder,
 		onStateChange: () => refreshMenu(),
 	});
 

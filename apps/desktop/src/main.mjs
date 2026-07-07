@@ -474,6 +474,12 @@ const showMeetingWidgetForTest = async () => {
 		"meetingDetection",
 	).showMeetingWidgetForTest();
 };
+const showScheduledMeetingReminder = async (event) => {
+	await requireDesktopService(
+		meetingDetection,
+		"meetingDetection",
+	).showScheduledMeetingReminder(event);
+};
 const resetMeetingDetectionForTest = () => {
 	requireDesktopService(
 		meetingDetection,
@@ -2181,13 +2187,14 @@ const showMainWindow = async (options = {}) => {
 desktopTray = createDesktopTray({
 	app,
 	confirmAndQuitCompletely: () => confirmAndQuitCompletely(),
-	dockIconPath,
 	getNotificationPreferences: () => activeWorkspaceNotificationPreferences,
 	initialStatusLabel: getDesktopUpdaterUnavailableTrayLabel({
 		isPackaged: app.isPackaged,
 	}),
 	onCheckForUpdates: () => handleCheckForUpdates(),
 	onOpenMainWindow: (options) => showMainWindow(options),
+	onShowScheduledMeetingReminder: (event) =>
+		showScheduledMeetingReminder(event),
 	onQuit: () => handleTrayQuit(),
 	trayIconPath,
 	traySettingsPath,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createDesktopTrayCalendar } from "../src/desktop-tray-calendar.mjs";
 import {
 	createLoadingTrayCalendarState,
 	createUnavailableTrayCalendarState,
@@ -21,6 +22,42 @@ const createMeetingEvent = (overrides = {}) => ({
 	...overrides,
 });
 
+const createCalendarReminderHarness = ({ events, preferences }) => {
+	const openedExternalUrls = [];
+	const openedMainWindows = [];
+	const shownScheduledMeetingReminders = [];
+	const calendar = createDesktopTrayCalendar({
+		calendarSource: {
+			listCurrentDayEvents: async () => ({
+				connectedCalendarCount: 1,
+				events,
+				status: "ready",
+			}),
+		},
+		getNotificationPreferences: () => preferences,
+		onOpenMainWindow: async (options) => {
+			openedMainWindows.push(options);
+		},
+		onShowScheduledMeetingReminder: async (event) => {
+			shownScheduledMeetingReminders.push(event);
+		},
+		onStateChange: () => {},
+		shellApi: {
+			openExternal: async (url) => {
+				openedExternalUrls.push(url);
+			},
+		},
+		shouldMaintainCalendar: () => true,
+	});
+
+	return {
+		calendar,
+		openedExternalUrls,
+		openedMainWindows,
+		shownScheduledMeetingReminders,
+	};
+};
+
 test("detects live calendar meetings", () => {
 	const event = createMeetingEvent();
 
@@ -31,6 +68,68 @@ test("detects live calendar meetings", () => {
 		),
 		event,
 	);
+});
+
+test("shows a scheduled meeting reminder when enabled and the meeting is due", async () => {
+	const startAt = new Date(Date.now() + 10_000).toISOString();
+	const event = createMeetingEvent({
+		endAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+		startAt,
+	});
+	const harness = createCalendarReminderHarness({
+		events: [event],
+		preferences: {
+			notifyForAutoDetectedMeetings: false,
+			notifyForScheduledMeetings: true,
+		},
+	});
+
+	await harness.calendar.refresh();
+	harness.calendar.clearRefresh();
+
+	assert.deepEqual(harness.shownScheduledMeetingReminders, [event]);
+});
+
+test("does not repeat a scheduled reminder for the same due event", async () => {
+	const event = createMeetingEvent({
+		endAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+		startAt: new Date(Date.now() + 10_000).toISOString(),
+	});
+	const harness = createCalendarReminderHarness({
+		events: [event],
+		preferences: {
+			notifyForAutoDetectedMeetings: false,
+			notifyForScheduledMeetings: true,
+		},
+	});
+
+	await harness.calendar.refresh();
+	await harness.calendar.refresh();
+	harness.calendar.clearRefresh();
+
+	assert.deepEqual(harness.shownScheduledMeetingReminders, [event]);
+});
+
+test("does not burn a scheduled reminder while preferences are still disabled", async () => {
+	const preferences = {
+		notifyForAutoDetectedMeetings: false,
+		notifyForScheduledMeetings: false,
+	};
+	const event = createMeetingEvent({
+		endAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+		startAt: new Date(Date.now() + 10_000).toISOString(),
+	});
+	const harness = createCalendarReminderHarness({
+		events: [event],
+		preferences,
+	});
+
+	await harness.calendar.refresh();
+	preferences.notifyForScheduledMeetings = true;
+	await harness.calendar.refresh();
+	harness.calendar.clearRefresh();
+
+	assert.deepEqual(harness.shownScheduledMeetingReminders, [event]);
 });
 
 test("associates ad-hoc calls with meetings started within the last 15 minutes", () => {
