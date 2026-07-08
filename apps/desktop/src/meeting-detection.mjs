@@ -6,6 +6,7 @@ import {
 	stopLineEventHelperSession,
 } from "./line-event-helper-session.mjs";
 import { logError } from "./logger.mjs";
+import { getMeetingProviderNameFromUrl } from "./meeting-provider-url.mjs";
 import {
 	createMeetingSignal,
 	createMeetingSignalCalendarEvent,
@@ -66,7 +67,7 @@ export const createMeetingDetection = ({
 	let latestMeetingDetectionState = createInitialMeetingDetectionState();
 	let meetingDetectionDebounceTimeoutId = null;
 	let dismissedMeetingSignalKey = null;
-	let scheduledMeetingReminderEvent = null;
+	let scheduledMeetingReminderPrompt = null;
 	let nativeMeetingWindowState =
 		createInitialMeetingDetectionState().meetingWindowState;
 	let microphoneSourceName = null;
@@ -110,12 +111,19 @@ export const createMeetingDetection = ({
 		});
 	};
 
-	const syncMeetingDetectionState = (patch, options = {}) => {
+	const createScheduledMeetingReminderPrompt = (event) => ({
+		event,
+		sourceName: getMeetingProviderNameFromUrl(event?.meetingUrl) ?? null,
+	});
+
+	const syncMeetingDetectionState = (patch) => {
 		const nextActiveMicApps =
 			"activeMicApps" in (patch ?? {})
 				? normalizeActiveMicApps(patch.activeMicApps)
 				: latestMeetingDetectionState.activeMicApps;
 		const aggregateWindowState = getAggregateMeetingWindowState();
+		const promptCalendarEvent = scheduledMeetingReminderPrompt?.event ?? null;
+		const promptSourceName = scheduledMeetingReminderPrompt?.sourceName ?? null;
 		const nextMeetingDetectionState = {
 			...latestMeetingDetectionState,
 			...(patch ?? {}),
@@ -123,6 +131,7 @@ export const createMeetingDetection = ({
 			meetingWindowState: aggregateWindowState,
 			sourceName:
 				getMeetingWindowSourceName(aggregateWindowState) ??
+				promptSourceName ??
 				microphoneSourceName,
 		};
 		const meetingSignal = createMeetingSignal(
@@ -132,13 +141,13 @@ export const createMeetingDetection = ({
 		latestMeetingDetectionState = {
 			...nextMeetingDetectionState,
 			...createMeetingSignalStatePatch(meetingSignal),
-			...(options.calendarEvent
+			...(promptCalendarEvent
 				? {
-						calendarEvent: createMeetingSignalCalendarEvent(
-							options.calendarEvent,
-						),
+						calendarEvent:
+							createMeetingSignalCalendarEvent(promptCalendarEvent),
 					}
 				: {}),
+			...(promptSourceName ? { sourceName: promptSourceName } : {}),
 			hasMeetingSignal: Boolean(meetingSignal),
 		};
 
@@ -219,7 +228,7 @@ export const createMeetingDetection = ({
 	};
 
 	const clearScheduledMeetingReminderEvent = () => {
-		scheduledMeetingReminderEvent = null;
+		scheduledMeetingReminderPrompt = null;
 	};
 
 	const ensureMeetingWidgetWindow = async () => {
@@ -277,7 +286,7 @@ export const createMeetingDetection = ({
 		) || isCurrentMeetingSignalDismissed(getCurrentMeetingSignal());
 
 	const hasMeetingWidgetPrompt = () =>
-		Boolean(scheduledMeetingReminderEvent || getCurrentMeetingSignal());
+		Boolean(scheduledMeetingReminderPrompt || getCurrentMeetingSignal());
 
 	const autoHideMeetingWidgetPrompt = () => {
 		hideMeetingWidgetWindow();
@@ -350,7 +359,7 @@ export const createMeetingDetection = ({
 		const confidence = 0.35;
 		const promptConfidence = 0.82;
 
-		if (scheduledMeetingReminderEvent) {
+		if (scheduledMeetingReminderPrompt) {
 			if (isSuppressed) {
 				clearScheduledMeetingReminderEvent();
 				hideMeetingWidgetWindow();
@@ -436,7 +445,7 @@ export const createMeetingDetection = ({
 	};
 
 	const startDetectedMeetingNote = async () => {
-		const scheduledPromptEvent = scheduledMeetingReminderEvent;
+		const scheduledPromptEvent = scheduledMeetingReminderPrompt?.event ?? null;
 
 		clearMeetingDetectionDebounceTimeout();
 		hideMeetingWidgetWindow();
@@ -472,19 +481,15 @@ export const createMeetingDetection = ({
 		}
 
 		clearMeetingDetectionDebounceTimeout();
-		scheduledMeetingReminderEvent = event;
-		syncMeetingDetectionState(
-			{
-				candidateStartedAt: Date.now(),
-				confidence: 1,
-				dismissedUntil: null,
-				isSuppressed: false,
-				status: "prompting",
-			},
-			{
-				calendarEvent: event,
-			},
-		);
+		scheduledMeetingReminderPrompt =
+			createScheduledMeetingReminderPrompt(event);
+		syncMeetingDetectionState({
+			candidateStartedAt: Date.now(),
+			confidence: 1,
+			dismissedUntil: null,
+			isSuppressed: false,
+			status: "prompting",
+		});
 
 		try {
 			const didShowMeetingWidget = await showMeetingWidgetWindow();

@@ -18,6 +18,8 @@ import {
 	getMeetingWidgetTitle,
 } from "@/lib/meeting-widget-title";
 
+const meetingWidgetFrameWidthPx = 360;
+
 export function MeetingWidgetScreen() {
 	const [state, setState] = React.useState<DesktopMeetingDetectionState | null>(
 		null,
@@ -93,15 +95,19 @@ export function MeetingWidgetScreen() {
 	}, []);
 
 	return (
-		<div ref={frameRef} className="dark inline-flex p-1.5">
+		<div
+			ref={frameRef}
+			className="dark inline-flex p-1.5"
+			style={{ width: meetingWidgetFrameWidthPx }}
+		>
 			<Card
 				data-app-region="drag"
 				size="sm"
 				className={cn(
-					"relative rounded-lg border border-border/70 bg-card py-0 text-card-foreground shadow-none",
+					"relative w-full min-w-0 rounded-lg border border-border/70 bg-card py-0 text-card-foreground shadow-none",
 				)}
 			>
-				<CardContent className="flex items-center gap-2 p-1.5">
+				<CardContent className="flex min-w-0 items-center gap-2 p-1.5">
 					<div
 						data-app-region="no-drag"
 						className="flex size-8 shrink-0 items-center justify-center"
@@ -123,11 +129,17 @@ export function MeetingWidgetScreen() {
 					/>
 					<div className="min-w-0 flex-1 px-0.5">
 						<div className="flex min-w-0 flex-col gap-1">
-							<p className="truncate text-sm leading-none font-medium text-foreground">
+							<p
+								className="truncate text-sm leading-none font-medium text-foreground"
+								title={title}
+							>
 								{title}
 							</p>
 							{detail ? (
-								<p className="truncate text-xs leading-none text-muted-foreground">
+								<p
+									className="truncate text-xs leading-none text-muted-foreground"
+									title={detail}
+								>
 									{detail}
 								</p>
 							) : null}

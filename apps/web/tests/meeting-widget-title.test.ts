@@ -76,6 +76,29 @@ describe("meeting widget title", () => {
 		).toBe(null);
 	});
 
+	it("shows scheduled reminder event details before a live meeting signal exists", () => {
+		const scheduledReminderState = createState({
+			calendarEvent: {
+				id: "event-1",
+				calendarName: "Work",
+				endAt: "2026-06-05T10:30:00.000Z",
+				startAt: "2026-06-05T10:00:00.000Z",
+				title: "Product review",
+			},
+			hasMeetingSignal: false,
+			isMicrophoneActive: false,
+			sourceName: "Yandex Telemost",
+			status: "prompting",
+		});
+
+		expect(getMeetingWidgetTitle(scheduledReminderState)).toBe(
+			"Meeting detected",
+		);
+		expect(getMeetingWidgetDetail(scheduledReminderState)).toBe(
+			"Product review - Yandex Telemost",
+		);
+	});
+
 	it("shows source detail while monitoring an active signal", () => {
 		expect(
 			getMeetingWidgetDetail(
@@ -123,6 +146,6 @@ describe("meeting widget title", () => {
 					sourceName: "Google Meet",
 				}),
 			),
-		).toBe("Product review");
+		).toBe("Product review - Google Meet");
 	});
 });
