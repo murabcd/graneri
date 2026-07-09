@@ -1,4 +1,3 @@
-import type { DesktopPreferences } from "@workspace/platform/desktop-bridge";
 import type {
 	RemoteMcpConnectionFormState,
 	RemoteMcpOAuthFields,
@@ -53,34 +52,6 @@ export type YandexCalendarConnectionFormState = {
 	email: string;
 	password: string;
 };
-
-export type PreferencesSettingsState = {
-	preferences: DesktopPreferences | null;
-	isLoadingPreferences: boolean;
-	savingPreference: keyof DesktopPreferences | null;
-};
-
-export type PreferencesSettingsAction =
-	| {
-			type: "loadSucceeded";
-			value: DesktopPreferences;
-	  }
-	| {
-			type: "finishLoading";
-	  }
-	| {
-			type: "setSavingPreference";
-			value: keyof DesktopPreferences | null;
-	  }
-	| {
-			type: "setPreferences";
-			value: DesktopPreferences | null;
-	  }
-	| {
-			key: "launchAtLogin";
-			type: "setPreferenceOptimistic";
-			value: boolean;
-	  };
 
 export type CalendarSettingsState = {
 	isSavingCalendarPreferences: boolean;
@@ -574,36 +545,6 @@ export const createStableConnectionSettingsStore = () => {
 
 export const stableConnectionSettingsStore =
 	createStableConnectionSettingsStore();
-
-export const preferencesSettingsReducer = (
-	state: PreferencesSettingsState,
-	action: PreferencesSettingsAction,
-): PreferencesSettingsState => {
-	switch (action.type) {
-		case "loadSucceeded":
-			return {
-				...state,
-				preferences: action.value,
-				isLoadingPreferences: false,
-			};
-		case "finishLoading":
-			return { ...state, isLoadingPreferences: false };
-		case "setSavingPreference":
-			return { ...state, savingPreference: action.value };
-		case "setPreferences":
-			return { ...state, preferences: action.value };
-		case "setPreferenceOptimistic":
-			return state.preferences
-				? {
-						...state,
-						preferences: {
-							...state.preferences,
-							[action.key]: action.value,
-						},
-					}
-				: state;
-	}
-};
 
 export const calendarSettingsReducer = (
 	state: CalendarSettingsState,

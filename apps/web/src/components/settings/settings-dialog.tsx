@@ -1,11 +1,8 @@
 import {
 	getDesktopAuthCallbackUrl,
-	getDesktopPreferences,
 	isDesktopRuntime,
 	openDesktopExternalUrl,
-	setDesktopLaunchAtLogin,
 } from "@workspace/platform/desktop";
-import type { DesktopPreferences } from "@workspace/platform/desktop-bridge";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -126,8 +123,6 @@ import {
 	initialYandexTrackerConnectionFormState,
 	initialZoomConnectionFormState,
 	type JiraConnectionFormState,
-	type PreferencesSettingsState,
-	preferencesSettingsReducer,
 	type RemoteMcpFormPatch,
 	type RemoteMcpFormStateKey,
 	resolveConnectionSettings,
@@ -136,6 +131,7 @@ import {
 	type YandexTrackerConnectionFormState,
 	type YandexTrackerOrgType,
 } from "@/components/settings/connection-settings-state";
+import { PreferencesSettings } from "@/components/settings/preferences-settings";
 import { RemoteMcpDialog } from "@/components/settings/remote-mcp-dialog";
 import { SettingsSwitchRow } from "@/components/settings/settings-switch-row";
 import { VoiceSettings } from "@/components/settings/voice-settings";
@@ -323,12 +319,6 @@ const navigateTo = (pathname: string) => {
 	window.history.pushState(null, "", pathname);
 	window.dispatchEvent(new PopStateEvent("popstate"));
 };
-
-const getInitialPreferencesSettingsState = (): PreferencesSettingsState => ({
-	preferences: null,
-	isLoadingPreferences: isDesktopRuntime(),
-	savingPreference: null,
-});
 
 export function SettingsDialog({
 	open,
@@ -558,115 +548,6 @@ function NotificationsSettings() {
 							notifyForScheduledMeetings:
 								notificationPreferences?.notifyForScheduledMeetings ?? false,
 							notifyForAutoDetectedMeetings: checked,
-						});
-					}}
-				/>
-			</FieldGroup>
-		</div>
-	);
-}
-
-function PreferencesSettings() {
-	const [state, dispatch] = useReducer(
-		preferencesSettingsReducer,
-		getInitialPreferencesSettingsState(),
-	);
-	const { preferences, isLoadingPreferences, savingPreference } = state;
-
-	useEffect(() => {
-		if (!isDesktopRuntime()) {
-			return;
-		}
-
-		let isCancelled = false;
-
-		const loadPreferences = async () => {
-			try {
-				const nextPreferences = await getDesktopPreferences();
-				if (!isCancelled) {
-					dispatch({ type: "loadSucceeded", value: nextPreferences });
-				}
-			} catch (error) {
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to load desktop preferences",
-				});
-				if (!isCancelled) {
-					dispatch({ type: "finishLoading" });
-					toast.error("Failed to load desktop preferences");
-				}
-			}
-		};
-
-		void loadPreferences();
-
-		return () => {
-			isCancelled = true;
-		};
-	}, []);
-
-	const savePreference = async ({
-		errorMessage,
-		key,
-		save,
-		value,
-	}: {
-		errorMessage: string;
-		key: "launchAtLogin";
-		save: (value: boolean) => Promise<DesktopPreferences>;
-		value: boolean;
-	}) => {
-		if (!isDesktopRuntime()) {
-			return;
-		}
-
-		const previousPreferences = preferences;
-		dispatch({ type: "setSavingPreference", value: key });
-		dispatch({ key, type: "setPreferenceOptimistic", value });
-
-		try {
-			const nextPreferences = await save(value);
-			dispatch({ type: "setPreferences", value: nextPreferences });
-		} catch (error) {
-			logError({ event: "client.error", error: error, message: errorMessage });
-			dispatch({ type: "setPreferences", value: previousPreferences });
-			toast.error(errorMessage);
-		} finally {
-			dispatch({ type: "setSavingPreference", value: null });
-		}
-	};
-
-	if (!isDesktopRuntime()) {
-		return (
-			<div className="py-4 text-sm text-muted-foreground">
-				Preferences are available in the desktop app.
-			</div>
-		);
-	}
-
-	if (isLoadingPreferences && !preferences) {
-		return <div className="py-4" aria-hidden="true" />;
-	}
-
-	return (
-		<div className="py-4">
-			<FieldGroup className="gap-4">
-				<SettingsSwitchRow
-					id="settings-launch-at-login"
-					label="Launch at login"
-					checked={preferences?.launchAtLogin ?? false}
-					disabled={
-						isLoadingPreferences ||
-						savingPreference === "launchAtLogin" ||
-						!(preferences?.canLaunchAtLogin ?? false)
-					}
-					onCheckedChange={(checked) => {
-						void savePreference({
-							errorMessage: "Failed to update launch at login preference",
-							key: "launchAtLogin",
-							save: setDesktopLaunchAtLogin,
-							value: checked,
 						});
 					}}
 				/>

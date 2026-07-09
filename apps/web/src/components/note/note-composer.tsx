@@ -180,6 +180,10 @@ import {
 	type RecipeSlug,
 } from "@/lib/recipes";
 import {
+	DEFAULT_SEND_SHORTCUT,
+	shouldSendFromKeyboardEvent,
+} from "@/lib/send-shortcut";
+import {
 	getMentionAnchorRect,
 	getMentionPickerPosition,
 	INLINE_MENTION_CLASS,
@@ -325,7 +329,7 @@ const groupChatsForSelector = (chats: NoteChatSummary[]) => {
 
 type ComposerKeyboardEvent = Pick<
 	KeyboardEvent,
-	"key" | "shiftKey" | "preventDefault" | "isComposing"
+	"key" | "metaKey" | "shiftKey" | "preventDefault" | "isComposing"
 > & {
 	nativeEvent?: Pick<KeyboardEvent, "isComposing">;
 };
@@ -2083,9 +2087,15 @@ const useNoteComposerController = ({
 
 	const handleComposerKeyDown = (event: ComposerKeyboardEvent) => {
 		if (
-			event.key !== "Enter" ||
-			event.shiftKey ||
-			(event.nativeEvent?.isComposing ?? event.isComposing)
+			!shouldSendFromKeyboardEvent(
+				{
+					isComposing: event.nativeEvent?.isComposing ?? event.isComposing,
+					key: event.key,
+					metaKey: event.metaKey,
+					shiftKey: event.shiftKey,
+				},
+				userPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT,
+			)
 		) {
 			return;
 		}

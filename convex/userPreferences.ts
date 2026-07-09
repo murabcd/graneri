@@ -15,6 +15,7 @@ const userPreferencesValidator = v.object({
 		v.literal("high"),
 		v.literal("xhigh"),
 	),
+	sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 	avatarStorageId: v.union(v.id("_storage"), v.null()),
 	avatarUrl: v.union(v.string(), v.null()),
 });
@@ -24,6 +25,11 @@ const reasoningEffortValidator = v.union(
 	v.literal("medium"),
 	v.literal("high"),
 	v.literal("xhigh"),
+);
+
+const sendShortcutValidator = v.union(
+	v.literal("enter"),
+	v.literal("command-enter"),
 );
 
 const reduceMotionValidator = v.union(
@@ -36,6 +42,7 @@ const DEFAULT_FONT_SMOOTHING = true;
 const DEFAULT_REDUCE_MOTION = "system";
 const DEFAULT_TRANSLUCENT_SIDEBAR = false;
 const DEFAULT_REASONING_EFFORT = "medium";
+const DEFAULT_SEND_SHORTCUT = "enter";
 
 const userAiProfileContextValidator = v.object({
 	name: v.union(v.string(), v.null()),
@@ -92,6 +99,7 @@ const toUserPreferencesResponse = async (
 		? preferences.translucentSidebar
 		: DEFAULT_TRANSLUCENT_SIDEBAR,
 	reasoningEffort: preferences?.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
+	sendShortcut: preferences ? preferences.sendShortcut : DEFAULT_SEND_SHORTCUT,
 	avatarStorageId: preferences?.avatarStorageId ?? null,
 	avatarUrl: preferences?.avatarStorageId
 		? await ctx.storage.getUrl(preferences.avatarStorageId)
@@ -139,6 +147,7 @@ export const update = mutation({
 		reduceMotion: v.optional(reduceMotionValidator),
 		translucentSidebar: v.optional(v.boolean()),
 		reasoningEffort: v.optional(reasoningEffortValidator),
+		sendShortcut: v.optional(sendShortcutValidator),
 		avatarStorageId: v.optional(v.union(v.id("_storage"), v.null())),
 	},
 	returns: userPreferencesValidator,
@@ -184,6 +193,12 @@ export const update = mutation({
 				args.reasoningEffort !== undefined
 					? args.reasoningEffort
 					: (existing?.reasoningEffort ?? DEFAULT_REASONING_EFFORT),
+			sendShortcut:
+				args.sendShortcut !== undefined
+					? args.sendShortcut
+					: existing
+						? existing.sendShortcut
+						: DEFAULT_SEND_SHORTCUT,
 			avatarStorageId:
 				args.avatarStorageId !== undefined
 					? args.avatarStorageId
@@ -201,6 +216,7 @@ export const update = mutation({
 				nextPreferences.translucentSidebar === existing.translucentSidebar &&
 				nextPreferences.reasoningEffort ===
 					(existing.reasoningEffort ?? DEFAULT_REASONING_EFFORT) &&
+				nextPreferences.sendShortcut === existing.sendShortcut &&
 				(nextPreferences.avatarStorageId ?? undefined) ===
 					existing.avatarStorageId
 			) {
@@ -222,6 +238,7 @@ export const update = mutation({
 				reduceMotion: nextPreferences.reduceMotion,
 				translucentSidebar: nextPreferences.translucentSidebar,
 				reasoningEffort: nextPreferences.reasoningEffort,
+				sendShortcut: nextPreferences.sendShortcut,
 				avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 				updatedAt: now,
 			});
@@ -235,6 +252,7 @@ export const update = mutation({
 				reduceMotion: nextPreferences.reduceMotion,
 				translucentSidebar: nextPreferences.translucentSidebar,
 				reasoningEffort: nextPreferences.reasoningEffort,
+				sendShortcut: nextPreferences.sendShortcut,
 				avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 				updatedAt: now,
 			});
@@ -249,6 +267,7 @@ export const update = mutation({
 			reduceMotion: nextPreferences.reduceMotion,
 			translucentSidebar: nextPreferences.translucentSidebar,
 			reasoningEffort: nextPreferences.reasoningEffort,
+			sendShortcut: nextPreferences.sendShortcut,
 			avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 			createdAt: now,
 			updatedAt: now,

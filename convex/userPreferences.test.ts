@@ -24,6 +24,20 @@ test("user preferences default reasoning effort to medium", async () => {
 	const preferences = await asOwner.query(api.userPreferences.get, {});
 
 	expect(preferences.reasoningEffort).toBe("medium");
+	expect(preferences.sendShortcut).toBe("enter");
+});
+
+test("user preferences persist the send shortcut", async () => {
+	const asOwner = createClient();
+
+	const updated = await asOwner.mutation(api.userPreferences.update, {
+		sendShortcut: "command-enter",
+	});
+
+	expect(updated.sendShortcut).toBe("command-enter");
+	expect((await asOwner.query(api.userPreferences.get, {})).sendShortcut).toBe(
+		"command-enter",
+	);
 });
 
 test("user preferences persist reasoning effort independently", async () => {

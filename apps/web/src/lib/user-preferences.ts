@@ -1,5 +1,6 @@
 import { DEFAULT_REASONING_EFFORT } from "@/lib/ai/models";
 import type { ReasoningEffort } from "@/lib/ai/reasoning-effort";
+import { DEFAULT_SEND_SHORTCUT, type SendShortcut } from "@/lib/send-shortcut";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
 	DEFAULT_FONT_SMOOTHING,
@@ -16,6 +17,7 @@ export type UserPreferencesState = {
 	reduceMotion: ReduceMotionPreference;
 	translucentSidebar: boolean;
 	reasoningEffort: ReasoningEffort;
+	sendShortcut: SendShortcut;
 	avatarStorageId: Id<"_storage"> | null;
 	avatarUrl: string | null;
 };
@@ -54,6 +56,10 @@ export function mergeUserPreferencesForOptimisticUpdate(
 			args.reasoningEffort !== undefined
 				? args.reasoningEffort
 				: (currentPreferences?.reasoningEffort ?? DEFAULT_REASONING_EFFORT),
+		sendShortcut:
+			args.sendShortcut !== undefined
+				? args.sendShortcut
+				: (currentPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT),
 		avatarStorageId:
 			args.avatarStorageId !== undefined
 				? args.avatarStorageId

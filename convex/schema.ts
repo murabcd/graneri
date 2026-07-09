@@ -97,6 +97,7 @@ export default defineSchema({
 				v.literal("xhigh"),
 			),
 		),
+		sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 		avatarStorageId: v.optional(v.id("_storage")),
 		createdAt: v.number(),
 		updatedAt: v.number(),

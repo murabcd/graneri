@@ -103,6 +103,10 @@ import {
 } from "@/lib/local-folder-sharing";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
+import {
+	DEFAULT_SEND_SHORTCUT,
+	shouldSendFromKeyboardEvent,
+} from "@/lib/send-shortcut";
 import { createTextMatchRanges, escapeRegExp } from "@/lib/text-search-ranges";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc } from "../../../../../convex/_generated/dataModel";
@@ -1230,14 +1234,24 @@ const useChatPageController = ({
 
 	const handleDraftKeyDown = React.useCallback(
 		(event: KeyboardEvent) => {
-			if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+			if (
+				!shouldSendFromKeyboardEvent(
+					{
+						isComposing: event.isComposing,
+						key: event.key,
+						metaKey: event.metaKey,
+						shiftKey: event.shiftKey,
+					},
+					userPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT,
+				)
+			) {
 				return;
 			}
 
 			event.preventDefault();
 			void handleSubmit();
 		},
-		[handleSubmit],
+		[handleSubmit, userPreferences?.sendShortcut],
 	);
 
 	const handleWebSearchEnabledChange = React.useCallback((enabled: boolean) => {
