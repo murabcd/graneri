@@ -9,6 +9,7 @@ export type SettingsUser = {
 export type SettingsPage =
 	| "Profile"
 	| "Appearance"
+	| "Voice"
 	| "Preferences"
 	| "Notifications"
 	| "Workspace"

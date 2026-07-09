@@ -3,7 +3,6 @@ import {
 	getDesktopPreferences,
 	isDesktopRuntime,
 	openDesktopExternalUrl,
-	setDesktopKeepDictationBarVisible,
 	setDesktopLaunchAtLogin,
 } from "@workspace/platform/desktop";
 import type { DesktopPreferences } from "@workspace/platform/desktop-bridge";
@@ -88,6 +87,7 @@ import {
 	ImageUp,
 	LayoutGrid,
 	LoaderCircle,
+	Mic2,
 	Paintbrush,
 	SlidersHorizontal,
 	UserRound,
@@ -138,6 +138,7 @@ import {
 } from "@/components/settings/connection-settings-state";
 import { RemoteMcpDialog } from "@/components/settings/remote-mcp-dialog";
 import { SettingsSwitchRow } from "@/components/settings/settings-switch-row";
+import { VoiceSettings } from "@/components/settings/voice-settings";
 import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
 import { useLinkedAccounts } from "@/hooks/use-linked-accounts";
 import { authClient } from "@/lib/auth-client";
@@ -182,6 +183,7 @@ function useResetStateWhenValueChanges<T>(
 const settingsNav = [
 	{ name: "Profile", icon: UserRound },
 	{ name: "Appearance", icon: Paintbrush },
+	{ name: "Voice", icon: Mic2 },
 	{ name: "Preferences", icon: SlidersHorizontal },
 	{ name: "Notifications", icon: Bell },
 	{ name: "Workspace", icon: FolderKanban },
@@ -442,6 +444,8 @@ export function SettingsDialog({
 								/>
 							) : activePage === "Appearance" ? (
 								<AppearanceSettings />
+							) : activePage === "Voice" ? (
+								<VoiceSettings />
 							) : activePage === "Preferences" ? (
 								<PreferencesSettings />
 							) : activePage === "Notifications" ? (
@@ -580,11 +584,7 @@ function PreferencesSettings() {
 			try {
 				const nextPreferences = await getDesktopPreferences();
 				if (!isCancelled) {
-					if (nextPreferences) {
-						dispatch({ type: "loadSucceeded", value: nextPreferences });
-					} else {
-						dispatch({ type: "finishLoading" });
-					}
+					dispatch({ type: "loadSucceeded", value: nextPreferences });
 				}
 			} catch (error) {
 				logError({
@@ -613,8 +613,8 @@ function PreferencesSettings() {
 		value,
 	}: {
 		errorMessage: string;
-		key: "keepDictationBarVisible" | "launchAtLogin";
-		save: (value: boolean) => Promise<DesktopPreferences | null>;
+		key: "launchAtLogin";
+		save: (value: boolean) => Promise<DesktopPreferences>;
 		value: boolean;
 	}) => {
 		if (!isDesktopRuntime()) {
@@ -627,9 +627,6 @@ function PreferencesSettings() {
 
 		try {
 			const nextPreferences = await save(value);
-			if (!nextPreferences) {
-				throw new Error("Desktop preferences are unavailable.");
-			}
 			dispatch({ type: "setPreferences", value: nextPreferences });
 		} catch (error) {
 			logError({ event: "client.error", error: error, message: errorMessage });
@@ -669,23 +666,6 @@ function PreferencesSettings() {
 							errorMessage: "Failed to update launch at login preference",
 							key: "launchAtLogin",
 							save: setDesktopLaunchAtLogin,
-							value: checked,
-						});
-					}}
-				/>
-				<SettingsSwitchRow
-					id="settings-keep-dictation-bar-visible"
-					label="Keep dictation bar visible"
-					checked={preferences?.keepDictationBarVisible ?? true}
-					disabled={
-						isLoadingPreferences ||
-						savingPreference === "keepDictationBarVisible"
-					}
-					onCheckedChange={(checked) => {
-						void savePreference({
-							errorMessage: "Failed to update dictation bar preference",
-							key: "keepDictationBarVisible",
-							save: setDesktopKeepDictationBarVisible,
 							value: checked,
 						});
 					}}

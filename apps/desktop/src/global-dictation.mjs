@@ -4,6 +4,10 @@ import { resolveDesktopRuntimeExecutablePath } from "./desktop-runtime-paths.mjs
 import { createDictationAudioBuffer } from "./dictation-audio-buffer.mjs";
 import { pasteTextToFocusedInput } from "./dictation-paste.mjs";
 import { createGlobalDictationHotkeyMonitor } from "./global-dictation-hotkey-monitor.mjs";
+import {
+	shouldShowIdleDictationOverlay,
+	shouldTranscribeStoppedDictation,
+} from "./global-dictation-policy.mjs";
 import { logError, logInfo } from "./logger.mjs";
 
 const idleOverlayStatus = {
@@ -610,7 +614,9 @@ const createDictationOverlay = ({ onClose, onRetry } = {}) => {
 };
 
 export const createGlobalDictation = ({
+	getDictationHotkeyMode,
 	isKeepBarVisibleEnabled = () => true,
+	registerCancelShortcut = () => null,
 	runtimeDir,
 	startMicrophoneCapture,
 	stopMicrophoneCapture,
@@ -622,7 +628,12 @@ export const createGlobalDictation = ({
 	let retryLastDictation = null;
 	let overlay = null;
 	const showIdleOverlay = () => {
-		if (isKeepBarVisibleEnabled()) {
+		if (
+			shouldShowIdleDictationOverlay({
+				hotkeyMode: getDictationHotkeyMode(),
+				keepBarVisible: isKeepBarVisibleEnabled(),
+			})
+		) {
 			void overlay?.show(idleOverlayStatus);
 			return;
 		}
@@ -672,10 +683,10 @@ export const createGlobalDictation = ({
 			await pasteTextToFocusedInput(result.text);
 		}
 
-		await overlay.show(idleOverlayStatus);
+		showIdleOverlay();
 	};
 
-	const stopCurrentRecording = async () => {
+	const stopCurrentRecording = async ({ reason = "complete" } = {}) => {
 		const session = dictationSession;
 		if (!session || session.isStopping) {
 			return;
@@ -683,6 +694,7 @@ export const createGlobalDictation = ({
 
 		session.isStopping = true;
 		session.disposeCaptureEvents?.();
+		session.disposeCancelShortcut?.();
 		dictationSession = null;
 		await stopMicrophoneCapture().catch((error) => {
 			logError({
@@ -691,8 +703,11 @@ export const createGlobalDictation = ({
 			});
 		});
 
-		if (session.audio.getByteLength() === 0) {
-			void overlay.show(idleOverlayStatus);
+		if (
+			!shouldTranscribeStoppedDictation(reason) ||
+			session.audio.getByteLength() === 0
+		) {
+			showIdleOverlay();
 			return;
 		}
 
@@ -744,10 +759,19 @@ export const createGlobalDictation = ({
 		const currentOperationId = ++operationId;
 		const session = {
 			audio: createDictationAudioBuffer(),
+			disposeCancelShortcut: null,
 			disposeCaptureEvents: null,
 			isStopping: false,
 		};
 		dictationSession = session;
+		session.disposeCancelShortcut = registerCancelShortcut(() => {
+			if (dictationSession !== session || session.isStopping) {
+				return;
+			}
+
+			operationId += 1;
+			void stopCurrentRecording({ reason: "cancel" });
+		});
 		void overlay.show({
 			status: "recording",
 		});
@@ -784,6 +808,7 @@ export const createGlobalDictation = ({
 			session.audio.setSampleRate(capture?.sampleRate);
 		} catch (error) {
 			session.disposeCaptureEvents?.();
+			session.disposeCancelShortcut?.();
 			if (dictationSession === session) {
 				dictationSession = null;
 			}
@@ -796,6 +821,15 @@ export const createGlobalDictation = ({
 	};
 
 	const handleHotkeyEvent = (event) => {
+		if (event?.type === "toggle") {
+			if (dictationSession) {
+				operationId += 1;
+				void stopCurrentRecording({ reason: "complete" });
+			} else {
+				void startRecording();
+			}
+			return;
+		}
 		if (event?.type === "start") {
 			void startRecording();
 			return;
@@ -803,7 +837,7 @@ export const createGlobalDictation = ({
 
 		if (event?.type === "stop") {
 			operationId += 1;
-			void stopCurrentRecording();
+			void stopCurrentRecording({ reason: "complete" });
 			return;
 		}
 
@@ -818,6 +852,9 @@ export const createGlobalDictation = ({
 
 	const start = () => {
 		if (process.platform !== "darwin") {
+			return;
+		}
+		if (getDictationHotkeyMode() === "off") {
 			return;
 		}
 
@@ -836,6 +873,7 @@ export const createGlobalDictation = ({
 
 		hotkeyMonitor = createGlobalDictationHotkeyMonitor({
 			helperPath,
+			mode: getDictationHotkeyMode(),
 			onEvent: handleHotkeyEvent,
 			onExit: ({ code, signal }) => {
 				logInfo({
@@ -843,7 +881,7 @@ export const createGlobalDictation = ({
 					details: { code, signal },
 				});
 				hotkeyMonitor = null;
-				void stopCurrentRecording();
+				void stopCurrentRecording({ reason: "cancel" });
 			},
 			onLog: (message) => {
 				logError({
@@ -852,7 +890,7 @@ export const createGlobalDictation = ({
 				});
 			},
 		});
-		void overlay.show(idleOverlayStatus);
+		showIdleOverlay();
 	};
 
 	const stop = async () => {
@@ -861,11 +899,23 @@ export const createGlobalDictation = ({
 
 		monitor?.close();
 
-		await stopCurrentRecording();
+		await stopCurrentRecording({ reason: "cancel" });
 		overlay.destroy();
+	};
+	const refreshHotkeyMode = async () => {
+		const monitor = hotkeyMonitor;
+		hotkeyMonitor = null;
+		monitor?.close();
+		await stopCurrentRecording({ reason: "cancel" });
+		if (getDictationHotkeyMode() === "off") {
+			overlay.hide();
+			return;
+		}
+		start();
 	};
 
 	return {
+		refreshHotkeyMode,
 		refreshVisibility: showIdleOverlay,
 		start,
 		stop,

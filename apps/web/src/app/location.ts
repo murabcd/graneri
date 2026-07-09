@@ -5,6 +5,7 @@ import { isSameCalendarDay } from "@/lib/calendar-day";
 const SETTINGS_PAGE_BY_SLUG = {
 	profile: "Profile",
 	appearance: "Appearance",
+	voice: "Voice",
 	preferences: "Preferences",
 	notifications: "Notifications",
 	workspace: "Workspace",
@@ -17,6 +18,7 @@ const SETTINGS_PAGE_BY_SLUG = {
 const SETTINGS_SLUG_BY_PAGE: Record<SettingsPage, string> = {
 	Profile: "profile",
 	Appearance: "appearance",
+	Voice: "voice",
 	Preferences: "preferences",
 	Notifications: "notifications",
 	Workspace: "workspace",

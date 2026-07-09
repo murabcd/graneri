@@ -77,7 +77,7 @@ export type PreferencesSettingsAction =
 			value: DesktopPreferences | null;
 	  }
 	| {
-			key: keyof DesktopPreferences;
+			key: "launchAtLogin";
 			type: "setPreferenceOptimistic";
 			value: boolean;
 	  };

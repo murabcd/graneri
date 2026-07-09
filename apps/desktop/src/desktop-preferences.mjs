@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { logError } from "./logger.mjs";
 
 const createDefaultDesktopAppPreferences = () => ({
+	dictationHotkeyMode: "hold",
 	keepDictationBarVisible: true,
 });
 
@@ -12,7 +13,15 @@ const parseDesktopAppPreferences = (value) => {
 		return defaults;
 	}
 
+	const dictationHotkeyMode =
+		value.dictationHotkeyMode === undefined
+			? defaults.dictationHotkeyMode
+			: value.dictationHotkeyMode;
+	if (!["hold", "toggle", "off"].includes(dictationHotkeyMode)) {
+		throw new Error("Stored dictation hotkey mode is invalid.");
+	}
 	return {
+		dictationHotkeyMode,
 		keepDictationBarVisible:
 			typeof value.keepDictationBarVisible === "boolean"
 				? value.keepDictationBarVisible
@@ -31,14 +40,15 @@ export const createDesktopPreferencesStore = ({ filePath }) => {
 					JSON.parse(await readFile(filePath, "utf8")),
 				);
 			} catch (error) {
-				if (error?.code !== "ENOENT") {
-					logError({
-						error: error,
-						message: "Failed to read desktop preferences.",
-					});
+				if (error?.code === "ENOENT") {
+					preferences = createDefaultDesktopAppPreferences();
+					return preferences;
 				}
-
-				preferences = createDefaultDesktopAppPreferences();
+				logError({
+					error: error,
+					message: "Failed to read desktop preferences.",
+				});
+				throw error;
 			}
 
 			return preferences;

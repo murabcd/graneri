@@ -8,6 +8,7 @@ import {
 	BrowserWindow,
 	clipboard,
 	dialog,
+	globalShortcut,
 	ipcMain,
 	nativeImage,
 	nativeTheme,
@@ -60,6 +61,7 @@ import {
 } from "./desktop-window.mjs";
 import { loadRootEnv } from "./env.mjs";
 import { createGlobalDictation } from "./global-dictation.mjs";
+import { getDictationPreferencePatchForHotkeyMode } from "./global-dictation-policy.mjs";
 import { startLocalServer } from "./local-server.mjs";
 import { emitWideEvent, logError, logInfo, serializeError } from "./logger.mjs";
 import { createMeetingDetection } from "./meeting-detection.mjs";
@@ -426,8 +428,23 @@ const startSystemAudioCapture = nativeAudioCapture.startSystemAudioCapture;
 const stopMicrophoneCapture = nativeAudioCapture.stopMicrophoneCapture;
 const stopSystemAudioCapture = nativeAudioCapture.stopSystemAudioCapture;
 const globalDictation = createGlobalDictation({
+	getDictationHotkeyMode: () =>
+		desktopPreferencesStore.get().dictationHotkeyMode,
 	isKeepBarVisibleEnabled: () =>
 		desktopPreferencesStore.get().keepDictationBarVisible === true,
+	registerCancelShortcut: (onCancel) => {
+		if (!globalShortcut.register("Escape", onCancel)) {
+			logError({
+				event: "dictation.cancel_shortcut_registration_failed",
+				message: "[dictation] failed to register Escape cancellation shortcut",
+			});
+			return null;
+		}
+
+		return () => {
+			globalShortcut.unregister("Escape");
+		};
+	},
 	runtimeDir,
 	startMicrophoneCapture,
 	stopMicrophoneCapture,
@@ -2367,6 +2384,7 @@ const getDesktopPreferences = () => {
 		return {
 			launchAtLogin: false,
 			canLaunchAtLogin: false,
+			dictationHotkeyMode: desktopAppPreferences.dictationHotkeyMode,
 			keepDictationBarVisible: desktopAppPreferences.keepDictationBarVisible,
 		};
 	}
@@ -2374,6 +2392,7 @@ const getDesktopPreferences = () => {
 	return {
 		launchAtLogin: app.getLoginItemSettings().openAtLogin === true,
 		canLaunchAtLogin: true,
+		dictationHotkeyMode: desktopAppPreferences.dictationHotkeyMode,
 		keepDictationBarVisible: desktopAppPreferences.keepDictationBarVisible,
 	};
 };
@@ -2405,6 +2424,18 @@ const setKeepDictationBarVisible = async (enabled) => {
 		keepDictationBarVisible: enabled,
 	});
 	globalDictation.refreshVisibility();
+	return getDesktopPreferences();
+};
+
+const setDictationHotkeyMode = async (mode) => {
+	if (!["hold", "toggle", "off"].includes(mode)) {
+		throw new Error("Dictation hotkey mode is invalid.");
+	}
+
+	await desktopPreferencesStore.set(
+		getDictationPreferencePatchForHotkeyMode(mode),
+	);
+	await globalDictation.refreshHotkeyMode();
 	return getDesktopPreferences();
 };
 
@@ -2712,6 +2743,10 @@ ipcMain.handle(
 		return await setKeepDictationBarVisible(enabled);
 	},
 );
+
+ipcMain.handle("app:set-dictation-hotkey-mode", async (_event, mode) => {
+	return await setDictationHotkeyMode(mode);
+});
 
 ipcMain.handle("app:start-system-audio-capture", async () => {
 	return await startSystemAudioCapture();

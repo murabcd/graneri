@@ -316,7 +316,13 @@ Global dictation is a desktop-native capability, not a renderer textarea
 feature. The desktop runtime owns the global hotkey monitor, microphone capture,
 buffered AI SDK transcription, and system paste into the focused app. Renderer
 code must not duplicate dictation capture or expose route-level fallbacks for
-this path.
+this path. The renderer may select the persisted global dictation hotkey mode
+through the desktop bridge; Electron applies hold, toggle, or disabled mode by
+restarting the native hotkey monitor without restarting the app.
+While a dictation capture is active, Electron owns a temporary global Escape
+shortcut that cancels capture and discards buffered audio without transcribing
+or pasting it. The idle dictation bar is suppressed when dictation hotkeys are
+disabled, even if its persisted visibility preference remains enabled.
 
 Desktop realtime transcription is a long-lived native capture session. Starting
 the microphone transport must schedule the realtime session rollover, and

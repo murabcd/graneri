@@ -3,15 +3,20 @@ import { createInterface } from "node:readline";
 
 export const createGlobalDictationHotkeyMonitor = ({
 	helperPath,
+	mode,
 	onEvent,
 	onExit,
 	onLog,
+	spawnImpl = spawn,
 } = {}) => {
 	if (!helperPath) {
 		return null;
 	}
+	if (mode !== "hold" && mode !== "toggle") {
+		throw new Error("Global dictation hotkey mode must be hold or toggle.");
+	}
 
-	const child = spawn(helperPath, [], {
+	const child = spawnImpl(helperPath, ["--mode", mode], {
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 	const lineReader = createInterface({

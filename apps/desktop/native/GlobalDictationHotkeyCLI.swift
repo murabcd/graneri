@@ -8,7 +8,8 @@ private let controlFlag = CGEventFlags.maskControl
 private let optionFlag = CGEventFlags.maskAlternate
 private let mKeyCode: CGKeyCode = 46
 private let shortcutLabel = "Control+Option+M"
-private var isHoldingShortcut = false
+private var dictationMode = ""
+private var isShortcutDown = false
 
 private func hasDictationShortcutModifiers(_ flags: CGEventFlags) -> Bool {
 	return flags.contains(controlFlag) && flags.contains(optionFlag)
@@ -27,21 +28,29 @@ private let callback: CGEventTapCallBack = { _, type, event, _ in
 
 	switch type {
 	case .keyDown:
-		if keyCode == mKeyCode && hasDictationShortcutModifiers(flags) && !isHoldingShortcut {
-			isHoldingShortcut = true
-			emit("start")
+		if keyCode == mKeyCode && hasDictationShortcutModifiers(flags) && !isShortcutDown {
+			isShortcutDown = true
+			if dictationMode == "toggle" {
+				emit("toggle")
+			} else {
+				emit("start")
+			}
 			return nil
 		}
 	case .keyUp:
-		if keyCode == mKeyCode && isHoldingShortcut {
-			isHoldingShortcut = false
-			emit("stop")
+		if keyCode == mKeyCode && isShortcutDown {
+			isShortcutDown = false
+			if dictationMode == "hold" {
+				emit("stop")
+			}
 			return nil
 		}
 	case .flagsChanged:
-		if isHoldingShortcut && !hasDictationShortcutModifiers(flags) {
-			isHoldingShortcut = false
-			emit("stop")
+		if isShortcutDown && !hasDictationShortcutModifiers(flags) {
+			isShortcutDown = false
+			if dictationMode == "hold" {
+				emit("stop")
+			}
 		}
 	default:
 		break
@@ -53,6 +62,18 @@ private let callback: CGEventTapCallBack = { _, type, event, _ in
 @main
 struct GlobalDictationHotkeyCLI {
 	static func main() {
+		guard let modeIndex = CommandLine.arguments.firstIndex(of: "--mode"),
+			CommandLine.arguments.indices.contains(modeIndex + 1)
+		else {
+			logger.log("Global dictation hotkey mode is required.")
+			exit(EXIT_FAILURE)
+		}
+		let requestedMode = CommandLine.arguments[modeIndex + 1]
+		guard requestedMode == "hold" || requestedMode == "toggle" else {
+			logger.log("Global dictation hotkey mode is invalid.")
+			exit(EXIT_FAILURE)
+		}
+		dictationMode = requestedMode
 		let eventMask =
 			(1 << CGEventType.keyDown.rawValue) |
 			(1 << CGEventType.keyUp.rawValue) |
@@ -79,6 +100,7 @@ struct GlobalDictationHotkeyCLI {
 		CGEvent.tapEnable(tap: eventTap, enable: true)
 		emitter.send(event: [
 			"type": "ready",
+			"mode": dictationMode,
 			"shortcut": shortcutLabel,
 		])
 		CFRunLoopRun()

@@ -10,9 +10,7 @@ import {
 	SelectContent,
 	SelectGroup,
 	SelectItem,
-	SelectLabel,
 	SelectTrigger,
-	SelectValue,
 } from "@workspace/ui/components/select";
 import { useTheme } from "@workspace/ui/components/theme-provider";
 import { useMutation, useQuery } from "convex/react";
@@ -26,13 +24,6 @@ import {
 } from "@/lib/appearance-preferences";
 import { logError } from "@/lib/logger";
 import {
-	getTranscriptionLanguageSelectValue,
-	OTHER_TRANSCRIPTION_LANGUAGE_OPTIONS,
-	PRIMARY_TRANSCRIPTION_LANGUAGE_OPTIONS,
-	parseTranscriptionLanguageSelectValue,
-	TRANSCRIPTION_LANGUAGE_OPTIONS,
-} from "@/lib/transcription-languages";
-import {
 	mergeUserPreferencesForOptimisticUpdate,
 	type UserPreferencesState,
 } from "@/lib/user-preferences";
@@ -42,10 +33,7 @@ import { SettingsSwitchRow } from "./settings-switch-row";
 type UserPreferencesUpdatePatch = Partial<
 	Pick<
 		UserPreferencesState,
-		| "fontSmoothing"
-		| "reduceMotion"
-		| "transcriptionLanguage"
-		| "translucentSidebar"
+		"fontSmoothing" | "reduceMotion" | "translucentSidebar"
 	>
 >;
 type SavingPreference = keyof UserPreferencesUpdatePatch;
@@ -108,9 +96,6 @@ export function AppearanceSettings() {
 	const [savingPreference, setSavingPreference] =
 		useState<SavingPreference | null>(null);
 
-	const transcriptionLanguageValue = getTranscriptionLanguageSelectValue(
-		userPreferences?.transcriptionLanguage,
-	);
 	const fontSmoothing =
 		userPreferences?.fontSmoothing ?? DEFAULT_FONT_SMOOTHING;
 	const reduceMotion = userPreferences?.reduceMotion ?? DEFAULT_REDUCE_MOTION;
@@ -142,16 +127,6 @@ export function AppearanceSettings() {
 		if (isThemePreference(value)) {
 			setTheme(value);
 		}
-	};
-
-	const handleTranscriptionLanguageChange = async (value: string) => {
-		await saveUserPreference(
-			{
-				transcriptionLanguage: parseTranscriptionLanguageSelectValue(value),
-			},
-			"transcriptionLanguage",
-			"transcription language",
-		);
 	};
 
 	const handleFontSmoothingChange = async (value: boolean) => {
@@ -278,59 +253,6 @@ export function AppearanceSettings() {
 						/>
 					</>
 				) : null}
-				<Field
-					orientation="responsive"
-					className="@md/field-group:items-start @md/field-group:has-[>[data-slot=field-content]]:items-start"
-				>
-					<FieldContent>
-						<Label>Transcription language</Label>
-					</FieldContent>
-					<Select
-						value={transcriptionLanguageValue}
-						onValueChange={(value) => {
-							void handleTranscriptionLanguageChange(value);
-						}}
-					>
-						<SelectTrigger
-							size="sm"
-							className="w-full cursor-pointer justify-between @md/field-group:w-56"
-							aria-label="Select transcription language"
-							disabled={savingPreference === "transcriptionLanguage"}
-						>
-							<SelectValue>
-								{TRANSCRIPTION_LANGUAGE_OPTIONS.find(
-									(option) => option.value === transcriptionLanguageValue,
-								)?.label ?? "Auto-detect"}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent
-							align="end"
-							className="max-h-80"
-							showScrollButtons={false}
-						>
-							<SelectGroup>
-								<SelectLabel>Suggested</SelectLabel>
-								{PRIMARY_TRANSCRIPTION_LANGUAGE_OPTIONS.map(
-									({ value, label }) => (
-										<SelectItem key={value} value={value}>
-											<span>{label}</span>
-										</SelectItem>
-									),
-								)}
-							</SelectGroup>
-							<SelectGroup>
-								<SelectLabel>More languages</SelectLabel>
-								{OTHER_TRANSCRIPTION_LANGUAGE_OPTIONS.map(
-									({ value, label }) => (
-										<SelectItem key={value} value={value}>
-											<span>{label}</span>
-										</SelectItem>
-									),
-								)}
-							</SelectGroup>
-						</SelectContent>
-					</Select>
-				</Field>
 			</FieldGroup>
 		</div>
 	);

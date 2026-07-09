@@ -3,6 +3,7 @@ import type {
 	DesktopNavigation,
 	DesktopPermissionId,
 	DesktopPlatform,
+	DesktopPreferences,
 	DesktopThemeSource,
 	DesktopTrayCalendarState,
 	GraneriDesktopBridge,
@@ -121,12 +122,7 @@ export const openDesktopPermissionSettings = async (
 };
 
 export const getDesktopPreferences = async () => {
-	const bridge = getDesktopBridge();
-
-	if (!bridge?.getPreferences) {
-		return null;
-	}
-
+	const bridge = getRequiredDesktopBridge();
 	return await bridge.getPreferences();
 };
 
@@ -143,23 +139,20 @@ export const setDesktopNativeTheme = async (
 };
 
 export const setDesktopLaunchAtLogin = async (enabled: boolean) => {
-	const bridge = getDesktopBridge();
-
-	if (!bridge?.setLaunchAtLogin) {
-		return null;
-	}
-
+	const bridge = getRequiredDesktopBridge();
 	return await bridge.setLaunchAtLogin(enabled);
 };
 
 export const setDesktopKeepDictationBarVisible = async (enabled: boolean) => {
-	const bridge = getDesktopBridge();
-
-	if (!bridge?.setKeepDictationBarVisible) {
-		return null;
-	}
-
+	const bridge = getRequiredDesktopBridge();
 	return await bridge.setKeepDictationBarVisible(enabled);
+};
+
+export const setDesktopDictationHotkeyMode = async (
+	mode: DesktopPreferences["dictationHotkeyMode"],
+) => {
+	const bridge = getRequiredDesktopBridge();
+	return await bridge.setDictationHotkeyMode(mode);
 };
 
 export const setDesktopActiveWorkspaceId = async (

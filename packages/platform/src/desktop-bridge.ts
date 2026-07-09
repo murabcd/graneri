@@ -36,6 +36,7 @@ export interface DesktopPermissionsStatus {
 export interface DesktopPreferences {
 	launchAtLogin: boolean;
 	canLaunchAtLogin: boolean;
+	dictationHotkeyMode: "hold" | "toggle" | "off";
 	keepDictationBarVisible: boolean;
 }
 
@@ -269,6 +270,9 @@ export interface GraneriDesktopBridge {
 	openSoundSettings: () => Promise<{ ok: boolean }>;
 	setLaunchAtLogin: (enabled: boolean) => Promise<DesktopPreferences>;
 	setKeepDictationBarVisible: (enabled: boolean) => Promise<DesktopPreferences>;
+	setDictationHotkeyMode: (
+		mode: DesktopPreferences["dictationHotkeyMode"],
+	) => Promise<DesktopPreferences>;
 	getTranscriptionSessionState: () => Promise<DesktopTranscriptionControllerState>;
 	getMeetingDetectionState: () => Promise<DesktopMeetingDetectionState>;
 	configureTranscriptionSession: (options: {

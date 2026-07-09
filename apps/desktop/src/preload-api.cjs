@@ -37,6 +37,7 @@ const invokeChannels = {
 	setActiveWorkspaceNotificationPreferences:
 		"app:set-active-workspace-notification-preferences",
 	setKeepDictationBarVisible: "app:set-keep-dictation-bar-visible",
+	setDictationHotkeyMode: "app:set-dictation-hotkey-mode",
 	setLaunchAtLogin: "app:set-launch-at-login",
 	setNativeTheme: "app:set-native-theme",
 	setTrayCalendarState: "app:set-tray-calendar-state",
@@ -109,6 +110,8 @@ const createGraneriDesktopApi = ({ ipcRenderer, platform, env }) => ({
 		ipcRenderer.invoke(invokeChannels.setLaunchAtLogin, enabled),
 	setKeepDictationBarVisible: (enabled) =>
 		ipcRenderer.invoke(invokeChannels.setKeepDictationBarVisible, enabled),
+	setDictationHotkeyMode: (mode) =>
+		ipcRenderer.invoke(invokeChannels.setDictationHotkeyMode, mode),
 	getTranscriptionSessionState: () =>
 		ipcRenderer.invoke(invokeChannels.getTranscriptionSessionState),
 	getMeetingDetectionState: () =>
