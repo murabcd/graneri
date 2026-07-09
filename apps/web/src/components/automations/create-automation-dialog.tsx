@@ -1278,7 +1278,7 @@ function AppSourcesPicker({
 						onClick={onOpenConnectionsSettings}
 					>
 						<Plus aria-hidden="true" />
-						<span aria-hidden="true">Connect tools</span>
+						<span aria-hidden="true">Connect plugins</span>
 						<span className="sr-only">Connect apps</span>
 					</DropdownMenuItem>
 				</DropdownMenuGroup>

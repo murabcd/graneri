@@ -1363,11 +1363,11 @@ function ScopePicker({
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
 					<DropdownMenuItem
-						aria-label="Connect tools"
+						aria-label="Connect plugins"
 						onClick={onOpenConnectionsSettings}
 					>
 						<Plus aria-hidden="true" />
-						<span>Connect tools</span>
+						<span>Connect plugins</span>
 					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>
