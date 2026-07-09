@@ -78,6 +78,10 @@ import {
 	mergePersistedChatMessagesWithController,
 	normalizeChatMessages,
 } from "@/lib/chat-message-state";
+import {
+	type ChatPluginPrefill,
+	createChatPluginDraft,
+} from "@/lib/chat-plugin-prefill";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import {
 	buildWorkspaceChatRequestBody,
@@ -115,6 +119,7 @@ import { ChatHistoryList } from "./chat-history-list";
 
 export type ChatPageProps = {
 	chatId: string;
+	pluginPrefill?: ChatPluginPrefill | null;
 	onChatPersisted?: (chatId: string) => void;
 	chats: Array<Doc<"chats">>;
 	isChatsLoading: boolean;
@@ -319,6 +324,7 @@ const getVisibleActiveStreamingChatIds = ({
 
 const useChatPageController = ({
 	chatId,
+	pluginPrefill,
 	onChatPersisted: chatPersistedCallback,
 	chats,
 	isChatsLoading,
@@ -326,6 +332,7 @@ const useChatPageController = ({
 }: Pick<
 	ChatPageProps,
 	| "chatId"
+	| "pluginPrefill"
 	| "onChatPersisted"
 	| "chats"
 	| "isChatsLoading"
@@ -341,6 +348,13 @@ const useChatPageController = ({
 	// Chat lookup is render-time query derivation, not deferred event handling.
 	// react-doctor-disable-next-line react-doctor/no-event-handler
 	const currentChat = chats.find((chat) => getChatId(chat) === chatId) ?? null;
+	const initialPluginDraft = React.useMemo(
+		() =>
+			pluginPrefill?.composerId === chatId
+				? createChatPluginDraft(pluginPrefill)
+				: null,
+		[chatId, pluginPrefill],
+	);
 	const {
 		clear: clearDraft,
 		getSnapshot: getDraftSnapshot,
@@ -348,7 +362,10 @@ const useChatPageController = ({
 		setMetadata: setDraftMetadata,
 		setText: setDraft,
 		text: draft,
-	} = useComposerDraft<ChatComposerDraftMetadata>(draftStorageScope);
+	} = useComposerDraft<ChatComposerDraftMetadata>(
+		draftStorageScope,
+		initialPluginDraft,
+	);
 	// Attachments are composer state; object URL cleanup is owned by the cleanup hook.
 	// react-doctor-disable-next-line react-doctor/no-event-handler
 	const [attachedFiles, setAttachedFiles] = React.useState<ChatAttachment[]>(
@@ -1495,6 +1512,7 @@ const useChatPageController = ({
 // oxlint-disable-next-line react-doctor/no-giant-component -- Page-level orchestrator wires chat state, search, history, and summary surfaces.
 export function ChatPage({
 	chatId,
+	pluginPrefill,
 	onChatPersisted,
 	chats,
 	isChatsLoading,
@@ -1513,6 +1531,7 @@ export function ChatPage({
 		// The controller hook owns route/chat synchronization for this chat id.
 		// react-doctor-disable-next-line react-doctor/no-event-handler
 		chatId,
+		pluginPrefill,
 		// The controller must call the latest parent persistence callback after submit.
 		// react-doctor-disable-next-line react-doctor/no-event-handler
 		onChatPersisted,

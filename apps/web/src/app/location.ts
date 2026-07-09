@@ -345,6 +345,17 @@ export const createNoteSearch = ({
 	return search ? `?${search}` : "";
 };
 
+const createChatSearch = (chatId: string | null) => {
+	const searchParams = new URLSearchParams();
+
+	if (chatId) {
+		searchParams.set("chatId", chatId);
+	}
+
+	const search = searchParams.toString();
+	return search ? `?${search}` : "";
+};
+
 export const getSettingsPageFromPath = (
 	pathname: string,
 ): SettingsPage | null => {
@@ -476,8 +487,8 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 						scheduledAutoStartAt: scheduledAutoStartNoteCaptureAt,
 						stopCaptureWhenMeetingEnds: shouldStopNoteCaptureWhenMeetingEnds,
 					})
-				: view === "chat" && chatId
-					? `?chatId=${encodeURIComponent(chatId)}`
+				: view === "chat"
+					? createChatSearch(chatId)
 					: view === "project" && projectIdString
 						? `?projectId=${encodeURIComponent(projectIdString)}`
 						: "",

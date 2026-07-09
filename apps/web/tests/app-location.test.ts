@@ -42,4 +42,15 @@ describe("app location", () => {
 			}),
 		).toBe("?capture=1&captureRequestId=req-2");
 	});
+
+	it("does not preserve legacy plugin handoff query parameters", () => {
+		const locationState = getAppLocationState(
+			new URL(
+				"https://graneri.local/chat?plugin=source-linear&provider=linear",
+			),
+		);
+
+		expect(locationState.view).toBe("chat");
+		expect(locationState.canonicalSearch).toBe("");
+	});
 });

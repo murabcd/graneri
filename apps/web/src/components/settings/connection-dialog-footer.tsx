@@ -30,10 +30,10 @@ export function ConnectionDialogFooter({
 					{isDisabling ? (
 						<>
 							<LoaderCircle className="animate-spin" />
-							Disabling
+							Uninstalling
 						</>
 					) : (
-						"Disable"
+						"Uninstall"
 					)}
 				</Button>
 			) : (

@@ -20,6 +20,7 @@ import { AutomationsPageEntry } from "@/components/automations/automations-page-
 import { ChatPageEntry } from "@/components/chat/chat-page-entry";
 import type { NoteEditorActions } from "@/components/note/note-page";
 import { NotePageEntry } from "@/components/note/note-page-entry";
+import type { ChatPluginPrefill } from "@/lib/chat-plugin-prefill";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 type NoteListViewProps = {
@@ -94,6 +95,7 @@ export type AppShellContentView =
 			activeStreamingChatIds: ReadonlySet<string>;
 			automations: AutomationListItem[] | undefined;
 			chatComposerId: string;
+			chatPluginPrefill: ChatPluginPrefill | null;
 			chats: Array<Doc<"chats">> | undefined;
 			currentChatId: string | null;
 			isDesktopMac: boolean;
@@ -245,6 +247,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 		<ChatPageEntry
 			key={view.chatComposerId}
 			chatId={view.chatComposerId}
+			pluginPrefill={view.chatPluginPrefill}
 			onChatPersisted={view.onChatPersisted}
 			chats={view.chats ?? []}
 			isChatsLoading={view.chats === undefined}

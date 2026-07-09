@@ -17,13 +17,17 @@ const emptyComposerDraft = <TMetadata>(): ComposerDraftSnapshot<TMetadata> => ({
 
 const readComposerDraft = <TMetadata>(
 	scopeKey: string | null,
+	initialDraft: ComposerDraftSnapshot<TMetadata> | null,
 ): ComposerDraftSnapshot<TMetadata> =>
 	scopeKey
-		? (loadComposerDraft<TMetadata>(scopeKey) ?? emptyComposerDraft())
-		: emptyComposerDraft();
+		? (loadComposerDraft<TMetadata>(scopeKey) ??
+			initialDraft ??
+			emptyComposerDraft())
+		: (initialDraft ?? emptyComposerDraft());
 
 export const useComposerDraft = <TMetadata>(
 	scopeKey: string | null,
+	initialDraft: ComposerDraftSnapshot<TMetadata> | null = null,
 ): {
 	text: string;
 	metadata: TMetadata | null;
@@ -33,7 +37,7 @@ export const useComposerDraft = <TMetadata>(
 	clear: () => void;
 } => {
 	const [draft, setDraftState] = React.useState(() =>
-		readComposerDraft<TMetadata>(scopeKey),
+		readComposerDraft<TMetadata>(scopeKey, initialDraft),
 	);
 	const draftRef = React.useRef(draft);
 	const persistTimeoutRef = React.useRef<number | null>(null);
@@ -60,12 +64,12 @@ export const useComposerDraft = <TMetadata>(
 
 	React.useEffect(() => {
 		cancelPendingPersist();
-		const nextDraft = readComposerDraft<TMetadata>(scopeKey);
+		const nextDraft = readComposerDraft<TMetadata>(scopeKey, initialDraft);
 		draftRef.current = nextDraft;
 		// Draft state hydrates from scope-keyed localStorage when the active composer changes.
 		// react-doctor-disable-next-line react-doctor/no-derived-state
 		setDraftState(nextDraft);
-	}, [cancelPendingPersist, scopeKey]);
+	}, [cancelPendingPersist, initialDraft, scopeKey]);
 
 	const persist = React.useCallback(
 		(nextDraft: ComposerDraftSnapshot<TMetadata>) => {

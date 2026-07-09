@@ -60,6 +60,7 @@ describe("settings dialog cancel actions", () => {
 
 		render(
 			<SettingsDialog
+				onTryPlugin={() => {}}
 				open
 				onOpenChange={onOpenChange}
 				initialPage="Profile"
@@ -97,6 +98,7 @@ describe("settings dialog cancel actions", () => {
 
 		render(
 			<SettingsDialog
+				onTryPlugin={() => {}}
 				open
 				onOpenChange={onOpenChange}
 				initialPage="Workspace"

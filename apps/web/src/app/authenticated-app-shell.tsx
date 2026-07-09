@@ -136,6 +136,10 @@ import { prefetchChatMessagesSnapshot } from "@/hooks/use-chat-messages-snapshot
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
 import { type AuthSession, authClient } from "@/lib/auth-client";
 import { getChatId } from "@/lib/chat";
+import type {
+	ChatPluginPrefill,
+	ChatPluginSelection,
+} from "@/lib/chat-plugin-prefill";
 import { clearCachedConvexToken } from "@/lib/convex-token";
 import {
 	DESKTOP_INBOX_PANEL_WIDTH,
@@ -316,6 +320,8 @@ const useAppShellState = ({
 		crypto.randomUUID(),
 	);
 	const chatComposerId = currentChatId ?? draftChatComposerId;
+	const [chatPluginPrefill, setChatPluginPrefill] =
+		React.useState<ChatPluginPrefill | null>(null);
 	const [currentNoteId, setCurrentNoteId] = React.useState<Id<"notes"> | null>(
 		null,
 	);
@@ -933,7 +939,17 @@ const useAppShellState = ({
 	}, [inboxOpen]);
 
 	const openChatLanding = React.useCallback(
-		({ resetDraft }: { resetDraft: boolean }) => {
+		(
+			options:
+				| { mode: "preserve-draft" }
+				| { mode: "fresh"; plugin?: ChatPluginSelection },
+		) => {
+			const freshComposerId =
+				options.mode === "fresh" ? crypto.randomUUID() : null;
+			const pluginPrefill =
+				freshComposerId && options.mode === "fresh" && options.plugin
+					? { ...options.plugin, composerId: freshComposerId }
+					: null;
 			React.startTransition(() => {
 				setInboxOpen(shouldKeepPinnedInboxOpen());
 				setCurrentView("chat");
@@ -943,8 +959,9 @@ const useAppShellState = ({
 				setEditingAutomationId(null);
 				setCurrentNoteEditorActions(null);
 				setCurrentNoteCommentsOpener(null);
-				if (resetDraft) {
-					setDraftChatComposerId(crypto.randomUUID());
+				if (freshComposerId) {
+					setDraftChatComposerId(freshComposerId);
+					setChatPluginPrefill(pluginPrefill);
 				}
 				window.history.pushState(null, "", "/chat");
 			});
@@ -953,12 +970,19 @@ const useAppShellState = ({
 	);
 
 	const openFreshChat = React.useCallback(() => {
-		openChatLanding({ resetDraft: true });
+		openChatLanding({ mode: "fresh" });
 	}, [openChatLanding]);
 
 	const openDraftChat = React.useCallback(() => {
-		openChatLanding({ resetDraft: false });
+		openChatLanding({ mode: "preserve-draft" });
 	}, [openChatLanding]);
+
+	const handleStartChatWithPlugin = React.useCallback(
+		(plugin: ChatPluginSelection) => {
+			openChatLanding({ mode: "fresh", plugin });
+		},
+		[openChatLanding],
+	);
 
 	const openStoredChat = React.useCallback(
 		(chatId: string) => {
@@ -1685,6 +1709,7 @@ const useAppShellState = ({
 		chats,
 		activeStreamingChatIds,
 		chatComposerId,
+		chatPluginPrefill,
 		currentChat,
 		currentChatId,
 		currentChatNoteId,
@@ -1751,6 +1776,7 @@ const useAppShellState = ({
 		handleRunAutomationNow,
 		handleSettingsOpenChange,
 		handleSignOut,
+		handleStartChatWithPlugin,
 		handleToggleAutomationPaused,
 		handleViewChange,
 		handleWorkspaceCreate,
@@ -2807,6 +2833,7 @@ function createAppShellContentView({
 		activeStreamingChatIds: controller.activeStreamingChatIds,
 		automations: controller.automations,
 		chatComposerId: controller.chatComposerId,
+		chatPluginPrefill: controller.chatPluginPrefill,
 		chats: controller.chats,
 		currentChatId: controller.currentChatId,
 		isDesktopMac: controller.isDesktopMac,
@@ -2876,6 +2903,7 @@ export function AuthenticatedAppShell({
 					settingsOpen={controller.settingsOpen}
 					settingsPage={controller.settingsPage}
 					onSettingsOpenChange={controller.handleSettingsOpenChange}
+					onStartChatWithPlugin={controller.handleStartChatWithPlugin}
 					onSignOut={controller.handleSignOut}
 					signingOut={controller.isSigningOut}
 					desktopSafeTop={controller.isDesktopMac}

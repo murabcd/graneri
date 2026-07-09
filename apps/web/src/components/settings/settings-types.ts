@@ -1,3 +1,4 @@
+import type { ChatPluginSelection } from "@/lib/chat-plugin-prefill";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 
 export type SettingsUser = {
@@ -24,4 +25,5 @@ export type SettingsDialogProps = {
 	workspace: WorkspaceRecord | null;
 	initialPage?: SettingsPage;
 	onPageChange?: (page: SettingsPage) => void;
+	onTryPlugin: (plugin: ChatPluginSelection) => void;
 };

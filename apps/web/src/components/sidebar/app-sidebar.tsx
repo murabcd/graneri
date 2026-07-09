@@ -28,6 +28,7 @@ import { TemplatesDialogEntry } from "@/components/templates/templates-dialog-en
 import { WorkspaceSwitcher } from "@/components/workspaces/workspace-switcher";
 import { useRecordingNoteId } from "@/hooks/use-transcription-session";
 import { getChatId } from "@/lib/chat";
+import type { ChatPluginSelection } from "@/lib/chat-plugin-prefill";
 import { SIDEBAR_NAVIGATION } from "@/lib/navigation";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { WorkspaceRecord } from "@/lib/workspaces";
@@ -88,6 +89,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 	settingsOpen: boolean;
 	settingsPage?: SettingsPage;
 	onSettingsOpenChange: (open: boolean, page?: SettingsPage) => void;
+	onStartChatWithPlugin: (plugin: ChatPluginSelection) => void;
 	onSignOut: () => void;
 	signingOut?: boolean;
 	desktopSafeTop?: boolean;
@@ -566,6 +568,7 @@ export function AppSidebar({
 	settingsOpen,
 	settingsPage = "Profile",
 	onSettingsOpenChange,
+	onStartChatWithPlugin,
 	onSignOut,
 	signingOut = false,
 	desktopSafeTop = false,
@@ -672,6 +675,7 @@ export function AppSidebar({
 				onNoteSelect={model.handleNoteSelect}
 				onOpenChange={model.handleDialogOpenChange}
 				onSettingsOpenChange={onSettingsOpenChange}
+				onStartChatWithPlugin={onStartChatWithPlugin}
 				searchItems={model.searchItems}
 				settingsOpen={settingsOpen}
 				settingsPage={settingsPage}
@@ -997,6 +1001,7 @@ const AppSidebarDialogs = React.memo(function AppSidebarDialogs({
 	onNoteSelect,
 	onOpenChange,
 	onSettingsOpenChange,
+	onStartChatWithPlugin,
 	searchItems,
 	settingsOpen,
 	settingsPage,
@@ -1016,6 +1021,7 @@ const AppSidebarDialogs = React.memo(function AppSidebarDialogs({
 		value: boolean,
 	) => void;
 	onSettingsOpenChange: (open: boolean, page?: SettingsPage) => void;
+	onStartChatWithPlugin: (plugin: ChatPluginSelection) => void;
 	searchItems: SearchCommandItem[];
 	settingsOpen: boolean;
 	settingsPage: SettingsPage;
@@ -1107,6 +1113,7 @@ const AppSidebarDialogs = React.memo(function AppSidebarDialogs({
 				workspace={selectedWorkspace}
 				initialPage={settingsPage}
 				onPageChange={handleSettingsPageChange}
+				onTryPlugin={onStartChatWithPlugin}
 			/>
 			<RecipesDialogEntry
 				open={recipesOpen}

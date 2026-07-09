@@ -131,6 +131,10 @@ import {
 	type YandexTrackerConnectionFormState,
 	type YandexTrackerOrgType,
 } from "@/components/settings/connection-settings-state";
+import {
+	PluginConnectionsSection,
+	type ToolConnection,
+} from "@/components/settings/plugin-connections-section";
 import { PreferencesSettings } from "@/components/settings/preferences-settings";
 import { RemoteMcpDialog } from "@/components/settings/remote-mcp-dialog";
 import { SettingsSwitchRow } from "@/components/settings/settings-switch-row";
@@ -139,6 +143,7 @@ import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
 import { useLinkedAccounts } from "@/hooks/use-linked-accounts";
 import { authClient } from "@/lib/auth-client";
 import { getAvatarSrc } from "@/lib/avatar";
+import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
 import {
 	GOOGLE_CALENDAR_SCOPE,
 	GOOGLE_CALENDAR_SCOPES,
@@ -262,28 +267,6 @@ type VisibleCalendarRowProps = {
 	onCheckedChange: (checked: boolean) => void;
 };
 
-type ToolConnectionRowProps = {
-	group: PluginGroup;
-	icon: React.ReactNode;
-	name: string;
-	buttonLabel: string;
-	buttonVariant?: "default" | "outline";
-	buttonDisabled?: boolean;
-	buttonIcon?: React.ReactNode;
-	onButtonClick: () => void;
-};
-
-const pluginGroups = [
-	"Productivity",
-	"Tracking",
-	"Knowledge",
-	"Design",
-	"Analytics",
-	"Meetings",
-] as const;
-
-type PluginGroup = (typeof pluginGroups)[number];
-
 const getWorkspaceFormState = (
 	workspace: WorkspaceRecord | null,
 ): WorkspaceFormState => ({
@@ -327,6 +310,7 @@ export function SettingsDialog({
 	workspace,
 	initialPage = "Profile",
 	onPageChange,
+	onTryPlugin,
 }: SettingsDialogProps) {
 	const [selectedPage, setSelectedPage] = useReducer(
 		(_current: SettingsPage | null, next: SettingsPage | null) => next,
@@ -449,7 +433,10 @@ export function SettingsDialog({
 							) : activePage === "Calendar" ? (
 								<CalendarSettings />
 							) : activePage === "Plugins" ? (
-								<ConnectionsSettings />
+								<ConnectionsSettings
+									onClose={() => onOpenChange(false)}
+									onTryPlugin={onTryPlugin}
+								/>
 							) : activePage === "Data controls" ? (
 								<DataControlsSettings
 									canDeleteData={Boolean(session?.user)}
@@ -688,11 +675,6 @@ function useCalendarSettingsController() {
 	};
 }
 
-const getGoogleToolAction = ({ hasScope }: { hasScope: boolean }) => ({
-	buttonLabel: hasScope ? "Manage" : "Connect",
-	buttonVariant: "outline" as const,
-});
-
 function VisibleCalendarsSection({
 	calendars,
 }: {
@@ -923,8 +905,24 @@ function useYandexCalendarConnectionDialog({
 	};
 }
 
-function ConnectionsSettings() {
+function ConnectionsSettings({
+	onClose,
+	onTryPlugin,
+}: {
+	onClose: () => void;
+	onTryPlugin: SettingsDialogProps["onTryPlugin"];
+}) {
 	const controller = useConnectionsSettingsController();
+	const handleTryNow = ({
+		provider,
+		sourceId,
+	}: {
+		provider: ChatAppSourceProvider;
+		sourceId: string;
+	}) => {
+		onClose();
+		onTryPlugin({ provider, sourceId });
+	};
 
 	if (!controller.activeWorkspaceId) {
 		return (
@@ -936,7 +934,10 @@ function ConnectionsSettings() {
 
 	return (
 		<div className="py-4">
-			<ToolConnectionsSection connections={controller.toolConnections} />
+			<PluginConnectionsSection
+				connections={controller.toolConnections}
+				onTryNow={handleTryNow}
+			/>
 			<ConnectionSettingsDialogs controller={controller} />
 		</div>
 	);
@@ -2321,13 +2322,6 @@ function useConnectionsSettingsController() {
 		}
 	};
 
-	const googleCalendarToolAction = getGoogleToolAction({
-		hasScope: hasGoogleCalendarToolScope && googleCalendarEnabledForWorkspace,
-	});
-	const googleDriveToolAction = getGoogleToolAction({
-		hasScope: hasGoogleDriveToolScope && googleDriveEnabledForWorkspace,
-	});
-
 	const jiraWebhookUrl =
 		convexSiteUrl && jiraConnection?.webhookSecret
 			? (() => {
@@ -2338,20 +2332,26 @@ function useConnectionsSettingsController() {
 				})()
 			: null;
 
-	const toolConnections: ToolConnectionRowProps[] = [
+	const toolConnections: ToolConnection[] = [
 		{
 			group: "Productivity",
 			icon: (
 				<AppSourceIcon provider="google-calendar" className="size-5 shrink-0" />
 			),
 			name: "Google Calendar",
-			buttonLabel: googleCalendarToolAction.buttonLabel,
-			buttonVariant: googleCalendarToolAction.buttonVariant,
+			installation:
+				hasGoogleCalendarToolScope && googleCalendarEnabledForWorkspace
+					? {
+							status: "installed",
+							sourceId: "app:google-calendar",
+							provider: "google-calendar",
+						}
+					: { status: "available" },
 			buttonDisabled: isConnectingGoogleCalendarTool || !session?.user,
 			buttonIcon: isConnectingGoogleCalendarTool ? (
 				<LoaderCircle className="animate-spin" />
 			) : null,
-			onButtonClick: () => {
+			onConfigure: () => {
 				void connectGoogleTool({
 					enableForWorkspace: "calendar",
 					scopes: GOOGLE_CALENDAR_SCOPES,
@@ -2366,13 +2366,19 @@ function useConnectionsSettingsController() {
 				<AppSourceIcon provider="google-drive" className="size-5 shrink-0" />
 			),
 			name: "Google Drive",
-			buttonLabel: googleDriveToolAction.buttonLabel,
-			buttonVariant: googleDriveToolAction.buttonVariant,
+			installation:
+				hasGoogleDriveToolScope && googleDriveEnabledForWorkspace
+					? {
+							status: "installed",
+							sourceId: "app:google-drive",
+							provider: "google-drive",
+						}
+					: { status: "available" },
 			buttonDisabled: isConnectingGoogleDriveTool || !session?.user,
 			buttonIcon: isConnectingGoogleDriveTool ? (
 				<LoaderCircle className="animate-spin" />
 			) : null,
-			onButtonClick: () => {
+			onConfigure: () => {
 				void connectGoogleTool({
 					enableForWorkspace: "drive",
 					scopes: GOOGLE_DRIVE_SCOPES,
@@ -2387,11 +2393,17 @@ function useConnectionsSettingsController() {
 				<AppSourceIcon provider="yandex-calendar" className="size-5 shrink-0" />
 			),
 			name: "Yandex Calendar",
-			buttonLabel: yandexCalendarConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
+			installation: yandexCalendarConnection
+				? {
+						status: "installed",
+						sourceId: yandexCalendarConnection.sourceId,
+						provider: "yandex-calendar",
+						onUninstall: () => void handleDisableYandexCalendar(),
+					}
+				: { status: "available" },
 			buttonDisabled:
 				!session?.user || yandexCalendarDialog.isSavingYandexCalendarConnection,
-			onButtonClick: () =>
+			onConfigure: () =>
 				yandexCalendarDialog.handleYandexCalendarDialogOpenChange(true),
 		},
 		{
@@ -2400,94 +2412,148 @@ function useConnectionsSettingsController() {
 				<AppSourceIcon provider="yandex-tracker" className="size-5 shrink-0" />
 			),
 			name: "Yandex Tracker",
-			buttonLabel: yandexTrackerConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
-			onButtonClick: () => handleYandexTrackerDialogOpenChange(true),
+			installation: yandexTrackerConnection
+				? {
+						status: "installed",
+						sourceId: yandexTrackerConnection.sourceId,
+						provider: "yandex-tracker",
+						onUninstall: () => void handleDisableYandexTracker(),
+					}
+				: { status: "available" },
+			onConfigure: () => handleYandexTrackerDialogOpenChange(true),
 		},
 		{
 			group: "Tracking",
 			icon: <AppSourceIcon provider="jira" className="size-5 shrink-0" />,
 			name: "Jira",
-			buttonLabel: jiraMcpConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
+			installation: jiraMcpConnection
+				? {
+						status: "installed",
+						sourceId: jiraMcpConnection.sourceId,
+						provider: "jira-mcp",
+						onUninstall: () => void handleDisableJiraMcp(),
+					}
+				: { status: "available" },
 			buttonDisabled: isSavingJiraMcpConnection || !session?.user,
 			buttonIcon: isSavingJiraMcpConnection ? (
 				<LoaderCircle className="animate-spin" />
 			) : null,
-			onButtonClick: () => handleJiraMcpDialogOpenChange(true),
+			onConfigure: () => handleJiraMcpDialogOpenChange(true),
 		},
 		{
 			group: "Tracking",
 			icon: <AppSourceIcon provider="jira" className="size-5 shrink-0" />,
 			name: "Jira Sync",
-			buttonLabel: jiraConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
-			onButtonClick: () => handleJiraDialogOpenChange(true),
+			installation: jiraConnection
+				? {
+						status: "installed",
+						sourceId: jiraConnection.sourceId,
+						provider: "jira",
+						onUninstall: () => void handleDisableJiraSync(),
+					}
+				: { status: "available" },
+			onConfigure: () => handleJiraDialogOpenChange(true),
 		},
 		{
 			group: "Analytics",
 			icon: <AppSourceIcon provider="posthog" className="size-5 shrink-0" />,
 			name: "PostHog",
-			buttonLabel: posthogConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
-			onButtonClick: () => handlePostHogDialogOpenChange(true),
+			installation: posthogConnection
+				? {
+						status: "installed",
+						sourceId: posthogConnection.sourceId,
+						provider: "posthog",
+						onUninstall: () => void handleDisablePostHog(),
+					}
+				: { status: "available" },
+			onConfigure: () => handlePostHogDialogOpenChange(true),
 		},
 		{
 			group: "Knowledge",
 			icon: <AppSourceIcon provider="context7" className="size-5 shrink-0" />,
 			name: "Context7",
-			buttonLabel: context7Connection ? "Manage" : "Connect",
-			buttonVariant: "outline",
+			installation: context7Connection
+				? {
+						status: "installed",
+						sourceId: context7Connection.sourceId,
+						provider: "context7",
+						onUninstall: () => void handleDisableContext7(),
+					}
+				: { status: "available" },
 			buttonDisabled: isSavingContext7Connection || !session?.user,
 			buttonIcon: isSavingContext7Connection ? (
 				<LoaderCircle className="animate-spin" />
 			) : null,
-			onButtonClick: () => handleContext7DialogOpenChange(true),
+			onConfigure: () => handleContext7DialogOpenChange(true),
 		},
 		{
 			group: "Design",
 			icon: <AppSourceIcon provider="figma" className="size-5 shrink-0" />,
 			name: "Figma",
-			buttonLabel: figmaConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
+			installation: figmaConnection
+				? {
+						status: "installed",
+						sourceId: figmaConnection.sourceId,
+						provider: "figma",
+						onUninstall: () => void handleDisableFigma(),
+					}
+				: { status: "available" },
 			buttonDisabled: isSavingFigmaConnection || !session?.user,
 			buttonIcon: isSavingFigmaConnection ? (
 				<LoaderCircle className="animate-spin" />
 			) : null,
-			onButtonClick: () => handleFigmaDialogOpenChange(true),
+			onConfigure: () => handleFigmaDialogOpenChange(true),
 		},
 		{
 			group: "Tracking",
 			icon: <AppSourceIcon provider="linear" className="size-5 shrink-0" />,
 			name: "Linear",
-			buttonLabel: linearConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
+			installation: linearConnection
+				? {
+						status: "installed",
+						sourceId: linearConnection.sourceId,
+						provider: "linear",
+						onUninstall: () => void handleDisableLinear(),
+					}
+				: { status: "available" },
 			buttonDisabled: isSavingLinearConnection || !session?.user,
 			buttonIcon: isSavingLinearConnection ? (
 				<LoaderCircle className="animate-spin" />
 			) : null,
-			onButtonClick: () => handleLinearDialogOpenChange(true),
+			onConfigure: () => handleLinearDialogOpenChange(true),
 		},
 		{
 			group: "Knowledge",
 			icon: <AppSourceIcon provider="notion" className="size-5 shrink-0" />,
 			name: "Notion",
-			buttonLabel: notionConnection ? "Manage" : "Connect",
-			buttonVariant: "outline",
-			onButtonClick: () => handleNotionDialogOpenChange(true),
+			installation: notionConnection
+				? {
+						status: "installed",
+						sourceId: notionConnection.sourceId,
+						provider: "notion",
+						onUninstall: () => void handleDisableNotion(),
+					}
+				: { status: "available" },
+			onConfigure: () => handleNotionDialogOpenChange(true),
 		},
 		{
 			group: "Meetings",
 			icon: <AppSourceIcon provider="zoom" className="size-5 shrink-0" />,
 			name: "Zoom",
-			buttonLabel:
-				zoomConnection?.status === "connected" ? "Manage" : "Connect",
-			buttonVariant: "outline",
+			installation:
+				zoomConnection?.status === "connected"
+					? {
+							status: "installed",
+							sourceId: zoomConnection.sourceId,
+							provider: "zoom",
+							onUninstall: () => void handleDisableZoom(),
+						}
+					: { status: "available" },
 			buttonDisabled: isSavingZoomConnection || !session?.user,
 			buttonIcon: isSavingZoomConnection ? (
 				<LoaderCircle className="animate-spin" />
 			) : null,
-			onButtonClick: () => handleZoomDialogOpenChange(true),
+			onConfigure: () => handleZoomDialogOpenChange(true),
 		},
 	];
 
@@ -2690,51 +2756,6 @@ function useConnectionsSettingsController() {
 	};
 }
 
-function ToolConnectionsSection({
-	connections,
-}: {
-	connections: ToolConnectionRowProps[];
-}) {
-	return (
-		<Field>
-			<div className="space-y-6">
-				{pluginGroups.map((group) => {
-					const groupConnections = connections.filter(
-						(connection) => connection.group === group,
-					);
-
-					if (groupConnections.length === 0) {
-						return null;
-					}
-
-					return (
-						<div key={group} className="space-y-3">
-							<Label className="text-xs font-medium text-muted-foreground">
-								{group}
-							</Label>
-							<div className="space-y-3">
-								{groupConnections.map((connection) => (
-									<ToolConnectionRow
-										key={connection.name}
-										group={connection.group}
-										icon={connection.icon}
-										name={connection.name}
-										buttonLabel={connection.buttonLabel}
-										buttonVariant={connection.buttonVariant}
-										buttonDisabled={connection.buttonDisabled}
-										buttonIcon={connection.buttonIcon}
-										onButtonClick={connection.onButtonClick}
-									/>
-								))}
-							</div>
-						</div>
-					);
-				})}
-			</div>
-		</Field>
-	);
-}
-
 function JiraSyncSection({
 	onCopyWebhookUrl,
 	webhookUrl,
@@ -2778,37 +2799,6 @@ function JiraSyncSection({
 				</InputGroup>
 			</Field>
 		</FieldGroup>
-	);
-}
-
-function ToolConnectionRow({
-	icon,
-	name,
-	buttonLabel,
-	buttonVariant = "outline",
-	buttonDisabled = false,
-	buttonIcon,
-	onButtonClick,
-}: ToolConnectionRowProps) {
-	return (
-		<div className="flex items-center justify-between gap-4">
-			<div className="flex min-w-0 items-center gap-3">
-				{icon}
-				<div className="min-w-0">
-					<Label className="text-sm font-medium text-foreground">{name}</Label>
-				</div>
-			</div>
-			<Button
-				type="button"
-				variant={buttonVariant}
-				size="default"
-				onClick={onButtonClick}
-				disabled={buttonDisabled}
-			>
-				{buttonIcon}
-				{buttonLabel}
-			</Button>
-		</div>
 	);
 }
 
