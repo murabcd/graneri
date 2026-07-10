@@ -77,6 +77,28 @@ const createOverlayHtml = () => `<!doctype html>
 				padding-bottom: 18px;
 			}
 
+			@media (prefers-color-scheme: light) {
+				body {
+					--overlay-foreground: oklch(0.21 0.006 285.885);
+					--overlay-hint: oklch(0.21 0.006 285.885 / 0.92);
+					--overlay-kbd-border: hsl(240 5.9% 10% / 0.14);
+					--overlay-kbd-background: oklch(0.92 0.004 286.32);
+					--overlay-kbd-foreground: oklch(0.552 0.016 285.938);
+					--overlay-dot: oklch(0.21 0.006 285.885 / 0.9);
+					--overlay-target-border: hsl(240 5.9% 10% / 0.14);
+					--overlay-target-background: oklch(1 0 0 / 0.96);
+					--overlay-mic: oklch(0.21 0.006 285.885 / 0.82);
+					--overlay-spinner-track: hsl(240 5.9% 10% / 0.2);
+					--overlay-spinner-active: oklch(0.21 0.006 285.885 / 0.9);
+					--overlay-error-border: hsl(240 5.9% 10% / 0.12);
+					--overlay-error-shadow: hsl(240 10% 3.9% / 0.16);
+					--overlay-error-highlight: hsl(0 0% 100% / 0.5);
+					--overlay-icon-button: oklch(0.21 0.006 285.885 / 0.8);
+					--overlay-icon-button-hover: oklch(0.21 0.006 285.885 / 0.96);
+					--overlay-icon-button-hover-background: hsl(240 5.9% 10% / 0.08);
+				}
+			}
+
 			.dictation-target {
 				display: flex;
 				align-items: flex-end;

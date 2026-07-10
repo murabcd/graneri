@@ -12,9 +12,11 @@ configuration path, or Convex integration contract changes.
 `apps/desktop`
 : Electron main, preload, IPC, native permissions, capture helpers, local
 server, packaging, updater behavior, and desktop release configuration.
-The global dictation overlay uses a self-contained dark surface with fixed light
-foreground colors. It does not inspect screen pixels or follow macOS appearance,
-so global dictation does not require Screen Recording permission.
+The global dictation overlay uses self-contained light and dark palettes selected
+through `prefers-color-scheme`. Electron's native theme follows the renderer's
+persisted app theme, including macOS appearance when the app theme is System.
+The overlay does not inspect screen pixels, so global dictation does not require
+Screen Recording permission.
 
 `apps/web`
 : React renderer for both desktop and browser. Desktop releases still depend on
