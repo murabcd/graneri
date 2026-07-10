@@ -1,5 +1,6 @@
 import { BrowserWindow, screen, shell } from "electron";
 import { createBrowserMeetingWindowMonitor } from "./browser-meeting-window-monitor.mjs";
+import { createRendererWebPreferences } from "./desktop-renderer-window.mjs";
 import { resolveDesktopRuntimeExecutablePath } from "./desktop-runtime-paths.mjs";
 import {
 	startLineEventHelperSession,
@@ -254,12 +255,7 @@ export const createMeetingDetection = ({
 			type: process.platform === "darwin" ? "panel" : undefined,
 			hiddenInMissionControl: true,
 			icon: dockIconPath,
-			webPreferences: {
-				preload: preloadPath,
-				contextIsolation: true,
-				nodeIntegration: false,
-				sandbox: false,
-			},
+			webPreferences: createRendererWebPreferences({ preloadPath }),
 		});
 
 		meetingWidgetWindow.setAlwaysOnTop(true, "floating");

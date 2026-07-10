@@ -1,4 +1,5 @@
 import { BrowserWindow, desktopCapturer } from "electron";
+import { createRendererWebPreferences } from "./desktop-renderer-window.mjs";
 import { logError } from "./logger.mjs";
 
 const minimumWindowSize = {
@@ -10,8 +11,6 @@ const defaultWindowSize = {
 	width: 1200,
 	height: 840,
 };
-
-export const rendererSessionPartition = "graneri-renderer";
 
 export const createDesktopWindow = ({
 	desktopNavigationChannel,
@@ -49,13 +48,7 @@ export const createDesktopWindow = ({
 			trafficLightPosition: isMac ? { x: 16, y: 14 } : undefined,
 			vibrancy: isMac ? "sidebar" : undefined,
 			visualEffectState: isMac ? "active" : undefined,
-			webPreferences: {
-				preload: preloadPath,
-				partition: rendererSessionPartition,
-				contextIsolation: true,
-				nodeIntegration: false,
-				sandbox: false,
-			},
+			webPreferences: createRendererWebPreferences({ preloadPath }),
 		});
 
 		if (!hasConfiguredDisplayMediaHandler) {

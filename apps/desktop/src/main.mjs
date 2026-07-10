@@ -41,6 +41,7 @@ import {
 import { createDesktopPreferencesStore } from "./desktop-preferences.mjs";
 import { createDesktopRealtimeTransport } from "./desktop-realtime-transport.mjs";
 import { createDesktopRecordingPowerSaveBlocker } from "./desktop-recording-power-save.mjs";
+import { rendererSessionPartition } from "./desktop-renderer-window.mjs";
 import { createDesktopShell } from "./desktop-shell.mjs";
 import { createDesktopStorage } from "./desktop-storage.mjs";
 import { createDesktopSystemAudioPolicy as createSystemAudioPolicy } from "./desktop-transcription-policy.mjs";
@@ -55,10 +56,7 @@ import {
 	getDesktopUpdaterUnavailableTrayLabel,
 	isDesktopUpdaterAvailable,
 } from "./desktop-updater.mjs";
-import {
-	createDesktopWindow,
-	rendererSessionPartition,
-} from "./desktop-window.mjs";
+import { createDesktopWindow } from "./desktop-window.mjs";
 import { loadRootEnv } from "./env.mjs";
 import { createGlobalDictation } from "./global-dictation.mjs";
 import { getDictationPreferencePatchForHotkeyMode } from "./global-dictation-policy.mjs";
