@@ -97,7 +97,7 @@ export function MeetingWidgetScreen() {
 	return (
 		<div
 			ref={frameRef}
-			className="dark inline-flex p-1.5"
+			className="inline-flex p-1.5"
 			style={{ width: meetingWidgetFrameWidthPx }}
 		>
 			<Card
