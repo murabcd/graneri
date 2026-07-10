@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-	createAudioVolumeStats,
-	getPcm16AverageAbsVolume,
-} from "../src/audio-volume-stats.mjs";
+import { createAudioVolumeStats } from "../src/audio-volume-stats.mjs";
+import { getBase64Pcm16AverageAbsVolume } from "../src/pcm16-volume.mjs";
 
 const createPcm16Base64 = (samples) => {
 	const pcm16 = new Int16Array(samples);
@@ -12,10 +10,13 @@ const createPcm16Base64 = (samples) => {
 	);
 };
 
-test("getPcm16AverageAbsVolume measures normalized average amplitude", () => {
-	assert.equal(getPcm16AverageAbsVolume(createPcm16Base64([0, 16_384])), 0.25);
-	assert.equal(getPcm16AverageAbsVolume(createPcm16Base64([-32_768])), 1);
-	assert.equal(getPcm16AverageAbsVolume(""), 0);
+test("getBase64Pcm16AverageAbsVolume measures normalized average amplitude", () => {
+	assert.equal(
+		getBase64Pcm16AverageAbsVolume(createPcm16Base64([0, 16_384])),
+		0.25,
+	);
+	assert.equal(getBase64Pcm16AverageAbsVolume(createPcm16Base64([-32_768])), 1);
+	assert.equal(getBase64Pcm16AverageAbsVolume(""), 0);
 });
 
 test("audio volume stats logs paired source aggregates on interval", () => {
@@ -30,10 +31,16 @@ test("audio volume stats logs paired source aggregates on interval", () => {
 		microphonePcm16: createPcm16Base64([0, 0]),
 		systemAudioPcm16: createPcm16Base64([16_384, 16_384]),
 	});
-	assert.equal(stats.logIfReady((details) => logs.push(details)), false);
+	assert.equal(
+		stats.logIfReady((details) => logs.push(details)),
+		false,
+	);
 
 	now += 30_000;
-	assert.equal(stats.logIfReady((details) => logs.push(details)), true);
+	assert.equal(
+		stats.logIfReady((details) => logs.push(details)),
+		true,
+	);
 	assert.deepEqual(logs, [
 		{
 			intervalMs: 30_000,
@@ -59,7 +66,10 @@ test("audio volume stats logs paired source aggregates on interval", () => {
 		systemAudioPcm16: null,
 	});
 	now += 30_000;
-	assert.equal(stats.logIfReady((details) => logs.push(details)), true);
+	assert.equal(
+		stats.logIfReady((details) => logs.push(details)),
+		true,
+	);
 	assert.equal(logs[1].microphone.sampleCount, 1);
 	assert.equal(logs[1].systemAudio.sampleCount, 0);
 });

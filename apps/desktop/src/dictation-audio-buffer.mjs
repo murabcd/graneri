@@ -1,4 +1,7 @@
+import { getPcm16BufferAverageAbsVolume } from "./pcm16-volume.mjs";
+
 export const maxDictationPcmBytes = 25_000_000;
+const speechVolumeThreshold = 0.003;
 
 export const createPcm16MonoWavHeader = ({ byteLength, sampleRate }) => {
 	const header = Buffer.alloc(44);
@@ -38,6 +41,7 @@ export const createDictationAudioBuffer = ({
 	const chunks = [];
 	let byteLength = 0;
 	let currentSampleRate = sampleRate;
+	let peakAverageVolume = 0;
 
 	return {
 		appendBase64Pcm16: (value) => {
@@ -49,6 +53,10 @@ export const createDictationAudioBuffer = ({
 
 			chunks.push(chunk);
 			byteLength = nextByteLength;
+			peakAverageVolume = Math.max(
+				peakAverageVolume,
+				getPcm16BufferAverageAbsVolume(chunk),
+			);
 			return true;
 		},
 		createWav: () =>
@@ -58,6 +66,7 @@ export const createDictationAudioBuffer = ({
 			}),
 		getByteLength: () => byteLength,
 		getSampleRate: () => currentSampleRate,
+		hasSpeech: () => peakAverageVolume >= speechVolumeThreshold,
 		setSampleRate: (value) => {
 			currentSampleRate = Number(value) || sampleRate;
 		},

@@ -1,3 +1,5 @@
+import { getBase64Pcm16AverageAbsVolume } from "./pcm16-volume.mjs";
+
 const defaultLogIntervalMs = 30_000;
 const silentVolumeThreshold = 0.001;
 
@@ -7,27 +9,6 @@ const createSourceStats = () => ({
 	silentCount: 0,
 	sumVolume: 0,
 });
-
-export const getPcm16AverageAbsVolume = (base64Pcm16) => {
-	if (!base64Pcm16) {
-		return 0;
-	}
-
-	const buffer = Buffer.from(base64Pcm16, "base64");
-	const sampleCount = Math.floor(
-		buffer.byteLength / Int16Array.BYTES_PER_ELEMENT,
-	);
-	if (sampleCount === 0) {
-		return 0;
-	}
-
-	let sum = 0;
-	for (let offset = 0; offset < sampleCount * 2; offset += 2) {
-		sum += Math.abs(buffer.readInt16LE(offset)) / 32768;
-	}
-
-	return sum / sampleCount;
-};
 
 export const createAudioVolumeStats = ({
 	logIntervalMs = defaultLogIntervalMs,
@@ -64,10 +45,13 @@ export const createAudioVolumeStats = ({
 
 	const update = ({ microphonePcm16, systemAudioPcm16 }) => {
 		if (microphonePcm16) {
-			updateSource(microphone, getPcm16AverageAbsVolume(microphonePcm16));
+			updateSource(microphone, getBase64Pcm16AverageAbsVolume(microphonePcm16));
 		}
 		if (systemAudioPcm16) {
-			updateSource(systemAudio, getPcm16AverageAbsVolume(systemAudioPcm16));
+			updateSource(
+				systemAudio,
+				getBase64Pcm16AverageAbsVolume(systemAudioPcm16),
+			);
 		}
 	};
 

@@ -12,8 +12,14 @@ test("dictation audio buffer limits PCM bytes and creates a WAV payload", () => 
 		sampleRate: 16_000,
 	});
 
-	assert.equal(buffer.appendBase64Pcm16(Buffer.from([1, 2]).toString("base64")), true);
-	assert.equal(buffer.appendBase64Pcm16(Buffer.from([3, 4, 5]).toString("base64")), false);
+	assert.equal(
+		buffer.appendBase64Pcm16(Buffer.from([1, 2]).toString("base64")),
+		true,
+	);
+	assert.equal(
+		buffer.appendBase64Pcm16(Buffer.from([3, 4, 5]).toString("base64")),
+		false,
+	);
 	assert.equal(buffer.getByteLength(), 2);
 	assert.equal(buffer.getSampleRate(), 16_000);
 
@@ -23,6 +29,22 @@ test("dictation audio buffer limits PCM bytes and creates a WAV payload", () => 
 	assert.equal(wav.subarray(8, 12).toString("ascii"), "WAVE");
 	assert.equal(wav.readUInt32LE(24), 16_000);
 	assert.deepEqual([...wav.subarray(44)], [1, 2]);
+});
+
+test("dictation audio buffer distinguishes silence from speech", () => {
+	const buffer = createDictationAudioBuffer();
+	const silence = Buffer.alloc(960);
+	assert.equal(buffer.appendBase64Pcm16(silence.toString("base64")), true);
+	assert.equal(buffer.hasSpeech(), false);
+
+	const speechSamples = new Int16Array(480).fill(4_000);
+	const speech = Buffer.from(
+		speechSamples.buffer,
+		speechSamples.byteOffset,
+		speechSamples.byteLength,
+	);
+	assert.equal(buffer.appendBase64Pcm16(speech.toString("base64")), true);
+	assert.equal(buffer.hasSpeech(), true);
 });
 
 test("createWavBuffer writes PCM16 mono header sizes", () => {
