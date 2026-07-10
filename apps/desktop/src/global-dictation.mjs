@@ -2,6 +2,7 @@ import { BrowserWindow, screen } from "electron";
 import { transcribeDictationAudio } from "../../../packages/ai/src/dictation-transcription.mjs";
 import { resolveDesktopRuntimeExecutablePath } from "./desktop-runtime-paths.mjs";
 import { createDictationAudioBuffer } from "./dictation-audio-buffer.mjs";
+import { createDictationOverlayContrastController } from "./dictation-overlay-contrast-controller.mjs";
 import { pasteTextToFocusedInput } from "./dictation-paste.mjs";
 import { createGlobalDictationHotkeyMonitor } from "./global-dictation-hotkey-monitor.mjs";
 import {
@@ -53,6 +54,14 @@ const createOverlayHtml = () => `<!doctype html>
 			}
 
 			body {
+				display: flex;
+				align-items: flex-end;
+				justify-content: center;
+				position: relative;
+				padding-bottom: 18px;
+			}
+
+			body[data-contrast="light"] {
 				--overlay-foreground: #fafafa;
 				--overlay-hint: hsl(0 0% 98% / 0.86);
 				--overlay-kbd-border: hsl(0 0% 100% / 0.14);
@@ -70,33 +79,26 @@ const createOverlayHtml = () => `<!doctype html>
 				--overlay-icon-button: hsl(0 0% 98% / 0.8);
 				--overlay-icon-button-hover: hsl(0 0% 98% / 0.96);
 				--overlay-icon-button-hover-background: hsl(0 0% 100% / 0.09);
-				display: flex;
-				align-items: flex-end;
-				justify-content: center;
-				position: relative;
-				padding-bottom: 18px;
 			}
 
-			@media (prefers-color-scheme: light) {
-				body {
-					--overlay-foreground: hsl(240 10% 3.9%);
-					--overlay-hint: hsl(240 10% 3.9% / 0.82);
-					--overlay-kbd-border: hsl(240 5.9% 10% / 0.16);
-					--overlay-kbd-background: hsl(240 5.9% 10% / 0.08);
-					--overlay-kbd-foreground: hsl(240 10% 3.9% / 0.9);
-					--overlay-dot: hsl(240 10% 3.9% / 0.84);
-					--overlay-target-border: hsl(240 5.9% 10% / 0.34);
-					--overlay-mic: hsl(240 10% 3.9% / 0.78);
-					--overlay-spinner-track: hsl(240 5.9% 10% / 0.2);
-					--overlay-spinner-active: hsl(240 10% 3.9% / 0.86);
-					--overlay-error-background: hsl(0 0% 100% / 0.86);
-					--overlay-error-border: hsl(240 5.9% 10% / 0.14);
-					--overlay-error-shadow: hsl(240 10% 3.9% / 0.16);
-					--overlay-error-highlight: hsl(0 0% 100% / 0.5);
-					--overlay-icon-button: hsl(240 10% 3.9% / 0.68);
-					--overlay-icon-button-hover: hsl(240 10% 3.9% / 0.9);
-					--overlay-icon-button-hover-background: hsl(240 5.9% 10% / 0.08);
-				}
+			body[data-contrast="dark"] {
+				--overlay-foreground: hsl(240 10% 3.9%);
+				--overlay-hint: hsl(240 10% 3.9% / 0.82);
+				--overlay-kbd-border: hsl(240 5.9% 10% / 0.16);
+				--overlay-kbd-background: hsl(240 5.9% 10% / 0.08);
+				--overlay-kbd-foreground: hsl(240 10% 3.9% / 0.9);
+				--overlay-dot: hsl(240 10% 3.9% / 0.84);
+				--overlay-target-border: hsl(240 5.9% 10% / 0.34);
+				--overlay-mic: hsl(240 10% 3.9% / 0.78);
+				--overlay-spinner-track: hsl(240 5.9% 10% / 0.2);
+				--overlay-spinner-active: hsl(240 10% 3.9% / 0.86);
+				--overlay-error-background: hsl(0 0% 100% / 0.86);
+				--overlay-error-border: hsl(240 5.9% 10% / 0.14);
+				--overlay-error-shadow: hsl(240 10% 3.9% / 0.16);
+				--overlay-error-highlight: hsl(0 0% 100% / 0.5);
+				--overlay-icon-button: hsl(240 10% 3.9% / 0.68);
+				--overlay-icon-button-hover: hsl(240 10% 3.9% / 0.9);
+				--overlay-icon-button-hover-background: hsl(240 5.9% 10% / 0.08);
 			}
 
 			.dictation-target {
@@ -465,6 +467,15 @@ const createDictationOverlay = ({ onClose, onRetry } = {}) => {
 	let isLoaded = false;
 	let pendingStatus = null;
 	let hideTimeoutId = null;
+	const contrastController = createDictationOverlayContrastController({
+		onError: (error) => {
+			logError({
+				error,
+				event: "dictation.overlay_contrast_capture_failed",
+				message: "[dictation] failed to sample overlay background",
+			});
+		},
+	});
 
 	const ensureWindow = async () => {
 		if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -499,6 +510,7 @@ const createDictationOverlay = ({ onClose, onRetry } = {}) => {
 		});
 		overlayWindow.setIgnoreMouseEvents(true, { forward: true });
 		overlayWindow.on("closed", () => {
+			contrastController.stop();
 			overlayWindow = null;
 			isLoaded = false;
 		});
@@ -577,7 +589,9 @@ const createDictationOverlay = ({ onClose, onRetry } = {}) => {
 			...getOverlayWindowPosition(bounds),
 		});
 		await updateStatus(status);
+		await contrastController.refresh(window);
 		window.showInactive();
+		contrastController.start(window);
 	};
 
 	const hide = ({ delayMs = 0 } = {}) => {
@@ -587,6 +601,7 @@ const createDictationOverlay = ({ onClose, onRetry } = {}) => {
 
 		hideTimeoutId = setTimeout(() => {
 			hideTimeoutId = null;
+			contrastController.stop();
 			if (overlayWindow && !overlayWindow.isDestroyed()) {
 				overlayWindow.hide();
 			}
@@ -594,6 +609,7 @@ const createDictationOverlay = ({ onClose, onRetry } = {}) => {
 	};
 
 	const destroy = () => {
+		contrastController.stop();
 		if (hideTimeoutId) {
 			clearTimeout(hideTimeoutId);
 			hideTimeoutId = null;
