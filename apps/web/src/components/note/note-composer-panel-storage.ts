@@ -9,8 +9,6 @@ const NOTE_CHAT_OVERLAY_VIEWPORT_INSET = 112;
 export const INLINE_POPOVER_DEFAULT_HEIGHT = 384;
 export const INLINE_POPOVER_HEIGHT_STORAGE_KEY_PREFIX =
 	"graneri.noteComposer.inlinePopoverHeight";
-export const INLINE_POPOVER_HEIGHT_LEGACY_STORAGE_KEY =
-	"graneri.noteComposer.inlinePopoverHeight";
 export const NOTE_CHAT_SIDEBAR_WIDTH_STORAGE_KEY_PREFIX =
 	"graneri.noteComposer.sidebarWidth";
 
@@ -82,55 +80,31 @@ export const clampPanelHeight = ({
 	maxHeight: number;
 }) => Math.min(maxHeight, Math.max(NOTE_CHAT_PANEL_MIN_HEIGHT, nextHeight));
 
-export const readStoredPanelHeight = (
-	storageKeys: string | string[],
-	fallback: number,
-) => {
+export const readStoredPanelHeight = (storageKey: string, fallback: number) => {
 	if (typeof window === "undefined") {
 		return fallback;
 	}
 
 	try {
-		const candidateKeys = Array.isArray(storageKeys)
-			? storageKeys
-			: [storageKeys];
-
-		for (const storageKey of candidateKeys) {
-			const storedValue = window.localStorage.getItem(storageKey);
-
-			if (!storedValue) {
-				continue;
-			}
-
-			const parsedValue = Number(storedValue);
-
-			if (Number.isFinite(parsedValue)) {
-				return parsedValue;
-			}
+		const storedValue = window.localStorage.getItem(storageKey);
+		if (!storedValue) {
+			return fallback;
 		}
 
-		return fallback;
+		const parsedValue = Number(storedValue);
+		return Number.isFinite(parsedValue) ? parsedValue : fallback;
 	} catch {
 		return fallback;
 	}
 };
 
-export const storePanelHeight = (
-	storageKeys: string | string[],
-	height: number,
-) => {
+export const storePanelHeight = (storageKey: string, height: number) => {
 	if (typeof window === "undefined") {
 		return;
 	}
 
 	try {
-		const candidateKeys = Array.isArray(storageKeys)
-			? storageKeys
-			: [storageKeys];
-
-		for (const storageKey of candidateKeys) {
-			window.localStorage.setItem(storageKey, String(height));
-		}
+		window.localStorage.setItem(storageKey, String(height));
 	} catch {
 		// Ignore storage failures and keep the in-memory size.
 	}

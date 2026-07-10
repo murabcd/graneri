@@ -217,7 +217,6 @@ import {
 	getNoteScopedStorageKeyForViewport,
 	getNoteStorageScopeKey,
 	INLINE_POPOVER_DEFAULT_HEIGHT,
-	INLINE_POPOVER_HEIGHT_LEGACY_STORAGE_KEY,
 	INLINE_POPOVER_HEIGHT_STORAGE_KEY_PREFIX,
 	NOTE_CHAT_FLOATING_DEFAULT_HEIGHT,
 	NOTE_CHAT_FLOATING_HEIGHT_STORAGE_KEY_PREFIX,
@@ -412,25 +411,59 @@ const useNoteComposerController = ({
 		isMobileViewport: isMobile,
 	});
 	const [inlinePanelHeight, setInlinePanelHeight] = React.useState(() =>
-		readStoredPanelHeight(
-			getNoteScopedStorageKey({
-				prefix: INLINE_POPOVER_HEIGHT_STORAGE_KEY_PREFIX,
-				noteScopeKey: noteStorageScopeKey,
-				platform: getCurrentPanelViewportPlatform(),
-			}),
-			INLINE_POPOVER_DEFAULT_HEIGHT,
-		),
+		clampPanelHeight({
+			nextHeight: readStoredPanelHeight(
+				getNoteScopedStorageKey({
+					prefix: INLINE_POPOVER_HEIGHT_STORAGE_KEY_PREFIX,
+					noteScopeKey: noteStorageScopeKey,
+					platform: getCurrentPanelViewportPlatform(),
+				}),
+				INLINE_POPOVER_DEFAULT_HEIGHT,
+			),
+			maxHeight: getCurrentPanelMaxHeight(),
+		}),
 	);
 	const [floatingPanelHeight, setFloatingPanelHeight] = React.useState(() =>
-		readStoredPanelHeight(
-			getNoteScopedStorageKey({
-				prefix: NOTE_CHAT_FLOATING_HEIGHT_STORAGE_KEY_PREFIX,
-				noteScopeKey: noteStorageScopeKey,
-				platform: getCurrentPanelViewportPlatform(),
-			}),
-			NOTE_CHAT_FLOATING_DEFAULT_HEIGHT,
-		),
+		clampPanelHeight({
+			nextHeight: readStoredPanelHeight(
+				getNoteScopedStorageKey({
+					prefix: NOTE_CHAT_FLOATING_HEIGHT_STORAGE_KEY_PREFIX,
+					noteScopeKey: noteStorageScopeKey,
+					platform: getCurrentPanelViewportPlatform(),
+				}),
+				NOTE_CHAT_FLOATING_DEFAULT_HEIGHT,
+			),
+			maxHeight: getCurrentPanelMaxHeight(),
+		}),
 	);
+	const [previousInlinePanelStorageKey, setPreviousInlinePanelStorageKey] =
+		React.useState(inlinePopoverHeightStorageKey);
+	const [previousFloatingPanelStorageKey, setPreviousFloatingPanelStorageKey] =
+		React.useState(floatingPanelHeightStorageKey);
+	if (previousInlinePanelStorageKey !== inlinePopoverHeightStorageKey) {
+		setPreviousInlinePanelStorageKey(inlinePopoverHeightStorageKey);
+		setInlinePanelHeight(
+			clampPanelHeight({
+				nextHeight: readStoredPanelHeight(
+					inlinePopoverHeightStorageKey,
+					INLINE_POPOVER_DEFAULT_HEIGHT,
+				),
+				maxHeight: getCurrentPanelMaxHeight(),
+			}),
+		);
+	}
+	if (previousFloatingPanelStorageKey !== floatingPanelHeightStorageKey) {
+		setPreviousFloatingPanelStorageKey(floatingPanelHeightStorageKey);
+		setFloatingPanelHeight(
+			clampPanelHeight({
+				nextHeight: readStoredPanelHeight(
+					floatingPanelHeightStorageKey,
+					NOTE_CHAT_FLOATING_DEFAULT_HEIGHT,
+				),
+				maxHeight: getCurrentPanelMaxHeight(),
+			}),
+		);
+	}
 	const [recipePopoverOpen, setRecipePopoverOpen] = React.useState(false);
 	const [modelPopoverOpen, setModelPopoverOpen] = React.useState(false);
 	const [selectedModelOverride, setSelectedModelOverride] = React.useState<{
@@ -1062,17 +1095,6 @@ const useNoteComposerController = ({
 	);
 
 	React.useEffect(() => {
-		setInlinePanelHeight((currentHeight) =>
-			clampInlinePanelHeight(currentHeight),
-		);
-	}, [clampInlinePanelHeight]);
-	React.useEffect(() => {
-		setFloatingPanelHeight((currentHeight) =>
-			clampFloatingPanelHeight(currentHeight),
-		);
-	}, [clampFloatingPanelHeight]);
-
-	React.useEffect(() => {
 		const handleWindowResize = () => {
 			setInlinePanelHeight((currentHeight) =>
 				clampInlinePanelHeight(currentHeight),
@@ -1089,39 +1111,8 @@ const useNoteComposerController = ({
 	}, [clampFloatingPanelHeight, clampInlinePanelHeight]);
 
 	React.useEffect(() => {
-		// Inline panel height restores from note-scoped localStorage and viewport bounds.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
-		setInlinePanelHeight(
-			clampInlinePanelHeight(
-				readStoredPanelHeight(
-					[
-						inlinePopoverHeightStorageKey,
-						INLINE_POPOVER_HEIGHT_LEGACY_STORAGE_KEY,
-					],
-					INLINE_POPOVER_DEFAULT_HEIGHT,
-				),
-			),
-		);
-	}, [clampInlinePanelHeight, inlinePopoverHeightStorageKey]);
-
-	React.useEffect(() => {
-		storePanelHeight(
-			[inlinePopoverHeightStorageKey, INLINE_POPOVER_HEIGHT_LEGACY_STORAGE_KEY],
-			inlinePanelHeight,
-		);
+		storePanelHeight(inlinePopoverHeightStorageKey, inlinePanelHeight);
 	}, [inlinePanelHeight, inlinePopoverHeightStorageKey]);
-	React.useEffect(() => {
-		// Floating panel height restores from note-scoped localStorage and viewport bounds.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
-		setFloatingPanelHeight(
-			clampFloatingPanelHeight(
-				readStoredPanelHeight(
-					floatingPanelHeightStorageKey,
-					NOTE_CHAT_FLOATING_DEFAULT_HEIGHT,
-				),
-			),
-		);
-	}, [clampFloatingPanelHeight, floatingPanelHeightStorageKey]);
 	React.useEffect(() => {
 		storePanelHeight(floatingPanelHeightStorageKey, floatingPanelHeight);
 	}, [floatingPanelHeight, floatingPanelHeightStorageKey]);

@@ -38,15 +38,13 @@ describe("note composer panel storage", () => {
 		).toBe("graneri.noteComposer.inlinePopoverHeight.note:draft.mobile");
 	});
 
-	it("reads the first finite stored height and stores all requested keys", () => {
-		window.localStorage.setItem("legacy", "not-a-number");
+	it("reads and stores a finite height for one scoped key", () => {
 		window.localStorage.setItem("current", "456");
 
-		expect(readStoredPanelHeight(["legacy", "current"], 384)).toBe(456);
+		expect(readStoredPanelHeight("current", 384)).toBe(456);
 
-		storePanelHeight(["legacy", "current"], 512);
+		storePanelHeight("current", 512);
 
-		expect(window.localStorage.getItem("legacy")).toBe("512");
 		expect(window.localStorage.getItem("current")).toBe("512");
 	});
 

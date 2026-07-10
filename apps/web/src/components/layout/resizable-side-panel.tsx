@@ -212,7 +212,7 @@ function useResizableSidePanel({
 			viewportWidth,
 		],
 	);
-	const [panelWidth, setPanelWidth] = React.useState(() =>
+	const [requestedPanelWidth, setPanelWidth] = React.useState(() =>
 		clampPanelWidth(
 			isMobile
 				? typeof window === "undefined"
@@ -222,6 +222,7 @@ function useResizableSidePanel({
 			bounds,
 		),
 	);
+	const panelWidth = clampPanelWidth(requestedPanelWidth, bounds);
 	const panelWidthRef = React.useRef(panelWidth);
 	const resizeGrabOffsetRef = React.useRef(0);
 	const pendingPanelWidthRef = React.useRef<number | null>(null);
@@ -376,10 +377,6 @@ function useResizableSidePanel({
 		mobileMinWidth,
 		storageKey,
 	]);
-
-	React.useEffect(() => {
-		setPanelWidth((currentWidth) => clampPanelWidth(currentWidth, bounds));
-	}, [bounds]);
 
 	const resizeHandleKeyDown = React.useCallback(
 		(event: React.KeyboardEvent<HTMLButtonElement>) => {

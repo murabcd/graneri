@@ -56,6 +56,23 @@ export function NavPlatform({
 	onInboxToggle: () => void;
 }) {
 	const viewItems = items.filter((item) => item.action !== "search");
+	const handleOpenAskAiShortcut = React.useEffectEvent(() => {
+		onViewChange("chat");
+	});
+
+	React.useEffect(() => {
+		const down = (event: KeyboardEvent) => {
+			if (!matchesCommandShortcut(event, { altKey: true, code: "KeyN" })) {
+				return;
+			}
+
+			event.preventDefault();
+			handleOpenAskAiShortcut();
+		};
+
+		document.addEventListener("keydown", down);
+		return () => document.removeEventListener("keydown", down);
+	}, []);
 
 	return (
 		<SidebarCollapsibleGroup
@@ -89,6 +106,9 @@ export function NavPlatform({
 							>
 								{item.icon && <item.icon />}
 								<span>{item.title}</span>
+								{item.action === "view" && item.view === "chat" ? (
+									<SidebarMenuShortcutHint altKey keyLabel="N" />
+								) : null}
 								{item.badge ? (
 									<span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-accent px-1 text-xs font-medium tabular-nums text-sidebar-accent-foreground">
 										{formatBadgeCount(item.badge)}
@@ -110,13 +130,7 @@ function NewNoteButton({ onCreateNote }: { onCreateNote: () => void }) {
 
 	React.useEffect(() => {
 		const down = (event: KeyboardEvent) => {
-			if (
-				event.defaultPrevented ||
-				!(event.metaKey || event.ctrlKey) ||
-				event.altKey ||
-				event.shiftKey ||
-				event.key.toLowerCase() !== "n"
-			) {
+			if (!matchesCommandShortcut(event, { code: "KeyN" })) {
 				return;
 			}
 
@@ -158,13 +172,7 @@ function SearchButton({
 
 	React.useEffect(() => {
 		const down = (event: KeyboardEvent) => {
-			if (
-				event.defaultPrevented ||
-				!(event.metaKey || event.ctrlKey) ||
-				event.altKey ||
-				event.shiftKey ||
-				event.key.toLowerCase() !== "k"
-			) {
+			if (!matchesCommandShortcut(event, { code: "KeyK" })) {
 				return;
 			}
 
@@ -201,11 +209,37 @@ function formatBadgeCount(value: number) {
 	return value > 99 ? "99+" : String(value);
 }
 
-function SidebarMenuShortcutHint({ keyLabel }: { keyLabel: string }) {
+function SidebarMenuShortcutHint({
+	altKey = false,
+	keyLabel,
+}: {
+	altKey?: boolean;
+	keyLabel: string;
+}) {
 	return (
 		<ShortcutHint
+			altKey={altKey}
 			keyLabel={keyLabel}
 			className="border border-border/60 bg-muted px-1.5 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
 		/>
+	);
+}
+
+function matchesCommandShortcut(
+	event: KeyboardEvent,
+	{
+		altKey = false,
+		code,
+	}: {
+		altKey?: boolean;
+		code: KeyboardEvent["code"];
+	},
+) {
+	return (
+		!event.defaultPrevented &&
+		(event.metaKey || event.ctrlKey) &&
+		event.altKey === altKey &&
+		!event.shiftKey &&
+		event.code === code
 	);
 }

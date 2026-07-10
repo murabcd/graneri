@@ -2,9 +2,11 @@ import { Kbd } from "@workspace/ui/components/kbd";
 import { cn } from "@workspace/ui/lib/utils";
 
 export function ShortcutHint({
+	altKey = false,
 	keyLabel,
 	className,
 }: {
+	altKey?: boolean;
 	keyLabel: string;
 	className?: string;
 }) {
@@ -14,6 +16,7 @@ export function ShortcutHint({
 			className={cn("ml-auto shrink-0 font-mono", className)}
 		>
 			<span className="text-xs">⌘</span>
+			{altKey ? <span className="text-xs">⌥</span> : null}
 			<span>{keyLabel}</span>
 		</Kbd>
 	);

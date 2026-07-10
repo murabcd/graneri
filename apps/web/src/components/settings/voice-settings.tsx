@@ -35,6 +35,25 @@ import { useDesktopVoiceSettings } from "./use-desktop-voice-settings";
 
 const SYSTEM_DEFAULT_MICROPHONE_VALUE = "system-default";
 
+const handleMicrophoneAction = async (value: string) => {
+	if (value !== "open-sound-settings") {
+		return;
+	}
+
+	try {
+		if (!(await openDesktopSoundSettings())) {
+			throw new Error("Desktop sound settings are unavailable.");
+		}
+	} catch (error) {
+		logError({
+			event: "client.error",
+			error,
+			message: "Failed to open Sound settings",
+		});
+		toast.error("Failed to open Sound settings");
+	}
+};
+
 export function VoiceSettings() {
 	const isDesktopApp = isDesktopRuntime();
 	const desktopVoice = useDesktopVoiceSettings(isDesktopApp);
@@ -73,24 +92,6 @@ export function VoiceSettings() {
 			toast.error("Failed to update transcription language");
 		} finally {
 			setIsSaving(false);
-		}
-	};
-
-	const handleMicrophoneAction = async (value: string) => {
-		if (value !== "open-sound-settings") {
-			return;
-		}
-		try {
-			if (!(await openDesktopSoundSettings())) {
-				throw new Error("Desktop sound settings are unavailable.");
-			}
-		} catch (error) {
-			logError({
-				event: "client.error",
-				error,
-				message: "Failed to open Sound settings",
-			});
-			toast.error("Failed to open Sound settings");
 		}
 	};
 

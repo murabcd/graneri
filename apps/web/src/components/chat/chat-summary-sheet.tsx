@@ -465,9 +465,8 @@ function ChatSummaryPanel({
 				preview: source.preview,
 				content: source.content,
 			});
-			onOpenSummary();
 		},
-		[addTab, onOpenSummary, workspaceSources],
+		[addTab, workspaceSources],
 	);
 	const openFileSearch = React.useCallback(() => {
 		setFileSearchOpen(true);

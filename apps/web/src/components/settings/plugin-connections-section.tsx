@@ -9,38 +9,11 @@ import {
 import { Field } from "@workspace/ui/components/field";
 import { Label } from "@workspace/ui/components/label";
 import { MessageCircle, MoreHorizontal, Settings, Trash2 } from "lucide-react";
-import type React from "react";
+import {
+	pluginGroups,
+	type ToolConnection,
+} from "@/components/settings/plugin-connections";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
-
-export const pluginGroups = [
-	"Productivity",
-	"Tracking",
-	"Knowledge",
-	"Design",
-	"Analytics",
-	"Meetings",
-] as const;
-
-export type PluginGroup = (typeof pluginGroups)[number];
-
-type PluginInstallation =
-	| { status: "available" }
-	| {
-			status: "installed";
-			sourceId: string;
-			provider: ChatAppSourceProvider;
-			onUninstall?: () => void;
-	  };
-
-export type ToolConnection = {
-	group: PluginGroup;
-	icon: React.ReactNode;
-	name: string;
-	buttonDisabled?: boolean;
-	buttonIcon?: React.ReactNode;
-	installation: PluginInstallation;
-	onConfigure: () => void;
-};
 
 export function PluginConnectionsSection({
 	connections,

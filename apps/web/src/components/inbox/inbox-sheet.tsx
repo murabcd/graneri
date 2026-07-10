@@ -88,12 +88,16 @@ import { getAvatarSrc } from "@/lib/avatar";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import { getErrorMessage } from "@/lib/error-message";
 import { api } from "../../../../../convex/_generated/api";
-import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const JiraLogo = Icons.jiraLogo;
 
 type InboxView = "all" | "unread" | "archived";
 type InboxItem = FunctionReturnType<typeof api.inboxItems.list>[number];
+type InboxCurrentUser = {
+	name: string;
+	email: string;
+	avatar: string;
+};
 
 const INBOX_VIEW_OPTIONS: Array<{
 	value: InboxView;
@@ -111,11 +115,7 @@ export type InboxSheetProps = {
 	sidebarState: "expanded" | "collapsed";
 	isMobile: boolean;
 	initialAllItems?: InboxItem[];
-	currentUser: {
-		name: string;
-		email: string;
-		avatar: string;
-	};
+	currentUser: InboxCurrentUser;
 	desktopSafeTop?: boolean;
 	onMarkItemsRead?: (itemIds: string[]) => void;
 	onMarkAllRead?: () => void;
@@ -132,6 +132,7 @@ export function InboxSheet({
 	onMarkItemsRead,
 	onMarkAllRead,
 }: InboxSheetProps) {
+	const activeWorkspaceId = useActiveWorkspaceId();
 	const sidebarOffset =
 		sidebarState === "collapsed" ? SIDEBAR_WIDTH_ICON : SIDEBAR_WIDTH;
 	const sidebarOffsetPx =
@@ -154,6 +155,7 @@ export function InboxSheet({
 		storageKey: INBOX_PANEL_PINNED_STORAGE_KEY,
 	});
 	const [view, setView] = React.useState<InboxView>("all");
+	const inboxPanelKey = `${activeWorkspaceId ?? "no-workspace"}:${view}`;
 	const [markAllReadRequestId, setMarkAllReadRequestId] = React.useState(0);
 	const [archiveReadRequestId, setArchiveReadRequestId] = React.useState(0);
 	const [clearArchivedRequestId, setClearArchivedRequestId] = React.useState(0);
@@ -212,6 +214,7 @@ export function InboxSheet({
 				</div>
 				<div className="flex min-h-0 flex-1 flex-col">
 					<InboxPanel
+						key={inboxPanelKey}
 						view={view}
 						initialAllItems={initialAllItems}
 						currentUser={currentUser}
@@ -267,6 +270,7 @@ export function InboxSheet({
 					onTogglePinned={() => {}}
 				/>
 				<InboxPanel
+					key={inboxPanelKey}
 					view={view}
 					initialAllItems={initialAllItems}
 					currentUser={currentUser}
@@ -300,11 +304,7 @@ function getInboxAvatarProps({
 		actorAvatarUrl?: string | null;
 		actorDisplayName?: string | null;
 	};
-	currentUser: {
-		name: string;
-		email: string;
-		avatar: string;
-	};
+	currentUser: InboxCurrentUser;
 }) {
 	if (item.provider === "jira") {
 		return null;
@@ -614,17 +614,6 @@ const InboxPanel = React.memo(function InboxPanel({
 	}, [items, markAllReadRequestId]);
 
 	React.useEffect(() => {
-		const nextScope = `${activeWorkspaceId ?? "no-workspace"}:${view}`;
-
-		if (!nextScope) {
-			return;
-		}
-
-		setOptimisticReadItemIds(new Set());
-		setOptimisticRemovedItemIds(new Set());
-	}, [activeWorkspaceId, view]);
-
-	React.useEffect(() => {
 		if (archiveReadRequestId === 0 || view === "archived") {
 			return;
 		}
@@ -658,10 +647,7 @@ const InboxPanel = React.memo(function InboxPanel({
 		});
 	}, [clearArchivedRequestId, items, view]);
 
-	const handleMarkItemRead = async (item: {
-		_id: Id<"inboxItems">;
-		isRead: boolean;
-	}) => {
+	const handleMarkItemRead = async (item: InboxItem) => {
 		const optimisticItemId = String(item._id);
 
 		if (item.isRead || optimisticReadItemIds.has(optimisticItemId)) {
@@ -687,13 +673,7 @@ const InboxPanel = React.memo(function InboxPanel({
 		}
 	};
 
-	const handleOpenItem = async (item: {
-		_id: Id<"inboxItems">;
-		provider: "jira" | "notes";
-		kind: "jira-mention" | "note-comment";
-		url: string;
-		isRead: boolean;
-	}) => {
+	const handleOpenItem = async (item: InboxItem) => {
 		// Opening any inbox item should mark it read before navigation or external handoff.
 		// react-doctor-disable-next-line react-doctor/async-defer-await
 		await handleMarkItemRead(item);
@@ -775,104 +755,123 @@ const InboxPanel = React.memo(function InboxPanel({
 				{visibleItems.map((item) => {
 					const isRead =
 						item.isRead || optimisticReadItemIds.has(String(item._id));
-					const avatarProps = getInboxAvatarProps({ item, currentUser });
-					const itemTitle = formatInboxTitle(
-						item.kind,
-						item.title,
-						item.actorDisplayName,
-					);
-
 					return (
-						<div
+						<InboxItemRow
 							key={item._id}
-							className="group relative border-b transition-colors hover:bg-accent/20"
-						>
-							<button
-								type="button"
-								aria-label={`Mark ${itemTitle} as read`}
-								className="absolute inset-0 z-0 cursor-pointer rounded-none focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								onClick={() => {
-									void handleMarkItemRead(item).catch((error) => {
-										toast.error(
-											getErrorMessage(
-												error,
-												"Failed to mark inbox item as read",
-											),
-										);
-									});
-								}}
-							/>
-							<div className="relative z-10">
-								<div
-									className={cn(
-										"pointer-events-none grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 p-3",
-										isRead && "opacity-50",
-									)}
-								>
-									<div className="flex pt-0.5">
-										{item.provider === "jira" ? (
-											<JiraLogo className="size-4" />
-										) : (
-											<Avatar className="size-4">
-												<AvatarImage
-													src={avatarProps?.avatarSrc}
-													alt={avatarProps?.name ?? "Comment author"}
-												/>
-												<AvatarFallback className="text-[9px] font-medium">
-													{getAvatarLabel(avatarProps?.name)}
-												</AvatarFallback>
-											</Avatar>
-										)}
-									</div>
-									<div className="min-w-0">
-										<div className="flex items-start justify-between gap-3">
-											<p className="truncate text-sm font-medium text-foreground">
-												{itemTitle}
-											</p>
-											<p className="shrink-0 pt-0.5 text-xs text-muted-foreground">
-												{formatInboxTimestamp(item.occurredAt)}
-											</p>
-										</div>
-									</div>
-									<div className="col-start-2 min-w-0">
-										<p className="truncate text-xs leading-4 text-muted-foreground">
-											{item.issueKey}
-										</p>
-									</div>
-									<div className="col-start-2 min-w-0">
-										<p className="line-clamp-3 text-sm text-muted-foreground">
-											{formatInboxPreview(item.preview)}
-										</p>
-									</div>
-								</div>
-								<div className="px-3 pb-3 pl-9">
-									<Button
-										type="button"
-										variant="outline"
-										size="sm"
-										className={cn(
-											"relative z-10 cursor-pointer text-xs",
-											isRead && "opacity-50",
-										)}
-										onClick={() => {
-											void handleOpenItem(item).catch((error) => {
-												toast.error(
-													getErrorMessage(error, "Failed to open inbox item"),
-												);
-											});
-										}}
-									>
-										Reply
-									</Button>
-								</div>
-							</div>
-						</div>
+							item={item}
+							currentUser={currentUser}
+							isRead={isRead}
+							onMarkRead={handleMarkItemRead}
+							onOpen={handleOpenItem}
+						/>
 					);
 				})}
 			</div>
 		</ScrollArea>
 	);
 });
+
+function InboxItemRow({
+	item,
+	currentUser,
+	isRead,
+	onMarkRead,
+	onOpen,
+}: {
+	item: InboxItem;
+	currentUser: InboxCurrentUser;
+	isRead: boolean;
+	onMarkRead: (item: InboxItem) => Promise<void>;
+	onOpen: (item: InboxItem) => Promise<void>;
+}) {
+	const avatarProps = getInboxAvatarProps({ item, currentUser });
+	const itemTitle = formatInboxTitle(
+		item.kind,
+		item.title,
+		item.actorDisplayName,
+	);
+
+	return (
+		<div className="group relative border-b transition-colors hover:bg-accent/20">
+			<button
+				type="button"
+				aria-label={`Mark ${itemTitle} as read`}
+				className="absolute inset-0 z-0 cursor-pointer rounded-none focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				onClick={() => {
+					void onMarkRead(item).catch((error) => {
+						toast.error(
+							getErrorMessage(error, "Failed to mark inbox item as read"),
+						);
+					});
+				}}
+			/>
+			<div className="relative z-10">
+				<div
+					className={cn(
+						"pointer-events-none grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 p-3",
+						isRead && "opacity-50",
+					)}
+				>
+					<div className="flex pt-0.5">
+						{item.provider === "jira" ? (
+							<JiraLogo className="size-4" />
+						) : (
+							<Avatar className="size-4">
+								<AvatarImage
+									src={avatarProps?.avatarSrc}
+									alt={avatarProps?.name ?? "Comment author"}
+								/>
+								<AvatarFallback className="text-[9px] font-medium">
+									{getAvatarLabel(avatarProps?.name)}
+								</AvatarFallback>
+							</Avatar>
+						)}
+					</div>
+					<div className="min-w-0">
+						<div className="flex items-start justify-between gap-3">
+							<p className="truncate text-sm font-medium text-foreground">
+								{itemTitle}
+							</p>
+							<p className="shrink-0 pt-0.5 text-xs text-muted-foreground">
+								{formatInboxTimestamp(item.occurredAt)}
+							</p>
+						</div>
+					</div>
+					<div className="col-start-2 min-w-0">
+						<p className="truncate text-xs leading-4 text-muted-foreground">
+							{item.issueKey}
+						</p>
+					</div>
+					<div className="col-start-2 min-w-0">
+						<p className="line-clamp-3 text-sm text-muted-foreground">
+							{formatInboxPreview(item.preview)}
+						</p>
+					</div>
+				</div>
+				<div className="px-3 pb-3 pl-9">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className={cn(
+							"relative z-10 cursor-pointer text-xs",
+							isRead && "opacity-50",
+						)}
+						onClick={() => {
+							void onOpen(item).catch((error) => {
+								toast.error(
+									getErrorMessage(error, "Failed to open inbox item"),
+								);
+							});
+						}}
+					>
+						Reply
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+}
 
 function getInboxEmptyDescription(view: InboxView) {
 	switch (view) {

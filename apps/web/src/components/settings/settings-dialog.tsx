@@ -131,10 +131,8 @@ import {
 	type YandexTrackerConnectionFormState,
 	type YandexTrackerOrgType,
 } from "@/components/settings/connection-settings-state";
-import {
-	PluginConnectionsSection,
-	type ToolConnection,
-} from "@/components/settings/plugin-connections-section";
+import type { ToolConnection } from "@/components/settings/plugin-connections";
+import { PluginConnectionsSection } from "@/components/settings/plugin-connections-section";
 import { PreferencesSettings } from "@/components/settings/preferences-settings";
 import { RemoteMcpDialog } from "@/components/settings/remote-mcp-dialog";
 import { SettingsSwitchRow } from "@/components/settings/settings-switch-row";
