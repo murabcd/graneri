@@ -34,16 +34,16 @@ typed client function references and generated data-model types, not server
 implementation coupling. Hosted chat helpers own shared run-plan assembly,
 prompt construction, active-turn input preparation, branch preparation,
 tool-loop setup, message persistence payloads, and active-stream persistence
-behavior; callers provide runtime-specific reads, writes, request transport,
-and desktop-local capabilities through small adapter callbacks.
+behavior; the hosted web route provides Convex reads and writes, request
+transport, and desktop-local tool declarations through small adapter callbacks.
 Turn input buffering is separate from active-stream transport: the hosted turn
 input buffer owns pending steer/mailbox ordering, wait-agent activity
 notifications, and mailbox deferral rules, while active-stream sessions own
 broadcast, replay, abort, and persistence.
-Hosted and desktop chat routes share the same user-message persistence helper
-for normal saves, queued replay accepts, queued steer batch accepts, and
-continued-run message appends; route handlers keep runtime-specific telemetry,
-HTTP response formatting, and local capability adapters.
+The hosted chat route uses the shared user-message persistence helper for normal
+saves, queued replay accepts, queued steer batch accepts, and continued-run
+message appends; the route keeps HTTP telemetry and response formatting while
+shared modules own chat behavior.
 The hosted web chat route delegates active-run policy, same-run validation,
 queued acceptance headers, assistant-run start, stream finalization, initial
 AI SDK stream piping, and reconnect stream piping to its hosted stream runtime
@@ -134,8 +134,8 @@ accepted input as an empty successful stream instead of rolling it back. Manual
 steer must be prepared as a queued steer intent and sent through
 `/api/chat/steer` with both `steerQueuedMessageId` and the expected active
 `continueRunId`; ordinary `/api/chat` requests must reject steer payloads
-instead of falling back to implicit behavior. Hosted web and desktop direct
-routes must return the same structured `{ error, errorCode }` JSON body for
+instead of falling back to implicit behavior. The hosted route must return a
+structured `{ error, errorCode }` JSON body for
 queued replay and steer validation failures, and must reject malformed IDs
 before Convex state lookup or mutation. Steer input is queue-id driven: the
 server reconstructs the user message from the claimed durable queue row and must
@@ -253,6 +253,13 @@ GRANERI_HOSTED_SITE_URL=https://<hosted-app-origin>
 
 Local development builds stay local. `bun dev` and desktop dev runs load local
 runtime values and connect to the development Convex deployment.
+Rebuilding or packaging the desktop app does not deploy its hosted dependencies.
+Before distributing or installing a desktop build that depends on new Convex
+functions, HTTP actions, or schema, deploy those changes to the exact hosted
+Convex deployment embedded in the package. Deploy associated Vercel handlers
+before the desktop build depends on them. Verify the deployed function and HTTP
+route inventory rather than treating a successful desktop build as evidence
+that its hosted runtime is compatible.
 Production desktop packages default to the `com.graneri.desktop` bundle
 identifier. Local/dev packages keep `dev.graneri.desktop` so installed
 production builds and repo-built verification bundles do not share macOS app
@@ -268,8 +275,8 @@ instead of Electron Builder's automatic discovery.
 
 ## Desktop AI
 
-The desktop local server owns desktop AI HTTP routes. Renderer fetches and
-native desktop capture both cross this boundary before any OpenAI request:
+The desktop local server owns the loopback HTTP boundary used by renderer
+fetches and native capture:
 
 - `/api/chat`
 - `/api/chat/steer`
@@ -278,18 +285,35 @@ native desktop capture both cross this boundary before any OpenAI request:
 - `/api/apply-template`
 - `/api/enhance-note`
 - `/api/realtime-transcription-session`
+- `/api/dictation-transcription`
 
-Packaged desktop apps must not embed `OPENAI_API_KEY`. Local development uses
-the same desktop local server route boundary, with `.env.local` supplying
-server-side secrets. If hosted site config is present and no process-local
-OpenAI key exists, the desktop local server proxies AI routes to
-`GRANERI_HOSTED_SITE_URL`/`SITE_URL`. Convex HTTP is not an AI SDK streaming
-fallback; it remains the durable backend, auth/OAuth callback surface, and
-state coordination layer. Release behavior must not depend on
+Chat, note generation, template application, and realtime session creation are
+transport-only proxies to the web server in every environment. Dictation
+transcription crosses the authenticated Convex HTTP boundary directly. Local
+folder tool execution remains inside the desktop process because it operates on
+folders the user explicitly shared with the installed app.
+
+Packaged desktop apps must not embed `OPENAI_API_KEY`, and the Electron process
+must never consume it even when one exists in its local environment. During
+development, the loopback server proxies hosted AI routes to the matching Vite
+handlers at `SITE_URL`; production proxies those same routes to the Vercel
+deployment at `GRANERI_HOSTED_SITE_URL`/`SITE_URL`. `.env.local` supplies the
+OpenAI key only to the local web server handlers. Convex HTTP is not an AI SDK
+streaming fallback; it remains the durable backend, auth/OAuth callback surface,
+and state coordination layer. Release behavior must not depend on
 terminal-inherited shell environment.
 Hosted production deployments must expose the same AI HTTP routes as real
 serverless functions under `/api/*`; Vite dev/preview middleware is only the
 local development surface and is not a Vercel production route by itself.
+Each model-producing hosted chat turn must pass through Convex admission before
+Vercel starts or steers an AI SDK stream. Convex authenticates and rate-limits
+the stable identity; Vercel hashes that identity and sends it as OpenAI's safety
+identifier. Reconnect and stop-only requests do not consume chat admission.
+The OpenAI key and streaming/tool loop remain in the web server handler (Vite
+locally and Vercel in production), while Convex continues to own authorization
+and durable run, queue, message, and lifecycle state. Development and
+production therefore execute the same chat implementation and identity
+boundary.
 
 Local-folder chat uses a hosted-model, desktop-tool bridge:
 
@@ -469,12 +493,12 @@ private duplicate list of renderer route prefixes.
 
 The desktop local server keeps Node HTTP transport and route dispatch in
 `apps/desktop/src/local-server.mjs`. Reusable HTTP/CORS behavior, hosted AI
-proxying, note AI routes, realtime transcription session creation, and local
-folder tool execution live behind dedicated local-server modules. Chat
-HTTP response formatting and desktop-local logging may remain in the local
-server module, while shared hosted chat helpers own prompt construction,
-run-plan assembly, tool-loop setup, branch preparation, save payloads,
-active-stream persistence, and stream finalization mechanics.
+proxying, realtime transcription session creation, and local folder tool
+execution live behind dedicated local-server modules. Electron contains no
+model, response, lifecycle, or AI SDK implementation; the loopback server
+preserves hosted request and response semantics. Shared hosted chat helpers own
+prompt construction, run-plan assembly, tool-loop setup, branch preparation,
+save payloads, active-stream persistence, and stream finalization mechanics.
 
 Desktop packages must keep the app runtime in `Contents/Resources/app.asar`.
 Only native helpers and bundled media tools may be unpacked into

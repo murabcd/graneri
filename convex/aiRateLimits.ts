@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 
-type AiRateLimitOperation = "dictation" | "realtime-session";
+type AiRateLimitOperation = "chat-turn" | "dictation" | "realtime-session";
 
 type AiRateLimitPolicy = {
 	capacity: number;
@@ -10,6 +10,10 @@ type AiRateLimitPolicy = {
 };
 
 const aiRateLimitPolicies: Record<AiRateLimitOperation, AiRateLimitPolicy> = {
+	"chat-turn": {
+		capacity: 10,
+		refillIntervalMs: 5_000,
+	},
 	dictation: {
 		capacity: 6,
 		refillIntervalMs: 10_000,

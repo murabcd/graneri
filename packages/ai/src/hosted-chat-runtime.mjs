@@ -225,8 +225,7 @@ export const validateHostedChatSteerRoute = ({
 
 	if (steerQueuedMessageId && replayQueuedMessageId) {
 		return {
-			error:
-				"Queued message replay and steering cannot be requested together.",
+			error: "Queued message replay and steering cannot be requested together.",
 			errorCode: "queued_message_mode_conflict",
 			statusCode: 400,
 		};
@@ -566,7 +565,9 @@ export const prepareHostedChatBranch = ({
 			? branchStoredMessages.slice(0, editedMessageIndex)
 			: branchStoredMessages;
 	const baseMessages = fromHostedStoredMessages(baseStoredMessages);
-	const baseMessageIds = new Set(baseMessages.map((baseMessage) => baseMessage.id));
+	const baseMessageIds = new Set(
+		baseMessages.map((baseMessage) => baseMessage.id),
+	);
 	const pendingIncomingMessages = [];
 	for (const pendingMessage of pendingMessages) {
 		if (!pendingMessage || baseMessageIds.has(pendingMessage.id)) {
@@ -691,6 +692,7 @@ export const buildHostedChatRuntimePrompt = ({
 
 export const generateHostedChatTitle = async ({
 	assistantMessage,
+	safetyIdentifier,
 	userMessage,
 }) => {
 	const userText = getHostedChatMessageText(userMessage);
@@ -705,6 +707,11 @@ export const generateHostedChatTitle = async ({
 	try {
 		const { text } = await generateText({
 			model: openai(CHAT_TITLE_MODEL_ID),
+			providerOptions: {
+				openai: {
+					safetyIdentifier,
+				},
+			},
 			system: CHAT_TITLE_SYSTEM_PROMPT,
 			prompt: buildChatTitlePrompt({
 				userText,

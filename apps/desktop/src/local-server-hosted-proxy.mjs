@@ -2,9 +2,6 @@ import { Readable } from "node:stream";
 
 const getHostedApiBaseUrl = () => process.env.SITE_URL?.trim() || "";
 
-export const shouldProxyHostedAiRequest = () =>
-	!process.env.OPENAI_API_KEY && Boolean(getHostedApiBaseUrl());
-
 export const proxyHostedAiRequest = async ({
 	path,
 	request,

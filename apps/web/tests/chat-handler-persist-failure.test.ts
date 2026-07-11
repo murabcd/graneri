@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { type FunctionReference, getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	hostedChatReplayAcceptedHeader,
@@ -15,13 +16,20 @@ import {
 } from "../server/chat-handler";
 
 const convexMock = vi.hoisted(() => ({
+	authorizeChatTurn: vi.fn(),
 	mutation: vi.fn(),
 	query: vi.fn(),
 }));
 
 vi.mock("convex/browser", () => ({
 	ConvexHttpClient: class {
-		mutation = convexMock.mutation;
+		mutation = (
+			functionReference: FunctionReference<"mutation">,
+			args: Record<string, unknown>,
+		) =>
+			getFunctionName(functionReference) === "aiAccess:authorizeChatTurn"
+				? convexMock.authorizeChatTurn(functionReference, args)
+				: convexMock.mutation(functionReference, args);
 		query = convexMock.query;
 	},
 }));
@@ -32,6 +40,10 @@ const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
 beforeEach(() => {
 	process.env.CONVEX_URL = "https://example.convex.cloud";
 	process.env.OPENAI_API_KEY = "test-key";
+	convexMock.authorizeChatTurn.mockReset();
+	convexMock.authorizeChatTurn.mockResolvedValue({
+		tokenIdentifier: "https://graneri.test|owner",
+	});
 	convexMock.query.mockReset();
 	convexMock.mutation.mockReset();
 });
@@ -255,6 +267,44 @@ describe("chat handler persistence failures", () => {
 		});
 	});
 
+	it("rate limits a model-producing turn before queue or stream mutations", async () => {
+		convexMock.query.mockResolvedValueOnce({
+			model: "gpt-5.4",
+			title: "Existing chat",
+		});
+		convexMock.query.mockResolvedValueOnce(null);
+		convexMock.authorizeChatTurn.mockRejectedValueOnce({
+			data: {
+				code: "AI_RATE_LIMITED",
+				retryAfterMs: 2_500,
+			},
+		});
+
+		const result = await postChatRequest(
+			{
+				id: "chat_1",
+				workspaceId: "workspace_1",
+				convexToken: "token_1",
+				model: "gpt-5.4",
+				appsEnabled: false,
+				message: {
+					id: "message_1",
+					role: "user",
+					parts: [{ type: "text", text: "hello" }],
+				},
+			},
+			{ includeHeaders: true },
+		);
+
+		expect(result.status).toBe(429);
+		expect(result.body).toEqual({
+			error: "Too many chat requests. Please try again shortly.",
+			errorCode: "rate_limited",
+		});
+		expect(result.headers.get("Retry-After")).toBe("3");
+		expect(convexMock.mutation).not.toHaveBeenCalled();
+	});
+
 	it("returns structured queue errors when replay lookup fails validation", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: "gpt-5.4",
@@ -307,6 +357,7 @@ describe("chat handler persistence failures", () => {
 				errorCode: "ASSISTANT_RUN_INVARIANT_VIOLATION",
 			},
 		});
+		expect(convexMock.authorizeChatTurn).not.toHaveBeenCalled();
 	});
 
 	it("returns structured lifecycle errors when reconnect lookup fails closed", async () => {
@@ -324,6 +375,7 @@ describe("chat handler persistence failures", () => {
 				errorCode: "ASSISTANT_RUN_INVARIANT_VIOLATION",
 			}),
 		});
+		expect(convexMock.authorizeChatTurn).not.toHaveBeenCalled();
 	});
 
 	it("rejects empty direct input before loading chat state", async () => {

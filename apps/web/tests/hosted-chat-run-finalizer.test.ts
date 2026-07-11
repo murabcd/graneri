@@ -64,6 +64,7 @@ const createFinalizerHarness = () => {
 		onFailed,
 		onFinalizeError,
 		reasoningEffort: "low",
+		safetyIdentifier: "hashed-user-identifier",
 		saveAssistantMessageForRun,
 		shouldGenerateChatTitle: false,
 		updateChatTitle: vi.fn(),

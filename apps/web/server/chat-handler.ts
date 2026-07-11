@@ -32,6 +32,7 @@ import {
 } from "../../../packages/ai/src/hosted-chat-runtime.mjs";
 import { createHostedChatTurnController } from "../../../packages/ai/src/hosted-chat-turn-controller.mjs";
 import { resolveLocalFolderRoots } from "../../../packages/ai/src/local-folder-tools.mjs";
+import { authorizeOpenAiRequest } from "../../../packages/ai/src/openai-admission.mjs";
 import {
 	findChatModel,
 	getChatModelProviderOptions,
@@ -458,15 +459,6 @@ export const handleChatRequest = async (
 	const resolvedReasoningEffort = normalizeReasoningEffort(
 		requestedReasoningEffort,
 	);
-	const providerOptions = getChatModelProviderOptions(resolvedModel.model, {
-		reasoningEffort: resolvedReasoningEffort,
-	});
-	logLatency("chat.model_resolved", {
-		hasProviderOptions: Boolean(providerOptions),
-		model: resolvedModel.model,
-		reasoningEffort: resolvedReasoningEffort,
-	});
-
 	const resolvedNoteId =
 		(noteContext?.noteId as Id<"notes"> | null | undefined) ??
 		storedChat?.noteId ??
@@ -495,6 +487,37 @@ export const handleChatRequest = async (
 		});
 		return;
 	}
+	const admission = await authorizeOpenAiRequest({
+		authorize: () => convexClient.mutation(api.aiAccess.authorizeChatTurn, {}),
+		rateLimitError: "Too many chat requests. Please try again shortly.",
+	});
+	if (!admission.ok) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = admission.statusCode;
+		wideEvent.error_code = admission.errorCode;
+		emitWideEvent("error");
+		sendJson(
+			response,
+			admission.statusCode,
+			{
+				error: admission.error,
+				errorCode: admission.errorCode,
+			},
+			admission.retryAfterSeconds === undefined
+				? undefined
+				: { "Retry-After": String(admission.retryAfterSeconds) },
+		);
+		return;
+	}
+	const providerOptions = getChatModelProviderOptions(resolvedModel.model, {
+		reasoningEffort: resolvedReasoningEffort,
+		safetyIdentifier: admission.safetyIdentifier,
+	});
+	logLatency("chat.model_resolved", {
+		hasProviderOptions: Boolean(providerOptions),
+		model: resolvedModel.model,
+		reasoningEffort: resolvedReasoningEffort,
+	});
 	const queuedInput = createHostedChatQueuedInput<
 		Id<"workspaces">,
 		string,
@@ -788,6 +811,7 @@ export const handleChatRequest = async (
 		noteId: resolvedNoteId,
 		queuedInput,
 		reasoningEffort: resolvedReasoningEffort,
+		safetyIdentifier: admission.safetyIdentifier,
 		replayQueuedMessageId,
 		response,
 		sendJson,

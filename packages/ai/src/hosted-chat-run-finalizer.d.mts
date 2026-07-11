@@ -75,6 +75,7 @@ export declare const createHostedAssistantRunFinalizer: <
 		responseMessage: UIMessage;
 	}) => void;
 	reasoningEffort: ReasoningEffort;
+	safetyIdentifier: string;
 	saveAssistantMessageForRun: (
 		args: SaveAssistantMessageForRunArgs<
 			WorkspaceId,

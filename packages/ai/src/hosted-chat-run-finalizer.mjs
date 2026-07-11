@@ -1,8 +1,8 @@
+import { getConvexErrorData } from "./convex-error.mjs";
 import {
 	buildHostedChatSaveMessageArgs,
 	generateHostedChatTitle,
 } from "./hosted-chat-runtime.mjs";
-import { getConvexErrorData } from "./convex-error.mjs";
 
 const getConvexErrorCode = (error) => {
 	const data = getConvexErrorData(error);
@@ -28,6 +28,7 @@ export const createHostedAssistantRunFinalizer = ({
 	onFinalizeError,
 	onTitleGenerationError,
 	reasoningEffort,
+	safetyIdentifier,
 	saveAssistantMessageForRun,
 	shouldGenerateChatTitle,
 	updateChatTitle,
@@ -83,6 +84,7 @@ export const createHostedAssistantRunFinalizer = ({
 					const generatedChatTitle = await generateHostedChatTitle({
 						userMessage: lastUserMessage,
 						assistantMessage: runResponseMessage,
+						safetyIdentifier,
 					});
 					await updateChatTitle({
 						workspaceId,
@@ -100,11 +102,7 @@ export const createHostedAssistantRunFinalizer = ({
 	};
 
 	const closePersistenceForTerminalization = async () => {
-		try {
-			await activeStreamSession.closePersistence();
-		} catch (error) {
-			throw error;
-		}
+		await activeStreamSession.closePersistence();
 	};
 
 	const failRunAfterFinalizeError = async (error) => {

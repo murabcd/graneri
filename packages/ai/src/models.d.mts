@@ -31,12 +31,16 @@ export declare const normalizeReasoningEffort: (
 ) => ReasoningEffort;
 export declare const getChatModelProviderOptions: (
 	model: string,
-	options?: { reasoningEffort?: string | null },
+	options?: {
+		reasoningEffort?: string | null;
+		safetyIdentifier?: string;
+	},
 ) =>
 	| {
 			openai: {
-				reasoningSummary: "auto";
-				reasoningEffort: ReasoningEffort;
+				reasoningSummary?: "auto";
+				reasoningEffort?: ReasoningEffort;
+				safetyIdentifier?: string;
 			};
 	  }
 	| undefined;

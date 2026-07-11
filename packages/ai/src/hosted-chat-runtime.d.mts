@@ -18,9 +18,7 @@ export declare const getHostedChatSteerAcceptanceHeaders: (args: {
 export declare const getHostedChatReplayAcceptanceHeaders: (args: {
 	queuedMessageId: string;
 }) => Record<string, string>;
-export declare const getHostedChatConvexRouteError: (
-	error: unknown,
-) => null | {
+export declare const getHostedChatConvexRouteError: (error: unknown) => null | {
 	error: string;
 	errorCode: string;
 	statusCode: 400 | 409 | 500;
@@ -226,5 +224,6 @@ export declare const buildHostedChatRuntimePrompt: (args: {
 }) => string;
 export declare const generateHostedChatTitle: (args: {
 	assistantMessage?: UIMessage;
+	safetyIdentifier: string;
 	userMessage: UIMessage;
 }) => Promise<string>;

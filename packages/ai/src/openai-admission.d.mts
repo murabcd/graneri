@@ -1,0 +1,20 @@
+type OpenAiAdmission =
+	| {
+			ok: true;
+			safetyIdentifier: string;
+	  }
+	| {
+			error: string;
+			errorCode:
+				| "authentication_invalid"
+				| "authentication_service_unavailable"
+				| "rate_limited";
+			ok: false;
+			retryAfterSeconds?: number;
+			statusCode: 401 | 429 | 503;
+	  };
+
+export declare const authorizeOpenAiRequest: (args: {
+	authorize: () => Promise<{ tokenIdentifier: string }>;
+	rateLimitError: string;
+}) => Promise<OpenAiAdmission>;

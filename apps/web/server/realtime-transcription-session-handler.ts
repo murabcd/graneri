@@ -2,12 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
-import {
-	getConvexRetryAfterSeconds,
-	isConvexErrorCode,
-} from "../../../packages/ai/src/convex-error.mjs";
 import { getBearerTokenFromAuthorizationHeader } from "../../../packages/ai/src/hosted-chat-http.mjs";
-import { createSafetyIdentifier } from "../../../packages/ai/src/safety-identifier.mjs";
+import { authorizeOpenAiRequest } from "../../../packages/ai/src/openai-admission.mjs";
 import {
 	createRealtimeTranscriptionSession,
 	createRealtimeTranscriptionSessionOptions,
@@ -70,42 +66,24 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		throw new Error("CONVEX_URL is not configured.");
 	}
 
-	let safetyIdentifier: string;
-	try {
-		const convexClient = new ConvexHttpClient(convexUrl, {
-			auth: convexToken,
-		});
-		const authorization = await convexClient.mutation(
-			api.aiAccess.authorizeRealtimeSession,
-		);
-		safetyIdentifier = await createSafetyIdentifier(
-			authorization.tokenIdentifier,
-		);
-	} catch (error) {
-		if (isConvexErrorCode(error, "UNAUTHENTICATED")) {
-			sendError({
-				error: "Authentication is invalid.",
-				errorCode: "authentication_invalid",
-				statusCode: 401,
-			});
-			return;
-		}
-		if (isConvexErrorCode(error, "AI_RATE_LIMITED")) {
-			sendError({
-				error: "Too many realtime session requests. Please try again shortly.",
-				errorCode: "rate_limited",
-				headers: {
-					"Retry-After": String(getConvexRetryAfterSeconds(error)),
-				},
-				statusCode: 429,
-			});
-			return;
-		}
-
+	const convexClient = new ConvexHttpClient(convexUrl, {
+		auth: convexToken,
+	});
+	const admission = await authorizeOpenAiRequest({
+		authorize: () =>
+			convexClient.mutation(api.aiAccess.authorizeRealtimeSession),
+		rateLimitError:
+			"Too many realtime session requests. Please try again shortly.",
+	});
+	if (!admission.ok) {
 		sendError({
-			error: "Authentication service is unavailable.",
-			errorCode: "authentication_service_unavailable",
-			statusCode: 503,
+			error: admission.error,
+			errorCode: admission.errorCode,
+			headers:
+				admission.retryAfterSeconds === undefined
+					? undefined
+					: { "Retry-After": String(admission.retryAfterSeconds) },
+			statusCode: admission.statusCode,
 		});
 		return;
 	}
@@ -136,7 +114,7 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 	const sessionResponse = await requestOpenAiRealtimeClientSecret({
 		apiKey: process.env.OPENAI_API_KEY,
 		requestId,
-		safetyIdentifier,
+		safetyIdentifier: admission.safetyIdentifier,
 		session: createRealtimeTranscriptionSession(
 			createRealtimeTranscriptionSessionOptions({
 				language,

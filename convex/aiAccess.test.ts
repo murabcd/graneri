@@ -10,6 +10,36 @@ const ownerIdentity = {
 	tokenIdentifier: "test|owner",
 };
 
+test("chat turn authorization requires authentication", async () => {
+	const t = convexTest(schema, modules);
+
+	await expect(t.mutation(api.aiAccess.authorizeChatTurn)).rejects.toThrow(
+		"You must be signed in to access chat.",
+	);
+});
+
+test("chat turn authorization returns the authenticated stable identifier", async () => {
+	const t = convexTest(schema, modules);
+	const asOwner = t.withIdentity(ownerIdentity);
+
+	await expect(
+		asOwner.mutation(api.aiAccess.authorizeChatTurn),
+	).resolves.toEqual({ tokenIdentifier: ownerIdentity.tokenIdentifier });
+});
+
+test("chat turn authorization is rate limited per identity", async () => {
+	const t = convexTest(schema, modules);
+	const asOwner = t.withIdentity(ownerIdentity);
+
+	for (let requestIndex = 0; requestIndex < 10; requestIndex += 1) {
+		await asOwner.mutation(api.aiAccess.authorizeChatTurn);
+	}
+
+	await expect(
+		asOwner.mutation(api.aiAccess.authorizeChatTurn),
+	).rejects.toThrow("Too many AI requests");
+});
+
 test("realtime session authorization requires authentication", async () => {
 	const t = convexTest(schema, modules);
 

@@ -108,6 +108,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	noteId,
 	queuedInput,
 	reasoningEffort,
+	safetyIdentifier,
 	replayQueuedMessageId,
 	response,
 	sendJson,
@@ -139,6 +140,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	noteId: Id<"notes"> | null;
 	queuedInput: HostedQueuedInput;
 	reasoningEffort: ReasoningEffort;
+	safetyIdentifier: string;
 	replayQueuedMessageId?: Id<"assistantQueuedMessages"> | null;
 	response: ServerResponse;
 	sendJson: SendJson;
@@ -400,6 +402,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 			});
 		},
 		reasoningEffort,
+		safetyIdentifier,
 		saveAssistantMessageForRun: (args) =>
 			convexClient.mutation(api.chats.saveAssistantMessageForRun, args),
 		shouldGenerateChatTitle,

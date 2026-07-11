@@ -72,16 +72,22 @@ export const normalizeReasoningEffort = (value) =>
 
 export const getChatModelProviderOptions = (
 	model,
-	{ reasoningEffort } = {},
+	{ reasoningEffort, safetyIdentifier } = {},
 ) => {
-	if (!model?.startsWith("gpt-5")) {
+	const isReasoningModel = model?.startsWith("gpt-5");
+	if (!isReasoningModel && !safetyIdentifier) {
 		return undefined;
 	}
 
 	return {
 		openai: {
-			reasoningSummary: "auto",
-			reasoningEffort: normalizeReasoningEffort(reasoningEffort),
+			...(isReasoningModel
+				? {
+						reasoningSummary: "auto",
+						reasoningEffort: normalizeReasoningEffort(reasoningEffort),
+					}
+				: {}),
+			...(safetyIdentifier ? { safetyIdentifier } : {}),
 		},
 	};
 };
