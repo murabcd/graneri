@@ -37,13 +37,20 @@ describe("note template application requests", () => {
 					title: "Weekly sync",
 					noteText: "Reviewed progress",
 				},
-				{ fetcher },
+				{
+					fetcher,
+					resolveConvexToken: async () => "convex-token",
+				},
 			),
 		).resolves.toEqual(note);
 		expect(fetcher).toHaveBeenCalledWith(
 			"/api/enhance-note",
 			expect.objectContaining({
 				method: "POST",
+				headers: {
+					Authorization: "Bearer convex-token",
+					"Content-Type": "application/json",
+				},
 				body: JSON.stringify({
 					title: "Weekly sync",
 					noteText: "Reviewed progress",
@@ -82,6 +89,7 @@ describe("note template application requests", () => {
 					markdownUpdates.push(markdown);
 				},
 				fetcher,
+				resolveConvexToken: async () => "convex-token",
 			}),
 		).resolves.toEqual({
 			overview: ["Intro"],
@@ -93,10 +101,29 @@ describe("note template application requests", () => {
 			expect.objectContaining({
 				method: "POST",
 				headers: {
+					Authorization: "Bearer convex-token",
 					"Content-Type": "application/json",
 					Accept: "application/x-ndjson",
 				},
 			}),
 		);
+	});
+
+	it("fails closed before note generation when authentication is unavailable", async () => {
+		const fetcher = vi.fn<typeof fetch>();
+
+		await expect(
+			requestEnhancedStructuredNote(
+				{
+					title: "Weekly sync",
+					noteText: "Reviewed progress",
+				},
+				{
+					fetcher,
+					resolveConvexToken: async () => null,
+				},
+			),
+		).rejects.toThrow("Authentication is required.");
+		expect(fetcher).not.toHaveBeenCalled();
 	});
 });

@@ -74,6 +74,7 @@ const inboxItemKindValidator = v.union(
 const aiRateLimitOperationValidator = v.union(
 	v.literal("chat-turn"),
 	v.literal("dictation"),
+	v.literal("note-generation"),
 	v.literal("realtime-session"),
 );
 

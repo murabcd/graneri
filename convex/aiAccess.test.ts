@@ -70,6 +70,36 @@ test("realtime session authorization is rate limited per identity", async () => 
 	).rejects.toThrow("Too many AI requests");
 });
 
+test("note generation authorization requires authentication", async () => {
+	const t = convexTest(schema, modules);
+
+	await expect(
+		t.mutation(api.aiAccess.authorizeNoteGeneration),
+	).rejects.toThrow("You must be signed in to access note generation.");
+});
+
+test("note generation authorization returns the authenticated stable identifier", async () => {
+	const t = convexTest(schema, modules);
+	const asOwner = t.withIdentity(ownerIdentity);
+
+	await expect(
+		asOwner.mutation(api.aiAccess.authorizeNoteGeneration),
+	).resolves.toEqual({ tokenIdentifier: ownerIdentity.tokenIdentifier });
+});
+
+test("note generation routes share one rate limit per identity", async () => {
+	const t = convexTest(schema, modules);
+	const asOwner = t.withIdentity(ownerIdentity);
+
+	for (let requestIndex = 0; requestIndex < 6; requestIndex += 1) {
+		await asOwner.mutation(api.aiAccess.authorizeNoteGeneration);
+	}
+
+	await expect(
+		asOwner.mutation(api.aiAccess.authorizeNoteGeneration),
+	).rejects.toThrow("Too many AI requests");
+});
+
 test("AI rate-limit state is removed with its owner", async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);

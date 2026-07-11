@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ConvexHttpClient } from "convex/browser";
-import { api } from "../../../convex/_generated/api.js";
-import { getBearerTokenFromAuthorizationHeader } from "../../../packages/ai/src/hosted-chat-http.mjs";
-import { authorizeOpenAiRequest } from "../../../packages/ai/src/openai-admission.mjs";
 import {
 	createRealtimeTranscriptionSession,
 	createRealtimeTranscriptionSessionOptions,
 	normalizeTranscriptionLanguage,
 } from "../../../packages/ai/src/transcription.mjs";
+import {
+	authorizeHostedOpenAiRequest,
+	sendHostedOpenAiAdmissionError,
+} from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import { requestOpenAiRealtimeClientSecret } from "./openai-realtime-session-client.js";
 import { createServerWideEvent, emitServerWideEvent } from "./server-logger.js";
@@ -48,43 +48,16 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
 		sendJson(response, statusCode, { error }, headers);
 	};
-	const convexToken = getBearerTokenFromAuthorizationHeader(
-		request.headers.authorization,
-	);
-
-	if (!convexToken) {
-		sendError({
-			error: "Authentication is required.",
-			errorCode: "authentication_required",
-			statusCode: 401,
-		});
-		return;
-	}
-
-	const convexUrl = process.env.CONVEX_URL ?? process.env.VITE_CONVEX_URL;
-	if (!convexUrl) {
-		throw new Error("CONVEX_URL is not configured.");
-	}
-
-	const convexClient = new ConvexHttpClient(convexUrl, {
-		auth: convexToken,
-	});
-	const admission = await authorizeOpenAiRequest({
-		authorize: () =>
-			convexClient.mutation(api.aiAccess.authorizeRealtimeSession),
-		rateLimitError:
-			"Too many realtime session requests. Please try again shortly.",
+	const admission = await authorizeHostedOpenAiRequest({
+		operation: "realtime-session",
+		request,
 	});
 	if (!admission.ok) {
-		sendError({
-			error: admission.error,
-			errorCode: admission.errorCode,
-			headers:
-				admission.retryAfterSeconds === undefined
-					? undefined
-					: { "Retry-After": String(admission.retryAfterSeconds) },
-			statusCode: admission.statusCode,
-		});
+		wideEvent.outcome = "error";
+		wideEvent.status_code = admission.statusCode;
+		wideEvent.error_code = admission.errorCode;
+		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
+		sendHostedOpenAiAdmissionError(response, admission);
 		return;
 	}
 

@@ -1,3 +1,4 @@
+import { getCachedConvexToken } from "@/lib/convex-token";
 import { logInfo } from "@/lib/logger";
 import type { NoteTemplate } from "@/lib/note-templates";
 import {
@@ -7,6 +8,18 @@ import {
 } from "@/lib/structured-note";
 
 type NoteTemplateFetch = typeof fetch;
+type ResolveConvexToken = () => Promise<string | null>;
+
+const requireAuthorizationHeader = async (
+	resolveConvexToken: ResolveConvexToken,
+) => {
+	const convexToken = await resolveConvexToken();
+	if (!convexToken) {
+		throw new Error("Authentication is required.");
+	}
+
+	return `Bearer ${convexToken}`;
+};
 
 export type EnhancedStructuredNoteRequest = {
 	title: string;
@@ -17,11 +30,19 @@ export type EnhancedStructuredNoteRequest = {
 
 export const requestEnhancedStructuredNote = async (
 	body: EnhancedStructuredNoteRequest,
-	{ fetcher = fetch }: { fetcher?: NoteTemplateFetch } = {},
+	{
+		fetcher = fetch,
+		resolveConvexToken = getCachedConvexToken,
+	}: {
+		fetcher?: NoteTemplateFetch;
+		resolveConvexToken?: ResolveConvexToken;
+	} = {},
 ) => {
+	const authorization = await requireAuthorizationHeader(resolveConvexToken);
 	const response = await fetcher("/api/enhance-note", {
 		method: "POST",
 		headers: {
+			Authorization: authorization,
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(body),
@@ -75,16 +96,20 @@ export const requestTemplateStructuredNote = async ({
 	template,
 	onMarkdown,
 	fetcher = fetch,
+	resolveConvexToken = getCachedConvexToken,
 }: {
 	title: string;
 	noteText: string;
 	template: NoteTemplate;
 	onMarkdown: (markdown: string) => void;
 	fetcher?: NoteTemplateFetch;
+	resolveConvexToken?: ResolveConvexToken;
 }) => {
+	const authorization = await requireAuthorizationHeader(resolveConvexToken);
 	const response = await fetcher("/api/apply-template", {
 		method: "POST",
 		headers: {
+			Authorization: authorization,
 			"Content-Type": "application/json",
 			Accept: "application/x-ndjson",
 		},

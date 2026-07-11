@@ -6,6 +6,7 @@ import { requireIdentity } from "./domain";
 
 const aiAccessPolicies = {
 	"chat-turn": { accessLabel: "chat" },
+	"note-generation": { accessLabel: "note generation" },
 	"realtime-session": { accessLabel: "realtime transcription" },
 } as const;
 
@@ -35,6 +36,14 @@ export const authorizeChatTurn = mutation({
 		tokenIdentifier: v.string(),
 	}),
 	handler: async (ctx) => await authorizeAiRequest(ctx, "chat-turn"),
+});
+
+export const authorizeNoteGeneration = mutation({
+	args: {},
+	returns: v.object({
+		tokenIdentifier: v.string(),
+	}),
+	handler: async (ctx) => await authorizeAiRequest(ctx, "note-generation"),
 });
 
 export const authorizeRealtimeSession = mutation({

@@ -309,6 +309,12 @@ Each model-producing hosted chat turn must pass through Convex admission before
 Vercel starts or steers an AI SDK stream. Convex authenticates and rate-limits
 the stable identity; Vercel hashes that identity and sends it as OpenAI's safety
 identifier. Reconnect and stop-only requests do not consume chat admission.
+Hosted note enhancement and template application follow the same boundary:
+their renderer requests carry the current Convex bearer token, both routes
+consume one shared per-identity `note-generation` admission bucket, and the web
+handler sends only the hashed stable identity to OpenAI as its safety
+identifier. Anonymous requests and unavailable admission fail closed before a
+model request begins; there is no unauthenticated or client-key fallback.
 The OpenAI key and streaming/tool loop remain in the web server handler (Vite
 locally and Vercel in production), while Convex continues to own authorization
 and durable run, queue, message, and lifecycle state. Development and

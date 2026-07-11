@@ -10,6 +10,11 @@ import {
 	parseTemplateStreamToStructuredNote,
 	validateTemplateStream,
 } from "../src/lib/note-template-stream.js";
+import {
+	authorizeHostedOpenAiRequest,
+	getOpenAiSafetyProviderOptions,
+	sendHostedOpenAiAdmissionError,
+} from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
@@ -91,6 +96,18 @@ export const handleApplyTemplateRequest = async (
 		event: wideEvent,
 		startedAt,
 	});
+	const admission = await authorizeHostedOpenAiRequest({
+		operation: "note-generation",
+		request,
+	});
+	if (!admission.ok) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = admission.statusCode;
+		wideEvent.error_code = admission.errorCode;
+		emitWideEvent("error");
+		sendHostedOpenAiAdmissionError(response, admission);
+		return;
+	}
 
 	if (!process.env.OPENAI_API_KEY) {
 		wideEvent.outcome = "error";
@@ -144,6 +161,7 @@ export const handleApplyTemplateRequest = async (
 
 	const result = streamText({
 		model: openai(NOTE_GENERATION_MODEL_ID),
+		providerOptions: getOpenAiSafetyProviderOptions(admission.safetyIdentifier),
 		system: APPLY_TEMPLATE_SYSTEM_PROMPT,
 		prompt: buildApplyTemplatePrompt({
 			title,

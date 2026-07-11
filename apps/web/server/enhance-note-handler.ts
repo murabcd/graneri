@@ -7,6 +7,11 @@ import {
 	buildEnhancedNotePrompt,
 	ENHANCED_NOTE_SYSTEM_PROMPT,
 } from "../../../packages/ai/src/prompts.mjs";
+import {
+	authorizeHostedOpenAiRequest,
+	getOpenAiSafetyProviderOptions,
+	sendHostedOpenAiAdmissionError,
+} from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
@@ -47,6 +52,18 @@ export const handleEnhanceNoteRequest = async (
 		event: wideEvent,
 		startedAt,
 	});
+	const admission = await authorizeHostedOpenAiRequest({
+		operation: "note-generation",
+		request,
+	});
+	if (!admission.ok) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = admission.statusCode;
+		wideEvent.error_code = admission.errorCode;
+		emitWideEvent("error");
+		sendHostedOpenAiAdmissionError(response, admission);
+		return;
+	}
 
 	if (!process.env.OPENAI_API_KEY) {
 		wideEvent.outcome = "error";
@@ -104,6 +121,9 @@ export const handleEnhanceNoteRequest = async (
 	try {
 		const result = await generateText({
 			model: openai(NOTE_GENERATION_MODEL_ID),
+			providerOptions: getOpenAiSafetyProviderOptions(
+				admission.safetyIdentifier,
+			),
 			system: ENHANCED_NOTE_SYSTEM_PROMPT,
 			output: Output.object({
 				schema: structuredNoteSchema,
