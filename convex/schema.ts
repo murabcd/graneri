@@ -865,6 +865,11 @@ export default defineSchema({
 			"workspaceId",
 			"updatedAt",
 		]),
+	dictationUploads: defineTable({
+		storageId: v.id("_storage"),
+		ownerTokenIdentifier: v.string(),
+		status: v.union(v.literal("pending"), v.literal("processing")),
+	}),
 	transcriptSessions: defineTable({
 		ownerTokenIdentifier: v.string(),
 		noteId: v.id("notes"),

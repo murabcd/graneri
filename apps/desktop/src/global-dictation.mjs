@@ -1,5 +1,4 @@
 import { BrowserWindow, screen } from "electron";
-import { transcribeDictationAudio } from "../../../packages/ai/src/dictation-transcription.mjs";
 import { resolveDesktopRuntimeExecutablePath } from "./desktop-runtime-paths.mjs";
 import { createDictationAudioBuffer } from "./dictation-audio-buffer.mjs";
 import { pasteTextToFocusedInput } from "./dictation-paste.mjs";
@@ -619,6 +618,7 @@ export const createGlobalDictation = ({
 	startMicrophoneCapture,
 	stopMicrophoneCapture,
 	subscribeToCaptureEvents,
+	transcribeDictationAudio,
 }) => {
 	let hotkeyMonitor = null;
 	let dictationSession = null;

@@ -454,6 +454,18 @@ const scanRuntimeImports = (packagedResources) => {
 		);
 	}
 
+	const forbiddenOpenAIApiKey = process.env.OPENAI_API_KEY?.trim();
+	if (forbiddenOpenAIApiKey && allText.includes(forbiddenOpenAIApiKey)) {
+		throw new Error("Packaged app contains the server-side OpenAI credential.");
+	}
+	for (const marker of ["openAIApiKey", "GRANERI_HOSTED_OPENAI_API_KEY"]) {
+		if (allText.includes(marker)) {
+			throw new Error(
+				`Packaged app contains forbidden OpenAI credential config: ${marker}.`,
+			);
+		}
+	}
+
 	for (const fallback of forbiddenLifecycleFallbacks) {
 		if (allText.includes(fallback.pattern)) {
 			throw new Error(
@@ -495,6 +507,7 @@ const scanRuntimeImports = (packagedResources) => {
 				? `Expected Convex deployment: ${expectedDeployment}`
 				: "Expected Convex deployment: not configured",
 			`Expected hosted site URL: ${expectedSiteUrl}`,
+			"Server-side OpenAI credential: not embedded",
 			`Combined audio echo reduction self-test: ${nativeAudioSelfTestResult.echoReductionRatio}`,
 		].join("\n"),
 	);

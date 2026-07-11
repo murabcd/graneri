@@ -5,7 +5,7 @@
 	viewBox="0 0 256 256"
 	fill="none"
 >
-	<rect width="256" height="256" rx="64" fill="#1F2937" />
+	<rect width="256" height="256" rx="64" fill="#171717" />
 	<path
 		d="M160 64V192A32 32 0 1 0 192 160H64A32 32 0 1 0 96 192V64A32 32 0 1 0 64 96H192A32 32 0 1 0 160 64"
 		stroke="#F9FAFB"

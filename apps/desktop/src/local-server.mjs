@@ -47,6 +47,7 @@ import {
 	normalizeReasoningEffort,
 } from "../../../packages/ai/src/models.mjs";
 import { createAuthCallbackSuccessHtml } from "./local-server-auth-callback-page.mjs";
+import { handleDictationTranscriptionRequest } from "./local-server-dictation-route.mjs";
 import {
 	proxyHostedAiRequest,
 	shouldProxyHostedAiRequest,
@@ -1095,6 +1096,7 @@ export const startLocalServer = async ({
 				}),
 		],
 		["/api/apply-template", handleApplyTemplateRequest],
+		["/api/dictation-transcription", handleDictationTranscriptionRequest],
 		[
 			"/api/realtime-transcription-session",
 			handleRealtimeTranscriptionSessionRequest,

@@ -34,6 +34,7 @@ import {
 	registerDesktopAppProtocols,
 } from "./desktop-app-protocol.mjs";
 import { createDesktopBootOrchestrator } from "./desktop-boot-orchestrator.mjs";
+import { createDesktopDictationTranscription } from "./desktop-dictation-transcription.mjs";
 import {
 	createDesktopNavigationState,
 	getDefaultDesktopNavigation,
@@ -409,11 +410,10 @@ const nativeAudioCapture = createNativeAudioCapture({
 const resolveMicrophoneHelperPath =
 	nativeAudioCapture.resolveMicrophoneHelperPath;
 const desktopRealtimeTransport = createDesktopRealtimeTransport({
-	canUseHostedDesktopAi: () => canUseHostedDesktopAi(),
 	getCaptureSampleRate: (source) =>
 		nativeAudioCapture.getCaptureSampleRate(source),
+	getConvexToken: () => getDesktopAuthClient().getConvexToken(),
 	getHostedSiteUrl: async () => (await ensureLocalServer()).origin,
-	getOpenAIApiKey: () => null,
 	handleTransportEvent: (event) => handleDesktopRealtimeTransportEvent(event),
 	logDesktopTurnDebug: (...args) => logDesktopTurnDebug(...args),
 	subscribeToCaptureEvents,
@@ -425,6 +425,10 @@ const startMicrophoneCapture = nativeAudioCapture.startMicrophoneCapture;
 const startSystemAudioCapture = nativeAudioCapture.startSystemAudioCapture;
 const stopMicrophoneCapture = nativeAudioCapture.stopMicrophoneCapture;
 const stopSystemAudioCapture = nativeAudioCapture.stopSystemAudioCapture;
+const transcribeDictationAudio = createDesktopDictationTranscription({
+	getConvexToken: () => getDesktopAuthClient().getConvexToken(),
+	getLocalApiOrigin: async () => (await ensureLocalServer()).origin,
+});
 const globalDictation = createGlobalDictation({
 	getDictationHotkeyMode: () =>
 		desktopPreferencesStore.get().dictationHotkeyMode,
@@ -447,6 +451,7 @@ const globalDictation = createGlobalDictation({
 	startMicrophoneCapture,
 	stopMicrophoneCapture,
 	subscribeToCaptureEvents,
+	transcribeDictationAudio,
 });
 let meetingDetection = null;
 const getMeetingDetectionState = () =>
@@ -771,11 +776,9 @@ const resolveCurrentSystemAudioStatus = (policy) => {
 	return createSystemAudioStatusFromPolicy(policy);
 };
 
-const canUseHostedDesktopAi = () => Boolean(process.env.SITE_URL?.trim());
-
 const getDesktopRealtimeAvailability = () =>
 	process.platform === "darwin" &&
-	(Boolean(process.env.OPENAI_API_KEY) || canUseHostedDesktopAi()) &&
+	Boolean(process.env.SITE_URL) &&
 	Boolean(resolveMicrophoneHelperPath());
 
 const isNonRecoverableStartError = (error) => {

@@ -324,6 +324,12 @@ code must not duplicate dictation capture or expose route-level fallbacks for
 this path. The renderer may select the persisted global dictation hotkey mode
 through the desktop bridge; Electron applies hold, toggle, or disabled mode by
 restarting the native hotkey monitor without restarting the app.
+Global dictation uploads temporary WAV audio through an authenticated desktop
+local-server route to Convex storage, then invokes a Convex action that owns the
+OpenAI transcription request and deletes the temporary file. Desktop realtime
+transcription obtains its short-lived OpenAI client secret from the
+authenticated hosted Vercel route through the desktop local server. Electron
+must never call OpenAI with a long-lived API key or embed that key in a build.
 While a dictation capture is active, Electron owns a temporary global Escape
 shortcut that cancels capture and discards buffered audio without transcribing
 or pasting it. The idle dictation bar is suppressed when dictation hotkeys are

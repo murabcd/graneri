@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { connectRealtimeTranscriptionTransport } from "../src/lib/capture/realtime-transcription-transport";
 
+vi.mock("../src/lib/convex-token", () => ({
+	getCachedConvexToken: vi.fn(async () => "test-convex-token"),
+}));
+
 const createMockStream = () =>
 	({
 		getTracks: () => [{ stop: vi.fn() }],
@@ -104,6 +108,9 @@ describe("connectRealtimeTranscriptionTransport", () => {
 			1,
 			"/api/realtime-transcription-session",
 			expect.objectContaining({
+				headers: expect.objectContaining({
+					Authorization: "Bearer test-convex-token",
+				}),
 				method: "POST",
 			}),
 		);

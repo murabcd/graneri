@@ -30,11 +30,10 @@ const createTransport = ({
 	WebSocketImpl,
 }) =>
 	createDesktopRealtimeTransport({
-		canUseHostedDesktopAi: () => true,
 		fetchImpl: createFetch(),
 		getCaptureSampleRate: () => 48_000,
+		getConvexToken: () => "test-convex-token",
 		getHostedSiteUrl: () => "https://example.com",
-		getOpenAIApiKey: () => "",
 		handleTransportEvent,
 		logDesktopTurnDebug: () => {},
 		subscribeToCaptureEvents,

@@ -60,7 +60,6 @@ const createRuntimeConfig = (value) => {
 		"";
 	const siteUrl =
 		trimConfigValue(value?.siteUrl) || hostedDefaults.siteUrl || "";
-	const openAIApiKey = trimConfigValue(value?.openAIApiKey);
 
 	if (!convexUrl) {
 		throw new Error(
@@ -78,7 +77,6 @@ const createRuntimeConfig = (value) => {
 		convexUrl,
 		convexSiteUrl,
 		siteUrl,
-		openAIApiKey,
 	};
 };
 
@@ -99,14 +97,12 @@ const resolveRuntimeConfig = async () => {
 	const envConvexSiteUrl =
 		trimConfigValue(process.env.CONVEX_SITE_URL) ||
 		trimConfigValue(process.env.VITE_CONVEX_SITE_URL);
-	const envOpenAIApiKey = trimConfigValue(process.env.OPENAI_API_KEY);
 	const envSiteUrl = trimConfigValue(process.env.SITE_URL);
 
 	return createRuntimeConfig({
 		convexUrl: envConvexUrl,
 		convexSiteUrl: envConvexSiteUrl,
 		siteUrl: envSiteUrl,
-		openAIApiKey: envOpenAIApiKey,
 	});
 };
 
@@ -119,10 +115,6 @@ const applyRuntimeConfig = (value) => {
 	if (value.convexSiteUrl) {
 		process.env.CONVEX_SITE_URL = value.convexSiteUrl;
 		process.env.VITE_CONVEX_SITE_URL = value.convexSiteUrl;
-	}
-
-	if (value.openAIApiKey) {
-		process.env.OPENAI_API_KEY = value.openAIApiKey;
 	}
 
 	if (value.siteUrl) {

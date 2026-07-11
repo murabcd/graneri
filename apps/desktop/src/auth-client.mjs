@@ -210,5 +210,18 @@ const authFetch = async (path, options = {}) => {
 
 export const getDesktopAuthClient = () => ({
 	getCookie: () => getCookie(getAuthOrigin()),
+	getConvexToken: async () => {
+		const data = await authFetch("/convex/token", { throw: true });
+		const token =
+			data && typeof data === "object" && typeof data.token === "string"
+				? data.token.trim()
+				: "";
+
+		if (!token) {
+			throw new Error("Convex authentication token is unavailable.");
+		}
+
+		return token;
+	},
 	$fetch: authFetch,
 });

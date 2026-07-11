@@ -48,10 +48,9 @@ const createAudioDiagnostics = () => ({
 });
 
 export const createDesktopRealtimeTransport = ({
-	canUseHostedDesktopAi,
 	fetchImpl = fetch,
 	getCaptureSampleRate,
-	getOpenAIApiKey,
+	getConvexToken,
 	getHostedSiteUrl,
 	handleTransportEvent,
 	logDesktopTurnDebug,
@@ -293,12 +292,6 @@ export const createDesktopRealtimeTransport = ({
 		}
 		const language = normalizeTranscriptionLanguage(lang);
 
-		if (!getOpenAIApiKey() && !canUseHostedDesktopAi()) {
-			throw new Error(
-				"Realtime transcription is not configured for this desktop build.",
-			);
-		}
-
 		const captureSampleRate = getCaptureSampleRate(source);
 
 		if (!captureSampleRate) {
@@ -308,8 +301,8 @@ export const createDesktopRealtimeTransport = ({
 		await stop(speaker);
 		const clientSecret = await createDesktopRealtimeClientSecret({
 			fetchImpl,
+			getConvexToken,
 			getHostedSiteUrl,
-			getOpenAIApiKey,
 			lang,
 			source,
 			speaker,

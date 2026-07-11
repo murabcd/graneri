@@ -2,61 +2,26 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDesktopRealtimeClientSecret } from "../src/desktop-realtime-client-secret.mjs";
 
-test("desktop realtime client secret request uses the production transcription session config", async () => {
+test("desktop realtime requests an authenticated hosted client secret", async () => {
 	let requestBody = null;
-
-	const clientSecret = await createDesktopRealtimeClientSecret({
-		fetchImpl: async (_url, init) => {
-			requestBody = JSON.parse(String(init.body));
-
-			return new Response(JSON.stringify({ value: "client-secret" }), {
-				headers: {
-					"Content-Type": "application/json",
-					"openai-processing-ms": "10",
-					"x-request-id": "request-id",
-				},
-				status: 200,
-			});
-		},
-		getHostedSiteUrl: () => null,
-		getOpenAIApiKey: () => "test-openai-key",
-		lang: "en-US",
-		source: "systemAudio",
-		speaker: "them",
-	});
-
-	assert.equal(clientSecret, "client-secret");
-	assert.equal(requestBody.session.type, "transcription");
-	assert.equal(requestBody.session.audio.input.format.type, "audio/pcm");
-	assert.equal(requestBody.session.audio.input.format.rate, 24_000);
-	assert.equal(requestBody.session.audio.input.noise_reduction, null);
-	assert.equal(
-		Object.hasOwn(requestBody.session.audio.input, "turn_detection"),
-		false,
-	);
-	assert.deepEqual(requestBody.session.audio.input.transcription, {
-		delay: "high",
-		language: "en",
-		model: "gpt-realtime-whisper",
-	});
-});
-
-test("desktop realtime client secret proxies through the hosted app origin", async () => {
 	let requestUrl = null;
+	let authorization = null;
+	let requestOrigin = null;
 
 	const clientSecret = await createDesktopRealtimeClientSecret({
-		fetchImpl: async (url) => {
+		fetchImpl: async (url, init) => {
 			requestUrl = url.toString();
+			requestBody = JSON.parse(String(init.body));
+			authorization = new Headers(init.headers).get("authorization");
+			requestOrigin = new Headers(init.headers).get("origin");
 
 			return new Response(JSON.stringify({ clientSecret: "client-secret" }), {
-				headers: {
-					"Content-Type": "application/json",
-				},
+				headers: { "Content-Type": "application/json" },
 				status: 200,
 			});
 		},
-		getHostedSiteUrl: () => "https://example.com",
-		getOpenAIApiKey: () => "",
+		getConvexToken: () => "test-convex-token",
+		getHostedSiteUrl: () => "http://127.0.0.1:1234",
 		lang: "en-US",
 		source: "systemAudio",
 		speaker: "them",
@@ -65,23 +30,35 @@ test("desktop realtime client secret proxies through the hosted app origin", asy
 	assert.equal(clientSecret, "client-secret");
 	assert.equal(
 		requestUrl,
-		"https://example.com/api/realtime-transcription-session",
+		"http://127.0.0.1:1234/api/realtime-transcription-session",
 	);
+	assert.equal(authorization, "Bearer test-convex-token");
+	assert.equal(requestOrigin, "http://127.0.0.1:1234");
+	assert.deepEqual(requestBody, {
+		lang: "en-US",
+		source: "systemAudio",
+		speaker: "them",
+	});
 });
 
-test("desktop realtime client secret fails closed without a hosted app origin", async () => {
+test("desktop realtime surfaces hosted session errors", async () => {
 	await assert.rejects(
 		async () =>
 			await createDesktopRealtimeClientSecret({
-				fetchImpl: async () => {
-					throw new Error("fetch must not be called.");
-				},
-				getHostedSiteUrl: () => "",
-				getOpenAIApiKey: () => "",
+				fetchImpl: async () =>
+					new Response(
+						JSON.stringify({ error: "Authentication is invalid." }),
+						{
+							headers: { "Content-Type": "application/json" },
+							status: 401,
+						},
+					),
+				getConvexToken: () => "expired-token",
+				getHostedSiteUrl: () => "https://example.com",
 				lang: "en-US",
 				source: "systemAudio",
 				speaker: "them",
 			}),
-		/SITE_URL is not configured\./u,
+		/Authentication is invalid\./u,
 	);
 });

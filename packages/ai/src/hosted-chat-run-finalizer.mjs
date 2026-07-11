@@ -1,11 +1,11 @@
 import {
 	buildHostedChatSaveMessageArgs,
 	generateHostedChatTitle,
-	getHostedChatConvexErrorData,
 } from "./hosted-chat-runtime.mjs";
+import { getConvexErrorData } from "./convex-error.mjs";
 
 const getConvexErrorCode = (error) => {
-	const data = getHostedChatConvexErrorData(error);
+	const data = getConvexErrorData(error);
 	return typeof data?.code === "string" ? data.code : null;
 };
 

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as aiAccess from "../aiAccess.js";
 import type * as appConnectionActions from "../appConnectionActions.js";
 import type * as appConnectionProviders from "../appConnectionProviders.js";
 import type * as appConnections from "../appConnections.js";
@@ -25,6 +26,8 @@ import type * as chatAttachments from "../chatAttachments.js";
 import type * as chatToolCalls from "../chatToolCalls.js";
 import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
+import type * as dictationActions from "../dictationActions.js";
+import type * as dictationUploads from "../dictationUploads.js";
 import type * as domain from "../domain.js";
 import type * as googleAuth from "../googleAuth.js";
 import type * as googleTools from "../googleTools.js";
@@ -57,6 +60,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  aiAccess: typeof aiAccess;
   appConnectionActions: typeof appConnectionActions;
   appConnectionProviders: typeof appConnectionProviders;
   appConnections: typeof appConnections;
@@ -74,6 +78,8 @@ declare const fullApi: ApiFromModules<{
   chatToolCalls: typeof chatToolCalls;
   chats: typeof chats;
   crons: typeof crons;
+  dictationActions: typeof dictationActions;
+  dictationUploads: typeof dictationUploads;
   domain: typeof domain;
   googleAuth: typeof googleAuth;
   googleTools: typeof googleTools;

@@ -1,3 +1,4 @@
+import { getCachedConvexToken } from "@/lib/convex-token";
 import type { TranscriptSpeaker } from "@/lib/transcript";
 import type { TranscriptionLogger } from "@/lib/transcription-logger";
 import { normalizeTranscriptionLanguage } from "../../../../../packages/ai/src/transcription.mjs";
@@ -92,10 +93,15 @@ const createRealtimeSession = async (
 	speaker?: TranscriptSpeaker,
 ): Promise<RealtimeSessionPayload> => {
 	const language = normalizeTranscriptionLanguage(lang);
+	const convexToken = await getCachedConvexToken();
+	if (!convexToken) {
+		throw new Error("Authentication is required for transcription.");
+	}
 
 	const response = await fetch("/api/realtime-transcription-session", {
 		method: "POST",
 		headers: {
+			Authorization: `Bearer ${convexToken}`,
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify({

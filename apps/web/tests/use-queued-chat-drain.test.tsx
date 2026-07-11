@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useQueuedChatDrain } from "../src/hooks/use-queued-chat-drain";
@@ -59,6 +59,7 @@ describe("useQueuedChatDrain", () => {
 	});
 
 	afterEach(() => {
+		cleanup();
 		resetQueuedFollowUpsCacheForTest();
 	});
 

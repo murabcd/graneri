@@ -14,6 +14,24 @@ export const readJsonBody = async (request) => {
 	return JSON.parse(rawBody);
 };
 
+export const readBinaryBody = async (request, { maxBytes }) => {
+	const chunks = [];
+	let byteLength = 0;
+
+	for await (const chunk of request) {
+		const buffer = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+		byteLength += buffer.byteLength;
+
+		if (byteLength > maxBytes) {
+			throw new Error("Request body is too large.");
+		}
+
+		chunks.push(buffer);
+	}
+
+	return Buffer.concat(chunks, byteLength);
+};
+
 export const sendJson = (response, statusCode, payload, headers = null) => {
 	response.statusCode = statusCode;
 	response.setHeader("Content-Type", "application/json");

@@ -98,15 +98,16 @@ export const useQueuedChatDrain = ({
 		[queuedMessagesCacheKey],
 	);
 
-	React.useEffect(
-		() => () => {
+	React.useEffect(() => {
+		isMountedRef.current = true;
+		return () => {
 			isMountedRef.current = false;
 			if (retryTimerRef.current !== null) {
 				window.clearTimeout(retryTimerRef.current);
+				retryTimerRef.current = null;
 			}
-		},
-		[],
-	);
+		};
+	}, []);
 
 	const scheduleRetry = React.useCallback(() => {
 		if (!isMountedRef.current || retryTimerRef.current !== null) {

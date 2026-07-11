@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../convex/_generated/api.js";
+import { isConvexErrorCode } from "../../../packages/ai/src/convex-error.mjs";
+import { getBearerTokenFromAuthorizationHeader } from "../../../packages/ai/src/hosted-chat-http.mjs";
 import {
 	createRealtimeTranscriptionSession,
 	createRealtimeTranscriptionSessionOptions,
@@ -26,14 +30,65 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		event: "realtime_transcription_session.request",
 		request,
 	});
+	const sendError = ({
+		error,
+		errorCode,
+		statusCode,
+	}: {
+		error: string;
+		errorCode: string;
+		statusCode: number;
+	}) => {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = statusCode;
+		wideEvent.error_code = errorCode;
+		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
+		sendJson(response, statusCode, { error });
+	};
+	const convexToken = getBearerTokenFromAuthorizationHeader(
+		request.headers.authorization,
+	);
+
+	if (!convexToken) {
+		sendError({
+			error: "Authentication is required.",
+			errorCode: "authentication_required",
+			statusCode: 401,
+		});
+		return;
+	}
+
+	const convexUrl = process.env.CONVEX_URL ?? process.env.VITE_CONVEX_URL;
+	if (!convexUrl) {
+		throw new Error("CONVEX_URL is not configured.");
+	}
+
+	try {
+		const convexClient = new ConvexHttpClient(convexUrl, { auth: convexToken });
+		await convexClient.query(api.aiAccess.verify);
+	} catch (error) {
+		if (isConvexErrorCode(error, "UNAUTHENTICATED")) {
+			sendError({
+				error: "Authentication is invalid.",
+				errorCode: "authentication_invalid",
+				statusCode: 401,
+			});
+			return;
+		}
+
+		sendError({
+			error: "Authentication service is unavailable.",
+			errorCode: "authentication_service_unavailable",
+			statusCode: 503,
+		});
+		return;
+	}
 
 	if (!process.env.OPENAI_API_KEY) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 500;
-		wideEvent.error_code = "openai_api_key_missing";
-		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
-		sendJson(response, 500, {
+		sendError({
 			error: "OPENAI_API_KEY is not configured.",
+			errorCode: "openai_api_key_missing",
+			statusCode: 500,
 		});
 		return;
 	}
@@ -91,16 +146,14 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 	};
 
 	if (!sessionResponse.ok) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = sessionResponse.status;
-		wideEvent.error_message =
+		const error =
 			payload.error?.message ||
 			"Failed to create realtime transcription session.";
-		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
-		sendJson(response, sessionResponse.status, {
-			error:
-				payload.error?.message ||
-				"Failed to create realtime transcription session.",
+		wideEvent.error_message = error;
+		sendError({
+			error,
+			errorCode: "openai_session_failed",
+			statusCode: sessionResponse.status,
 		});
 		return;
 	}
@@ -108,12 +161,10 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 	const clientSecret = payload.value;
 
 	if (!clientSecret) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 500;
-		wideEvent.error_code = "client_secret_missing";
-		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
-		sendJson(response, 500, {
+		sendError({
 			error: "OpenAI did not return a client secret.",
+			errorCode: "client_secret_missing",
+			statusCode: 500,
 		});
 		return;
 	}
