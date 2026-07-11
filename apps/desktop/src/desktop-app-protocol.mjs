@@ -74,7 +74,7 @@ const resolveAssetPath = (pathname, rendererDistDir) => {
 	return assetPath;
 };
 
-const tryCreateFileResponse = (filePath) => {
+const tryCreateFileResponse = (filePath, contentSecurityPolicy) => {
 	let fileContents;
 	try {
 		fileContents = readFileSync(filePath);
@@ -82,18 +82,25 @@ const tryCreateFileResponse = (filePath) => {
 		return null;
 	}
 
-	return new Response(fileContents, {
-		headers: {
-			"Content-Type":
-				mimeTypes[extname(filePath)] ?? "application/octet-stream",
-		},
-	});
+	const contentType =
+		mimeTypes[extname(filePath)] ?? "application/octet-stream";
+	const headers = { "Content-Type": contentType };
+	if (contentType.startsWith("text/html")) {
+		headers["Content-Security-Policy"] = contentSecurityPolicy;
+	}
+
+	return new Response(fileContents, { headers });
 };
 
 export const registerDesktopAppProtocol = ({
+	contentSecurityPolicy,
 	protocolRegistrar = protocol,
 	rendererDistDir,
 }) => {
+	if (!contentSecurityPolicy) {
+		throw new Error("Desktop Content Security Policy is required.");
+	}
+
 	protocolRegistrar.handle(appProtocolScheme, async (request) => {
 		const url = new URL(request.url);
 
@@ -106,7 +113,10 @@ export const registerDesktopAppProtocol = ({
 			return createForbiddenResponse();
 		}
 
-		const assetResponse = tryCreateFileResponse(assetPath);
+		const assetResponse = tryCreateFileResponse(
+			assetPath,
+			contentSecurityPolicy,
+		);
 		if (assetResponse) {
 			return assetResponse;
 		}
@@ -114,6 +124,7 @@ export const registerDesktopAppProtocol = ({
 		if (isRendererAppRoutePath(url.pathname)) {
 			const indexResponse = tryCreateFileResponse(
 				resolve(rendererDistDir, "index.html"),
+				contentSecurityPolicy,
 			);
 			if (indexResponse) {
 				return indexResponse;
@@ -125,10 +136,15 @@ export const registerDesktopAppProtocol = ({
 };
 
 export const registerDesktopAppProtocols = ({
+	contentSecurityPolicy,
 	protocolRegistrars,
 	rendererDistDir,
 }) => {
 	for (const protocolRegistrar of protocolRegistrars) {
-		registerDesktopAppProtocol({ protocolRegistrar, rendererDistDir });
+		registerDesktopAppProtocol({
+			contentSecurityPolicy,
+			protocolRegistrar,
+			rendererDistDir,
+		});
 	}
 };

@@ -71,6 +71,11 @@ const inboxItemKindValidator = v.union(
 	v.literal("note-comment"),
 );
 
+const aiRateLimitOperationValidator = v.union(
+	v.literal("dictation"),
+	v.literal("realtime-session"),
+);
+
 const appConnectionOrgTypeValidator = v.union(
 	v.literal("x-org-id"),
 	v.literal("x-cloud-org-id"),
@@ -865,11 +870,15 @@ export default defineSchema({
 			"workspaceId",
 			"updatedAt",
 		]),
-	dictationUploads: defineTable({
-		storageId: v.id("_storage"),
+	aiRateLimits: defineTable({
+		lastRefillAt: v.number(),
+		operation: aiRateLimitOperationValidator,
 		ownerTokenIdentifier: v.string(),
-		status: v.union(v.literal("pending"), v.literal("processing")),
-	}),
+		tokens: v.number(),
+	}).index("by_ownerTokenIdentifier_and_operation", [
+		"ownerTokenIdentifier",
+		"operation",
+	]),
 	transcriptSessions: defineTable({
 		ownerTokenIdentifier: v.string(),
 		noteId: v.id("notes"),

@@ -9,6 +9,7 @@
  */
 
 import type * as aiAccess from "../aiAccess.js";
+import type * as aiRateLimits from "../aiRateLimits.js";
 import type * as appConnectionActions from "../appConnectionActions.js";
 import type * as appConnectionProviders from "../appConnectionProviders.js";
 import type * as appConnections from "../appConnections.js";
@@ -27,7 +28,8 @@ import type * as chatToolCalls from "../chatToolCalls.js";
 import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
 import type * as dictationActions from "../dictationActions.js";
-import type * as dictationUploads from "../dictationUploads.js";
+import type * as dictationHttp from "../dictationHttp.js";
+import type * as dictationStorage from "../dictationStorage.js";
 import type * as domain from "../domain.js";
 import type * as googleAuth from "../googleAuth.js";
 import type * as googleTools from "../googleTools.js";
@@ -61,6 +63,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   aiAccess: typeof aiAccess;
+  aiRateLimits: typeof aiRateLimits;
   appConnectionActions: typeof appConnectionActions;
   appConnectionProviders: typeof appConnectionProviders;
   appConnections: typeof appConnections;
@@ -79,7 +82,8 @@ declare const fullApi: ApiFromModules<{
   chats: typeof chats;
   crons: typeof crons;
   dictationActions: typeof dictationActions;
-  dictationUploads: typeof dictationUploads;
+  dictationHttp: typeof dictationHttp;
+  dictationStorage: typeof dictationStorage;
   domain: typeof domain;
   googleAuth: typeof googleAuth;
   googleTools: typeof googleTools;

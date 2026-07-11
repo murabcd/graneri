@@ -30,9 +30,18 @@ export const getConvexErrorData = (error) => {
 	}
 
 	const message = typeof error.message === "string" ? error.message : "";
-	const match = message.match(/(?:Uncaught\s+)?ConvexError:\s*(\{.*?\})(?:\s+at|$)/su);
+	const match = message.match(
+		/(?:Uncaught\s+)?ConvexError:\s*(\{.*?\})(?:\s+at|$)/su,
+	);
 	return match ? parseConvexErrorData(match[1]) : null;
 };
 
 export const isConvexErrorCode = (error, code) =>
 	getConvexErrorData(error)?.code === code;
+
+export const getConvexRetryAfterSeconds = (error) => {
+	const retryAfterMs = getConvexErrorData(error)?.retryAfterMs;
+	return typeof retryAfterMs === "number" && retryAfterMs > 0
+		? Math.max(1, Math.ceil(retryAfterMs / 1000))
+		: 1;
+};

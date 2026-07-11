@@ -33,13 +33,16 @@ test("desktop package verification rejects legacy chat lifecycle fallbacks", () 
 });
 
 test("desktop package verification rejects unexpected Convex deployments generically", () => {
-	assert.match(
-		verifyPackageSource,
-		/convexDeploymentUrlPattern\s*=/u,
-	);
+	assert.match(verifyPackageSource, /convexDeploymentUrlPattern\s*=/u);
 	assert.match(
 		verifyPackageSource,
 		/Packaged app contains unexpected Convex deployment/u,
 	);
 	assert.doesNotMatch(verifyPackageSource, /clever-chinchilla-887/u);
+});
+
+test("desktop package verification requires CSP and an external theme initializer", () => {
+	assert.match(verifyPackageSource, /Content Security Policy/u);
+	assert.match(verifyPackageSource, /script-src 'self'/u);
+	assert.match(verifyPackageSource, /dist-app\/theme-init\.js/u);
 });

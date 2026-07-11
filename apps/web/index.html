@@ -20,38 +20,7 @@
       crossorigin
     />
     <title>Graneri</title>
-    <script>
-      (() => {
-        const storedTheme = localStorage.getItem("theme");
-        const resolvedTheme =
-          storedTheme === "dark" ||
-          (storedTheme !== "light" &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches)
-            ? "dark"
-            : "light";
-
-        document.documentElement.classList.remove("light", "dark");
-        document.documentElement.classList.add(resolvedTheme);
-        document.documentElement.style.colorScheme = resolvedTheme;
-      })();
-    </script>
-    <style>
-      html,
-      body,
-      #root {
-        min-height: 100%;
-      }
-
-      body {
-        margin: 0;
-      }
-
-      .app-loading-mark {
-        width: 42px;
-        height: 42px;
-        display: block;
-      }
-    </style>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

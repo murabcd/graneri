@@ -324,12 +324,24 @@ code must not duplicate dictation capture or expose route-level fallbacks for
 this path. The renderer may select the persisted global dictation hotkey mode
 through the desktop bridge; Electron applies hold, toggle, or disabled mode by
 restarting the native hotkey monitor without restarting the app.
-Global dictation uploads temporary WAV audio through an authenticated desktop
-local-server route to Convex storage, then invokes a Convex action that owns the
-OpenAI transcription request and deletes the temporary file. Desktop realtime
-transcription obtains its short-lived OpenAI client secret from the
-authenticated hosted Vercel route through the desktop local server. Electron
-must never call OpenAI with a long-lived API key or embed that key in a build.
+Global dictation sends at most 19 MB of temporary WAV audio through the
+authenticated desktop local-server route to one Convex HTTP action. That action
+rate-limits the authenticated identity, stores the audio, schedules an
+idempotent expiry before invoking the internal OpenAI transcription action, and
+attempts immediate deletion when the request finishes. The scheduled cleanup is
+the durable guarantee when a request or action is interrupted. There is no
+client-visible generated-upload or registration lifecycle. The OpenAI request
+uses the same SHA-256 safety identifier policy as realtime transcription.
+
+Desktop realtime transcription obtains its short-lived OpenAI client secret
+from the authenticated hosted Vercel route through the desktop local server.
+The hosted route rate-limits the authenticated identity and sends OpenAI a
+SHA-256 hash of the stable Convex token identifier as
+`OpenAI-Safety-Identifier`; the raw identity never leaves Graneri's server
+boundary. Realtime recovery is bounded to three reconnect attempts with 750 ms,
+1.5 s, and 3 s backoff, and each attempt must request a fresh short-lived
+secret. Electron must never call OpenAI with a long-lived API key or embed that
+key in a build.
 While a dictation capture is active, Electron owns a temporary global Escape
 shortcut that cancels capture and discards buffered audio without transcribing
 or pasting it. The idle dictation bar is suppressed when dictation hotkeys are
@@ -341,6 +353,12 @@ the native transport must explicitly commit non-empty OpenAI input audio
 buffers during live capture. Empty-buffer commits are not a valid path; they
 create recoverable-looking OpenAI errors that can collapse into start/stop
 loops.
+
+Packaged renderer documents are served with a Content Security Policy. Network
+connections are limited to the configured Convex and hosted-site origins,
+their WebSocket equivalents, the desktop loopback API, and the explicit OpenAI
+and GitHub endpoints used by renderer capabilities. Inline scripts are not
+allowed; the pre-render theme initializer is a packaged static asset.
 
 Desktop meeting audio must preserve two distinct sources: microphone audio is
 the `you` source, and native system audio is the `them` source. Built-in speaker

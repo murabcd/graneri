@@ -34,6 +34,7 @@ import {
 	registerDesktopAppProtocols,
 } from "./desktop-app-protocol.mjs";
 import { createDesktopBootOrchestrator } from "./desktop-boot-orchestrator.mjs";
+import { createDesktopContentSecurityPolicy } from "./desktop-content-security-policy.mjs";
 import { createDesktopDictationTranscription } from "./desktop-dictation-transcription.mjs";
 import {
 	createDesktopNavigationState,
@@ -78,7 +79,12 @@ loadRootEnv({
 		app.isPackaged !== true ||
 		process.env.GRANERI_ENV_MODE?.trim() !== "production",
 });
-await hydrateRuntimeConfig();
+const runtimeConfig = await hydrateRuntimeConfig();
+const desktopContentSecurityPolicy = createDesktopContentSecurityPolicy({
+	convexSiteUrl: runtimeConfig.convexSiteUrl,
+	convexUrl: runtimeConfig.convexUrl,
+	siteUrl: runtimeConfig.siteUrl,
+});
 
 const runtimeDir = dirname(fileURLToPath(import.meta.url));
 const rendererDistDir =
@@ -3195,7 +3201,12 @@ createDesktopBootOrchestrator({
 	refreshApplicationMenu,
 	refreshTranscriptionPolicy,
 	refreshTrayCalendar,
-	registerDesktopAppProtocols,
+	registerDesktopAppProtocols: ({ protocolRegistrars, rendererDistDir }) =>
+		registerDesktopAppProtocols({
+			contentSecurityPolicy: desktopContentSecurityPolicy,
+			protocolRegistrars,
+			rendererDistDir,
+		}),
 	rendererDistDir,
 	setTrayStatusLabel,
 	showMainWindow,

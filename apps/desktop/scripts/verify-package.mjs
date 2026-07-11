@@ -424,7 +424,23 @@ const scanRuntimeImports = (packagedResources) => {
 		.filter((file) => /\.(html|js|mjs|cjs|json)$/u.test(file.relativePath))
 		.map((file) => file.readText())
 		.join("\n");
+	const packagedFilePaths = new Set(
+		packagedResources.files.map((file) => file.relativePath),
+	);
 	const packagedConvexDeployments = getConfigurationConvexDeployments(allText);
+
+	if (
+		!allText.includes('headers["Content-Security-Policy"]') ||
+		!allText.includes("script-src 'self'")
+	) {
+		throw new Error(
+			"Packaged app does not enforce the desktop Content Security Policy.",
+		);
+	}
+
+	if (!packagedFilePaths.has("dist-app/theme-init.js")) {
+		throw new Error("Packaged app is missing the external theme initializer.");
+	}
 
 	for (const deployment of forbiddenDeployments) {
 		if (allText.includes(deployment)) {

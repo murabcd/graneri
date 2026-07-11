@@ -2,8 +2,7 @@
 
 import { ConvexError, v } from "convex/values";
 import { transcribeDictationAudio } from "../packages/ai/src/dictation-transcription.mjs";
-import { internal } from "./_generated/api";
-import { action } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 
 const transcriptionResultValidator = v.object({
 	durationInSeconds: v.union(v.number(), v.null()),
@@ -16,55 +15,38 @@ const isWavAudio = (audio: Uint8Array) =>
 	String.fromCharCode(...audio.subarray(0, 4)) === "RIFF" &&
 	String.fromCharCode(...audio.subarray(8, 12)) === "WAVE";
 
-export const transcribe = action({
+export const transcribeStoredAudio = internalAction({
 	args: {
-		uploadId: v.id("dictationUploads"),
+		safetyIdentifier: v.string(),
+		storageId: v.id("_storage"),
 	},
 	returns: transcriptionResultValidator,
 	handler: async (ctx, args) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) {
+		const audio = await ctx.storage.get(args.storageId);
+		if (!audio) {
 			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "You must be signed in to use dictation.",
+				code: "DICTATION_AUDIO_MISSING",
+				message: "Dictation audio is missing.",
 			});
 		}
 
-		const storageId = await ctx.runMutation(internal.dictationUploads.claim, {
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			uploadId: args.uploadId,
+		const audioBytes = new Uint8Array(await audio.arrayBuffer());
+		if (!isWavAudio(audioBytes)) {
+			throw new ConvexError({
+				code: "DICTATION_AUDIO_TYPE_INVALID",
+				message: "Dictation audio must be a WAV file.",
+			});
+		}
+
+		const result = await transcribeDictationAudio({
+			audio: audioBytes,
+			safetyIdentifier: args.safetyIdentifier,
 		});
 
-		try {
-			const audio = await ctx.storage.get(storageId);
-			if (!audio) {
-				throw new ConvexError({
-					code: "DICTATION_AUDIO_MISSING",
-					message: "Dictation audio is missing.",
-				});
-			}
-
-			const audioBytes = new Uint8Array(await audio.arrayBuffer());
-			if (!isWavAudio(audioBytes)) {
-				throw new ConvexError({
-					code: "DICTATION_AUDIO_TYPE_INVALID",
-					message: "Dictation audio must be a WAV file.",
-				});
-			}
-
-			const result = await transcribeDictationAudio({
-				audio: audioBytes,
-			});
-
-			return {
-				durationInSeconds: result.durationInSeconds ?? null,
-				language: result.language ?? null,
-				text: result.text,
-			};
-		} finally {
-			await ctx.runMutation(internal.dictationUploads.complete, {
-				uploadId: args.uploadId,
-			});
-		}
+		return {
+			durationInSeconds: result.durationInSeconds ?? null,
+			language: result.language ?? null,
+			text: result.text,
+		};
 	},
 });

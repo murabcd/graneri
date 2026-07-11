@@ -65,6 +65,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 					}
 
 					const runCtx = requireRunMutationCtx(ctx);
+					await runCtx.runMutation(internal.aiRateLimits.removeAllForOwner, {
+						ownerTokenIdentifier: identity.tokenIdentifier,
+					});
 					await runCtx.runMutation(internal.notes.removeAllForOwner, {
 						ownerTokenIdentifier: identity.tokenIdentifier,
 					});

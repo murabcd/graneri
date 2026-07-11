@@ -2,6 +2,22 @@
 @import "./styles/note-editor.css";
 @import "./styles/note-chat.css";
 
+html,
+body,
+#root {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+}
+
+.app-loading-mark {
+	display: block;
+	width: 42px;
+	height: 42px;
+}
+
 [data-app-region="drag"] {
 	-webkit-app-region: drag;
 	user-select: none;

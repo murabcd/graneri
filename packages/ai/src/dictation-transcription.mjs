@@ -1,11 +1,10 @@
 import { openai } from "@ai-sdk/openai";
 import { experimental_transcribe as transcribe } from "ai";
+import { MAX_DICTATION_AUDIO_BYTES } from "./dictation-policy.mjs";
 import {
 	DICTATION_TRANSCRIPTION_MODEL,
 	normalizeTranscriptionLanguage,
 } from "./transcription.mjs";
-
-export const MAX_DICTATION_AUDIO_BYTES = 25_000_000;
 
 const MAX_DICTATION_PROMPT_LENGTH = 1_000;
 
@@ -31,7 +30,8 @@ export const transcribeDictationAudio = async ({
 	audio,
 	language = null,
 	prompt = null,
-} = {}) => {
+	safetyIdentifier,
+}) => {
 	if (!(audio instanceof Uint8Array) || audio.byteLength === 0) {
 		throw new Error("Audio is required.");
 	}
@@ -39,11 +39,17 @@ export const transcribeDictationAudio = async ({
 	if (audio.byteLength > MAX_DICTATION_AUDIO_BYTES) {
 		throw new Error("Audio is too large.");
 	}
+	if (typeof safetyIdentifier !== "string" || safetyIdentifier.length === 0) {
+		throw new Error("A safety identifier is required.");
+	}
 
 	const openaiOptions = buildOpenAIOptions({ language, prompt });
 	const result = await transcribe({
 		model: openai.transcription(DICTATION_TRANSCRIPTION_MODEL),
 		audio,
+		headers: {
+			"OpenAI-Safety-Identifier": safetyIdentifier,
+		},
 		providerOptions:
 			Object.keys(openaiOptions).length > 0
 				? {

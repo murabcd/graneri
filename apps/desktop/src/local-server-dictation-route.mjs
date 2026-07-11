@@ -1,79 +1,60 @@
-import { ConvexHttpClient } from "convex/browser";
-import { api } from "../../../convex/_generated/api.js";
-import { MAX_DICTATION_AUDIO_BYTES } from "../../../packages/ai/src/dictation-transcription.mjs";
+import {
+	DICTATION_AUDIO_CONTENT_TYPE,
+	MAX_DICTATION_AUDIO_BYTES,
+} from "../../../packages/ai/src/dictation-policy.mjs";
 import { getBearerTokenFromAuthorizationHeader } from "../../../packages/ai/src/hosted-chat-http.mjs";
 import { readBinaryBody, sendJson } from "./local-server-http.mjs";
 
-const getConvexUrl = () => {
-	const value = process.env.CONVEX_URL?.trim();
+const getConvexSiteUrl = () => {
+	const value = process.env.CONVEX_SITE_URL?.trim();
 	if (!value) {
-		throw new Error("CONVEX_URL is not configured.");
+		throw new Error("CONVEX_SITE_URL is not configured.");
 	}
 
-	return value;
+	return value.replace(/\/$/u, "");
 };
 
-const readStorageId = async (response) => {
-	const payload = await response.json().catch(() => null);
-	const storageId =
-		payload &&
-		typeof payload === "object" &&
-		typeof payload.storageId === "string"
-			? payload.storageId
-			: "";
+export const createDictationTranscriptionRequestHandler =
+	({ fetchImpl }) =>
+	async (request, response) => {
+		const convexToken = getBearerTokenFromAuthorizationHeader(
+			request.headers.authorization,
+		);
+		if (!convexToken) {
+			sendJson(response, 401, { error: "Authentication is required." });
+			return;
+		}
 
-	if (!response.ok || !storageId) {
-		throw new Error("Failed to upload dictation audio.");
-	}
-
-	return storageId;
-};
-
-export const handleDictationTranscriptionRequest = async (
-	request,
-	response,
-) => {
-	const convexToken = getBearerTokenFromAuthorizationHeader(
-		request.headers.authorization,
-	);
-	if (!convexToken) {
-		sendJson(response, 401, { error: "Authentication is required." });
-		return;
-	}
-
-	const audio = await readBinaryBody(request, {
-		maxBytes: MAX_DICTATION_AUDIO_BYTES,
-	});
-	if (audio.byteLength === 0) {
-		sendJson(response, 400, { error: "Audio is required." });
-		return;
-	}
-
-	const client = new ConvexHttpClient(getConvexUrl(), { auth: convexToken });
-	const uploadUrl = await client.mutation(
-		api.dictationUploads.generateUploadUrl,
-	);
-	const uploadResponse = await fetch(uploadUrl, {
-		method: "POST",
-		headers: {
-			"Content-Type": "audio/wav",
-		},
-		body: audio,
-	});
-	const storageId = await readStorageId(uploadResponse);
-	const uploadId = await client.mutation(api.dictationUploads.register, {
-		storageId,
-	});
-
-	try {
-		const result = await client.action(api.dictationActions.transcribe, {
-			uploadId,
+		const audio = await readBinaryBody(request, {
+			maxBytes: MAX_DICTATION_AUDIO_BYTES,
 		});
-		sendJson(response, 200, result);
-	} catch (error) {
-		await client
-			.mutation(api.dictationUploads.cancel, { uploadId })
-			.catch(() => undefined);
-		throw error;
-	}
-};
+		if (audio.byteLength === 0) {
+			sendJson(response, 400, { error: "Audio is required." });
+			return;
+		}
+
+		const transcriptionResponse = await fetchImpl(
+			`${getConvexSiteUrl()}/api/dictation-transcription`,
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${convexToken}`,
+					"Content-Type": DICTATION_AUDIO_CONTENT_TYPE,
+				},
+				body: audio,
+			},
+		);
+		const payload = await transcriptionResponse.json().catch(() => ({
+			error: "Unable to transcribe audio.",
+		}));
+		const retryAfter = transcriptionResponse.headers.get("retry-after");
+		sendJson(
+			response,
+			transcriptionResponse.status,
+			payload,
+			retryAfter ? { "Retry-After": retryAfter } : null,
+		);
+	};
+
+export const handleDictationTranscriptionRequest =
+	createDictationTranscriptionRequestHandler({ fetchImpl: fetch });

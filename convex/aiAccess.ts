@@ -1,12 +1,22 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { mutation } from "./_generated/server";
+import { consumeAiRateLimit } from "./aiRateLimits";
 import { requireIdentity } from "./domain";
 
-export const verify = query({
+export const authorizeRealtimeSession = mutation({
 	args: {},
-	returns: v.boolean(),
+	returns: v.object({
+		tokenIdentifier: v.string(),
+	}),
 	handler: async (ctx) => {
-		await requireIdentity(ctx, "AI features");
-		return true;
+		const identity = await requireIdentity(ctx, "realtime transcription");
+		await consumeAiRateLimit(ctx, {
+			operation: "realtime-session",
+			ownerTokenIdentifier: identity.tokenIdentifier,
+		});
+
+		return {
+			tokenIdentifier: identity.tokenIdentifier,
+		};
 	},
 });

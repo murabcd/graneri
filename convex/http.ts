@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
+import { handleDictationTranscriptionUploadRequest } from "./dictationHttp";
 import { handleJiraWebhookRequest } from "./jiraWebhook";
 import { handleMcpOAuthCallbackRequest } from "./mcpOAuth";
 import { handleZoomOAuthCallbackRequest } from "./zoomOAuth";
@@ -8,6 +9,15 @@ import { handleZoomOAuthCallbackRequest } from "./zoomOAuth";
 const http = httpRouter();
 
 authComponent.registerRoutes(http, createAuth, { cors: true });
+
+http.route({
+	path: "/api/dictation-transcription",
+	method: "POST",
+	handler: httpAction(
+		async (ctx, request) =>
+			await handleDictationTranscriptionUploadRequest(ctx, request),
+	),
+});
 
 http.route({
 	path: "/api/webhooks/jira",

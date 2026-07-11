@@ -1,6 +1,7 @@
+import { MAX_DICTATION_PCM_BYTES } from "../../../packages/ai/src/dictation-policy.mjs";
 import { getPcm16BufferAverageAbsVolume } from "./pcm16-volume.mjs";
 
-export const maxDictationPcmBytes = 25_000_000;
+export const maxDictationPcmBytes = MAX_DICTATION_PCM_BYTES;
 const speechVolumeThreshold = 0.003;
 
 export const createPcm16MonoWavHeader = ({ byteLength, sampleRate }) => {
