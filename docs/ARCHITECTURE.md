@@ -264,6 +264,13 @@ sessions; they must not reimplement form reset, OAuth navigation, connection
 failure cleanup, or workspace-scoped loading. Remote MCP providers enter through
 `use-remote-mcp-connection-session.ts`, while capability identity and defaults
 remain authoritative in `@workspace/ai/capability-metadata`.
+Note transcript capture lifecycle is owned by
+`apps/web/src/lib/note-transcript-capture-session.ts`. It serializes session
+identity, concurrent starts, draft/server hydration precedence, queued and
+deduplicated utterance persistence, capture-scope replacement, and system-audio
+mode persistence claims. React effects in `use-note-transcript-session.ts`
+adapt this lifecycle to route scope, Convex repositories, and desktop capture;
+they must not recreate temporal ownership with parallel refs.
 
 `convex/`
 : Server functions, schema, HTTP actions, auth, and server-only integrations.
