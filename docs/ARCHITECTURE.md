@@ -26,6 +26,11 @@ local-tool handoff, active-run resume, persisted-message reseeding and merging,
 and durable follow-up drain and controls. Full chat and note chat remain view
 adapters: they own composer and presentation behavior but must not assemble
 parallel stream, recovery, or queue lifecycles.
+The note document session is the authoritative module for note hydration, local
+draft recovery, remote reconciliation, debounced saves, per-note in-flight save
+serialization, and flush-on-navigation behavior. The note page remains a view
+adapter: it projects session documents into Tiptap and must not rebuild save or
+draft ordering with local effects and refs.
 
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.

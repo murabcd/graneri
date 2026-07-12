@@ -29,6 +29,10 @@ import {
 	plainTextToDocumentNodes,
 } from "@/lib/note-document-content";
 import {
+	createNoteDocumentSession,
+	type NoteDocument,
+} from "@/lib/note-document-session";
+import {
 	loadNoteDraft,
 	removeNoteDraft,
 	saveNoteDraft,
@@ -45,11 +49,6 @@ import {
 	parseStoredNoteContent,
 } from "@/lib/note-editor";
 import { exportTextFile } from "@/lib/note-export";
-import {
-	createNoteSnapshot,
-	getFlushableQueuedNoteSave,
-	isLatestNoteSaveRequest,
-} from "@/lib/note-snapshot";
 import {
 	requestEnhancedStructuredNote,
 	requestTemplateStructuredNote,
@@ -92,8 +91,6 @@ type Highlight = object;
 
 const NOTE_SEARCH_MATCH_HIGHLIGHT = "note-search-match";
 const NOTE_SEARCH_ACTIVE_MATCH_HIGHLIGHT = "note-search-active-match";
-const NOTE_SAVE_DEBOUNCE_MS = 2000;
-const NOTE_SAVE_MAX_DEBOUNCE_MS = 10_000;
 
 const showActionError = (message: string, error: unknown) => {
 	logError({ event: "client.error", error: error, message: message });
@@ -200,13 +197,7 @@ const useNotePageController = ({
 		},
 		[onTitleChange],
 	);
-	const hasHydratedRef = React.useRef(false);
-	const hydratedNoteIdRef = React.useRef<Id<"notes"> | null>(null);
 	const suppressNextTitleChangeRef = React.useRef(false);
-	const saveInFlightRef = React.useRef(false);
-	const lastSavedSnapshotRef = React.useRef<string | null>(null);
-	const latestSaveRequestIdRef = React.useRef(0);
-	const firstUnsavedChangeAtRef = React.useRef<number | null>(null);
 	const publishedEditorActionsRef = React.useRef<{
 		noteId: Id<"notes">;
 		canCopyMarkdown: boolean;
@@ -215,25 +206,6 @@ const useNotePageController = ({
 		canShowTemplateSelect: boolean;
 	} | null>(null);
 	const publishEditorActionsRef = React.useRef<(() => void) | null>(null);
-	const queuedSaveRef = React.useRef<{
-		requestId: number;
-		snapshot: string;
-		payload: {
-			title: string;
-			content: string;
-			searchableText: string;
-		};
-	} | null>(null);
-	const pendingSaveRef = React.useRef<{
-		noteId: Id<"notes">;
-		requestId: number;
-		snapshot: string;
-		payload: {
-			title: string;
-			content: string;
-			searchableText: string;
-		};
-	} | null>(null);
 	const shouldPreserveStructuredNoteTitle = Boolean(note?.calendarEventKey);
 	const saveNote = useMutation(api.notes.save);
 	const setNoteTemplate = useMutation(
@@ -246,99 +218,6 @@ const useNotePageController = ({
 		});
 		optimisticPatchNote(localStore, args.workspaceId, args.id, patchNote);
 	});
-
-	const flushSave = React.useCallback(
-		async (
-			nextNoteId: Id<"notes">,
-			requestId: number,
-			snapshot: string,
-			payload: {
-				title: string;
-				content: string;
-				searchableText: string;
-			},
-		) => {
-			if (
-				!isLatestNoteSaveRequest({
-					requestId,
-					latestRequestId: latestSaveRequestIdRef.current,
-				})
-			) {
-				return;
-			}
-
-			if (saveInFlightRef.current) {
-				queuedSaveRef.current = { requestId, snapshot, payload };
-				return;
-			}
-
-			saveInFlightRef.current = true;
-
-			try {
-				if (!activeWorkspaceId) {
-					return;
-				}
-
-				await saveNote({
-					workspaceId: activeWorkspaceId,
-					id: nextNoteId,
-					...payload,
-				});
-				lastSavedSnapshotRef.current = snapshot;
-				firstUnsavedChangeAtRef.current = null;
-				await removeNoteDraft(nextNoteId);
-				if (pendingSaveRef.current?.snapshot === snapshot) {
-					pendingSaveRef.current = null;
-				}
-			} catch (error) {
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to save note",
-				});
-			} finally {
-				saveInFlightRef.current = false;
-
-				const queuedSaveToFlush = getFlushableQueuedNoteSave({
-					lastSavedSnapshot: lastSavedSnapshotRef.current,
-					latestRequestId: latestSaveRequestIdRef.current,
-					queuedSave: queuedSaveRef.current,
-				});
-				queuedSaveRef.current = null;
-				if (queuedSaveToFlush) {
-					void flushSave(
-						nextNoteId,
-						queuedSaveToFlush.requestId,
-						queuedSaveToFlush.snapshot,
-						queuedSaveToFlush.payload,
-					);
-				}
-			}
-		},
-		[activeWorkspaceId, saveNote],
-	);
-	const flushPendingSave = React.useCallback(
-		(noteIdToFlush: Id<"notes"> | null) => {
-			const pendingSave = pendingSaveRef.current;
-
-			if (
-				!noteIdToFlush ||
-				!pendingSave ||
-				pendingSave.noteId !== noteIdToFlush
-			) {
-				return;
-			}
-
-			pendingSaveRef.current = null;
-			void flushSave(
-				pendingSave.noteId,
-				pendingSave.requestId,
-				pendingSave.snapshot,
-				pendingSave.payload,
-			);
-		},
-		[flushSave],
-	);
 
 	const getTableOfContentsScrollParent = React.useCallback(
 		() => scrollParentRef?.current ?? window,
@@ -435,121 +314,64 @@ const useNotePageController = ({
 		},
 		[editor, syncTableOfContents],
 	);
-	const syncHydratedNoteState = React.useCallback(async () => {
-		if (hydratedNoteIdRef.current !== noteId) {
-			hydratedNoteIdRef.current = noteId;
-			hasHydratedRef.current = false;
-			lastSavedSnapshotRef.current = null;
-			latestSaveRequestIdRef.current = 0;
-			firstUnsavedChangeAtRef.current = null;
-			queuedSaveRef.current = null;
-			pendingSaveRef.current = null;
-			setTableOfContents([]);
-			pendingTableOfContentsRef.current = null;
-
-			if (editor) {
-				applyDraftState({
-					title: "",
-					content: EMPTY_DOCUMENT_STRING,
-					searchableText: "",
-				});
-				setEditorDocument(EMPTY_DOCUMENT);
-			}
-		}
-
-		if (!editor || !noteId || note === undefined || hasHydratedRef.current) {
-			if (editor && note && hasHydratedRef.current) {
-				const remoteSnapshot = createNoteSnapshot({
-					title: note.title,
-					content: note.content,
-					searchableText: note.searchableText,
-				});
-				const localSnapshot = createNoteSnapshot({
-					title,
-					content,
-					searchableText,
-				});
-
-				if (
-					remoteSnapshot !== lastSavedSnapshotRef.current &&
-					localSnapshot === lastSavedSnapshotRef.current &&
-					!pendingSaveRef.current &&
-					!saveInFlightRef.current
-				) {
-					const nextContent = parseStoredNoteContent(
-						note.content,
-						editor.state.schema,
-					);
-
-					applyDraftState({
-						title: note.title,
-						content: note.content,
-						searchableText: note.searchableText,
-					});
-					lastSavedSnapshotRef.current = remoteSnapshot;
-					await removeNoteDraft(note._id);
-					setEditorDocument(nextContent);
-				}
-			}
-			return;
-		}
-
-		if (note) {
-			const localDraft =
-				activeWorkspaceId && note.updatedAt
-					? await loadNoteDraft({
-							noteId: note._id,
-							workspaceId: activeWorkspaceId,
-						})
-					: null;
-			if (localDraft && localDraft.updatedAt <= note.updatedAt) {
-				void removeNoteDraft(note._id);
-			}
-			const nextDraft =
-				localDraft && localDraft.updatedAt > note.updatedAt
-					? {
-							title: localDraft.title,
-							content: localDraft.content,
-							searchableText: localDraft.searchableText,
-						}
-					: {
-							title: note.title,
-							content: note.content,
-							searchableText: note.searchableText,
-						};
-			const nextContent = parseStoredNoteContent(
-				nextDraft.content,
-				editor.state.schema,
+	const latestDocumentRef = React.useRef<NoteDocument>({
+		title,
+		content,
+		searchableText,
+	});
+	latestDocumentRef.current = { title, content, searchableText };
+	const applyDocumentRef = React.useRef<(document: NoteDocument) => void>(
+		() => {},
+	);
+	applyDocumentRef.current = (document) => {
+		applyDraftState(document);
+		if (editor) {
+			setEditorDocument(
+				parseStoredNoteContent(document.content, editor.state.schema),
 			);
-
-			applyDraftState(nextDraft);
-			lastSavedSnapshotRef.current = createNoteSnapshot({
-				title: note.title,
-				content: note.content,
-				searchableText: note.searchableText,
-			});
-			setEditorDocument(nextContent);
-		} else {
-			lastSavedSnapshotRef.current = createNoteSnapshot({
+		}
+		setTableOfContents([]);
+		pendingTableOfContentsRef.current = null;
+	};
+	const saveNoteRef = React.useRef(saveNote);
+	saveNoteRef.current = saveNote;
+	const [documentSession] = React.useState(() =>
+		createNoteDocumentSession<Id<"workspaces">, Id<"notes">>({
+			emptyDocument: {
 				title: "",
 				content: EMPTY_DOCUMENT_STRING,
 				searchableText: "",
-			});
-			setEditorDocument(EMPTY_DOCUMENT);
-		}
-
-		hasHydratedRef.current = true;
-	}, [
-		activeWorkspaceId,
-		applyDraftState,
-		content,
-		editor,
-		note,
-		noteId,
-		searchableText,
-		setEditorDocument,
-		title,
-	]);
+			},
+			readDocument: () => latestDocumentRef.current,
+			applyDocument: (document) => applyDocumentRef.current(document),
+			loadDraft: ({ noteId, workspaceId }) =>
+				loadNoteDraft({ noteId, workspaceId }),
+			saveDraft: ({ noteId, workspaceId, document }) =>
+				saveNoteDraft({ noteId, workspaceId, payload: document }),
+			removeDraft: removeNoteDraft,
+			saveRemote: async ({ noteId, workspaceId, document }) => {
+				await saveNoteRef.current({
+					workspaceId,
+					id: noteId,
+					...document,
+				});
+			},
+			onSaveError: (error) => {
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to save note",
+				});
+			},
+			onDraftError: (error) => {
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to persist local note draft",
+				});
+			},
+		}),
+	);
 
 	React.useEffect(() => {
 		nextNoteIdRef.current = noteId;
@@ -576,8 +398,27 @@ const useNotePageController = ({
 	}, [note?.templateSlug, searchableText, templateApplyState.isRunning, title]);
 
 	React.useEffect(() => {
-		void syncHydratedNoteState();
-	}, [syncHydratedNoteState]);
+		if (!editor) {
+			return;
+		}
+
+		void documentSession.synchronize({
+			workspaceId: activeWorkspaceId,
+			noteId,
+			remote:
+				note === undefined
+					? undefined
+					: note
+						? {
+								id: note._id,
+								title: note.title,
+								content: note.content,
+								searchableText: note.searchableText,
+								updatedAt: note.updatedAt,
+							}
+						: null,
+		});
+	}, [activeWorkspaceId, documentSession, editor, note, noteId]);
 
 	React.useEffect(() => {
 		return () => {
@@ -588,81 +429,28 @@ const useNotePageController = ({
 	}, []);
 
 	React.useEffect(() => {
-		if (!noteId || !hasHydratedRef.current) {
-			return;
-		}
-
 		if (templateApplyState.isRunning) {
 			return;
 		}
 
-		const snapshot = createNoteSnapshot({
+		documentSession.update({
 			title,
 			content,
 			searchableText,
 		});
-
-		if (snapshot === lastSavedSnapshotRef.current) {
-			firstUnsavedChangeAtRef.current = null;
-			return;
-		}
-
-		const now = Date.now();
-		firstUnsavedChangeAtRef.current ??= now;
-		const elapsedSinceFirstUnsavedChange =
-			now - firstUnsavedChangeAtRef.current;
-		const remainingMaxDebounceMs = Math.max(
-			0,
-			NOTE_SAVE_MAX_DEBOUNCE_MS - elapsedSinceFirstUnsavedChange,
-		);
-		const requestId = latestSaveRequestIdRef.current + 1;
-		latestSaveRequestIdRef.current = requestId;
-		const payload = {
-			title,
-			content,
-			searchableText,
-		};
-		if (activeWorkspaceId) {
-			void saveNoteDraft({
-				noteId,
-				workspaceId: activeWorkspaceId,
-				payload,
-			});
-		}
-		pendingSaveRef.current = {
-			noteId,
-			requestId,
-			snapshot,
-			payload,
-		};
-
-		const timeout = window.setTimeout(
-			() => {
-				void flushSave(noteId, requestId, snapshot, payload);
-			},
-			Math.min(NOTE_SAVE_DEBOUNCE_MS, remainingMaxDebounceMs),
-		);
-
-		return () => {
-			window.clearTimeout(timeout);
-		};
 	}, [
 		content,
-		activeWorkspaceId,
-		flushSave,
-		noteId,
+		documentSession,
 		searchableText,
 		templateApplyState.isRunning,
 		title,
 	]);
 
 	React.useEffect(() => {
-		const noteIdToFlush = noteId;
-
 		return () => {
-			flushPendingSave(noteIdToFlush);
+			documentSession.dispose();
 		};
-	}, [flushPendingSave, noteId]);
+	}, [documentSession]);
 
 	React.useEffect(() => {
 		if (suppressNextTitleChangeRef.current) {
@@ -680,7 +468,7 @@ const useNotePageController = ({
 	}, [onTitleChange, title]);
 
 	React.useEffect(() => {
-		if (!noteId || !hasHydratedRef.current || externalTitle === undefined) {
+		if (!noteId || note === undefined || externalTitle === undefined) {
 			return;
 		}
 
@@ -690,7 +478,7 @@ const useNotePageController = ({
 
 		suppressNextTitleChangeRef.current = true;
 		setTitle(externalTitle);
-	}, [externalTitle, noteId]);
+	}, [externalTitle, note, noteId]);
 
 	React.useEffect(() => {
 		void title;
@@ -1059,19 +847,11 @@ const useNotePageController = ({
 				if (!nextNoteId) {
 					return;
 				}
-				const saveSnapshot = createNoteSnapshot({
-					title: nextTitle,
-					content: nextContent,
-					searchableText: nextSearchableText,
-				});
-				const requestId = latestSaveRequestIdRef.current + 1;
-				latestSaveRequestIdRef.current = requestId;
-
 				setEditorDocument(nextDocument);
 				setTitle(nextTitle);
 				setContent(nextContent);
 				setSearchableText(nextSearchableText);
-				await flushSave(nextNoteId, requestId, saveSnapshot, {
+				await documentSession.saveNow({
 					title: nextTitle,
 					content: nextContent,
 					searchableText: nextSearchableText,
@@ -1089,9 +869,9 @@ const useNotePageController = ({
 		},
 		[
 			activeWorkspaceId,
+			documentSession,
 			noteId,
 			editor,
-			flushSave,
 			searchableText,
 			setEditorDocument,
 			setNoteTemplate,
