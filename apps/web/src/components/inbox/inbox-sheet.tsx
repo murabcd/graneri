@@ -611,6 +611,7 @@ const InboxPanel = React.memo(function InboxPanel({
 			}
 			return next;
 		});
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [items, markAllReadRequestId]);
 
 	React.useEffect(() => {
@@ -623,7 +624,6 @@ const InboxPanel = React.memo(function InboxPanel({
 			for (const item of items) {
 				const itemId = String(item._id);
 				// The list owns optimistic item state; archive-read requests arrive from the header command.
-				// react-doctor-disable-next-line react-doctor/no-event-handler
 				const isRead = item.isRead || optimisticReadItemIds.has(itemId);
 				if (isRead) {
 					next.add(itemId);
@@ -631,6 +631,7 @@ const InboxPanel = React.memo(function InboxPanel({
 			}
 			return next;
 		});
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [archiveReadRequestId, items, optimisticReadItemIds, view]);
 
 	React.useEffect(() => {
@@ -645,6 +646,7 @@ const InboxPanel = React.memo(function InboxPanel({
 			}
 			return next;
 		});
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [clearArchivedRequestId, items, view]);
 
 	const handleMarkItemRead = async (item: InboxItem) => {
@@ -675,7 +677,6 @@ const InboxPanel = React.memo(function InboxPanel({
 
 	const handleOpenItem = async (item: InboxItem) => {
 		// Opening any inbox item should mark it read before navigation or external handoff.
-		// react-doctor-disable-next-line react-doctor/async-defer-await
 		await handleMarkItemRead(item);
 
 		if (item.provider === "notes" && item.kind === "note-comment") {

@@ -1432,7 +1432,6 @@ function useNoteCommentsSheetController({
 	const threads = useQuery(
 		api.noteComments.listThreads,
 		// Thread query input follows note/workspace props; no event handler owns route changes.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		workspaceId && noteId
 			? {
 					workspaceId,
@@ -1461,25 +1460,28 @@ function useNoteCommentsSheetController({
 	const deleteThread = useMutation(api.noteComments.deleteThread);
 
 	React.useEffect(() => {
-		if (!threads || optimisticReadThreadIds.size === 0) {
+		if (!threads) {
 			return;
 		}
 
 		// Server thread updates confirm optimistic read state; this reconciles external query data.
-		// react-doctor-disable-next-line react-doctor/no-chain-state-updates
 		setOptimisticReadThreadIds((current) => {
+			if (current.size === 0) {
+				return current;
+			}
+
 			let changed = false;
 			const next = new Set(current);
 
 			for (const thread of threads) {
-				if (!thread.isRead && next.delete(String(thread._id))) {
+				if (thread.isRead && next.delete(String(thread._id))) {
 					changed = true;
 				}
 			}
 
 			return changed ? next : current;
 		});
-	}, [optimisticReadThreadIds.size, threads]);
+	}, [threads]);
 
 	const visibleThreads = React.useMemo(() => {
 		if (!threads) {
@@ -1502,7 +1504,6 @@ function useNoteCommentsSheetController({
 	}, [
 		threads,
 		// Anchor order is synchronized from editor decorations, not from a local event.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		visibleThreadOrder,
 	]);
 	const cachedExpandedThread = expandedThreadId
@@ -1588,7 +1589,6 @@ function useNoteCommentsSheetController({
 
 		lastAnchorSyncKeyRef.current = nextSyncKey;
 		// Comment anchor order is read from the live editor document after content changes.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		setVisibleThreadOrder(collectVisibleThreadOrder(editor));
 	}, [editor, noteContent, noteId]);
 
@@ -1663,7 +1663,6 @@ function useNoteCommentsSheetController({
 
 	React.useEffect(() => {
 		// Pending selections are owned by the note page; closing the sheet must clear them.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		if (!open && pendingSelection) {
 			onPendingSelectionChange(null);
 		}
@@ -1701,7 +1700,6 @@ function useNoteCommentsSheetController({
 		lastSyncedActiveThreadIdRef.current = activeThreadId;
 
 		// Active thread is driven by editor selection and must synchronize the sheet state.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		if (!activeThreadId) {
 			collapseExpandedThread();
 			return;

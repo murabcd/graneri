@@ -74,7 +74,6 @@ import {
 } from "lucide-react";
 import * as React from "react";
 // Composer focus and optimistic message paths need committed DOM before the next imperative line.
-// react-doctor-disable-next-line react-doctor/no-flush-sync
 import { createPortal, flushSync } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -356,7 +355,6 @@ const useNoteComposerController = ({
 	} = useSidebarRight();
 	const { rightInsetPanelWidth } = useDockedPanelWidths();
 	// Note id is route/context input for storage and query scopes, not event-handler work.
-	// react-doctor-disable-next-line react-doctor/no-event-handler
 	const noteId = (noteContext.noteId as Id<"notes"> | null) ?? null;
 	const noteStorageScopeKey = getNoteStorageScopeKey(noteId);
 	const draftStorageScope = noteId ? getNoteComposerDraftScope(noteId) : null;
@@ -473,6 +471,7 @@ const useNoteComposerController = ({
 				typeof value === "function" ? value(selectedRecipeSlug) : value;
 			setDraftMetadata(nextValue ? { selectedRecipeSlug: nextValue } : null);
 		},
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[selectedRecipeSlug, setDraftMetadata],
 	);
 	const rootRef = React.useRef<HTMLDivElement>(null);
@@ -520,7 +519,6 @@ const useNoteComposerController = ({
 	const shouldIgnoreNextOutsidePointerDownRef = React.useRef(false);
 	const suppressRecipePickerUntilUserActionRef = React.useRef(false);
 	// Panel mode is local UI state mirrored through refs for external editor handlers.
-	// react-doctor-disable-next-line react-doctor/no-event-handler
 	const panelMode = panelModeState;
 	const presentationMode = presentationModeState;
 
@@ -701,7 +699,7 @@ const useNoteComposerController = ({
 	const transcriptionLanguageSelectValue = getTranscriptionLanguageSelectValue(
 		transcriptionLanguage,
 	);
-	const shouldLoadStoredTranscriptHistory = panelModeState === "transcript";
+	const shouldLoadStoredTranscriptHistory = panelMode === "transcript";
 	const transcriptionSessionState = useTranscriptionSession();
 
 	const handleTranscriptionLanguageChange = React.useCallback(
@@ -1040,6 +1038,7 @@ const useNoteComposerController = ({
 		}
 
 		setRightSidebarWidthOverride(activeSidebarWidthOverride);
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [activeSidebarWidthOverride, isMobile, setRightSidebarWidthOverride]);
 	React.useEffect(() => {
 		if (!isMobile) {
@@ -1047,6 +1046,7 @@ const useNoteComposerController = ({
 		}
 
 		setRightSidebarWidthMobileOverride(activeSidebarWidthOverride);
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		activeSidebarWidthOverride,
 		isMobile,
@@ -1066,7 +1066,7 @@ const useNoteComposerController = ({
 	);
 	const isPersistedChatStreaming = Boolean(displayActiveRun);
 	const isChatUiPending = isChatRequestPending || isPersistedChatStreaming;
-	const canStop = isChatRequestPending || isPersistedChatStreaming;
+	const canStop = isChatUiPending;
 	const hasMessage = message.trim().length > 0;
 	const canGenerateNotes = resolveCanGenerateNotes({
 		hasGeneratedLatestTranscript:
@@ -1246,6 +1246,7 @@ const useNoteComposerController = ({
 		}
 
 		resetComposerForNoteChange();
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [canStop, handleStop, noteId, resetComposerForNoteChange]);
 
 	React.useEffect(() => {
@@ -1255,6 +1256,7 @@ const useNoteComposerController = ({
 		) {
 			setSelectedRecipeSlug(null);
 		}
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [recipes, selectedRecipeSlug, setSelectedRecipeSlug]);
 
 	React.useEffect(
@@ -1275,6 +1277,7 @@ const useNoteComposerController = ({
 		}
 
 		previousSpeechListeningRef.current = isCurrentNoteSpeechListening;
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [closeRightSidebar, isCurrentNoteSpeechListening, setPanelMode]);
 
 	React.useEffect(() => {
@@ -1285,6 +1288,7 @@ const useNoteComposerController = ({
 		if (!isRightSidebarOpen && panelMode === "chat") {
 			setPanelMode(null);
 		}
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [isRightSidebarOpen, panelMode, presentationMode, setPanelMode]);
 
 	React.useEffect(() => {
@@ -1312,6 +1316,7 @@ const useNoteComposerController = ({
 			window.clearTimeout(immediateTimeoutId);
 			window.clearTimeout(delayedTimeoutId);
 		};
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [panelMode, shouldShowInlinePanel]);
 
 	React.useEffect(() => {
@@ -1366,6 +1371,7 @@ const useNoteComposerController = ({
 		return () => {
 			document.removeEventListener("pointerdown", handlePointerDown);
 		};
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [panelMode, setPanelMode, shouldShowInlinePanel]);
 
 	React.useEffect(() => {
@@ -1374,6 +1380,7 @@ const useNoteComposerController = ({
 		}
 
 		closeComposerPopovers();
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [closeComposerPopovers, panelMode, presentationMode]);
 
 	const openDraftChat = React.useCallback(() => {
@@ -1393,10 +1400,11 @@ const useNoteComposerController = ({
 		}
 
 		openRightSidebar(presentationMode);
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		closeComposerPopovers,
-		canStop,
 		handleStop,
+		canStop,
 		openRightSidebar,
 		presentationMode,
 		setMessages,
@@ -1654,6 +1662,7 @@ const useNoteComposerController = ({
 			setIsPreparingRequest(false);
 			requestComposerFocus();
 		}
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		activeRun,
 		activeWorkspaceId,
@@ -1746,6 +1755,7 @@ const useNoteComposerController = ({
 				text: outgoingText,
 			});
 		},
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			activeRun,
 			activeWorkspaceId,
@@ -1831,7 +1841,8 @@ const useNoteComposerController = ({
 			resizeTextarea();
 			requestComposerFocus();
 		},
-		[canStop, handleStop, requestComposerFocus, resizeTextarea, setMessage],
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
+		[handleStop, canStop, requestComposerFocus, resizeTextarea, setMessage],
 	);
 
 	const handleCancelEdit = React.useCallback(() => {
@@ -1914,10 +1925,11 @@ const useNoteComposerController = ({
 				setPendingTruncateMessageId(null);
 			});
 		},
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			activeWorkspaceId,
-			canStop,
 			currentChatId,
+			canStop,
 			resetTextareaHeight,
 			setMessages,
 			clearDraft,
@@ -1963,10 +1975,11 @@ const useNoteComposerController = ({
 				setIsPreparingRequest(false);
 			}
 		},
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			buildRequestBody,
-			canStop,
 			clearDraft,
+			canStop,
 			latestRequestBodyRef,
 			openRightSidebar,
 			presentationMode,
@@ -2623,7 +2636,7 @@ function useInlineFooterHeight() {
 	};
 }
 
-// oxlint-disable-next-line react-doctor/no-giant-component -- Tiptap note-chat composer keeps recipe suggestion lifecycle and submit controls together.
+// react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap footer adapter owns recipe suggestions, editor focus, and submit controls for one popover.
 function ChatInlinePopoverFooter({
 	composerEditorRef,
 	composerPlaceholder,
@@ -2712,7 +2725,6 @@ function ChatInlinePopoverFooter({
 	const selectedRecipeSlugRef = React.useRef<RecipeSlug | null>(
 		selectedRecipe?.slug ?? null,
 	);
-	composerPlaceholderRef.current = composerPlaceholder;
 	const filteredRecipes = React.useMemo(() => {
 		const normalizedQuery = activeMentionQuery.trim().toLowerCase();
 
@@ -2724,14 +2736,24 @@ function ChatInlinePopoverFooter({
 			`${recipe.name} ${recipe.slug}`.toLowerCase().includes(normalizedQuery),
 		);
 	}, [activeMentionQuery, recipes]);
-	filteredRecipesRef.current = filteredRecipes;
-	if (previousRecipePopoverOpenRef.current && !recipePopoverOpen) {
-		suppressRecipePickerUntilUserActionRef.current = true;
-	}
-	previousRecipePopoverOpenRef.current = recipePopoverOpen;
-	recipePopoverOpenRef.current = recipePopoverOpen;
-	selectedRecipeSlugRef.current = selectedRecipe?.slug ?? null;
-	selectedRecipeIndexRef.current = selectedRecipeIndex;
+	React.useEffect(() => {
+		composerPlaceholderRef.current = composerPlaceholder;
+		filteredRecipesRef.current = filteredRecipes;
+		if (previousRecipePopoverOpenRef.current && !recipePopoverOpen) {
+			suppressRecipePickerUntilUserActionRef.current = true;
+		}
+		previousRecipePopoverOpenRef.current = recipePopoverOpen;
+		recipePopoverOpenRef.current = recipePopoverOpen;
+		selectedRecipeSlugRef.current = selectedRecipe?.slug ?? null;
+		selectedRecipeIndexRef.current = selectedRecipeIndex;
+	}, [
+		composerPlaceholder,
+		filteredRecipes,
+		recipePopoverOpen,
+		selectedRecipe?.slug,
+		selectedRecipeIndex,
+		suppressRecipePickerUntilUserActionRef,
+	]);
 
 	const selectRecipeIndex = React.useCallback((index: number) => {
 		selectedRecipeIndexRef.current = index;
@@ -2924,10 +2946,8 @@ function ChatInlinePopoverFooter({
 
 		previousComposerPlaceholderRef.current = composerPlaceholder;
 		// Placeholder updates are ProseMirror transaction metadata, not React-derived state.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		composerEditor.view.dispatch(
 			// Placeholder updates are ProseMirror transaction metadata, not React-derived state.
-			// react-doctor-disable-next-line react-doctor/no-derived-state
 			composerEditor.state.tr.setMeta("addToHistory", false),
 		);
 	}, [composerEditor, composerPlaceholder]);
@@ -2937,13 +2957,10 @@ function ChatInlinePopoverFooter({
 		}
 
 		// Tiptap keeps note-chat text in ProseMirror state; render cannot derive this snapshot.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		const currentText = composerEditor.getText({ blockSeparator: "\n" });
 		// Recipe mentions are embedded in ProseMirror JSON, outside React render state.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		const currentRecipeSlug = getRecipeSlugFromComposerContent(
 			// Recipe mentions are embedded in ProseMirror JSON, outside React render state.
-			// react-doctor-disable-next-line react-doctor/no-derived-state
 			composerEditor.getJSON(),
 		);
 		if (
@@ -2958,7 +2975,6 @@ function ChatInlinePopoverFooter({
 		}
 
 		// External message changes must be pushed through Tiptap's imperative content command.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		composerEditor.commands.setContent(
 			getComposerContentFromMessage(message, selectedRecipe),
 			{ emitUpdate: false },
@@ -2994,7 +3010,9 @@ function ChatInlinePopoverFooter({
 		},
 		[closeRecipePicker, composerEditor, onRecipeSelect, recipes],
 	);
-	handleRecipeSelectRef.current = handleRecipeSelect;
+	React.useEffect(() => {
+		handleRecipeSelectRef.current = handleRecipeSelect;
+	}, [handleRecipeSelect]);
 	const handleAttachmentUploadFailed = React.useCallback(
 		(id: string) => {
 			onAttachedFilesChange((files) => files.filter((file) => file.id !== id));
@@ -4037,14 +4055,17 @@ function NoteTranscriptPanel({
 	);
 
 	React.useEffect(() => {
-		if (transcriptEntryCount <= TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD) {
-			setFullyRenderedTranscriptEntryCount(transcriptEntryCount);
+		const currentTranscriptEntryCount = deferredDisplayTranscriptEntries.length;
+		if (
+			currentTranscriptEntryCount <= TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD
+		) {
+			setFullyRenderedTranscriptEntryCount(currentTranscriptEntryCount);
 			return;
 		}
 
 		const promoteFullTranscriptEntries = () => {
 			React.startTransition(() => {
-				setFullyRenderedTranscriptEntryCount(transcriptEntryCount);
+				setFullyRenderedTranscriptEntryCount(currentTranscriptEntryCount);
 			});
 		};
 
@@ -4065,7 +4086,7 @@ function NoteTranscriptPanel({
 		return () => {
 			globalThis.clearTimeout(timeoutId);
 		};
-	}, [transcriptEntryCount]);
+	}, [deferredDisplayTranscriptEntries.length]);
 	const renderFullTranscriptEntries =
 		transcriptEntryCount <= TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD ||
 		fullyRenderedTranscriptEntryCount === transcriptEntryCount;

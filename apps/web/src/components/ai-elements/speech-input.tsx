@@ -67,9 +67,6 @@ export const SpeechInput = ({
 		session.scopeKey !== null &&
 		session.scopeKey !== scopeKey &&
 		(session.isListening || session.isConnecting);
-	const configuredScopeKey = hasActiveSessionInDifferentScope
-		? session.scopeKey
-		: scopeKey;
 	const scopedLiveTranscript = isScopedSession
 		? session.liveTranscript
 		: createEmptyLiveTranscriptState();
@@ -85,6 +82,9 @@ export const SpeechInput = ({
 			: "Start transcription";
 
 	useEffect(() => {
+		const configuredScopeKey = hasActiveSessionInDifferentScope
+			? session.scopeKey
+			: scopeKey;
 		transcriptionSessionManager.controller.configure({
 			autoStartKey: hasActiveSessionInDifferentScope ? null : autoStartKey,
 			lang,
@@ -92,9 +92,10 @@ export const SpeechInput = ({
 		});
 	}, [
 		autoStartKey,
-		configuredScopeKey,
 		hasActiveSessionInDifferentScope,
 		lang,
+		scopeKey,
+		session.scopeKey,
 	]);
 
 	useSynchronizedCallbackValue(onListeningChange, isScopedListening);

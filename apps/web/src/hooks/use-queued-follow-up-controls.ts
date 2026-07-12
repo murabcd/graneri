@@ -82,10 +82,10 @@ export const useQueuedFollowUpControls = ({
 	if (sendingNowIdsRef.current === null) {
 		sendingNowIdsRef.current = new Set();
 	}
-	const sendNowChainRef = React.useRef<Promise<void> | null>(null);
-	if (sendNowChainRef.current === null) {
-		sendNowChainRef.current = Promise.resolve();
-	}
+	const [initialSendNowChain] = React.useState(() => Promise.resolve());
+	const sendNowChainRef = React.useRef<Promise<void> | null>(
+		initialSendNowChain,
+	);
 
 	const restoreEditedQueuedMessage = React.useCallback(() => {
 		if (!editDraft) {

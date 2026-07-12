@@ -17,6 +17,8 @@ import type * as assistantQueuedMessages from "../assistantQueuedMessages.js";
 import type * as assistantRunEventModel from "../assistantRunEventModel.js";
 import type * as assistantRunEvents from "../assistantRunEvents.js";
 import type * as assistantRunLifecycle from "../assistantRunLifecycle.js";
+import type * as assistantRunModel from "../assistantRunModel.js";
+import type * as assistantRunStateMachine from "../assistantRunStateMachine.js";
 import type * as assistantRuns from "../assistantRuns.js";
 import type * as auth from "../auth.js";
 import type * as automationActions from "../automationActions.js";
@@ -71,6 +73,8 @@ declare const fullApi: ApiFromModules<{
   assistantRunEventModel: typeof assistantRunEventModel;
   assistantRunEvents: typeof assistantRunEvents;
   assistantRunLifecycle: typeof assistantRunLifecycle;
+  assistantRunModel: typeof assistantRunModel;
+  assistantRunStateMachine: typeof assistantRunStateMachine;
   assistantRuns: typeof assistantRuns;
   auth: typeof auth;
   automationActions: typeof automationActions;

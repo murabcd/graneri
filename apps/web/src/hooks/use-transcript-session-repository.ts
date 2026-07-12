@@ -216,7 +216,6 @@ export const useTranscriptSessionRepository = (
 
 		if (latestTranscriptSessionSummary === null) {
 			// The latest-session cache mirrors Convex query state for this note scope.
-			// react-doctor-disable-next-line react-doctor/no-chain-state-updates react-doctor/no-derived-state
 			setLatestTranscriptSessionState({
 				isFetching: false,
 				noteId,

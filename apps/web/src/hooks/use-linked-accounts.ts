@@ -35,6 +35,7 @@ export const useLinkedAccounts = (
 				};
 
 	const loadAccounts = useCallback(async () => {
+		const cacheKey = sessionUser?.email ?? null;
 		const requestId = requestIdRef.current + 1;
 		requestIdRef.current = requestId;
 
@@ -97,7 +98,7 @@ export const useLinkedAccounts = (
 			});
 			toast.error("Failed to load linked Google accounts");
 		}
-	}, [cacheKey, sessionUser]);
+	}, [sessionUser]);
 
 	useEffect(() => {
 		void loadAccounts();

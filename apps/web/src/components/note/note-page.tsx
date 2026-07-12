@@ -561,7 +561,6 @@ const useNotePageController = ({
 		}
 
 		// Tiptap editability is imperative editor state controlled by template application.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		editor.setEditable(!templateApplyState.isRunning);
 	}, [editor, templateApplyState.isRunning]);
 
@@ -685,15 +684,12 @@ const useNotePageController = ({
 			return;
 		}
 
-		const nextTitle = externalTitle;
-		setTitle((currentTitle) => {
-			if (nextTitle === currentTitle) {
-				return currentTitle;
-			}
+		if (externalTitle === latestEditorStateRef.current.title) {
+			return;
+		}
 
-			suppressNextTitleChangeRef.current = true;
-			return nextTitle;
-		});
+		suppressNextTitleChangeRef.current = true;
+		setTitle(externalTitle);
 	}, [externalTitle, noteId]);
 
 	React.useEffect(() => {
@@ -873,7 +869,6 @@ const useNotePageController = ({
 
 			try {
 				// Persist the chosen template even when enhanced rewriting is skipped or later fails.
-				// react-doctor-disable-next-line react-doctor/async-defer-await
 				await setNoteTemplate({
 					workspaceId: activeWorkspaceId,
 					id: nextNoteIdRef.current ?? noteId,
@@ -1019,7 +1014,6 @@ const useNotePageController = ({
 
 		publishEditorActionsRef.current = publishEditorActions;
 		// The app shell needs the live editor action bridge for header commands.
-		// react-doctor-disable-next-line react-doctor/no-pass-live-state-to-parent
 		publishEditorActions();
 		editor.on("update", publishEditorActions);
 
@@ -1300,7 +1294,6 @@ function useNotePageCommentPanel({
 		}
 
 		// The app shell owns the comments button; the page must publish its current opener.
-		// react-doctor-disable-next-line react-doctor/no-pass-live-state-to-parent
 		onCommentsOpenChange?.(handleOpenComments);
 
 		return () => {
@@ -1311,10 +1304,8 @@ function useNotePageCommentPanel({
 	React.useEffect(() => {
 		const nextCommentsPinned = readDesktopCommentsPanelPinnedState(noteId);
 		// Comments pinning restores from desktop storage and viewport state.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		setCommentsPinned(nextCommentsPinned);
 		// Comments panel visibility restores from desktop storage and viewport state.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		setCommentPanelState({
 			commentsOpen: !isMobile && nextCommentsPinned,
 			activeCommentThreadId: null,

@@ -132,7 +132,6 @@ export const useRendererChatSession = ({
 		displayActiveRun || isChatRequestPending
 			? activeSteerHandoffStreamingMessageIds
 			: EMPTY_STREAMING_MESSAGE_IDS;
-
 	useResumeActiveChatRun({
 		activeRun: displayActiveRun,
 		chatId,
@@ -179,6 +178,7 @@ export const useRendererChatSession = ({
 
 			return normalizeChatMessages(currentMessages);
 		});
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		activeRun,
 		activeAssistantMessageId,
@@ -232,6 +232,7 @@ export const useRendererChatSession = ({
 				...steerHandoffStreamingMessageIds,
 				...(displayActiveRun?.interruptedAssistantMessageIds ?? []),
 			]),
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			displayActiveRun?.interruptedAssistantMessageIds,
 			steerHandoffStreamingMessageIds,

@@ -144,7 +144,6 @@ export const useQueuedChatDrain = ({
 			return;
 		}
 		// Queue draining is driven by external run/queue state, not a local UI event.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		const resolvedWorkspaceId = workspaceId;
 		if (!resolvedWorkspaceId) {
 			return;
@@ -156,23 +155,19 @@ export const useQueuedChatDrain = ({
 				const drainResult = await drainQueuedChatMessage({
 					workspaceId: resolvedWorkspaceId,
 					// The queued drain must target the active chat from hook props.
-					// react-doctor-disable-next-line react-doctor/no-event-handler
 					chatId,
 					claimQueuedMessage,
 					discardClaimedMessage,
 					// Local message ids come from the live chat state used to de-dupe drains.
-					// react-doctor-disable-next-line react-doctor/no-event-handler
 					hasMessageId: (messageId) => localMessageIds.has(messageId),
 					pendingDiscardClaimedMessageId:
 						pendingDiscardClaimedMessageIdRef.current,
 					queuedMessageCount,
 					resolveConvexToken: getCachedConvexToken,
 					// Sending is the imperative AI SDK handoff for the claimed queued message.
-					// react-doctor-disable-next-line react-doctor/no-event-handler
 					sendMessage,
 					setLatestRequestBody: (body) => {
 						// Latest request body is stored for the next queued drain handoff.
-						// react-doctor-disable-next-line react-doctor/no-event-handler
 						latestRequestBodyRef.current = body;
 					},
 				});

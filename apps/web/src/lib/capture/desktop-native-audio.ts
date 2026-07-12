@@ -151,7 +151,6 @@ export const createDesktopNativeAudioStream = async (
 
 			try {
 				// Disposal can happen during the backoff timer, so the post-delay guard must stay.
-				// react-doctor-disable-next-line react-doctor/async-defer-await
 				await new Promise((resolvePromise) => {
 					window.setTimeout(resolvePromise, delay);
 				});

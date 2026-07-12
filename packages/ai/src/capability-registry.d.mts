@@ -1,15 +1,15 @@
 import type { ToolSet } from "ai";
+import type {
+	AppSourceInstructionConnection,
+	AppSourceProvider,
+	CapabilityMetadata,
+} from "./capability-metadata.mjs";
 import type { Context7McpToolConnection } from "./context7-tools.mjs";
 import type { FigmaMcpToolConnection } from "./figma-tools.mjs";
 import type { JiraMcpToolConnection } from "./jira-mcp-tools.mjs";
 import type { LinearMcpToolConnection } from "./linear-tools.mjs";
 import type { NotionMcpToolConnection } from "./notion-tools.mjs";
 import type { PostHogMcpToolConnection } from "./posthog-tools.mjs";
-import type {
-	AppSourceInstructionConnection,
-	AppSourceProvider,
-	CapabilityMetadata,
-} from "./capability-metadata.mjs";
 import type { YandexTrackerToolConnection } from "./yandex-tracker-tools.mjs";
 import type { ZoomMcpToolConnection } from "./zoom-mcp-tools.mjs";
 

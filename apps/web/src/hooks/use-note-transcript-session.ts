@@ -82,10 +82,10 @@ export const useNoteTranscriptSession = ({
 	const hasHydratedStoredTranscriptSessionRef = React.useRef(false);
 	const hasLoadedTranscriptDraftContentRef = React.useRef(false);
 	const loadedTranscriptDraftUpdatedAtRef = React.useRef<number | null>(null);
-	const lastAudioActivityAtRef = React.useRef<number | null>(null);
-	if (lastAudioActivityAtRef.current === null) {
-		lastAudioActivityAtRef.current = Date.now();
-	}
+	const [initialLastAudioActivityAt] = React.useState(Date.now);
+	const lastAudioActivityAtRef = React.useRef<number | null>(
+		initialLastAudioActivityAt,
+	);
 	const transcriptUtterancesRef = React.useRef<TranscriptUtterance[]>([]);
 	const listeningStartedAtRef = React.useRef<number | null>(null);
 	const transcriptSessionStartPromiseRef =
@@ -117,10 +117,8 @@ export const useNoteTranscriptSession = ({
 		transcriptionSession,
 	} = useNoteTranscriptScope({
 		// Transcript scope follows the active note route/context.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		noteId,
 		// Stored history loading is an input to transcript scope hydration.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		shouldLoadStoredTranscriptHistory,
 	});
 	const previousTranscriptDraftKeyRef = React.useRef(captureTranscriptDraftKey);
@@ -153,6 +151,7 @@ export const useNoteTranscriptSession = ({
 	const orderedTranscriptUtterances = React.useMemo(
 		() =>
 			mergeTranscriptUtterances(transcriptUtterances, scopedSnapshotUtterances),
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[scopedSnapshotUtterances, transcriptUtterances],
 	);
 
@@ -181,6 +180,7 @@ export const useNoteTranscriptSession = ({
 				session: currentNoteLatestTranscriptSession,
 				summary: currentNoteLatestTranscriptSessionSummary,
 			}),
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			currentNoteLatestTranscriptSession,
 			currentNoteLatestTranscriptSessionSummary,
@@ -202,6 +202,7 @@ export const useNoteTranscriptSession = ({
 				liveTranscript,
 				orderedTranscriptUtterances,
 			}),
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			currentNoteLatestTranscriptSession,
 			isViewingCaptureScope,
@@ -255,7 +256,6 @@ export const useNoteTranscriptSession = ({
 		}
 
 		// Capture scope follows route state only when no live recording owns the scope.
-		// react-doctor-disable-next-line react-doctor/no-pass-data-to-parent
 		setCaptureScopeKey((currentScopeKey) =>
 			currentScopeKey === resolvedCaptureScopeKey
 				? currentScopeKey
@@ -278,7 +278,6 @@ export const useNoteTranscriptSession = ({
 			enabled: stopTranscriptionWhenMeetingEnds === true && isDesktopRuntime(),
 		});
 		// Auto-start is a one-shot route request latch, not render-derived state.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		setPendingAutoStartKey(queuedAutoStartKey);
 	}, [
 		queuedAutoStartKey,

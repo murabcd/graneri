@@ -292,10 +292,8 @@ const useAppShellState = ({
 		React.useState<Id<"workspaces"> | null>(() => workspaces[0]?._id ?? null);
 	const resolvedActiveWorkspaceId = resolveActiveWorkspaceId({
 		// Workspace resolution is pure render derivation; no event handler owns these query inputs.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		activeWorkspaceId,
 		// Workspace resolution is pure render derivation; no event handler owns these query inputs.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		workspaces,
 	});
 	const [currentChatId, setCurrentChatId] = React.useState<string | null>(
@@ -399,10 +397,10 @@ const useAppShellState = ({
 	}, [userPreferences]);
 	const creatingNoteRef = React.useRef(false);
 	const inboxOpenRef = React.useRef(inboxOpen);
-	const lastNonSettingsLocationRef = React.useRef<string | null>(null);
-	if (lastNonSettingsLocationRef.current === null) {
-		lastNonSettingsLocationRef.current = getInitialNonSettingsLocation();
-	}
+	const [initialNonSettingsLocation] = React.useState(
+		getInitialNonSettingsLocation,
+	);
+	const lastNonSettingsLocationRef = React.useRef(initialNonSettingsLocation);
 	const user = React.useMemo(
 		() => toAppUser(session, userPreferences?.avatarUrl),
 		[session, userPreferences?.avatarUrl],
@@ -419,7 +417,6 @@ const useAppShellState = ({
 		});
 	const upcomingCalendarRequestIdRef = React.useRef(0);
 	// Calendar loading is driven by auth and account state, not by a local event handler.
-	// react-doctor-disable-next-line react-doctor/no-event-handler
 	const upcomingCalendarLoadKey = session?.user?.email
 		? `${isConvexAuthenticated ? "authenticated" : "unauthenticated"}:${session.user.email}`
 		: "anonymous";
@@ -580,13 +577,10 @@ const useAppShellState = ({
 		normalizedRouteNoteId === undefined;
 	const hasInvalidCurrentNoteRoute =
 		// Route validity is render-time URL/query derivation; navigation is synchronized elsewhere.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		currentView === "note" &&
 		// Route validity is render-time URL/query derivation; navigation is synchronized elsewhere.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		currentRouteNoteId !== null &&
 		// Route validity is render-time URL/query derivation; navigation is synchronized elsewhere.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		currentNoteId === null &&
 		normalizedRouteNoteId === null;
 	const listedSelectedNote =
@@ -620,6 +614,7 @@ const useAppShellState = ({
 				title,
 			});
 		},
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[resolvedCurrentNoteId],
 	);
 	const isResolvingCurrentNote =
@@ -635,7 +630,6 @@ const useAppShellState = ({
 		currentView,
 		expectedView: "chat",
 		// Route resolution is pure render derivation from URL state, not delayed event work.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		id: currentChatId,
 		items: chats,
 		matches: (chat, id) => getChatId(chat) === id,
@@ -649,7 +643,6 @@ const useAppShellState = ({
 		currentView,
 		expectedView: "project",
 		// Route resolution is pure render derivation from URL state, not delayed event work.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
 		id: currentProjectIdString,
 		items: projects,
 		matches: (project, id) => project._id === id,
@@ -1183,6 +1176,7 @@ const useAppShellState = ({
 								: "/home",
 			);
 		},
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			currentProjectIdString,
 			openDraftChat,
@@ -1407,6 +1401,7 @@ const useAppShellState = ({
 			"",
 			`/note?noteId=${resolvedCurrentNoteId}`,
 		);
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [resolvedCurrentNoteId, resolvedCurrentView]);
 
 	React.useEffect(() => {
@@ -1423,6 +1418,7 @@ const useAppShellState = ({
 				stopCaptureWhenMeetingEnds: shouldStopNoteCaptureWhenMeetingEnds,
 			});
 		}
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		currentRouteNoteId,
 		handleCreateNote,
@@ -1461,6 +1457,7 @@ const useAppShellState = ({
 		}, scheduledAt - Date.now());
 
 		return () => window.clearTimeout(timeoutId);
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		clearScheduledAutoStart,
 		resolvedCurrentNoteId,
@@ -1605,6 +1602,7 @@ const useAppShellState = ({
 			setCurrentNoteCommentsOpener(null);
 			handleViewChange("home");
 		},
+		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[handleViewChange, resolvedCurrentNoteId],
 	);
 	const handlePrefetchChat = React.useCallback(

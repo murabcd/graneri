@@ -762,7 +762,9 @@ export function ProjectSidebarItem({
 			return;
 		}
 
-		const nextName = normalizeProjectName(renameValue);
+		const nextName = normalizeProjectName(
+			state.renameOpen ? state.renameValue : project.name,
+		);
 		if (nextName.length < 1) {
 			toast.error("Project name is required");
 			return;
@@ -805,7 +807,8 @@ export function ProjectSidebarItem({
 		project._id,
 		project.name,
 		renameProject,
-		renameValue,
+		state.renameOpen,
+		state.renameValue,
 		workspaceId,
 	]);
 

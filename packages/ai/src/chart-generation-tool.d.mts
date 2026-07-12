@@ -1,5 +1,4 @@
-import type { Tool } from "ai";
-import type { UIMessage } from "ai";
+import type { Tool, UIMessage } from "ai";
 
 export declare const CHART_GENERATION_TOOL_NAME = "generate_chart";
 

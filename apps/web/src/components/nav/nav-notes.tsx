@@ -288,7 +288,6 @@ function SidebarNotesList({
 							align="start"
 							side="right"
 							// renameAnchor is an intentional popover anchor slot; NoteActionsMenu is not memoized.
-							// react-doctor-disable-next-line react-doctor/jsx-no-jsx-as-prop
 							renameAnchor={renameAnchor}
 							renamePopoverAlign="start"
 							renamePopoverSide="bottom"

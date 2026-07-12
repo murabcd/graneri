@@ -67,7 +67,6 @@ export const useComposerDraft = <TMetadata>(
 		const nextDraft = readComposerDraft<TMetadata>(scopeKey, initialDraft);
 		draftRef.current = nextDraft;
 		// Draft state hydrates from scope-keyed localStorage when the active composer changes.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		setDraftState(nextDraft);
 	}, [cancelPendingPersist, initialDraft, scopeKey]);
 

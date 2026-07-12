@@ -684,7 +684,7 @@ export function CreateAutomationDialog(props: CreateAutomationDialogProps) {
 	return useCreateAutomationDialogElement(props);
 }
 
-// oxlint-disable-next-line react-doctor/no-giant-component -- Tiptap editor shell keeps lifecycle refs and suggestion state together.
+// react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap adapter owns one editor instance, its suggestion refs, and imperative synchronization.
 function AutomationPromptEditor({
 	id,
 	prompt,
@@ -747,12 +747,21 @@ function AutomationPromptEditor({
 		[visibleNoteSources, visibleToolSources],
 	);
 
-	allNoteSourcesRef.current = noteSources;
-	allAppSourcesRef.current = appSources;
-	visibleNoteSourcesRef.current = visibleNoteSources;
-	visibleItemsRef.current = visibleItems;
-	selectedIndexRef.current = selectedIndex;
-	popoverOpenRef.current = popoverOpen;
+	React.useEffect(() => {
+		allNoteSourcesRef.current = noteSources;
+		allAppSourcesRef.current = appSources;
+		visibleNoteSourcesRef.current = visibleNoteSources;
+		visibleItemsRef.current = visibleItems;
+		selectedIndexRef.current = selectedIndex;
+		popoverOpenRef.current = popoverOpen;
+	}, [
+		appSources,
+		noteSources,
+		popoverOpen,
+		selectedIndex,
+		visibleItems,
+		visibleNoteSources,
+	]);
 
 	const selectIndex = React.useCallback((index: number) => {
 		selectedIndexRef.current = index;
@@ -827,7 +836,6 @@ function AutomationPromptEditor({
 		}
 
 		// Picker coordinates come from the live Tiptap DOM range, so render cannot derive them safely.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		setPosition(
 			getMentionPickerPosition({
 				rect,
@@ -974,12 +982,10 @@ function AutomationPromptEditor({
 		}
 
 		// Tiptap keeps content in ProseMirror state; this reads an external editor snapshot.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		const currentText = editor.getText({ blockSeparator: "\n" });
 		if (
 			currentText === prompt &&
 			// Tiptap mention nodes live in editor JSON, not React render state.
-			// react-doctor-disable-next-line react-doctor/no-derived-state
 			getPromptMentionsFromContent(editor.getJSON()).length === mentions.length
 		) {
 			return;
@@ -990,7 +996,6 @@ function AutomationPromptEditor({
 		}
 
 		// Prop changes must be applied through Tiptap's imperative editor command.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		editor.commands.setContent(getPromptDocument(prompt, mentions), {
 			emitUpdate: false,
 		});
@@ -1073,7 +1078,7 @@ function handleAutomationMentionPickerKeyDown({
 }
 
 // Private portal tied to the composer suggestion refs; extracting it would not create a reusable API.
-// react-doctor-disable-next-line react-doctor/no-multi-comp
+// react-doctor-disable-next-line react-doctor/no-multi-comp -- private portal is an implementation slot of AutomationPromptEditor and has no independent feature API.
 function AutomationMentionPicker({
 	open,
 	position,
@@ -1222,7 +1227,7 @@ function AutomationMentionPicker({
 }
 
 // Private picker slot for this composer; its props are the composer state boundary.
-// react-doctor-disable-next-line react-doctor/no-multi-comp
+// react-doctor-disable-next-line react-doctor/no-multi-comp -- private scope-picker slot shares the dialog controller contract and is not a reusable component boundary.
 function AppSourcesPicker({
 	open,
 	onOpenChange,
@@ -1288,7 +1293,7 @@ function AppSourcesPicker({
 }
 
 // Private scheduling slot for this dialog; it shares the dialog's schedule state directly.
-// react-doctor-disable-next-line react-doctor/no-multi-comp
+// react-doctor-disable-next-line react-doctor/no-multi-comp -- private schedule-picker slot shares the dialog schedule state and is not an independent module.
 function SchedulePicker({
 	open,
 	onOpenChange,

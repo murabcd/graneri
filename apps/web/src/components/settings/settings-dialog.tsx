@@ -1020,9 +1020,14 @@ function JiraConnectionDialogs({
 				onEmailChange={controller.setJiraEmail}
 				onTokenChange={controller.setJiraToken}
 				onConnect={() => void controller.handleConnectJira()}
-				isFormValid={controller.isJiraFormValid}
-				isSaving={controller.isSavingJiraConnection}
-				isDisabling={controller.isDisablingConnection}
+				canConnect={controller.isJiraFormValid}
+				connectionStatus={
+					controller.isDisablingConnection
+						? "disabling"
+						: controller.isSavingJiraConnection
+							? "saving"
+							: "idle"
+				}
 				onDisable={
 					controller.jiraConnection
 						? controller.handleDisableJiraSync
@@ -1430,6 +1435,7 @@ function useConnectionsSettingsController() {
 	}, []);
 
 	useEffect(() => {
+		const jiraConnection = stableConnectionSettings.jira;
 		if (!activeWorkspaceId || !jiraConnection) {
 			lastPreparedJiraSyncKeyRef.current = null;
 			return;
@@ -1458,7 +1464,11 @@ function useConnectionsSettingsController() {
 			.finally(() => {
 				setIsPreparingJiraMentionSync(false);
 			});
-	}, [activeWorkspaceId, prepareJiraMentionSync, jiraConnection]);
+	}, [
+		activeWorkspaceId,
+		prepareJiraMentionSync,
+		stableConnectionSettings.jira,
+	]);
 
 	const handleYandexTrackerDialogOpenChange = (open: boolean) => {
 		dispatch({ type: "setIsYandexTrackerDialogOpen", value: open });
@@ -2299,7 +2309,6 @@ function useConnectionsSettingsController() {
 			}
 
 			// Tool capability must be enabled before handing the user to the browser auth flow.
-			// react-doctor-disable-next-line react-doctor/async-defer-await
 			await enableGoogleToolForWorkspace();
 
 			if (await openDesktopExternalUrl(url)) {
@@ -2898,7 +2907,6 @@ function YandexTrackerDialog({
 }
 
 // Private settings dialog with independent connection state flags; variants would obscure the form state.
-// react-doctor-disable-next-line react-doctor/no-many-boolean-props
 function JiraDialog({
 	open,
 	onOpenChange,
@@ -2909,10 +2917,9 @@ function JiraDialog({
 	onTokenChange,
 	onConnect,
 	onDisable,
+	canConnect,
+	connectionStatus,
 	showSyncSettings,
-	isFormValid,
-	isSaving,
-	isDisabling,
 	webhookUrl,
 }: {
 	open: boolean;
@@ -2924,12 +2931,14 @@ function JiraDialog({
 	onTokenChange: (token: string) => void;
 	onConnect: () => void;
 	onDisable?: () => void;
+	canConnect: boolean;
+	connectionStatus: "idle" | "saving" | "disabling";
 	showSyncSettings: boolean;
-	isFormValid: boolean;
-	isSaving: boolean;
-	isDisabling: boolean;
 	webhookUrl: string | null;
 }) {
+	const isSaving = connectionStatus === "saving";
+	const isDisabling = connectionStatus === "disabling";
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-md">
@@ -3028,7 +3037,7 @@ function JiraDialog({
 						<Button
 							type="button"
 							onClick={onConnect}
-							disabled={!isFormValid || isSaving || isDisabling}
+							disabled={!canConnect || isSaving || isDisabling}
 						>
 							{isSaving ? (
 								<>

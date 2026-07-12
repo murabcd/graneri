@@ -479,7 +479,7 @@ export function ChatComposer({
 	);
 }
 
-// oxlint-disable-next-line react-doctor/no-giant-component -- Tiptap composer shell keeps editor lifecycle and mention picker state colocated.
+// react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap adapter owns one editor instance, its mention refs, and imperative draft synchronization.
 function ChatComposerTextEditor({
 	draft,
 	editingMessageId,
@@ -548,14 +548,25 @@ function ChatComposerTextEditor({
 		? "No results found."
 		: "Type to search for notes";
 
-	mentionPopoverOpenRef.current = mentionPopoverOpen;
-	allMentionDocumentsRef.current = mentionableDocuments;
-	allAppSourcesRef.current = appSources;
-	visibleMentionDocumentsRef.current = visibleMentionDocuments;
-	visibleMentionItemsRef.current = visibleMentionItems;
-	mentionsRef.current = mentions;
-	placeholderRef.current = placeholder;
-	selectedMentionIndexRef.current = selectedMentionIndex;
+	React.useEffect(() => {
+		mentionPopoverOpenRef.current = mentionPopoverOpen;
+		allMentionDocumentsRef.current = mentionableDocuments;
+		allAppSourcesRef.current = appSources;
+		visibleMentionDocumentsRef.current = visibleMentionDocuments;
+		visibleMentionItemsRef.current = visibleMentionItems;
+		mentionsRef.current = mentions;
+		placeholderRef.current = placeholder;
+		selectedMentionIndexRef.current = selectedMentionIndex;
+	}, [
+		appSources,
+		mentionPopoverOpen,
+		mentionableDocuments,
+		mentions,
+		placeholder,
+		selectedMentionIndex,
+		visibleMentionDocuments,
+		visibleMentionItems,
+	]);
 
 	const selectMentionIndex = React.useCallback((index: number) => {
 		selectedMentionIndexRef.current = index;
@@ -827,10 +838,8 @@ function ChatComposerTextEditor({
 
 		previousPlaceholderRef.current = placeholder;
 		// Placeholder updates are ProseMirror transaction metadata, not React-derived state.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		composerEditor.view.dispatch(
 			// Placeholder updates are ProseMirror transaction metadata, not React-derived state.
-			// react-doctor-disable-next-line react-doctor/no-derived-state
 			composerEditor.state.tr.setMeta("addToHistory", false),
 		);
 	}, [composerEditor, placeholder]);
@@ -841,12 +850,10 @@ function ChatComposerTextEditor({
 		}
 
 		// Tiptap keeps draft text in ProseMirror state; React cannot derive this snapshot in render.
-		// react-doctor-disable-next-line react-doctor/no-derived-state react-doctor/no-pass-data-to-parent
 		const currentText = composerEditor.getText({ blockSeparator: "\n" });
 		if (
 			currentText === draft &&
 			// Mention nodes are embedded in ProseMirror JSON, so this guard must read editor state.
-			// react-doctor-disable-next-line react-doctor/no-derived-state react-doctor/no-pass-data-to-parent
 			getMentionsFromComposerContent(composerEditor.getJSON()).length ===
 				mentions.length
 		) {
@@ -858,7 +865,6 @@ function ChatComposerTextEditor({
 		}
 
 		// External draft changes must be pushed through Tiptap's imperative content command.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		composerEditor.commands.setContent(getDraftDocument(draft, mentions), {
 			emitUpdate: false,
 		});
@@ -881,7 +887,6 @@ function ChatComposerTextEditor({
 		}
 
 		// Initial focus is an imperative editor command after mount, not derived React state.
-		// react-doctor-disable-next-line react-doctor/no-derived-state
 		composerEditor.commands.focus("end", { scrollIntoView: false });
 	}, [composerEditor]);
 

@@ -5,6 +5,7 @@
 	viewBox="0 0 256 256"
 	fill="none"
 >
+	<title>Graneri</title>
 	<rect width="256" height="256" rx="64" fill="#171717" />
 	<g transform="translate(128 128) scale(0.5714285714) translate(-128 -128)">
 		<path

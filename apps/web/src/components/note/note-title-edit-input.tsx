@@ -36,7 +36,7 @@ export function NoteTitleEditInput({
 		}
 
 		const frame = requestAnimationFrame(() => {
-			const element = ref.current;
+			const element = (inputRef ?? fallbackRef).current;
 			if (!element) {
 				return;
 			}
@@ -46,7 +46,7 @@ export function NoteTitleEditInput({
 		});
 
 		return () => cancelAnimationFrame(frame);
-	}, [focusOnMount, ref]);
+	}, [focusOnMount, inputRef]);
 
 	return (
 		<Input

@@ -508,11 +508,11 @@ function SearchCommandView({
 			),
 		[dateFilter, dateRange, titleFilteredItems],
 	);
-
 	const visibleItems = dateFilteredItems;
+
 	const groupedItems = React.useMemo(
-		() => groupItemsByRelativeDate(visibleItems, (item) => item.updatedAt),
-		[visibleItems],
+		() => groupItemsByRelativeDate(dateFilteredItems, (item) => item.updatedAt),
+		[dateFilteredItems],
 	);
 	const itemSections = React.useMemo(
 		() =>

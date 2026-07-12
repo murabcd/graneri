@@ -1,7 +1,7 @@
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import type { UIMessage } from "ai";
 // Queued confirmation submits need the optimistic message committed before request continuation.
-// react-doctor-disable-next-line react-doctor/no-flush-sync
+// react-doctor-disable-next-line react-doctor/no-flush-sync -- submitChatTurn continues into imperative request/paint work that must observe the committed optimistic message.
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-controls";

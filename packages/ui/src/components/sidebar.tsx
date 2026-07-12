@@ -416,10 +416,11 @@ function useSidebarProviderElement({
 		rightSidebarWidthMobileOverride,
 		rightSidebarWidthOverride,
 	} = sidebarState;
-	const open = openProp ?? uncontrolledOpen;
 	const setOpen = React.useCallback(
 		(value: boolean | ((value: boolean) => boolean)) => {
-			const openState = typeof value === "function" ? value(open) : value;
+			const currentOpen = openProp ?? uncontrolledOpen;
+			const openState =
+				typeof value === "function" ? value(currentOpen) : value;
 			if (setOpenProp) {
 				setOpenProp(openState);
 			} else {
@@ -427,7 +428,7 @@ function useSidebarProviderElement({
 			}
 			persistSidebarState(openState);
 		},
-		[setOpenProp, open],
+		[setOpenProp, openProp, uncontrolledOpen],
 	);
 
 	const initRef = React.useRef({
@@ -605,20 +606,27 @@ function useSidebarProviderElement({
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [toggleRightSidebar, toggleSidebar]);
 
-	const state = open ? "expanded" : "collapsed";
+	const shellContextValue = React.useMemo<SidebarShellContextProps>(() => {
+		const contextOpen = openProp ?? uncontrolledOpen;
 
-	const shellContextValue = React.useMemo<SidebarShellContextProps>(
-		() => ({
-			state,
-			open,
+		return {
+			state: contextOpen ? "expanded" : "collapsed",
+			open: contextOpen,
 			setOpen,
 			isMobile,
 			openMobile,
 			setOpenMobile,
 			toggleSidebar,
-		}),
-		[state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
-	);
+		};
+	}, [
+		openProp,
+		uncontrolledOpen,
+		setOpen,
+		isMobile,
+		openMobile,
+		setOpenMobile,
+		toggleSidebar,
+	]);
 	const rightContextValue = React.useMemo<SidebarRightContextProps>(
 		() => ({
 			rightOpen,
