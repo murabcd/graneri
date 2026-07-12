@@ -130,6 +130,28 @@ const bundleDesktopMain = async () => {
 	}
 };
 
+const bundleDesktopPreload = async () => {
+	await execFileAsync(
+		"bun",
+		[
+			"build",
+			resolve(sourceDir, "preload.cjs"),
+			"--target=node",
+			"--format=cjs",
+			`--outfile=${resolve(distDir, "preload.cjs")}`,
+			"--external",
+			"electron",
+			"--sourcemap=none",
+		],
+		{
+			cwd: repoRoot,
+			stdio: "inherit",
+		},
+	);
+
+	await rm(resolve(distDir, "preload-api.cjs"), { force: true });
+};
+
 const copyNativeRuntimeTools = async () => {
 	if (process.platform !== "darwin") {
 		return;
@@ -183,6 +205,7 @@ await rm(packageAppDir, { recursive: true, force: true });
 await mkdir(distDir, { recursive: true });
 
 await copyRuntimeSources();
+await bundleDesktopPreload();
 await bundleDesktopMain();
 await copyNativeRuntimeTools();
 await stagePackageApp();

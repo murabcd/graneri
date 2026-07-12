@@ -30,6 +30,12 @@ parallel stream, recovery, or queue lifecycles.
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.
 Renderer code must access desktop capabilities through this package.
+`desktopIpcContract` is the authoritative capability-to-channel catalog for
+invoke, send, subscription, and test-only IPC. The typed bridge must have exact
+method parity with that catalog, preload methods are derived from it, and the
+main process fails startup when a required handler is missing, duplicated, or
+unexpected. Desktop builds bundle the preload so the shared catalog does not
+become a packaged runtime dependency.
 
 `packages/ai`
 : Shared AI runtime code. It must not import Convex server modules or

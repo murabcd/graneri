@@ -1,23 +1,24 @@
 {
-	"name": "@workspace/platform",
-	"version": "0.0.0",
-	"type": "module",
-	"private": true,
-	"scripts": {
-		"lint": "biome lint src",
-		"lint:fix": "biome lint --write src",
-		"check": "biome check src",
-		"check:fix": "biome check --write src",
-		"format": "biome format --write src",
-		"test": "node -e \"process.exit(0)\"",
-		"typecheck": "tsc --noEmit"
-	},
-	"devDependencies": {
-		"typescript": "workspace:*"
-	},
-	"exports": {
-		"./desktop": "./src/desktop.ts",
-		"./desktop-bridge": "./src/desktop-bridge.ts",
-		"./renderer-routes": "./src/renderer-routes.mjs"
-	}
+  "name": "@workspace/platform",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint": "biome lint src",
+    "lint:fix": "biome lint --write src",
+    "check": "biome check src",
+    "check:fix": "biome check --write src",
+    "format": "biome format --write src",
+    "test": "node -e \"process.exit(0)\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "workspace:*"
+  },
+  "exports": {
+    "./desktop": "./src/desktop.ts",
+    "./desktop-bridge": "./src/desktop-bridge.ts",
+    "./desktop-ipc-contract": "./src/desktop-ipc-contract.ts",
+    "./renderer-routes": "./src/renderer-routes.mjs"
+  }
 }

@@ -291,6 +291,7 @@ export interface GraneriDesktopBridge {
 	reportMeetingWidgetSize: (size: { width: number; height: number }) => void;
 	test?:
 		| {
+				getTrayCalendarState: () => Promise<DesktopTrayCalendarState>;
 				showMeetingWidget: () => Promise<{ ok: boolean }>;
 				resetMeetingDetection: () => Promise<{ ok: boolean }>;
 		  }
@@ -355,8 +356,35 @@ export interface GraneriDesktopBridge {
 	}>;
 }
 
+type DesktopIpcBridgeMethod =
+	| keyof typeof desktopIpcContract.invoke
+	| keyof typeof desktopIpcContract.send
+	| keyof typeof desktopIpcContract.subscribe;
+type DesktopBridgeMethod = Exclude<
+	keyof GraneriDesktopBridge,
+	"platform" | "test"
+>;
+type DesktopTestIpcBridgeMethod = keyof typeof desktopIpcContract.testInvoke;
+type DesktopTestBridgeMethod = keyof NonNullable<GraneriDesktopBridge["test"]>;
+type ExactMethodSet<Left, Right> =
+	Exclude<Left, Right> extends never
+		? Exclude<Right, Left> extends never
+			? true
+			: false
+		: false;
+type AssertExactMethodSet<Check extends true> = Check;
+
+export type DesktopBridgeIpcContractParity = AssertExactMethodSet<
+	ExactMethodSet<DesktopBridgeMethod, DesktopIpcBridgeMethod>
+>;
+export type DesktopTestBridgeIpcContractParity = AssertExactMethodSet<
+	ExactMethodSet<DesktopTestBridgeMethod, DesktopTestIpcBridgeMethod>
+>;
+
 declare global {
 	interface Window {
 		graneriDesktop?: GraneriDesktopBridge;
 	}
 }
+
+import type { desktopIpcContract } from "./desktop-ipc-contract";

@@ -19,6 +19,11 @@ import {
 	systemPreferences,
 } from "electron";
 import electronUpdater from "electron-updater";
+import {
+	assertDesktopIpcRegistrationParity,
+	desktopIpcContract,
+	resolveDesktopIpcChannel,
+} from "../../../packages/platform/src/desktop-ipc-contract.ts";
 import { getDesktopAuthClient } from "./auth-client.mjs";
 import { createDesktopAppMenu } from "./desktop-app-menu.mjs";
 import {
@@ -103,12 +108,17 @@ const transcriptDraftsDirPath = join(
 	"transcript-drafts",
 );
 const noteDraftsDirPath = join(app.getPath("userData"), "note-drafts");
-const microphoneCaptureEventChannel = "app:microphone-capture-event";
-const systemAudioCaptureEventChannel = "app:system-audio-capture-event";
-const transcriptionSessionStateChannel = "app:transcription-session-state";
-const transcriptionSessionEventChannel = "app:transcription-session-event";
-const meetingDetectionStateChannel = "app:meeting-detection-state";
-const desktopNavigationChannel = "app:navigate";
+const microphoneCaptureEventChannel =
+	desktopIpcContract.subscribe.onMicrophoneCaptureEvent;
+const systemAudioCaptureEventChannel =
+	desktopIpcContract.subscribe.onSystemAudioCaptureEvent;
+const transcriptionSessionStateChannel =
+	desktopIpcContract.subscribe.onTranscriptionSessionState;
+const transcriptionSessionEventChannel =
+	desktopIpcContract.subscribe.onTranscriptionSessionEvent;
+const meetingDetectionStateChannel =
+	desktopIpcContract.subscribe.onMeetingDetectionState;
+const desktopNavigationChannel = desktopIpcContract.subscribe.onNavigate;
 const maxRecoveryAttempts = 3;
 const recoveryBackoffMs = [750, 1_500, 3_000];
 const systemAudioAttachRetryBackoffMs = [750, 1_500, 3_000];
@@ -2156,26 +2166,48 @@ const openSoundSettings = async () => {
 	return { ok: true };
 };
 
-ipcMain.handle("app:get-meta", () => ({
+const registeredDesktopIpcCapabilities = new Set();
+const registerDesktopInvokeHandler = (capability, handler) => {
+	if (registeredDesktopIpcCapabilities.has(capability)) {
+		throw new Error(
+			`Desktop IPC capability is already registered: ${capability}.`,
+		);
+	}
+
+	registeredDesktopIpcCapabilities.add(capability);
+	ipcMain.handle(resolveDesktopIpcChannel(capability), handler);
+};
+const registerDesktopSendHandler = (capability, handler) => {
+	if (registeredDesktopIpcCapabilities.has(capability)) {
+		throw new Error(
+			`Desktop IPC capability is already registered: ${capability}.`,
+		);
+	}
+
+	registeredDesktopIpcCapabilities.add(capability);
+	ipcMain.on(resolveDesktopIpcChannel(capability), handler);
+};
+
+registerDesktopInvokeHandler("getMeta", () => ({
 	name: app.getName(),
 	version: app.getVersion(),
 	platform: process.platform,
 }));
 
-ipcMain.handle("app:get-runtime-config", async () => {
+registerDesktopInvokeHandler("getRuntimeConfig", async () => {
 	const server = await ensureLocalServer();
 	return await getRuntimeConfig({ localApiOrigin: server.origin });
 });
 
-ipcMain.handle("app:get-preferences", async () => {
+registerDesktopInvokeHandler("getPreferences", async () => {
 	return getDesktopPreferences();
 });
 
-ipcMain.handle("app:set-native-theme", async (_event, themeSource) => {
+registerDesktopInvokeHandler("setNativeTheme", async (_event, themeSource) => {
 	return applyDesktopThemeSource(themeSource);
 });
 
-ipcMain.handle("app:auth-fetch", async (_event, request) => {
+registerDesktopInvokeHandler("authFetch", async (_event, request) => {
 	if (!request || typeof request !== "object") {
 		throw new Error("Auth request payload must be an object.");
 	}
@@ -2232,18 +2264,20 @@ ipcMain.handle("app:auth-fetch", async (_event, request) => {
 	});
 });
 
-ipcMain.handle("app:get-permissions-status", () => getPermissionsStatus());
+registerDesktopInvokeHandler("getPermissionsStatus", () =>
+	getPermissionsStatus(),
+);
 
-ipcMain.handle("app:get-transcription-session-state", async () => {
+registerDesktopInvokeHandler("getTranscriptionSessionState", async () => {
 	return latestTranscriptionSessionState;
 });
 
-ipcMain.handle("app:get-meeting-detection-state", async () => {
+registerDesktopInvokeHandler("getMeetingDetectionState", async () => {
 	return getMeetingDetectionState();
 });
 
-ipcMain.handle(
-	"app:configure-transcription-session",
+registerDesktopInvokeHandler(
+	"configureTranscriptionSession",
 	async (_event, options) => {
 		if (!options || typeof options !== "object") {
 			throw new Error("Transcription session options are required.");
@@ -2254,12 +2288,12 @@ ipcMain.handle(
 	},
 );
 
-ipcMain.handle("app:start-transcription-session", async () => {
+registerDesktopInvokeHandler("startTranscriptionSession", async () => {
 	return await startDesktopTranscriptionSession();
 });
 
-ipcMain.handle(
-	"app:stop-transcription-session",
+registerDesktopInvokeHandler(
+	"stopTranscriptionSession",
 	async (_event, options = {}) => {
 		await stopDesktopTranscriptionSession({
 			reason:
@@ -2273,26 +2307,26 @@ ipcMain.handle(
 	},
 );
 
-ipcMain.handle("app:request-transcription-system-audio", async () => {
+registerDesktopInvokeHandler("requestTranscriptionSystemAudio", async () => {
 	return await requestDesktopTranscriptionSystemAudio();
 });
 
-ipcMain.handle("app:detach-transcription-system-audio", async () => {
+registerDesktopInvokeHandler("detachTranscriptionSystemAudio", async () => {
 	await detachDesktopTranscriptionSystemAudio();
 	return { ok: true };
 });
 
-ipcMain.handle("app:start-detected-meeting-note", async () => {
+registerDesktopInvokeHandler("startDetectedMeetingNote", async () => {
 	await startDetectedMeetingNote();
 	return { ok: true };
 });
 
-ipcMain.handle("app:dismiss-detected-meeting-widget", async () => {
+registerDesktopInvokeHandler("dismissDetectedMeetingWidget", async () => {
 	dismissDetectedMeetingWidget();
 	return { ok: true };
 });
 
-ipcMain.on("app:report-meeting-widget-size", (event, size) => {
+registerDesktopSendHandler("reportMeetingWidgetSize", (event, size) => {
 	if (!isMeetingWidgetSender(event.sender)) {
 		return;
 	}
@@ -2301,22 +2335,22 @@ ipcMain.on("app:report-meeting-widget-size", (event, size) => {
 });
 
 if (areDesktopTestHooksEnabled) {
-	ipcMain.handle("app:test-show-meeting-widget", async () => {
+	registerDesktopInvokeHandler("showMeetingWidget", async () => {
 		await showMeetingWidgetForTest();
 		return { ok: true };
 	});
 
-	ipcMain.handle("app:test-reset-meeting-detection", async () => {
+	registerDesktopInvokeHandler("resetMeetingDetection", async () => {
 		resetMeetingDetectionForTest();
 		return { ok: true };
 	});
 
-	ipcMain.handle("app:test-get-tray-calendar-state", async () =>
+	registerDesktopInvokeHandler("getTrayCalendarState", async () =>
 		getTrayCalendarStateForTest(),
 	);
 }
 
-ipcMain.handle("app:open-external-url", async (_event, url) => {
+registerDesktopInvokeHandler("openExternalUrl", async (_event, url) => {
 	if (typeof url !== "string" || !url.startsWith("http")) {
 		throw new Error("Invalid external URL.");
 	}
@@ -2325,66 +2359,72 @@ ipcMain.handle("app:open-external-url", async (_event, url) => {
 	return { ok: true };
 });
 
-ipcMain.handle("app:request-permission", async (_event, permissionId) => {
-	if (typeof permissionId !== "string") {
-		throw new Error("Permission id must be a string.");
-	}
+registerDesktopInvokeHandler(
+	"requestPermission",
+	async (_event, permissionId) => {
+		if (typeof permissionId !== "string") {
+			throw new Error("Permission id must be a string.");
+		}
 
-	return await requestPermission(permissionId);
-});
+		return await requestPermission(permissionId);
+	},
+);
 
-ipcMain.handle("app:open-permission-settings", async (_event, permissionId) => {
-	if (typeof permissionId !== "string") {
-		throw new Error("Permission id must be a string.");
-	}
+registerDesktopInvokeHandler(
+	"openPermissionSettings",
+	async (_event, permissionId) => {
+		if (typeof permissionId !== "string") {
+			throw new Error("Permission id must be a string.");
+		}
 
-	return await openPermissionSettings(permissionId);
-});
+		return await openPermissionSettings(permissionId);
+	},
+);
 
-ipcMain.handle("app:open-sound-settings", async () => {
+registerDesktopInvokeHandler("openSoundSettings", async () => {
 	return await openSoundSettings();
 });
 
-ipcMain.handle("app:set-launch-at-login", async (_event, enabled) => {
+registerDesktopInvokeHandler("setLaunchAtLogin", async (_event, enabled) => {
 	return await setLaunchAtLogin(enabled);
 });
 
-ipcMain.handle(
-	"app:set-keep-dictation-bar-visible",
+registerDesktopInvokeHandler(
+	"setKeepDictationBarVisible",
 	async (_event, enabled) => {
 		return await setKeepDictationBarVisible(enabled);
 	},
 );
 
-ipcMain.handle("app:set-dictation-hotkey-mode", async (_event, mode) => {
+registerDesktopInvokeHandler("setDictationHotkeyMode", async (_event, mode) => {
 	return await setDictationHotkeyMode(mode);
 });
 
-ipcMain.handle("app:start-system-audio-capture", async () => {
+registerDesktopInvokeHandler("startSystemAudioCapture", async () => {
 	return await startSystemAudioCapture();
 });
 
-ipcMain.handle("app:stop-system-audio-capture", async () => {
+registerDesktopInvokeHandler("stopSystemAudioCapture", async () => {
 	await stopSystemAudioCapture();
 	return { ok: true };
 });
 
-ipcMain.handle("app:start-microphone-capture", async () => {
+registerDesktopInvokeHandler("startMicrophoneCapture", async () => {
 	return await startMicrophoneCapture();
 });
 
-ipcMain.handle("app:stop-microphone-capture", async () => {
+registerDesktopInvokeHandler("stopMicrophoneCapture", async () => {
 	await stopMicrophoneCapture();
 	return { ok: true };
 });
 
-ipcMain.handle("app:get-auth-callback-url", async () => {
+registerDesktopInvokeHandler("getAuthCallbackUrl", async () => {
 	return {
 		url: await getDesktopAuthCallbackUrl(),
 	};
 });
 
-ipcMain.handle("app:get-share-base-url", async () => {
+registerDesktopInvokeHandler("getShareBaseUrl", async () => {
 	const shareBaseUrl =
 		process.env.SITE_URL?.trim() || (await resolveRendererUrl());
 
@@ -2393,21 +2433,24 @@ ipcMain.handle("app:get-share-base-url", async () => {
 	};
 });
 
-ipcMain.handle("app:set-active-workspace-id", async (_event, workspaceId) => {
-	if (workspaceId !== null && typeof workspaceId !== "string") {
-		throw new Error("Workspace id must be a string or null.");
-	}
+registerDesktopInvokeHandler(
+	"setActiveWorkspaceId",
+	async (_event, workspaceId) => {
+		if (workspaceId !== null && typeof workspaceId !== "string") {
+			throw new Error("Workspace id must be a string or null.");
+		}
 
-	activeWorkspaceId = workspaceId;
-	activeWorkspaceNotificationPreferences =
-		createInitialNotificationPreferences();
-	reevaluateMeetingDetection();
-	scheduleTrayCalendarRefresh(0);
-	return { ok: true };
-});
+		activeWorkspaceId = workspaceId;
+		activeWorkspaceNotificationPreferences =
+			createInitialNotificationPreferences();
+		reevaluateMeetingDetection();
+		scheduleTrayCalendarRefresh(0);
+		return { ok: true };
+	},
+);
 
-ipcMain.handle(
-	"app:set-active-workspace-notification-preferences",
+registerDesktopInvokeHandler(
+	"setActiveWorkspaceNotificationPreferences",
 	async (_event, payload) => {
 		if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
 			throw new Error("Notification preferences payload is invalid.");
@@ -2444,17 +2487,20 @@ ipcMain.handle(
 	},
 );
 
-ipcMain.handle("app:refresh-tray-calendar", async () => {
+registerDesktopInvokeHandler("refreshTrayCalendar", async () => {
 	await refreshTrayCalendar();
 	return { ok: true };
 });
 
-ipcMain.handle("app:set-tray-calendar-state", async (_event, payload) => {
-	requireDesktopService(desktopTray, "desktopTray").setCalendarState(payload);
-	return { ok: true };
-});
+registerDesktopInvokeHandler(
+	"setTrayCalendarState",
+	async (_event, payload) => {
+		requireDesktopService(desktopTray, "desktopTray").setCalendarState(payload);
+		return { ok: true };
+	},
+);
 
-ipcMain.handle("app:write-clipboard-text", async (_event, value) => {
+registerDesktopInvokeHandler("writeClipboardText", async (_event, value) => {
 	if (typeof value !== "string") {
 		throw new Error("Clipboard value must be a string.");
 	}
@@ -2463,24 +2509,27 @@ ipcMain.handle("app:write-clipboard-text", async (_event, value) => {
 	return { ok: true };
 });
 
-ipcMain.handle("app:write-clipboard-rich-text", async (_event, payload) => {
-	if (
-		!payload ||
-		typeof payload !== "object" ||
-		typeof payload.html !== "string" ||
-		typeof payload.text !== "string"
-	) {
-		throw new Error("Clipboard payload must include html and text strings.");
-	}
+registerDesktopInvokeHandler(
+	"writeClipboardRichText",
+	async (_event, payload) => {
+		if (
+			!payload ||
+			typeof payload !== "object" ||
+			typeof payload.html !== "string" ||
+			typeof payload.text !== "string"
+		) {
+			throw new Error("Clipboard payload must include html and text strings.");
+		}
 
-	clipboard.write({
-		html: payload.html,
-		text: payload.text,
-	});
-	return { ok: true };
-});
+		clipboard.write({
+			html: payload.html,
+			text: payload.text,
+		});
+		return { ok: true };
+	},
+);
 
-ipcMain.handle("app:load-transcript-draft", async (_event, noteKey) => {
+registerDesktopInvokeHandler("loadTranscriptDraft", async (_event, noteKey) => {
 	if (typeof noteKey !== "string" || !noteKey.trim()) {
 		throw new Error("Transcript draft key must be a non-empty string.");
 	}
@@ -2488,30 +2537,36 @@ ipcMain.handle("app:load-transcript-draft", async (_event, noteKey) => {
 	return await desktopStorage.loadTranscriptDraft(noteKey.trim());
 });
 
-ipcMain.handle("app:save-transcript-draft", async (_event, noteKey, draft) => {
-	if (typeof noteKey !== "string" || !noteKey.trim()) {
-		throw new Error("Transcript draft key must be a non-empty string.");
-	}
+registerDesktopInvokeHandler(
+	"saveTranscriptDraft",
+	async (_event, noteKey, draft) => {
+		if (typeof noteKey !== "string" || !noteKey.trim()) {
+			throw new Error("Transcript draft key must be a non-empty string.");
+		}
 
-	if (!draft || typeof draft !== "object") {
-		throw new Error("Transcript draft payload must be an object.");
-	}
+		if (!draft || typeof draft !== "object") {
+			throw new Error("Transcript draft payload must be an object.");
+		}
 
-	return await desktopStorage.saveTranscriptDraft({
-		noteKey: noteKey.trim(),
-		draft,
-	});
-});
+		return await desktopStorage.saveTranscriptDraft({
+			noteKey: noteKey.trim(),
+			draft,
+		});
+	},
+);
 
-ipcMain.handle("app:clear-transcript-draft", async (_event, noteKey) => {
-	if (typeof noteKey !== "string" || !noteKey.trim()) {
-		throw new Error("Transcript draft key must be a non-empty string.");
-	}
+registerDesktopInvokeHandler(
+	"clearTranscriptDraft",
+	async (_event, noteKey) => {
+		if (typeof noteKey !== "string" || !noteKey.trim()) {
+			throw new Error("Transcript draft key must be a non-empty string.");
+		}
 
-	return await desktopStorage.clearTranscriptDraft(noteKey.trim());
-});
+		return await desktopStorage.clearTranscriptDraft(noteKey.trim());
+	},
+);
 
-ipcMain.handle("app:load-note-draft", async (_event, noteKey) => {
+registerDesktopInvokeHandler("loadNoteDraft", async (_event, noteKey) => {
 	if (typeof noteKey !== "string" || !noteKey.trim()) {
 		throw new Error("Note draft key must be a non-empty string.");
 	}
@@ -2519,22 +2574,25 @@ ipcMain.handle("app:load-note-draft", async (_event, noteKey) => {
 	return await desktopStorage.loadNoteDraft(noteKey.trim());
 });
 
-ipcMain.handle("app:save-note-draft", async (_event, noteKey, draft) => {
-	if (typeof noteKey !== "string" || !noteKey.trim()) {
-		throw new Error("Note draft key must be a non-empty string.");
-	}
+registerDesktopInvokeHandler(
+	"saveNoteDraft",
+	async (_event, noteKey, draft) => {
+		if (typeof noteKey !== "string" || !noteKey.trim()) {
+			throw new Error("Note draft key must be a non-empty string.");
+		}
 
-	if (!draft || typeof draft !== "object") {
-		throw new Error("Note draft payload must be an object.");
-	}
+		if (!draft || typeof draft !== "object") {
+			throw new Error("Note draft payload must be an object.");
+		}
 
-	return await desktopStorage.saveNoteDraft({
-		noteKey: noteKey.trim(),
-		draft,
-	});
-});
+		return await desktopStorage.saveNoteDraft({
+			noteKey: noteKey.trim(),
+			draft,
+		});
+	},
+);
 
-ipcMain.handle("app:clear-note-draft", async (_event, noteKey) => {
+registerDesktopInvokeHandler("clearNoteDraft", async (_event, noteKey) => {
 	if (typeof noteKey !== "string" || !noteKey.trim()) {
 		throw new Error("Note draft key must be a non-empty string.");
 	}
@@ -2542,12 +2600,12 @@ ipcMain.handle("app:clear-note-draft", async (_event, noteKey) => {
 	return await desktopStorage.clearNoteDraft(noteKey.trim());
 });
 
-ipcMain.handle("app:share-local-folders", async (_event, paths) => {
+registerDesktopInvokeHandler("shareLocalFolders", async (_event, paths) => {
 	return await desktopStorage.shareLocalFolders(paths);
 });
 
-ipcMain.handle(
-	"app:save-text-file",
+registerDesktopInvokeHandler(
+	"saveTextFile",
 	async (_event, defaultFileName, content) => {
 		if (typeof defaultFileName !== "string" || !defaultFileName.trim()) {
 			throw new Error("Default file name must be a non-empty string.");
@@ -2578,6 +2636,11 @@ ipcMain.handle(
 		};
 	},
 );
+
+assertDesktopIpcRegistrationParity({
+	includeTestCapabilities: areDesktopTestHooksEnabled,
+	registeredCapabilities: registeredDesktopIpcCapabilities,
+});
 
 const quitCompletely = () => {
 	isBypassingQuitConfirmation = true;

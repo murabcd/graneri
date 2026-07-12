@@ -1,7 +1,9 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
-	channels,
+	desktopIpcContract,
+} = require("../../../packages/platform/src/desktop-ipc-contract.ts");
+const {
 	createGraneriDesktopApi,
 	shouldExposeTestHooks,
 } = require("../src/preload-api.cjs");
@@ -54,100 +56,34 @@ const createApi = (options = {}) => {
 
 test("maps invoke bridge calls to their IPC channels and arguments", async () => {
 	const { api, ipcRenderer } = createApi();
-	const request = { method: "POST", path: "/api/auth/session" };
-	const preferences = {
-		notifyForAutoDetectedMeetings: false,
-		notifyForScheduledMeetings: true,
-		workspaceId: "workspace_1",
-	};
-	const trayCalendarState = {
-		connectedCalendarCount: 1,
-		events: [],
-		status: "ready",
-	};
-	const transcriptDraft = {
-		liveTranscript: {
-			them: { speaker: "them", startedAt: null, text: "" },
-			you: { speaker: "you", startedAt: 1, text: "hello" },
-		},
-		pendingGenerateTranscript: "",
-		utterances: [],
-	};
-	const noteDraft = {
-		workspaceId: "workspace_1",
-		title: "Draft title",
-		content: "{}",
-		searchableText: "Draft title",
-	};
 
-	await api.getMeta();
-	await api.authFetch(request);
-	await api.setActiveWorkspaceNotificationPreferences(preferences);
-	await api.setTrayCalendarState(trayCalendarState);
-	await api.configureTranscriptionSession({
-		autoStartKey: "meeting_1",
-		lang: "en",
-		scopeKey: "note_1",
-	});
-	await api.startDetectedMeetingNote();
-	await api.saveTranscriptDraft("note_1", transcriptDraft);
-	await api.saveNoteDraft("note_1", noteDraft);
-	await api.shareLocalFolders(["/Users/test/Documents/project"]);
-	await api.saveTextFile("meeting.txt", "notes");
-	await api.setKeepDictationBarVisible(false);
-	await api.setDictationHotkeyMode("toggle");
+	for (const methodName of Object.keys(desktopIpcContract.invoke)) {
+		await api[methodName](methodName, { marker: methodName });
+	}
 
-	assert.deepEqual(ipcRenderer.invocations, [
-		{ args: [], channel: "app:get-meta" },
-		{ args: [request], channel: "app:auth-fetch" },
-		{
-			args: [preferences],
-			channel: "app:set-active-workspace-notification-preferences",
-		},
-		{
-			args: [trayCalendarState],
-			channel: "app:set-tray-calendar-state",
-		},
-		{
-			args: [{ autoStartKey: "meeting_1", lang: "en", scopeKey: "note_1" }],
-			channel: "app:configure-transcription-session",
-		},
-		{ args: [], channel: "app:start-detected-meeting-note" },
-		{
-			args: ["note_1", transcriptDraft],
-			channel: "app:save-transcript-draft",
-		},
-		{
-			args: ["note_1", noteDraft],
-			channel: "app:save-note-draft",
-		},
-		{
-			args: [["/Users/test/Documents/project"]],
-			channel: "app:share-local-folders",
-		},
-		{ args: ["meeting.txt", "notes"], channel: "app:save-text-file" },
-		{
-			args: [false],
-			channel: "app:set-keep-dictation-bar-visible",
-		},
-		{
-			args: ["toggle"],
-			channel: "app:set-dictation-hotkey-mode",
-		},
-	]);
+	assert.deepEqual(
+		ipcRenderer.invocations,
+		Object.entries(desktopIpcContract.invoke).map(([methodName, channel]) => ({
+			args: [methodName, { marker: methodName }],
+			channel,
+		})),
+	);
 });
 
 test("maps send bridge calls to their IPC channels and arguments", () => {
 	const { api, ipcRenderer } = createApi();
 
-	api.reportMeetingWidgetSize({ height: 480, width: 320 });
+	for (const methodName of Object.keys(desktopIpcContract.send)) {
+		api[methodName](methodName, { marker: methodName });
+	}
 
-	assert.deepEqual(ipcRenderer.sends, [
-		{
-			args: [{ height: 480, width: 320 }],
-			channel: "app:report-meeting-widget-size",
-		},
-	]);
+	assert.deepEqual(
+		ipcRenderer.sends,
+		Object.entries(desktopIpcContract.send).map(([methodName, channel]) => ({
+			args: [methodName, { marker: methodName }],
+			channel,
+		})),
+	);
 });
 
 test("forwards subscription payloads and removes the same handler on cleanup", () => {
@@ -159,21 +95,26 @@ test("forwards subscription payloads and removes the same handler on cleanup", (
 		received.push(state);
 	});
 	const registeredHandler = ipcRenderer.getListener(
-		channels.meetingDetectionState,
+		desktopIpcContract.subscribe.onMeetingDetectionState,
 	);
 
-	ipcRenderer.emit(channels.meetingDetectionState, payload);
+	ipcRenderer.emit(
+		desktopIpcContract.subscribe.onMeetingDetectionState,
+		payload,
+	);
 	unsubscribe();
 
 	assert.deepEqual(received, [payload]);
 	assert.deepEqual(ipcRenderer.removedListeners, [
 		{
-			channel: channels.meetingDetectionState,
+			channel: desktopIpcContract.subscribe.onMeetingDetectionState,
 			handler: registeredHandler,
 		},
 	]);
 	assert.equal(
-		ipcRenderer.getListener(channels.meetingDetectionState),
+		ipcRenderer.getListener(
+			desktopIpcContract.subscribe.onMeetingDetectionState,
+		),
 		undefined,
 	);
 });
@@ -195,8 +136,11 @@ test("wires native audio and navigation subscriptions to dedicated channels", ()
 		received.push(payload);
 	});
 
-	ipcRenderer.emit(channels.desktopNavigation, navigationPayload);
-	ipcRenderer.emit(channels.systemAudioCaptureEvent, capturePayload);
+	ipcRenderer.emit(desktopIpcContract.subscribe.onNavigate, navigationPayload);
+	ipcRenderer.emit(
+		desktopIpcContract.subscribe.onSystemAudioCaptureEvent,
+		capturePayload,
+	);
 	unsubscribeNavigate();
 	unsubscribeCapture();
 
@@ -204,11 +148,11 @@ test("wires native audio and navigation subscriptions to dedicated channels", ()
 	assert.equal(ipcRenderer.removedListeners.length, 2);
 	assert.equal(
 		ipcRenderer.removedListeners[0].channel,
-		channels.desktopNavigation,
+		desktopIpcContract.subscribe.onNavigate,
 	);
 	assert.equal(
 		ipcRenderer.removedListeners[1].channel,
-		channels.systemAudioCaptureEvent,
+		desktopIpcContract.subscribe.onSystemAudioCaptureEvent,
 	);
 });
 
@@ -231,9 +175,20 @@ test("exposes desktop test hooks only outside production unless explicitly enabl
 
 	await api.test.showMeetingWidget();
 	await api.test.resetMeetingDetection();
+	await api.test.getTrayCalendarState();
 
 	assert.deepEqual(ipcRenderer.invocations, [
-		{ args: [], channel: "app:test-show-meeting-widget" },
-		{ args: [], channel: "app:test-reset-meeting-detection" },
+		{
+			args: [],
+			channel: desktopIpcContract.testInvoke.showMeetingWidget,
+		},
+		{
+			args: [],
+			channel: desktopIpcContract.testInvoke.resetMeetingDetection,
+		},
+		{
+			args: [],
+			channel: desktopIpcContract.testInvoke.getTrayCalendarState,
+		},
 	]);
 });
