@@ -20,6 +20,7 @@ import {
 	type ChatToolConnection,
 	chatToolConnectionValidator,
 } from "./appConnections";
+import { createResourceAccess } from "./domain";
 import { refreshMcpSdkOAuthToken, startMcpSdkOAuth } from "./mcpOAuth";
 import {
 	verifyYandexCalendarConnection,
@@ -712,18 +713,7 @@ const getTrackerHeaderName = (
 ): "X-Org-Id" | "X-Cloud-Org-Id" =>
 	orgType === "x-cloud-org-id" ? "X-Cloud-Org-Id" : "X-Org-Id";
 
-const requireIdentity = async (ctx: ActionCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to connect app integrations.",
-		});
-	}
-
-	return identity;
-};
+const { requireIdentity } = createResourceAccess("app integrations");
 
 const sanitizeRemoteMcpEnv = (env?: Record<string, string>) =>
 	Object.fromEntries(

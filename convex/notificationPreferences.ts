@@ -1,8 +1,9 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 
 const notificationPreferencesValidator = v.object({
 	notifyForScheduledMeetings: v.boolean(),
@@ -10,36 +11,7 @@ const notificationPreferencesValidator = v.object({
 });
 
 const REMOVE_ALL_NOTIFICATION_PREFERENCES_BATCH_SIZE = 100;
-
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access notification preferences.",
-		});
-	}
-
-	return identity;
-};
-
-const requireOwnedWorkspace = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) => {
-	const workspace = await ctx.db.get(workspaceId);
-
-	if (!workspace || workspace.ownerTokenIdentifier !== ownerTokenIdentifier) {
-		throw new ConvexError({
-			code: "WORKSPACE_NOT_FOUND",
-			message: "Workspace not found.",
-		});
-	}
-
-	return workspace;
-};
+const { requireIdentity } = createResourceAccess("notification preferences");
 
 const getNotificationPreferencesRecord = async (
 	ctx: QueryCtx | MutationCtx,

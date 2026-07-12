@@ -4,7 +4,9 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
-import { requireTokenIdentifier } from "./domain";
+import { createResourceAccess } from "./domain";
+
+const { requireTokenIdentifier } = createResourceAccess("chatToolCalls");
 
 const chatToolCallStatusValidator = v.union(
 	v.literal("pending"),
@@ -57,10 +59,7 @@ const requireOwnedActiveStream = async (
 		runId: Id<"assistantRuns">;
 	},
 ) => {
-	const ownerTokenIdentifier = await requireTokenIdentifier(
-		ctx,
-		"chatToolCalls",
-	);
+	const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 	const chat = await getOwnedActiveChatById(
 		ctx,
 		ownerTokenIdentifier,

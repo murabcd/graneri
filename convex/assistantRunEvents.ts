@@ -3,7 +3,9 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { query } from "./_generated/server";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
-import { requireTokenIdentifier } from "./domain";
+import { createResourceAccess } from "./domain";
+
+const { requireTokenIdentifier } = createResourceAccess("assistantRunEvents");
 
 const assistantRunEventRecordValidator = v.object({
 	_id: v.id("assistantRunEvents"),
@@ -67,10 +69,7 @@ export const listRunEventsAfter = query({
 	},
 	returns: v.array(assistantRunEventRecordValidator),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRunEvents",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 		const limit = Math.min(Math.max(args.limit ?? 100, 1), 500);
 		const afterEventIndex = args.afterEventIndex ?? -1;

@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { createResourceAccess } from "./domain";
 
 type TranscriptSessionStatus = Doc<"transcriptSessionStates">["status"];
 type TranscriptRefinementStatus =
@@ -108,24 +109,7 @@ const transcriptSessionSummaryValidator = v.union(
 	v.null(),
 );
 
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access transcript sessions.",
-		});
-	}
-
-	return identity;
-};
-
-const requireTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await requireIdentity(ctx);
-
-	return identity.tokenIdentifier;
-};
+const { requireTokenIdentifier } = createResourceAccess("transcript sessions");
 
 const requireOwnedNote = async (
 	ctx: QueryCtx | MutationCtx,

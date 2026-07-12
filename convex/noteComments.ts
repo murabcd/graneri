@@ -4,11 +4,13 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
+	createResourceAccess,
 	getAuthorName,
-	requireIdentity,
-	requireOwnedNote,
 	requireOwnedWorkspace,
-} from "./notes";
+} from "./domain";
+import { requireOwnedNote } from "./notes";
+
+const { requireIdentity } = createResourceAccess("notes");
 
 const MAX_THREAD_EXCERPT_LENGTH = 280;
 const MAX_COMMENT_BODY_LENGTH = 2_000;

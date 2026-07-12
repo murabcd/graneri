@@ -4,10 +4,9 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
+	createResourceAccess,
 	getAuthorName,
-	requireIdentity as requireDomainIdentity,
 	requireOwnedWorkspace,
-	requireTokenIdentifier as requireDomainTokenIdentifier,
 } from "./domain";
 import { requireOwnedProject } from "./projects";
 
@@ -72,10 +71,8 @@ const noteVersionValidator = v.object({
 	createdAt: v.number(),
 });
 
-export { getAuthorName, requireOwnedWorkspace };
-
-export const requireIdentity = async (ctx: QueryCtx | MutationCtx) =>
-	await requireDomainIdentity(ctx, "notes");
+const { requireIdentity, requireTokenIdentifier } =
+	createResourceAccess("notes");
 
 const normalizeNote = (note: Doc<"notes">) => ({
 	...note,
@@ -83,10 +80,6 @@ const normalizeNote = (note: Doc<"notes">) => ({
 	templateSlug: note.templateSlug,
 	visibility: note.visibility ?? "private",
 });
-
-const requireTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
-	return await requireDomainTokenIdentifier(ctx, "notes");
-};
 
 const getNotesByArchivedState = async (
 	ctx: QueryCtx,

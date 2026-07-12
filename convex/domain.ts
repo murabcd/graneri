@@ -1,15 +1,14 @@
 import { ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 
 export type AuthenticatedIdentity = NonNullable<
 	Awaited<ReturnType<QueryCtx["auth"]["getUserIdentity"]>>
 >;
 
-export const requireIdentity = async (
-	ctx: QueryCtx | MutationCtx,
-	resourceName: string,
-) => {
+type AuthContext = Pick<ActionCtx | MutationCtx | QueryCtx, "auth">;
+
+const requireIdentity = async (ctx: AuthContext, resourceName: string) => {
 	const identity = await ctx.auth.getUserIdentity();
 
 	if (!identity) {
@@ -22,14 +21,11 @@ export const requireIdentity = async (
 	return identity;
 };
 
-export const requireTokenIdentifier = async (
-	ctx: QueryCtx | MutationCtx,
-	resourceName: string,
-) => {
-	const identity = await requireIdentity(ctx, resourceName);
-
-	return identity.tokenIdentifier;
-};
+export const createResourceAccess = (resourceName: string) => ({
+	requireIdentity: (ctx: AuthContext) => requireIdentity(ctx, resourceName),
+	requireTokenIdentifier: async (ctx: AuthContext) =>
+		(await requireIdentity(ctx, resourceName)).tokenIdentifier,
+});
 
 export const requireOwnedWorkspace = async (
 	ctx: QueryCtx | MutationCtx,

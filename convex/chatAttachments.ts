@@ -1,19 +1,8 @@
-import { ConvexError, v } from "convex/values";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { v } from "convex/values";
 import { mutation } from "./_generated/server";
+import { createResourceAccess } from "./domain";
 
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to upload chat attachments.",
-		});
-	}
-
-	return identity;
-};
+const { requireIdentity } = createResourceAccess("chat attachments");
 
 export const generateUploadUrl = mutation({
 	args: {},

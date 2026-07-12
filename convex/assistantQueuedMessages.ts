@@ -7,7 +7,11 @@ import {
 	getOwnedActiveChatById,
 	isNonTerminalRun,
 } from "./assistantRunLifecycle";
-import { requireTokenIdentifier } from "./domain";
+import { createResourceAccess } from "./domain";
+
+const { requireTokenIdentifier } = createResourceAccess(
+	"assistantQueuedMessages",
+);
 
 const queuedMessageStatusValidator = v.union(
 	v.literal("queued"),
@@ -364,10 +368,7 @@ export const enqueueForActiveRun = mutation({
 	},
 	returns: queuedMessageValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
 			ctx,
 			ownerTokenIdentifier,
@@ -433,10 +434,7 @@ export const listQueuedForChat = query({
 	},
 	returns: v.array(queuedMessageValidator),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
 			ctx,
 			ownerTokenIdentifier,
@@ -471,10 +469,7 @@ export const claimNextForRun = mutation({
 	returns: v.union(queuedMessageValidator, v.null()),
 	handler: async (ctx, args) => {
 		const isTargetedClaim = Boolean(args.queuedMessageId);
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await getOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (run.status !== "running" && run.status !== "waiting_for_user") {
@@ -564,10 +559,7 @@ export const claimReadyForRun = mutation({
 	},
 	returns: v.array(queuedMessageValidator),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await getOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (
@@ -661,10 +653,7 @@ export const claimNextForChat = mutation({
 	},
 	returns: v.union(queuedMessageValidator, v.null()),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
 			ctx,
 			ownerTokenIdentifier,
@@ -721,10 +710,7 @@ export const getClaimedForChat = query({
 	},
 	returns: v.union(queuedMessageValidator, v.null()),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const { chat, queuedMessage } = await getScopedQueuedMessageForChat(ctx, {
 			chatId: args.chatId,
 			ownerTokenIdentifier,
@@ -753,10 +739,7 @@ export const discardClaimed = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const { queuedMessage } = await getScopedQueuedMessageForChat(ctx, {
 			chatId: args.chatId,
 			ownerTokenIdentifier,
@@ -785,10 +768,7 @@ export const discardQueued = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const { queuedMessage } = await getScopedQueuedMessageForChat(ctx, {
 			chatId: args.chatId,
 			ownerTokenIdentifier,
@@ -818,10 +798,7 @@ export const updateQueued = mutation({
 	},
 	returns: queuedMessageValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const queuedMessage = await requireSavedQueuedMessage(
 			ctx,
 			args.queuedMessageId,
@@ -879,10 +856,7 @@ export const reorderQueuedForChat = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
 			ctx,
 			ownerTokenIdentifier,
@@ -965,10 +939,7 @@ export const discardQueuedForRun = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantQueuedMessages",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await getOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 		await discardQueuedForRunInternal(ctx, run._id);
 

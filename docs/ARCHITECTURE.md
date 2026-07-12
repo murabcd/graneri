@@ -230,7 +230,11 @@ capabilities.
 Read `convex/_generated/ai/guidelines.md` before changing Convex code. Convex
 derives ownership from server-side identity; client arguments may select
 resources such as workspace or chat ids, but they must not be trusted as owner
-identity. Hosted auth provider configuration is fail-closed: missing OAuth
+identity. `convex/domain.ts` owns the shared access-control primitives for
+queries, mutations, and actions. Feature modules configure their resource label
+through `createResourceAccess` and use the canonical workspace ownership guard;
+they must not define local authentication or workspace ownership wrappers.
+Hosted auth provider configuration is fail-closed: missing OAuth
 provider credentials must reject configuration instead of substituting
 placeholder client ids or secrets.
 

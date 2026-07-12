@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import {
 	assertSidebarReorderInputSize,
 	assertSidebarStoredReorderSize,
@@ -30,19 +31,7 @@ const REMOVE_ALL_PROJECTS_BATCH_SIZE = 100;
 const REMOVE_PROJECT_NOTES_BATCH_SIZE = 100;
 const MAX_PROJECT_NAME_LENGTH = 48;
 const MAX_PROJECT_DESCRIPTION_LENGTH = 255;
-
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access projects.",
-		});
-	}
-
-	return identity;
-};
+const { requireIdentity } = createResourceAccess("projects");
 
 const normalizeProjectName = (value: string) =>
 	value.replace(/\s+/g, " ").trim();
@@ -54,23 +43,6 @@ const withProjectDefaults = (project: Doc<"projects">) => ({
 	...project,
 	isStarred: project.isStarred ?? false,
 });
-
-const requireOwnedWorkspace = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) => {
-	const workspace = await ctx.db.get(workspaceId);
-
-	if (!workspace || workspace.ownerTokenIdentifier !== ownerTokenIdentifier) {
-		throw new ConvexError({
-			code: "WORKSPACE_NOT_FOUND",
-			message: "Workspace not found.",
-		});
-	}
-
-	return workspace;
-};
 
 export const ensureOwnedProject = ({
 	project,

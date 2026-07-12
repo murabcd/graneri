@@ -1,7 +1,7 @@
 import type { GenericActionCtx } from "convex/server";
-import { ConvexError } from "convex/values";
 import type { DataModel } from "./_generated/dataModel";
 import { authComponent, createAuth } from "./auth";
+import { createResourceAccess } from "./domain";
 
 export const GOOGLE_CALENDAR_SCOPE =
 	"https://www.googleapis.com/auth/calendar.readonly";
@@ -19,6 +19,8 @@ export type GoogleAccessTokenResult = {
 	accessToken: string;
 	scopes: string[];
 };
+
+const { requireIdentity } = createResourceAccess("Google integrations");
 
 export const parseGoogleScopeList = (scope: string | null | undefined) =>
 	scope
@@ -40,14 +42,7 @@ export const resolveGoogleScopes = (tokens: {
 export const getGoogleAuthContext = async (
 	ctx: GenericActionCtx<DataModel>,
 ): Promise<GoogleAuthContext> => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access Google integrations.",
-		});
-	}
+	await requireIdentity(ctx);
 
 	return await authComponent.getAuth(createAuth, ctx);
 };

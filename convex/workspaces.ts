@@ -1,8 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import { seedDefaultRecipesForWorkspace } from "./recipes";
 import { seedDefaultTemplatesForWorkspace } from "./templates";
 
@@ -34,42 +35,13 @@ const workspaceResponseValidator = v.object({
 const REMOVE_ALL_WORKSPACES_BATCH_SIZE = 100;
 const MAX_RETURNED_WORKSPACES = 20;
 const MAX_WORKSPACE_NAME_LENGTH = 48;
-
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access workspaces.",
-		});
-	}
-
-	return identity;
-};
+const { requireIdentity } = createResourceAccess("workspaces");
 
 const normalizeWorkspaceName = (value: string) =>
 	value.replace(/\s+/g, " ").trim();
 
 const toNormalizedWorkspaceKey = (value: string) =>
 	normalizeWorkspaceName(value).toLowerCase();
-
-const requireOwnedWorkspace = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) => {
-	const workspace = await ctx.db.get(workspaceId);
-
-	if (!workspace || workspace.ownerTokenIdentifier !== ownerTokenIdentifier) {
-		throw new ConvexError({
-			code: "WORKSPACE_NOT_FOUND",
-			message: "Workspace not found.",
-		});
-	}
-
-	return workspace;
-};
 
 const deleteWorkspaceBatch = async (
 	ctx: MutationCtx,

@@ -2,12 +2,14 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
-import { requireOwnedWorkspace, requireTokenIdentifier } from "./domain";
+import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import {
 	assertSidebarReorderInputSize,
 	assertSidebarStoredReorderSize,
 	MAX_SIDEBAR_REORDER_ITEMS,
 } from "./reorderLimits";
+
+const { requireTokenIdentifier } = createResourceAccess("starred");
 
 const starredItemValidator = v.union(
 	v.object({
@@ -96,7 +98,7 @@ export const reorder = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx, "starred");
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
 
 		assertSidebarReorderInputSize({

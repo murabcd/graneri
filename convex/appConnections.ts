@@ -20,6 +20,7 @@ import {
 	requiresChatSourceToken,
 } from "./appConnectionProviders";
 import { enableYandexCalendarPreferenceForWorkspace } from "./calendarPreferences";
+import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 
 const yandexTrackerProviderValidator = v.literal("yandex-tracker");
 const yandexCalendarProviderValidator = v.literal("yandex-calendar");
@@ -527,36 +528,7 @@ type McpOAuthChatToolConnection = Extract<
 	ChatToolConnection,
 	{ provider: McpOAuthConnectionProvider }
 >;
-
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access app connections.",
-		});
-	}
-
-	return identity;
-};
-
-const requireOwnedWorkspace = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-) => {
-	const workspace = await ctx.db.get(workspaceId);
-
-	if (!workspace || workspace.ownerTokenIdentifier !== ownerTokenIdentifier) {
-		throw new ConvexError({
-			code: "WORKSPACE_NOT_FOUND",
-			message: "Workspace not found.",
-		});
-	}
-
-	return workspace;
-};
+const { requireIdentity } = createResourceAccess("app connections");
 
 export const assertWorkspaceAccess = internalQuery({
 	args: {

@@ -22,9 +22,8 @@ import {
 } from "./automations";
 import {
 	clampWhitespace,
+	createResourceAccess,
 	getAuthorName,
-	requireIdentity as requireDomainIdentity,
-	requireTokenIdentifier as requireDomainTokenIdentifier,
 	requireOwnedWorkspace,
 	truncate,
 	uppercaseFirstCharacter,
@@ -135,12 +134,8 @@ const CONVEX_STORAGE_PATH_SEGMENT = "/api/storage/";
 
 type ChatArchiveState = "archived" | "active";
 
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) =>
-	await requireDomainIdentity(ctx, "chats");
-
-const requireTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
-	return await requireDomainTokenIdentifier(ctx, "chats");
-};
+const { requireIdentity, requireTokenIdentifier } =
+	createResourceAccess("chats");
 
 const normalizeChatTitle = (value: string | undefined) => {
 	const normalized = clampWhitespace(value ?? "");

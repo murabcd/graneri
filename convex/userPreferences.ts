@@ -1,6 +1,7 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { createResourceAccess } from "./domain";
 
 const userPreferencesValidator = v.object({
 	transcriptionLanguage: v.union(v.string(), v.null()),
@@ -50,18 +51,7 @@ const userAiProfileContextValidator = v.object({
 	companyName: v.union(v.string(), v.null()),
 });
 
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access user preferences.",
-		});
-	}
-
-	return identity;
-};
+const { requireIdentity } = createResourceAccess("user preferences");
 
 const getFirstName = (value: string | null | undefined) => {
 	const trimmedValue = value?.trim() ?? "";

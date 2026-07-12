@@ -13,7 +13,9 @@ import {
 	getOwnedActiveChatById,
 	nonTerminalRunStatuses,
 } from "./assistantRunLifecycle";
-import { requireOwnedWorkspace, requireTokenIdentifier } from "./domain";
+import { createResourceAccess, requireOwnedWorkspace } from "./domain";
+
+const { requireTokenIdentifier } = createResourceAccess("assistantRuns");
 
 const reasoningEffortValidator = v.union(
 	v.literal("low"),
@@ -309,17 +311,11 @@ export const startAssistantRun = mutation({
 		assistantMessageId: v.string(),
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),
-		policy: v.union(
-			v.literal("reject"),
-			v.literal("supersede"),
-		),
+		policy: v.union(v.literal("reject"), v.literal("supersede")),
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
 			ctx,
 			ownerTokenIdentifier,
@@ -503,10 +499,7 @@ export const waitForUserDecision = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (
@@ -549,10 +542,7 @@ export const resumeAssistantRunAfterUserDecision = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (run.status !== "waiting_for_user") {
@@ -579,10 +569,7 @@ export const finishAssistantRun = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (run.status !== "running") {
@@ -618,10 +605,7 @@ export const appendUserMessageToAssistantRun = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (run.status !== "running" && run.status !== "waiting_for_user") {
@@ -655,10 +639,7 @@ export const failAssistantRun = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (
@@ -701,10 +682,7 @@ export const requestStopAssistantRun = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (run.status === "stopping") {
@@ -735,10 +713,7 @@ export const finishStoppedAssistantRun = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		if (
@@ -781,10 +756,7 @@ export const getAttachableRun = query({
 	},
 	returns: v.union(assistantRunValidator, v.null()),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
 			ctx,
 			ownerTokenIdentifier,
@@ -827,10 +799,7 @@ export const getActiveRunStatus = query({
 	},
 	returns: v.union(v.literal("streaming"), v.null()),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
 			ctx,
 			ownerTokenIdentifier,
@@ -853,10 +822,7 @@ export const listActiveChatIds = query({
 	},
 	returns: v.array(v.string()),
 	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(
-			ctx,
-			"assistantRuns",
-		);
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
 		const activeChatIds = new Set<string>();
 		const activeRunCountsByChatId = new Map<Id<"chats">, number>();

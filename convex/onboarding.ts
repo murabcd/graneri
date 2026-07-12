@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { createResourceAccess } from "./domain";
 
 const onboardingStateFields = {
 	_id: v.id("onboardingStates"),
@@ -21,19 +22,7 @@ const onboardingStatusValidator = v.object({
 });
 
 const REMOVE_ALL_ONBOARDING_STATES_BATCH_SIZE = 100;
-
-const requireIdentity = async (ctx: QueryCtx | MutationCtx) => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		throw new ConvexError({
-			code: "UNAUTHENTICATED",
-			message: "You must be signed in to access onboarding.",
-		});
-	}
-
-	return identity;
-};
+const { requireIdentity } = createResourceAccess("onboarding");
 
 const getOnboardingState = async (
 	ctx: QueryCtx | MutationCtx,

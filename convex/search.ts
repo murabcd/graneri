@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireIdentity, requireOwnedWorkspace } from "./notes";
+import { createResourceAccess, requireOwnedWorkspace } from "./domain";
+
+const { requireIdentity } = createResourceAccess("notes");
 
 const MAX_RESULTS_PER_SOURCE = 20;
 const MAX_RESULTS = 30;

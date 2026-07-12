@@ -2,12 +2,12 @@ import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { consumeAiRateLimit } from "./aiRateLimits";
-import { requireIdentity } from "./domain";
+import { createResourceAccess } from "./domain";
 
 const aiAccessPolicies = {
-	"chat-turn": { accessLabel: "chat" },
-	"note-generation": { accessLabel: "note generation" },
-	"realtime-session": { accessLabel: "realtime transcription" },
+	"chat-turn": createResourceAccess("chat"),
+	"note-generation": createResourceAccess("note generation"),
+	"realtime-session": createResourceAccess("realtime transcription"),
 } as const;
 
 type AiAccessOperation = keyof typeof aiAccessPolicies;
@@ -16,10 +16,7 @@ const authorizeAiRequest = async (
 	ctx: MutationCtx,
 	operation: AiAccessOperation,
 ) => {
-	const identity = await requireIdentity(
-		ctx,
-		aiAccessPolicies[operation].accessLabel,
-	);
+	const identity = await aiAccessPolicies[operation].requireIdentity(ctx);
 	await consumeAiRateLimit(ctx, {
 		operation,
 		ownerTokenIdentifier: identity.tokenIdentifier,
