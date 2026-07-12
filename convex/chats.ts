@@ -21,7 +21,7 @@ import {
 	moveLinkedAutomationToFreshChat,
 	pauseLinkedAutomationForChat,
 	resumeLinkedAutomationForChat,
-} from "./automations";
+} from "./automationRunStateMachine";
 import {
 	clampWhitespace,
 	createResourceAccess,

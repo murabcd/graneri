@@ -280,6 +280,13 @@ continuation scheduling for note-, workspace-, owner-, and trash-scoped
 removal. Note and chat feature modules expose record-specific retirement
 adapters, but callers must enter through the resource-retirement boundary and
 must not reproduce record ordering or retry loops.
+Automation execution state is owned by
+`convex/automationRunStateMachine.ts`. Run reservation, activation, active-run
+checks, terminal transitions, and chat-linked pause/resume/move consequences
+must enter through that module. `convex/automationSchedule.ts` is the canonical
+home for next-run calculation and scheduled-function registration; definition
+CRUD may invoke it but must not reproduce schedule arithmetic or cancellation
+behavior.
 Hosted auth provider configuration is fail-closed: missing OAuth
 provider credentials must reject configuration instead of substituting
 placeholder client ids or secrets.

@@ -402,6 +402,60 @@ test("stopping an automation run prevents late completion from winning", async (
 	expect(rows.automation?.activeRunId).toBeUndefined();
 });
 
+test("automation run transitions reject mismatched automation and run ids", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const createArgs = {
+		workspaceId,
+		prompt: "Review the workspace.",
+		model: "gpt-5.4",
+		reasoningEffort: "medium" as const,
+		webSearchEnabled: false,
+		appsEnabled: true,
+		appSources: [],
+		schedulePeriod: "daily" as const,
+		scheduledAt: 2_000,
+		timezone: "UTC",
+		target: { kind: "workspace" as const },
+	};
+	const firstAutomation = await asOwner.mutation(api.automations.create, {
+		...createArgs,
+		title: "First automation",
+	});
+	const secondAutomation = await asOwner.mutation(api.automations.create, {
+		...createArgs,
+		title: "Second automation",
+	});
+	const firstRun = await asOwner.mutation(api.automations.runNow, {
+		automationId: firstAutomation.id,
+	});
+	const secondRun = await asOwner.mutation(api.automations.runNow, {
+		automationId: secondAutomation.id,
+	});
+
+	if (firstRun.status !== "started" || secondRun.status !== "started") {
+		throw new Error("Expected both automation runs to start.");
+	}
+
+	await t.mutation(internal.automations.completeRun, {
+		automationId: firstAutomation.id,
+		runId: secondRun.runId,
+		userMessageId: "wrong-user",
+		assistantMessageId: "wrong-assistant",
+	});
+
+	const rows = await t.run(async (ctx) => ({
+		firstAutomation: await ctx.db.get(firstAutomation.id),
+		firstRun: await ctx.db.get(firstRun.runId),
+		secondAutomation: await ctx.db.get(secondAutomation.id),
+		secondRun: await ctx.db.get(secondRun.runId),
+	}));
+
+	expect(rows.firstRun?.status).toBe("running");
+	expect(rows.secondRun?.status).toBe("running");
+	expect(rows.firstAutomation?.activeRunId).toBe(firstRun.runId);
+	expect(rows.secondAutomation?.activeRunId).toBe(secondRun.runId);
+});
+
 test("moving a chat to trash pauses its automation and restoring resumes it", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 

@@ -9,6 +9,19 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	activateAutomationRun,
+	automationChatHasActiveAssistantRun,
+	createAutomationChatId,
+	isAutomationRunActive,
+	reserveAutomationRun,
+	transitionAutomationRun,
+} from "./automationRunStateMachine";
+import {
+	cancelAutomationSchedule,
+	getNextAutomationRunAt,
+	scheduleAutomationRun,
+} from "./automationSchedule";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 
 const automationSchedulePeriodValidator = v.union(
@@ -176,10 +189,6 @@ const STALE_SCHEDULED_FUNCTION_MS = 2 * 60 * 1000;
 const DELETE_RUNS_BATCH_SIZE = 50;
 const DELETE_AUTOMATIONS_BATCH_SIZE = 50;
 const MAX_TARGET_NOTES = MAX_CONTEXT_NOTES;
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
-
-type AutomationSchedulePeriod = Doc<"automations">["schedulePeriod"];
 type AutomationTarget =
 	| {
 			kind: "notes";
@@ -379,123 +388,6 @@ const normalizeReasoningEffort = (reasoningEffort: string | undefined) =>
 const normalizeTimezone = (timezone: string | undefined) =>
 	clampWhitespace(timezone ?? "") || "UTC";
 
-const createAutomationChatId = () =>
-	`automation-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-const getTimeParts = (scheduledAt: number) => {
-	const scheduledDate = new Date(scheduledAt);
-
-	return {
-		dayOfWeek: scheduledDate.getUTCDay(),
-		hours: scheduledDate.getUTCHours(),
-		minutes: scheduledDate.getUTCMinutes(),
-	};
-};
-
-const getDailyCandidate = (from: number, scheduledAt: number) => {
-	const { hours, minutes } = getTimeParts(scheduledAt);
-	const candidate = new Date(from);
-	candidate.setUTCHours(hours, minutes, 0, 0);
-
-	if (candidate.getTime() <= from) {
-		candidate.setUTCDate(candidate.getUTCDate() + 1);
-	}
-
-	return candidate.getTime();
-};
-
-const getHourlyCandidate = (from: number, scheduledAt: number) => {
-	const { minutes } = getTimeParts(scheduledAt);
-	const candidate = new Date(from);
-	candidate.setUTCMinutes(minutes, 0, 0);
-
-	if (candidate.getTime() <= from) {
-		candidate.setTime(candidate.getTime() + HOUR_MS);
-	}
-
-	return candidate.getTime();
-};
-
-const getWeekdayCandidate = (from: number, scheduledAt: number) => {
-	let candidate = getDailyCandidate(from, scheduledAt);
-
-	for (let attempt = 0; attempt < 7; attempt += 1) {
-		const day = new Date(candidate).getUTCDay();
-		if (day >= 1 && day <= 5) {
-			return candidate;
-		}
-		candidate += DAY_MS;
-	}
-
-	return candidate;
-};
-
-const getWeeklyCandidate = (from: number, scheduledAt: number) => {
-	const { dayOfWeek, hours, minutes } = getTimeParts(scheduledAt);
-	const candidate = new Date(from);
-	candidate.setUTCHours(hours, minutes, 0, 0);
-
-	const dayOffset = (dayOfWeek - candidate.getUTCDay() + 7) % 7;
-	candidate.setUTCDate(candidate.getUTCDate() + dayOffset);
-
-	if (candidate.getTime() <= from) {
-		candidate.setUTCDate(candidate.getUTCDate() + 7);
-	}
-
-	return candidate.getTime();
-};
-
-const getNextRunAt = ({
-	from,
-	scheduledAt,
-	schedulePeriod,
-}: {
-	from: number;
-	scheduledAt: number;
-	schedulePeriod: AutomationSchedulePeriod;
-}) => {
-	switch (schedulePeriod) {
-		case "hourly":
-			return getHourlyCandidate(from, scheduledAt);
-		case "weekdays":
-			return getWeekdayCandidate(from, scheduledAt);
-		case "weekly":
-			return getWeeklyCandidate(from, scheduledAt);
-		case "daily":
-			return getDailyCandidate(from, scheduledAt);
-	}
-};
-
-const cancelScheduledFunction = async (
-	ctx: MutationCtx,
-	scheduledFunctionId: Id<"_scheduled_functions"> | undefined,
-) => {
-	if (!scheduledFunctionId) {
-		return;
-	}
-
-	try {
-		await ctx.scheduler.cancel(scheduledFunctionId);
-	} catch (error) {
-		console.warn("Failed to cancel automation scheduled function", error);
-	}
-};
-
-const scheduleAutomationRun = async (
-	ctx: MutationCtx,
-	automationId: Id<"automations">,
-	nextRunAt: number,
-) =>
-	await ctx.scheduler.runAt(
-		nextRunAt,
-		internal.automationActions.runAutomation,
-		{
-			automationId,
-			scheduledFor: nextRunAt,
-			reason: "scheduled",
-		},
-	);
-
 const toListItem = (automation: Doc<"automations">) => ({
 	id: automation._id,
 	title: automation.title,
@@ -556,103 +448,6 @@ const getRecentContextNotes = async (
 	return [];
 };
 
-const getActiveChatForAutomation = async (
-	ctx: QueryCtx | MutationCtx,
-	automation: Doc<"automations">,
-) =>
-	await ctx.db
-		.query("chats")
-		.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
-			q
-				.eq("ownerTokenIdentifier", automation.ownerTokenIdentifier)
-				.eq("workspaceId", automation.workspaceId)
-				.eq("chatId", automation.chatId),
-		)
-		.unique();
-
-const chatHasNonTerminalAssistantRun = async (
-	ctx: QueryCtx | MutationCtx,
-	chatId: Id<"chats">,
-) => {
-	const nonTerminalStatuses = [
-		"running",
-		"waiting_for_user",
-		"stopping",
-	] as const;
-
-	for (const status of nonTerminalStatuses) {
-		const run = await ctx.db
-			.query("assistantRuns")
-			.withIndex("by_chatId_and_status", (q) =>
-				q.eq("chatId", chatId).eq("status", status),
-			)
-			.first();
-
-		if (run) {
-			return true;
-		}
-	}
-
-	return false;
-};
-
-const beginAutomationRun = async (
-	ctx: MutationCtx,
-	args: {
-		automationId: Id<"automations">;
-		scheduledFor: number;
-		reason: Doc<"automationRuns">["reason"];
-	},
-) => {
-	const automation = await ctx.db.get(args.automationId);
-	if (!automation) {
-		return { status: "skipped" as const };
-	}
-
-	if (automation.activeRunId) {
-		return { status: "skipped" as const };
-	}
-
-	if (
-		args.reason === "scheduled" &&
-		(automation.isPaused || automation.nextRunAt !== args.scheduledFor)
-	) {
-		return { status: "skipped" as const };
-	}
-
-	const chat = await getActiveChatForAutomation(ctx, automation);
-	if (chat && (await chatHasNonTerminalAssistantRun(ctx, chat._id))) {
-		return { status: "skipped" as const };
-	}
-
-	const now = Date.now();
-	const runId = await ctx.db.insert("automationRuns", {
-		automationId: automation._id,
-		ownerTokenIdentifier: automation.ownerTokenIdentifier,
-		workspaceId: automation.workspaceId,
-		chatId: automation.chatId,
-		scheduledFor: args.scheduledFor,
-		reason: args.reason,
-		status: "running",
-		error: undefined,
-		startedAt: now,
-		completedAt: undefined,
-		userMessageId: undefined,
-		assistantMessageId: undefined,
-		createdAt: now,
-		updatedAt: now,
-	});
-
-	await ctx.db.patch(automation._id, {
-		activeRunId: runId,
-		lastRunAt: now,
-		scheduledFunctionId: undefined,
-		updatedAt: now,
-	});
-
-	return buildAutomationRunStart(ctx, automation, runId, args);
-};
-
 const buildAutomationRunStart = async (
 	ctx: MutationCtx,
 	automation: Doc<"automations">,
@@ -681,66 +476,6 @@ const buildAutomationRunStart = async (
 	reason: args.reason,
 	notes: await getRecentContextNotes(ctx, automation),
 });
-
-const getNextScheduleAfterRun = async (
-	ctx: MutationCtx,
-	automation: Doc<"automations">,
-	run: Doc<"automationRuns"> | null,
-	now: number,
-) => {
-	const shouldScheduleNext =
-		run?.reason === "scheduled" &&
-		!automation.isPaused &&
-		automation.nextRunAt === run.scheduledFor;
-
-	if (!shouldScheduleNext) {
-		return {
-			nextRunAt: automation.nextRunAt,
-			scheduledFunctionId: automation.scheduledFunctionId,
-		};
-	}
-
-	const nextRunAt = getNextRunAt({
-		from: Math.max(now, run.scheduledFor),
-		scheduledAt: automation.scheduledAt,
-		schedulePeriod: automation.schedulePeriod,
-	});
-	const scheduledFunctionId = await scheduleAutomationRun(
-		ctx,
-		automation._id,
-		nextRunAt,
-	);
-
-	return { nextRunAt, scheduledFunctionId };
-};
-
-const clearActiveRunAndScheduleNext = async (
-	ctx: MutationCtx,
-	args: {
-		automation: Doc<"automations"> | null;
-		run: Doc<"automationRuns"> | null;
-		runId: Id<"automationRuns">;
-		now: number;
-	},
-) => {
-	if (!args.automation || args.automation.activeRunId !== args.runId) {
-		return;
-	}
-
-	const { nextRunAt, scheduledFunctionId } = await getNextScheduleAfterRun(
-		ctx,
-		args.automation,
-		args.run,
-		args.now,
-	);
-
-	await ctx.db.patch(args.automation._id, {
-		activeRunId: undefined,
-		nextRunAt,
-		scheduledFunctionId,
-		updatedAt: args.now,
-	});
-};
 
 export const list = query({
 	args: {
@@ -814,7 +549,7 @@ export const getRunningRunForChat = query({
 
 		const run = await ctx.db.get(automation.activeRunId);
 
-		if (!run || run.status !== "running") {
+		if (run?.status !== "running") {
 			return null;
 		}
 
@@ -895,7 +630,7 @@ export const create = mutation({
 				message: "This chat already has an automation.",
 			});
 		}
-		const nextRunAt = getNextRunAt({
+		const nextRunAt = getNextAutomationRunAt({
 			from: now,
 			scheduledAt: args.scheduledAt,
 			schedulePeriod: args.schedulePeriod,
@@ -976,13 +711,13 @@ export const update = mutation({
 			automation.workspaceId,
 			args.target,
 		);
-		await cancelScheduledFunction(ctx, automation.scheduledFunctionId);
+		await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
 		const now = Date.now();
 		const prompt = normalizePrompt(args.prompt);
 		const appSources = normalizeAppSources(args.appSources);
 		const nextRunAt = automation.isPaused
 			? undefined
-			: getNextRunAt({
+			: getNextAutomationRunAt({
 					from: now,
 					scheduledAt: args.scheduledAt,
 					schedulePeriod: args.schedulePeriod,
@@ -1038,7 +773,7 @@ export const togglePaused = mutation({
 		const now = Date.now();
 
 		if (!automation.isPaused) {
-			await cancelScheduledFunction(ctx, automation.scheduledFunctionId);
+			await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
 			await ctx.db.patch(automation._id, {
 				isPaused: true,
 				nextRunAt: undefined,
@@ -1046,7 +781,7 @@ export const togglePaused = mutation({
 				updatedAt: now,
 			});
 		} else {
-			const nextRunAt = getNextRunAt({
+			const nextRunAt = getNextAutomationRunAt({
 				from: now,
 				scheduledAt: automation.scheduledAt,
 				schedulePeriod: automation.schedulePeriod,
@@ -1098,20 +833,19 @@ export const runNow = mutation({
 			};
 		}
 
-		const chat = await getActiveChatForAutomation(ctx, automation);
-		if (chat && (await chatHasNonTerminalAssistantRun(ctx, chat._id))) {
+		if (await automationChatHasActiveAssistantRun(ctx, automation)) {
 			return {
 				status: "chat_busy" as const,
 				chatId: automation.chatId,
 			};
 		}
 
-		const run = await beginAutomationRun(ctx, {
+		const run = await reserveAutomationRun(ctx, {
 			automationId: automation._id,
 			scheduledFor: now,
 			reason: "manual",
 		});
-		if (run.status !== "started") {
+		if (run.status !== "reserved") {
 			return {
 				status: "already_running" as const,
 				chatId: automation.chatId,
@@ -1146,7 +880,7 @@ export const remove = mutation({
 			ownerTokenIdentifier,
 			args.automationId,
 		);
-		await cancelScheduledFunction(ctx, automation.scheduledFunctionId);
+		await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
 		await ctx.db.delete(automation._id);
 		await ctx.scheduler.runAfter(0, internal.automations.removeOrphanedRuns, {
 			automationId: automation._id,
@@ -1156,134 +890,6 @@ export const remove = mutation({
 	},
 });
 
-const getLinkedAutomationForChat = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	chatId: string,
-) =>
-	await ctx.db
-		.query("automations")
-		.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
-			q
-				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-				.eq("workspaceId", workspaceId)
-				.eq("chatId", chatId),
-		)
-		.unique();
-
-const scheduleNextAutomationRun = async (
-	ctx: MutationCtx,
-	automation: Doc<"automations">,
-	now: number,
-) => {
-	const nextRunAt = getNextRunAt({
-		from: now,
-		scheduledAt: automation.scheduledAt,
-		schedulePeriod: automation.schedulePeriod,
-	});
-	const scheduledFunctionId = await scheduleAutomationRun(
-		ctx,
-		automation._id,
-		nextRunAt,
-	);
-
-	return { nextRunAt, scheduledFunctionId };
-};
-
-export const pauseLinkedAutomationForChat = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	chatId: string,
-	now: number,
-) => {
-	const automation = await getLinkedAutomationForChat(
-		ctx,
-		ownerTokenIdentifier,
-		workspaceId,
-		chatId,
-	);
-
-	if (!automation || automation.isPaused) {
-		return;
-	}
-
-	await cancelScheduledFunction(ctx, automation.scheduledFunctionId);
-	await ctx.db.patch(automation._id, {
-		isPaused: true,
-		nextRunAt: undefined,
-		scheduledFunctionId: undefined,
-		updatedAt: now,
-	});
-};
-
-export const resumeLinkedAutomationForChat = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	chatId: string,
-	now: number,
-) => {
-	const automation = await getLinkedAutomationForChat(
-		ctx,
-		ownerTokenIdentifier,
-		workspaceId,
-		chatId,
-	);
-
-	if (!automation?.isPaused) {
-		return;
-	}
-
-	const { nextRunAt, scheduledFunctionId } = await scheduleNextAutomationRun(
-		ctx,
-		automation,
-		now,
-	);
-
-	await ctx.db.patch(automation._id, {
-		isPaused: false,
-		nextRunAt,
-		scheduledFunctionId,
-		updatedAt: now,
-	});
-};
-
-export const moveLinkedAutomationToFreshChat = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	chatId: string,
-	now: number,
-) => {
-	const automation = await getLinkedAutomationForChat(
-		ctx,
-		ownerTokenIdentifier,
-		workspaceId,
-		chatId,
-	);
-
-	if (!automation) {
-		return;
-	}
-
-	await cancelScheduledFunction(ctx, automation.scheduledFunctionId);
-	const { nextRunAt, scheduledFunctionId } = await scheduleNextAutomationRun(
-		ctx,
-		automation,
-		now,
-	);
-
-	await ctx.db.patch(automation._id, {
-		chatId: createAutomationChatId(),
-		isPaused: false,
-		nextRunAt,
-		scheduledFunctionId,
-		updatedAt: now,
-	});
-};
-
 export const beginRun = internalMutation({
 	args: {
 		automationId: v.id("automations"),
@@ -1291,7 +897,19 @@ export const beginRun = internalMutation({
 		reason: automationRunReasonValidator,
 	},
 	returns: automationRunStartValidator,
-	handler: async (ctx, args) => await beginAutomationRun(ctx, args),
+	handler: async (ctx, args) => {
+		const reservation = await reserveAutomationRun(ctx, args);
+		if (reservation.status !== "reserved") {
+			return { status: "skipped" as const };
+		}
+
+		return await buildAutomationRunStart(
+			ctx,
+			reservation.automation,
+			reservation.runId,
+			args,
+		);
+	},
 });
 
 export const activateRun = internalMutation({
@@ -1303,21 +921,17 @@ export const activateRun = internalMutation({
 	},
 	returns: automationRunActiveValidator,
 	handler: async (ctx, args) => {
-		const [automation, run] = await Promise.all([
-			ctx.db.get(args.automationId),
-			ctx.db.get(args.runId),
-		]);
-
-		if (
-			!automation ||
-			!run ||
-			run.status !== "running" ||
-			automation.activeRunId !== run._id
-		) {
+		const activeRun = await activateAutomationRun(ctx, args);
+		if (activeRun.status !== "active") {
 			return { status: "stopped" as const };
 		}
 
-		return await buildAutomationRunStart(ctx, automation, run._id, args);
+		return await buildAutomationRunStart(
+			ctx,
+			activeRun.automation,
+			activeRun.run._id,
+			args,
+		);
 	},
 });
 
@@ -1327,19 +941,7 @@ export const isRunActive = internalMutation({
 		runId: v.id("automationRuns"),
 	},
 	returns: v.boolean(),
-	handler: async (ctx, args) => {
-		const [automation, run] = await Promise.all([
-			ctx.db.get(args.automationId),
-			ctx.db.get(args.runId),
-		]);
-
-		return Boolean(
-			automation &&
-				run &&
-				run.status === "running" &&
-				automation.activeRunId === run._id,
-		);
-	},
+	handler: async (ctx, args) => await isAutomationRunActive(ctx, args),
 });
 
 export const stopRun = mutation({
@@ -1364,29 +966,7 @@ export const stopRun = mutation({
 			});
 		}
 
-		if (run.status !== "running" || automation.activeRunId !== run._id) {
-			return null;
-		}
-
-		const now = Date.now();
-		const { nextRunAt, scheduledFunctionId } = await getNextScheduleAfterRun(
-			ctx,
-			automation,
-			run,
-			now,
-		);
-		await ctx.db.patch(run._id, {
-			status: "stopped",
-			error: "Stopped by user.",
-			completedAt: now,
-			updatedAt: now,
-		});
-		await ctx.db.patch(automation._id, {
-			activeRunId: undefined,
-			nextRunAt,
-			scheduledFunctionId,
-			updatedAt: now,
-		});
+		await transitionAutomationRun(ctx, args, { type: "stop" });
 
 		return null;
 	},
@@ -1401,31 +981,11 @@ export const completeRun = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const run = await ctx.db.get(args.runId);
-		const automation = await ctx.db.get(args.automationId);
-		const now = Date.now();
-
-		if (run && run.status !== "running") {
-			return null;
-		}
-
-		if (run) {
-			await ctx.db.patch(run._id, {
-				status: "completed",
-				completedAt: now,
-				userMessageId: args.userMessageId,
-				assistantMessageId: args.assistantMessageId,
-				updatedAt: now,
-			});
-		}
-
-		await clearActiveRunAndScheduleNext(ctx, {
-			automation,
-			run,
-			runId: args.runId,
-			now,
+		await transitionAutomationRun(ctx, args, {
+			type: "complete",
+			userMessageId: args.userMessageId,
+			assistantMessageId: args.assistantMessageId,
 		});
-
 		return null;
 	},
 });
@@ -1438,30 +998,10 @@ export const failRun = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const run = await ctx.db.get(args.runId);
-		const automation = await ctx.db.get(args.automationId);
-		const now = Date.now();
-
-		if (run && run.status !== "running") {
-			return null;
-		}
-
-		if (run) {
-			await ctx.db.patch(run._id, {
-				status: "failed",
-				error: truncate(args.error, 1_000),
-				completedAt: now,
-				updatedAt: now,
-			});
-		}
-
-		await clearActiveRunAndScheduleNext(ctx, {
-			automation,
-			run,
-			runId: args.runId,
-			now,
+		await transitionAutomationRun(ctx, args, {
+			type: "fail",
+			error: args.error,
 		});
-
 		return null;
 	},
 });
@@ -1581,7 +1121,7 @@ export const removeAllForOwner = internalMutation({
 
 		await Promise.all(
 			automations.map(async (automation) => {
-				await cancelScheduledFunction(ctx, automation.scheduledFunctionId);
+				await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
 				await ctx.db.delete(automation._id);
 			}),
 		);
