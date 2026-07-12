@@ -3,6 +3,9 @@ import type { ChatAddToolOutputFunction, UIMessage } from "ai";
 import { lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import type { FunctionReturnType } from "convex/server";
 import * as React from "react";
+import { toast } from "sonner";
+import { stopActiveChatStream } from "@/lib/chat-active-stream";
+import { stopChatInteraction } from "@/lib/chat-interaction-session";
 import {
 	appendLocalOptimisticChatMessages,
 	normalizeChatMessages,
@@ -12,12 +15,14 @@ import { getUIMessageSeedKey } from "@/lib/chat-snapshot";
 import { CHAT_STREAM_UI_THROTTLE_MS } from "@/lib/chat-streaming-performance";
 import { removeChatMessageById } from "@/lib/chat-submit-session";
 import { createDesktopLocalToolCallHandler } from "@/lib/desktop-local-tool-call";
+import { logError } from "@/lib/logger";
 import {
 	mergeRendererChatSessionMessages,
 	resolveRendererChatRunState,
 } from "@/lib/renderer-chat-session";
 import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { useChatInteractionSession } from "./use-chat-interaction-session";
 import { useQueuedChatDrain } from "./use-queued-chat-drain";
 import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
 import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
@@ -27,11 +32,6 @@ type AttachableRun =
 	| FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
 	| undefined;
 
-export type ScopedLocalOptimisticMessages = {
-	chatId: string;
-	messages: UIMessage[];
-};
-
 const EMPTY_STREAMING_MESSAGE_IDS = new Set<string>();
 
 export const useRendererChatSession = ({
@@ -39,22 +39,20 @@ export const useRendererChatSession = ({
 	chatId,
 	contextLabel,
 	isExternallyBlocked = false,
-	isPreparingRequest,
-	localOptimisticMessages,
 	onEditQueuedMessage,
 	persistedMessages,
 	resumeEnabled = true,
+	stopExternalRun,
 	workspaceId,
 }: {
 	activeRun: AttachableRun;
 	chatId: string;
 	contextLabel: string;
 	isExternallyBlocked?: boolean;
-	isPreparingRequest: boolean;
-	localOptimisticMessages: ScopedLocalOptimisticMessages | null;
 	onEditQueuedMessage: (message: QueuedFollowUpMessage) => void;
 	persistedMessages: UIMessage[];
 	resumeEnabled?: boolean;
+	stopExternalRun?: () => Promise<boolean>;
 	workspaceId: Id<"workspaces"> | null;
 }) => {
 	const attachableActiveRun =
@@ -93,6 +91,14 @@ export const useRendererChatSession = ({
 		onToolCall: handleToolCall,
 		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 	});
+	const {
+		beginRequestPreparation,
+		commitOptimisticMessage,
+		isPreparingRequest,
+		localOptimisticMessages,
+		rollbackOptimisticMessage,
+		truncateMessagesFrom,
+	} = useChatInteractionSession({ chatId, setMessages });
 	React.useEffect(() => {
 		addToolOutputRef.current = addToolOutput;
 
@@ -289,25 +295,81 @@ export const useRendererChatSession = ({
 		setQueuedMessages,
 		workspaceId,
 	});
+	const isPersistedChatStreaming = Boolean(displayActiveRun);
+	const isChatUiPending =
+		isChatRequestPending || isPersistedChatStreaming || isExternallyBlocked;
+	const stopCurrentStream = React.useCallback(
+		async ({ interruptActiveRun = false } = {}) => {
+			await stopChatInteraction({
+				chatId,
+				contextLabel,
+				hasDisplayActiveRun: Boolean(displayActiveRun),
+				interruptActiveRun,
+				stopActiveRun: stopActiveChatStream,
+				stopExternalRun,
+				stopLocalStream: stop,
+				workspaceId,
+			});
+		},
+		[
+			chatId,
+			contextLabel,
+			displayActiveRun,
+			stop,
+			stopExternalRun,
+			workspaceId,
+		],
+	);
+	const handleStop = React.useCallback(() => {
+		const stopPromise = queuedMessages[0]
+			? queuedFollowUpControls.sendQueuedFollowUpNow()
+			: stopCurrentStream();
+
+		void stopPromise.catch((error) => {
+			logError({
+				event: "client.error",
+				error,
+				message: `Failed to stop ${contextLabel} stream`,
+			});
+			toast.error(
+				error instanceof Error
+					? error.message
+					: `Failed to stop ${contextLabel} stream`,
+			);
+		});
+	}, [
+		contextLabel,
+		queuedFollowUpControls.sendQueuedFollowUpNow,
+		queuedMessages,
+		stopCurrentStream,
+	]);
 
 	return {
 		activeAssistantMessageId,
+		beginRequestPreparation,
+		commitOptimisticMessage,
+		canStop: isChatUiPending,
 		controllerMessages,
 		displayActiveRun,
 		displayMessages,
 		error,
 		hasLocallyCompletedAssistantMessage,
+		handleStop,
 		isAiRequestPending,
 		isChatRequestPending,
+		isChatUiPending,
+		isPreparingRequest,
 		latestRequestBodyRef,
 		queuedMessages,
 		...queuedFollowUpControls,
 		regenerate,
+		rollbackOptimisticMessage,
 		sendMessage,
 		setMessages,
 		setQueuedMessages,
 		status,
-		stop,
+		stopCurrentStream,
 		streamingMessageIds,
+		truncateMessagesFrom,
 	};
 };

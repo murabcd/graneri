@@ -5,7 +5,6 @@ import type { UIMessage } from "ai";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-controls";
-import { normalizeChatMessages } from "@/lib/chat-message-state";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import { logError } from "@/lib/logger";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -13,19 +12,10 @@ import { waitForBrowserPaint } from "./browser-paint";
 import {
 	type ActiveRun,
 	type EnqueueQueuedChatTurn,
-	removeChatMessageById,
 	type SendChatTurn,
 	submitChatTurn,
 } from "./chat-submit-session";
 
-type ScopedLocalOptimisticMessages = {
-	chatId: string;
-	messages: UIMessage[];
-};
-
-type StateUpdate<T> = T | ((currentState: T) => T);
-
-type SetState<T> = (update: StateUpdate<T>) => void;
 type SetQueuedMessages = (
 	update: (messages: QueuedFollowUpMessage[]) => QueuedFollowUpMessage[],
 ) => void;
@@ -40,13 +30,13 @@ export const submitAutomationConfirmationChatTurn = async <
 	displayActiveRun,
 	enqueueQueuedMessage,
 	isAiRequestPending,
+	commitOptimisticMessage,
 	onBeforeSubmit,
 	onFinally,
 	onOptimisticMessage,
 	onRequestPrepared,
+	rollbackOptimisticMessage,
 	sendMessage,
-	setLocalOptimisticMessages,
-	setMessages,
 	setQueuedMessages,
 	text,
 }: {
@@ -61,6 +51,7 @@ export const submitAutomationConfirmationChatTurn = async <
 	displayActiveRun: ActiveRun;
 	enqueueQueuedMessage: EnqueueQueuedChatTurn;
 	isAiRequestPending: boolean;
+	commitOptimisticMessage: (message: UIMessage) => void;
 	onBeforeSubmit?: () => void;
 	onFinally?: () => void;
 	onOptimisticMessage?: () => void;
@@ -68,9 +59,8 @@ export const submitAutomationConfirmationChatTurn = async <
 		localFolders: DesktopLocalFolder[];
 		requestBody: Record<string, unknown>;
 	}) => void;
+	rollbackOptimisticMessage: (messageId: string) => void;
 	sendMessage: SendChatTurn;
-	setLocalOptimisticMessages: SetState<ScopedLocalOptimisticMessages | null>;
-	setMessages: SetState<UIMessage[]>;
 	setQueuedMessages: SetQueuedMessages;
 	text: string;
 }) => {
@@ -88,16 +78,7 @@ export const submitAutomationConfirmationChatTurn = async <
 			onOptimisticMessage: (message) => {
 				optimisticMessageId = message.id;
 				flushSync(() => {
-					setLocalOptimisticMessages((currentState) => ({
-						chatId,
-						messages: normalizeChatMessages([
-							...(currentState?.chatId === chatId ? currentState.messages : []),
-							message,
-						]),
-					}));
-					setMessages((currentMessages) =>
-						normalizeChatMessages([...currentMessages, message]),
-					);
+					commitOptimisticMessage(message);
 				});
 				onOptimisticMessage?.();
 			},
@@ -131,21 +112,7 @@ export const submitAutomationConfirmationChatTurn = async <
 				: "Failed to submit automation confirmation",
 		);
 		if (optimisticMessageId) {
-			const failedOptimisticMessageId = optimisticMessageId;
-			setLocalOptimisticMessages((currentState) =>
-				currentState?.chatId === chatId
-					? {
-							chatId,
-							messages: removeChatMessageById(
-								currentState.messages,
-								failedOptimisticMessageId,
-							),
-						}
-					: currentState,
-			);
-			setMessages((currentMessages) =>
-				removeChatMessageById(currentMessages, failedOptimisticMessageId),
-			);
+			rollbackOptimisticMessage(optimisticMessageId);
 		}
 	} finally {
 		onFinally?.();

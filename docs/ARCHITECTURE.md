@@ -247,6 +247,14 @@ and wait primitives for active-turn user input, but it does not implement
 reference subagents. Graneri drains accepted input at the AI SDK stream restart
 boundary into the next prompt branch, while Convex remains the durable source of
 truth for user input, chat runs, crash recovery, and cross-process coordination.
+Renderer chat interaction ownership is shared across workspace and note chat
+surfaces. `use-chat-interaction-session.ts` owns request-preparation leases and
+atomic optimistic message commit, rollback, and truncation;
+`use-renderer-chat-session.ts` composes that state with AI SDK streaming,
+durable queued follow-ups, and stop arbitration. Persisted/external/local stop
+ordering enters through `chat-interaction-session.ts`. Chat surfaces provide
+request-body and presentation adapters, but must not maintain parallel pending
+or optimistic-message state.
 
 Connected app AI capabilities are declared in
 `@workspace/ai/capability-metadata`. The catalog is the source of truth

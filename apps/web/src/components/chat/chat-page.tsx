@@ -43,10 +43,7 @@ import { PageTitle } from "@/components/layout/page-title";
 import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
 import { useAppSources } from "@/hooks/use-app-sources";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
-import {
-	type ScopedLocalOptimisticMessages,
-	useRendererChatSession,
-} from "@/hooks/use-renderer-chat-session";
+import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import {
 	getStoredChatModel as getStoredLocalChatModel,
 	storeChatModel,
@@ -66,7 +63,6 @@ import {
 } from "@/lib/ai/reasoning-effort";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { getChatId } from "@/lib/chat";
-import { stopActiveChatStream } from "@/lib/chat-active-stream";
 import { getPendingAutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
 import { submitAutomationConfirmationChatTurn } from "@/lib/chat-automation-confirmation-submit";
 import { getChatText } from "@/lib/chat-message";
@@ -81,14 +77,8 @@ import {
 	buildWorkspaceChatRequestBodyFromLocalFolders,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
-import {
-	removeChatMessageById,
-	submitChatTurn,
-} from "@/lib/chat-submit-session";
-import {
-	applyPendingMessageTruncation,
-	getMessagesBefore,
-} from "@/lib/chat-thread";
+import { submitChatTurn } from "@/lib/chat-submit-session";
+import { applyPendingMessageTruncation } from "@/lib/chat-thread";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
@@ -128,16 +118,6 @@ export type ChatPageProps = {
 	automations?: AutomationListItem[];
 	onAddAutomation?: (chatId: string) => void;
 };
-
-type StateUpdate<T> = T | ((currentState: T) => T);
-
-const stateUpdateReducer = <T,>(
-	currentState: T,
-	updateState: StateUpdate<T>,
-): T =>
-	typeof updateState === "function"
-		? (updateState as (currentState: T) => T)(currentState)
-		: updateState;
 
 const getLatestUserMessageText = (messages: UIMessage[]) => {
 	for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -384,7 +364,6 @@ const useChatPageController = ({
 		null,
 	);
 	// Preparing state tracks async request construction started by submit handlers.
-	const [isPreparingRequest, setIsPreparingRequest] = React.useState(false);
 	// Shared local folders hydrate from desktop storage for the active chat scope.
 	const [sharedLocalFolders, setSharedLocalFolders] = React.useState<
 		DesktopLocalFolder[]
@@ -443,11 +422,17 @@ const useChatPageController = ({
 		api.automations.getRunningRunForChat,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId, chatId } : "skip",
 	);
-	const [localOptimisticMessages, setLocalOptimisticMessages] =
-		React.useReducer(
-			stateUpdateReducer<ScopedLocalOptimisticMessages | null>,
-			null,
-		);
+	const stopRunningAutomation = React.useCallback(async () => {
+		if (!runningAutomationRun) {
+			return false;
+		}
+
+		await stopAutomationRun({
+			automationId: runningAutomationRun.automationId,
+			runId: runningAutomationRun.runId,
+		});
+		return true;
+	}, [runningAutomationRun, stopAutomationRun]);
 	// Truncation is local optimistic state reconciled with persisted chat messages.
 	const [pendingTruncateMessageId, setPendingTruncateMessageId] =
 		React.useState<string | null>(null);
@@ -481,33 +466,37 @@ const useChatPageController = ({
 
 	const isAutomationRunning = Boolean(runningAutomationRun);
 	const {
+		beginRequestPreparation,
+		canStop,
+		commitOptimisticMessage,
 		displayActiveRun,
 		displayMessages,
 		error,
 		finishQueuedMessageEdit,
 		hasLocallyCompletedAssistantMessage,
+		handleStop,
 		isAiRequestPending,
 		isChatRequestPending,
+		isChatUiPending,
+		isPreparingRequest,
 		latestRequestBodyRef,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
-		queuedMessages,
 		regenerate,
 		restoreEditedQueuedMessage,
+		rollbackOptimisticMessage,
 		sendMessage,
-		sendQueuedFollowUpNow,
 		setMessages,
 		setQueuedMessages,
-		stop,
+		stopCurrentStream,
 		streamingMessageIds,
+		truncateMessagesFrom,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
 		activeRun,
 		chatId,
 		contextLabel: "chat",
 		isExternallyBlocked: isAutomationRunning,
-		isPreparingRequest,
-		localOptimisticMessages,
 		onEditQueuedMessage: (queuedMessage) => {
 			setEditingMessageId(queuedMessage._id);
 			setDraft(queuedMessage.text);
@@ -515,52 +504,14 @@ const useChatPageController = ({
 			setAttachedFiles([]);
 		},
 		persistedMessages: visiblePersistedMessages,
+		stopExternalRun: stopRunningAutomation,
 		workspaceId: activeWorkspaceId,
 	});
-	const isPersistedChatStreaming = Boolean(displayActiveRun);
-	const isChatUiPending =
-		isChatRequestPending || isPersistedChatStreaming || isAutomationRunning;
-	const canStop = isChatUiPending;
 	const automationDeleteConfirmation = React.useMemo(
 		() => getPendingAutomationDeleteConfirmation(displayMessages),
 		[displayMessages],
 	);
 	const hasMessages = displayMessages.length > 0 || isAutomationRunning;
-	const stopCurrentStream = React.useCallback(
-		async ({ interruptActiveRun = false } = {}) => {
-			stop();
-
-			if (runningAutomationRun) {
-				await stopAutomationRun({
-					automationId: runningAutomationRun.automationId,
-					runId: runningAutomationRun.runId,
-				});
-				return;
-			}
-
-			if (!displayActiveRun) {
-				return;
-			}
-
-			if (!activeWorkspaceId) {
-				throw new Error("Cannot stop chat stream without an active workspace.");
-			}
-			await stopActiveChatStream({
-				chatId,
-				interruptActiveRun,
-				workspaceId: activeWorkspaceId,
-			});
-		},
-		[
-			activeWorkspaceId,
-			chatId,
-			displayActiveRun,
-			runningAutomationRun,
-			stop,
-			stopAutomationRun,
-		],
-	);
-	const queuedFollowUp = queuedMessages[0] ?? null;
 	const isNotesLoading = notes === undefined;
 	const selectedModel =
 		(selectedModelOverride?.chatId === chatId
@@ -683,6 +634,7 @@ const useChatPageController = ({
 		const metadata =
 			mentions.length > 0 ? { mentionPositions: mentions } : undefined;
 		let optimisticMessageId: string | null = null;
+		const finishRequestPreparation = beginRequestPreparation();
 
 		try {
 			if (queuedMessageEditDraft) {
@@ -690,7 +642,6 @@ const useChatPageController = ({
 					throw new Error("Cannot edit queued message without a workspace.");
 				}
 
-				setIsPreparingRequest(true);
 				const { mentionIds, requestSelectedSourceIds } =
 					getMentionRequestContext(mentions);
 				const requestBody = await buildWorkspaceChatRequestBody({
@@ -721,13 +672,10 @@ const useChatPageController = ({
 				setEditingMessageId(null);
 				clearDraft();
 				setAttachedFiles([]);
-				setIsPreparingRequest(false);
 				return;
 			}
 
 			chatPersistedCallback?.(chatId);
-			setIsPreparingRequest(true);
-
 			const { mentionIds, requestSelectedSourceIds } =
 				getMentionRequestContext(mentions);
 
@@ -756,18 +704,7 @@ const useChatPageController = ({
 						setEditingMessageId(null);
 						clearDraft();
 						setAttachedFiles([]);
-						setLocalOptimisticMessages((currentState) => ({
-							chatId,
-							messages: normalizeChatMessages([
-								...(currentState?.chatId === chatId
-									? currentState.messages
-									: []),
-								message,
-							]),
-						}));
-						setMessages((currentMessages) =>
-							normalizeChatMessages([...currentMessages, message]),
-						);
+						commitOptimisticMessage(message);
 					});
 				},
 				onRequestPrepared: ({ localFolders, requestBody }) => {
@@ -793,10 +730,8 @@ const useChatPageController = ({
 				clearDraft();
 				setAttachedFiles([]);
 				await waitForBrowserPaint();
-				setIsPreparingRequest(false);
 				return;
 			}
-			setIsPreparingRequest(false);
 		} catch (error) {
 			logError({
 				event: "client.error",
@@ -809,32 +744,21 @@ const useChatPageController = ({
 					: "Failed to prepare chat request",
 			);
 			if (optimisticMessageId) {
-				const failedOptimisticMessageId = optimisticMessageId;
-				setLocalOptimisticMessages((currentState) =>
-					currentState?.chatId === chatId
-						? {
-								chatId,
-								messages: removeChatMessageById(
-									currentState.messages,
-									failedOptimisticMessageId,
-								),
-							}
-						: currentState,
-				);
-				setMessages((currentMessages) =>
-					removeChatMessageById(currentMessages, failedOptimisticMessageId),
-				);
+				rollbackOptimisticMessage(optimisticMessageId);
 			}
 			setDraft(value);
 			setDraftMetadata(mentions.length > 0 ? { mentions } : null);
 			setAttachedFiles(attachedFiles);
-			setIsPreparingRequest(false);
+		} finally {
+			finishRequestPreparation();
 		}
 	}, [
 		activeWorkspaceId,
 		activeRun,
 		attachedFiles,
+		beginRequestPreparation,
 		chatId,
+		commitOptimisticMessage,
 		displayActiveRun,
 		editingMessageId,
 		enqueueQueuedMessage,
@@ -849,13 +773,13 @@ const useChatPageController = ({
 		// The submit callback must capture the latest parent persistence callback.
 		chatPersistedCallback,
 		queuedMessageEditDraft,
+		rollbackOptimisticMessage,
 		clearDraft,
 		setDraft,
 		setDraftMetadata,
 		selectedReasoningEffort,
 		selectedModel.model,
 		sendMessage,
-		setMessages,
 		setQueuedMessages,
 		updateQueuedMessage,
 		webSearchEnabled,
@@ -873,7 +797,7 @@ const useChatPageController = ({
 				return;
 			}
 
-			setIsPreparingRequest(true);
+			const finishRequestPreparation = beginRequestPreparation();
 			await submitAutomationConfirmationChatTurn({
 				activeRun,
 				activeWorkspaceId,
@@ -890,6 +814,7 @@ const useChatPageController = ({
 						workspaceId: activeWorkspaceId,
 					}),
 				chatId,
+				commitOptimisticMessage,
 				displayActiveRun,
 				enqueueQueuedMessage,
 				isAiRequestPending,
@@ -897,15 +822,14 @@ const useChatPageController = ({
 					chatPersistedCallback?.(chatId);
 				},
 				onFinally: () => {
-					setIsPreparingRequest(false);
+					finishRequestPreparation();
 				},
 				onRequestPrepared: ({ localFolders, requestBody }) => {
 					setSharedLocalFolders(localFolders);
 					latestRequestBodyRef.current = requestBody;
 				},
+				rollbackOptimisticMessage,
 				sendMessage,
-				setLocalOptimisticMessages,
-				setMessages,
 				setQueuedMessages,
 				text: outgoingText,
 			});
@@ -914,7 +838,9 @@ const useChatPageController = ({
 			activeWorkspaceId,
 			activeRun,
 			attachedFiles,
+			beginRequestPreparation,
 			chatId,
+			commitOptimisticMessage,
 			displayActiveRun,
 			enqueueQueuedMessage,
 			isAiRequestPending,
@@ -925,8 +851,8 @@ const useChatPageController = ({
 			chatPersistedCallback,
 			selectedReasoningEffort,
 			selectedModel.model,
+			rollbackOptimisticMessage,
 			sendMessage,
-			setMessages,
 			setQueuedMessages,
 			webSearchEnabled,
 		],
@@ -989,23 +915,6 @@ const useChatPageController = ({
 		setWebSearchEnabled(enabled);
 	}, []);
 
-	const handleStop = React.useCallback(() => {
-		const stopPromise = queuedFollowUp
-			? sendQueuedFollowUpNow()
-			: stopCurrentStream();
-
-		void stopPromise.catch((error) => {
-			logError({
-				event: "client.error",
-				error: error,
-				message: "Failed to stop chat stream",
-			});
-			toast.error(
-				error instanceof Error ? error.message : "Failed to stop chat stream",
-			);
-		});
-	}, [queuedFollowUp, sendQueuedFollowUpNow, stopCurrentStream]);
-
 	const handleEditMessage = React.useCallback(
 		(
 			messageId: string,
@@ -1064,19 +973,7 @@ const useChatPageController = ({
 			}
 
 			setPendingTruncateMessageId(messageId);
-			setMessages((currentMessages) =>
-				normalizeChatMessages(getMessagesBefore(currentMessages, messageId)),
-			);
-			setLocalOptimisticMessages((currentMessages) =>
-				currentMessages?.chatId === chatId
-					? {
-							chatId,
-							messages: normalizeChatMessages(
-								getMessagesBefore(currentMessages.messages, messageId),
-							),
-						}
-					: currentMessages,
-			);
+			truncateMessagesFrom(messageId);
 			setEditingMessageId(null);
 			clearDraft();
 
@@ -1104,7 +1001,7 @@ const useChatPageController = ({
 			chatId,
 			handleStop,
 			canStop,
-			setMessages,
+			truncateMessagesFrom,
 			clearDraft,
 			truncateFromMessage,
 		],
@@ -1116,7 +1013,7 @@ const useChatPageController = ({
 				await stopCurrentStream();
 			}
 
-			setIsPreparingRequest(true);
+			const finishRequestPreparation = beginRequestPreparation();
 
 			try {
 				const requestBody = await buildRequestBody();
@@ -1134,7 +1031,7 @@ const useChatPageController = ({
 						body: requestBody,
 					}),
 				).finally(() => {
-					setIsPreparingRequest(false);
+					finishRequestPreparation();
 				});
 			} catch (error) {
 				logError({
@@ -1142,12 +1039,13 @@ const useChatPageController = ({
 					error: error,
 					message: "Failed to prepare chat regeneration",
 				});
-				setIsPreparingRequest(false);
+				finishRequestPreparation();
 			}
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			buildRequestBody,
+			beginRequestPreparation,
 			clearDraft,
 			canStop,
 			latestRequestBodyRef,

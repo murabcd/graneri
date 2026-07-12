@@ -115,10 +115,7 @@ import {
 } from "@/hooks/use-chat-messages-snapshot";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
-import {
-	type ScopedLocalOptimisticMessages,
-	useRendererChatSession,
-} from "@/hooks/use-renderer-chat-session";
+import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import {
 	getStoredChatModel as getStoredLocalChatModel,
@@ -135,24 +132,16 @@ import {
 } from "@/lib/ai/reasoning-effort";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { isSameCalendarDay } from "@/lib/calendar-day";
-import { stopActiveChatStream } from "@/lib/chat-active-stream";
 import { getPendingAutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
 import { submitAutomationConfirmationChatTurn } from "@/lib/chat-automation-confirmation-submit";
-import { normalizeChatMessages } from "@/lib/chat-message-state";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import {
 	buildNoteChatRequestBody,
 	buildNoteChatRequestBodyFromLocalFolders,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
-import {
-	removeChatMessageById,
-	submitChatTurn,
-} from "@/lib/chat-submit-session";
-import {
-	applyPendingMessageTruncation,
-	getMessagesBefore,
-} from "@/lib/chat-thread";
+import { submitChatTurn } from "@/lib/chat-submit-session";
+import { applyPendingMessageTruncation } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
@@ -374,7 +363,6 @@ const useNoteComposerController = ({
 	const [currentChatId, setCurrentChatId] = React.useState<string>(() =>
 		createDraftChatId(),
 	);
-	const [isPreparingRequest, setIsPreparingRequest] = React.useState(false);
 	const [
 		isAutomationConfirmationSubmitting,
 		setIsAutomationConfirmationSubmitting,
@@ -806,35 +794,36 @@ const useNoteComposerController = ({
 			),
 		[activePendingTruncateMessageId, initialMessages],
 	);
-	const [localOptimisticMessages, setLocalOptimisticMessages] =
-		React.useState<ScopedLocalOptimisticMessages | null>(null);
 	const {
+		beginRequestPreparation,
+		canStop,
+		commitOptimisticMessage,
 		displayActiveRun,
 		displayMessages: displayChatMessages,
 		error: chatError,
 		finishQueuedMessageEdit,
+		handleStop,
 		isAiRequestPending,
-		isChatRequestPending,
+		isChatUiPending,
+		isPreparingRequest,
 		latestRequestBodyRef,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
-		queuedMessages,
 		regenerate,
 		restoreEditedQueuedMessage,
+		rollbackOptimisticMessage,
 		sendMessage,
-		sendQueuedFollowUpNow,
 		setMessages,
 		setQueuedMessages,
 		status: chatStatus,
-		stop,
+		stopCurrentStream,
 		streamingMessageIds,
+		truncateMessagesFrom,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
 		activeRun,
 		chatId: currentChatId,
 		contextLabel: "note chat",
-		isPreparingRequest,
-		localOptimisticMessages,
 		onEditQueuedMessage: (queuedMessage) => {
 			setEditingMessageId(queuedMessage._id);
 			setMessage(queuedMessage.text);
@@ -1064,9 +1053,6 @@ const useNoteComposerController = ({
 		},
 		[setRightSidebarWidthMobileOverride],
 	);
-	const isPersistedChatStreaming = Boolean(displayActiveRun);
-	const isChatUiPending = isChatRequestPending || isPersistedChatStreaming;
-	const canStop = isChatUiPending;
 	const hasMessage = message.trim().length > 0;
 	const canGenerateNotes = resolveCanGenerateNotes({
 		hasGeneratedLatestTranscript:
@@ -1173,46 +1159,6 @@ const useNoteComposerController = ({
 		setModelPopoverOpen(false);
 		setRecipePopoverOpen(false);
 	}, [recipePopoverOpen]);
-	const stopCurrentStream = React.useCallback(
-		async ({ interruptActiveRun = false } = {}) => {
-			stop();
-
-			if (!displayActiveRun) {
-				return;
-			}
-
-			if (!activeWorkspaceId) {
-				throw new Error(
-					"Cannot stop note chat stream without an active workspace.",
-				);
-			}
-			await stopActiveChatStream({
-				chatId: currentChatId,
-				interruptActiveRun,
-				workspaceId: activeWorkspaceId,
-			});
-		},
-		[activeWorkspaceId, currentChatId, displayActiveRun, stop],
-	);
-	const queuedFollowUp = queuedMessages[0] ?? null;
-	const handleStop = React.useCallback(() => {
-		const stopPromise = queuedFollowUp
-			? sendQueuedFollowUpNow()
-			: stopCurrentStream();
-
-		void stopPromise.catch((error) => {
-			logError({
-				event: "client.error",
-				error: error,
-				message: "Failed to stop note chat stream",
-			});
-			toast.error(
-				error instanceof Error
-					? error.message
-					: "Failed to stop note chat stream",
-			);
-		});
-	}, [queuedFollowUp, sendQueuedFollowUpNow, stopCurrentStream]);
 	const toggleTranscriptPanel = React.useCallback(() => {
 		closeComposerPopovers();
 		closeRightSidebar();
@@ -1490,6 +1436,7 @@ const useNoteComposerController = ({
 		}
 
 		let optimisticMessageId: string | null = null;
+		const finishRequestPreparation = beginRequestPreparation();
 
 		try {
 			const outgoingText = nextMessage || selectedRecipe?.name || "";
@@ -1502,7 +1449,6 @@ const useNoteComposerController = ({
 						recipeOnly: nextMessage.length === 0,
 					}
 				: undefined;
-			setIsPreparingRequest(true);
 			if (queuedMessageEditDraft) {
 				if (!activeWorkspaceId) {
 					throw new Error("Cannot edit queued message without a workspace.");
@@ -1540,7 +1486,6 @@ const useNoteComposerController = ({
 				clearDraft();
 				setAttachedFiles([]);
 				resetTextareaHeight();
-				setIsPreparingRequest(false);
 				requestComposerFocus();
 				return;
 			}
@@ -1583,18 +1528,7 @@ const useNoteComposerController = ({
 						clearDraft();
 						setAttachedFiles([]);
 						resetTextareaHeight();
-						setLocalOptimisticMessages((currentState) => ({
-							chatId: currentChatId,
-							messages: normalizeChatMessages([
-								...(currentState?.chatId === currentChatId
-									? currentState.messages
-									: []),
-								message,
-							]),
-						}));
-						setMessages((currentMessages) =>
-							normalizeChatMessages([...currentMessages, message]),
-						);
+						commitOptimisticMessage(message);
 					});
 					requestComposerFocus();
 				},
@@ -1622,11 +1556,9 @@ const useNoteComposerController = ({
 				setAttachedFiles([]);
 				resetTextareaHeight();
 				await waitForBrowserPaint();
-				setIsPreparingRequest(false);
 				requestComposerFocus();
 				return;
 			}
-			setIsPreparingRequest(false);
 			requestComposerFocus();
 		} catch (error) {
 			logError({
@@ -1640,35 +1572,24 @@ const useNoteComposerController = ({
 					: "Failed to prepare note chat request",
 			);
 			if (optimisticMessageId) {
-				const failedOptimisticMessageId = optimisticMessageId;
-				setLocalOptimisticMessages((currentState) =>
-					currentState?.chatId === currentChatId
-						? {
-								chatId: currentChatId,
-								messages: removeChatMessageById(
-									currentState.messages,
-									failedOptimisticMessageId,
-								),
-							}
-						: currentState,
-				);
-				setMessages((currentMessages) =>
-					removeChatMessageById(currentMessages, failedOptimisticMessageId),
-				);
+				rollbackOptimisticMessage(optimisticMessageId);
 			}
 			setMessage(submittedDraftText);
 			setAttachedFiles(attachedFiles);
 			resetTextareaHeight();
-			setIsPreparingRequest(false);
 			requestComposerFocus();
+		} finally {
+			finishRequestPreparation();
 		}
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		activeRun,
 		activeWorkspaceId,
 		attachedFiles,
+		beginRequestPreparation,
 		chatStatus,
 		clearDraft,
+		commitOptimisticMessage,
 		currentChatId,
 		displayActiveRun,
 		enqueueQueuedMessage,
@@ -1689,11 +1610,11 @@ const useNoteComposerController = ({
 		selectedModel.model,
 		sendMessage,
 		setPanelMode,
-		setMessages,
 		setMessage,
 		setQueuedMessages,
 		updateQueuedMessage,
 		requestComposerFocus,
+		rollbackOptimisticMessage,
 	]);
 
 	const handleSubmit = async (event: React.FormEvent) => {
@@ -1709,7 +1630,7 @@ const useNoteComposerController = ({
 			}
 
 			setIsAutomationConfirmationSubmitting(true);
-			setIsPreparingRequest(true);
+			const finishRequestPreparation = beginRequestPreparation();
 			if (presentationMode === "inline") {
 				setPanelMode("chat");
 			} else {
@@ -1735,12 +1656,13 @@ const useNoteComposerController = ({
 						text: confirmationText,
 					}),
 				chatId: currentChatId,
+				commitOptimisticMessage,
 				displayActiveRun,
 				enqueueQueuedMessage,
 				isAiRequestPending,
 				onFinally: () => {
 					setIsAutomationConfirmationSubmitting(false);
-					setIsPreparingRequest(false);
+					finishRequestPreparation();
 					requestComposerFocus();
 				},
 				onOptimisticMessage: requestComposerFocus,
@@ -1748,9 +1670,8 @@ const useNoteComposerController = ({
 					setSharedLocalFolders(localFolders);
 					latestRequestBodyRef.current = requestBody;
 				},
+				rollbackOptimisticMessage,
 				sendMessage,
-				setLocalOptimisticMessages,
-				setMessages,
 				setQueuedMessages,
 				text: outgoingText,
 			});
@@ -1759,6 +1680,8 @@ const useNoteComposerController = ({
 		[
 			activeRun,
 			activeWorkspaceId,
+			beginRequestPreparation,
+			commitOptimisticMessage,
 			currentChatId,
 			displayActiveRun,
 			enqueueQueuedMessage,
@@ -1770,10 +1693,10 @@ const useNoteComposerController = ({
 			presentationMode,
 			readNoteContext,
 			requestComposerFocus,
+			rollbackOptimisticMessage,
 			selectedModel.model,
 			selectedReasoningEffort,
 			sendMessage,
-			setMessages,
 			setPanelMode,
 			setQueuedMessages,
 		],
@@ -1889,19 +1812,7 @@ const useNoteComposerController = ({
 			}
 
 			setPendingTruncateMessageId(messageId);
-			setMessages((currentMessages) =>
-				normalizeChatMessages(getMessagesBefore(currentMessages, messageId)),
-			);
-			setLocalOptimisticMessages((currentMessages) =>
-				currentMessages?.chatId === currentChatId
-					? {
-							chatId: currentChatId,
-							messages: normalizeChatMessages(
-								getMessagesBefore(currentMessages.messages, messageId),
-							),
-						}
-					: currentMessages,
-			);
+			truncateMessagesFrom(messageId);
 			setEditingMessageId(null);
 			clearDraft();
 			setAttachedFiles([]);
@@ -1931,10 +1842,10 @@ const useNoteComposerController = ({
 			currentChatId,
 			canStop,
 			resetTextareaHeight,
-			setMessages,
 			clearDraft,
 			handleStop,
 			truncateFromMessage,
+			truncateMessagesFrom,
 		],
 	);
 
@@ -1944,7 +1855,7 @@ const useNoteComposerController = ({
 				await stopCurrentStream();
 			}
 
-			setIsPreparingRequest(true);
+			const finishRequestPreparation = beginRequestPreparation();
 			if (presentationMode === "inline") {
 				setPanelMode("chat");
 			} else {
@@ -1964,7 +1875,7 @@ const useNoteComposerController = ({
 						body: requestBody,
 					}),
 				).finally(() => {
-					setIsPreparingRequest(false);
+					finishRequestPreparation();
 				});
 			} catch (error) {
 				logError({
@@ -1972,12 +1883,13 @@ const useNoteComposerController = ({
 					error: error,
 					message: "Failed to prepare note chat regeneration",
 				});
-				setIsPreparingRequest(false);
+				finishRequestPreparation();
 			}
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			buildRequestBody,
+			beginRequestPreparation,
 			clearDraft,
 			canStop,
 			latestRequestBodyRef,
