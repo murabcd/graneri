@@ -4,12 +4,6 @@ import { appendFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-	isLowConfidenceTranscriptLogprobs,
-	isTranscriptPlaceholderText,
-	shouldKeepInterruptedTranscriptTurn,
-	summarizeTranscriptConfidence,
-} from "@workspace/ai/transcription";
-import {
 	app,
 	BrowserWindow,
 	clipboard,
@@ -48,8 +42,9 @@ import { createDesktopShell } from "./desktop-shell.mjs";
 import { createDesktopStorage } from "./desktop-storage.mjs";
 import { createDesktopSystemAudioPolicy as createSystemAudioPolicy } from "./desktop-transcription-policy.mjs";
 import {
+	createDesktopTranscriptionRuntime,
 	createEmptyLiveTranscriptState,
-	createTranscriptionSpeakerRuntime,
+	createInitialTranscriptionSessionState,
 	createTranscriptRecoveryStatus,
 } from "./desktop-transcription-runtime.mjs";
 import { createDesktopTray } from "./desktop-tray.mjs";
@@ -179,39 +174,6 @@ const createInitialNotificationPreferences = () => ({
 	notifyForScheduledMeetings: false,
 	notifyForAutoDetectedMeetings: true,
 });
-const createInitialTranscriptionSessionState = () => ({
-	autoStartKey: null,
-	error: null,
-	isAvailable: false,
-	isConnecting: false,
-	isListening: false,
-	liveTranscript: {
-		you: {
-			speaker: "you",
-			startedAt: null,
-			text: "",
-		},
-		them: {
-			speaker: "them",
-			startedAt: null,
-			text: "",
-		},
-	},
-	phase: "idle",
-	recoveryStatus: {
-		attempt: 0,
-		maxAttempts: 0,
-		message: null,
-		state: "idle",
-	},
-	scopeKey: null,
-	systemAudioStatus: {
-		sourceMode: "unsupported",
-		state: "unsupported",
-	},
-	utterances: [],
-});
-
 const isLikelySystemAudioPermissionError = (error) => {
 	const message = error instanceof Error ? error.message : String(error);
 
@@ -259,10 +221,7 @@ const preSubscriberCaptureChunks = {
 	microphone: [],
 	systemAudio: [],
 };
-const transcriptionSpeakers = {
-	them: createTranscriptionSpeakerRuntime("them"),
-	you: createTranscriptionSpeakerRuntime("you"),
-};
+let desktopTranscriptionRuntime = null;
 let transcriptionConfig = {
 	autoStartKey: null,
 	lang: undefined,
@@ -420,7 +379,11 @@ const desktopRealtimeTransport = createDesktopRealtimeTransport({
 		nativeAudioCapture.getCaptureSampleRate(source),
 	getConvexToken: () => getDesktopAuthClient().getConvexToken(),
 	getHostedSiteUrl: async () => (await ensureLocalServer()).origin,
-	handleTransportEvent: (event) => handleDesktopRealtimeTransportEvent(event),
+	handleTransportEvent: (event) =>
+		requireDesktopService(
+			desktopTranscriptionRuntime,
+			"desktopTranscriptionRuntime",
+		).handleTransportEvent(event),
 	logDesktopTurnDebug: (...args) => logDesktopTurnDebug(...args),
 	subscribeToCaptureEvents,
 });
@@ -578,57 +541,6 @@ const patchTranscriptionSessionState = (patch) => {
 	});
 };
 
-const countLoggedTranscriptWords = (value) =>
-	typeof value === "string" && value.trim()
-		? value.trim().split(/\s+/u).filter(Boolean).length
-		: 0;
-
-const summarizeTranscriptTextForLog = (value) => {
-	const text = typeof value === "string" ? value.trim() : "";
-	const wordCount = countLoggedTranscriptWords(text);
-
-	return {
-		isOversizedTurn: wordCount >= 80,
-		textLength: text.length,
-		textPreview: text.slice(0, 160),
-		turnSizeBucket:
-			wordCount >= 80
-				? "very_long"
-				: wordCount >= 40
-					? "long"
-					: wordCount >= 15
-						? "medium"
-						: wordCount > 0
-							? "short"
-							: "empty",
-		wordCount,
-	};
-};
-
-const summarizeTranscriptConfidenceForLog = ({ logprobs, source, text }) => {
-	const summary = summarizeTranscriptConfidence({
-		logprobs,
-		source,
-		text,
-	});
-
-	return summary
-		? {
-				confidenceAverage: summary.average,
-				confidenceLowTokenRatio: summary.lowTokenRatio,
-				confidenceMinProbability: summary.minProbability,
-				confidenceTokenCount: summary.tokenCount,
-				confidenceVeryLowTokenRatio: summary.veryLowTokenRatio,
-			}
-		: {
-				confidenceAverage: null,
-				confidenceLowTokenRatio: null,
-				confidenceMinProbability: null,
-				confidenceTokenCount: 0,
-				confidenceVeryLowTokenRatio: null,
-			};
-};
-
 const logDesktopTurnDebug = (event, details = {}) => {
 	if (!shouldLogDesktopTurnDebug) {
 		return;
@@ -696,36 +608,6 @@ const appendTranscriptionDebugEvent = (event, details = {}) => {
 	).catch(() => {});
 };
 
-const updateTranscriptionLiveTranscript = (speaker, value) => {
-	patchTranscriptionSessionState({
-		liveTranscript: {
-			...latestTranscriptionSessionState.liveTranscript,
-			[speaker]: {
-				...latestTranscriptionSessionState.liveTranscript[speaker],
-				...value,
-			},
-		},
-	});
-};
-
-const clearTranscriptionLiveTranscript = (speaker, metadata = {}) => {
-	const previousValue = latestTranscriptionSessionState.liveTranscript[speaker];
-
-	if (previousValue?.text?.trim()) {
-		logDesktopTurnDebug("live.cleared", {
-			itemId: metadata.itemId ?? null,
-			reason: metadata.reason ?? "unknown",
-			speaker,
-			...summarizeTranscriptTextForLog(previousValue.text),
-		});
-	}
-
-	updateTranscriptionLiveTranscript(speaker, {
-		startedAt: null,
-		text: "",
-	});
-};
-
 const compareTranscriptUtterances = (left, right) => {
 	if (left.startedAt !== right.startedAt) {
 		return left.startedAt - right.startedAt;
@@ -750,6 +632,30 @@ const appendTranscriptionUtterance = (utterance) => {
 	});
 };
 
+desktopTranscriptionRuntime = createDesktopTranscriptionRuntime({
+	getLiveTranscript: (speaker) =>
+		latestTranscriptionSessionState.liveTranscript[speaker],
+	getSessionId: () => currentTranscriptionSessionCorrelationId,
+	logTurnDebug: logDesktopTurnDebug,
+	onLiveTranscriptChanged: (speaker, value) => {
+		patchTranscriptionSessionState({
+			liveTranscript: {
+				...latestTranscriptionSessionState.liveTranscript,
+				[speaker]: {
+					...latestTranscriptionSessionState.liveTranscript[speaker],
+					...value,
+				},
+			},
+		});
+	},
+	onTransportInterrupted: (event) =>
+		handleDesktopTransportInterrupted({
+			message: event.message,
+			speaker: event.speaker,
+		}),
+	onUtterance: appendTranscriptionUtterance,
+});
+
 const createDesktopSystemAudioPolicy = () => {
 	const systemAudioPermission = getSystemAudioPermission();
 
@@ -770,11 +676,9 @@ const resolveCurrentSystemAudioStatus = (policy) => {
 		return createSystemAudioStatusFromPolicy(policy);
 	}
 
-	if (transcriptionSpeakers.them.transportActive) {
+	if (desktopTranscriptionRuntime.isActive("them")) {
 		return {
-			sourceMode:
-				transcriptionSpeakers.them.activeSourceMode ??
-				policy.systemAudioCapability.sourceMode,
+			sourceMode: desktopTranscriptionRuntime.getSourceMode("them"),
 			state: "connected",
 		};
 	}
@@ -934,106 +838,6 @@ const ensureDesktopMicrophonePermissionGranted = async () => {
 	}
 
 	throw new Error("Microphone access is required to start live transcription.");
-};
-
-const emitTranscriptionOrderedTurns = (speaker) => {
-	const state = transcriptionSpeakers[speaker];
-
-	for (;;) {
-		const nextTurn = [...state.turns.values()].find(
-			(turn) =>
-				turn.committed &&
-				(turn.completed || turn.failed) &&
-				!state.emittedItemIds.has(turn.itemId) &&
-				turn.previousItemId === state.lastCommittedItemId,
-		);
-
-		if (!nextTurn) {
-			return;
-		}
-
-		const text = nextTurn.text.trim();
-		const source = speaker === "them" ? "systemAudio" : "microphone";
-		const isPlaceholder = text ? isTranscriptPlaceholderText(text) : false;
-		const isLowConfidence =
-			!nextTurn.failed && text
-				? isLowConfidenceTranscriptLogprobs({
-						logprobs: nextTurn.logprobs ?? null,
-						source,
-						text,
-					})
-				: false;
-		const shouldEmit = !nextTurn.failed && text && !isPlaceholder;
-		const shouldLogOrderedTurn = Boolean(text) || nextTurn.failed;
-
-		if (shouldEmit) {
-			appendTranscriptionUtterance({
-				endedAt: nextTurn.endedAt ?? Date.now(),
-				id: `${state.sessionId ?? "session"}:${speaker}:${nextTurn.itemId}`,
-				speaker,
-				startedAt: nextTurn.startedAt ?? Date.now(),
-				text,
-			});
-		}
-
-		if (shouldLogOrderedTurn) {
-			logDesktopTurnDebug("turn.ordered", {
-				itemId: nextTurn.itemId,
-				outcome: shouldEmit
-					? "emitted"
-					: isPlaceholder
-						? "placeholder"
-						: nextTurn.failed
-							? "failed"
-							: "empty",
-				isLowConfidence,
-				shouldDropForConfidence: false,
-				previousItemId: nextTurn.previousItemId,
-				speaker,
-				...summarizeTranscriptConfidenceForLog({
-					logprobs: nextTurn.logprobs ?? null,
-					source,
-					text,
-				}),
-				...summarizeTranscriptTextForLog(text),
-			});
-		}
-
-		state.emittedItemIds.add(nextTurn.itemId);
-		state.lastCommittedItemId = nextTurn.itemId;
-
-		if (state.liveItemId === nextTurn.itemId) {
-			state.liveItemId = null;
-			clearTranscriptionLiveTranscript(speaker, {
-				itemId: nextTurn.itemId,
-				reason: shouldEmit
-					? "turn_emitted"
-					: nextTurn.failed
-						? "turn_failed"
-						: "turn_empty",
-			});
-		}
-	}
-};
-
-const upsertTranscriptionTurn = (speaker, itemId, updates) => {
-	const state = transcriptionSpeakers[speaker];
-	const currentValue = state.turns.get(itemId);
-	const nextValue = {
-		completed: currentValue?.completed ?? false,
-		committed: currentValue?.committed ?? false,
-		endedAt: currentValue?.endedAt ?? null,
-		failed: currentValue?.failed ?? false,
-		itemId,
-		logprobs: currentValue?.logprobs ?? null,
-		previousItemId: currentValue?.previousItemId ?? null,
-		startedAt: currentValue?.startedAt ?? null,
-		text: currentValue?.text ?? "",
-		...updates,
-	};
-
-	state.turns.set(itemId, nextValue);
-	return nextValue;
 };
 
 const wait = (durationMs) =>
@@ -1200,52 +1004,21 @@ const configureDesktopTranscriptionSession = ({
 	}
 };
 
-const appendTranscriptionTailUtterance = (speaker) => {
-	const state = transcriptionSpeakers[speaker];
-	const liveEntry = latestTranscriptionSessionState.liveTranscript[speaker];
-	const text = liveEntry.text.trim();
-
-	if (!shouldKeepInterruptedTranscriptTurn(text)) {
-		return;
-	}
-
-	appendTranscriptionUtterance({
-		endedAt: Date.now(),
-		id: `${state.sessionId ?? "session"}:${speaker}:manual:${randomUUID()}`,
-		speaker,
-		startedAt: liveEntry.startedAt ?? Date.now(),
-		text,
-	});
-};
-
 const stopTranscriptionSpeakerTransport = async (speaker) => {
-	if (speaker === "you") {
-		await desktopRealtimeTransport.stop("you", {
-			getLiveItemId: (currentSpeaker) =>
-				transcriptionSpeakers[currentSpeaker]?.liveItemId ?? null,
-		});
-	} else {
-		await desktopRealtimeTransport.stop("them", {
-			getLiveItemId: (currentSpeaker) =>
-				transcriptionSpeakers[currentSpeaker]?.liveItemId ?? null,
-		});
-	}
-
-	appendTranscriptionTailUtterance(speaker);
+	await desktopRealtimeTransport.stop(speaker, {
+		getLiveItemId: (currentSpeaker) =>
+			desktopTranscriptionRuntime.getLiveItemId(currentSpeaker),
+	});
+	desktopTranscriptionRuntime.appendTail(speaker);
 };
 
 const stopTranscriptionSpeakerCapture = async (speaker) => {
-	const state = transcriptionSpeakers[speaker];
-
 	if (speaker === "you") {
 		await stopMicrophoneCapture();
 	} else {
 		await stopSystemAudioCapture();
 	}
-
-	await state.captureDispose?.();
-	transcriptionSpeakers[speaker] = createTranscriptionSpeakerRuntime(speaker);
-	clearTranscriptionLiveTranscript(speaker);
+	desktopTranscriptionRuntime.reset(speaker);
 };
 
 const stopTranscriptionSpeaker = async (speaker) => {
@@ -1280,162 +1053,6 @@ const cleanupDesktopTranscriptionSession = async ({
 		utterances: preserveUtterances
 			? latestTranscriptionSessionState.utterances
 			: [],
-	});
-};
-
-const handleDesktopRealtimeTransportEvent = async (event) => {
-	const state = transcriptionSpeakers[event.speaker];
-
-	if (!state.transportActive) {
-		return;
-	}
-
-	if (event.type === "committed") {
-		const existingTurn = state.turns.get(event.itemId);
-		const startedAt =
-			existingTurn?.startedAt ??
-			latestTranscriptionSessionState.liveTranscript[event.speaker].startedAt ??
-			Date.now();
-		logDesktopTurnDebug("transport.committed", {
-			hasExistingTurn: Boolean(existingTurn),
-			itemId: event.itemId,
-			liveItemId: state.liveItemId,
-			previousItemId: event.previousItemId,
-			speaker: event.speaker,
-			turnCompleted: existingTurn?.completed ?? false,
-			turnFailed: existingTurn?.failed ?? false,
-		});
-		upsertTranscriptionTurn(event.speaker, event.itemId, {
-			committed: true,
-			endedAt: event.endedAt ?? existingTurn?.endedAt ?? null,
-			previousItemId: event.previousItemId,
-			startedAt: event.startedAt ?? startedAt,
-		});
-
-		emitTranscriptionOrderedTurns(event.speaker);
-		return;
-	}
-
-	if (event.type === "partial") {
-		const existingTurn = state.turns.get(event.itemId);
-		const nextTurn = upsertTranscriptionTurn(event.speaker, event.itemId, {
-			failed: false,
-			logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
-			startedAt: existingTurn?.startedAt ?? Date.now(),
-			text: `${existingTurn?.text ?? ""}${event.textDelta}`,
-		});
-
-		if (!existingTurn) {
-			logDesktopTurnDebug("transport.partial_started", {
-				itemId: event.itemId,
-				liveItemId: state.liveItemId,
-				speaker: event.speaker,
-				...summarizeTranscriptTextForLog(nextTurn.text),
-			});
-		} else if (state.liveItemId && state.liveItemId !== event.itemId) {
-			logDesktopTurnDebug("transport.partial_replaced_live_item", {
-				itemId: event.itemId,
-				replacedItemId: state.liveItemId,
-				speaker: event.speaker,
-				...summarizeTranscriptTextForLog(nextTurn.text),
-			});
-		}
-
-		state.liveItemId = event.itemId;
-		updateTranscriptionLiveTranscript(event.speaker, {
-			startedAt: nextTurn.startedAt,
-			text: nextTurn.text,
-		});
-		return;
-	}
-
-	if (event.type === "turn_failed") {
-		const existingTurn = state.turns.get(event.itemId);
-		const interruptedText =
-			existingTurn?.text ||
-			latestTranscriptionSessionState.liveTranscript[event.speaker].text ||
-			"";
-		const shouldKeepInterruptedText =
-			shouldKeepInterruptedTranscriptTurn(interruptedText);
-		logDesktopTurnDebug("transport.turn_failed", {
-			itemId: event.itemId,
-			keepInterruptedText: shouldKeepInterruptedText,
-			liveItemId: state.liveItemId,
-			message: event.message,
-			speaker: event.speaker,
-			...summarizeTranscriptTextForLog(interruptedText),
-		});
-		upsertTranscriptionTurn(event.speaker, event.itemId, {
-			committed: true,
-			completed: shouldKeepInterruptedText,
-			failed: !shouldKeepInterruptedText,
-			logprobs: shouldKeepInterruptedText
-				? (existingTurn?.logprobs ?? null)
-				: null,
-			startedAt:
-				existingTurn?.startedAt ??
-				latestTranscriptionSessionState.liveTranscript[event.speaker]
-					.startedAt ??
-				Date.now(),
-			text: shouldKeepInterruptedText ? interruptedText : "",
-		});
-
-		if (state.liveItemId === event.itemId) {
-			state.liveItemId = null;
-			clearTranscriptionLiveTranscript(event.speaker, {
-				itemId: event.itemId,
-				reason: shouldKeepInterruptedText
-					? "turn_failed_salvaged"
-					: "turn_failed_dropped",
-			});
-		}
-
-		emitTranscriptionOrderedTurns(event.speaker);
-		return;
-	}
-
-	if (event.type === "final") {
-		const existingTurn = state.turns.get(event.itemId);
-		const finalText =
-			event.text ||
-			existingTurn?.text ||
-			latestTranscriptionSessionState.liveTranscript[event.speaker].text;
-		const source = event.speaker === "them" ? "systemAudio" : "microphone";
-
-		if (finalText.trim()) {
-			logDesktopTurnDebug("transport.final", {
-				itemId: event.itemId,
-				liveItemId: state.liveItemId,
-				speaker: event.speaker,
-				...summarizeTranscriptConfidenceForLog({
-					logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
-					source,
-					text: finalText,
-				}),
-				...summarizeTranscriptTextForLog(finalText),
-			});
-		}
-		upsertTranscriptionTurn(event.speaker, event.itemId, {
-			completed: true,
-			failed: false,
-			logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
-			startedAt:
-				existingTurn?.startedAt ??
-				latestTranscriptionSessionState.liveTranscript[event.speaker]
-					.startedAt ??
-				Date.now(),
-			text:
-				event.text ||
-				existingTurn?.text ||
-				latestTranscriptionSessionState.liveTranscript[event.speaker].text,
-		});
-		emitTranscriptionOrderedTurns(event.speaker);
-		return;
-	}
-
-	await handleDesktopTransportInterrupted({
-		message: event.message,
-		speaker: event.speaker,
 	});
 };
 
@@ -1488,10 +1105,7 @@ const connectDesktopTranscriptionSpeaker = async ({
 		return false;
 	}
 
-	const state = transcriptionSpeakers[speaker];
-	state.activeSourceMode = sourceMode;
-	state.sessionId ??= currentTranscriptionSessionCorrelationId;
-	state.transportActive = true;
+	desktopTranscriptionRuntime.connect(speaker, sourceMode);
 };
 
 const scheduleAutomaticSystemAudioAttachRetry = ({
@@ -1503,7 +1117,7 @@ const scheduleAutomaticSystemAudioAttachRetry = ({
 		attempt >= systemAudioAttachRetryBackoffMs.length ||
 		transcriptionLifecycleOperationId !== operationId ||
 		latestTranscriptionSessionState.phase !== "listening" ||
-		transcriptionSpeakers.them.transportActive
+		desktopTranscriptionRuntime.isActive("them")
 	) {
 		return false;
 	}
@@ -1538,7 +1152,7 @@ const scheduleAutomaticSystemAudioAttachRetry = ({
 		if (
 			transcriptionLifecycleOperationId !== operationId ||
 			latestTranscriptionSessionState.phase !== "listening" ||
-			transcriptionSpeakers.them.transportActive
+			desktopTranscriptionRuntime.isActive("them")
 		) {
 			return;
 		}
@@ -1569,7 +1183,7 @@ const attachDesktopSystemAudio = async ({
 			!isCurrentTranscriptionOperation(operationId) ||
 			!policy.systemAudioCapability.isSupported ||
 			policy.systemAudioCapability.sourceMode !== "desktop-native" ||
-			transcriptionSpeakers.them.transportActive
+			desktopTranscriptionRuntime.isActive("them")
 		) {
 			logDesktopTurnDebug("system_audio.attach_skipped", {
 				automatic,
@@ -1578,7 +1192,7 @@ const attachDesktopSystemAudio = async ({
 				isSupported: policy.systemAudioCapability.isSupported,
 				operationId,
 				sourceMode: policy.systemAudioCapability.sourceMode,
-				themTransportActive: transcriptionSpeakers.them.transportActive,
+				themTransportActive: desktopTranscriptionRuntime.isActive("them"),
 			});
 			return false;
 		}
@@ -1839,8 +1453,8 @@ async function handleDesktopTransportInterrupted({
 			message,
 			phase: latestTranscriptionSessionState.phase,
 			speaker,
-			themActive: transcriptionSpeakers.them.transportActive,
-			youActive: transcriptionSpeakers.you.transportActive,
+			themActive: desktopTranscriptionRuntime.isActive("them"),
+			youActive: desktopTranscriptionRuntime.isActive("you"),
 		},
 		message: "[transcription] transport interrupted",
 	});
@@ -1857,8 +1471,8 @@ async function handleDesktopTransportInterrupted({
 		patchTranscriptionSessionState({
 			error: null,
 			isConnecting: false,
-			isListening: transcriptionSpeakers.you.transportActive,
-			phase: transcriptionSpeakers.you.transportActive ? "listening" : "idle",
+			isListening: desktopTranscriptionRuntime.isActive("you"),
+			phase: desktopTranscriptionRuntime.isActive("you") ? "listening" : "idle",
 			systemAudioStatus: transcriptionPolicy
 				? resolveCurrentSystemAudioStatus(transcriptionPolicy)
 				: {
@@ -1869,7 +1483,7 @@ async function handleDesktopTransportInterrupted({
 
 		if (
 			transcriptionPolicy?.systemAudioCapability.shouldAutoBootstrap &&
-			transcriptionSpeakers.you.transportActive
+			desktopTranscriptionRuntime.isActive("you")
 		) {
 			scheduleAutomaticSystemAudioAttachRetry({
 				attempt: 0,
@@ -1964,8 +1578,8 @@ const isDesktopTranscriptionSessionIdle = () =>
 	latestTranscriptionSessionState.phase === "idle" &&
 	!latestTranscriptionSessionState.isConnecting &&
 	!latestTranscriptionSessionState.isListening &&
-	!transcriptionSpeakers.them.transportActive &&
-	!transcriptionSpeakers.you.transportActive;
+	!desktopTranscriptionRuntime.isActive("them") &&
+	!desktopTranscriptionRuntime.isActive("you");
 
 const resetIdleDesktopTranscriptionSession = ({
 	resetError,
@@ -2001,8 +1615,9 @@ const stopDesktopTranscriptionSession = async ({
 		reset_error: resetError,
 		reset_recovery: resetRecovery,
 		scope_key: latestTranscriptionSessionState.scopeKey,
-		speaker_them_active_before_stop: transcriptionSpeakers.them.transportActive,
-		speaker_you_active_before_stop: transcriptionSpeakers.you.transportActive,
+		speaker_them_active_before_stop:
+			desktopTranscriptionRuntime.isActive("them"),
+		speaker_you_active_before_stop: desktopTranscriptionRuntime.isActive("you"),
 		timestamp: new Date().toISOString(),
 		workspace_id: activeWorkspaceId,
 	};
@@ -2088,9 +1703,9 @@ const stopDesktopTranscriptionSession = async ({
 		stopEvent.is_listening_after_stop =
 			latestTranscriptionSessionState.isListening;
 		stopEvent.speaker_them_active_after_stop =
-			transcriptionSpeakers.them.transportActive;
+			desktopTranscriptionRuntime.isActive("them");
 		stopEvent.speaker_you_active_after_stop =
-			transcriptionSpeakers.you.transportActive;
+			desktopTranscriptionRuntime.isActive("you");
 
 		appendTranscriptionDebugEvent("transcription.stop", stopEvent);
 		emitWideEvent({

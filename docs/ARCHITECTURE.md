@@ -399,6 +399,12 @@ buffers during live capture. Empty-buffer commits are not a valid path; they
 create recoverable-looking OpenAI errors that can collapse into start/stop
 loops.
 
+`desktop-transcription-runtime.mjs` owns the per-speaker transport state, live
+transcript projection, ordered turn emission, interrupted-tail salvage, and
+initial renderer session shape. Electron `main.mjs` orchestrates permissions,
+native capture, reconnects, and IPC around that runtime; it must not maintain a
+second set of speaker turn maps or interpret realtime transport events itself.
+
 Packaged renderer documents are served with a Content Security Policy. Network
 connections are limited to the configured Convex and hosted-site origins,
 their WebSocket equivalents, the desktop loopback API, and the explicit OpenAI
