@@ -119,7 +119,6 @@ export default function ChatMessages({
 			errorClassName="px-4"
 			isLoading={isLoading}
 			messages={messages}
-			streamdownClassName="note-streamdown"
 			textContainerClassName="mt-2 flex flex-row items-start gap-2 first:mt-0"
 			turnClassName={getTurnClassName}
 			renderAssistantActions={renderAssistantActions}

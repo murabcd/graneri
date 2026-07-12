@@ -91,9 +91,6 @@ export default function NoteChatMessages({
 						messageStackClassName="gap-2"
 						messages={chatMessages}
 						scrollAnchorUserMessages={false}
-						streamdownClassName={
-							disablePadding ? "note-chat-sidebar-streamdown" : undefined
-						}
 						textContainerClassName=""
 						turnClassName={getTurnClassName}
 						renderAssistantActions={renderAssistantActions}

@@ -1495,7 +1495,7 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 								{templateApplyState.isRunning ? (
 									templateApplyState.streamedMarkdown.trim().length > 0 ? (
 										<MarkdownStreamEntry
-											className="note-streamdown min-h-[320px] text-base text-foreground"
+											className="min-h-[320px] text-base text-foreground"
 											isAnimating
 											mode="streaming"
 										>

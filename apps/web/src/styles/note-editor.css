@@ -139,80 +139,78 @@
 	text-decoration-color: transparent;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) > :first-child {
+:where(.note-tiptap.ProseMirror) > :first-child {
 	margin-top: 0;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) > :last-child {
+:where(.note-tiptap.ProseMirror) > :last-child {
 	margin-bottom: 0;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(p) {
+:where(.note-tiptap.ProseMirror) :where(p) {
 	margin: 0 0 0.5rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown)
-	:where(h1, h2, h3, h4, h5, h6) {
+:where(.note-tiptap.ProseMirror) :where(h1, h2, h3, h4, h5, h6) {
 	margin: 1.25rem 0 0.5rem;
 	font-weight: 500;
 	letter-spacing: -0.025em;
 	line-height: 1.25;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(h1) {
+:where(.note-tiptap.ProseMirror) :where(h1) {
 	font-size: 1.875rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(h2) {
+:where(.note-tiptap.ProseMirror) :where(h2) {
 	font-size: 1.125rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(h3) {
+:where(.note-tiptap.ProseMirror) :where(h3) {
 	font-size: 1.125rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(h4) {
+:where(.note-tiptap.ProseMirror) :where(h4) {
 	font-size: 1.125rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(h5) {
+:where(.note-tiptap.ProseMirror) :where(h5) {
 	font-size: 1.125rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(h6) {
+:where(.note-tiptap.ProseMirror) :where(h6) {
 	font-size: 1rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(ul, ol) {
+:where(.note-tiptap.ProseMirror) :where(ul, ol) {
 	margin: 0 0 0.75rem;
 	padding-left: 2rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(ul) {
+:where(.note-tiptap.ProseMirror) :where(ul) {
 	list-style: disc;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(ol) {
+:where(.note-tiptap.ProseMirror) :where(ol) {
 	list-style: decimal;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown)
-	:where(ul ul, ul ol, ol ul, ol ol) {
+:where(.note-tiptap.ProseMirror) :where(ul ul, ul ol, ol ul, ol ol) {
 	margin-top: 0.25rem;
 	margin-bottom: 0.25rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(li) {
+:where(.note-tiptap.ProseMirror) :where(li) {
 	margin: 0.125rem 0;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(blockquote) {
+:where(.note-tiptap.ProseMirror) :where(blockquote) {
 	margin: 1rem 0;
 	border-left: 4px solid var(--foreground);
 	padding-left: 1rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(code) {
+:where(.note-tiptap.ProseMirror) :where(code) {
 	border: 1px solid var(--border);
 	border-radius: min(var(--radius-md), 8px);
 	background-color: var(--muted);
@@ -224,7 +222,7 @@
 	font-size: 0.75rem;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(pre) {
+:where(.note-tiptap.ProseMirror) :where(pre) {
 	margin: 1.5rem 0;
 	overflow-x: auto;
 	border: 1px solid var(--border);
@@ -235,7 +233,7 @@
 	white-space: pre-wrap;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(pre code) {
+:where(.note-tiptap.ProseMirror) :where(pre code) {
 	border: 0;
 	background: transparent;
 	padding: 0;
@@ -244,19 +242,19 @@
 	border-radius: 0;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(hr) {
+:where(.note-tiptap.ProseMirror) :where(hr) {
 	margin: 1.25rem 0;
 	border: 0;
 	border-top: 1px solid var(--border);
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(a) {
+:where(.note-tiptap.ProseMirror) :where(a) {
 	color: var(--primary);
 	text-decoration: underline;
 	text-underline-offset: 0.15em;
 }
 
-:where(.note-tiptap.ProseMirror, .note-streamdown) :where(strong) {
+:where(.note-tiptap.ProseMirror) :where(strong) {
 	font-weight: 600;
 }
 
@@ -281,8 +279,8 @@
 	flex: 1 1 auto;
 }
 
-:where(.note-title, .note-tiptap, .note-streamdown)::selection,
-:where(.note-title, .note-tiptap, .note-streamdown) *::selection {
+:where(.note-title, .note-tiptap)::selection,
+:where(.note-title, .note-tiptap) *::selection {
 	background: var(--note-selection-background);
 	color: inherit;
 	-webkit-text-fill-color: currentColor;
@@ -294,11 +292,4 @@
 	float: left;
 	height: 0;
 	pointer-events: none;
-}
-
-.note-streamdown {
-	color: inherit;
-	font-family: var(--font-sans);
-	font-size: 0.875rem;
-	line-height: 1.7142857143;
 }

@@ -36,13 +36,11 @@ export function CollapsibleMessageContent({
 	role,
 	text,
 	isAnimating,
-	streamdownClassName,
 	mode,
 }: {
 	role: UIMessage["role"];
 	text: string;
 	isAnimating: boolean;
-	streamdownClassName?: string;
 	mode?: "streaming" | "static";
 }) {
 	const [isExpanded, setIsExpanded] = useState(false);
@@ -51,11 +49,7 @@ export function CollapsibleMessageContent({
 
 	if (!isCollapsible) {
 		return (
-			<MarkdownStream
-				className={streamdownClassName}
-				isAnimating={isAnimating}
-				mode={resolvedMode}
-			>
+			<MarkdownStream isAnimating={isAnimating} mode={resolvedMode}>
 				{text}
 			</MarkdownStream>
 		);
@@ -69,11 +63,7 @@ export function CollapsibleMessageContent({
 					isExpanded ? "max-h-[999rem]" : "max-h-80",
 				)}
 			>
-				<MarkdownStream
-					className={streamdownClassName}
-					isAnimating={isAnimating}
-					mode={resolvedMode}
-				>
+				<MarkdownStream isAnimating={isAnimating} mode={resolvedMode}>
 					{text}
 				</MarkdownStream>
 			</div>

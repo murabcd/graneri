@@ -74,7 +74,6 @@ export function ChatMessageListContent({
 	turnClassName,
 	messageStackClassName,
 	textContainerClassName,
-	streamdownClassName,
 	breathingSpaceClassName = "min-h-[max(140px,24vh)] w-full",
 	errorClassName,
 	includeSources = true,
@@ -91,9 +90,6 @@ export function ChatMessageListContent({
 	turnClassName?: (isLastTurn: boolean) => string;
 	messageStackClassName?: string;
 	textContainerClassName?: string;
-	streamdownClassName?:
-		| string
-		| ((role: UIMessage["role"]) => string | undefined);
 	breathingSpaceClassName?: string;
 	errorClassName?: string;
 	includeSources?: boolean;
@@ -184,7 +180,6 @@ export function ChatMessageListContent({
 									renderUserActions={renderUserActions}
 									onOpenMention={onOpenMention}
 									streamingMessageIds={forcedStreamingMessageIds}
-									streamdownClassName={streamdownClassName}
 									textContainerClassName={textContainerClassName}
 								/>
 							</div>
@@ -216,7 +211,6 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	renderUserActions,
 	onOpenMention,
 	streamingMessageIds,
-	streamdownClassName,
 	textContainerClassName,
 }: {
 	message: UIMessage;
@@ -230,9 +224,6 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	renderUserActions?: (context: ChatMessageActionContext) => React.ReactNode;
 	onOpenMention?: (noteId: string) => void;
 	streamingMessageIds: ReadonlySet<string>;
-	streamdownClassName?:
-		| string
-		| ((role: UIMessage["role"]) => string | undefined);
 	textContainerClassName?: string;
 }) {
 	const fileParts = extractFileParts(message);
@@ -319,7 +310,6 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 					mentionPositions={metadata?.mentionPositions}
 					onOpenMention={onOpenMention}
 					role={message.role}
-					streamdownClassName={streamdownClassName}
 					textContainerClassName={textContainerClassName}
 				/>
 				{isInterruptedAssistantMessage ? <InterruptedMessageStatus /> : null}
@@ -518,7 +508,6 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	mentionPositions,
 	onOpenMention,
 	role,
-	streamdownClassName,
 	textContainerClassName,
 }: {
 	displayText: string;
@@ -535,19 +524,11 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	}>;
 	onOpenMention?: (noteId: string) => void;
 	role: UIMessage["role"];
-	streamdownClassName?:
-		| string
-		| ((role: UIMessage["role"]) => string | undefined);
 	textContainerClassName?: string;
 }) {
 	if (!isStreamingAssistantMessage && !displayText) {
 		return null;
 	}
-	const resolvedStreamdownClassName =
-		typeof streamdownClassName === "function"
-			? streamdownClassName(role)
-			: streamdownClassName;
-
 	return (
 		<div className={textContainerClassName}>
 			<Bubble
@@ -580,7 +561,6 @@ const ChatMessageText = React.memo(function ChatMessageText({
 							isAnimating={
 								isStreamingAssistantMessage && !isInterruptedAssistantMessage
 							}
-							streamdownClassName={resolvedStreamdownClassName}
 							mode={
 								isStreamingAssistantMessage || isInterruptedAssistantMessage
 									? "streaming"
