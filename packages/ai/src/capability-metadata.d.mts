@@ -43,6 +43,14 @@ export type RemoteMcpConnectionDefaults = {
 	endpoint: string;
 };
 
+export type CapabilitySettingsGroup =
+	| "Analytics"
+	| "Design"
+	| "Knowledge"
+	| "Meetings"
+	| "Productivity"
+	| "Tracking";
+
 export type AppSourceInstructionConnection = {
 	id?: string;
 	sourceId?: string;
@@ -52,8 +60,17 @@ export type AppSourceInstructionConnection = {
 };
 
 export type CapabilityMetadata = {
-	id: AppSourceProvider;
+	id: ChatAppSourceProvider;
 	displayName: string;
+	sourceKind: "app" | "sync";
+	connection?: {
+		usage: "chat" | "sync";
+		oauthFlow?: "mcp" | "mcp-sdk";
+		remoteMcpEndpoint?: string;
+		requiresChatSourceToken?: boolean;
+	};
+	settingsGroup: CapabilitySettingsGroup;
+	settingsName?: string;
 	toolPrefix?: string;
 	sourceInstruction?: (
 		connection: AppSourceInstructionConnection,
@@ -71,7 +88,7 @@ export declare const DEFAULT_POSTHOG_MCP_ENDPOINT: string;
 export declare const DEFAULT_ZOOM_MCP_ENDPOINT: string;
 export declare const capabilityMetadataDefinitions: readonly CapabilityMetadata[];
 export declare const capabilityMetadataRegistry: Record<
-	AppSourceProvider,
+	ChatAppSourceProvider,
 	CapabilityMetadata
 >;
 export declare const appSourceProviders: readonly AppSourceProvider[];
@@ -85,50 +102,17 @@ export declare function isChatAppSourceProvider(
 export declare function getChatAppSourceLabel(
 	provider: ChatAppSourceProvider,
 ): string;
-export declare const appConnectionProviders: readonly [
-	"yandex-tracker",
-	"yandex-calendar",
-	"jira",
-	"jira-mcp",
-	"posthog",
-	"notion",
-	"zoom",
-	"context7",
-	"figma",
-	"linear",
-];
-export declare const mcpOAuthConnectionProviders: readonly [
-	"figma",
-	"jira-mcp",
-	"linear",
-	"notion",
-	"posthog",
-	"zoom",
-];
-export declare const mcpSdkOAuthConnectionProviders: readonly [
-	"figma",
-	"jira-mcp",
-	"linear",
-	"posthog",
-];
+export declare const appConnectionProviders: readonly AppConnectionProvider[];
+export declare const mcpOAuthConnectionProviders: readonly McpOAuthConnectionProvider[];
+export declare const mcpSdkOAuthConnectionProviders: readonly McpSdkOAuthConnectionProvider[];
 export declare function isMcpSdkOAuthConnectionProvider(
 	provider: unknown,
 ): provider is McpSdkOAuthConnectionProvider;
-export declare const chatSourceAppConnectionProviders: readonly [
-	"yandex-calendar",
-	"yandex-tracker",
-	"jira-mcp",
-	"posthog",
-	"notion",
-	"zoom",
-	"context7",
-	"figma",
-	"linear",
-];
-export declare const tokenRequiredChatSourceAppConnectionProviders: readonly [
-	"figma",
-	"linear",
-];
+export declare const chatSourceAppConnectionProviders: readonly Exclude<
+	AppConnectionProvider,
+	"jira"
+>[];
+export declare const tokenRequiredChatSourceAppConnectionProviders: readonly AppConnectionProvider[];
 export declare const appConnectionProviderLabels: Record<
 	AppConnectionProvider,
 	string
@@ -146,6 +130,11 @@ export declare const remoteMcpToolPrefixes: readonly {
 export declare function getCapabilityMetadata(
 	provider: string,
 ): CapabilityMetadata | null;
+
+export declare function getCapabilitySettings(provider: string): {
+	group: CapabilitySettingsGroup;
+	name: string;
+};
 
 export declare function getSelectedAppSourceIds(
 	selectedSourceIds?: string[],

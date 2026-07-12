@@ -1,5 +1,5 @@
-import { buildContext7Tools } from "./context7-tools.mjs";
 import { capabilityMetadataDefinitions } from "./capability-metadata.mjs";
+import { buildContext7Tools } from "./context7-tools.mjs";
 import { buildFigmaTools } from "./figma-tools.mjs";
 import { buildGoogleCalendarTools } from "./google-calendar-tools.mjs";
 import { buildGoogleDriveTools } from "./google-drive-tools.mjs";
@@ -88,9 +88,9 @@ const buildYandexCalendarToolAdapter = (adapter) => ({
 
 const capabilityToolBuilders = {
 	"google-calendar": async (_connection, adapters) =>
-			adapters.googleCalendar
-				? buildGoogleCalendarTools(adapters.googleCalendar)
-				: {},
+		adapters.googleCalendar
+			? buildGoogleCalendarTools(adapters.googleCalendar)
+			: {},
 	"google-drive": async (_connection, adapters) =>
 		adapters.googleDrive ? buildGoogleDriveTools(adapters.googleDrive) : {},
 	context7: buildContext7Tools,
@@ -100,25 +100,29 @@ const capabilityToolBuilders = {
 	notion: buildNotionTools,
 	posthog: buildPostHogTools,
 	"yandex-calendar": async (connection, adapters) =>
-			adapters.yandexCalendar
-				? buildYandexCalendarTools(
-						buildYandexCalendarToolAdapter(
-							adapters.yandexCalendar(connection),
-						),
-					)
-				: {},
+		adapters.yandexCalendar
+			? buildYandexCalendarTools(
+					buildYandexCalendarToolAdapter(adapters.yandexCalendar(connection)),
+				)
+			: {},
 	"yandex-tracker": buildYandexTrackerTools,
 	zoom: buildZoomMcpTools,
 };
 
 export const graneriCapabilityRegistry = Object.fromEntries(
-	capabilityMetadataDefinitions.map((capability) => [
-		capability.id,
-		{
-			...capability,
-			buildTools: capabilityToolBuilders[capability.id],
-		},
-	]),
+	capabilityMetadataDefinitions
+		.filter((capability) => capability.sourceKind === "app")
+		.map((capability) => {
+			const buildTools = capabilityToolBuilders[capability.id];
+
+			if (!buildTools) {
+				throw new Error(
+					`Missing tool adapter for capability: ${capability.id}`,
+				);
+			}
+
+			return [capability.id, { ...capability, buildTools }];
+		}),
 );
 
 export const getGraneriCapability = (provider) =>

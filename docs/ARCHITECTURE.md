@@ -211,10 +211,13 @@ boundary into the next prompt branch, while Convex remains the durable source of
 truth for user input, chat runs, crash recovery, and cross-process coordination.
 
 Connected app AI capabilities are declared in
-`packages/ai/src/capability-registry.mjs`. The registry is the source of truth
-for provider identity, source instructions, tool-discovery prefixes, and tool
-builders. Desktop-local capabilities such as shared local folders and native
-transcription remain desktop bridge APIs, not generic connected-app
+`packages/ai/src/capability-metadata.mjs`. The catalog is the source of truth
+for provider identity, source classification, connection and OAuth behavior,
+settings identity, source instructions, remote defaults, and tool-discovery
+prefixes. `packages/ai/src/capability-registry.mjs` attaches runtime-specific
+tool adapters to every app-source capability and fails at module load when an
+adapter is missing. Desktop-local capabilities such as shared local folders
+and native transcription remain desktop bridge APIs, not generic connected-app
 capabilities.
 
 `convex/`

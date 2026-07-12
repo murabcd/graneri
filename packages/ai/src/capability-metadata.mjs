@@ -25,18 +25,28 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "google-calendar",
 		displayName: "Google Calendar",
+		sourceKind: "app",
+		settingsGroup: "Productivity",
 		sourceInstruction: () =>
 			"The selected app source for this chat is Google Calendar. Treat it as the preferred source for meeting schedules, event timing, attendee context, and calendar availability.",
 	},
 	{
 		id: "google-drive",
 		displayName: "Google Drive",
+		sourceKind: "app",
+		settingsGroup: "Productivity",
 		sourceInstruction: () =>
 			"The selected app source for this chat is Google Drive. Treat it as the preferred source for connected Google docs, spreadsheets, presentations, and file metadata. Only read-only Drive tools are available in this chat.",
 	},
 	{
 		id: "context7",
 		displayName: "Context7",
+		sourceKind: "app",
+		connection: {
+			usage: "chat",
+			remoteMcpEndpoint: DEFAULT_CONTEXT7_MCP_ENDPOINT,
+		},
+		settingsGroup: "Knowledge",
 		toolPrefix: "context7_",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
@@ -49,6 +59,14 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "figma",
 		displayName: "Figma",
+		sourceKind: "app",
+		connection: {
+			usage: "chat",
+			oauthFlow: "mcp-sdk",
+			remoteMcpEndpoint: DEFAULT_FIGMA_MCP_ENDPOINT,
+			requiresChatSourceToken: true,
+		},
+		settingsGroup: "Design",
 		toolPrefix: "figma_",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
@@ -61,6 +79,13 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "jira-mcp",
 		displayName: "Jira",
+		sourceKind: "app",
+		connection: {
+			usage: "chat",
+			oauthFlow: "mcp-sdk",
+			remoteMcpEndpoint: DEFAULT_JIRA_MCP_ENDPOINT,
+		},
+		settingsGroup: "Tracking",
 		toolPrefix: "jira_",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
@@ -73,6 +98,14 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "linear",
 		displayName: "Linear",
+		sourceKind: "app",
+		connection: {
+			usage: "chat",
+			oauthFlow: "mcp-sdk",
+			remoteMcpEndpoint: DEFAULT_LINEAR_MCP_ENDPOINT,
+			requiresChatSourceToken: true,
+		},
+		settingsGroup: "Tracking",
 		toolPrefix: "linear_",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
@@ -85,6 +118,13 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "notion",
 		displayName: "Notion",
+		sourceKind: "app",
+		connection: {
+			usage: "chat",
+			oauthFlow: "mcp",
+			remoteMcpEndpoint: DEFAULT_NOTION_MCP_ENDPOINT,
+		},
+		settingsGroup: "Knowledge",
 		toolPrefix: "notion_",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
@@ -97,6 +137,13 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "posthog",
 		displayName: "PostHog",
+		sourceKind: "app",
+		connection: {
+			usage: "chat",
+			oauthFlow: "mcp-sdk",
+			remoteMcpEndpoint: DEFAULT_POSTHOG_MCP_ENDPOINT,
+		},
+		settingsGroup: "Analytics",
 		toolPrefix: "posthog_",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
@@ -109,12 +156,18 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "yandex-calendar",
 		displayName: "Yandex Calendar",
+		sourceKind: "app",
+		connection: { usage: "chat" },
+		settingsGroup: "Productivity",
 		sourceInstruction: () =>
 			"The selected app source for this chat is Yandex Calendar. Treat it as the preferred source for meeting schedules, event timing, attendee context, and calendar availability.",
 	},
 	{
 		id: "yandex-tracker",
 		displayName: "Yandex Tracker",
+		sourceKind: "app",
+		connection: { usage: "chat" },
+		settingsGroup: "Tracking",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -126,6 +179,13 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "zoom",
 		displayName: "Zoom",
+		sourceKind: "app",
+		connection: {
+			usage: "chat",
+			oauthFlow: "mcp",
+			remoteMcpEndpoint: DEFAULT_ZOOM_MCP_ENDPOINT,
+		},
+		settingsGroup: "Meetings",
 		toolPrefix: "zoom_",
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
@@ -134,6 +194,14 @@ export const capabilityMetadataDefinitions = [
 				(displayName) =>
 					`The selected app source for this chat is Zoom (${displayName}). Treat it as the preferred source for meeting transcripts, recordings, summaries, and Zoom workspace context. If the user's request could plausibly be answered from Zoom, use the Zoom MCP tools before saying the context is unavailable.`,
 			),
+	},
+	{
+		id: "jira",
+		displayName: "Jira",
+		sourceKind: "sync",
+		connection: { usage: "sync" },
+		settingsGroup: "Tracking",
+		settingsName: "Jira Sync",
 	},
 ];
 
@@ -144,38 +212,26 @@ export const capabilityMetadataRegistry = Object.fromEntries(
 	]),
 );
 
-export const appSourceProviders = capabilityMetadataDefinitions.map(
-	(capability) => capability.id,
-);
+export const appSourceProviders = capabilityMetadataDefinitions
+	.filter((capability) => capability.sourceKind === "app")
+	.map((capability) => capability.id);
 
 export const automationAppSourceProviders = appSourceProviders;
 
 export const appSourceLabels = Object.fromEntries(
-	capabilityMetadataDefinitions.map((capability) => [
-		capability.id,
-		capability.displayName,
-	]),
+	capabilityMetadataDefinitions
+		.filter((capability) => capability.sourceKind === "app")
+		.map((capability) => [capability.id, capability.displayName]),
 );
 
-export const chatAppSourceProviders = [
-	"context7",
-	"figma",
-	"google-calendar",
-	"google-drive",
-	"jira",
-	"jira-mcp",
-	"linear",
-	"notion",
-	"posthog",
-	"zoom",
-	"yandex-calendar",
-	"yandex-tracker",
-];
+export const chatAppSourceProviders = capabilityMetadataDefinitions.map(
+	(capability) => capability.id,
+);
 
 export const chatAppSourceLabels = Object.fromEntries(
 	chatAppSourceProviders.map((provider) => [
 		provider,
-		provider === "jira" ? "Jira" : appSourceLabels[provider],
+		capabilityMetadataRegistry[provider].displayName,
 	]),
 );
 
@@ -185,93 +241,49 @@ export const isChatAppSourceProvider = (value) =>
 export const getChatAppSourceLabel = (provider) =>
 	chatAppSourceLabels[provider];
 
-export const appConnectionProviders = [
-	"yandex-tracker",
-	"yandex-calendar",
-	"jira",
-	"jira-mcp",
-	"posthog",
-	"notion",
-	"zoom",
-	"context7",
-	"figma",
-	"linear",
-];
+export const appConnectionProviders = capabilityMetadataDefinitions
+	.filter((capability) => capability.connection)
+	.map((capability) => capability.id);
 
-export const mcpOAuthConnectionProviders = [
-	"figma",
-	"jira-mcp",
-	"linear",
-	"notion",
-	"posthog",
-	"zoom",
-];
+export const mcpOAuthConnectionProviders = capabilityMetadataDefinitions
+	.filter((capability) => capability.connection?.oauthFlow)
+	.map((capability) => capability.id);
 
-export const mcpSdkOAuthConnectionProviders = [
-	"figma",
-	"jira-mcp",
-	"linear",
-	"posthog",
-];
+export const mcpSdkOAuthConnectionProviders = capabilityMetadataDefinitions
+	.filter((capability) => capability.connection?.oauthFlow === "mcp-sdk")
+	.map((capability) => capability.id);
 
 export const isMcpSdkOAuthConnectionProvider = (provider) =>
 	typeof provider === "string" &&
 	mcpSdkOAuthConnectionProviders.includes(provider);
 
-export const chatSourceAppConnectionProviders = [
-	"yandex-calendar",
-	"yandex-tracker",
-	"jira-mcp",
-	"posthog",
-	"notion",
-	"zoom",
-	"context7",
-	"figma",
-	"linear",
-];
+export const chatSourceAppConnectionProviders = capabilityMetadataDefinitions
+	.filter((capability) => capability.connection?.usage === "chat")
+	.map((capability) => capability.id);
 
-export const tokenRequiredChatSourceAppConnectionProviders = [
-	"figma",
-	"linear",
-];
+export const tokenRequiredChatSourceAppConnectionProviders =
+	capabilityMetadataDefinitions
+		.filter((capability) => capability.connection?.requiresChatSourceToken)
+		.map((capability) => capability.id);
 
 export const appConnectionProviderLabels = Object.fromEntries(
 	appConnectionProviders.map((provider) => [
 		provider,
-		provider === "jira" ? "Jira" : chatAppSourceLabels[provider],
+		capabilityMetadataRegistry[provider].displayName,
 	]),
 );
 
-export const remoteMcpConnectionDefaults = {
-	context7: {
-		displayName: appConnectionProviderLabels.context7,
-		endpoint: DEFAULT_CONTEXT7_MCP_ENDPOINT,
-	},
-	figma: {
-		displayName: appConnectionProviderLabels.figma,
-		endpoint: DEFAULT_FIGMA_MCP_ENDPOINT,
-	},
-	"jira-mcp": {
-		displayName: appConnectionProviderLabels["jira-mcp"],
-		endpoint: DEFAULT_JIRA_MCP_ENDPOINT,
-	},
-	linear: {
-		displayName: appConnectionProviderLabels.linear,
-		endpoint: DEFAULT_LINEAR_MCP_ENDPOINT,
-	},
-	notion: {
-		displayName: appConnectionProviderLabels.notion,
-		endpoint: DEFAULT_NOTION_MCP_ENDPOINT,
-	},
-	posthog: {
-		displayName: appConnectionProviderLabels.posthog,
-		endpoint: DEFAULT_POSTHOG_MCP_ENDPOINT,
-	},
-	zoom: {
-		displayName: appConnectionProviderLabels.zoom,
-		endpoint: DEFAULT_ZOOM_MCP_ENDPOINT,
-	},
-};
+export const remoteMcpConnectionDefaults = Object.fromEntries(
+	capabilityMetadataDefinitions
+		.filter((capability) => capability.connection?.remoteMcpEndpoint)
+		.map((capability) => [
+			capability.id,
+			{
+				displayName: capability.displayName,
+				endpoint: capability.connection.remoteMcpEndpoint,
+			},
+		]),
+);
 
 export const remoteMcpToolPrefixes = capabilityMetadataDefinitions
 	.filter((capability) => capability.toolPrefix)
@@ -283,6 +295,19 @@ export const remoteMcpToolPrefixes = capabilityMetadataDefinitions
 
 export const getCapabilityMetadata = (provider) =>
 	capabilityMetadataRegistry[provider] ?? null;
+
+export const getCapabilitySettings = (provider) => {
+	const capability = getCapabilityMetadata(provider);
+
+	if (!capability) {
+		throw new Error(`Unknown connected capability: ${provider}`);
+	}
+
+	return {
+		group: capability.settingsGroup,
+		name: capability.settingsName ?? capability.displayName,
+	};
+};
 
 export const getSelectedAppSourceIds = (selectedSourceIds) =>
 	(selectedSourceIds ?? []).filter((value) =>

@@ -164,6 +164,7 @@ import {
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { getCapabilitySettings } from "../../../../../packages/ai/src/capability-metadata.mjs";
 import type {
 	SettingsDialogProps,
 	SettingsPage,
@@ -2332,11 +2333,10 @@ function useConnectionsSettingsController() {
 
 	const toolConnections: ToolConnection[] = [
 		{
-			group: "Productivity",
+			...getCapabilitySettings("google-calendar"),
 			icon: (
 				<AppSourceIcon provider="google-calendar" className="size-5 shrink-0" />
 			),
-			name: "Google Calendar",
 			installation:
 				hasGoogleCalendarToolScope && googleCalendarEnabledForWorkspace
 					? {
@@ -2359,11 +2359,10 @@ function useConnectionsSettingsController() {
 			},
 		},
 		{
-			group: "Productivity",
+			...getCapabilitySettings("google-drive"),
 			icon: (
 				<AppSourceIcon provider="google-drive" className="size-5 shrink-0" />
 			),
-			name: "Google Drive",
 			installation:
 				hasGoogleDriveToolScope && googleDriveEnabledForWorkspace
 					? {
@@ -2386,11 +2385,10 @@ function useConnectionsSettingsController() {
 			},
 		},
 		{
-			group: "Productivity",
+			...getCapabilitySettings("yandex-calendar"),
 			icon: (
 				<AppSourceIcon provider="yandex-calendar" className="size-5 shrink-0" />
 			),
-			name: "Yandex Calendar",
 			installation: yandexCalendarConnection
 				? {
 						status: "installed",
@@ -2405,11 +2403,10 @@ function useConnectionsSettingsController() {
 				yandexCalendarDialog.handleYandexCalendarDialogOpenChange(true),
 		},
 		{
-			group: "Tracking",
+			...getCapabilitySettings("yandex-tracker"),
 			icon: (
 				<AppSourceIcon provider="yandex-tracker" className="size-5 shrink-0" />
 			),
-			name: "Yandex Tracker",
 			installation: yandexTrackerConnection
 				? {
 						status: "installed",
@@ -2421,9 +2418,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handleYandexTrackerDialogOpenChange(true),
 		},
 		{
-			group: "Tracking",
+			...getCapabilitySettings("jira-mcp"),
 			icon: <AppSourceIcon provider="jira" className="size-5 shrink-0" />,
-			name: "Jira",
 			installation: jiraMcpConnection
 				? {
 						status: "installed",
@@ -2439,9 +2435,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handleJiraMcpDialogOpenChange(true),
 		},
 		{
-			group: "Tracking",
+			...getCapabilitySettings("jira"),
 			icon: <AppSourceIcon provider="jira" className="size-5 shrink-0" />,
-			name: "Jira Sync",
 			installation: jiraConnection
 				? {
 						status: "installed",
@@ -2453,9 +2448,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handleJiraDialogOpenChange(true),
 		},
 		{
-			group: "Analytics",
+			...getCapabilitySettings("posthog"),
 			icon: <AppSourceIcon provider="posthog" className="size-5 shrink-0" />,
-			name: "PostHog",
 			installation: posthogConnection
 				? {
 						status: "installed",
@@ -2467,9 +2461,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handlePostHogDialogOpenChange(true),
 		},
 		{
-			group: "Knowledge",
+			...getCapabilitySettings("context7"),
 			icon: <AppSourceIcon provider="context7" className="size-5 shrink-0" />,
-			name: "Context7",
 			installation: context7Connection
 				? {
 						status: "installed",
@@ -2485,9 +2478,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handleContext7DialogOpenChange(true),
 		},
 		{
-			group: "Design",
+			...getCapabilitySettings("figma"),
 			icon: <AppSourceIcon provider="figma" className="size-5 shrink-0" />,
-			name: "Figma",
 			installation: figmaConnection
 				? {
 						status: "installed",
@@ -2503,9 +2495,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handleFigmaDialogOpenChange(true),
 		},
 		{
-			group: "Tracking",
+			...getCapabilitySettings("linear"),
 			icon: <AppSourceIcon provider="linear" className="size-5 shrink-0" />,
-			name: "Linear",
 			installation: linearConnection
 				? {
 						status: "installed",
@@ -2521,9 +2512,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handleLinearDialogOpenChange(true),
 		},
 		{
-			group: "Knowledge",
+			...getCapabilitySettings("notion"),
 			icon: <AppSourceIcon provider="notion" className="size-5 shrink-0" />,
-			name: "Notion",
 			installation: notionConnection
 				? {
 						status: "installed",
@@ -2535,9 +2525,8 @@ function useConnectionsSettingsController() {
 			onConfigure: () => handleNotionDialogOpenChange(true),
 		},
 		{
-			group: "Meetings",
+			...getCapabilitySettings("zoom"),
 			icon: <AppSourceIcon provider="zoom" className="size-5 shrink-0" />,
-			name: "Zoom",
 			installation:
 				zoomConnection?.status === "connected"
 					? {

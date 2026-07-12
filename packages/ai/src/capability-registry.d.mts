@@ -75,7 +75,7 @@ export type GraneriCapabilityAdapters = {
 };
 
 export type GraneriCapability = CapabilityMetadata & {
-	buildTools?: (
+	buildTools: (
 		connection: AppSourceInstructionConnection,
 		adapters?: GraneriCapabilityAdapters,
 	) => Promise<ToolSet> | ToolSet;

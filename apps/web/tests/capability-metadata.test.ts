@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
 	appConnectionProviderLabels,
 	appConnectionProviders,
+	appSourceProviders,
+	capabilityMetadataDefinitions,
 	chatSourceAppConnectionProviders,
+	getCapabilitySettings,
 	isMcpSdkOAuthConnectionProvider,
 	mcpSdkOAuthConnectionProviders,
 	remoteMcpConnectionDefaults,
 	tokenRequiredChatSourceAppConnectionProviders,
 } from "../../../packages/ai/src/capability-metadata.mjs";
+import { graneriCapabilityRegistry } from "../../../packages/ai/src/capability-registry.mjs";
 
 describe("capability metadata", () => {
 	it("defines labels for every app connection provider", () => {
@@ -15,6 +19,45 @@ describe("capability metadata", () => {
 			expect(appConnectionProviderLabels[provider]).toEqual(expect.any(String));
 			expect(appConnectionProviderLabels[provider].length).toBeGreaterThan(0);
 		}
+	});
+
+	it("classifies every canonical capability through the public catalog", () => {
+		const ids = capabilityMetadataDefinitions.map(
+			(capability) => capability.id,
+		);
+
+		expect(new Set(ids).size).toBe(ids.length);
+		for (const capability of capabilityMetadataDefinitions) {
+			expect(appSourceProviders.includes(capability.id)).toBe(
+				capability.sourceKind === "app",
+			);
+			expect(appConnectionProviders.includes(capability.id)).toBe(
+				Boolean(capability.connection),
+			);
+			expect(chatSourceAppConnectionProviders.includes(capability.id)).toBe(
+				capability.connection?.usage === "chat",
+			);
+		}
+	});
+
+	it("registers tools and settings for every app capability", () => {
+		for (const provider of appSourceProviders) {
+			expect(graneriCapabilityRegistry[provider]?.buildTools).toEqual(
+				expect.any(Function),
+			);
+			expect(getCapabilitySettings(provider)).toEqual({
+				group: expect.any(String),
+				name: expect.any(String),
+			});
+		}
+
+		expect(getCapabilitySettings("jira")).toEqual({
+			group: "Tracking",
+			name: "Jira Sync",
+		});
+		expect(() => getCapabilitySettings("unknown")).toThrow(
+			"Unknown connected capability: unknown",
+		);
 	});
 
 	it("keeps sync-only Jira out of chat app connection sources", () => {
