@@ -60,53 +60,17 @@
       "types": "./src/dictation-transcription.d.mts",
       "import": "./src/dictation-transcription.mjs"
     },
-    "./hosted-chat-active-stream": {
-      "types": "./src/hosted-chat-active-stream.d.mts",
-      "import": "./src/hosted-chat-active-stream.mjs"
-    },
-    "./hosted-chat-branch-preparer": {
-      "types": "./src/hosted-chat-branch-preparer.d.mts",
-      "import": "./src/hosted-chat-branch-preparer.mjs"
-    },
     "./hosted-chat-http": {
       "types": "./src/hosted-chat-http.d.mts",
       "import": "./src/hosted-chat-http.mjs"
-    },
-    "./hosted-chat-orphaned-run": {
-      "types": "./src/hosted-chat-orphaned-run.d.mts",
-      "import": "./src/hosted-chat-orphaned-run.mjs"
-    },
-    "./hosted-chat-queued-input": {
-      "types": "./src/hosted-chat-queued-input.d.mts",
-      "import": "./src/hosted-chat-queued-input.mjs"
-    },
-    "./hosted-chat-run-context": {
-      "types": "./src/hosted-chat-run-context.d.mts",
-      "import": "./src/hosted-chat-run-context.mjs"
-    },
-    "./hosted-chat-run-finalizer": {
-      "types": "./src/hosted-chat-run-finalizer.d.mts",
-      "import": "./src/hosted-chat-run-finalizer.mjs"
-    },
-    "./hosted-chat-run-starter": {
-      "types": "./src/hosted-chat-run-starter.d.mts",
-      "import": "./src/hosted-chat-run-starter.mjs"
     },
     "./hosted-chat-runtime": {
       "types": "./src/hosted-chat-runtime.d.mts",
       "import": "./src/hosted-chat-runtime.mjs"
     },
-    "./hosted-chat-stream-lifecycle": {
-      "types": "./src/hosted-chat-stream-lifecycle.d.mts",
-      "import": "./src/hosted-chat-stream-lifecycle.mjs"
-    },
-    "./hosted-chat-turn-controller": {
-      "types": "./src/hosted-chat-turn-controller.d.mts",
-      "import": "./src/hosted-chat-turn-controller.mjs"
-    },
-    "./hosted-chat-user-message-persistence": {
-      "types": "./src/hosted-chat-user-message-persistence.d.mts",
-      "import": "./src/hosted-chat-user-message-persistence.mjs"
+    "./hosted-chat-turn": {
+      "types": "./src/hosted-chat-turn.d.mts",
+      "import": "./src/hosted-chat-turn.mjs"
     },
     "./hosted-route-catalog": {
       "types": "./src/hosted-route-catalog.d.mts",

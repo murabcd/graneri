@@ -4,29 +4,25 @@ import {
 	loadSelectedAppSourceConnections,
 } from "@workspace/ai/capability-metadata";
 import { createChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
-import {
-	createHostedActiveStreamKey,
-	type HostedActiveStreamSession,
-} from "@workspace/ai/hosted-chat-active-stream";
-import { prepareHostedChatTurnBranch } from "@workspace/ai/hosted-chat-branch-preparer";
 import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
-import { stopOrphanedHostedAssistantRun } from "@workspace/ai/hosted-chat-orphaned-run";
-import { createHostedChatQueuedInput } from "@workspace/ai/hosted-chat-queued-input";
 import {
 	buildHostedChatRunContext,
-	getHostedChatLocalFolderReferencePaths,
-} from "@workspace/ai/hosted-chat-run-context";
-import {
 	buildHostedNotesContext,
+	createHostedActiveStreamKey,
+	createHostedChatQueuedInput,
+	createHostedChatTurnController,
 	getHostedChatConvexRouteError,
 	getHostedChatInputValidationErrorResponse,
+	getHostedChatLocalFolderReferencePaths,
 	getHostedChatSteerTelemetry,
 	getStoredHostedNoteContext,
+	type HostedActiveStreamSession,
+	prepareHostedChatTurnBranch,
+	stopOrphanedHostedAssistantRun,
 	validateHostedChatInput,
 	validateHostedChatRequestInput,
 	validateHostedChatSteerRoute,
-} from "@workspace/ai/hosted-chat-runtime";
-import { createHostedChatTurnController } from "@workspace/ai/hosted-chat-turn-controller";
+} from "@workspace/ai/hosted-chat-turn";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
 import { authorizeOpenAiRequest } from "@workspace/ai/openai-admission";
 import { type InferUITools, type UIMessage, validateUIMessages } from "ai";

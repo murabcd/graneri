@@ -336,6 +336,15 @@ and durable run, queue, message, and lifecycle state. Development and
 production therefore execute the same chat implementation and identity
 boundary.
 
+Hosted chat consumers enter shared orchestration through
+`@workspace/ai/hosted-chat-turn`. Active-stream persistence, branch
+preparation, queued input, run start/finalization, and transport-event modules
+are package internals; app and route code must not bind to their individual
+file boundaries. Browser-safe request validation and acceptance-header helpers
+remain isolated in `@workspace/ai/hosted-chat-runtime` so renderer bundles do
+not traverse server-only orchestration dependencies. Bearer-token parsing is
+the separate `@workspace/ai/hosted-chat-http` transport utility.
+
 Local-folder chat uses a hosted-model, desktop-tool bridge:
 
 1. The hosted web AI route owns the OpenAI key and model loop.

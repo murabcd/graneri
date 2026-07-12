@@ -3,21 +3,19 @@ import {
 	type ChatLatencyLogger,
 	createChatStreamLatencyTracker,
 } from "@workspace/ai/chat-latency-logger";
-import type { HostedActiveStreamSession } from "@workspace/ai/hosted-chat-active-stream";
-import type { createHostedChatQueuedInput } from "@workspace/ai/hosted-chat-queued-input";
-import type { buildHostedChatRunContext } from "@workspace/ai/hosted-chat-run-context";
-import { createHostedAssistantRunFinalizer } from "@workspace/ai/hosted-chat-run-finalizer";
-import { startHostedChatRun } from "@workspace/ai/hosted-chat-run-starter";
 import {
+	type buildHostedChatRunContext,
+	createHostedAssistantRunFinalizer,
+	type createHostedChatQueuedInput,
+	createHostedChatRunResponseStream,
+	type createHostedChatTurnController,
 	getHostedChatConvexRouteError,
-	validateHostedChatActiveRunPolicy,
-} from "@workspace/ai/hosted-chat-runtime";
-import { createHostedChatRunResponseStream } from "@workspace/ai/hosted-chat-stream-lifecycle";
-import type { createHostedChatTurnController } from "@workspace/ai/hosted-chat-turn-controller";
-import {
+	type HostedActiveStreamSession,
 	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,
-} from "@workspace/ai/hosted-chat-user-message-persistence";
+	startHostedChatRun,
+	validateHostedChatActiveRunPolicy,
+} from "@workspace/ai/hosted-chat-turn";
 import type { ReasoningEffort } from "@workspace/ai/models";
 import {
 	consumeStream,

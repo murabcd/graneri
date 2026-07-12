@@ -102,4 +102,17 @@ describe("AI package boundary", () => {
 			Object.keys(manifest.exports).sort(),
 		);
 	});
+
+	it("exposes hosted chat orchestration through one public turn interface", async () => {
+		const manifest = await readManifest();
+		const hostedChatExports = Object.keys(manifest.exports).filter((subpath) =>
+			subpath.startsWith("./hosted-chat-"),
+		);
+
+		expect(hostedChatExports.sort()).toEqual([
+			"./hosted-chat-http",
+			"./hosted-chat-runtime",
+			"./hosted-chat-turn",
+		]);
+	});
 });
