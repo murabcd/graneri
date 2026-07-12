@@ -1,3 +1,8 @@
+import {
+	buildHostedChatStreamPath,
+	buildHostedRoutePath,
+	type HostedRouteId,
+} from "@workspace/ai/hosted-route-catalog";
 import { getDesktopBridge } from "@workspace/platform/desktop";
 
 type AppRuntimeConfig = {
@@ -44,10 +49,23 @@ export async function loadRuntimeConfig(): Promise<AppRuntimeConfig> {
 	return runtimeConfigSnapshot;
 }
 
+const resolveHostedApiPath = (path: string) =>
+	runtimeConfigSnapshot?.localApiOrigin
+		? new URL(path, runtimeConfigSnapshot.localApiOrigin).toString()
+		: path;
+
+export function getHostedApiUrl(routeId: Exclude<HostedRouteId, "chatStream">) {
+	const path = buildHostedRoutePath(routeId);
+	return resolveHostedApiPath(path);
+}
+
+export function getChatStreamApiUrl(chatId: string) {
+	const path = buildHostedChatStreamPath(chatId);
+	return resolveHostedApiPath(path);
+}
+
 export function getChatApiUrl() {
-	return runtimeConfigSnapshot?.localApiOrigin
-		? `${runtimeConfigSnapshot.localApiOrigin}/api/chat`
-		: "/api/chat";
+	return getHostedApiUrl("chat");
 }
 
 export function getLocalFolderToolApiUrl() {

@@ -8,8 +8,8 @@ export default async function handler(
 ) {
 	await handleHostedApiRoute({
 		handler: handleChatReconnectRequest,
-		method: "GET",
 		request,
 		response,
+		routeId: "chatStream",
 	});
 }

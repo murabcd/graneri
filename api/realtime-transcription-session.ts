@@ -8,8 +8,8 @@ export default async function handler(
 ) {
 	await handleHostedApiRoute({
 		handler: handleRealtimeTranscriptionSessionRequest,
-		method: "POST",
 		request,
 		response,
+		routeId: "realtimeTranscriptionSession",
 	});
 }

@@ -295,6 +295,13 @@ fetches and native capture:
 - `/api/realtime-transcription-session`
 - `/api/dictation-transcription`
 
+Hosted AI route identity, HTTP method, parameterized path matching/building,
+and desktop proxy body mode are owned by
+`@workspace/ai/hosted-route-catalog`. Vite middleware, Vercel wrappers,
+renderer clients, and the desktop loopback proxy consume that catalog instead
+of maintaining private endpoint lists. Handler wiring remains in the runtime
+that owns the handler; the shared catalog contains transport metadata only.
+
 Chat, note generation, template application, and realtime session creation are
 transport-only proxies to the web server in every environment. Dictation
 transcription crosses the authenticated Convex HTTP boundary directly. Local

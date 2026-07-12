@@ -1,3 +1,4 @@
+import { buildHostedRoutePath } from "@workspace/ai/hosted-route-catalog";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import { logInfo } from "@/lib/logger";
 import type { NoteTemplate } from "@/lib/note-templates";
@@ -39,7 +40,7 @@ export const requestEnhancedStructuredNote = async (
 	} = {},
 ) => {
 	const authorization = await requireAuthorizationHeader(resolveConvexToken);
-	const response = await fetcher("/api/enhance-note", {
+	const response = await fetcher(buildHostedRoutePath("enhanceNote"), {
 		method: "POST",
 		headers: {
 			Authorization: authorization,
@@ -106,7 +107,7 @@ export const requestTemplateStructuredNote = async ({
 	resolveConvexToken?: ResolveConvexToken;
 }) => {
 	const authorization = await requireAuthorizationHeader(resolveConvexToken);
-	const response = await fetcher("/api/apply-template", {
+	const response = await fetcher(buildHostedRoutePath("applyTemplate"), {
 		method: "POST",
 		headers: {
 			Authorization: authorization,

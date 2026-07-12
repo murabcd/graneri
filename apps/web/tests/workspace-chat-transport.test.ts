@@ -18,6 +18,7 @@ describe("getWorkspaceChatSendApi", () => {
 		expect(
 			getWorkspaceChatSendApi({
 				chatApiUrl: "/api/chat",
+				chatSteerApiUrl: "/api/chat/steer",
 				body: { steerQueuedMessageId: "queued-1" },
 			}),
 		).toBe("/api/chat/steer");
@@ -39,6 +40,7 @@ describe("getWorkspaceChatSendApi", () => {
 		const api = getWorkspaceChatSendApi({
 			body,
 			chatApiUrl: "/api/chat",
+			chatSteerApiUrl: "/api/chat/steer",
 		});
 		const preparedBody = prepareWorkspaceChatSendBody({
 			body,
@@ -67,6 +69,7 @@ describe("getWorkspaceChatSendApi", () => {
 		expect(
 			getWorkspaceChatSendApi({
 				chatApiUrl: "/api/chat",
+				chatSteerApiUrl: "/api/chat/steer",
 				body: { continueRunId: "run-1" },
 			}),
 		).toBe("/api/chat");

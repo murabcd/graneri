@@ -12,8 +12,8 @@ export default async function handler(
 				isSteerRoute: true,
 			});
 		},
-		method: "POST",
 		request,
 		response,
+		routeId: "chatSteer",
 	});
 }

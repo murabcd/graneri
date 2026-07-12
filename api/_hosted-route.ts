@@ -1,5 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getHostedChatConvexRouteError } from "@workspace/ai/hosted-chat-runtime";
+import {
+	getHostedRouteDefinition,
+	type HostedRouteId,
+} from "@workspace/ai/hosted-route-catalog";
+import {
+	sendHostedRouteError,
+	sendHostedRouteMethodNotAllowed,
+} from "../apps/web/server/hosted-route-response.js";
 
 export type HostedApiHandler = (
 	request: IncomingMessage,
@@ -8,42 +15,24 @@ export type HostedApiHandler = (
 
 export const handleHostedApiRoute = async ({
 	handler,
-	method,
 	request,
 	response,
+	routeId,
 }: {
 	handler: HostedApiHandler;
-	method: "GET" | "POST";
 	request: IncomingMessage;
 	response: ServerResponse;
+	routeId: HostedRouteId;
 }) => {
-	if (request.method !== method) {
-		response.statusCode = 405;
-		response.setHeader("Content-Type", "application/json");
-		response.end(JSON.stringify({ error: "Method not allowed." }));
+	const route = getHostedRouteDefinition(routeId);
+	if (request.method !== route.method) {
+		sendHostedRouteMethodNotAllowed(response);
 		return;
 	}
 
 	try {
 		await handler(request, response);
 	} catch (error) {
-		const routeError = getHostedChatConvexRouteError(error);
-		if (routeError) {
-			response.statusCode = routeError.statusCode;
-			response.setHeader("Content-Type", "application/json");
-			response.end(
-				JSON.stringify({
-					error: routeError.error,
-					errorCode: routeError.errorCode,
-				}),
-			);
-			return;
-		}
-
-		const message =
-			error instanceof Error ? error.message : "Unexpected server error.";
-		response.statusCode = 500;
-		response.setHeader("Content-Type", "application/json");
-		response.end(JSON.stringify({ error: message }));
+		sendHostedRouteError(response, error);
 	}
 };

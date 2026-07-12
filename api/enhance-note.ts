@@ -8,8 +8,8 @@ export default async function handler(
 ) {
 	await handleHostedApiRoute({
 		handler: handleEnhanceNoteRequest,
-		method: "POST",
 		request,
 		response,
+		routeId: "enhanceNote",
 	});
 }

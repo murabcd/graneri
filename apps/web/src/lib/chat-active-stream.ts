@@ -1,6 +1,6 @@
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { getCachedConvexToken } from "./convex-token";
-import { getChatApiUrl } from "./runtime-config";
+import { getHostedApiUrl } from "./runtime-config";
 
 const readChatActionErrorMessage = async (
 	response: Response,
@@ -55,7 +55,7 @@ export const stopActiveChatStreamWithTransport = async ({
 		throw new Error("Cannot stop chat stream without a Convex token.");
 	}
 
-	const response = await fetchChatStop(`${getChatApiUrl()}/stop`, {
+	const response = await fetchChatStop(getHostedApiUrl("chatStop"), {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({

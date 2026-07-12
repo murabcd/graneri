@@ -1,3 +1,4 @@
+import { buildHostedRoutePath } from "@workspace/ai/hosted-route-catalog";
 import { normalizeTranscriptionLanguage } from "@workspace/ai/transcription";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import type { TranscriptSpeaker } from "@/lib/transcript";
@@ -98,18 +99,21 @@ const createRealtimeSession = async (
 		throw new Error("Authentication is required for transcription.");
 	}
 
-	const response = await fetch("/api/realtime-transcription-session", {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${convexToken}`,
-			"Content-Type": "application/json",
+	const response = await fetch(
+		buildHostedRoutePath("realtimeTranscriptionSession"),
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${convexToken}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				...(language ? { lang: language } : {}),
+				...(source ? { source } : {}),
+				...(speaker ? { speaker } : {}),
+			}),
 		},
-		body: JSON.stringify({
-			...(language ? { lang: language } : {}),
-			...(source ? { source } : {}),
-			...(speaker ? { speaker } : {}),
-		}),
-	});
+	);
 
 	const payload = (await response.json().catch(() => ({}))) as {
 		clientSecret?: string;

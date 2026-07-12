@@ -8,8 +8,8 @@ export default async function handler(
 ) {
 	await handleHostedApiRoute({
 		handler: handleApplyTemplateRequest,
-		method: "POST",
 		request,
 		response,
+		routeId: "applyTemplate",
 	});
 }

@@ -6,6 +6,7 @@ import {
 	finalizeGeneratedChatTitle,
 } from "./chat-titles.mjs";
 import { getConvexErrorData } from "./convex-error.mjs";
+import { buildHostedRoutePath } from "./hosted-route-catalog.mjs";
 import { aiLogger, serializeError } from "./logger.mjs";
 import { CHAT_TITLE_MODEL_ID } from "./models.mjs";
 import { buildChatSystemPrompt, CHAT_TITLE_SYSTEM_PROMPT } from "./prompts.mjs";
@@ -263,7 +264,7 @@ export const validateHostedChatSteerRoute = ({
 
 	if (steerQueuedMessageId) {
 		return {
-			error: "Queued message steering must use /api/chat/steer.",
+			error: `Queued message steering must use ${buildHostedRoutePath("chatSteer")}.`,
 			errorCode: "steer_route_required",
 			statusCode: 400,
 		};

@@ -8,8 +8,8 @@ export default async function handler(
 ) {
 	await handleHostedApiRoute({
 		handler: handleChatRequest,
-		method: "POST",
 		request,
 		response,
+		routeId: "chat",
 	});
 }

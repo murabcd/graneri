@@ -1,3 +1,5 @@
+import { buildHostedRoutePath } from "@workspace/ai/hosted-route-catalog";
+
 export const createDesktopRealtimeClientSecret = async ({
 	fetchImpl,
 	getConvexToken,
@@ -11,7 +13,7 @@ export const createDesktopRealtimeClientSecret = async ({
 		getConvexToken(),
 	]);
 	const response = await fetchImpl(
-		new URL("/api/realtime-transcription-session", baseUrl),
+		new URL(buildHostedRoutePath("realtimeTranscriptionSession"), baseUrl),
 		{
 			method: "POST",
 			headers: {

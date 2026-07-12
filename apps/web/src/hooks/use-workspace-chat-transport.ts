@@ -10,18 +10,22 @@ import { DefaultChatTransport } from "ai";
 import * as React from "react";
 import { prepareChatReconnectToStreamRequest } from "@/lib/chat-resume";
 import { FrameBudgetedChatTransport } from "@/lib/frame-budgeted-chat-transport";
-import { getChatApiUrl } from "@/lib/runtime-config";
+import {
+	getChatApiUrl,
+	getChatStreamApiUrl,
+	getHostedApiUrl,
+} from "@/lib/runtime-config";
 
 export const getWorkspaceChatSendApi = ({
 	body,
 	chatApiUrl,
+	chatSteerApiUrl,
 }: {
 	body: Record<string, unknown> | undefined;
 	chatApiUrl: string;
+	chatSteerApiUrl: string;
 }) =>
-	typeof body?.steerQueuedMessageId === "string"
-		? `${chatApiUrl}/steer`
-		: chatApiUrl;
+	typeof body?.steerQueuedMessageId === "string" ? chatSteerApiUrl : chatApiUrl;
 
 const isServerOwnedQueuedSend = (body: Record<string, unknown> | undefined) =>
 	typeof body?.replayQueuedMessageId === "string" ||
@@ -124,6 +128,7 @@ export const prepareWorkspaceChatSendBody = ({
 export const useWorkspaceChatTransport = (workspaceId: string | null) =>
 	React.useMemo(() => {
 		const chatApiUrl = getChatApiUrl();
+		const chatSteerApiUrl = getHostedApiUrl("chatSteer");
 
 		const transport = new DefaultChatTransport({
 			api: chatApiUrl,
@@ -137,7 +142,11 @@ export const useWorkspaceChatTransport = (workspaceId: string | null) =>
 				trigger,
 				messageId,
 			}) => ({
-				api: getWorkspaceChatSendApi({ body, chatApiUrl }),
+				api: getWorkspaceChatSendApi({
+					body,
+					chatApiUrl,
+					chatSteerApiUrl,
+				}),
 				headers,
 				credentials,
 				body: prepareWorkspaceChatSendBody({
@@ -149,15 +158,9 @@ export const useWorkspaceChatTransport = (workspaceId: string | null) =>
 					workspaceId,
 				}),
 			}),
-			prepareReconnectToStreamRequest: async ({
-				api,
-				id,
-				headers,
-				credentials,
-			}) => {
+			prepareReconnectToStreamRequest: async ({ id, headers, credentials }) => {
 				const request = await prepareChatReconnectToStreamRequest({
-					api,
-					chatId: id,
+					streamApiUrl: getChatStreamApiUrl(id),
 					workspaceId,
 				});
 				const reconnectHeaders = new Headers(headers);

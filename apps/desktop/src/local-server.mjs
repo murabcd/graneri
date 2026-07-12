@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { matchHostedRoutePath } from "@workspace/ai/hosted-route-catalog";
 import { createAuthCallbackSuccessHtml } from "./local-server-auth-callback-page.mjs";
 import { handleDictationTranscriptionRequest } from "./local-server-dictation-route.mjs";
 import { proxyHostedAiRequest } from "./local-server-hosted-proxy.mjs";
@@ -8,7 +9,6 @@ import {
 	setCorsHeadersForLocalAppRequest,
 } from "./local-server-http.mjs";
 import { createLocalFolderToolRouteHandler } from "./local-server-local-folder-route.mjs";
-import { handleRealtimeTranscriptionSessionRequest } from "./local-server-realtime-route.mjs";
 import {
 	createWideEvent,
 	emitWideEvent,
@@ -20,26 +20,14 @@ const preferredLocalServerPorts = Array.from(
 	(_value, index) => 42831 + index,
 );
 
-const chatStreamPathPattern = /^\/api\/chat\/[^/]+\/stream$/;
-
-const handleHostedAiProxyRequest = async (request, response) => {
+const handleHostedAiProxyRequest = async (request, response, route) => {
 	const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
 
 	await proxyHostedAiRequest({
 		path: requestUrl.pathname + requestUrl.search,
 		request,
 		response,
-	});
-};
-
-const handleBufferedHostedAiProxyRequest = async (request, response) => {
-	const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
-
-	await proxyHostedAiRequest({
-		path: requestUrl.pathname + requestUrl.search,
-		request,
-		response,
-		responseMode: "bufferedJson",
+		responseMode: route.proxyBodyMode,
 	});
 };
 
@@ -93,25 +81,15 @@ export const startLocalServer = async ({
 				getSharedLocalFolders,
 			}),
 		],
-		["/api/chat", handleHostedAiProxyRequest],
-		["/api/chat/steer", handleHostedAiProxyRequest],
-		["/api/chat/stop", handleHostedAiProxyRequest],
-		["/api/apply-template", handleHostedAiProxyRequest],
 		["/api/dictation-transcription", handleDictationTranscriptionRequest],
-		[
-			"/api/realtime-transcription-session",
-			handleRealtimeTranscriptionSessionRequest,
-		],
-		["/api/enhance-note", handleBufferedHostedAiProxyRequest],
 	]);
 	const server = createServer((request, response) => {
 		const startedAt = Date.now();
 		const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
 		const requestPath = requestUrl.pathname;
-		const isReconnectRoute = chatStreamPathPattern.test(requestPath);
-		const localAppRouteHandler =
-			localAppRoutes.get(requestPath) ??
-			(isReconnectRoute ? handleHostedAiProxyRequest : null);
+		const hostedRoute = matchHostedRoutePath(requestPath);
+		const isReconnectRoute = hostedRoute?.id === "chatStream";
+		const localRouteHandler = localAppRoutes.get(requestPath) ?? null;
 		const allowedOrigins = [
 			localServerOrigin,
 			...(typeof getAllowedOrigins === "function" ? getAllowedOrigins() : []),
@@ -154,7 +132,7 @@ export const startLocalServer = async ({
 			return;
 		}
 
-		if (localAppRouteHandler) {
+		if (localRouteHandler || hostedRoute) {
 			const wideEvent = createWideEvent({
 				event: "desktop.local_api.request",
 				request,
@@ -193,7 +171,8 @@ export const startLocalServer = async ({
 
 			setCorsHeadersForLocalAppRequest(request, response, allowedOrigins);
 
-			if (isReconnectRoute && request.method !== "GET") {
+			const expectedMethod = hostedRoute?.method ?? "POST";
+			if (request.method !== expectedMethod) {
 				wideEvent.outcome = "error";
 				wideEvent.status_code = 405;
 				wideEvent.error_code = "method_not_allowed";
@@ -201,15 +180,10 @@ export const startLocalServer = async ({
 				return;
 			}
 
-			if (!isReconnectRoute && request.method !== "POST") {
-				wideEvent.outcome = "error";
-				wideEvent.status_code = 405;
-				wideEvent.error_code = "method_not_allowed";
-				sendJson(response, 405, { error: "Method not allowed." });
-				return;
-			}
-
-			void localAppRouteHandler(request, response).catch((error) => {
+			const routeRequest = hostedRoute
+				? handleHostedAiProxyRequest(request, response, hostedRoute)
+				: localRouteHandler(request, response);
+			void routeRequest.catch((error) => {
 				wideEvent.outcome = "error";
 				wideEvent.status_code = 500;
 				wideEvent.error_code = "route_handler_failed";

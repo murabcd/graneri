@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import type { HtmlTagDescriptor, Plugin } from "vite";
 import { defineConfig } from "vite";
-import { graneriChatPlugin } from "./server/chat-plugin";
+import { graneriHostedApiPlugin } from "./server/hosted-api-plugin";
 
 const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 const workspaceRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -231,7 +231,7 @@ export default defineConfig(() => {
 			convexSitePreconnectPlugin(),
 			react(),
 			tailwindcss(),
-			graneriChatPlugin(),
+			graneriHostedApiPlugin(),
 		],
 		build: {
 			modulePreload: false,

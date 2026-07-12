@@ -108,6 +108,10 @@
       "types": "./src/hosted-chat-user-message-persistence.d.mts",
       "import": "./src/hosted-chat-user-message-persistence.mjs"
     },
+    "./hosted-route-catalog": {
+      "types": "./src/hosted-route-catalog.d.mts",
+      "import": "./src/hosted-route-catalog.mjs"
+    },
     "./local-folder-tools": {
       "types": "./src/local-folder-tools.d.mts",
       "import": "./src/local-folder-tools.mjs"

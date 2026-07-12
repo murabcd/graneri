@@ -11,7 +11,7 @@ vi.mock("../src/lib/convex-token", () => ({
 }));
 
 vi.mock("../src/lib/runtime-config", () => ({
-	getChatApiUrl: () => "/api/chat",
+	getHostedApiUrl: () => "/api/chat/stop",
 }));
 
 const workspaceId = "workspace-1" as Id<"workspaces">;
