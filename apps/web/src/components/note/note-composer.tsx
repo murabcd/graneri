@@ -54,7 +54,7 @@ import {
 } from "@workspace/ui/lib/panel-dimensions";
 import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart, UIMessage } from "ai";
-import { useConvex, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import {
 	ArrowUp,
 	AtSign,
@@ -109,29 +109,16 @@ import {
 	useResizeHandle,
 } from "@/components/layout/resizable-side-panel";
 import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
-import {
-	prefetchChatMessagesSnapshot,
-	useChatMessagesSnapshot,
-} from "@/hooks/use-chat-messages-snapshot";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
+import {
+	type NoteChatGroups,
+	type NoteChatSummary,
+	useNoteDiscussionSession,
+} from "@/hooks/use-note-discussion-session";
 import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
-import {
-	getStoredChatModel as getStoredLocalChatModel,
-	storeChatModel,
-} from "@/lib/ai/chat-model";
-import { findChatModel, findReasoningEffort } from "@/lib/ai/models";
-import {
-	getStoredChatReasoningEffort,
-	getStoredReasoningEffort,
-	getStoredReasoningEffortOverride,
-	resolveReasoningEffortPreference,
-	storeChatReasoningEffort,
-	storeReasoningEffort,
-} from "@/lib/ai/reasoning-effort";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
-import { isSameCalendarDay } from "@/lib/calendar-day";
 import { getPendingAutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
 import { submitAutomationConfirmationChatTurn } from "@/lib/chat-automation-confirmation-submit";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
@@ -179,7 +166,7 @@ import {
 } from "@/lib/transcription-languages";
 import { transcriptionSessionManager } from "@/lib/transcription-session-manager";
 import { api } from "../../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { SpeechInput } from "../ai-elements/speech-input";
 import {
 	DESKTOP_DOCKED_PANEL_DEFAULT_WIDTH,
@@ -235,25 +222,6 @@ const INLINE_POPOVER_FOOTER_DEFAULT_HEIGHT = 120;
 const TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD = 32;
 const TRANSCRIPT_INITIAL_WINDOW_SIZE = 32;
 
-const getStoredChatModel = (model: string | undefined): ChatModel | null =>
-	model ? (findChatModel(model) ?? null) : null;
-
-const getPersistedChatReasoningEffort = (
-	reasoningEffort: string | undefined,
-): ReasoningEffort | null =>
-	reasoningEffort ? (findReasoningEffort(reasoningEffort)?.id ?? null) : null;
-
-type NoteChatSummary = Pick<
-	Doc<"chats">,
-	| "_id"
-	| "_creationTime"
-	| "chatId"
-	| "createdAt"
-	| "model"
-	| "title"
-	| "updatedAt"
->;
-
 type NoteComposerProps = {
 	noteContext: {
 		noteId: string | null;
@@ -276,38 +244,12 @@ type NoteComposerProps = {
 	stopTranscriptionWhenMeetingEnds?: boolean;
 };
 
-const groupChatsForSelector = (chats: NoteChatSummary[]) => {
-	const now = new Date();
-
-	return chats.reduce<{
-		today: NoteChatSummary[];
-		previous: NoteChatSummary[];
-	}>(
-		(groups, chat) => {
-			const chatDate = new Date(
-				chat.updatedAt || chat.createdAt || chat._creationTime,
-			);
-
-			if (isSameCalendarDay(chatDate, now)) {
-				groups.today.push(chat);
-			} else {
-				groups.previous.push(chat);
-			}
-
-			return groups;
-		},
-		{ today: [], previous: [] },
-	);
-};
-
 type ComposerKeyboardEvent = Pick<
 	KeyboardEvent,
 	"key" | "metaKey" | "shiftKey" | "preventDefault" | "isComposing"
 > & {
 	nativeEvent?: Pick<KeyboardEvent, "isComposing">;
 };
-
-const createDraftChatId = (): string => crypto.randomUUID();
 
 type NoteComposerDraftMetadata = {
 	selectedRecipeSlug: RecipeSlug;
@@ -360,17 +302,10 @@ const useNoteComposerController = ({
 	>(null);
 	const [presentationModeState, setPresentationModeState] =
 		React.useState<NoteChatPresentation>("inline");
-	const [currentChatId, setCurrentChatId] = React.useState<string>(() =>
-		createDraftChatId(),
-	);
 	const [
 		isAutomationConfirmationSubmitting,
 		setIsAutomationConfirmationSubmitting,
 	] = React.useState(false);
-	const [sharedLocalFolders, setSharedLocalFolders] = React.useState<
-		DesktopLocalFolder[]
-	>([]);
-	const localFolderStorageScope = `note-chat:${currentChatId}`;
 	const [, startTranscriptPanelTransition] = React.useTransition();
 	const inlinePopoverHeightStorageKey = getNoteScopedStorageKeyForViewport({
 		prefix: INLINE_POPOVER_HEIGHT_STORAGE_KEY_PREFIX,
@@ -438,13 +373,6 @@ const useNoteComposerController = ({
 	}
 	const [recipePopoverOpen, setRecipePopoverOpen] = React.useState(false);
 	const [modelPopoverOpen, setModelPopoverOpen] = React.useState(false);
-	const [selectedModelOverride, setSelectedModelOverride] = React.useState<{
-		chatId: string;
-		model: ChatModel;
-	} | null>(null);
-	const [reasoningEffort, setReasoningEffort] = React.useState<ReasoningEffort>(
-		getStoredReasoningEffort,
-	);
 	const selectedRecipeSlug = draftMetadata?.selectedRecipeSlug ?? null;
 	const [editingMessageId, setEditingMessageId] = React.useState<string | null>(
 		null,
@@ -510,24 +438,6 @@ const useNoteComposerController = ({
 	const panelMode = panelModeState;
 	const presentationMode = presentationModeState;
 
-	React.useEffect(() => {
-		let isCurrent = true;
-		const storedFolders = loadStoredSharedLocalFolders(localFolderStorageScope);
-		setSharedLocalFolders(storedFolders);
-
-		void rehydrateSharedLocalFolders(localFolderStorageScope).then(
-			(folders) => {
-				if (isCurrent) {
-					setSharedLocalFolders(folders);
-				}
-			},
-		);
-
-		return () => {
-			isCurrent = false;
-		};
-	}, [localFolderStorageScope]);
-
 	const readNoteContext = React.useCallback(
 		() =>
 			getNoteContext?.() ?? {
@@ -545,134 +455,59 @@ const useNoteComposerController = ({
 		],
 	);
 	const activeWorkspaceId = useActiveWorkspaceId();
-	const convex = useConvex();
 	const previousNoteIdRef = React.useRef(noteId);
-	const noteChats = useQuery(
-		api.chats.listForNote,
-		noteId && activeWorkspaceId
-			? {
-					workspaceId: activeWorkspaceId,
-					noteId,
-				}
-			: "skip",
-	);
-	const hasStoredCurrentChat = React.useMemo(
-		() => (noteChats ?? []).some((chat) => chat.chatId === currentChatId),
-		[currentChatId, noteChats],
-	);
-	const { messages: storedMessages } = useChatMessagesSnapshot({
-		chatId: hasStoredCurrentChat ? currentChatId : null,
-		workspaceId: activeWorkspaceId,
-	});
-	const activeRun = useQuery(
-		api.assistantRuns.getAttachableRun,
-		activeWorkspaceId && hasStoredCurrentChat
-			? { workspaceId: activeWorkspaceId, chatId: currentChatId }
-			: "skip",
-	);
-	const currentChatSession = useQuery(
-		api.chats.getSession,
-		activeWorkspaceId && hasStoredCurrentChat
-			? {
-					workspaceId: activeWorkspaceId,
-					chatId: currentChatId,
-				}
-			: "skip",
-	);
 	const userPreferences = useQuery(api.userPreferences.get, {});
-	const selectedNoteChat =
-		(noteChats ?? []).find((chat) => chat.chatId === currentChatId) ?? null;
-	const selectedModel =
-		(selectedModelOverride?.chatId === currentChatId
-			? selectedModelOverride.model
-			: null) ??
-		getStoredChatModel(selectedNoteChat?.model ?? currentChatSession?.model) ??
-		getStoredLocalChatModel();
-	const selectedReasoningEffort = resolveReasoningEffortPreference({
-		persistedChatReasoningEffort: getPersistedChatReasoningEffort(
-			selectedNoteChat?.reasoningEffort ?? currentChatSession?.reasoningEffort,
-		),
-		chatReasoningEffortOverride: getStoredChatReasoningEffort(currentChatId),
-		globalReasoningEffortOverride: getStoredReasoningEffortOverride(),
+	const {
+		activeRun,
+		chatTitle,
+		currentChatId,
+		groupedNoteChats,
+		handleReasoningEffortChange,
+		handleSelectedModelChange,
+		hasKnownNoteChat,
+		hasStoredCurrentChat,
+		isNoteChatsLoading,
+		latestNoteChat,
+		noteChats,
+		openDraftChat: startDraftChat,
+		prefetchNoteChat: handlePrefetchNoteChat,
+		selectChat: selectNoteChat,
+		selectedModel,
+		selectedReasoningEffort,
+		storedMessages,
+	} = useNoteDiscussionSession({
+		activeWorkspaceId,
+		noteId,
 		userPreferenceReasoningEffort: userPreferences?.reasoningEffort,
-		fallbackReasoningEffort: reasoningEffort,
 	});
+	const [sharedLocalFolders, setSharedLocalFolders] = React.useState<
+		DesktopLocalFolder[]
+	>([]);
+	const localFolderStorageScope = `note-chat:${currentChatId}`;
+	React.useEffect(() => {
+		let isCurrent = true;
+		const storedFolders = loadStoredSharedLocalFolders(localFolderStorageScope);
+		setSharedLocalFolders(storedFolders);
+
+		void rehydrateSharedLocalFolders(localFolderStorageScope).then(
+			(folders) => {
+				if (isCurrent) {
+					setSharedLocalFolders(folders);
+				}
+			},
+		);
+
+		return () => {
+			isCurrent = false;
+		};
+	}, [localFolderStorageScope]);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
 	const truncateFromMessage = useMutation(api.chats.truncateFromMessage);
-	const persistChatSettings = useMutation(api.chats.setChatSettings);
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
 	);
 	const updateQueuedMessage = useMutation(
 		api.assistantQueuedMessages.updateQueued,
-	);
-	const handleSelectedModelChange = React.useCallback(
-		(model: ChatModel) => {
-			setSelectedModelOverride({ chatId: currentChatId, model });
-			storeChatModel(model);
-
-			if (!activeWorkspaceId || currentChatSession?.model === model.model) {
-				return;
-			}
-
-			void persistChatSettings({
-				workspaceId: activeWorkspaceId,
-				chatId: currentChatId,
-				model: model.model,
-			}).catch((error) => {
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to persist note chat model",
-				});
-				toast.error("Failed to save model");
-			});
-		},
-		[
-			activeWorkspaceId,
-			currentChatId,
-			currentChatSession?.model,
-			persistChatSettings,
-		],
-	);
-	const handleReasoningEffortChange = React.useCallback(
-		(value: ReasoningEffort) => {
-			setReasoningEffort(value);
-			storeReasoningEffort(value);
-			storeChatReasoningEffort(currentChatId, value);
-
-			void updateUserPreferences({ reasoningEffort: value }).catch((error) => {
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to persist default reasoning effort",
-				});
-			});
-
-			if (!activeWorkspaceId || currentChatSession?.reasoningEffort === value) {
-				return;
-			}
-
-			void persistChatSettings({
-				workspaceId: activeWorkspaceId,
-				chatId: currentChatId,
-				reasoningEffort: value,
-			}).catch((error) => {
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to persist note chat reasoning effort",
-				});
-				toast.error("Failed to save reasoning");
-			});
-		},
-		[
-			activeWorkspaceId,
-			currentChatId,
-			currentChatSession?.reasoningEffort,
-			persistChatSettings,
-			updateUserPreferences,
-		],
 	);
 	const recipeData = useQuery(
 		api.recipes.list,
@@ -730,27 +565,6 @@ const useNoteComposerController = ({
 			transcriptSession.currentNoteScopeKey &&
 		(transcriptionSessionState.isListening ||
 			transcriptionSessionState.isConnecting);
-
-	const handlePrefetchNoteChat = React.useCallback(
-		(chatId: string) => {
-			if (!activeWorkspaceId) {
-				return;
-			}
-
-			void prefetchChatMessagesSnapshot({
-				chatId,
-				convex,
-				workspaceId: activeWorkspaceId,
-			}).catch((error) => {
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to prefetch note chat snapshot",
-				});
-			});
-		},
-		[activeWorkspaceId, convex],
-	);
 
 	React.useEffect(() => {
 		if (!isTranscriptionLanguageReady) {
@@ -1066,21 +880,6 @@ const useNoteComposerController = ({
 		isTranscriptOpen,
 		isTranscriptSessionReady: transcriptSession.isTranscriptSessionReady,
 	});
-	const chatTitle =
-		selectedNoteChat?.title?.trim() ||
-		currentChatSession?.title?.trim() ||
-		"New chat";
-	const groupedNoteChats = React.useMemo(
-		() => groupChatsForSelector(noteChats ?? []),
-		[noteChats],
-	);
-	const latestNoteChat = noteChats?.[0] ?? null;
-	const isNoteChatsLoading = Boolean(
-		noteId && activeWorkspaceId && noteChats === undefined,
-	);
-	const hasKnownNoteChat = Boolean(
-		latestNoteChat || selectedNoteChat || currentChatSession,
-	);
 	const composerPlaceholder = isNoteChatsLoading
 		? "Ask for follow-up"
 		: hasKnownNoteChat
@@ -1170,7 +969,7 @@ const useNoteComposerController = ({
 	}, [closeComposerPopovers, closeRightSidebar, setPanelMode]);
 
 	const resetComposerForNoteChange = React.useCallback(() => {
-		setCurrentChatId(createDraftChatId());
+		startDraftChat();
 		setMessages([]);
 		setEditingMessageId(null);
 		setAttachedFiles([]);
@@ -1178,7 +977,13 @@ const useNoteComposerController = ({
 		setRecipePopoverOpen(false);
 		resetTextareaHeight();
 		closeRightSidebar();
-	}, [closeRightSidebar, resetTextareaHeight, setMessages, setPanelMode]);
+	}, [
+		closeRightSidebar,
+		resetTextareaHeight,
+		setMessages,
+		setPanelMode,
+		startDraftChat,
+	]);
 
 	React.useEffect(() => {
 		if (previousNoteIdRef.current === noteId) {
@@ -1335,8 +1140,7 @@ const useNoteComposerController = ({
 		}
 
 		closeComposerPopovers();
-		const nextChatId = createDraftChatId();
-		setCurrentChatId(nextChatId);
+		startDraftChat();
 		setMessages([]);
 		setEditingMessageId(null);
 
@@ -1355,6 +1159,7 @@ const useNoteComposerController = ({
 		presentationMode,
 		setMessages,
 		setPanelMode,
+		startDraftChat,
 	]);
 
 	const focusComposerInput = React.useCallback(() => {
@@ -1912,8 +1717,7 @@ const useNoteComposerController = ({
 		}
 
 		closeComposerPopovers();
-		handlePrefetchNoteChat(chatId);
-		setCurrentChatId(chatId);
+		selectNoteChat(chatId);
 		setEditingMessageId(null);
 		if (presentationMode === "inline") {
 			setPanelMode("chat");
@@ -1953,8 +1757,7 @@ const useNoteComposerController = ({
 	const openInlineChatFromComposer = React.useCallback(() => {
 		closeComposerPopovers();
 		if (latestNoteChat) {
-			handlePrefetchNoteChat(latestNoteChat.chatId);
-			setCurrentChatId(latestNoteChat.chatId);
+			selectNoteChat(latestNoteChat.chatId);
 		}
 
 		closeRightSidebar();
@@ -1966,8 +1769,8 @@ const useNoteComposerController = ({
 	}, [
 		closeComposerPopovers,
 		closeRightSidebar,
-		handlePrefetchNoteChat,
 		latestNoteChat,
+		selectNoteChat,
 		setPanelMode,
 		setPresentationMode,
 	]);
@@ -2259,7 +2062,7 @@ function NoteChatHeader({
 }: {
 	chatTitle: string;
 	currentChatId: string;
-	groupedNoteChats: ReturnType<typeof groupChatsForSelector>;
+	groupedNoteChats: NoteChatGroups;
 	handlePrefetchNoteChat: (chatId: string) => void;
 	noteChats: NoteChatSummary[] | undefined;
 	onHideChat: () => void;

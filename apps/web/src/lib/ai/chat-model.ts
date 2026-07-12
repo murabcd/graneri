@@ -1,7 +1,7 @@
 import type { chatModels } from "@/lib/ai/models";
 import { defaultChatModel, findChatModel } from "@/lib/ai/models";
 
-type ChatModel = (typeof chatModels)[number];
+export type ChatModel = (typeof chatModels)[number];
 
 const CHAT_MODEL_STORAGE_KEY = "graneri:chat-model";
 

@@ -255,6 +255,12 @@ durable queued follow-ups, and stop arbitration. Persisted/external/local stop
 ordering enters through `chat-interaction-session.ts`. Chat surfaces provide
 request-body and presentation adapters, but must not maintain parallel pending
 or optimistic-message state.
+Note-scoped discussion ownership is layered on top of the shared renderer
+interaction session by `use-note-discussion-session.ts`. It owns draft/stored
+chat identity, note chat list/session/run snapshots, prefetching, selector
+grouping, title/loading derivation, and model/reasoning persistence. The note
+composer owns only editor, attachment, transcript, focus, and panel-presentation
+adapters; it must not reproduce discussion identity or query orchestration.
 
 Connected app AI capabilities are declared in
 `@workspace/ai/capability-metadata`. The catalog is the source of truth
