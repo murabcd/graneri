@@ -1,12 +1,10 @@
 import type { UIMessage } from "ai";
 import type { createHostedChatQueuedInput } from "./hosted-chat-queued-input.mjs";
 
-type AttachableRun<RunId extends string> =
-	| {
-			_id: RunId;
-			status?: "running" | "waiting_for_user" | string;
-	  }
-	| null;
+type AttachableRun<RunId extends string> = {
+	_id: RunId;
+	status?: "running" | "waiting_for_user" | string;
+} | null;
 
 type QueuedInput<
 	WorkspaceId extends string,
@@ -103,9 +101,7 @@ export declare const createHostedChatTurnController: <
 		replayQueuedMessageId?: QueuedMessageId | null;
 		steerQueuedMessageId?: QueuedMessageId | null;
 	}) => Promise<PreparedTurnInput<QueuedMessageId> | TurnControllerError>;
-	requireSameActiveRun: (args: {
-		continueRunId?: RunId | null;
-	}) => Promise<
+	requireSameActiveRun: (args: { continueRunId?: RunId | null }) => Promise<
 		| {
 				ok: true;
 		  }

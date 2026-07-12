@@ -1,9 +1,9 @@
-import { shareDesktopLocalFolders } from "@workspace/platform/desktop";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import {
 	extractLocalPathReferences,
 	mergeLocalFolders,
-} from "../../../../packages/ai/src/local-path-references.mjs";
+} from "@workspace/ai/local-path-references";
+import { shareDesktopLocalFolders } from "@workspace/platform/desktop";
+import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 
 const STORAGE_KEY_PREFIX = "graneri.sharedLocalFolders";
 

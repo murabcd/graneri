@@ -2,13 +2,13 @@ import {
 	getConvexErrorData,
 	getConvexRetryAfterSeconds,
 	isConvexErrorCode,
-} from "../packages/ai/src/convex-error.mjs";
+} from "@workspace/ai/convex-error";
 import {
 	DICTATION_AUDIO_CONTENT_TYPE,
 	DICTATION_AUDIO_EXPIRATION_MS,
 	MAX_DICTATION_AUDIO_BYTES,
-} from "../packages/ai/src/dictation-policy.mjs";
-import { createSafetyIdentifier } from "../packages/ai/src/safety-identifier.mjs";
+} from "@workspace/ai/dictation-policy";
+import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 

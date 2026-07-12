@@ -1,6 +1,6 @@
-export type { ChatAppSourceProvider } from "../../../../packages/ai/src/capability-metadata.mjs";
+export type { ChatAppSourceProvider } from "@workspace/ai/capability-metadata";
 export {
 	chatAppSourceProviders as CHAT_APP_SOURCE_PROVIDERS,
 	getChatAppSourceLabel as getAppSourceLabel,
 	isChatAppSourceProvider,
-} from "../../../../packages/ai/src/capability-metadata.mjs";
+} from "@workspace/ai/capability-metadata";

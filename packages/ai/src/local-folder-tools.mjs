@@ -10,8 +10,8 @@ import {
 import { openai } from "@ai-sdk/openai";
 import { embed, generateText, tool } from "ai";
 import { createBashTool } from "bash-tool";
-import { aiLogger } from "./logger.mjs";
 import { buildLocalFolderToolConfigs } from "./local-folder-tool-definitions.mjs";
+import { aiLogger } from "./logger.mjs";
 import { DEFAULT_CHAT_MODEL_ID } from "./models.mjs";
 
 export { buildLocalFolderSystemContext } from "./local-folder-tool-definitions.mjs";

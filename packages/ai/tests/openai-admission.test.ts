@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { authorizeOpenAiRequest } from "../../../packages/ai/src/openai-admission.mjs";
+import { authorizeOpenAiRequest } from "../src/openai-admission.mjs";
 
 const createConvexError = (code: string, retryAfterMs?: number) => ({
 	data: {

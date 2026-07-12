@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { openai } from "@ai-sdk/openai";
-import { smoothStream, streamText } from "ai";
-import { NOTE_GENERATION_MODEL_ID } from "../../../packages/ai/src/models.mjs";
+import { NOTE_GENERATION_MODEL_ID } from "@workspace/ai/models";
 import {
 	APPLY_TEMPLATE_SYSTEM_PROMPT,
 	buildApplyTemplatePrompt,
-} from "../../../packages/ai/src/prompts.mjs";
+} from "@workspace/ai/prompts";
+import { smoothStream, streamText } from "ai";
 import {
 	parseTemplateStreamToStructuredNote,
 	validateTemplateStream,

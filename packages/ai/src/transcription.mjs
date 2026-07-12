@@ -2,6 +2,7 @@ export const REALTIME_TRANSCRIPTION_MODEL = "gpt-realtime-whisper";
 export const DICTATION_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
 export const AUDIO_TRANSCRIPTION_SAMPLE_RATE = 24_000;
 export const REALTIME_TRANSCRIPTION_DELAY = "high";
+export const DESKTOP_REALTIME_PROFILE = "default";
 
 export const REALTIME_TRANSCRIPTION_INCLUDE_FIELDS = [
 	"item.input_audio_transcription.logprobs",
@@ -58,7 +59,9 @@ const getTranscriptEmbeddedSpeaker = (text) =>
 	String(text ?? "").match(TRANSCRIPT_EMBEDDED_SPEAKER_PATTERN)?.[1] ?? null;
 
 const shouldEndTranscriptSection = (section) =>
-	String(section?.text ?? "").trim().endsWith(".");
+	String(section?.text ?? "")
+		.trim()
+		.endsWith(".");
 
 export const compareTranscriptUtteranceOrder = (left, right) => {
 	const leftStartedAt = Number(left.startedAt);
@@ -226,20 +229,14 @@ export const isTranscriptPlaceholderText = (value) => {
 	);
 };
 
-export const resolveRealtimeNoiseReductionType = (source) => {
-	return null;
-};
-
 export const normalizeTranscriptionLanguage = (value) =>
 	value?.split("-")[0]?.trim().toLowerCase() || null;
 
 export const createRealtimeTranscriptionSessionOptions = ({
 	language = null,
-	source = null,
-	speaker = null,
 } = {}) => ({
 	language,
-	noiseReductionType: resolveRealtimeNoiseReductionType(source),
+	noiseReductionType: null,
 	delay: REALTIME_TRANSCRIPTION_DELAY,
 });
 
@@ -265,40 +262,6 @@ export const createRealtimeTranscriptionSession = ({
 		},
 	},
 });
-
-export const resolveDesktopRealtimeProfile = ({
-	source = null,
-	speaker = null,
-} = {}) => {
-	return "default";
-};
-
-export const createDesktopRealtimeTranscriptionSession = ({
-	language = null,
-	source = null,
-	speaker = null,
-} = {}) => {
-	const session = createRealtimeTranscriptionSession(
-		createRealtimeTranscriptionSessionOptions({
-			language,
-			source,
-			speaker,
-		}),
-	);
-
-	return {
-		...session,
-		audio: {
-			input: {
-				...session.audio.input,
-				format: {
-					rate: AUDIO_TRANSCRIPTION_SAMPLE_RATE,
-					type: "audio/pcm",
-				},
-			},
-		},
-	};
-};
 
 const clampProbability = (logprob) => {
 	if (typeof logprob !== "number" || Number.isNaN(logprob)) {
@@ -477,11 +440,7 @@ export const shouldDropTranscriptForConfidence = ({
 	return true;
 };
 
-export const shouldKeepInterruptedTranscriptTurn = ({
-	logprobs,
-	source = null,
-	text,
-}) => {
+export const shouldKeepInterruptedTranscriptTurn = (text) => {
 	const normalizedText = normalizeTranscriptText(text);
 
 	if (!normalizedText || isTranscriptPlaceholderText(normalizedText)) {

@@ -1,0 +1,164 @@
+{
+  "name": "@workspace/ai",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint": "biome lint src tests package.json tsconfig.json",
+    "lint:fix": "biome lint --write src tests package.json tsconfig.json",
+    "check": "biome check src tests package.json tsconfig.json",
+    "check:fix": "biome check --write src tests package.json tsconfig.json",
+    "format": "biome format --write src tests package.json tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/mcp": "^1.0.42",
+    "@ai-sdk/openai": "3.0.63",
+    "@ai-sdk/provider-utils": "^4.0.19",
+    "ai": "6.0.182",
+    "bash-tool": "^1.3.16",
+    "convex": "^1.37.0",
+    "pino": "^10.1.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "typescript": "workspace:*",
+    "vitest": "^4.1.9"
+  },
+  "exports": {
+    "./automation-tools": {
+      "types": "./src/automation-tools.d.mts",
+      "import": "./src/automation-tools.mjs"
+    },
+    "./capability-metadata": {
+      "types": "./src/capability-metadata.d.mts",
+      "import": "./src/capability-metadata.mjs"
+    },
+    "./capability-registry": {
+      "types": "./src/capability-registry.d.mts",
+      "import": "./src/capability-registry.mjs"
+    },
+    "./chat-latency-logger": {
+      "types": "./src/chat-latency-logger.d.mts",
+      "import": "./src/chat-latency-logger.mjs"
+    },
+    "./context7-tools": {
+      "types": "./src/context7-tools.d.mts",
+      "import": "./src/context7-tools.mjs"
+    },
+    "./convex-error": {
+      "types": "./src/convex-error.d.mts",
+      "import": "./src/convex-error.mjs"
+    },
+    "./dictation-policy": {
+      "types": "./src/dictation-policy.d.mts",
+      "import": "./src/dictation-policy.mjs"
+    },
+    "./dictation-transcription": {
+      "types": "./src/dictation-transcription.d.mts",
+      "import": "./src/dictation-transcription.mjs"
+    },
+    "./hosted-chat-active-stream": {
+      "types": "./src/hosted-chat-active-stream.d.mts",
+      "import": "./src/hosted-chat-active-stream.mjs"
+    },
+    "./hosted-chat-branch-preparer": {
+      "types": "./src/hosted-chat-branch-preparer.d.mts",
+      "import": "./src/hosted-chat-branch-preparer.mjs"
+    },
+    "./hosted-chat-http": {
+      "types": "./src/hosted-chat-http.d.mts",
+      "import": "./src/hosted-chat-http.mjs"
+    },
+    "./hosted-chat-orphaned-run": {
+      "types": "./src/hosted-chat-orphaned-run.d.mts",
+      "import": "./src/hosted-chat-orphaned-run.mjs"
+    },
+    "./hosted-chat-queued-input": {
+      "types": "./src/hosted-chat-queued-input.d.mts",
+      "import": "./src/hosted-chat-queued-input.mjs"
+    },
+    "./hosted-chat-run-context": {
+      "types": "./src/hosted-chat-run-context.d.mts",
+      "import": "./src/hosted-chat-run-context.mjs"
+    },
+    "./hosted-chat-run-finalizer": {
+      "types": "./src/hosted-chat-run-finalizer.d.mts",
+      "import": "./src/hosted-chat-run-finalizer.mjs"
+    },
+    "./hosted-chat-run-starter": {
+      "types": "./src/hosted-chat-run-starter.d.mts",
+      "import": "./src/hosted-chat-run-starter.mjs"
+    },
+    "./hosted-chat-runtime": {
+      "types": "./src/hosted-chat-runtime.d.mts",
+      "import": "./src/hosted-chat-runtime.mjs"
+    },
+    "./hosted-chat-stream-lifecycle": {
+      "types": "./src/hosted-chat-stream-lifecycle.d.mts",
+      "import": "./src/hosted-chat-stream-lifecycle.mjs"
+    },
+    "./hosted-chat-turn-controller": {
+      "types": "./src/hosted-chat-turn-controller.d.mts",
+      "import": "./src/hosted-chat-turn-controller.mjs"
+    },
+    "./hosted-chat-user-message-persistence": {
+      "types": "./src/hosted-chat-user-message-persistence.d.mts",
+      "import": "./src/hosted-chat-user-message-persistence.mjs"
+    },
+    "./local-folder-tools": {
+      "types": "./src/local-folder-tools.d.mts",
+      "import": "./src/local-folder-tools.mjs"
+    },
+    "./local-path-references": {
+      "types": "./src/local-path-references.d.mts",
+      "import": "./src/local-path-references.mjs"
+    },
+    "./models": {
+      "types": "./src/models.d.mts",
+      "import": "./src/models.mjs"
+    },
+    "./note-template-stream": {
+      "types": "./src/note-template-stream.d.mts",
+      "import": "./src/note-template-stream.mjs"
+    },
+    "./openai-admission": {
+      "types": "./src/openai-admission.d.mts",
+      "import": "./src/openai-admission.mjs"
+    },
+    "./openai-tool-search": {
+      "types": "./src/openai-tool-search.d.mts",
+      "import": "./src/openai-tool-search.mjs"
+    },
+    "./pcm16-resampler": {
+      "types": "./src/pcm16-resampler.d.mts",
+      "import": "./src/pcm16-resampler.mjs"
+    },
+    "./prompts": {
+      "types": "./src/prompts.d.mts",
+      "import": "./src/prompts.mjs"
+    },
+    "./remote-mcp-tools": {
+      "types": "./src/remote-mcp-tools.d.mts",
+      "import": "./src/remote-mcp-tools.mjs"
+    },
+    "./safety-identifier": {
+      "types": "./src/safety-identifier.d.mts",
+      "import": "./src/safety-identifier.mjs"
+    },
+    "./tool-ui-metadata": {
+      "types": "./src/tool-ui-metadata.d.mts",
+      "import": "./src/tool-ui-metadata.mjs"
+    },
+    "./transcription": {
+      "types": "./src/transcription.d.mts",
+      "import": "./src/transcription.mjs"
+    },
+    "./zoom-mcp-tools": {
+      "types": "./src/zoom-mcp-tools.d.mts",
+      "import": "./src/zoom-mcp-tools.mjs"
+    }
+  }
+}

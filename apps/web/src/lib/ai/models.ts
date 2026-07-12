@@ -8,4 +8,4 @@ export {
 	getChatModelProviderOptions,
 	normalizeReasoningEffort,
 	REASONING_EFFORTS as reasoningEfforts,
-} from "../../../../../packages/ai/src/models.mjs";
+} from "@workspace/ai/models";

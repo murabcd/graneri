@@ -142,7 +142,9 @@ export const finalizeGeneratedChatTitle = ({
 	const truncatedTitle = truncate(sanitizedTitle, maxLength);
 	const normalizedTitle = normalizeComparisonText(truncatedTitle);
 	const normalizedUserText = normalizeComparisonText(userText);
-	const userWordCount = clampWhitespace(userText).split(/\s+/).filter(Boolean).length;
+	const userWordCount = clampWhitespace(userText)
+		.split(/\s+/)
+		.filter(Boolean).length;
 
 	if (PLACEHOLDER_TITLES.has(normalizedTitle)) {
 		return deriveFallbackChatTitle({ userText, maxLength });

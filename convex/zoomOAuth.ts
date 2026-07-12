@@ -1,6 +1,6 @@
-import type { ActionCtx } from "./_generated/server";
+import { validateZoomMcpConnection } from "@workspace/ai/zoom-mcp-tools";
 import { internal } from "./_generated/api";
-import { validateZoomMcpConnection } from "../packages/ai/src/zoom-mcp-tools.mjs";
+import type { ActionCtx } from "./_generated/server";
 import { oauthCallbackHtmlResponse } from "./oauthCallbackHtml";
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -52,7 +52,9 @@ const exchangeZoomOAuthCode = async ({
 	const tokenResponse = (await response.json()) as ZoomTokenResponse;
 
 	if (typeof tokenResponse.access_token !== "string") {
-		throw new Error("Zoom OAuth token exchange did not return an access token.");
+		throw new Error(
+			"Zoom OAuth token exchange did not return an access token.",
+		);
 	}
 
 	return {
@@ -91,7 +93,11 @@ export const handleZoomOAuthCallbackRequest = async (
 	);
 
 	if (!pendingState || pendingState.expiresAt < Date.now()) {
-		return oauthCallbackHtmlResponse("Zoom connection expired", "Start the Zoom connection again.", 400);
+		return oauthCallbackHtmlResponse(
+			"Zoom connection expired",
+			"Start the Zoom connection again.",
+			400,
+		);
 	}
 
 	if (!pendingState.oauthClientSecret) {
@@ -104,7 +110,11 @@ export const handleZoomOAuthCallbackRequest = async (
 
 	const redirectUri = getRedirectUri();
 	if (!redirectUri.startsWith("http")) {
-		return oauthCallbackHtmlResponse("Zoom connection failed", "CONVEX_SITE_URL is not configured.", 500);
+		return oauthCallbackHtmlResponse(
+			"Zoom connection failed",
+			"CONVEX_SITE_URL is not configured.",
+			500,
+		);
 	}
 
 	try {
@@ -134,7 +144,9 @@ export const handleZoomOAuthCallbackRequest = async (
 			oauthClientId: pendingState.oauthClientId,
 			oauthClientSecret: pendingState.oauthClientSecret,
 			oauthAccessToken: tokens.accessToken,
-			...(tokens.refreshToken ? { oauthRefreshToken: tokens.refreshToken } : {}),
+			...(tokens.refreshToken
+				? { oauthRefreshToken: tokens.refreshToken }
+				: {}),
 			...(tokens.expiresIn
 				? { tokenExpiresAt: Date.now() + tokens.expiresIn * 1000 }
 				: {}),
@@ -148,5 +160,8 @@ export const handleZoomOAuthCallbackRequest = async (
 		);
 	}
 
-	return oauthCallbackHtmlResponse("Zoom connected", "You can close this window and return to Graneri.");
+	return oauthCallbackHtmlResponse(
+		"Zoom connected",
+		"You can close this window and return to Graneri.",
+	);
 };

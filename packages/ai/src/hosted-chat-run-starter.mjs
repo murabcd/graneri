@@ -4,7 +4,9 @@ export const getHostedChatRunStartPolicy = ({
 	supersedeActiveRun = false,
 	trigger,
 }) =>
-	trigger === "regenerate-message" || supersedeActiveRun ? "supersede" : "reject";
+	trigger === "regenerate-message" || supersedeActiveRun
+		? "supersede"
+		: "reject";
 
 const getErrorText = (error, fallback) =>
 	error instanceof Error ? error.message : fallback;
@@ -29,7 +31,9 @@ export const startHostedChatRun = async ({
 	workspaceId,
 }) => {
 	let assistantRun =
-		continueRunId && attachableRun?._id === continueRunId ? attachableRun : null;
+		continueRunId && attachableRun?._id === continueRunId
+			? attachableRun
+			: null;
 	let activeStreamSession = null;
 
 	try {

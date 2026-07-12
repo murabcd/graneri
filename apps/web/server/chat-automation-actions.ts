@@ -1,10 +1,10 @@
-import type { ConvexHttpClient } from "convex/browser";
-import { api } from "../../../convex/_generated/api.js";
-import type { Id } from "../../../convex/_generated/dataModel.js";
 import type {
 	AutomationActions,
 	AutomationToolInput,
-} from "../../../packages/ai/src/automation-tools.mjs";
+} from "@workspace/ai/automation-tools";
+import type { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../convex/_generated/api.js";
+import type { Id } from "../../../convex/_generated/dataModel.js";
 
 type AutomationToolTarget = AutomationToolInput["target"];
 type AutomationToolUpdateInput = AutomationToolInput & { automationId: string };

@@ -1,17 +1,17 @@
 "use node";
 
 import { createHash, randomBytes } from "node:crypto";
-import { ConvexError, v } from "convex/values";
 import type {
 	McpOAuthConnectionProvider,
 	McpSdkOAuthConnectionProvider,
 	RemoteMcpConnectionProvider,
-} from "../packages/ai/src/capability-metadata.mjs";
+} from "@workspace/ai/capability-metadata";
 import {
 	isMcpSdkOAuthConnectionProvider,
 	remoteMcpConnectionDefaults,
-} from "../packages/ai/src/capability-metadata.mjs";
-import { validateContext7McpConnection } from "../packages/ai/src/context7-tools.mjs";
+} from "@workspace/ai/capability-metadata";
+import { validateContext7McpConnection } from "@workspace/ai/context7-tools";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";

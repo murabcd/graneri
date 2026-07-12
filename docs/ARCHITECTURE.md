@@ -31,7 +31,12 @@ Renderer code must access desktop capabilities through this package.
 `convex/*.ts`; server-only behavior must enter through adapters or Convex
 client/action boundaries. Imports from `convex/_generated` are allowed only for
 typed client function references and generated data-model types, not server
-implementation coupling. Hosted chat helpers own shared run-plan assembly,
+implementation coupling. The package is consumed through the explicit
+`@workspace/ai/*` exports declared in `packages/ai/package.json`; applications,
+Convex functions, and consumer-owned tests must not reach into
+`packages/ai/src`. AI runtime tests live with the package and may exercise its
+private modules directly, while integration tests stay with their consuming
+application or Convex surface. Hosted chat helpers own shared run-plan assembly,
 prompt construction, active-turn input preparation, branch preparation,
 tool-loop setup, message persistence payloads, and active-stream persistence
 behavior; the hosted web route provides Convex reads and writes, request
@@ -211,10 +216,10 @@ boundary into the next prompt branch, while Convex remains the durable source of
 truth for user input, chat runs, crash recovery, and cross-process coordination.
 
 Connected app AI capabilities are declared in
-`packages/ai/src/capability-metadata.mjs`. The catalog is the source of truth
+`@workspace/ai/capability-metadata`. The catalog is the source of truth
 for provider identity, source classification, connection and OAuth behavior,
 settings identity, source instructions, remote defaults, and tool-discovery
-prefixes. `packages/ai/src/capability-registry.mjs` attaches runtime-specific
+prefixes. `@workspace/ai/capability-registry` attaches runtime-specific
 tool adapters to every app-source capability and fails at module load when an
 adapter is missing. Desktop-local capabilities such as shared local folders
 and native transcription remain desktop bridge APIs, not generic connected-app
@@ -480,9 +485,11 @@ compose concrete adapters, but lifecycle ordering for single-instance handling,
 ready startup, suspend handling, window-all-closed cleanup, and before-quit
 cleanup must stay behind the boot orchestrator interface.
 
-Electron Builder packages dependencies from `apps/desktop/package.json`. Any
-package imported by packaged desktop runtime code through `apps/desktop`,
-`packages/ai`, or copied runtime modules must be declared there.
+Electron Builder packages dependencies from `apps/desktop/package.json`.
+`@workspace/ai` is a direct desktop dependency because desktop main-process
+code consumes its public modules. Any third-party package imported by packaged
+desktop runtime code through `apps/desktop`, `packages/ai`, or copied runtime
+modules must also be declared there.
 
 The desktop build packages generated runtime artifacts only. Packaged Electron
 main code lives in `dist-electron/main/index.js`, and packaged renderer assets

@@ -1,5 +1,5 @@
+import { remoteMcpToolPrefixes } from "@workspace/ai/capability-metadata";
 import type { UIMessage } from "ai";
-import { remoteMcpToolPrefixes } from "../../../../packages/ai/src/capability-metadata.mjs";
 
 export type ToolSource = {
 	href: string;

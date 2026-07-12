@@ -1,7 +1,5 @@
-import {
-	toHostedQueuedUserMessage,
-} from "./hosted-chat-runtime.mjs";
 import { isConvexErrorCode } from "./convex-error.mjs";
+import { toHostedQueuedUserMessage } from "./hosted-chat-runtime.mjs";
 
 const getClaimedQueuedMessageIds = ({
 	claimedQueuedMessageId,
@@ -95,7 +93,10 @@ export const createHostedChatQueuedInput = ({
 				clearClaimed();
 				return { ok: true, cleaned: true };
 			} catch (error) {
-				if (tolerateMissing && isConvexErrorCode(error, "QUEUED_MESSAGE_NOT_FOUND")) {
+				if (
+					tolerateMissing &&
+					isConvexErrorCode(error, "QUEUED_MESSAGE_NOT_FOUND")
+				) {
 					clearClaimed();
 					return { ok: true, cleaned: true };
 				}

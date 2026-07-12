@@ -262,8 +262,7 @@ export const buildJiraToolDefinitions = (connection) => [
 			requiresConnection: true,
 		},
 		ui: toolUiMetadata.jira_get_issue,
-		execute: async ({ issueKey }) =>
-			await getJiraIssue(connection, issueKey),
+		execute: async ({ issueKey }) => await getJiraIssue(connection, issueKey),
 	}),
 ];
 

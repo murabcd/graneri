@@ -1,8 +1,3 @@
-import { DefaultChatTransport } from "ai";
-import * as React from "react";
-import { prepareChatReconnectToStreamRequest } from "@/lib/chat-resume";
-import { FrameBudgetedChatTransport } from "@/lib/frame-budgeted-chat-transport";
-import { getChatApiUrl } from "@/lib/runtime-config";
 import {
 	hostedChatReplayAcceptedHeader,
 	hostedChatReplayQueuedMessageIdHeader,
@@ -10,7 +5,12 @@ import {
 	hostedChatSteerQueuedMessageIdHeader,
 	hostedChatSteerQueuedMessageIdsHeader,
 	hostedChatSteerTurnIdHeader,
-} from "../../../../packages/ai/src/hosted-chat-runtime.mjs";
+} from "@workspace/ai/hosted-chat-runtime";
+import { DefaultChatTransport } from "ai";
+import * as React from "react";
+import { prepareChatReconnectToStreamRequest } from "@/lib/chat-resume";
+import { FrameBudgetedChatTransport } from "@/lib/frame-budgeted-chat-transport";
+import { getChatApiUrl } from "@/lib/runtime-config";
 
 export const getWorkspaceChatSendApi = ({
 	body,

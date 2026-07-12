@@ -1,27 +1,19 @@
-import { describe, expect, it } from "vitest";
 import {
 	createRealtimeTranscriptionSession,
 	createRealtimeTranscriptionSessionOptions,
+	DESKTOP_REALTIME_PROFILE,
 	DICTATION_TRANSCRIPTION_MODEL,
 	isLowConfidenceTranscriptLogprobs,
 	REALTIME_TRANSCRIPTION_DELAY,
 	REALTIME_TRANSCRIPTION_MODEL,
-	resolveDesktopRealtimeProfile,
-	resolveRealtimeNoiseReductionType,
-} from "../../../packages/ai/src/transcription.mjs";
+} from "@workspace/ai/transcription";
+import { describe, expect, it } from "vitest";
 
 describe("transcription config", () => {
 	it("keeps dictation and realtime transcription models separate", () => {
 		expect(DICTATION_TRANSCRIPTION_MODEL).toBe("gpt-4o-mini-transcribe");
 		expect(REALTIME_TRANSCRIPTION_MODEL).toBe("gpt-realtime-whisper");
 		expect(REALTIME_TRANSCRIPTION_DELAY).toBe("high");
-	});
-
-	it("does not apply realtime noise reduction to live transcription sources", () => {
-		expect(resolveRealtimeNoiseReductionType("systemAudio")).toBeNull();
-		expect(resolveRealtimeNoiseReductionType("system-audio")).toBeNull();
-		expect(resolveRealtimeNoiseReductionType("system_audio")).toBeNull();
-		expect(resolveRealtimeNoiseReductionType("microphone")).toBeNull();
 	});
 
 	it("serializes nullable noise reduction in realtime transcription sessions", () => {
@@ -37,7 +29,6 @@ describe("transcription config", () => {
 		const session = createRealtimeTranscriptionSession(
 			createRealtimeTranscriptionSessionOptions({
 				language: "en",
-				source: "systemAudio",
 			}),
 		);
 
@@ -51,20 +42,11 @@ describe("transcription config", () => {
 
 	it("uses the default desktop realtime profile across realtime sessions", () => {
 		const session = createRealtimeTranscriptionSession(
-			createRealtimeTranscriptionSessionOptions({
-				language: "en",
-				source: "systemAudio",
-				speaker: "them",
-			}),
+			createRealtimeTranscriptionSessionOptions({ language: "en" }),
 		);
 
 		expect(session.audio.input).not.toHaveProperty("turn_detection");
-		expect(
-			resolveDesktopRealtimeProfile({
-				source: "systemAudio",
-				speaker: "them",
-			}),
-		).toBe("default");
+		expect(DESKTOP_REALTIME_PROFILE).toBe("default");
 	});
 
 	it("uses stricter low-confidence thresholds for system audio", () => {

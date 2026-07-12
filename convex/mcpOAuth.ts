@@ -1,11 +1,11 @@
 import type { OAuthTokens } from "@ai-sdk/mcp";
 import { auth as mcpSdkAuth } from "@ai-sdk/mcp";
-import type { McpOAuthConnectionProvider } from "../packages/ai/src/capability-metadata.mjs";
+import type { McpOAuthConnectionProvider } from "@workspace/ai/capability-metadata";
 import {
 	isMcpSdkOAuthConnectionProvider,
 	remoteMcpConnectionDefaults,
-} from "../packages/ai/src/capability-metadata.mjs";
-import { validateRemoteMcpConnection } from "../packages/ai/src/remote-mcp-tools.mjs";
+} from "@workspace/ai/capability-metadata";
+import { validateRemoteMcpConnection } from "@workspace/ai/remote-mcp-tools";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import { oauthCallbackHtmlResponse } from "./oauthCallbackHtml";

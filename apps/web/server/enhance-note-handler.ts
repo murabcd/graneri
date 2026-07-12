@@ -1,12 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { openai } from "@ai-sdk/openai";
-import { generateText, Output } from "ai";
-import { z } from "zod";
-import { NOTE_GENERATION_MODEL_ID } from "../../../packages/ai/src/models.mjs";
+import { NOTE_GENERATION_MODEL_ID } from "@workspace/ai/models";
 import {
 	buildEnhancedNotePrompt,
 	ENHANCED_NOTE_SYSTEM_PROMPT,
-} from "../../../packages/ai/src/prompts.mjs";
+} from "@workspace/ai/prompts";
+import { generateText, Output } from "ai";
+import { z } from "zod";
 import {
 	authorizeHostedOpenAiRequest,
 	getOpenAiSafetyProviderOptions,

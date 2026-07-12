@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import type * as AiModule from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createSafetyIdentifier } from "../../../packages/ai/src/safety-identifier.mjs";
 import { handleEnhanceNoteRequest } from "../server/enhance-note-handler";
 
 const previousConvexUrl = process.env.CONVEX_URL;

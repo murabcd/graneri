@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createHostedChatRunResponseStream } from "../../../packages/ai/src/hosted-chat-stream-lifecycle.mjs";
+import { createHostedChatRunResponseStream } from "../src/hosted-chat-stream-lifecycle.mjs";
 
 const createActiveStreamSession = () => {
 	const abortController = new AbortController();

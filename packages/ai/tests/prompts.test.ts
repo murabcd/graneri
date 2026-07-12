@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deriveFallbackChatTitle } from "../../../packages/ai/src/chat-titles.mjs";
-import { buildHostedChatAgentToolSet } from "../../../packages/ai/src/hosted-chat-agent.mjs";
+import { deriveFallbackChatTitle } from "../src/chat-titles.mjs";
+import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
 import {
 	buildHostedChatRuntimePrompt,
 	buildHostedChatSaveMessageArgs,
@@ -21,13 +21,13 @@ import {
 	validateHostedChatActiveRunPolicy,
 	validateHostedChatRequestInput,
 	validateHostedChatSteerRoute,
-} from "../../../packages/ai/src/hosted-chat-runtime.mjs";
+} from "../src/hosted-chat-runtime.mjs";
 import {
 	buildApplyTemplatePrompt,
 	buildChatSystemPrompt,
 	buildEnhancedNotePrompt,
 	CHAT_TITLE_SYSTEM_PROMPT,
-} from "../../../packages/ai/src/prompts.mjs";
+} from "../src/prompts.mjs";
 
 describe("prompt helpers", () => {
 	it("keeps wait_agent without exposing subagent tools", () => {

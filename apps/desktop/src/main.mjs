@@ -4,6 +4,12 @@ import { appendFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+	isLowConfidenceTranscriptLogprobs,
+	isTranscriptPlaceholderText,
+	shouldKeepInterruptedTranscriptTurn,
+	summarizeTranscriptConfidence,
+} from "@workspace/ai/transcription";
+import {
 	app,
 	BrowserWindow,
 	clipboard,
@@ -19,12 +25,6 @@ import {
 	systemPreferences,
 } from "electron";
 import electronUpdater from "electron-updater";
-import {
-	isLowConfidenceTranscriptLogprobs,
-	isTranscriptPlaceholderText,
-	shouldKeepInterruptedTranscriptTurn,
-	summarizeTranscriptConfidence,
-} from "../../../packages/ai/src/transcription.mjs";
 import { getDesktopAuthClient } from "./auth-client.mjs";
 import { createDesktopAppMenu } from "./desktop-app-menu.mjs";
 import {
@@ -1203,15 +1203,9 @@ const configureDesktopTranscriptionSession = ({
 const appendTranscriptionTailUtterance = (speaker) => {
 	const state = transcriptionSpeakers[speaker];
 	const liveEntry = latestTranscriptionSessionState.liveTranscript[speaker];
-	const source = speaker === "them" ? "systemAudio" : "microphone";
 	const text = liveEntry.text.trim();
 
-	if (
-		!shouldKeepInterruptedTranscriptTurn({
-			source,
-			text,
-		})
-	) {
+	if (!shouldKeepInterruptedTranscriptTurn(text)) {
 		return;
 	}
 
@@ -1357,16 +1351,12 @@ const handleDesktopRealtimeTransportEvent = async (event) => {
 
 	if (event.type === "turn_failed") {
 		const existingTurn = state.turns.get(event.itemId);
-		const source = event.speaker === "them" ? "systemAudio" : "microphone";
 		const interruptedText =
 			existingTurn?.text ||
 			latestTranscriptionSessionState.liveTranscript[event.speaker].text ||
 			"";
-		const shouldKeepInterruptedText = shouldKeepInterruptedTranscriptTurn({
-			logprobs: existingTurn?.logprobs ?? null,
-			source,
-			text: interruptedText,
-		});
+		const shouldKeepInterruptedText =
+			shouldKeepInterruptedTranscriptTurn(interruptedText);
 		logDesktopTurnDebug("transport.turn_failed", {
 			itemId: event.itemId,
 			keepInterruptedText: shouldKeepInterruptedText,

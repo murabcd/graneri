@@ -1,6 +1,6 @@
+import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import { convexTest } from "convex-test";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { createSafetyIdentifier } from "../packages/ai/src/safety-identifier.mjs";
 import schema from "./schema";
 import { modules } from "./test.setup";
 

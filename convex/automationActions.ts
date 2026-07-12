@@ -1,16 +1,16 @@
 "use node";
 
 import { openai } from "@ai-sdk/openai";
-import { stepCountIs, ToolLoopAgent } from "ai";
-import { v } from "convex/values";
-import { getSelectedAppSourceIds } from "../packages/ai/src/capability-metadata.mjs";
+import { getSelectedAppSourceIds } from "@workspace/ai/capability-metadata";
 import {
 	buildCapabilityToolSet,
 	type WorkspaceToolConnection,
-} from "../packages/ai/src/capability-registry.mjs";
-import { getChatModelProviderOptions } from "../packages/ai/src/models.mjs";
-import { finalizeOpenAIToolSet } from "../packages/ai/src/openai-tool-search.mjs";
-import { BASE_CHAT_SYSTEM_PROMPT } from "../packages/ai/src/prompts.mjs";
+} from "@workspace/ai/capability-registry";
+import { getChatModelProviderOptions } from "@workspace/ai/models";
+import { finalizeOpenAIToolSet } from "@workspace/ai/openai-tool-search";
+import { BASE_CHAT_SYSTEM_PROMPT } from "@workspace/ai/prompts";
+import { stepCountIs, ToolLoopAgent } from "ai";
+import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalAction } from "./_generated/server";

@@ -4,7 +4,7 @@ import {
 	createRealtimeTranscriptionSession,
 	createRealtimeTranscriptionSessionOptions,
 	normalizeTranscriptionLanguage,
-} from "../../../packages/ai/src/transcription.mjs";
+} from "@workspace/ai/transcription";
 import {
 	authorizeHostedOpenAiRequest,
 	sendHostedOpenAiAdmissionError,
@@ -89,11 +89,7 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		requestId,
 		safetyIdentifier: admission.safetyIdentifier,
 		session: createRealtimeTranscriptionSession(
-			createRealtimeTranscriptionSessionOptions({
-				language,
-				source: normalizedSource,
-				speaker,
-			}),
+			createRealtimeTranscriptionSessionOptions({ language }),
 		),
 	});
 

@@ -1,4 +1,4 @@
 export {
 	parseTemplateStreamToStructuredNote,
 	validateTemplateStream,
-} from "../../../../packages/ai/src/note-template-stream.mjs";
+} from "@workspace/ai/note-template-stream";

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { stopOrphanedHostedAssistantRun } from "../../../packages/ai/src/hosted-chat-orphaned-run.mjs";
+import { stopOrphanedHostedAssistantRun } from "../src/hosted-chat-orphaned-run.mjs";
 
 describe("hosted chat orphaned run cleanup", () => {
 	it("terminalizes orphaned runs even when active stream cleanup fails", async () => {

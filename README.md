@@ -81,6 +81,7 @@ bun run doctor:self-host
 - `apps/desktop`: Electron desktop app
 - `apps/marketing`: public marketing site
 - `convex`: Convex backend, auth, schema, actions, and HTTP routes
+- `packages/ai`: shared AI runtime with explicit workspace exports
 - `packages/platform`: renderer-safe desktop bridge helpers
 - `packages/ui`: shared UI primitives
 

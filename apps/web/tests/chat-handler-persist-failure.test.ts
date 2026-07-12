@@ -1,6 +1,4 @@
 import { createServer } from "node:http";
-import { type FunctionReference, getFunctionName } from "convex/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	hostedChatReplayAcceptedHeader,
 	hostedChatReplayQueuedMessageIdHeader,
@@ -8,7 +6,9 @@ import {
 	hostedChatSteerQueuedMessageIdHeader,
 	hostedChatSteerQueuedMessageIdsHeader,
 	hostedChatSteerTurnIdHeader,
-} from "../../../packages/ai/src/hosted-chat-runtime.mjs";
+} from "@workspace/ai/hosted-chat-runtime";
+import { type FunctionReference, getFunctionName } from "convex/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	handleChatReconnectRequest,
 	handleChatRequest,

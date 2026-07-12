@@ -104,7 +104,11 @@ const trackerRequest = async (connection, method, pathname, options = {}) => {
 	return await response.json();
 };
 
-export const searchYandexTrackerIssues = async (connection, query, limit = 5) => {
+export const searchYandexTrackerIssues = async (
+	connection,
+	query,
+	limit = 5,
+) => {
 	const issues = await trackerRequest(
 		connection,
 		"POST",

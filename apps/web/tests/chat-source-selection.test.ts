@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
 	getSelectedAppSourceIds,
 	getSelectedNoteSourceIds,
 	loadSelectedAppSourceConnections,
-} from "../../../packages/ai/src/capability-metadata.mjs";
+} from "@workspace/ai/capability-metadata";
+import { describe, expect, it } from "vitest";
 
 describe("chat source selection", () => {
 	it("treats empty selection as no external context", () => {

@@ -1,3 +1,5 @@
+import { remoteMcpToolPrefixes } from "@workspace/ai/capability-metadata";
+import { toolUiMetadata } from "@workspace/ai/tool-ui-metadata";
 import {
 	AudioLines,
 	Calendar,
@@ -15,8 +17,6 @@ import {
 import type React from "react";
 import { asRecord } from "@/lib/object-record";
 import { getTrimmedString } from "@/lib/string-value";
-import { remoteMcpToolPrefixes } from "../../../../../../packages/ai/src/capability-metadata.mjs";
-import { toolUiMetadata } from "../../../../../../packages/ai/src/tool-ui-metadata.mjs";
 
 export type ToolMeta = {
 	errorTitle?: (part: ToolPartLike) => string;

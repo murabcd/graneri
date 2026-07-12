@@ -1,14 +1,14 @@
+import type {
+	AppConnectionProvider,
+	McpOAuthConnectionProvider,
+} from "@workspace/ai/capability-metadata";
 import {
 	appConnectionProviderLabels,
 	appConnectionProviders,
 	chatSourceAppConnectionProviders,
 	mcpOAuthConnectionProviders,
 	tokenRequiredChatSourceAppConnectionProviders,
-} from "../packages/ai/src/capability-metadata.mjs";
-import type {
-	AppConnectionProvider,
-	McpOAuthConnectionProvider,
-} from "../packages/ai/src/capability-metadata.mjs";
+} from "@workspace/ai/capability-metadata";
 
 export const APP_CONNECTION_PROVIDERS = appConnectionProviders;
 export type { AppConnectionProvider };
@@ -30,6 +30,6 @@ export const isChatSourceAppConnectionProvider = (
 	(chatSourceAppConnectionProviders as readonly string[]).includes(provider);
 
 export const requiresChatSourceToken = (provider: AppConnectionProvider) =>
-	(
-		tokenRequiredChatSourceAppConnectionProviders as readonly string[]
-	).includes(provider);
+	(tokenRequiredChatSourceAppConnectionProviders as readonly string[]).includes(
+		provider,
+	);

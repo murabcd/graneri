@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createSafetyIdentifier } from "../../../packages/ai/src/safety-identifier.mjs";
 import { handleRealtimeTranscriptionSessionRequest } from "../server/realtime-transcription-session-handler";
 
 const previousConvexUrl = process.env.CONVEX_URL;

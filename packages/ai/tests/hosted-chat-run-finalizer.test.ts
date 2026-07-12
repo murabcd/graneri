@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
-import { createHostedAssistantRunFinalizationQueue } from "../../../packages/ai/src/hosted-chat-run-finalization-queue.mjs";
-import { createHostedAssistantRunFinalizer } from "../../../packages/ai/src/hosted-chat-run-finalizer.mjs";
+import { createHostedAssistantRunFinalizationQueue } from "../src/hosted-chat-run-finalization-queue.mjs";
+import { createHostedAssistantRunFinalizer } from "../src/hosted-chat-run-finalizer.mjs";
 
 const createMessage = (): UIMessage => ({
 	id: "assistant-message-1",

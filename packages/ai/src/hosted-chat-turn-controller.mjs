@@ -15,7 +15,10 @@ const queuedMessageUnavailableError = () => ({
 	statusCode: 409,
 });
 
-const cleanupClaimedInput = async ({ queuedInput, tolerateMissing = false }) => {
+const cleanupClaimedInput = async ({
+	queuedInput,
+	tolerateMissing = false,
+}) => {
 	const cleanupResult = await queuedInput.cleanupClaimed({ tolerateMissing });
 	if (cleanupResult.ok) {
 		return { ok: true };
@@ -125,7 +128,8 @@ export const createHostedChatTurnController = ({
 			}
 		}
 
-		const effectiveMessage = steeredUserMessage ?? replayedUserMessage ?? message;
+		const effectiveMessage =
+			steeredUserMessage ?? replayedUserMessage ?? message;
 		if (!effectiveMessage) {
 			const cleanupResult = await cleanupClaimedSteerQueuedMessage();
 			if (!cleanupResult.ok) {

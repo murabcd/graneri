@@ -1,9 +1,5 @@
-import type {
-	PrepareStepFunction,
-	ProviderOptions,
-	ToolLoopAgent,
-	ToolSet,
-} from "ai";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import type { PrepareStepFunction, ToolLoopAgent, ToolSet } from "ai";
 
 export declare const buildHostedChatAgentToolSet: ({
 	additionalAgentTools,

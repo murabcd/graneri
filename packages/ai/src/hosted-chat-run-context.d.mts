@@ -1,4 +1,5 @@
-import type { ProviderOptions, ToolLoopAgent, ToolSet, UIMessage } from "ai";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import type { ToolLoopAgent, ToolSet, UIMessage } from "ai";
 import type { AutomationActions } from "./automation-tools.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 

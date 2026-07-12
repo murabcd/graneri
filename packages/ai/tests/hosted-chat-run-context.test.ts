@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildChatAutomationContext } from "../../../packages/ai/src/automation-tools.mjs";
+import { buildChatAutomationContext } from "../src/automation-tools.mjs";
 import {
 	buildHostedChatRunContext,
 	getHostedChatLocalFolderReferenceIds,
 	getHostedChatLocalFolderReferencePaths,
-} from "../../../packages/ai/src/hosted-chat-run-context.mjs";
+} from "../src/hosted-chat-run-context.mjs";
 
 describe("hosted chat run context", () => {
 	it("extracts web local folder paths and desktop local folder ids", () => {

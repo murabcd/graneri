@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { getHostedChatConvexRouteError } from "@workspace/ai/hosted-chat-runtime";
 import type { Connect, Plugin } from "vite";
-import { getHostedChatConvexRouteError } from "../../../packages/ai/src/hosted-chat-runtime.mjs";
 import { handleApplyTemplateRequest } from "./apply-template-handler.js";
 import {
 	handleChatReconnectRequest,

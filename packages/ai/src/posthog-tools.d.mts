@@ -13,7 +13,10 @@ export type PostHogMcpToolConnection = {
 };
 
 export declare function validatePostHogMcpConnection(
-	connection: Omit<PostHogMcpToolConnection, "sourceId" | "provider" | "displayName">,
+	connection: Omit<
+		PostHogMcpToolConnection,
+		"sourceId" | "provider" | "displayName"
+	>,
 ): Promise<unknown[]>;
 
 export declare function buildPostHogTools(

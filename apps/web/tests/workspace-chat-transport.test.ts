@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest";
 import {
 	hostedChatReplayAcceptedHeader,
 	hostedChatReplayQueuedMessageIdHeader,
@@ -6,7 +5,8 @@ import {
 	hostedChatSteerQueuedMessageIdHeader,
 	hostedChatSteerQueuedMessageIdsHeader,
 	hostedChatSteerTurnIdHeader,
-} from "../../../packages/ai/src/hosted-chat-runtime.mjs";
+} from "@workspace/ai/hosted-chat-runtime";
+import { describe, expect, it } from "vitest";
 import {
 	createWorkspaceChatFetch,
 	getWorkspaceChatSendApi,

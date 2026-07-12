@@ -1,9 +1,9 @@
-import type { UIMessage } from "ai";
 import {
 	clampHostedChatWhitespace,
 	MAX_HOSTED_CHAT_INPUT_TEXT_CHARS,
 	validateHostedChatInputTextLimit,
-} from "../../../../packages/ai/src/hosted-chat-runtime.mjs";
+} from "@workspace/ai/hosted-chat-runtime";
+import type { UIMessage } from "ai";
 
 type QueuedRequestBody = Record<string, unknown>;
 

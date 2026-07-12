@@ -1,9 +1,9 @@
-import { ConvexError, v } from "convex/values";
-import type { McpOAuthConnectionProvider } from "../packages/ai/src/capability-metadata.mjs";
+import type { McpOAuthConnectionProvider } from "@workspace/ai/capability-metadata";
 import {
 	APP_SOURCE_PREFIX,
 	mcpOAuthConnectionProviders,
-} from "../packages/ai/src/capability-metadata.mjs";
+} from "@workspace/ai/capability-metadata";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";

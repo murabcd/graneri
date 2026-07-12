@@ -6,9 +6,8 @@ export type ToolUiMetadata = {
 	subtitleKeys?: string[];
 };
 
-export declare const toolUiMetadata: Record<
-	string,
-	ToolUiMetadata
->;
+export declare const toolUiMetadata: Record<string, ToolUiMetadata>;
 
-export declare function getToolUiMetadata(toolName: string): ToolUiMetadata | null;
+export declare function getToolUiMetadata(
+	toolName: string,
+): ToolUiMetadata | null;

@@ -51,7 +51,10 @@ export const createChatStreamLatencyTracker = (logLatency) => {
 							});
 						}
 
-						if (!state.sawFirstReasoningChunk && chunk.type === "reasoning-delta") {
+						if (
+							!state.sawFirstReasoningChunk &&
+							chunk.type === "reasoning-delta"
+						) {
 							state.sawFirstReasoningChunk = true;
 							logLatency("stream.first_reasoning_delta");
 						}

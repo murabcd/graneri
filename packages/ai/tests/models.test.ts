@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getChatModelProviderOptions } from "../../../packages/ai/src/models.mjs";
+import { getChatModelProviderOptions } from "../src/models.mjs";
 
 describe("chat model provider options", () => {
 	it("combines reasoning configuration with the safety identifier", () => {

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getHostedChatConvexRouteError } from "../packages/ai/src/hosted-chat-runtime.mjs";
+import { getHostedChatConvexRouteError } from "@workspace/ai/hosted-chat-runtime";
 
 export type HostedApiHandler = (
 	request: IncomingMessage,

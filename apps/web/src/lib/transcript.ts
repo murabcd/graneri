@@ -3,7 +3,7 @@ import {
 	createTranscriptBlocksText as createSharedTranscriptBlocksText,
 	createTranscriptTextSections,
 	shouldAppendTranscriptUtteranceToSection,
-} from "../../../../packages/ai/src/transcription.mjs";
+} from "@workspace/ai/transcription";
 
 type TranscriptLiveSpeaker = "you" | "them";
 export type TranscriptSpeaker = TranscriptLiveSpeaker;

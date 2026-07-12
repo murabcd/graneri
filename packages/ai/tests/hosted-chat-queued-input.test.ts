@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHostedChatQueuedInput } from "../../../packages/ai/src/hosted-chat-queued-input.mjs";
+import { createHostedChatQueuedInput } from "../src/hosted-chat-queued-input.mjs";
 
 const queuedMessage = ({
 	id,

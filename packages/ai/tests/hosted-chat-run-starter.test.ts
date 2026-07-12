@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	getHostedChatRunStartPolicy,
 	startHostedChatRun,
-} from "../../../packages/ai/src/hosted-chat-run-starter.mjs";
+} from "../src/hosted-chat-run-starter.mjs";
 
 const createCallbacks = (overrides = {}) => ({
 	appendActiveStreamText: vi.fn(async () => null),

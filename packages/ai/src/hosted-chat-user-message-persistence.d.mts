@@ -58,48 +58,45 @@ export declare const persistHostedChatUserMessage: <
 	ReasoningEffort extends string,
 	RunId extends string,
 	QueuedMessageId extends string,
->(args: SaveMessageArgs<WorkspaceId, ChatId, NoteId, ReasoningEffort> & {
-	acceptQueuedUserMessage: (
-		args: BuiltSaveMessageArgs<
-			WorkspaceId,
-			ChatId,
-			NoteId,
-			ReasoningEffort
-		> & {
-			queuedMessageId: QueuedMessageId;
-		},
-	) => Promise<unknown>;
-	acceptSteeredUserMessages: (args: {
-		workspaceId: WorkspaceId;
-		chatId: ChatId;
-		noteId: NoteId | undefined;
-		title?: string;
-		preview: string;
-		model: string;
-		reasoningEffort: ReasoningEffort;
-		runId: RunId;
-		messages: Array<{
-			queuedMessageId: QueuedMessageId;
-			message: ReturnType<typeof toHostedStoredMessage>;
-		}>;
-	}) => Promise<unknown>;
-	appendUserMessageToRun: (args: {
-		runId: RunId;
-		messageId: string;
-	}) => Promise<unknown>;
-	continueRunId?: RunId | null;
-	queuedInput: QueuedInput<WorkspaceId, ChatId, RunId, QueuedMessageId>;
-	replayQueuedMessageId?: QueuedMessageId | null;
-	saveMessage: (
-		args: BuiltSaveMessageArgs<
-			WorkspaceId,
-			ChatId,
-			NoteId,
-			ReasoningEffort
-		>,
-	) => Promise<unknown>;
-	steeredUserMessages: UIMessage[];
-}) => Promise<{
+>(
+	args: SaveMessageArgs<WorkspaceId, ChatId, NoteId, ReasoningEffort> & {
+		acceptQueuedUserMessage: (
+			args: BuiltSaveMessageArgs<
+				WorkspaceId,
+				ChatId,
+				NoteId,
+				ReasoningEffort
+			> & {
+				queuedMessageId: QueuedMessageId;
+			},
+		) => Promise<unknown>;
+		acceptSteeredUserMessages: (args: {
+			workspaceId: WorkspaceId;
+			chatId: ChatId;
+			noteId: NoteId | undefined;
+			title?: string;
+			preview: string;
+			model: string;
+			reasoningEffort: ReasoningEffort;
+			runId: RunId;
+			messages: Array<{
+				queuedMessageId: QueuedMessageId;
+				message: ReturnType<typeof toHostedStoredMessage>;
+			}>;
+		}) => Promise<unknown>;
+		appendUserMessageToRun: (args: {
+			runId: RunId;
+			messageId: string;
+		}) => Promise<unknown>;
+		continueRunId?: RunId | null;
+		queuedInput: QueuedInput<WorkspaceId, ChatId, RunId, QueuedMessageId>;
+		replayQueuedMessageId?: QueuedMessageId | null;
+		saveMessage: (
+			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId, ReasoningEffort>,
+		) => Promise<unknown>;
+		steeredUserMessages: UIMessage[];
+	},
+) => Promise<{
 	acceptedSteerTurnId: RunId | null;
 	pendingQueuedAcceptanceHeaders: Record<string, string> | null;
 }>;

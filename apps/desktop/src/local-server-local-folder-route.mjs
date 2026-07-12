@@ -1,4 +1,4 @@
-import { buildLocalFolderTools } from "../../../packages/ai/src/local-folder-tools.mjs";
+import { buildLocalFolderTools } from "@workspace/ai/local-folder-tools";
 import { readJsonBody, sendJson } from "./local-server-http.mjs";
 
 const getLocalFolderIds = (localFolders) =>

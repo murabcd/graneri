@@ -1,25 +1,21 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { type InferUITools, type UIMessage, validateUIMessages } from "ai";
-import { ConvexHttpClient } from "convex/browser";
-import { api } from "../../../convex/_generated/api.js";
-import type { Id } from "../../../convex/_generated/dataModel.js";
 import {
 	getSelectedNoteSourceIds,
 	loadSelectedAppSourceConnections,
-} from "../../../packages/ai/src/capability-metadata.mjs";
-import { createChatLatencyLogger } from "../../../packages/ai/src/chat-latency-logger.mjs";
+} from "@workspace/ai/capability-metadata";
+import { createChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
 import {
 	createHostedActiveStreamKey,
 	type HostedActiveStreamSession,
-} from "../../../packages/ai/src/hosted-chat-active-stream.mjs";
-import { prepareHostedChatTurnBranch } from "../../../packages/ai/src/hosted-chat-branch-preparer.mjs";
-import { getBearerTokenFromAuthorizationHeader } from "../../../packages/ai/src/hosted-chat-http.mjs";
-import { stopOrphanedHostedAssistantRun } from "../../../packages/ai/src/hosted-chat-orphaned-run.mjs";
-import { createHostedChatQueuedInput } from "../../../packages/ai/src/hosted-chat-queued-input.mjs";
+} from "@workspace/ai/hosted-chat-active-stream";
+import { prepareHostedChatTurnBranch } from "@workspace/ai/hosted-chat-branch-preparer";
+import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
+import { stopOrphanedHostedAssistantRun } from "@workspace/ai/hosted-chat-orphaned-run";
+import { createHostedChatQueuedInput } from "@workspace/ai/hosted-chat-queued-input";
 import {
 	buildHostedChatRunContext,
 	getHostedChatLocalFolderReferencePaths,
-} from "../../../packages/ai/src/hosted-chat-run-context.mjs";
+} from "@workspace/ai/hosted-chat-run-context";
 import {
 	buildHostedNotesContext,
 	getHostedChatConvexRouteError,
@@ -29,10 +25,14 @@ import {
 	validateHostedChatInput,
 	validateHostedChatRequestInput,
 	validateHostedChatSteerRoute,
-} from "../../../packages/ai/src/hosted-chat-runtime.mjs";
-import { createHostedChatTurnController } from "../../../packages/ai/src/hosted-chat-turn-controller.mjs";
-import { resolveLocalFolderRoots } from "../../../packages/ai/src/local-folder-tools.mjs";
-import { authorizeOpenAiRequest } from "../../../packages/ai/src/openai-admission.mjs";
+} from "@workspace/ai/hosted-chat-runtime";
+import { createHostedChatTurnController } from "@workspace/ai/hosted-chat-turn-controller";
+import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
+import { authorizeOpenAiRequest } from "@workspace/ai/openai-admission";
+import { type InferUITools, type UIMessage, validateUIMessages } from "ai";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../convex/_generated/api.js";
+import type { Id } from "../../../convex/_generated/dataModel.js";
 import {
 	findChatModel,
 	getChatModelProviderOptions,

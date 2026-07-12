@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,
-} from "../../../packages/ai/src/hosted-chat-user-message-persistence.mjs";
+} from "../src/hosted-chat-user-message-persistence.mjs";
 
 const userMessage = (id: string, text: string) => ({
 	id,

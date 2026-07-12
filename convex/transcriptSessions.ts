@@ -1,5 +1,5 @@
+import { createTranscriptBlocksTextFromUtterances } from "@workspace/ai/transcription";
 import { ConvexError, v } from "convex/values";
-import { createTranscriptBlocksTextFromUtterances } from "../packages/ai/src/transcription.mjs";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";

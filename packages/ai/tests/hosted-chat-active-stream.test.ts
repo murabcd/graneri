@@ -6,9 +6,9 @@ import {
 	HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS,
 	HostedActiveChatStreamPersister,
 	pipeHostedActiveStreamText,
-} from "../../../packages/ai/src/hosted-chat-active-stream.mjs";
-import type { HostedTurnInputBuffer } from "../../../packages/ai/src/hosted-chat-turn-input-buffer.mjs";
-import { createHostedTurnInputBuffer } from "../../../packages/ai/src/hosted-chat-turn-input-buffer.mjs";
+} from "../src/hosted-chat-active-stream.mjs";
+import type { HostedTurnInputBuffer } from "../src/hosted-chat-turn-input-buffer.mjs";
+import { createHostedTurnInputBuffer } from "../src/hosted-chat-turn-input-buffer.mjs";
 
 const collectStream = async <T>(stream: ReadableStream<T>) => {
 	const reader = stream.getReader();

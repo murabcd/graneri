@@ -27,16 +27,16 @@ import {
 export type { TranscriptionControllerState } from "@/lib/transcription-session-types";
 
 import {
+	isTranscriptPlaceholderText,
+	shouldKeepInterruptedTranscriptTurn,
+} from "@workspace/ai/transcription";
+import {
 	createSystemAudioStatusFromPolicy,
 	ensureDesktopMicrophonePermission,
 	getRealtimeAvailability,
 	resolveTranscriptionPolicy,
 	type TranscriptionPolicy,
 } from "@/lib/transcription-policy";
-import {
-	isTranscriptPlaceholderText,
-	shouldKeepInterruptedTranscriptTurn,
-} from "../../../../packages/ai/src/transcription.mjs";
 
 type TranscriptTurnState = {
 	itemId: string;
@@ -753,16 +753,12 @@ export class TranscriptionController {
 
 		if (event.type === "turn_failed") {
 			const existingTurn = state.turns.get(event.itemId);
-			const source = event.speaker === "them" ? "systemAudio" : "microphone";
 			const interruptedText =
 				existingTurn?.text ||
 				this.getState().liveTranscript[event.speaker].text ||
 				"";
-			const shouldKeepInterruptedText = shouldKeepInterruptedTranscriptTurn({
-				logprobs: existingTurn?.logprobs ?? null,
-				source,
-				text: interruptedText,
-			});
+			const shouldKeepInterruptedText =
+				shouldKeepInterruptedTranscriptTurn(interruptedText);
 			this.upsertTurn(event.speaker, event.itemId, {
 				committed: true,
 				completed: shouldKeepInterruptedText,
@@ -899,15 +895,9 @@ export class TranscriptionController {
 	private stopSpeaker = async (speaker: TranscriptSpeaker) => {
 		const state = this.speakers[speaker].data;
 		const liveEntry = this.getState().liveTranscript[speaker];
-		const source = speaker === "them" ? "systemAudio" : "microphone";
 		const text = liveEntry.text.trim();
 
-		if (
-			shouldKeepInterruptedTranscriptTurn({
-				source,
-				text,
-			})
-		) {
+		if (shouldKeepInterruptedTranscriptTurn(text)) {
 			this.appendUtterance({
 				endedAt: Date.now(),
 				id: `${state.sessionId ?? "session"}:${speaker}:manual:${crypto.randomUUID()}`,

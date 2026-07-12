@@ -1,4 +1,4 @@
-import { isTranscriptPlaceholderText } from "../../../../packages/ai/src/transcription.mjs";
+import { isTranscriptPlaceholderText } from "@workspace/ai/transcription";
 
 const PROMPT_LEAK_PATTERNS = [
 	"transcribe speech verbatim",

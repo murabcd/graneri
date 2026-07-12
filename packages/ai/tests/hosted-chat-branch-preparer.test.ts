@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	getHostedInterruptedAssistantMessageIds,
 	prepareHostedChatTurnBranch,
-} from "../../../packages/ai/src/hosted-chat-branch-preparer.mjs";
+} from "../src/hosted-chat-branch-preparer.mjs";
 
 describe("hosted chat branch preparer", () => {
 	it("extracts interrupted assistant message ids from run events", () => {

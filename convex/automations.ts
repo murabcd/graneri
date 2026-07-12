@@ -1,10 +1,10 @@
-import { ConvexError, v } from "convex/values";
 import {
 	DEFAULT_CHAT_MODEL_ID,
 	DEFAULT_REASONING_EFFORT,
 	findReasoningEffort,
 	isSupportedChatModel,
-} from "../packages/ai/src/models.mjs";
+} from "@workspace/ai/models";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";

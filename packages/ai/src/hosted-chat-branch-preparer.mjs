@@ -29,7 +29,9 @@ export const prepareHostedChatTurnBranch = async ({
 		? await getMessagesSnapshot({ workspaceId, chatId })
 		: [];
 	const runEvents =
-		shouldLoadStoredMessages && continueRunId && attachableRunId === continueRunId
+		shouldLoadStoredMessages &&
+		continueRunId &&
+		attachableRunId === continueRunId
 			? await listRunEventsAfter({ runId: continueRunId, limit: 500 })
 			: [];
 	const interruptedAssistantMessageIds =

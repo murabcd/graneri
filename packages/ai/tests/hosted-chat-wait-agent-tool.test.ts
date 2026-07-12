@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	HOSTED_TURN_INPUT_ACTIVITY_MAILBOX,
 	HOSTED_TURN_INPUT_ACTIVITY_STEER,
-} from "../../../packages/ai/src/hosted-chat-turn-input-buffer.mjs";
+} from "../src/hosted-chat-turn-input-buffer.mjs";
 import {
 	createHostedWaitAgentTool,
 	waitForHostedTurnInputActivity,
-} from "../../../packages/ai/src/hosted-chat-wait-agent-tool.mjs";
+} from "../src/hosted-chat-wait-agent-tool.mjs";
 
 type PendingActivity =
 	| typeof HOSTED_TURN_INPUT_ACTIVITY_MAILBOX

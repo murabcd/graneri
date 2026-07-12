@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
+import { authorizeOpenAiRequest } from "@workspace/ai/openai-admission";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
-import { getBearerTokenFromAuthorizationHeader } from "../../../packages/ai/src/hosted-chat-http.mjs";
-import { authorizeOpenAiRequest } from "../../../packages/ai/src/openai-admission.mjs";
 import { sendJson } from "./http-utils.js";
 
 type HostedOpenAiOperation = "note-generation" | "realtime-session";

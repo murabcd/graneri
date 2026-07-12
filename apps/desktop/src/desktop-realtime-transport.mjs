@@ -1,9 +1,9 @@
-import WebSocket from "ws";
-import { createPcm16Resampler } from "../../../packages/ai/src/pcm16-resampler.mjs";
+import { createPcm16Resampler } from "@workspace/ai/pcm16-resampler";
 import {
+	DESKTOP_REALTIME_PROFILE,
 	normalizeTranscriptionLanguage,
-	resolveDesktopRealtimeProfile,
-} from "../../../packages/ai/src/transcription.mjs";
+} from "@workspace/ai/transcription";
+import WebSocket from "ws";
 import { createDesktopRealtimeAudioBatcher } from "./desktop-realtime-audio-batcher.mjs";
 import { createDesktopRealtimeClientSecret } from "./desktop-realtime-client-secret.mjs";
 import { parseDesktopRealtimeTransportEvent } from "./desktop-realtime-events.mjs";
@@ -307,10 +307,7 @@ export const createDesktopRealtimeTransport = ({
 			source,
 			speaker,
 		});
-		const profile = resolveDesktopRealtimeProfile({
-			source,
-			speaker,
-		});
+		const profile = DESKTOP_REALTIME_PROFILE;
 
 		return await new Promise((resolvePromise, rejectPromise) => {
 			let didResolve = false;

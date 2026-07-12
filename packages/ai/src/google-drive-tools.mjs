@@ -18,8 +18,7 @@ export const buildGoogleDriveToolDefinitions = ({ searchFiles, getFile }) => [
 			requiresConnection: true,
 		},
 		ui: toolUiMetadata.google_drive_search_files,
-		execute: async ({ query, limit }) =>
-			await searchFiles({ query, limit }),
+		execute: async ({ query, limit }) => await searchFiles({ query, limit }),
 	}),
 	defineAiTool({
 		name: "google_drive_get_file",

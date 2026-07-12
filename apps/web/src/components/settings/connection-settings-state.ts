@@ -1,8 +1,8 @@
+import { remoteMcpConnectionDefaults } from "@workspace/ai/capability-metadata";
 import type {
 	RemoteMcpConnectionFormState,
 	RemoteMcpOAuthFields,
 } from "@/lib/remote-mcp-connection-form";
-import { remoteMcpConnectionDefaults } from "../../../../../packages/ai/src/capability-metadata.mjs";
 
 export type YandexTrackerOrgType = "x-org-id" | "x-cloud-org-id";
 

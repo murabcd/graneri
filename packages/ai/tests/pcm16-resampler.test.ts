@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPcm16Resampler } from "../../../packages/ai/src/pcm16-resampler.mjs";
+import { createPcm16Resampler } from "../src/pcm16-resampler.mjs";
 
 const encode = (samples: number[]) => {
 	const pcm16 = Int16Array.from(samples);

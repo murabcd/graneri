@@ -1,7 +1,7 @@
 "use node";
 
+import { transcribeDictationAudio } from "@workspace/ai/dictation-transcription";
 import { ConvexError, v } from "convex/values";
-import { transcribeDictationAudio } from "../packages/ai/src/dictation-transcription.mjs";
 import { internalAction } from "./_generated/server";
 
 const transcriptionResultValidator = v.object({

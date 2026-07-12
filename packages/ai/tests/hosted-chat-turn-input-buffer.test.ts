@@ -3,7 +3,7 @@ import {
 	createHostedTurnInputBuffer,
 	HOSTED_TURN_INPUT_ACTIVITY_MAILBOX,
 	HOSTED_TURN_INPUT_ACTIVITY_STEER,
-} from "../../../packages/ai/src/hosted-chat-turn-input-buffer.mjs";
+} from "../src/hosted-chat-turn-input-buffer.mjs";
 
 describe("hosted chat turn input buffer", () => {
 	it("buffers steered input before mailbox input for the current turn", () => {

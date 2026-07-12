@@ -6,7 +6,7 @@ import {
 	buildLocalFolderSystemContext,
 	buildLocalFolderTools,
 	getImageMediaType,
-} from "../../../packages/ai/src/local-folder-tools.mjs";
+} from "../src/local-folder-tools.mjs";
 
 describe("local folder tools", () => {
 	it("instructs the model to use tools for shared local path questions", () => {

@@ -1,8 +1,8 @@
 import {
 	DICTATION_AUDIO_CONTENT_TYPE,
 	MAX_DICTATION_AUDIO_BYTES,
-} from "../../../packages/ai/src/dictation-policy.mjs";
-import { getBearerTokenFromAuthorizationHeader } from "../../../packages/ai/src/hosted-chat-http.mjs";
+} from "@workspace/ai/dictation-policy";
+import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
 import { readBinaryBody, sendJson } from "./local-server-http.mjs";
 
 const getConvexSiteUrl = () => {

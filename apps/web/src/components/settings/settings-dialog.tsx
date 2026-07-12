@@ -1,3 +1,4 @@
+import { getCapabilitySettings } from "@workspace/ai/capability-metadata";
 import {
 	getDesktopAuthCallbackUrl,
 	isDesktopRuntime,
@@ -164,7 +165,6 @@ import {
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { getCapabilitySettings } from "../../../../../packages/ai/src/capability-metadata.mjs";
 import type {
 	SettingsDialogProps,
 	SettingsPage,

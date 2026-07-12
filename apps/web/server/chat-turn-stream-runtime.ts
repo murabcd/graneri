@@ -1,5 +1,25 @@
 import type { ServerResponse } from "node:http";
 import {
+	type ChatLatencyLogger,
+	createChatStreamLatencyTracker,
+} from "@workspace/ai/chat-latency-logger";
+import type { HostedActiveStreamSession } from "@workspace/ai/hosted-chat-active-stream";
+import type { createHostedChatQueuedInput } from "@workspace/ai/hosted-chat-queued-input";
+import type { buildHostedChatRunContext } from "@workspace/ai/hosted-chat-run-context";
+import { createHostedAssistantRunFinalizer } from "@workspace/ai/hosted-chat-run-finalizer";
+import { startHostedChatRun } from "@workspace/ai/hosted-chat-run-starter";
+import {
+	getHostedChatConvexRouteError,
+	validateHostedChatActiveRunPolicy,
+} from "@workspace/ai/hosted-chat-runtime";
+import { createHostedChatRunResponseStream } from "@workspace/ai/hosted-chat-stream-lifecycle";
+import type { createHostedChatTurnController } from "@workspace/ai/hosted-chat-turn-controller";
+import {
+	isHostedQueuedUserMessageAccept,
+	persistHostedChatUserMessage,
+} from "@workspace/ai/hosted-chat-user-message-persistence";
+import type { ReasoningEffort } from "@workspace/ai/models";
+import {
 	consumeStream,
 	type InferUITools,
 	pipeUIMessageStreamToResponse,
@@ -9,26 +29,6 @@ import {
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
-import {
-	type ChatLatencyLogger,
-	createChatStreamLatencyTracker,
-} from "../../../packages/ai/src/chat-latency-logger.mjs";
-import type { HostedActiveStreamSession } from "../../../packages/ai/src/hosted-chat-active-stream.mjs";
-import type { createHostedChatQueuedInput } from "../../../packages/ai/src/hosted-chat-queued-input.mjs";
-import type { buildHostedChatRunContext } from "../../../packages/ai/src/hosted-chat-run-context.mjs";
-import { createHostedAssistantRunFinalizer } from "../../../packages/ai/src/hosted-chat-run-finalizer.mjs";
-import { startHostedChatRun } from "../../../packages/ai/src/hosted-chat-run-starter.mjs";
-import {
-	getHostedChatConvexRouteError,
-	validateHostedChatActiveRunPolicy,
-} from "../../../packages/ai/src/hosted-chat-runtime.mjs";
-import { createHostedChatRunResponseStream } from "../../../packages/ai/src/hosted-chat-stream-lifecycle.mjs";
-import type { createHostedChatTurnController } from "../../../packages/ai/src/hosted-chat-turn-controller.mjs";
-import {
-	isHostedQueuedUserMessageAccept,
-	persistHostedChatUserMessage,
-} from "../../../packages/ai/src/hosted-chat-user-message-persistence.mjs";
-import type { ReasoningEffort } from "../../../packages/ai/src/models.mjs";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 

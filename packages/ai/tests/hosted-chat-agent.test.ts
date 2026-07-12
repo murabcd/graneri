@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildHostedChatAgentToolSet } from "../../../packages/ai/src/hosted-chat-agent.mjs";
-import { buildHostedChatRunPlan } from "../../../packages/ai/src/hosted-chat-run-plan.mjs";
+import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
+import { buildHostedChatRunPlan } from "../src/hosted-chat-run-plan.mjs";
 
 const deferredTool = {
 	description: "Search a connected source.",

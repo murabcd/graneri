@@ -3,7 +3,7 @@ import {
 	countDeferredOpenAITools,
 	finalizeOpenAIToolSet,
 	hasDeferredOpenAITools,
-} from "../../../packages/ai/src/openai-tool-search.mjs";
+} from "../src/openai-tool-search.mjs";
 
 const deferredTool = {
 	description: "Search a connected source.",

@@ -1,4 +1,4 @@
-import type { createRealtimeTranscriptionSession } from "../../../packages/ai/src/transcription.mjs";
+import type { createRealtimeTranscriptionSession } from "@workspace/ai/transcription";
 
 type RealtimeTranscriptionSession = ReturnType<
 	typeof createRealtimeTranscriptionSession

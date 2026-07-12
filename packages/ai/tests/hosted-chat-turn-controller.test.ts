@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHostedChatTurnController } from "../../../packages/ai/src/hosted-chat-turn-controller.mjs";
+import { createHostedChatTurnController } from "../src/hosted-chat-turn-controller.mjs";
 
 const userMessage = (id: string, text: string) => ({
 	id,

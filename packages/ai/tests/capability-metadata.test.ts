@@ -10,8 +10,8 @@ import {
 	mcpSdkOAuthConnectionProviders,
 	remoteMcpConnectionDefaults,
 	tokenRequiredChatSourceAppConnectionProviders,
-} from "../../../packages/ai/src/capability-metadata.mjs";
-import { graneriCapabilityRegistry } from "../../../packages/ai/src/capability-registry.mjs";
+} from "../src/capability-metadata.mjs";
+import { graneriCapabilityRegistry } from "../src/capability-registry.mjs";
 
 describe("capability metadata", () => {
 	it("defines labels for every app connection provider", () => {

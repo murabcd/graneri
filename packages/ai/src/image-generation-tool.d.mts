@@ -5,7 +5,12 @@ import type { FunctionReference } from "convex/server";
 import type { GenericId } from "convex/values";
 
 export type ChatAttachmentsApi = {
-	generateUploadUrl: FunctionReference<"mutation", "public", Record<string, never>, string>;
+	generateUploadUrl: FunctionReference<
+		"mutation",
+		"public",
+		Record<string, never>,
+		string
+	>;
 	getUrl: FunctionReference<
 		"mutation",
 		"public",
@@ -33,7 +38,9 @@ type GeneratedImageArtifact = {
 
 export declare const buildImageGenerationInstruction: () => string;
 
-export declare const shouldEnableImageGeneration: (message: UIMessage | undefined) => boolean;
+export declare const shouldEnableImageGeneration: (
+	message: UIMessage | undefined,
+) => boolean;
 
 export declare const createConvexGeneratedImageUploader: (
 	args: ConvexGeneratedImageUploaderArgs,

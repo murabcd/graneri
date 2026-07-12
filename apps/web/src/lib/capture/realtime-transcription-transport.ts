@@ -1,7 +1,7 @@
+import { normalizeTranscriptionLanguage } from "@workspace/ai/transcription";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import type { TranscriptSpeaker } from "@/lib/transcript";
 import type { TranscriptionLogger } from "@/lib/transcription-logger";
-import { normalizeTranscriptionLanguage } from "../../../../../packages/ai/src/transcription.mjs";
 
 type RealtimeTranscriptionLogprob = {
 	bytes?: number[];

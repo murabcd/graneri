@@ -1,4 +1,4 @@
-import { MAX_DICTATION_PCM_BYTES } from "../../../packages/ai/src/dictation-policy.mjs";
+import { MAX_DICTATION_PCM_BYTES } from "@workspace/ai/dictation-policy";
 import { getPcm16BufferAverageAbsVolume } from "./pcm16-volume.mjs";
 
 export const maxDictationPcmBytes = MAX_DICTATION_PCM_BYTES;
