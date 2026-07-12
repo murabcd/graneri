@@ -51,6 +51,32 @@ export const resolveCollectionRoute = <T>({
 		: { status: "missing" };
 };
 
+export const resolveApplicationView = ({
+	chat,
+	note,
+	project,
+	view,
+}: {
+	chat: ResourceRouteState<unknown>;
+	note: ResourceRouteState<unknown>;
+	project: ResourceRouteState<unknown>;
+	view: AppView;
+}) => {
+	const activeResource =
+		view === "chat"
+			? chat
+			: view === "note"
+				? note
+				: view === "project"
+					? project
+					: ({ status: "inactive" } as const);
+
+	return {
+		isResolving: activeResource.status === "resolving",
+		view: activeResource.status === "missing" ? "notFound" : view,
+	};
+};
+
 export const getResolvingPersistedChatIds = ({
 	chats,
 	pendingPersistedChatRouteIds,

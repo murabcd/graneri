@@ -31,6 +31,12 @@ draft recovery, remote reconciliation, debounced saves, per-note in-flight save
 serialization, and flush-on-navigation behavior. The note page remains a view
 adapter: it projects session documents into Tiptap and must not rebuild save or
 draft ordering with local effects and refs.
+The application navigation session is the authoritative renderer boundary for
+URL-derived route state, settings history restoration, desktop and popstate
+synchronization, pinned-inbox behavior, transient note-capture intent, and
+workspace-scoped resource-route resolution. The authenticated shell invokes
+typed navigation methods and renders the resolved snapshot; it must not mutate
+parallel route state cells or write browser history directly.
 
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.

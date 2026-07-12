@@ -1,7 +1,6 @@
 import {
 	getDesktopMeta,
 	isDesktopRuntime,
-	onDesktopNavigate,
 	setDesktopActiveWorkspaceId,
 	setDesktopActiveWorkspaceNotificationPreferences,
 } from "@workspace/platform/desktop";
@@ -85,6 +84,11 @@ import type {
 	UpcomingCalendarState,
 } from "@/app/app-types";
 import {
+	getResolvingPersistedChatIds,
+	resolveApplicationView,
+	resolveCollectionRoute,
+} from "@/app/application-navigation-session";
+import {
 	syncDisconnectedDesktopTrayCalendar,
 	syncErrorDesktopTrayCalendar,
 	syncReadyDesktopTrayCalendar,
@@ -93,19 +97,10 @@ import {
 	buildCalendarEventNoteDocument,
 	buildCalendarEventSearchableText,
 	createCalendarEventKey,
-	createNoteSearch,
-	getAppLocationState,
 	getDayWindowFromDayKey,
-	getInitialNonSettingsLocation,
-	getSettingsPageFromPath,
-	getSettingsPath,
-	shouldAutoStartNoteCaptureFromUrl,
 } from "@/app/location";
 import { createPendingPersistedChatRoutesStore } from "@/app/pending-persisted-chat-routes";
-import {
-	getResolvingPersistedChatIds,
-	resolveCollectionRoute,
-} from "@/app/resource-route";
+import { useApplicationNavigationSession } from "@/app/use-application-navigation-session";
 import type {
 	AutomationDraft,
 	AutomationListItem,
@@ -114,7 +109,6 @@ import { CreateAutomationDialogEntry } from "@/components/automations/create-aut
 import { OPEN_CHAT_SUMMARY_EVENT } from "@/components/chat/chat-summary-events";
 import { optimisticPatchChat } from "@/components/chat/optimistic-patch-chat";
 import { optimisticRenameChat } from "@/components/chat/optimistic-rename-chat";
-import { readDesktopInboxPanelPinnedState } from "@/components/inbox/inbox-panel-state";
 import { AppShellInset } from "@/components/layout/app-shell-inset";
 import {
 	NoteActionsMenu,
@@ -262,25 +256,7 @@ const useAppShellState = ({
 }) => {
 	const convex = useConvex();
 	const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
-	const [currentView, setCurrentView] = React.useState<AppView>(() => {
-		if (typeof window === "undefined") {
-			return "home";
-		}
-
-		const initialView = getAppLocationState(new URL(window.location.href)).view;
-		return initialView === "inbox" ? "home" : initialView;
-	});
-	const [inboxOpen, setInboxOpen] = React.useState(() => {
-		if (typeof window === "undefined") {
-			return false;
-		}
-
-		return getAppLocationState(new URL(window.location.href)).view === "inbox";
-	});
 	const [isDesktopMac, setIsDesktopMac] = React.useState(initialDesktopMac);
-	const [settingsOpen, setSettingsOpen] = React.useState(false);
-	const [settingsPage, setSettingsPage] =
-		React.useState<SettingsPage>("Profile");
 	const [automationDialogOpen, setAutomationDialogOpen] = React.useState(false);
 	const [editingAutomationId, setEditingAutomationId] =
 		React.useState<Id<"automations"> | null>(null);
@@ -296,89 +272,11 @@ const useAppShellState = ({
 		// Workspace resolution is pure render derivation; no event handler owns these query inputs.
 		workspaces,
 	});
-	const [currentChatId, setCurrentChatId] = React.useState<string | null>(
-		() => {
-			if (typeof window === "undefined") {
-				return null;
-			}
-
-			return getAppLocationState(new URL(window.location.href)).chatId;
-		},
-	);
-	const [currentProjectIdString, setCurrentProjectIdString] = React.useState<
-		string | null
-	>(() => {
-		if (typeof window === "undefined") {
-			return null;
-		}
-
-		return getAppLocationState(new URL(window.location.href)).projectIdString;
-	});
 	const [draftChatComposerId, setDraftChatComposerId] = React.useState(() =>
 		crypto.randomUUID(),
 	);
-	const chatComposerId = currentChatId ?? draftChatComposerId;
 	const [chatPluginPrefill, setChatPluginPrefill] =
 		React.useState<ChatPluginPrefill | null>(null);
-	const [currentNoteId, setCurrentNoteId] = React.useState<Id<"notes"> | null>(
-		null,
-	);
-	const [currentRouteNoteId, setCurrentRouteNoteId] = React.useState<
-		string | null
-	>(() => {
-		if (typeof window === "undefined") {
-			return null;
-		}
-
-		return getAppLocationState(new URL(window.location.href)).noteIdString;
-	});
-	const [shouldAutoStartNoteCapture, setShouldAutoStartNoteCapture] =
-		React.useState(() => {
-			if (typeof window === "undefined") {
-				return false;
-			}
-
-			return shouldAutoStartNoteCaptureFromUrl(new URL(window.location.href));
-		});
-	const [noteCaptureRequestId, setNoteCaptureRequestId] = React.useState<
-		string | null
-	>(() => {
-		if (typeof window === "undefined") {
-			return null;
-		}
-
-		return getAppLocationState(new URL(window.location.href))
-			.noteCaptureRequestId;
-	});
-	const [
-		shouldStopNoteCaptureWhenMeetingEnds,
-		setShouldStopNoteCaptureWhenMeetingEnds,
-	] = React.useState(() => {
-		if (typeof window === "undefined") {
-			return false;
-		}
-
-		return getAppLocationState(new URL(window.location.href))
-			.shouldStopNoteCaptureWhenMeetingEnds;
-	});
-	const [scheduledAutoStartNoteCaptureAt, setScheduledAutoStartNoteCaptureAt] =
-		React.useState<string | null>(() => {
-			if (typeof window === "undefined") {
-				return null;
-			}
-
-			return getAppLocationState(new URL(window.location.href))
-				.scheduledAutoStartNoteCaptureAt;
-		});
-	const [pendingCalendarEvent, setPendingCalendarEvent] =
-		React.useState<UpcomingCalendarEvent | null>(() => {
-			if (typeof window === "undefined") {
-				return null;
-			}
-
-			return getAppLocationState(new URL(window.location.href))
-				.pendingCalendarEvent;
-		});
 	const [currentNoteTitleOverride, setCurrentNoteTitleOverride] =
 		React.useState<{
 			noteId: Id<"notes"> | null;
@@ -388,6 +286,40 @@ const useAppShellState = ({
 		React.useState<NoteEditorActions | null>(null);
 	const [currentNoteCommentsOpener, setCurrentNoteCommentsOpener] =
 		React.useState<(() => void) | null>(null);
+	const navigation = useApplicationNavigationSession({
+		onLocationSynchronized: () => {
+			setAutomationDialogOpen(false);
+			setEditingAutomationId(null);
+			setAutomationChatId(null);
+			setCurrentNoteEditorActions(null);
+			setCurrentNoteCommentsOpener(null);
+		},
+	});
+	const {
+		clearScheduledAutoStart,
+		consumeNoteCaptureIntent,
+		currentChatId,
+		currentNoteId,
+		currentProjectIdString,
+		currentRouteNoteId,
+		currentView,
+		inboxOpen,
+		noteCaptureRequestId,
+		openChat: navigateChat,
+		openNote: navigateNote,
+		openProject: navigateProject,
+		openView: navigateView,
+		pendingCalendarEvent,
+		scheduledAutoStartNoteCaptureAt,
+		settingsOpen,
+		settingsPage,
+		setInboxOpen: setNavigationInboxOpen,
+		setSettingsOpen: setNavigationSettingsOpen,
+		shouldAutoStartNoteCapture,
+		shouldStopNoteCaptureWhenMeetingEnds,
+		triggerScheduledAutoStart,
+	} = navigation;
+	const chatComposerId = currentChatId ?? draftChatComposerId;
 	const userPreferences = useQuery(
 		api.userPreferences.get,
 		session?.user && isConvexAuthenticated ? {} : "skip",
@@ -396,11 +328,6 @@ const useAppShellState = ({
 		applyDesktopAppearancePreferenceAttributes(userPreferences);
 	}, [userPreferences]);
 	const creatingNoteRef = React.useRef(false);
-	const inboxOpenRef = React.useRef(inboxOpen);
-	const [initialNonSettingsLocation] = React.useState(
-		getInitialNonSettingsLocation,
-	);
-	const lastNonSettingsLocationRef = React.useRef(initialNonSettingsLocation);
 	const user = React.useMemo(
 		() => toAppUser(session, userPreferences?.avatarUrl),
 		[session, userPreferences?.avatarUrl],
@@ -420,55 +347,6 @@ const useAppShellState = ({
 	const upcomingCalendarLoadKey = session?.user?.email
 		? `${isConvexAuthenticated ? "authenticated" : "unauthenticated"}:${session.user.email}`
 		: "anonymous";
-	const applyLocationSyncState = React.useCallback(
-		(input: {
-			chatId: string | null;
-			inboxOpen: boolean;
-			noteCaptureRequestId: string | null;
-			noteIdString: string | null;
-			projectIdString: string | null;
-			pendingCalendarEvent: UpcomingCalendarEvent | null;
-			scheduledAutoStartNoteCaptureAt: string | null;
-			settingsOpen: boolean;
-			settingsPage: SettingsPage;
-			shouldAutoStartNoteCapture: boolean;
-			shouldStopNoteCaptureWhenMeetingEnds: boolean;
-			view: AppView;
-		}) => {
-			setInboxOpen(input.inboxOpen);
-			setCurrentView(input.view);
-			setCurrentChatId(input.chatId);
-			setCurrentProjectIdString(
-				input.view === "project" ? input.projectIdString : null,
-			);
-			setCurrentNoteId(null);
-			setCurrentRouteNoteId(input.view === "note" ? input.noteIdString : null);
-			setNoteCaptureRequestId(input.noteCaptureRequestId);
-			setShouldAutoStartNoteCapture(input.shouldAutoStartNoteCapture);
-			setShouldStopNoteCaptureWhenMeetingEnds(
-				input.shouldStopNoteCaptureWhenMeetingEnds,
-			);
-			setScheduledAutoStartNoteCaptureAt(input.scheduledAutoStartNoteCaptureAt);
-			setPendingCalendarEvent(input.pendingCalendarEvent);
-			setCurrentNoteEditorActions(null);
-			setCurrentNoteCommentsOpener(null);
-			setSettingsPage(input.settingsPage);
-			setSettingsOpen(input.settingsOpen);
-			setAutomationDialogOpen(false);
-			setEditingAutomationId(null);
-			setAutomationChatId(null);
-		},
-		[],
-	);
-
-	const clearScheduledAutoStart = React.useCallback(() => {
-		setScheduledAutoStartNoteCaptureAt(null);
-	}, []);
-
-	const triggerScheduledAutoStart = React.useCallback(() => {
-		setShouldAutoStartNoteCapture(true);
-		setScheduledAutoStartNoteCaptureAt(null);
-	}, []);
 	const calendarPreferences = useQuery(
 		api.calendarPreferences.get,
 		isConvexAuthenticated && resolvedActiveWorkspaceId
@@ -635,10 +513,8 @@ const useAppShellState = ({
 		matches: (chat, id) => getChatId(chat) === id,
 		resolvingIds: resolvingPersistedChatIds,
 	});
-	const isResolvingCurrentChat = currentChatRoute.status === "resolving";
 	const isResolvingPendingPersistedChat =
 		currentChatId !== null && resolvingPersistedChatIds.has(currentChatId);
-	const hasMissingCurrentChat = currentChatRoute.status === "missing";
 	const selectedProjectRoute = resolveCollectionRoute({
 		currentView,
 		expectedView: "project",
@@ -650,19 +526,24 @@ const useAppShellState = ({
 	});
 	const selectedProject =
 		selectedProjectRoute.status === "ready" ? selectedProjectRoute.value : null;
-	const isResolvingCurrentProject = selectedProjectRoute.status === "resolving";
-	const hasMissingCurrentProject = selectedProjectRoute.status === "missing";
-	const resolvedCurrentView =
-		hasInvalidCurrentNoteRoute ||
-		hasMissingCurrentNote ||
-		hasMissingCurrentChat ||
-		hasMissingCurrentProject
-			? "notFound"
-			: currentView;
-	const isResolvingResourceRoute =
-		isResolvingCurrentNote ||
-		(isResolvingCurrentChat && !isResolvingPendingPersistedChat) ||
-		isResolvingCurrentProject;
+	const currentNoteRoute =
+		currentView !== "note"
+			? ({ status: "inactive" } as const)
+			: hasInvalidCurrentNoteRoute || hasMissingCurrentNote
+				? ({ status: "missing" } as const)
+				: isResolvingCurrentNote
+					? ({ status: "resolving" } as const)
+					: ({ status: "ready", value: resolvedSelectedNote ?? null } as const);
+	const applicationView = resolveApplicationView({
+		chat: isResolvingPendingPersistedChat
+			? { status: "ready", value: null }
+			: currentChatRoute,
+		note: currentNoteRoute,
+		project: selectedProjectRoute,
+		view: currentView,
+	});
+	const resolvedCurrentView = applicationView.view;
+	const isResolvingResourceRoute = applicationView.isResolving;
 
 	const refreshUpcomingCalendarEvents = React.useEffectEvent(
 		async (
@@ -805,110 +686,38 @@ const useAppShellState = ({
 		async (input: { name: string }) => {
 			const workspace = await createWorkspace(input);
 			setActiveWorkspaceId(workspace._id);
+			navigateView("home");
 			return workspace;
 		},
-		[createWorkspace],
+		[createWorkspace, navigateView],
 	);
-
-	React.useEffect(() => {
-		const syncViewFromLocation = () => {
-			const url = new URL(window.location.href);
-			const nextSettingsPage =
-				getSettingsPageFromPath(url.pathname) ??
-				(url.hash === "#settings" ? "Profile" : null);
-			const nextSettingsOpen = nextSettingsPage !== null;
-
-			if (!nextSettingsOpen) {
-				lastNonSettingsLocationRef.current = `${url.pathname}${url.search}${url.hash}`;
-			}
-
-			const contentUrl = nextSettingsOpen
-				? new URL(lastNonSettingsLocationRef.current ?? "/home", url.origin)
-				: url;
-			const nextLocationState = getAppLocationState(contentUrl);
-			const nextChatId = nextLocationState.chatId;
-			const nextInboxOpen =
-				nextLocationState.view === "inbox" ||
-				(inboxOpenRef.current && readDesktopInboxPanelPinnedState());
-			const nextView = nextInboxOpen ? "home" : nextLocationState.view;
-			const nextNoteIdString = nextLocationState.noteIdString;
-			const nextNoteCaptureRequestId = nextLocationState.noteCaptureRequestId;
-			const nextShouldAutoStartNoteCapture =
-				nextLocationState.shouldAutoStartNoteCapture;
-			const nextShouldStopNoteCaptureWhenMeetingEnds =
-				nextLocationState.shouldStopNoteCaptureWhenMeetingEnds;
-			const nextScheduledAutoStartNoteCaptureAt =
-				nextLocationState.scheduledAutoStartNoteCaptureAt;
-
-			applyLocationSyncState({
-				chatId: nextChatId,
-				inboxOpen: nextInboxOpen,
-				noteCaptureRequestId: nextNoteCaptureRequestId,
-				noteIdString: nextNoteIdString,
-				projectIdString: nextLocationState.projectIdString,
-				pendingCalendarEvent: nextLocationState.pendingCalendarEvent,
-				scheduledAutoStartNoteCaptureAt: nextScheduledAutoStartNoteCaptureAt,
-				settingsOpen: nextSettingsOpen,
-				settingsPage: nextSettingsPage ?? "Profile",
-				shouldAutoStartNoteCapture: nextShouldAutoStartNoteCapture,
-				shouldStopNoteCaptureWhenMeetingEnds:
-					nextShouldStopNoteCaptureWhenMeetingEnds,
-				view: nextView,
-			});
-
-			const nextPath = nextSettingsOpen
-				? getSettingsPath(nextSettingsPage ?? "Profile")
-				: nextInboxOpen
-					? "/home"
-					: nextLocationState.canonicalPath;
-			const nextSearch = nextSettingsOpen
-				? ""
-				: nextInboxOpen
-					? ""
-					: nextLocationState.canonicalSearch;
-			const nextHash = "";
-			if (
-				nextPath &&
-				(window.location.pathname !== nextPath ||
-					window.location.search !== nextSearch ||
-					window.location.hash !== nextHash)
-			) {
-				window.history.replaceState(
-					null,
-					"",
-					`${nextPath}${nextSearch}${nextHash}`,
-				);
-			}
-		};
-
-		syncViewFromLocation();
-		window.addEventListener("popstate", syncViewFromLocation);
-
-		return () => {
-			window.removeEventListener("popstate", syncViewFromLocation);
-		};
-	}, [applyLocationSyncState]);
-
-	React.useEffect(() => {
-		if (typeof window === "undefined") {
-			return;
-		}
-
-		return onDesktopNavigate((navigation) => {
-			const nextLocation = `${navigation.pathname}${navigation.search}${navigation.hash}`;
-
-			if (
-				window.location.pathname === navigation.pathname &&
-				window.location.search === navigation.search &&
-				window.location.hash === navigation.hash
-			) {
+	const handleWorkspaceSelect = React.useCallback(
+		(workspaceId: Id<"workspaces">) => {
+			if (workspaceId === resolvedActiveWorkspaceId) {
 				return;
 			}
 
-			window.history.pushState(null, "", nextLocation);
-			window.dispatchEvent(new PopStateEvent("popstate"));
-		});
-	}, []);
+			setActiveWorkspaceId(workspaceId);
+			navigateView("home");
+		},
+		[navigateView, resolvedActiveWorkspaceId],
+	);
+	const previousResolvedWorkspaceIdRef = React.useRef(
+		resolvedActiveWorkspaceId,
+	);
+	React.useEffect(() => {
+		const previousWorkspaceId = previousResolvedWorkspaceIdRef.current;
+		previousResolvedWorkspaceIdRef.current = resolvedActiveWorkspaceId;
+
+		if (
+			previousWorkspaceId &&
+			resolvedActiveWorkspaceId &&
+			previousWorkspaceId !== resolvedActiveWorkspaceId &&
+			currentView !== "home"
+		) {
+			navigateView("home");
+		}
+	}, [currentView, navigateView, resolvedActiveWorkspaceId]);
 
 	React.useEffect(() => {
 		void getDesktopMeta()
@@ -921,15 +730,6 @@ const useAppShellState = ({
 				setIsDesktopMac(false);
 			});
 	}, []);
-
-	const shouldKeepPinnedInboxOpen = React.useCallback(
-		() => inboxOpen && readDesktopInboxPanelPinnedState(),
-		[inboxOpen],
-	);
-
-	React.useEffect(() => {
-		inboxOpenRef.current = inboxOpen;
-	}, [inboxOpen]);
 
 	const openChatLanding = React.useCallback(
 		(
@@ -944,10 +744,7 @@ const useAppShellState = ({
 					? { ...options.plugin, composerId: freshComposerId }
 					: null;
 			React.startTransition(() => {
-				setInboxOpen(shouldKeepPinnedInboxOpen());
-				setCurrentView("chat");
-				setSettingsOpen(false);
-				setCurrentChatId(null);
+				navigateChat(null);
 				setAutomationDialogOpen(false);
 				setEditingAutomationId(null);
 				setCurrentNoteEditorActions(null);
@@ -956,10 +753,9 @@ const useAppShellState = ({
 					setDraftChatComposerId(freshComposerId);
 					setChatPluginPrefill(pluginPrefill);
 				}
-				window.history.pushState(null, "", "/chat");
 			});
 		},
-		[shouldKeepPinnedInboxOpen],
+		[navigateChat],
 	);
 
 	const openFreshChat = React.useCallback(() => {
@@ -980,39 +776,23 @@ const useAppShellState = ({
 	const openStoredChat = React.useCallback(
 		(chatId: string) => {
 			React.startTransition(() => {
-				setInboxOpen(shouldKeepPinnedInboxOpen());
-				setCurrentView("chat");
-				setSettingsOpen(false);
-				setCurrentChatId(chatId);
-				window.history.pushState(
-					null,
-					"",
-					`/chat?chatId=${encodeURIComponent(chatId)}`,
-				);
+				navigateChat(chatId);
 			});
 		},
-		[shouldKeepPinnedInboxOpen],
+		[navigateChat],
 	);
 
 	const openProject = React.useCallback(
 		(projectId: Id<"projects">) => {
 			React.startTransition(() => {
-				setInboxOpen(shouldKeepPinnedInboxOpen());
-				setCurrentView("project");
-				setSettingsOpen(false);
-				setCurrentProjectIdString(projectId);
+				navigateProject(projectId);
 				setAutomationDialogOpen(false);
 				setEditingAutomationId(null);
 				setCurrentNoteEditorActions(null);
 				setCurrentNoteCommentsOpener(null);
-				window.history.pushState(
-					null,
-					"",
-					`/project?projectId=${encodeURIComponent(projectId)}`,
-				);
 			});
 		},
-		[shouldKeepPinnedInboxOpen],
+		[navigateProject],
 	);
 
 	const editingAutomation = React.useMemo(
@@ -1138,59 +918,26 @@ const useAppShellState = ({
 
 	const handleViewChange = React.useCallback(
 		(view: AppView) => {
-			if (view === "inbox") {
-				setInboxOpen(true);
-				setSettingsOpen(false);
-				setAutomationDialogOpen(false);
-				setEditingAutomationId(null);
-				return;
-			}
-
 			if (view === "chat") {
 				openDraftChat();
 				return;
 			}
 
-			setInboxOpen(shouldKeepPinnedInboxOpen());
-			setCurrentView(view);
-			setSettingsOpen(false);
+			navigateView(view);
 			setAutomationDialogOpen(false);
 			setEditingAutomationId(null);
 			setCurrentNoteEditorActions(null);
 			setCurrentNoteCommentsOpener(null);
-			const search =
-				view === "note" && resolvedCurrentNoteId
-					? `?noteId=${resolvedCurrentNoteId}`
-					: "";
-			window.history.pushState(
-				null,
-				"",
-				view === "note"
-					? `/note${search}`
-					: view === "automation"
-						? "/automations"
-						: view === "shared"
-							? "/shared"
-							: view === "project" && currentProjectIdString
-								? `/project?projectId=${encodeURIComponent(currentProjectIdString)}`
-								: "/home",
-			);
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[
-			currentProjectIdString,
-			openDraftChat,
-			resolvedCurrentNoteId,
-			shouldKeepPinnedInboxOpen,
-		],
+		[navigateView, openDraftChat],
 	);
 
-	const handleInboxOpenChange = React.useCallback((open: boolean) => {
-		setInboxOpen(open);
-		if (open) {
-			setSettingsOpen(false);
-		}
-	}, []);
+	const handleInboxOpenChange = React.useCallback(
+		(open: boolean) => {
+			setNavigationInboxOpen(open);
+		},
+		[setNavigationInboxOpen],
+	);
 
 	const handlePrefetchNote = React.useCallback(
 		(_noteId: Id<"notes">) => {},
@@ -1212,36 +959,16 @@ const useAppShellState = ({
 				captureRequestId: options?.captureRequestId,
 			});
 			handlePrefetchNote(noteId);
-			setInboxOpen(shouldKeepPinnedInboxOpen());
-			setCurrentView("note");
-			setSettingsOpen(false);
-			setCurrentNoteId(noteId);
-			setCurrentRouteNoteId(noteId);
-			setNoteCaptureRequestId(captureRequestId);
-			setShouldAutoStartNoteCapture(options?.autoStartCapture === true);
-			setShouldStopNoteCaptureWhenMeetingEnds(
-				options?.stopCaptureWhenMeetingEnds === true,
-			);
-			setScheduledAutoStartNoteCaptureAt(
-				options?.scheduledAutoStartAt?.trim() || null,
-			);
-			setPendingCalendarEvent(null);
+			navigateNote(noteId, {
+				autoStartCapture: options?.autoStartCapture,
+				captureRequestId,
+				scheduledAutoStartAt: options?.scheduledAutoStartAt,
+				stopCaptureWhenMeetingEnds: options?.stopCaptureWhenMeetingEnds,
+			});
 			setCurrentNoteEditorActions(null);
 			setCurrentNoteCommentsOpener(null);
-			window.history.pushState(
-				null,
-				"",
-				`/note${createNoteSearch({
-					autoStartCapture: options?.autoStartCapture === true,
-					captureRequestId,
-					noteId,
-					scheduledAutoStartAt: options?.scheduledAutoStartAt,
-					stopCaptureWhenMeetingEnds:
-						options?.stopCaptureWhenMeetingEnds === true,
-				})}`,
-			);
 		},
-		[handlePrefetchNote, shouldKeepPinnedInboxOpen],
+		[handlePrefetchNote, navigateNote],
 	);
 
 	const handleCreateNote = React.useCallback(
@@ -1328,26 +1055,13 @@ const useAppShellState = ({
 
 	const handleQuickNote = React.useCallback(() => {
 		const captureRequestId = createNoteCaptureRequestId();
-		setCurrentView("note");
-		setSettingsOpen(false);
-		setCurrentNoteId(null);
-		setCurrentRouteNoteId(null);
-		setNoteCaptureRequestId(captureRequestId);
-		setShouldAutoStartNoteCapture(true);
-		setShouldStopNoteCaptureWhenMeetingEnds(false);
-		setScheduledAutoStartNoteCaptureAt(null);
-		setPendingCalendarEvent(null);
+		navigateNote(null, {
+			autoStartCapture: true,
+			captureRequestId,
+		});
 		setCurrentNoteEditorActions(null);
 		setCurrentNoteCommentsOpener(null);
-		window.history.pushState(
-			null,
-			"",
-			`/note${createNoteSearch({
-				autoStartCapture: true,
-				captureRequestId,
-			})}`,
-		);
-	}, []);
+	}, [navigateNote]);
 
 	const handleCreateNoteFromChatResponse = React.useCallback(
 		async (title: string, content: string) => {
@@ -1387,22 +1101,8 @@ const useAppShellState = ({
 	);
 
 	const handleAutoStartNoteCaptureHandled = React.useCallback(() => {
-		setShouldAutoStartNoteCapture(false);
-		setShouldStopNoteCaptureWhenMeetingEnds(false);
-		setScheduledAutoStartNoteCaptureAt(null);
-		setNoteCaptureRequestId(null);
-
-		if (resolvedCurrentView !== "note" || !resolvedCurrentNoteId) {
-			return;
-		}
-
-		window.history.replaceState(
-			null,
-			"",
-			`/note?noteId=${resolvedCurrentNoteId}`,
-		);
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [resolvedCurrentNoteId, resolvedCurrentView]);
+		consumeNoteCaptureIntent(currentNoteId ?? normalizedRouteNoteId ?? null);
+	}, [consumeNoteCaptureIntent, currentNoteId, normalizedRouteNoteId]);
 
 	React.useEffect(() => {
 		if (
@@ -1497,24 +1197,9 @@ const useAppShellState = ({
 
 	const handleSettingsOpenChange = React.useCallback(
 		(open: boolean, page: SettingsPage = "Profile") => {
-			setSettingsOpen(open);
-			if (!open) {
-				setSettingsPage("Profile");
-				const nextLocation = lastNonSettingsLocationRef.current || "/home";
-				window.history.pushState(null, "", nextLocation);
-				return;
-			}
-
-			setInboxOpen(false);
-			const currentUrl = new URL(window.location.href);
-			if (getSettingsPageFromPath(currentUrl.pathname) === null) {
-				lastNonSettingsLocationRef.current = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
-			}
-
-			setSettingsPage(page);
-			window.history.pushState(null, "", getSettingsPath(page));
+			setNavigationSettingsOpen(open, page);
 		},
-		[],
+		[setNavigationSettingsOpen],
 	);
 
 	React.useEffect(() => {
@@ -1563,12 +1248,12 @@ const useAppShellState = ({
 			}
 
 			event.preventDefault();
-			setActiveWorkspaceId(workspace._id);
+			handleWorkspaceSelect(workspace._id);
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [resolvedActiveWorkspaceId, workspaces]);
+	}, [handleWorkspaceSelect, resolvedActiveWorkspaceId, workspaces]);
 
 	const handleOpenCalendarSettings = React.useCallback(() => {
 		handleSettingsOpenChange(true, "Calendar");
@@ -1595,8 +1280,6 @@ const useAppShellState = ({
 				return;
 			}
 
-			setCurrentNoteId(null);
-			setCurrentRouteNoteId(null);
 			setCurrentNoteTitleOverride(null);
 			setCurrentNoteEditorActions(null);
 			setCurrentNoteCommentsOpener(null);
@@ -1642,16 +1325,11 @@ const useAppShellState = ({
 			addPendingPersistedChatRouteId(chatId);
 
 			if (currentChatId !== chatId) {
-				setCurrentChatId(chatId);
 				setDraftChatComposerId(crypto.randomUUID());
 			}
-			window.history.replaceState(
-				null,
-				"",
-				`/chat?chatId=${encodeURIComponent(chatId)}`,
-			);
+			navigateChat(chatId, "replace");
 		},
-		[addPendingPersistedChatRouteId, currentChatId],
+		[addPendingPersistedChatRouteId, currentChatId, navigateChat],
 	);
 	const handleChatRemoved = React.useCallback(
 		(chatId: string) => {
@@ -1662,11 +1340,10 @@ const useAppShellState = ({
 			}
 
 			const nextChatId = crypto.randomUUID();
-			setCurrentChatId(null);
 			setDraftChatComposerId(nextChatId);
-			window.history.replaceState(null, "", "/chat");
+			navigateChat(null, "replace");
 		},
-		[currentChatId, removePendingPersistedChatRouteId],
+		[currentChatId, navigateChat, removePendingPersistedChatRouteId],
 	);
 	const currentChat =
 		currentChatRoute.status === "ready" ? currentChatRoute.value : null;
@@ -1795,7 +1472,7 @@ const useAppShellState = ({
 		selectedNote: resolvedSelectedNote,
 		settingsOpen,
 		settingsPage,
-		setActiveWorkspaceId,
+		setActiveWorkspaceId: handleWorkspaceSelect,
 		handleAutomationDialogOpenChange,
 		setCurrentNoteCommentsOpener,
 		setCurrentNoteEditorActions,

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	getResolvingPersistedChatIds,
+	resolveApplicationView,
 	resolveCollectionRoute,
-} from "@/app/resource-route";
+} from "@/app/application-navigation-session";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 const chatDoc = (id: string) =>
@@ -91,5 +92,24 @@ describe("resource route resolution", () => {
 				pendingPersistedChatRouteIds: ["chat-1", "chat-2"],
 			}),
 		).toEqual(new Set());
+	});
+
+	it("projects resource resolution into one application view state", () => {
+		expect(
+			resolveApplicationView({
+				chat: { status: "inactive" },
+				note: { status: "resolving" },
+				project: { status: "inactive" },
+				view: "note",
+			}),
+		).toEqual({ view: "note", isResolving: true });
+		expect(
+			resolveApplicationView({
+				chat: { status: "missing" },
+				note: { status: "inactive" },
+				project: { status: "inactive" },
+				view: "chat",
+			}),
+		).toEqual({ view: "notFound", isResolving: false });
 	});
 });
