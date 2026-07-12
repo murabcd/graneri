@@ -14,6 +14,17 @@ const restoreEnv = (name, value) => {
 	process.env[name] = value;
 };
 
+const fetchFromLocalServer = (fetchImplementation, server, path, init) => {
+	const headers = new Headers(init.headers);
+	// Test servers reuse preferred ports, so their sockets must not outlive them.
+	headers.set("connection", "close");
+
+	return fetchImplementation(`${server.origin}${path}`, {
+		...init,
+		headers,
+	});
+};
+
 test("enhance-note always proxies without forwarding stale body encoding headers", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalSiteUrl = process.env.SITE_URL;
@@ -49,14 +60,19 @@ test("enhance-note always proxies without forwarding stale body encoding headers
 
 	try {
 		server = await startLocalServer();
-		const response = await originalFetch(`${server.origin}/api/enhance-note`, {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				origin: server.origin,
+		const response = await fetchFromLocalServer(
+			originalFetch,
+			server,
+			"/api/enhance-note",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: server.origin,
+				},
+				body: JSON.stringify({ transcript: "hello world" }),
 			},
-			body: JSON.stringify({ transcript: "hello world" }),
-		});
+		);
 
 		assert.equal(response.status, 200);
 		assert.equal(response.headers.get("content-encoding"), null);
@@ -100,6 +116,7 @@ test("desktop streaming AI routes always proxy to the web server", async () => {
 	try {
 		server = await startLocalServer();
 		const requestHeaders = {
+			connection: "close",
 			"content-type": "application/json",
 			origin: server.origin,
 		};
@@ -140,6 +157,7 @@ test("desktop streaming AI routes always proxy to the web server", async () => {
 				method: "GET",
 				headers: {
 					authorization: "Bearer test-convex-token",
+					connection: "close",
 					origin: server.origin,
 				},
 			},
@@ -202,7 +220,7 @@ test("desktop chat requires SITE_URL even when a local OpenAI key exists", async
 
 	try {
 		server = await startLocalServer();
-		const response = await fetch(`${server.origin}/api/chat`, {
+		const response = await fetchFromLocalServer(fetch, server, "/api/chat", {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
@@ -243,22 +261,27 @@ test("local folder tool requests execute against shared desktop folders", async 
 			},
 		});
 
-		const response = await fetch(`${server.origin}/api/local-folder-tool`, {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				origin: server.origin,
-			},
-			body: JSON.stringify({
-				input: {
-					rootIndex: 0,
-					relativePath: ".",
+		const response = await fetchFromLocalServer(
+			fetch,
+			server,
+			"/api/local-folder-tool",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: server.origin,
 				},
-				localFolders: [{ id: "folder_1", name: "graneri" }],
-				toolCallId: "tool_call_1",
-				toolName: "list_local_directory",
-			}),
-		});
+				body: JSON.stringify({
+					input: {
+						rootIndex: 0,
+						relativePath: ".",
+					},
+					localFolders: [{ id: "folder_1", name: "graneri" }],
+					toolCallId: "tool_call_1",
+					toolName: "list_local_directory",
+				}),
+			},
+		);
 
 		assert.equal(response.status, 200);
 		assert.deepEqual(requestedFolderIds, ["folder_1"]);
