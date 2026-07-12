@@ -21,6 +21,11 @@ Screen Recording permission.
 `apps/web`
 : React renderer for both desktop and browser. Desktop releases still depend on
 the Vite bundle, so renderer constants are part of desktop release correctness.
+`useRendererChatSession` is the renderer boundary for AI SDK transport, desktop
+local-tool handoff, active-run resume, persisted-message reseeding and merging,
+and durable follow-up drain and controls. Full chat and note chat remain view
+adapters: they own composer and presentation behavior but must not assemble
+parallel stream, recovery, or queue lifecycles.
 
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.

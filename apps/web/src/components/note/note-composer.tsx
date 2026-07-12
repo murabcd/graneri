@@ -1,4 +1,3 @@
-import { useChat } from "@ai-sdk/react";
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
@@ -54,8 +53,7 @@ import {
 	APP_SIDEBAR_EXPANDED_WIDTH,
 } from "@workspace/ui/lib/panel-dimensions";
 import { cn } from "@workspace/ui/lib/utils";
-import type { ChatAddToolOutputFunction, FileUIPart, UIMessage } from "ai";
-import { lastAssistantMessageIsCompleteWithToolCalls } from "ai";
+import type { FileUIPart, UIMessage } from "ai";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import {
 	ArrowUp,
@@ -118,11 +116,11 @@ import {
 } from "@/hooks/use-chat-messages-snapshot";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
-import { useQueuedChatDrain } from "@/hooks/use-queued-chat-drain";
-import { useQueuedFollowUpControls } from "@/hooks/use-queued-follow-up-controls";
-import { useResumeActiveChatRun } from "@/hooks/use-resume-active-chat-run";
+import {
+	type ScopedLocalOptimisticMessages,
+	useRendererChatSession,
+} from "@/hooks/use-renderer-chat-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
-import { useWorkspaceChatTransport } from "@/hooks/use-workspace-chat-transport";
 import {
 	getStoredChatModel as getStoredLocalChatModel,
 	storeChatModel,
@@ -141,19 +139,13 @@ import { isSameCalendarDay } from "@/lib/calendar-day";
 import { stopActiveChatStream } from "@/lib/chat-active-stream";
 import { getPendingAutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
 import { submitAutomationConfirmationChatTurn } from "@/lib/chat-automation-confirmation-submit";
-import {
-	appendLocalOptimisticChatMessages,
-	hasRenderableChatMessageText,
-	mergePersistedChatMessagesWithController,
-	normalizeChatMessages,
-} from "@/lib/chat-message-state";
+import { normalizeChatMessages } from "@/lib/chat-message-state";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import {
 	buildNoteChatRequestBody,
 	buildNoteChatRequestBodyFromLocalFolders,
 } from "@/lib/chat-request-preparation";
-import { getUIMessageSeedKey, toStoredChatMessages } from "@/lib/chat-snapshot";
-import { CHAT_STREAM_UI_THROTTLE_MS } from "@/lib/chat-streaming-performance";
+import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import {
 	removeChatMessageById,
 	submitChatTurn,
@@ -165,7 +157,6 @@ import {
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
-import { createDesktopLocalToolCallHandler } from "@/lib/desktop-local-tool-call";
 import {
 	loadStoredSharedLocalFolders,
 	rehydrateSharedLocalFolders,
@@ -233,11 +224,6 @@ import {
 import { NOTE_POPOVER_SCROLLER_BUTTON_CLASS } from "./note-popover-scroll";
 
 type NoteChatPresentation = "inline" | "floating" | "sidebar";
-type ScopedLocalOptimisticMessages = {
-	chatId: string;
-	messages: UIMessage[];
-};
-const EMPTY_STEER_HANDOFF_STREAMING_MESSAGE_IDS = new Set<string>();
 const noteRecipePickerListboxProps = {
 	role: "listbox" as const,
 	"aria-label": "Recipe suggestions",
@@ -574,7 +560,6 @@ const useNoteComposerController = ({
 	);
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const convex = useConvex();
-	const previousChatIdRef = React.useRef(currentChatId);
 	const previousNoteIdRef = React.useRef(noteId);
 	const noteChats = useQuery(
 		api.chats.listForNote,
@@ -599,8 +584,6 @@ const useNoteComposerController = ({
 			? { workspaceId: activeWorkspaceId, chatId: currentChatId }
 			: "skip",
 	);
-	const attachableActiveRun =
-		activeRun && activeRun.status !== "stopping" ? activeRun : null;
 	const currentChatSession = useQuery(
 		api.chats.getSession,
 		activeWorkspaceId && hasStoredCurrentChat
@@ -806,8 +789,6 @@ const useNoteComposerController = ({
 		transcriptionSessionState.scopeKey,
 	]);
 
-	const transport = useWorkspaceChatTransport(activeWorkspaceId);
-
 	const initialMessages = React.useMemo(
 		() => toStoredChatMessages(storedMessages ?? []),
 		[storedMessages],
@@ -827,168 +808,49 @@ const useNoteComposerController = ({
 			),
 		[activePendingTruncateMessageId, initialMessages],
 	);
-	const latestRequestBodyRef = React.useRef<Record<string, unknown> | null>(
-		null,
-	);
-	const addToolOutputRef =
-		React.useRef<ChatAddToolOutputFunction<UIMessage> | null>(null);
 	const [localOptimisticMessages, setLocalOptimisticMessages] =
 		React.useState<ScopedLocalOptimisticMessages | null>(null);
-	const [
-		activeSteerHandoffStreamingMessageIds,
-		setActiveSteerHandoffStreamingMessageIds,
-	] = React.useState<ReadonlySet<string>>(() => new Set());
-	const handleToolCall = React.useMemo(
-		() =>
-			createDesktopLocalToolCallHandler({
-				addToolOutputRef,
-				latestRequestBodyRef,
-			}),
-		[],
-	);
 	const {
-		messages: chatMessages,
-		setMessages,
-		sendMessage,
-		regenerate,
+		displayActiveRun,
+		displayMessages: displayChatMessages,
 		error: chatError,
+		finishQueuedMessageEdit,
+		isAiRequestPending,
+		isChatRequestPending,
+		latestRequestBodyRef,
+		onQueuedFollowUpsReorder,
+		queuedFollowUps,
+		queuedMessages,
+		regenerate,
+		restoreEditedQueuedMessage,
+		sendMessage,
+		sendQueuedFollowUpNow,
+		setMessages,
+		setQueuedMessages,
 		status: chatStatus,
 		stop,
-		resumeStream,
-		addToolOutput,
-	} = useChat({
-		// useChat owns the transient chat session keyed by current note-chat id.
-		// react-doctor-disable-next-line react-doctor/no-event-handler
-		id: currentChatId,
-		experimental_throttle: CHAT_STREAM_UI_THROTTLE_MS,
-		messages: initialMessages,
-		transport,
-		onToolCall: handleToolCall,
-		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+		streamingMessageIds,
+		editDraft: queuedMessageEditDraft,
+	} = useRendererChatSession({
+		activeRun,
+		chatId: currentChatId,
+		contextLabel: "note chat",
+		isPreparingRequest,
+		localOptimisticMessages,
+		onEditQueuedMessage: (queuedMessage) => {
+			setEditingMessageId(queuedMessage._id);
+			setMessage(queuedMessage.text);
+			setDraftMetadata(null);
+			setAttachedFiles([]);
+			pendingComposerFocusRef.current = true;
+		},
+		persistedMessages: visibleInitialMessages,
+		resumeEnabled: hasStoredCurrentChat,
+		workspaceId: activeWorkspaceId,
 	});
-	addToolOutputRef.current = addToolOutput;
-	const controllerMessages = React.useMemo(
-		() => normalizeChatMessages(chatMessages),
-		[chatMessages],
-	);
-	const isAiRequestPending =
-		chatStatus === "submitted" || chatStatus === "streaming";
-	// Request pending state combines AI SDK status with local async submit preparation.
-	// react-doctor-disable-next-line react-doctor/no-event-handler
-	const isChatRequestPending = isAiRequestPending || isPreparingRequest;
-	const hasLocallyCompletedAssistantMessage =
-		!isAiRequestPending &&
-		Boolean(
-			attachableActiveRun &&
-				hasRenderableChatMessageText(
-					controllerMessages.find(
-						(message) =>
-							message.id === attachableActiveRun.assistantMessageId &&
-							message.role === "assistant",
-					),
-				),
-		);
-	const displayActiveRun = hasLocallyCompletedAssistantMessage
-		? null
-		: attachableActiveRun;
-	const activeAssistantMessageId = React.useMemo(() => {
-		if (!displayActiveRun) {
-			return null;
-		}
-
-		const controllerMessagesAfterLatestUser = controllerMessages.slice(
-			controllerMessages.findLastIndex(
-				(currentMessage) => currentMessage.role === "user",
-			) + 1,
-		);
-		const snapshotMessagesAfterLatestUser = visibleInitialMessages.slice(
-			visibleInitialMessages.findLastIndex(
-				(currentMessage) => currentMessage.role === "user",
-			) + 1,
-		);
-		const activeControllerAssistantMessage = [
-			...controllerMessagesAfterLatestUser,
-		]
-			.reverse()
-			.find((currentMessage) => currentMessage.role === "assistant");
-		const activeSnapshotAssistantMessage = [...snapshotMessagesAfterLatestUser]
-			.reverse()
-			.find((currentMessage) => currentMessage.role === "assistant");
-
-		return (
-			activeControllerAssistantMessage?.id ??
-			activeSnapshotAssistantMessage?.id ??
-			displayActiveRun.assistantMessageId
-		);
-	}, [controllerMessages, displayActiveRun, visibleInitialMessages]);
-	const steerHandoffStreamingMessageIds =
-		displayActiveRun || isAiRequestPending || isPreparingRequest
-			? activeSteerHandoffStreamingMessageIds
-			: EMPTY_STEER_HANDOFF_STREAMING_MESSAGE_IDS;
-	const mergedDisplayChatMessages = React.useMemo(() => {
-		if (!activeAssistantMessageId || !displayActiveRun) {
-			return controllerMessages.length > 0
-				? controllerMessages
-				: visibleInitialMessages;
-		}
-
-		const activeControllerMessage = controllerMessages.find(
-			(message) =>
-				message.id === activeAssistantMessageId && message.role === "assistant",
-		);
-		const activeSnapshotMessage = visibleInitialMessages.find(
-			(message) =>
-				message.id === activeAssistantMessageId && message.role === "assistant",
-		);
-		const activeAssistantMessage = hasRenderableChatMessageText(
-			activeControllerMessage,
-		)
-			? activeControllerMessage
-			: activeSnapshotMessage;
-
-		return mergePersistedChatMessagesWithController({
-			activeAssistantMessage,
-			activeAssistantMessageId,
-			controllerMessages,
-			persistedMessages: visibleInitialMessages,
-		});
-	}, [
-		activeAssistantMessageId,
-		controllerMessages,
-		displayActiveRun,
-		visibleInitialMessages,
-	]);
-	const displayChatMessages = React.useMemo(
-		() =>
-			appendLocalOptimisticChatMessages({
-				displayMessages: mergedDisplayChatMessages,
-				localOptimisticMessages:
-					localOptimisticMessages?.chatId === currentChatId
-						? localOptimisticMessages.messages
-						: [],
-				resolvedMessages: visibleInitialMessages,
-			}),
-		[
-			currentChatId,
-			localOptimisticMessages,
-			mergedDisplayChatMessages,
-			visibleInitialMessages,
-		],
-	);
 	const automationDeleteConfirmation = React.useMemo(
 		() => getPendingAutomationDeleteConfirmation(displayChatMessages),
 		[displayChatMessages],
-	);
-	const streamingMessageIds = React.useMemo(
-		() =>
-			new Set([
-				...steerHandoffStreamingMessageIds,
-				...(displayActiveRun?.interruptedAssistantMessageIds ?? []),
-			]),
-		[
-			displayActiveRun?.interruptedAssistantMessageIds,
-			steerHandoffStreamingMessageIds,
-		],
 	);
 
 	React.useEffect(() => {
@@ -998,72 +860,6 @@ const useNoteComposerController = ({
 
 		void prefetchConvexToken();
 	}, [activeWorkspaceId]);
-
-	useResumeActiveChatRun({
-		activeRun: displayActiveRun,
-		chatId: currentChatId,
-		enabled: hasStoredCurrentChat && !isChatRequestPending,
-		resumeStream,
-		workspaceId: activeWorkspaceId,
-	});
-
-	const initialMessagesSeedKey = React.useMemo(
-		() => getUIMessageSeedKey(visibleInitialMessages),
-		[visibleInitialMessages],
-	);
-	const appliedInitialMessagesSeedKeyRef = React.useRef(initialMessagesSeedKey);
-
-	React.useEffect(() => {
-		const isLocalRequestRunning =
-			chatStatus === "submitted" ||
-			chatStatus === "streaming" ||
-			isPreparingRequest;
-
-		if (previousChatIdRef.current !== currentChatId) {
-			previousChatIdRef.current = currentChatId;
-			appliedInitialMessagesSeedKeyRef.current = initialMessagesSeedKey;
-			// useChat owns transient UI messages; note-chat changes must reseed it.
-			// react-doctor-disable-next-line react-doctor/no-pass-data-to-parent
-			setMessages(visibleInitialMessages);
-			return;
-		}
-
-		if (isLocalRequestRunning) {
-			return;
-		}
-
-		// useChat owns transient UI messages; persisted note-chat messages must reseed it after loads.
-		// react-doctor-disable-next-line react-doctor/no-pass-data-to-parent
-		setMessages((currentMessages) => {
-			const currentMessagesSeedKey = getUIMessageSeedKey(currentMessages);
-			const nextInitialMessages = activeAssistantMessageId
-				? removeChatMessageById(
-						visibleInitialMessages,
-						activeAssistantMessageId,
-					)
-				: visibleInitialMessages;
-
-			if (
-				currentMessages.length === 0 ||
-				currentMessagesSeedKey === appliedInitialMessagesSeedKeyRef.current ||
-				(!activeRun && nextInitialMessages.length > 0)
-			) {
-				appliedInitialMessagesSeedKeyRef.current = initialMessagesSeedKey;
-				return nextInitialMessages;
-			}
-
-			return normalizeChatMessages(currentMessages);
-		});
-	}, [
-		activeRun,
-		activeAssistantMessageId,
-		chatStatus,
-		currentChatId,
-		initialMessagesSeedKey,
-		isPreparingRequest,
-		setMessages,
-		visibleInitialMessages,
-	]);
 
 	const resetTextareaHeight = React.useCallback(() => {}, []);
 	const resizeTextarea = React.useCallback(() => {}, []);
@@ -1271,26 +1067,6 @@ const useNoteComposerController = ({
 	const isPersistedChatStreaming = Boolean(displayActiveRun);
 	const isChatUiPending = isChatRequestPending || isPersistedChatStreaming;
 	const canStop = isChatRequestPending || isPersistedChatStreaming;
-	const localMessageIds = React.useMemo(
-		() =>
-			new Set([
-				...controllerMessages.map((message) => message.id),
-				...(localOptimisticMessages?.chatId === currentChatId
-					? localOptimisticMessages.messages.map((message) => message.id)
-					: []),
-			]),
-		[controllerMessages, currentChatId, localOptimisticMessages],
-	);
-	const { queuedMessages, setQueuedMessages } = useQueuedChatDrain({
-		activeRun: displayActiveRun,
-		chatId: currentChatId,
-		contextLabel: "note chat",
-		isBlocked: isChatRequestPending,
-		latestRequestBodyRef,
-		localMessageIds,
-		sendMessage,
-		workspaceId: activeWorkspaceId,
-	});
 	const hasMessage = message.trim().length > 0;
 	const canGenerateNotes = resolveCanGenerateNotes({
 		hasGeneratedLatestTranscript:
@@ -1418,60 +1194,6 @@ const useNoteComposerController = ({
 		},
 		[activeWorkspaceId, currentChatId, displayActiveRun, stop],
 	);
-	const {
-		editDraft: queuedMessageEditDraft,
-		finishQueuedMessageEdit,
-		onQueuedFollowUpsReorder,
-		queuedFollowUps,
-		restoreEditedQueuedMessage,
-		sendQueuedFollowUpNow,
-	} = useQueuedFollowUpControls({
-		activeRun: displayActiveRun,
-		chatId: currentChatId,
-		contextLabel: "note chat",
-		latestRequestBodyRef,
-		localMessageIds,
-		onEditMessage: (queuedMessage) => {
-			setEditingMessageId(queuedMessage._id);
-			setMessage(queuedMessage.text);
-			setDraftMetadata(null);
-			setAttachedFiles([]);
-			resetTextareaHeight();
-			pendingComposerFocusRef.current = true;
-		},
-		queuedMessages,
-		sendMessage,
-		setQueuedMessages,
-		onSteerStart: () => {
-			const handoffMessageIds = [
-				...(activeAssistantMessageId ? [activeAssistantMessageId] : []),
-				...(displayActiveRun?.assistantMessageId
-					? [displayActiveRun.assistantMessageId]
-					: []),
-			];
-			if (handoffMessageIds.length === 0) {
-				return undefined;
-			}
-
-			setActiveSteerHandoffStreamingMessageIds((messageIds) => {
-				const nextMessageIds = new Set(messageIds);
-				for (const messageId of handoffMessageIds) {
-					nextMessageIds.add(messageId);
-				}
-				return nextMessageIds;
-			});
-
-			return () =>
-				setActiveSteerHandoffStreamingMessageIds((messageIds) => {
-					const nextMessageIds = new Set(messageIds);
-					for (const messageId of handoffMessageIds) {
-						nextMessageIds.delete(messageId);
-					}
-					return nextMessageIds;
-				});
-		},
-		workspaceId: activeWorkspaceId,
-	});
 	const queuedFollowUp = queuedMessages[0] ?? null;
 	const handleStop = React.useCallback(() => {
 		const stopPromise = queuedFollowUp
@@ -1945,6 +1667,7 @@ const useNoteComposerController = ({
 		isAiRequestPending,
 		isPreparingRequest,
 		getDraftSnapshot,
+		latestRequestBodyRef,
 		localFolderStorageScope,
 		openRightSidebar,
 		presentationMode,
@@ -2031,6 +1754,7 @@ const useNoteComposerController = ({
 			enqueueQueuedMessage,
 			isAiRequestPending,
 			isAutomationConfirmationSubmitting,
+			latestRequestBodyRef,
 			localFolderStorageScope,
 			openRightSidebar,
 			presentationMode,
@@ -2243,6 +1967,7 @@ const useNoteComposerController = ({
 			buildRequestBody,
 			canStop,
 			clearDraft,
+			latestRequestBodyRef,
 			openRightSidebar,
 			presentationMode,
 			regenerate,
