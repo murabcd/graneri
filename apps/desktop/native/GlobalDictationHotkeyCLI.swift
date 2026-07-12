@@ -28,12 +28,14 @@ private let callback: CGEventTapCallBack = { _, type, event, _ in
 
 	switch type {
 	case .keyDown:
-		if keyCode == mKeyCode && hasDictationShortcutModifiers(flags) && !isShortcutDown {
-			isShortcutDown = true
-			if dictationMode == "toggle" {
-				emit("toggle")
-			} else {
-				emit("start")
+		if keyCode == mKeyCode && hasDictationShortcutModifiers(flags) {
+			if !isShortcutDown {
+				isShortcutDown = true
+				if dictationMode == "toggle" {
+					emit("toggle")
+				} else {
+					emit("start")
+				}
 			}
 			return nil
 		}
