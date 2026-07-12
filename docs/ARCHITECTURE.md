@@ -37,6 +37,12 @@ synchronization, pinned-inbox behavior, transient note-capture intent, and
 workspace-scoped resource-route resolution. The authenticated shell invokes
 typed navigation methods and renders the resolved snapshot; it must not mutate
 parallel route state cells or write browser history directly.
+The desktop permissions session is the renderer authority for loading and
+refreshing native permission status, request and system-settings transitions,
+readiness, and onboarding completion. It consumes the narrow platform bridge
+and treats a missing bridge as a runtime error; it must not synthesize legacy
+permission rows. Native probing, prerequisite ordering, and permission error
+classification remain in Electron main behind IPC.
 
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.

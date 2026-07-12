@@ -1,16 +1,12 @@
 import {
 	getDesktopAuthCallbackUrl,
 	getDesktopMeta,
-	getDesktopPermissionsStatus,
 	isDesktopRuntime,
-	openDesktopPermissionSettings,
-	requestDesktopPermission,
 } from "@workspace/platform/desktop";
 import type {
 	DesktopPermissionId,
 	DesktopPermissionState,
 	DesktopPermissionsStatus,
-	DesktopPlatform,
 } from "@workspace/platform/desktop-bridge";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -39,6 +35,10 @@ import type { SocialAuthProvider } from "@/app/app-types";
 import { AuthScreen } from "@/app/auth-screen";
 import { AuthenticatedAppShell } from "@/app/authenticated-app-shell";
 import { getSharedNoteShareId, getThemeFireworkColors } from "@/app/location";
+import {
+	type DesktopPermissionRow,
+	useDesktopPermissionsSession,
+} from "@/app/use-desktop-permissions-session";
 import { SharedNotePageEntry } from "@/components/note/shared-note-page-entry";
 import { WorkspaceComposer } from "@/components/workspaces/workspace-composer";
 import { type AuthSession, authClient } from "@/lib/auth-client";
@@ -51,25 +51,6 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
-type DesktopPermissionRow = {
-	id: DesktopPermissionId;
-	description: string;
-	label: string;
-	state: DesktopPermissionState;
-	required: boolean;
-	canRequest: boolean;
-	canOpenSystemSettings: boolean;
-};
-
-const isMissingDesktopPermissionHandlerError = (error: unknown) =>
-	error instanceof Error &&
-	error.message.includes(
-		"No handler registered for 'app:get-permissions-status'",
-	);
-const DESKTOP_PERMISSION_LABELS: Record<DesktopPermissionId, string> = {
-	microphone: "Transcribe me",
-	systemAudio: "Transcribe others",
-};
 const DESKTOP_PERMISSION_BUTTON_LABELS: Record<DesktopPermissionId, string> = {
 	microphone: "Enable",
 	systemAudio: "Enable",
@@ -103,23 +84,10 @@ const useAppBootstrapState = () => {
 		React.useState<SocialAuthProvider | null>(null);
 	const [isCreatingWorkspace, startWorkspaceCreation] = React.useTransition();
 	const [isDesktopMac, setIsDesktopMac] = React.useState(false);
-	const [desktopPlatform, setDesktopPlatform] =
-		React.useState<DesktopPlatform>("darwin");
 	const [workspaceName, setWorkspaceName] = React.useState("");
 	const [workspaceError, setWorkspaceError] = React.useState<string | null>(
 		null,
 	);
-	const [desktopPermissionsError, setDesktopPermissionsError] = React.useState<
-		string | null
-	>(null);
-	const [desktopPermissionsStatus, setDesktopPermissionsStatus] =
-		React.useState<DesktopPermissionsStatus | null>(null);
-	const [isRefreshingDesktopPermissions, startDesktopPermissionsRefresh] =
-		React.useTransition();
-	const [activeDesktopPermissionId, setActiveDesktopPermissionId] =
-		React.useState<DesktopPermissionId | null>(null);
-	const [isCompletingDesktopPermissions, startDesktopPermissionsCompletion] =
-		React.useTransition();
 	const workspaceNameSeededForRef = React.useRef<string | null>(null);
 	const [sharedNoteShareId, setSharedNoteShareId] = React.useState<
 		string | null
@@ -155,71 +123,17 @@ const useAppBootstrapState = () => {
 	);
 	const isDesktopApp = isDesktopRuntime();
 
-	const applyDesktopMeta = React.useCallback((platform: DesktopPlatform) => {
-		setIsDesktopMac(platform === "darwin");
-		setDesktopPlatform(platform);
-	}, []);
-
-	const resetDesktopPermissionsState = React.useCallback(() => {
-		setDesktopPermissionsError(null);
-		setDesktopPermissionsStatus(null);
-	}, []);
-
-	const applyDesktopPermissionsError = React.useCallback((message: string) => {
-		setDesktopPermissionsError(message);
-	}, []);
-
-	const applyDesktopPermissionsStatus = React.useCallback(
-		(status: DesktopPermissionsStatus | null) => {
-			setDesktopPermissionsStatus(status);
-		},
-		[],
-	);
-
-	const applyLegacyDesktopPermissionsFallback = React.useCallback(
-		(platform: DesktopPlatform) => {
-			applyDesktopPermissionsStatus({
-				isDesktop: true,
-				platform,
-				permissions: [
-					{
-						id: "microphone",
-						description:
-							"During your meetings, Graneri transcribes your microphone.",
-						required: true,
-						state: "unknown",
-						canRequest: false,
-						canOpenSystemSettings: false,
-					},
-					{
-						id: "systemAudio",
-						description:
-							"During your meetings, Graneri transcribes your system audio output.",
-						required: false,
-						state: "unknown",
-						canRequest: false,
-						canOpenSystemSettings: false,
-					},
-				],
-			});
-			applyDesktopPermissionsError(
-				"Desktop permissions are unavailable because the Electron shell is still running an older build. Restart the desktop app, then try again.",
-			);
-		},
-		[applyDesktopPermissionsError, applyDesktopPermissionsStatus],
-	);
-
 	React.useEffect(() => {
 		void getDesktopMeta()
 			.then((meta) => {
 				if (meta) {
-					applyDesktopMeta(meta.platform);
+					setIsDesktopMac(meta.platform === "darwin");
 				}
 			})
 			.catch(() => {
 				setIsDesktopMac(false);
 			});
-	}, [applyDesktopMeta]);
+	}, []);
 
 	React.useEffect(() => {
 		if (typeof window === "undefined") {
@@ -251,18 +165,6 @@ const useAppBootstrapState = () => {
 			window.removeEventListener("popstate", syncSharedNoteRoute);
 		};
 	}, []);
-
-	const syncDesktopPermissions = React.useCallback(async () => {
-		const status = await getDesktopPermissionsStatus();
-
-		if (!status) {
-			applyDesktopPermissionsStatus(null);
-			return null;
-		}
-
-		applyDesktopPermissionsStatus(status);
-		return status;
-	}, [applyDesktopPermissionsStatus]);
 
 	const isAuthenticating = authenticatingProvider !== null;
 
@@ -369,173 +271,42 @@ const useAppBootstrapState = () => {
 		workspaces.length > 0 &&
 		onboardingStatus !== undefined &&
 		!onboardingStatus.hasCompletedDesktopPermissions;
-
-	React.useEffect(() => {
-		if (!shouldLoadDesktopPermissions) {
-			resetDesktopPermissionsState();
-			return;
-		}
-
-		void syncDesktopPermissions().catch((error) => {
-			if (isMissingDesktopPermissionHandlerError(error)) {
-				applyLegacyDesktopPermissionsFallback(desktopPlatform);
-				return;
-			}
-
-			applyDesktopPermissionsError(
-				error instanceof Error
-					? error.message
-					: "Failed to load desktop permissions.",
-			);
-		});
-	}, [
-		applyDesktopPermissionsError,
-		applyLegacyDesktopPermissionsFallback,
-		desktopPlatform,
-		resetDesktopPermissionsState,
-		shouldLoadDesktopPermissions,
-		syncDesktopPermissions,
-	]);
-
-	React.useEffect(() => {
-		if (!shouldLoadDesktopPermissions) {
-			return;
-		}
-
-		const refreshPermissions = () => {
-			void syncDesktopPermissions().catch(() => {});
-		};
-
-		window.addEventListener("focus", refreshPermissions);
-
-		return () => {
-			window.removeEventListener("focus", refreshPermissions);
-		};
-	}, [shouldLoadDesktopPermissions, syncDesktopPermissions]);
-
-	const handleRequestDesktopPermission = React.useCallback(
-		(permissionId: DesktopPermissionId) => {
-			setActiveDesktopPermissionId(permissionId);
-			startDesktopPermissionsRefresh(async () => {
-				try {
-					setDesktopPermissionsError(null);
-
-					const status = await requestDesktopPermission(permissionId);
-
-					if (!status) {
-						throw new Error("Desktop permissions are unavailable.");
-					}
-
-					setDesktopPermissionsStatus(status);
-				} catch (error) {
-					setDesktopPermissionsError(
-						error instanceof Error
-							? error.message
-							: "Failed to request desktop permission.",
-					);
-				} finally {
-					setActiveDesktopPermissionId(null);
-				}
-			});
-		},
-		[],
-	);
-
-	const handleOpenDesktopPermissionSettings = React.useCallback(
-		(permissionId: DesktopPermissionId) => {
-			setActiveDesktopPermissionId(permissionId);
-			startDesktopPermissionsRefresh(async () => {
-				try {
-					setDesktopPermissionsError(null);
-
-					if (!(await openDesktopPermissionSettings(permissionId))) {
-						throw new Error("Desktop permissions are unavailable.");
-					}
-
-					await syncDesktopPermissions();
-				} catch (error) {
-					setDesktopPermissionsError(
-						error instanceof Error
-							? error.message
-							: "Failed to open system settings.",
-					);
-				} finally {
-					setActiveDesktopPermissionId(null);
-				}
-			});
-		},
-		[syncDesktopPermissions],
-	);
-
-	const handleCompleteDesktopPermissions = React.useCallback(() => {
-		startDesktopPermissionsCompletion(async () => {
-			try {
-				setDesktopPermissionsError(null);
-				await markDesktopPermissionsCompleted({});
-			} catch (error) {
-				setDesktopPermissionsError(
-					error instanceof Error
-						? error.message
-						: "Failed to finish desktop onboarding.",
-				);
-			}
-		});
-	}, [markDesktopPermissionsCompleted]);
-
-	const desktopPermissionRows: DesktopPermissionRow[] = (
-		desktopPermissionsStatus?.permissions ?? []
-	).map((permission) => ({
-		...permission,
-		label: DESKTOP_PERMISSION_LABELS[permission.id],
-	}));
-	const shouldShowDesktopPermissionsScreen =
-		shouldLoadDesktopPermissions && desktopPermissionRows.length > 0;
-	const requiredDesktopPermissionRows = desktopPermissionRows.filter(
-		(permission) => permission.required,
-	);
-	const systemAudioPermissionRow = desktopPermissionRows.find(
-		(permission) => permission.id === "systemAudio",
-	);
-	const areDesktopPermissionsReady =
-		requiredDesktopPermissionRows.length > 0 &&
-		requiredDesktopPermissionRows.every(
-			(permission) => permission.state === "granted",
-		) &&
-		(!isDesktopMac ||
-			!systemAudioPermissionRow ||
-			systemAudioPermissionRow.state === "granted" ||
-			systemAudioPermissionRow.state === "unsupported");
+	const desktopPermissions = useDesktopPermissionsSession({
+		complete: () => markDesktopPermissionsCompleted({}),
+		enabled: shouldLoadDesktopPermissions,
+		isMac: isDesktopMac,
+	});
 
 	return {
-		activeDesktopPermissionId,
-		areDesktopPermissionsReady,
+		activeDesktopPermissionId: desktopPermissions.activePermissionId,
+		areDesktopPermissionsReady: desktopPermissions.isReady,
 		authError,
 		authenticatingProvider,
-		desktopPermissionRows,
-		desktopPermissionsError,
-		desktopPermissionsStatus,
-		handleCompleteDesktopPermissions,
+		desktopPermissionRows: desktopPermissions.permissionRows,
+		desktopPermissionsError: desktopPermissions.error,
+		desktopPermissionsStatus: desktopPermissions.status,
+		handleCompleteDesktopPermissions: desktopPermissions.handleComplete,
 		handleContinueFromWelcomeCelebration,
 		handleCreateWorkspace,
 		handleGitHubSignIn,
 		handleGoogleSignIn,
-		handleOpenDesktopPermissionSettings,
+		handleOpenDesktopPermissionSettings: desktopPermissions.handleOpenSettings,
 		handleOpenOwnedSharedNote,
-		handleRequestDesktopPermission,
+		handleRequestDesktopPermission: desktopPermissions.handleRequestPermission,
 		isAuthenticating,
-		isCompletingDesktopPermissions,
+		isCompletingDesktopPermissions: desktopPermissions.isCompleting,
 		isConvexAuthenticated,
 		isCreatingWorkspace,
 		isDesktopApp,
 		isDesktopMac,
-		isRefreshingDesktopPermissions,
+		isRefreshingDesktopPermissions: desktopPermissions.isRefreshing,
 		isSessionPending,
 		onboardingStatus,
 		session,
 		sharedNote,
 		sharedNoteShareId,
 		shouldLoadDesktopPermissions,
-		shouldShowDesktopPermissionsScreen,
+		shouldShowDesktopPermissionsScreen: desktopPermissions.shouldShow,
 		workspaceError,
 		workspaceName,
 		workspaces,
@@ -625,7 +396,8 @@ function MainApp() {
 
 	if (
 		controller.shouldLoadDesktopPermissions &&
-		controller.desktopPermissionsStatus === null
+		controller.desktopPermissionsStatus === null &&
+		controller.desktopPermissionsError === null
 	) {
 		return (
 			<AuthBootstrapScreen
@@ -865,7 +637,11 @@ function AppGate({
 		);
 	}
 
-	if (shouldLoadDesktopPermissions && desktopPermissionsStatus === null) {
+	if (
+		shouldLoadDesktopPermissions &&
+		desktopPermissionsStatus === null &&
+		desktopPermissionsError === null
+	) {
 		return (
 			<AuthBootstrapScreen
 				isDesktopApp={isDesktopApp}
