@@ -23,6 +23,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/json-schema": "^7.0.15",
     "@types/node": "^24.12.0",
     "typescript": "workspace:*",
     "vitest": "^4.1.9"
