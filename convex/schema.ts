@@ -1,6 +1,12 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
+import {
+	assistantRunStatusValidator,
+	pendingDecisionValidator,
+	reasoningEffortValidator,
+	stopReasonValidator,
+} from "./assistantRunModel";
 
 const workspaceRoleValidator = v.union(
 	v.literal("startup-generalist"),
@@ -543,52 +549,12 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		chatId: v.id("chats"),
 		assistantMessageId: v.string(),
-		status: v.union(
-			v.literal("running"),
-			v.literal("waiting_for_user"),
-			v.literal("stopping"),
-			v.literal("stopped"),
-			v.literal("failed"),
-			v.literal("completed"),
-		),
+		status: assistantRunStatusValidator,
 		model: v.string(),
-		reasoningEffort: v.optional(
-			v.union(
-				v.literal("low"),
-				v.literal("medium"),
-				v.literal("high"),
-				v.literal("xhigh"),
-			),
-		),
+		reasoningEffort: v.optional(reasoningEffortValidator),
 		phase: v.optional(v.string()),
-		pendingDecision: v.optional(
-			v.union(
-				v.object({
-					type: v.literal("choose_workspace"),
-					question: v.string(),
-				}),
-				v.object({
-					type: v.literal("choose_note"),
-					question: v.string(),
-				}),
-				v.object({
-					type: v.literal("authorize_source"),
-					source: v.string(),
-					reason: v.string(),
-				}),
-				v.object({
-					type: v.literal("clarify_scope"),
-					question: v.string(),
-				}),
-			),
-		),
-		stopReason: v.optional(
-			v.union(
-				v.literal("user_requested"),
-				v.literal("superseded"),
-				v.literal("cleanup_failed"),
-			),
-		),
+		pendingDecision: v.optional(pendingDecisionValidator),
+		stopReason: v.optional(stopReasonValidator),
 		errorText: v.optional(v.string()),
 		startedAt: v.number(),
 		updatedAt: v.number(),

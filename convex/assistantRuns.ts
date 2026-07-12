@@ -4,109 +4,28 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
-	discardClaimedForRunInternal,
-	discardQueuedForRunInternal,
-} from "./assistantQueuedMessages";
-import { appendAssistantRunEvent } from "./assistantRunEvents";
-import {
 	getNonTerminalRunsForChat,
 	getOwnedActiveChatById,
 	nonTerminalRunStatuses,
 } from "./assistantRunLifecycle";
+import {
+	assistantRunValidator,
+	pendingDecisionValidator,
+	reasoningEffortValidator,
+	stopReasonValidator,
+} from "./assistantRunModel";
+import {
+	createAssistantRun,
+	deleteAssistantRunRuntimeBatch,
+	transitionAssistantRun,
+} from "./assistantRunStateMachine";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess("assistantRuns");
 
-const reasoningEffortValidator = v.union(
-	v.literal("low"),
-	v.literal("medium"),
-	v.literal("high"),
-	v.literal("xhigh"),
-);
-
-const assistantRunStatusValidator = v.union(
-	v.literal("running"),
-	v.literal("waiting_for_user"),
-	v.literal("stopping"),
-	v.literal("stopped"),
-	v.literal("failed"),
-	v.literal("completed"),
-);
-
-const pendingDecisionValidator = v.union(
-	v.object({
-		type: v.literal("choose_workspace"),
-		question: v.string(),
-	}),
-	v.object({
-		type: v.literal("choose_note"),
-		question: v.string(),
-	}),
-	v.object({
-		type: v.literal("authorize_source"),
-		source: v.string(),
-		reason: v.string(),
-	}),
-	v.object({
-		type: v.literal("clarify_scope"),
-		question: v.string(),
-	}),
-);
-
-const stopReasonValidator = v.union(
-	v.literal("user_requested"),
-	v.literal("superseded"),
-	v.literal("cleanup_failed"),
-);
-
-const assistantRunValidator = v.object({
-	_id: v.id("assistantRuns"),
-	_creationTime: v.number(),
-	ownerTokenIdentifier: v.string(),
-	workspaceId: v.id("workspaces"),
-	chatId: v.id("chats"),
-	assistantMessageId: v.string(),
-	interruptedAssistantMessageIds: v.optional(v.array(v.string())),
-	status: assistantRunStatusValidator,
-	model: v.string(),
-	reasoningEffort: v.optional(reasoningEffortValidator),
-	phase: v.optional(v.string()),
-	pendingDecision: v.optional(pendingDecisionValidator),
-	stopReason: v.optional(stopReasonValidator),
-	errorText: v.optional(v.string()),
-	startedAt: v.number(),
-	updatedAt: v.number(),
-	finishedAt: v.optional(v.number()),
-});
-
 const expirableRunStatuses = ["running", "stopping"] as const;
 const ASSISTANT_RUN_EXPIRATION_MS = 20 * 60 * 1000;
 const ASSISTANT_RUN_CLEANUP_BATCH_SIZE = 8;
-const ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE = 100;
-
-export const deleteRunSnapshots = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	const streamIds: Array<Id<"chatActiveStreams">> = [];
-	for await (const stream of ctx.db
-		.query("chatActiveStreams")
-		.withIndex("by_runId", (q) => q.eq("runId", runId))) {
-		streamIds.push(stream._id);
-	}
-
-	const toolCallIds: Array<Id<"chatToolCalls">> = [];
-	for await (const toolCall of ctx.db
-		.query("chatToolCalls")
-		.withIndex("by_runId", (q) => q.eq("runId", runId))) {
-		toolCallIds.push(toolCall._id);
-	}
-
-	await Promise.all([
-		...streamIds.map((streamId) => ctx.db.delete(streamId)),
-		...toolCallIds.map((toolCallId) => ctx.db.delete(toolCallId)),
-	]);
-};
 
 const getNonTerminalRunsForWorkspace = async (
 	ctx: QueryCtx,
@@ -139,94 +58,6 @@ const getActiveStreamUpdatedAt = async (
 	return stream?.updatedAt ?? null;
 };
 
-const deleteRunEventsBatch = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	const events = await ctx.db
-		.query("assistantRunEvents")
-		.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", runId))
-		.take(ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE);
-
-	await Promise.all(events.map((event) => ctx.db.delete(event._id)));
-
-	return events.length === ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE;
-};
-
-const deleteQueuedMessagesBatch = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	const statuses = ["queued", "claimed"] as const;
-	const batches = await Promise.all(
-		statuses.map((status) =>
-			ctx.db
-				.query("assistantQueuedMessages")
-				.withIndex("by_runId_and_status", (q) =>
-					q.eq("runId", runId).eq("status", status),
-				)
-				.take(ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE),
-		),
-	);
-	const messages = batches.flat();
-
-	await Promise.all(messages.map((message) => ctx.db.delete(message._id)));
-
-	return batches.some(
-		(batch) => batch.length === ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE,
-	);
-};
-
-const deleteRunRuntimeBatch = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	const [eventsHaveMore, queuedMessagesHaveMore] = await Promise.all([
-		deleteRunEventsBatch(ctx, runId),
-		deleteQueuedMessagesBatch(ctx, runId),
-	]);
-
-	await deleteRunSnapshots(ctx, runId);
-
-	return eventsHaveMore || queuedMessagesHaveMore;
-};
-
-const terminalizeExpiredRun = async (
-	ctx: MutationCtx,
-	run: Doc<"assistantRuns">,
-	now: number,
-) => {
-	if (run.status === "stopping") {
-		await ctx.db.patch(run._id, {
-			status: "stopped",
-			stopReason: run.stopReason ?? "cleanup_failed",
-			pendingDecision: undefined,
-			errorText: undefined,
-			updatedAt: now,
-			finishedAt: now,
-		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "run.stopped",
-			stopReason: run.stopReason ?? "cleanup_failed",
-		});
-	} else {
-		await ctx.db.patch(run._id, {
-			status: "failed",
-			pendingDecision: undefined,
-			errorText: "Assistant run expired after its stream producer stopped.",
-			updatedAt: now,
-			finishedAt: now,
-		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "run.failed",
-			errorText: "Assistant run expired after its stream producer stopped.",
-		});
-	}
-
-	await deleteRunSnapshots(ctx, run._id);
-	await discardQueuedForRunInternal(ctx, run._id);
-};
-
 const requireOwnedRun = async (
 	ctx: QueryCtx | MutationCtx,
 	ownerTokenIdentifier: string,
@@ -242,55 +73,6 @@ const requireOwnedRun = async (
 	}
 
 	return run;
-};
-
-const requireSavedRun = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	const run = await ctx.db.get(runId);
-
-	if (!run) {
-		throw new ConvexError({
-			code: "ASSISTANT_RUN_SAVE_FAILED",
-			message: "Failed to save assistant run.",
-		});
-	}
-
-	return run;
-};
-
-const stopSupersededRun = async (
-	ctx: MutationCtx,
-	run: Doc<"assistantRuns">,
-	now: number,
-) => {
-	await ctx.db.patch(run._id, {
-		status: "stopped",
-		stopReason: "superseded",
-		errorText: undefined,
-		pendingDecision: undefined,
-		updatedAt: now,
-		finishedAt: now,
-	});
-	await appendAssistantRunEvent(ctx, run, {
-		type: "run.stopped",
-		stopReason: "superseded",
-	});
-	await deleteRunSnapshots(ctx, run._id);
-	await discardQueuedForRunInternal(ctx, run._id);
-};
-
-const cleanupTerminalRunRuntime = async (
-	ctx: MutationCtx,
-	run: Doc<"assistantRuns">,
-) => {
-	await deleteRunSnapshots(ctx, run._id);
-	if (run.status === "completed") {
-		await discardClaimedForRunInternal(ctx, run._id);
-	} else {
-		await discardQueuedForRunInternal(ctx, run._id);
-	}
 };
 
 const requireSingleNonTerminalRun = (runs: Doc<"assistantRuns">[]) => {
@@ -340,46 +122,22 @@ export const startAssistantRun = mutation({
 			}
 
 			if (args.policy === "supersede") {
-				const now = Date.now();
 				await Promise.all(
-					activeRuns.map((run) => stopSupersededRun(ctx, run, now)),
+					activeRuns.map((run) =>
+						transitionAssistantRun(ctx, run, { type: "supersede" }),
+					),
 				);
 			}
 		}
 
-		const now = Date.now();
-		const runId = await ctx.db.insert("assistantRuns", {
+		return await createAssistantRun(ctx, {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			chatId: chat._id,
 			assistantMessageId: args.assistantMessageId,
-			status: "running",
 			model: args.model,
 			reasoningEffort: args.reasoningEffort,
-			phase: undefined,
-			pendingDecision: undefined,
-			stopReason: undefined,
-			errorText: undefined,
-			startedAt: now,
-			updatedAt: now,
-			finishedAt: undefined,
 		});
-		const run = await ctx.db.get(runId);
-
-		if (!run) {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_SAVE_FAILED",
-				message: "Failed to start assistant run.",
-			});
-		}
-
-		await appendAssistantRunEvent(ctx, run, {
-			type: "run.started",
-			assistantMessageId: run.assistantMessageId,
-			model: run.model,
-			reasoningEffort: run.reasoningEffort,
-		});
-		return run;
 	},
 });
 
@@ -436,7 +194,7 @@ export const cleanupExpiredAssistantRuns = internalMutation({
 					continue;
 				}
 
-				await terminalizeExpiredRun(ctx, run, now);
+				await transitionAssistantRun(ctx, run, { type: "expire" });
 				expired += 1;
 			}
 		}
@@ -473,7 +231,7 @@ export const removeOrphanedRun = internalMutation({
 			return { deleted: false, hasMore: false };
 		}
 
-		const hasMore = await deleteRunRuntimeBatch(ctx, run._id);
+		const hasMore = await deleteAssistantRunRuntimeBatch(ctx, run._id);
 
 		if (hasMore) {
 			await ctx.scheduler.runAfter(
@@ -502,36 +260,11 @@ export const waitForUserDecision = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
-		if (
-			run.status === "completed" ||
-			run.status === "stopped" ||
-			run.status === "failed" ||
-			run.status === "stopping"
-		) {
-			await cleanupTerminalRunRuntime(ctx, run);
-			return run;
-		}
-
-		if (run.status !== "running") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot wait for a user decision.",
-			});
-		}
-
-		await ctx.db.patch(run._id, {
-			status: "waiting_for_user",
+		return await transitionAssistantRun(ctx, run, {
+			type: "wait_for_user",
 			pendingDecision: args.pendingDecision,
 			phase: args.phase,
-			errorText: undefined,
-			updatedAt: Date.now(),
 		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "input.requested",
-			decisionType: args.pendingDecision.type,
-		});
-
-		return await requireSavedRun(ctx, run._id);
 	},
 });
 
@@ -545,21 +278,10 @@ export const resumeAssistantRunAfterUserDecision = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
-		if (run.status !== "waiting_for_user") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot resume from a user decision.",
-			});
-		}
-
-		await ctx.db.patch(run._id, {
-			status: "running",
-			pendingDecision: undefined,
+		return await transitionAssistantRun(ctx, run, {
+			type: "resume_after_user_decision",
 			phase: args.phase,
-			updatedAt: Date.now(),
 		});
-
-		return await requireSavedRun(ctx, run._id);
 	},
 });
 
@@ -572,29 +294,7 @@ export const finishAssistantRun = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
-		if (run.status !== "running") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot be completed.",
-			});
-		}
-
-		const now = Date.now();
-		await ctx.db.patch(run._id, {
-			status: "completed",
-			errorText: undefined,
-			stopReason: undefined,
-			pendingDecision: undefined,
-			updatedAt: now,
-			finishedAt: now,
-		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "run.completed",
-		});
-		await deleteRunSnapshots(ctx, run._id);
-		await discardClaimedForRunInternal(ctx, run._id);
-
-		return await requireSavedRun(ctx, run._id);
+		return await transitionAssistantRun(ctx, run, { type: "complete" });
 	},
 });
 
@@ -608,27 +308,10 @@ export const appendUserMessageToAssistantRun = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
-		if (run.status !== "running" && run.status !== "waiting_for_user") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot accept steered user input.",
-			});
-		}
-
-		await appendAssistantRunEvent(ctx, run, {
-			type: "user.message.appended",
-			messageId: args.messageId,
+		return await transitionAssistantRun(ctx, run, {
+			type: "append_user_messages",
+			messages: [{ messageId: args.messageId }],
 		});
-		if (run.status === "waiting_for_user") {
-			await ctx.db.patch(run._id, {
-				status: "running",
-				pendingDecision: undefined,
-				updatedAt: Date.now(),
-			});
-			return await requireSavedRun(ctx, run._id);
-		}
-
-		return run;
 	},
 });
 
@@ -642,36 +325,10 @@ export const failAssistantRun = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
-		if (
-			run.status !== "running" &&
-			run.status !== "waiting_for_user" &&
-			run.status !== "stopping" &&
-			run.status !== "failed"
-		) {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot be failed.",
-			});
-		}
-
-		if (run.status !== "failed") {
-			const now = Date.now();
-			await ctx.db.patch(run._id, {
-				status: "failed",
-				errorText: args.errorText,
-				pendingDecision: undefined,
-				updatedAt: now,
-				finishedAt: now,
-			});
-			await appendAssistantRunEvent(ctx, run, {
-				type: "run.failed",
-				errorText: args.errorText,
-			});
-		}
-		await deleteRunSnapshots(ctx, run._id);
-		await discardQueuedForRunInternal(ctx, run._id);
-
-		return await requireSavedRun(ctx, run._id);
+		return await transitionAssistantRun(ctx, run, {
+			type: "fail",
+			errorText: args.errorText,
+		});
 	},
 });
 
@@ -685,25 +342,10 @@ export const requestStopAssistantRun = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
-		if (run.status === "stopping") {
-			return run;
-		}
-
-		if (run.status !== "running" && run.status !== "waiting_for_user") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot be stopped.",
-			});
-		}
-
-		await ctx.db.patch(run._id, {
-			status: "stopping",
-			stopReason: args.stopReason ?? "user_requested",
-			pendingDecision: undefined,
-			updatedAt: Date.now(),
+		return await transitionAssistantRun(ctx, run, {
+			type: "request_stop",
+			stopReason: args.stopReason,
 		});
-
-		return await requireSavedRun(ctx, run._id);
 	},
 });
 
@@ -716,36 +358,7 @@ export const finishStoppedAssistantRun = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
-		if (
-			run.status === "stopped" ||
-			run.status === "completed" ||
-			run.status === "failed"
-		) {
-			await cleanupTerminalRunRuntime(ctx, run);
-			return run;
-		}
-
-		if (run.status !== "stopping") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run stop has not been requested.",
-			});
-		}
-
-		const now = Date.now();
-		await ctx.db.patch(run._id, {
-			status: "stopped",
-			updatedAt: now,
-			finishedAt: now,
-		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "run.stopped",
-			stopReason: run.stopReason,
-		});
-		await deleteRunSnapshots(ctx, run._id);
-		await discardQueuedForRunInternal(ctx, run._id);
-
-		return await requireSavedRun(ctx, run._id);
+		return await transitionAssistantRun(ctx, run, { type: "finish_stop" });
 	},
 });
 

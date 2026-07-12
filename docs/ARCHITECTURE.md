@@ -57,9 +57,14 @@ Assistant run start and active-stream session start share one runtime helper so
 both web and desktop choose the same reject/supersede policy, reuse matching
 continued runs, terminalize failed starts, and clean up partially-created stream
 sessions.
-Hosted chat runs are durable Convex lifecycle records. `assistantRuns` owns run
-state, stop/failure/completion history, and the one-active-run-per-chat
-invariant. `chatActiveStreams` and active `chatToolCalls` are temporary render
+Hosted chat runs are durable Convex lifecycle records.
+`assistantRunStateMachine` owns run creation, allowed transitions, ordered
+lifecycle events, and mandatory queue/snapshot cleanup; `assistantRuns` exposes
+the public Convex function adapters and lifecycle queries. Chat and queue modules
+must cross the state-machine seam instead of patching `assistantRuns` rows.
+Together they enforce stop/failure/completion history and the
+one-active-run-per-chat invariant. `chatActiveStreams` and active
+`chatToolCalls` are temporary render
 snapshots scoped to a run; terminal runs must leave no stream or active tool
 snapshots behind. These records do not move desktop-local tool execution out of
 the renderer/local-server bridge.

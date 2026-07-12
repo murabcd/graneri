@@ -8,13 +8,15 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
-import { discardQueuedForRunInternal } from "./assistantQueuedMessages";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import {
 	getOwnedActiveChatById,
 	nonTerminalRunStatuses,
 } from "./assistantRunLifecycle";
-import { deleteRunSnapshots } from "./assistantRuns";
+import {
+	cleanupAssistantRunSnapshots,
+	transitionAssistantRun,
+} from "./assistantRunStateMachine";
 import {
 	moveLinkedAutomationToFreshChat,
 	pauseLinkedAutomationForChat,
@@ -376,24 +378,10 @@ const stopActiveRunsForChat = async (
 	);
 	const activeRuns = activeRunBatches.flat();
 
-	const now = Date.now();
 	await Promise.all(
-		activeRuns.map(async (run) => {
-			await ctx.db.patch(run._id, {
-				status: "stopped",
-				stopReason: "superseded",
-				errorText: undefined,
-				pendingDecision: undefined,
-				updatedAt: now,
-				finishedAt: now,
-			});
-			await appendAssistantRunEvent(ctx, run, {
-				type: "run.stopped",
-				stopReason: "superseded",
-			});
-			await deleteRunSnapshots(ctx, run._id);
-			await discardQueuedForRunInternal(ctx, run._id);
-		}),
+		activeRuns.map((run) =>
+			transitionAssistantRun(ctx, run, { type: "supersede" }),
+		),
 	);
 
 	return activeRunBatches.some(
@@ -1434,22 +1422,15 @@ export const acceptSteeredUserMessage = mutation({
 			reasoningEffort: args.reasoningEffort,
 			message: args.message,
 		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "turn.steer.accepted",
-			queuedMessageId: queuedMessage._id,
-			messageId: args.message.id,
+		await transitionAssistantRun(ctx, run, {
+			type: "append_user_messages",
+			messages: [
+				{
+					queuedMessageId: queuedMessage._id,
+					messageId: args.message.id,
+				},
+			],
 		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "user.message.appended",
-			messageId: args.message.id,
-		});
-		if (run.status === "waiting_for_user") {
-			await ctx.db.patch(run._id, {
-				status: "running",
-				pendingDecision: undefined,
-				updatedAt: Date.now(),
-			});
-		}
 		await ctx.db.delete(queuedMessage._id);
 
 		return savedMessage;
@@ -1558,7 +1539,7 @@ export const acceptSteeredUserMessages = mutation({
 			);
 		}
 
-		for (const [index, queuedMessage] of queuedMessages.entries()) {
+		const transitionMessages = queuedMessages.map((queuedMessage, index) => {
 			if (!queuedMessage) {
 				throw new ConvexError({
 					code: "QUEUED_MESSAGE_NOT_CLAIMED",
@@ -1572,23 +1553,16 @@ export const acceptSteeredUserMessages = mutation({
 					message: "Steered message must be a non-empty user message.",
 				});
 			}
-			await appendAssistantRunEvent(ctx, run, {
-				type: "turn.steer.accepted",
+
+			return {
 				queuedMessageId: queuedMessage._id,
 				messageId: message.id,
-			});
-			await appendAssistantRunEvent(ctx, run, {
-				type: "user.message.appended",
-				messageId: message.id,
-			});
-		}
-		if (run.status === "waiting_for_user") {
-			await ctx.db.patch(run._id, {
-				status: "running",
-				pendingDecision: undefined,
-				updatedAt: Date.now(),
-			});
-		}
+			};
+		});
+		await transitionAssistantRun(ctx, run, {
+			type: "append_user_messages",
+			messages: transitionMessages,
+		});
 		await Promise.all(
 			queuedMessages.map((queuedMessage) =>
 				queuedMessage ? ctx.db.delete(queuedMessage._id) : null,
@@ -1820,7 +1794,7 @@ export const deleteActiveStreamSnapshot = mutation({
 			});
 		}
 
-		await deleteRunSnapshots(ctx, args.runId);
+		await cleanupAssistantRunSnapshots(ctx, args.runId);
 
 		return null;
 	},
@@ -1938,7 +1912,7 @@ export const stopActiveStream = mutation({
 			run.status === "failed" ||
 			run.status === "stopped"
 		) {
-			await deleteRunSnapshots(ctx, args.runId);
+			await cleanupAssistantRunSnapshots(ctx, args.runId);
 			return null;
 		}
 
@@ -1964,7 +1938,7 @@ export const stopActiveStream = mutation({
 			});
 		}
 
-		await deleteRunSnapshots(ctx, args.runId);
+		await cleanupAssistantRunSnapshots(ctx, args.runId);
 
 		return null;
 	},
