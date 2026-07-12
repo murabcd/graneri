@@ -255,6 +255,12 @@ identity. `convex/domain.ts` owns the shared access-control primitives for
 queries, mutations, and actions. Feature modules configure their resource label
 through `createResourceAccess` and use the canonical workspace ownership guard;
 they must not define local authentication or workspace ownership wrappers.
+`convex/resourceRetirement.ts` owns permanent note and chat retirement policy:
+bounded collection batches, progress reporting, idempotent retries, and
+continuation scheduling for note-, workspace-, owner-, and trash-scoped
+removal. Note and chat feature modules expose record-specific retirement
+adapters, but callers must enter through the resource-retirement boundary and
+must not reproduce record ordering or retry loops.
 Hosted auth provider configuration is fail-closed: missing OAuth
 provider credentials must reject configuration instead of substituting
 placeholder client ids or secrets.

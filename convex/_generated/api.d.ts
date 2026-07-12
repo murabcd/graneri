@@ -47,6 +47,7 @@ import type * as onboarding from "../onboarding.js";
 import type * as projects from "../projects.js";
 import type * as recipes from "../recipes.js";
 import type * as reorderLimits from "../reorderLimits.js";
+import type * as resourceRetirement from "../resourceRetirement.js";
 import type * as search from "../search.js";
 import type * as starred from "../starred.js";
 import type * as templates from "../templates.js";
@@ -103,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   recipes: typeof recipes;
   reorderLimits: typeof reorderLimits;
+  resourceRetirement: typeof resourceRetirement;
   search: typeof search;
   starred: typeof starred;
   templates: typeof templates;

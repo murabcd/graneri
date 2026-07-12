@@ -68,15 +68,21 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 					await runCtx.runMutation(internal.aiRateLimits.removeAllForOwner, {
 						ownerTokenIdentifier: identity.tokenIdentifier,
 					});
-					await runCtx.runMutation(internal.notes.removeAllForOwner, {
-						ownerTokenIdentifier: identity.tokenIdentifier,
-					});
+					await runCtx.runMutation(
+						internal.resourceRetirement.retireNotesForOwner,
+						{
+							ownerTokenIdentifier: identity.tokenIdentifier,
+						},
+					);
 					await runCtx.runMutation(internal.projects.removeAllForOwner, {
 						ownerTokenIdentifier: identity.tokenIdentifier,
 					});
-					await runCtx.runMutation(internal.chats.removeAllForOwner, {
-						ownerTokenIdentifier: identity.tokenIdentifier,
-					});
+					await runCtx.runMutation(
+						internal.resourceRetirement.retireChatsForOwner,
+						{
+							ownerTokenIdentifier: identity.tokenIdentifier,
+						},
+					);
 					await runCtx.runMutation(internal.automations.removeAllForOwner, {
 						ownerTokenIdentifier: identity.tokenIdentifier,
 					});

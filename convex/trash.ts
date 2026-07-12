@@ -73,7 +73,7 @@ const removeExpiredArchivedNotesBatch = async (
 	);
 
 	for (const note of notes) {
-		await ctx.runMutation(internal.notes.removeCascadeForOwner, {
+		await ctx.runMutation(internal.resourceRetirement.retireNote, {
 			ownerTokenIdentifier: note.ownerTokenIdentifier,
 			workspaceId: note.workspaceId,
 			noteId: note._id,
@@ -127,13 +127,9 @@ const removeExpiredArchivedChatsBatch = async (
 			continue;
 		}
 
-		await ctx.scheduler.runAfter(
-			0,
-			internal.chats.removeMessagesAndDeleteChat,
-			{
-				chatId: chat._id,
-			},
-		);
+		await ctx.scheduler.runAfter(0, internal.resourceRetirement.retireChat, {
+			chatId: chat._id,
+		});
 		scheduledCount += 1;
 	}
 

@@ -123,13 +123,23 @@ const removeAllChatsResultValidator = v.object({
 	hasMore: v.boolean(),
 });
 
+const chatRetirementBatchResultValidator = v.object({
+	deletedMessageCount: v.number(),
+	hasMore: v.boolean(),
+	retiredChat: v.boolean(),
+});
+
+type RemoveAllChatsResult = {
+	deletedCount: number;
+	hasMore: boolean;
+};
+
 const MAX_CHAT_PREVIEW_LENGTH = 180;
 const MAX_CHAT_TITLE_LENGTH = 80;
 const MAX_CHAT_INPUT_TEXT_CHARS = 1_048_576;
 const MAX_RETURNED_CHATS = 100;
 const MAX_RETURNED_CHAT_MESSAGES = 200;
 const REMOVE_CHAT_MESSAGES_BATCH_SIZE = 100;
-const REMOVE_ALL_CHATS_BATCH_SIZE = 25;
 const REMOVE_CHAT_RUNTIME_BATCH_SIZE = 100;
 const NOTE_CHAT_BATCH_SIZE = 25;
 const CONVEX_STORAGE_PATH_SEGMENT = "/api/storage/";
@@ -756,31 +766,6 @@ const deleteChatMessageBatch = async (
 	};
 };
 
-const deleteChatBatch = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-) => {
-	const chats = await ctx.db
-		.query("chats")
-		.withIndex("by_ownerTokenIdentifier_and_updatedAt", (q) =>
-			q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-		)
-		.take(REMOVE_ALL_CHATS_BATCH_SIZE);
-
-	await Promise.all(
-		chats.map((chat) =>
-			ctx.scheduler.runAfter(0, internal.chats.removeMessagesAndDeleteChat, {
-				chatId: chat._id,
-			}),
-		),
-	);
-
-	return {
-		deletedCount: chats.length,
-		hasMore: chats.length === REMOVE_ALL_CHATS_BATCH_SIZE,
-	};
-};
-
 const getNoteChatsByArchiveState = async (
 	ctx: MutationCtx,
 	ownerTokenIdentifier: string,
@@ -796,24 +781,6 @@ const getNoteChatsByArchiveState = async (
 				.eq("workspaceId", workspaceId)
 				.eq("noteId", noteId)
 				.eq("isArchived", isArchived),
-		)
-		.take(NOTE_CHAT_BATCH_SIZE);
-
-const getNoteChats = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	noteId: Id<"notes">,
-) =>
-	await ctx.db
-		.query("chats")
-		.withIndex(
-			"by_ownerTokenIdentifier_and_workspaceId_and_noteId_and_chatId",
-			(q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", workspaceId)
-					.eq("noteId", noteId),
 		)
 		.take(NOTE_CHAT_BATCH_SIZE);
 
@@ -1156,23 +1123,20 @@ export const getMessagesForOwner = internalQuery({
 	},
 });
 
-export const removeMessagesAndDeleteChat = internalMutation({
+export const retireChatRecordBatch = internalMutation({
 	args: {
 		chatId: v.id("chats"),
 	},
-	returns: v.null(),
+	returns: chatRetirementBatchResultValidator,
 	handler: async (ctx, args) => {
 		const result = await deleteChatMessageBatch(ctx, args.chatId);
 
 		if (result.hasMore) {
-			await ctx.scheduler.runAfter(
-				0,
-				internal.chats.removeMessagesAndDeleteChat,
-				{
-					chatId: args.chatId,
-				},
-			);
-			return null;
+			return {
+				deletedMessageCount: result.deletedCount,
+				hasMore: true,
+				retiredChat: false,
+			};
 		}
 
 		const chat = await ctx.db.get(args.chatId);
@@ -1183,7 +1147,11 @@ export const removeMessagesAndDeleteChat = internalMutation({
 			await ctx.db.delete(args.chatId);
 		}
 
-		return null;
+		return {
+			deletedMessageCount: result.deletedCount,
+			hasMore: false,
+			retiredChat: chat !== null,
+		};
 	},
 });
 
@@ -1261,48 +1229,6 @@ export const restoreForNote = internalMutation({
 
 		if (chats.length === NOTE_CHAT_BATCH_SIZE) {
 			await ctx.scheduler.runAfter(0, internal.chats.restoreForNote, args);
-		}
-
-		return null;
-	},
-});
-
-export const removeForNote = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		noteId: v.id("notes"),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const chats = await getNoteChats(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-			args.noteId,
-		);
-
-		await Promise.all(
-			chats.map(async (chat) => {
-				await deleteChatRuntimeRecords(ctx, chat._id);
-				await ctx.db.delete(chat._id);
-
-				const result = await deleteChatMessageBatch(ctx, chat._id);
-
-				if (result.hasMore) {
-					await ctx.scheduler.runAfter(
-						0,
-						internal.chats.removeMessagesAndDeleteChat,
-						{
-							chatId: chat._id,
-						},
-					);
-				}
-			}),
-		);
-
-		if (chats.length === NOTE_CHAT_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.chats.removeForNote, args);
 		}
 
 		return null;
@@ -1502,7 +1428,7 @@ export const acceptSteeredUserMessages = mutation({
 					message: "Queued message was not accepted for steering.",
 				});
 			}
-			if (!message || message.role !== "user" || !message.text.trim()) {
+			if (message?.role !== "user" || !message.text.trim()) {
 				throw new ConvexError({
 					code: "INVALID_STEERED_MESSAGE",
 					message: "Steered message must be a non-empty user message.",
@@ -2149,22 +2075,9 @@ export const remove = mutation({
 			return null;
 		}
 
-		const result = await deleteChatMessageBatch(ctx, chat._id);
-
-		if (result.hasMore) {
-			await ctx.scheduler.runAfter(
-				0,
-				internal.chats.removeMessagesAndDeleteChat,
-				{
-					chatId: chat._id,
-				},
-			);
-			return null;
-		}
-
-		await moveAutomationToFreshChat(ctx, chat);
-		await deleteChatRuntimeRecords(ctx, chat._id);
-		await ctx.db.delete(chat._id);
+		await ctx.runMutation(internal.resourceRetirement.retireChat, {
+			chatId: chat._id,
+		});
 
 		return null;
 	},
@@ -2175,89 +2088,21 @@ export const removeAll = mutation({
 		workspaceId: v.id("workspaces"),
 	},
 	returns: removeAllChatsResultValidator,
-	handler: async (ctx, args) => {
+	handler: async (ctx, args): Promise<RemoveAllChatsResult> => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const chats = await ctx.db
-			.query("chats")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_updatedAt", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId),
-			)
-			.take(REMOVE_ALL_CHATS_BATCH_SIZE);
-
-		await Promise.all(
-			chats.map((chat) =>
-				ctx.scheduler.runAfter(0, internal.chats.removeMessagesAndDeleteChat, {
-					chatId: chat._id,
-				}),
-			),
-		);
-
-		if (chats.length === REMOVE_ALL_CHATS_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.chats.removeAllForWorkspace, {
-				ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
-		}
+		const progress: { retiredCount: number; hasMore: boolean } =
+			await ctx.runMutation(
+				internal.resourceRetirement.retireChatsForWorkspace,
+				{
+					ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+				},
+			);
 
 		return {
-			deletedCount: chats.length,
-			hasMore: chats.length === REMOVE_ALL_CHATS_BATCH_SIZE,
+			deletedCount: progress.retiredCount,
+			hasMore: progress.hasMore,
 		};
-	},
-});
-
-export const removeAllForWorkspace = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const chats = await ctx.db
-			.query("chats")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_updatedAt", (q) =>
-				q
-					.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId),
-			)
-			.take(REMOVE_ALL_CHATS_BATCH_SIZE);
-
-		await Promise.all(
-			chats.map((chat) =>
-				ctx.scheduler.runAfter(0, internal.chats.removeMessagesAndDeleteChat, {
-					chatId: chat._id,
-				}),
-			),
-		);
-
-		if (chats.length === REMOVE_ALL_CHATS_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.chats.removeAllForWorkspace, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
-		}
-
-		return null;
-	},
-});
-
-export const removeAllForOwner = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const chats = await deleteChatBatch(ctx, args.ownerTokenIdentifier);
-
-		if (chats.hasMore) {
-			await ctx.scheduler.runAfter(0, internal.chats.removeAllForOwner, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-			});
-		}
-
-		return null;
 	},
 });

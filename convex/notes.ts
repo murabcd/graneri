@@ -56,7 +56,11 @@ const removeAllNotesResultValidator = v.object({
 	hasMore: v.boolean(),
 });
 
-const REMOVE_ALL_NOTES_BATCH_SIZE = 100;
+type RemoveAllNotesResult = {
+	deletedCount: number;
+	hasMore: boolean;
+};
+
 const MAX_CHAT_CONTEXT_NOTES = 20;
 const MAX_NOTE_REVISIONS = 50;
 const NOTE_REVISION_INTERVAL_MS = 30_000;
@@ -209,34 +213,6 @@ const extractNoteCommentAnchors = (content: string) => {
 	}
 };
 
-const deleteNoteBatch = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-) => {
-	const notes = await ctx.db
-		.query("notes")
-		.withIndex("by_ownerTokenIdentifier_and_updatedAt", (q) =>
-			q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-		)
-		.take(REMOVE_ALL_NOTES_BATCH_SIZE);
-
-	await Promise.all(
-		notes.map(async (note) => {
-			await removeNoteRevisions({
-				ctx,
-				ownerTokenIdentifier: note.ownerTokenIdentifier,
-				noteId: note._id,
-			});
-			await ctx.db.delete(note._id);
-		}),
-	);
-
-	return {
-		deletedCount: notes.length,
-		hasMore: notes.length === REMOVE_ALL_NOTES_BATCH_SIZE,
-	};
-};
-
 const pruneNoteRevisions = async ({
 	ctx,
 	ownerTokenIdentifier,
@@ -260,9 +236,9 @@ const pruneNoteRevisions = async ({
 		.take(MAX_NOTE_REVISIONS + 1);
 
 	await Promise.all(
-		revisions.slice(MAX_NOTE_REVISIONS).map((revision) =>
-			ctx.db.delete(revision._id),
-		),
+		revisions
+			.slice(MAX_NOTE_REVISIONS)
+			.map((revision) => ctx.db.delete(revision._id)),
 	);
 };
 
@@ -344,7 +320,7 @@ const removeNoteRevisions = async ({
 };
 
 const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
-	await ctx.runMutation(internal.chats.removeForNote, {
+	await ctx.runMutation(internal.resourceRetirement.retireChatsForNote, {
 		ownerTokenIdentifier: note.ownerTokenIdentifier,
 		workspaceId: note.workspaceId,
 		noteId: note._id,
@@ -366,7 +342,7 @@ const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
 	await ctx.db.delete(note._id);
 };
 
-export const removeCascadeForOwner = internalMutation({
+export const retireNoteRecord = internalMutation({
 	args: {
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
@@ -860,7 +836,10 @@ export const save = mutation({
 				const normalizedAnchors = (
 					await Promise.all(
 						anchors.map(async ({ threadId, excerpt }) => ({
-							threadId: await ctx.db.normalizeId("noteCommentThreads", threadId),
+							threadId: await ctx.db.normalizeId(
+								"noteCommentThreads",
+								threadId,
+							),
 							excerpt,
 						})),
 					)
@@ -1159,33 +1138,11 @@ export const remove = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
-		await deleteNoteCascade(ctx, note);
-
-		return null;
-	},
-});
-
-export const removeAllForOwner = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const result = await deleteNoteBatch(ctx, args.ownerTokenIdentifier);
-
-		if (result.hasMore) {
-			await ctx.scheduler.runAfter(0, internal.notes.removeAllForOwner, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-			});
-		} else {
-			await ctx.scheduler.runAfter(
-				0,
-				internal.transcriptSessions.removeAllForOwner,
-				{
-					ownerTokenIdentifier: args.ownerTokenIdentifier,
-				},
-			);
-		}
+		await ctx.runMutation(internal.resourceRetirement.retireNote, {
+			ownerTokenIdentifier: note.ownerTokenIdentifier,
+			workspaceId: note.workspaceId,
+			noteId: note._id,
+		});
 
 		return null;
 	},
@@ -1196,63 +1153,21 @@ export const removeAll = mutation({
 		workspaceId: v.id("workspaces"),
 	},
 	returns: removeAllNotesResultValidator,
-	handler: async (ctx, args) => {
+	handler: async (ctx, args): Promise<RemoveAllNotesResult> => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const notes = await ctx.db
-			.query("notes")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_updatedAt", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId),
-			)
-			.take(REMOVE_ALL_NOTES_BATCH_SIZE);
-
-		await Promise.all(
-			notes.map((note) => deleteNoteCascade(ctx, note)),
-		);
-
-		if (notes.length === REMOVE_ALL_NOTES_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.notes.removeAllForWorkspace, {
-				ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
-		}
+		const progress: { retiredCount: number; hasMore: boolean } =
+			await ctx.runMutation(
+				internal.resourceRetirement.retireNotesForWorkspace,
+				{
+					ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+				},
+			);
 
 		return {
-			deletedCount: notes.length,
-			hasMore: notes.length === REMOVE_ALL_NOTES_BATCH_SIZE,
+			deletedCount: progress.retiredCount,
+			hasMore: progress.hasMore,
 		};
-	},
-});
-
-export const removeAllForWorkspace = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const notes = await ctx.db
-			.query("notes")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_updatedAt", (q) =>
-				q
-					.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId),
-			)
-			.take(REMOVE_ALL_NOTES_BATCH_SIZE);
-
-		await Promise.all(
-			notes.map((note) => deleteNoteCascade(ctx, note)),
-		);
-
-		if (notes.length === REMOVE_ALL_NOTES_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.notes.removeAllForWorkspace, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
-		}
-
-		return null;
 	},
 });
