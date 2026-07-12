@@ -373,6 +373,13 @@ consume one shared per-identity `note-generation` admission bucket, and the web
 handler sends only the hashed stable identity to OpenAI as its safety
 identifier. Anonymous requests and unavailable admission fail closed before a
 model request begins; there is no unauthenticated or client-key fallback.
+`apps/web/server/hosted-openai-admission.ts` is the single web-server envelope
+for chat, note generation, template application, and realtime session
+admission. It owns operation-to-Convex authorization, rate-limit responses and
+retry headers, server API-key enforcement, and the hashed safety identity
+handoff. Route handlers report rejected admission to their wide event and own
+only their request validation, model invocation, and response-specific stream
+or payload behavior.
 The OpenAI key and streaming/tool loop remain in the web server handler (Vite
 locally and Vercel in production), while Convex continues to own authorization
 and durable run, queue, message, and lifecycle state. Development and

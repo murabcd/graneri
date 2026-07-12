@@ -148,6 +148,7 @@ describe("realtime transcription session handler", () => {
 
 		expect(response.statusCode).toBe(200);
 		const requestOptions = openAiMocks.requestClientSecret.mock.calls[0]?.[0];
+		expect(requestOptions.apiKey).toBe("server-api-key");
 		expect(requestOptions.safetyIdentifier).toBe(
 			await createSafetyIdentifier(tokenIdentifier),
 		);

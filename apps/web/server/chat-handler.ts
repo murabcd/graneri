@@ -24,7 +24,6 @@ import {
 	validateHostedChatSteerRoute,
 } from "@workspace/ai/hosted-chat-turn";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
-import { authorizeOpenAiRequest } from "@workspace/ai/openai-admission";
 import { type InferUITools, type UIMessage, validateUIMessages } from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
@@ -40,6 +39,7 @@ import {
 	pipeHostedActiveStreamSessionToResponse,
 	runHostedChatTurnStreamRuntime,
 } from "./chat-turn-stream-runtime.js";
+import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
@@ -283,17 +283,6 @@ export const handleChatRequest = async (
 		},
 	});
 
-	if (!process.env.OPENAI_API_KEY) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 500;
-		wideEvent.error_code = "openai_api_key_missing";
-		emitWideEvent("error");
-		sendJson(response, 500, {
-			error: "OPENAI_API_KEY is not configured.",
-		});
-		return;
-	}
-
 	const {
 		id,
 		trigger,
@@ -483,26 +472,19 @@ export const handleChatRequest = async (
 		});
 		return;
 	}
-	const admission = await authorizeOpenAiRequest({
-		authorize: () => convexClient.mutation(api.aiAccess.authorizeChatTurn, {}),
-		rateLimitError: "Too many chat requests. Please try again shortly.",
+	const admission = await admitHostedOpenAiRequest({
+		client: convexClient,
+		onRejected: ({ errorCode, statusCode }) => {
+			wideEvent.outcome = "error";
+			wideEvent.status_code = statusCode;
+			wideEvent.error_code = errorCode;
+			emitWideEvent("error");
+		},
+		operation: "chat-turn",
+		request,
+		response,
 	});
-	if (!admission.ok) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = admission.statusCode;
-		wideEvent.error_code = admission.errorCode;
-		emitWideEvent("error");
-		sendJson(
-			response,
-			admission.statusCode,
-			{
-				error: admission.error,
-				errorCode: admission.errorCode,
-			},
-			admission.retryAfterSeconds === undefined
-				? undefined
-				: { "Retry-After": String(admission.retryAfterSeconds) },
-		);
+	if (!admission) {
 		return;
 	}
 	const providerOptions = getChatModelProviderOptions(resolvedModel.model, {

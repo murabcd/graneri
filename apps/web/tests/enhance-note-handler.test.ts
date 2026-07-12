@@ -112,4 +112,27 @@ describe("enhance note handler", () => {
 			},
 		});
 	});
+
+	it("fails closed after admission when the server API key is missing", async () => {
+		process.env.CONVEX_URL = "https://example.convex.cloud";
+		delete process.env.OPENAI_API_KEY;
+		convexMocks.mutation.mockResolvedValue({
+			tokenIdentifier: "https://issuer.example|private-user-id",
+		});
+		const { end, response } = createResponse();
+
+		await handleEnhanceNoteRequest(
+			createRequest({
+				authorization: "Bearer valid-token",
+				body: { noteText: "Reviewed progress" },
+			}),
+			response,
+		);
+
+		expect(response.statusCode).toBe(500);
+		expect(end).toHaveBeenCalledWith(
+			JSON.stringify({ error: "OPENAI_API_KEY is not configured." }),
+		);
+		expect(aiMocks.generateText).not.toHaveBeenCalled();
+	});
 });

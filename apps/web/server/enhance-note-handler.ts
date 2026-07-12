@@ -8,9 +8,8 @@ import {
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import {
-	authorizeHostedOpenAiRequest,
+	admitHostedOpenAiRequest,
 	getOpenAiSafetyProviderOptions,
-	sendHostedOpenAiAdmissionError,
 } from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
@@ -52,27 +51,18 @@ export const handleEnhanceNoteRequest = async (
 		event: wideEvent,
 		startedAt,
 	});
-	const admission = await authorizeHostedOpenAiRequest({
+	const admission = await admitHostedOpenAiRequest({
 		operation: "note-generation",
 		request,
+		response,
+		onRejected: ({ errorCode, statusCode }) => {
+			wideEvent.outcome = "error";
+			wideEvent.status_code = statusCode;
+			wideEvent.error_code = errorCode;
+			emitWideEvent("error");
+		},
 	});
-	if (!admission.ok) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = admission.statusCode;
-		wideEvent.error_code = admission.errorCode;
-		emitWideEvent("error");
-		sendHostedOpenAiAdmissionError(response, admission);
-		return;
-	}
-
-	if (!process.env.OPENAI_API_KEY) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 500;
-		wideEvent.error_code = "openai_api_key_missing";
-		emitWideEvent("error");
-		sendJson(response, 500, {
-			error: "OPENAI_API_KEY is not configured.",
-		});
+	if (!admission) {
 		return;
 	}
 

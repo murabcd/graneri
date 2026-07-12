@@ -5,10 +5,7 @@ import {
 	createRealtimeTranscriptionSessionOptions,
 	normalizeTranscriptionLanguage,
 } from "@workspace/ai/transcription";
-import {
-	authorizeHostedOpenAiRequest,
-	sendHostedOpenAiAdmissionError,
-} from "./hosted-openai-admission.js";
+import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import { requestOpenAiRealtimeClientSecret } from "./openai-realtime-session-client.js";
 import { createServerWideEvent, emitServerWideEvent } from "./server-logger.js";
@@ -48,25 +45,18 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
 		sendJson(response, statusCode, { error }, headers);
 	};
-	const admission = await authorizeHostedOpenAiRequest({
+	const admission = await admitHostedOpenAiRequest({
 		operation: "realtime-session",
 		request,
+		response,
+		onRejected: ({ errorCode, statusCode }) => {
+			wideEvent.outcome = "error";
+			wideEvent.status_code = statusCode;
+			wideEvent.error_code = errorCode;
+			emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
+		},
 	});
-	if (!admission.ok) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = admission.statusCode;
-		wideEvent.error_code = admission.errorCode;
-		emitServerWideEvent({ event: wideEvent, level: "error", startedAt });
-		sendHostedOpenAiAdmissionError(response, admission);
-		return;
-	}
-
-	if (!process.env.OPENAI_API_KEY) {
-		sendError({
-			error: "OPENAI_API_KEY is not configured.",
-			errorCode: "openai_api_key_missing",
-			statusCode: 500,
-		});
+	if (!admission) {
 		return;
 	}
 
@@ -85,7 +75,7 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 	wideEvent.source = normalizedSource ?? null;
 
 	const sessionResponse = await requestOpenAiRealtimeClientSecret({
-		apiKey: process.env.OPENAI_API_KEY,
+		apiKey: admission.apiKey,
 		requestId,
 		safetyIdentifier: admission.safetyIdentifier,
 		session: createRealtimeTranscriptionSession(
