@@ -17,10 +17,12 @@ vi.mock("streamdown", () => ({
 	Streamdown: ({
 		children,
 		isAnimating,
+		linkSafety,
 		mode,
 	}: {
 		children: string;
 		isAnimating?: boolean;
+		linkSafety?: { enabled?: boolean };
 		mode?: "streaming" | "static";
 	}) => {
 		streamdownRenderCounts.set(
@@ -31,6 +33,7 @@ vi.mock("streamdown", () => ({
 		return (
 			<div
 				data-animating={isAnimating === true ? "true" : "false"}
+				data-link-safety={linkSafety?.enabled === false ? "false" : "true"}
 				data-mode={mode}
 				data-testid="streamdown"
 			>
@@ -177,6 +180,7 @@ describe("ChatMessageListContent performance", () => {
 		expect(streamdownRenderCounts.get(interruptedText)).toBe(1);
 		expect(markdown?.getAttribute("data-mode")).toBe("streaming");
 		expect(markdown?.getAttribute("data-animating")).toBe("false");
+		expect(markdown?.getAttribute("data-link-safety")).toBe("false");
 		expect(document.body.textContent).toContain("# Interrupted answer");
 		expect(document.body.textContent).toContain("Steered conversation");
 	});

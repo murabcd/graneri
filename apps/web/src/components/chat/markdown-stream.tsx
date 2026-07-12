@@ -1,17 +1,19 @@
-import { cn } from "@workspace/ui/lib/utils";
 import { Streamdown, type StreamdownProps } from "streamdown";
 
-export type MarkdownStreamProps = Omit<StreamdownProps, "children"> & {
+const disabledLinkSafety = {
+	enabled: false,
+} satisfies NonNullable<StreamdownProps["linkSafety"]>;
+
+export type MarkdownStreamProps = Omit<
+	StreamdownProps,
+	"children" | "linkSafety"
+> & {
 	children: string;
 };
 
-export function MarkdownStream({
-	children,
-	className,
-	...props
-}: MarkdownStreamProps) {
+export function MarkdownStream({ children, ...props }: MarkdownStreamProps) {
 	return (
-		<Streamdown className={cn("wrap-break-word", className)} {...props}>
+		<Streamdown {...props} linkSafety={disabledLinkSafety}>
 			{children}
 		</Streamdown>
 	);
