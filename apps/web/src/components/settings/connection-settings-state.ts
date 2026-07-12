@@ -29,25 +29,6 @@ export type LinearConnectionFormState = RemoteMcpOAuthConnectionFormState;
 export type NotionConnectionFormState = RemoteMcpOAuthConnectionFormState;
 export type ZoomConnectionFormState = RemoteMcpOAuthConnectionFormState;
 
-export type RemoteMcpFormStateKey =
-	| "jiraMcpFormState"
-	| "context7FormState"
-	| "figmaFormState"
-	| "linearFormState"
-	| "posthogFormState"
-	| "notionFormState"
-	| "zoomFormState";
-
-export type RemoteMcpFormPatch = Partial<
-	RemoteMcpConnectionFormState & RemoteMcpOAuthFields
->;
-
-type RemoteMcpFormPatchAction = {
-	type: "patchRemoteMcpFormState";
-	key: RemoteMcpFormStateKey;
-	value: RemoteMcpFormPatch;
-};
-
 export type YandexCalendarConnectionFormState = {
 	email: string;
 	password: string;
@@ -187,111 +168,19 @@ export type ConnectionQueryResults = {
 export type ConnectionsSettingsState = {
 	isYandexTrackerDialogOpen: boolean;
 	isJiraDialogOpen: boolean;
-	isJiraMcpDialogOpen: boolean;
-	isContext7DialogOpen: boolean;
-	isFigmaDialogOpen: boolean;
-	isLinearDialogOpen: boolean;
-	isPostHogDialogOpen: boolean;
-	isNotionDialogOpen: boolean;
-	isZoomDialogOpen: boolean;
 	isSavingYandexTrackerConnection: boolean;
 	isSavingJiraConnection: boolean;
-	isSavingJiraMcpConnection: boolean;
-	isSavingContext7Connection: boolean;
-	isSavingFigmaConnection: boolean;
-	isSavingLinearConnection: boolean;
 	isDisablingConnection: boolean;
-	isSavingPostHogConnection: boolean;
-	isSavingNotionConnection: boolean;
-	isSavingZoomConnection: boolean;
 	yandexTrackerFormState: YandexTrackerConnectionFormState;
 	jiraFormState: JiraConnectionFormState;
-	jiraMcpFormState: JiraMcpConnectionFormState;
-	context7FormState: Context7ConnectionFormState;
-	figmaFormState: FigmaConnectionFormState;
-	linearFormState: LinearConnectionFormState;
-	posthogFormState: PostHogConnectionFormState;
-	notionFormState: NotionConnectionFormState;
-	zoomFormState: ZoomConnectionFormState;
 };
 
 export type ConnectionsSettingsAction =
-	| {
-			type: "setIsYandexTrackerDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsJiraDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsJiraMcpDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsContext7DialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsFigmaDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsLinearDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsPostHogDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsNotionDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsZoomDialogOpen";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingYandexTrackerConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingJiraConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingJiraMcpConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingContext7Connection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingFigmaConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingLinearConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsDisablingConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingPostHogConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingNotionConnection";
-			value: boolean;
-	  }
-	| {
-			type: "setIsSavingZoomConnection";
-			value: boolean;
-	  }
+	| { type: "setIsYandexTrackerDialogOpen"; value: boolean }
+	| { type: "setIsJiraDialogOpen"; value: boolean }
+	| { type: "setIsSavingYandexTrackerConnection"; value: boolean }
+	| { type: "setIsSavingJiraConnection"; value: boolean }
+	| { type: "setIsDisablingConnection"; value: boolean }
 	| {
 			type: "setYandexTrackerFormState";
 			value: YandexTrackerConnectionFormState;
@@ -300,71 +189,8 @@ export type ConnectionsSettingsAction =
 			type: "patchYandexTrackerFormState";
 			value: Partial<YandexTrackerConnectionFormState>;
 	  }
-	| {
-			type: "setJiraFormState";
-			value: JiraConnectionFormState;
-	  }
-	| {
-			type: "patchJiraFormState";
-			value: Partial<JiraConnectionFormState>;
-	  }
-	| {
-			type: "setJiraMcpFormState";
-			value: JiraMcpConnectionFormState;
-	  }
-	| {
-			type: "patchJiraMcpFormState";
-			value: Partial<JiraMcpConnectionFormState>;
-	  }
-	| RemoteMcpFormPatchAction
-	| {
-			type: "setContext7FormState";
-			value: Context7ConnectionFormState;
-	  }
-	| {
-			type: "patchContext7FormState";
-			value: Partial<Context7ConnectionFormState>;
-	  }
-	| {
-			type: "setFigmaFormState";
-			value: FigmaConnectionFormState;
-	  }
-	| {
-			type: "patchFigmaFormState";
-			value: Partial<FigmaConnectionFormState>;
-	  }
-	| {
-			type: "setLinearFormState";
-			value: LinearConnectionFormState;
-	  }
-	| {
-			type: "patchLinearFormState";
-			value: Partial<LinearConnectionFormState>;
-	  }
-	| {
-			type: "setPostHogFormState";
-			value: PostHogConnectionFormState;
-	  }
-	| {
-			type: "patchPostHogFormState";
-			value: Partial<PostHogConnectionFormState>;
-	  }
-	| {
-			type: "setNotionFormState";
-			value: NotionConnectionFormState;
-	  }
-	| {
-			type: "patchNotionFormState";
-			value: Partial<NotionConnectionFormState>;
-	  }
-	| {
-			type: "setZoomFormState";
-			value: ZoomConnectionFormState;
-	  }
-	| {
-			type: "patchZoomFormState";
-			value: Partial<ZoomConnectionFormState>;
-	  };
+	| { type: "setJiraFormState"; value: JiraConnectionFormState }
+	| { type: "patchJiraFormState"; value: Partial<JiraConnectionFormState> };
 
 export const initialYandexTrackerConnectionFormState: YandexTrackerConnectionFormState =
 	{
@@ -446,32 +272,11 @@ export const initialCalendarSettingsState: CalendarSettingsState = {
 export const initialConnectionsSettingsState: ConnectionsSettingsState = {
 	isYandexTrackerDialogOpen: false,
 	isJiraDialogOpen: false,
-	isJiraMcpDialogOpen: false,
-	isContext7DialogOpen: false,
-	isFigmaDialogOpen: false,
-	isLinearDialogOpen: false,
-	isPostHogDialogOpen: false,
-	isNotionDialogOpen: false,
-	isZoomDialogOpen: false,
 	isSavingYandexTrackerConnection: false,
 	isSavingJiraConnection: false,
-	isSavingJiraMcpConnection: false,
-	isSavingContext7Connection: false,
-	isSavingFigmaConnection: false,
-	isSavingLinearConnection: false,
 	isDisablingConnection: false,
-	isSavingPostHogConnection: false,
-	isSavingNotionConnection: false,
-	isSavingZoomConnection: false,
 	yandexTrackerFormState: initialYandexTrackerConnectionFormState,
 	jiraFormState: initialJiraConnectionFormState,
-	jiraMcpFormState: initialJiraMcpConnectionFormState,
-	context7FormState: initialContext7ConnectionFormState,
-	figmaFormState: initialFigmaConnectionFormState,
-	linearFormState: initialLinearConnectionFormState,
-	posthogFormState: initialPostHogConnectionFormState,
-	notionFormState: initialNotionConnectionFormState,
-	zoomFormState: initialZoomConnectionFormState,
 };
 
 const emptyStableConnectionSettings = (): StableConnectionSettings => ({
@@ -556,49 +361,6 @@ export const calendarSettingsReducer = (
 	}
 };
 
-const patchRemoteMcpFormState = (
-	state: ConnectionsSettingsState,
-	action: RemoteMcpFormPatchAction,
-): ConnectionsSettingsState => {
-	switch (action.key) {
-		case "jiraMcpFormState":
-			return {
-				...state,
-				jiraMcpFormState: { ...state.jiraMcpFormState, ...action.value },
-			};
-		case "context7FormState":
-			return {
-				...state,
-				context7FormState: { ...state.context7FormState, ...action.value },
-			};
-		case "figmaFormState":
-			return {
-				...state,
-				figmaFormState: { ...state.figmaFormState, ...action.value },
-			};
-		case "linearFormState":
-			return {
-				...state,
-				linearFormState: { ...state.linearFormState, ...action.value },
-			};
-		case "posthogFormState":
-			return {
-				...state,
-				posthogFormState: { ...state.posthogFormState, ...action.value },
-			};
-		case "notionFormState":
-			return {
-				...state,
-				notionFormState: { ...state.notionFormState, ...action.value },
-			};
-		case "zoomFormState":
-			return {
-				...state,
-				zoomFormState: { ...state.zoomFormState, ...action.value },
-			};
-	}
-};
-
 export const connectionsSettingsReducer = (
 	state: ConnectionsSettingsState,
 	action: ConnectionsSettingsAction,
@@ -608,40 +370,12 @@ export const connectionsSettingsReducer = (
 			return { ...state, isYandexTrackerDialogOpen: action.value };
 		case "setIsJiraDialogOpen":
 			return { ...state, isJiraDialogOpen: action.value };
-		case "setIsJiraMcpDialogOpen":
-			return { ...state, isJiraMcpDialogOpen: action.value };
-		case "setIsContext7DialogOpen":
-			return { ...state, isContext7DialogOpen: action.value };
-		case "setIsFigmaDialogOpen":
-			return { ...state, isFigmaDialogOpen: action.value };
-		case "setIsLinearDialogOpen":
-			return { ...state, isLinearDialogOpen: action.value };
-		case "setIsPostHogDialogOpen":
-			return { ...state, isPostHogDialogOpen: action.value };
-		case "setIsNotionDialogOpen":
-			return { ...state, isNotionDialogOpen: action.value };
-		case "setIsZoomDialogOpen":
-			return { ...state, isZoomDialogOpen: action.value };
 		case "setIsSavingYandexTrackerConnection":
 			return { ...state, isSavingYandexTrackerConnection: action.value };
 		case "setIsSavingJiraConnection":
 			return { ...state, isSavingJiraConnection: action.value };
-		case "setIsSavingJiraMcpConnection":
-			return { ...state, isSavingJiraMcpConnection: action.value };
-		case "setIsSavingContext7Connection":
-			return { ...state, isSavingContext7Connection: action.value };
-		case "setIsSavingFigmaConnection":
-			return { ...state, isSavingFigmaConnection: action.value };
-		case "setIsSavingLinearConnection":
-			return { ...state, isSavingLinearConnection: action.value };
 		case "setIsDisablingConnection":
 			return { ...state, isDisablingConnection: action.value };
-		case "setIsSavingPostHogConnection":
-			return { ...state, isSavingPostHogConnection: action.value };
-		case "setIsSavingNotionConnection":
-			return { ...state, isSavingNotionConnection: action.value };
-		case "setIsSavingZoomConnection":
-			return { ...state, isSavingZoomConnection: action.value };
 		case "setYandexTrackerFormState":
 			return { ...state, yandexTrackerFormState: action.value };
 		case "patchYandexTrackerFormState":
@@ -657,82 +391,7 @@ export const connectionsSettingsReducer = (
 		case "patchJiraFormState":
 			return {
 				...state,
-				jiraFormState: {
-					...state.jiraFormState,
-					...action.value,
-				},
-			};
-		case "setJiraMcpFormState":
-			return { ...state, jiraMcpFormState: action.value };
-		case "patchJiraMcpFormState":
-			return {
-				...state,
-				jiraMcpFormState: {
-					...state.jiraMcpFormState,
-					...action.value,
-				},
-			};
-		case "patchRemoteMcpFormState":
-			return patchRemoteMcpFormState(state, action);
-		case "setContext7FormState":
-			return { ...state, context7FormState: action.value };
-		case "patchContext7FormState":
-			return {
-				...state,
-				context7FormState: {
-					...state.context7FormState,
-					...action.value,
-				},
-			};
-		case "setFigmaFormState":
-			return { ...state, figmaFormState: action.value };
-		case "patchFigmaFormState":
-			return {
-				...state,
-				figmaFormState: {
-					...state.figmaFormState,
-					...action.value,
-				},
-			};
-		case "setLinearFormState":
-			return { ...state, linearFormState: action.value };
-		case "patchLinearFormState":
-			return {
-				...state,
-				linearFormState: {
-					...state.linearFormState,
-					...action.value,
-				},
-			};
-		case "setPostHogFormState":
-			return { ...state, posthogFormState: action.value };
-		case "patchPostHogFormState":
-			return {
-				...state,
-				posthogFormState: {
-					...state.posthogFormState,
-					...action.value,
-				},
-			};
-		case "setNotionFormState":
-			return { ...state, notionFormState: action.value };
-		case "patchNotionFormState":
-			return {
-				...state,
-				notionFormState: {
-					...state.notionFormState,
-					...action.value,
-				},
-			};
-		case "setZoomFormState":
-			return { ...state, zoomFormState: action.value };
-		case "patchZoomFormState":
-			return {
-				...state,
-				zoomFormState: {
-					...state.zoomFormState,
-					...action.value,
-				},
+				jiraFormState: { ...state.jiraFormState, ...action.value },
 			};
 	}
 };

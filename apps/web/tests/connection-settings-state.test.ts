@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	type ConnectionQueryResults,
-	connectionsSettingsReducer,
 	createStableConnectionSettingsStore,
 	getStableConnectionSettingsKey,
-	initialConnectionsSettingsState,
 	type JiraConnectionSettings,
 	resolveConnectionSettings,
 } from "@/components/settings/connection-settings-state";
@@ -90,25 +88,5 @@ describe("connection settings state", () => {
 
 		expect(store.get(firstKey)?.jira).toBe(jiraConnection);
 		expect(store.get(secondKey)?.jira).toBeNull();
-	});
-
-	it("patches only the targeted remote MCP form state", () => {
-		const state = connectionsSettingsReducer(initialConnectionsSettingsState, {
-			type: "patchRemoteMcpFormState",
-			key: "figmaFormState",
-			value: {
-				name: "Figma OAuth",
-				oauthClientId: "client-id",
-			},
-		});
-
-		expect(state.figmaFormState).toMatchObject({
-			name: "Figma OAuth",
-			baseUrl: initialConnectionsSettingsState.figmaFormState.baseUrl,
-			oauthClientId: "client-id",
-		});
-		expect(state.linearFormState).toBe(
-			initialConnectionsSettingsState.linearFormState,
-		);
 	});
 });

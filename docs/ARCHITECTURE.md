@@ -257,6 +257,13 @@ tool adapters to every app-source capability and fails at module load when an
 adapter is missing. Desktop-local capabilities such as shared local folders
 and native transcription remain desktop bridge APIs, not generic connected-app
 capabilities.
+Renderer connection lifecycle is owned by
+`apps/web/src/components/settings/use-connected-app-settings-session.ts`.
+Provider views consume its stable connection snapshot and provider-family
+sessions; they must not reimplement form reset, OAuth navigation, connection
+failure cleanup, or workspace-scoped loading. Remote MCP providers enter through
+`use-remote-mcp-connection-session.ts`, while capability identity and defaults
+remain authoritative in `@workspace/ai/capability-metadata`.
 
 `convex/`
 : Server functions, schema, HTTP actions, auth, and server-only integrations.
