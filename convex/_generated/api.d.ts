@@ -22,6 +22,8 @@ import type * as assistantRunStateMachine from "../assistantRunStateMachine.js";
 import type * as assistantRuns from "../assistantRuns.js";
 import type * as auth from "../auth.js";
 import type * as automationActions from "../automationActions.js";
+import type * as automationRunStateMachine from "../automationRunStateMachine.js";
+import type * as automationSchedule from "../automationSchedule.js";
 import type * as automations from "../automations.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarPreferences from "../calendarPreferences.js";
@@ -79,6 +81,8 @@ declare const fullApi: ApiFromModules<{
   assistantRuns: typeof assistantRuns;
   auth: typeof auth;
   automationActions: typeof automationActions;
+  automationRunStateMachine: typeof automationRunStateMachine;
+  automationSchedule: typeof automationSchedule;
   automations: typeof automations;
   calendar: typeof calendar;
   calendarPreferences: typeof calendarPreferences;
