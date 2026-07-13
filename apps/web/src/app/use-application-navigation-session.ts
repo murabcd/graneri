@@ -70,11 +70,16 @@ export const useApplicationNavigationSession = ({
 		null,
 	);
 	const inboxOpenRef = React.useRef(inboxOpen);
-	const lastNonSettingsLocationRef = React.useRef(
-		getInitialNonSettingsLocation(),
+	const initialNonSettingsLocation = React.useMemo(
+		getInitialNonSettingsLocation,
+		[],
 	);
+	const lastNonSettingsLocationRef = React.useRef(initialNonSettingsLocation);
 	const onLocationSynchronizedRef = React.useRef(onLocationSynchronized);
-	onLocationSynchronizedRef.current = onLocationSynchronized;
+
+	React.useEffect(() => {
+		onLocationSynchronizedRef.current = onLocationSynchronized;
+	}, [onLocationSynchronized]);
 
 	React.useEffect(() => {
 		inboxOpenRef.current = inboxOpen;

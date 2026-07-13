@@ -319,22 +319,32 @@ const useNotePageController = ({
 		content,
 		searchableText,
 	});
-	latestDocumentRef.current = { title, content, searchableText };
 	const applyDocumentRef = React.useRef<(document: NoteDocument) => void>(
 		() => {},
 	);
-	applyDocumentRef.current = (document) => {
-		applyDraftState(document);
-		if (editor) {
-			setEditorDocument(
-				parseStoredNoteContent(document.content, editor.state.schema),
-			);
-		}
-		setTableOfContents([]);
-		pendingTableOfContentsRef.current = null;
-	};
 	const saveNoteRef = React.useRef(saveNote);
-	saveNoteRef.current = saveNote;
+
+	React.useEffect(() => {
+		latestDocumentRef.current = { title, content, searchableText };
+	}, [content, searchableText, title]);
+
+	React.useEffect(() => {
+		applyDocumentRef.current = (document) => {
+			applyDraftState(document);
+			if (editor) {
+				setEditorDocument(
+					parseStoredNoteContent(document.content, editor.state.schema),
+				);
+			}
+			setTableOfContents([]);
+			pendingTableOfContentsRef.current = null;
+		};
+	}, [applyDraftState, editor, setEditorDocument]);
+
+	React.useEffect(() => {
+		saveNoteRef.current = saveNote;
+	}, [saveNote]);
+
 	const [documentSession] = React.useState(() =>
 		createNoteDocumentSession<Id<"workspaces">, Id<"notes">>({
 			emptyDocument: {
