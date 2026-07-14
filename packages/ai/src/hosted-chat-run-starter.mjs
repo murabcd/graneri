@@ -12,7 +12,6 @@ const getErrorText = (error, fallback) =>
 	error instanceof Error ? error.message : fallback;
 
 export const startHostedChatRun = async ({
-	appendActiveStreamText,
 	assistantMessageId,
 	attachableRun,
 	chatId,
@@ -28,6 +27,7 @@ export const startHostedChatRun = async ({
 	startAssistantRun,
 	supersedeActiveRun = false,
 	trigger,
+	updateActiveStream,
 	workspaceId,
 }) => {
 	let assistantRun =
@@ -61,7 +61,7 @@ export const startHostedChatRun = async ({
 						...args,
 						assistantMessageId,
 					}),
-				appendActiveStreamText,
+				updateActiveStream,
 				finishActiveStream: deleteActiveStreamSnapshot,
 				startActiveStreamToolCall,
 				finishActiveStreamToolCall,

@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createHostedChatRunResponseStream } from "../src/hosted-chat-stream-lifecycle.mjs";
 
-const createActiveStreamSession = () => {
+const createActiveStreamSession = ({
+	replaceParts,
+}: {
+	replaceParts?: (parts: unknown[]) => void;
+} = {}) => {
 	const abortController = new AbortController();
 	const persistedText: string[] = [];
+	const persistedParts: unknown[][] = [];
 	let cleanedUp = false;
 	let persistenceClosed = false;
 	let broadcastStarted = false;
@@ -18,12 +23,19 @@ const createActiveStreamSession = () => {
 		get persistedText() {
 			return persistedText;
 		},
+		get persistedParts() {
+			return persistedParts;
+		},
 		get persistenceClosed() {
 			return persistenceClosed;
 		},
 		session: {
 			abortSignal: abortController.signal,
 			append: (delta: string) => persistedText.push(delta),
+			replaceParts: (parts: unknown[]) => {
+				persistedParts.push(parts);
+				replaceParts?.(parts);
+			},
 			cleanup: () => {
 				cleanedUp = true;
 			},
@@ -71,7 +83,13 @@ describe("hosted chat stream lifecycle", () => {
 				});
 				return new ReadableStream({
 					start(controller) {
-						controller.enqueue({ type: "text-delta", delta: "Hi" });
+						controller.enqueue({ type: "text-start", id: "text-1" });
+						controller.enqueue({
+							type: "text-delta",
+							id: "text-1",
+							delta: "Hi",
+						});
+						controller.enqueue({ type: "text-end", id: "text-1" });
 						controller.close();
 					},
 				});
@@ -99,7 +117,14 @@ describe("hosted chat stream lifecycle", () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(activeStream.broadcastStarted).toBe(true);
-		expect(chunks).toEqual([{ type: "text-delta", delta: "Hi" }]);
+		expect(activeStream.persistedParts.at(-1)).toEqual([
+			{ type: "text", text: "Hi", state: "done" },
+		]);
+		expect(chunks).toEqual([
+			{ type: "text-start", id: "text-1" },
+			{ type: "text-delta", id: "text-1", delta: "Hi" },
+			{ type: "text-end", id: "text-1" },
+		]);
 		expect(finalized).toEqual([
 			{
 				responseMessage: {
@@ -153,6 +178,72 @@ describe("hosted chat stream lifecycle", () => {
 			},
 		]);
 		expect(errors).toHaveLength(1);
+	});
+
+	it("fails finalization when rich snapshot persistence fails", async () => {
+		const snapshotError = new Error("snapshot persistence failed");
+		const activeStream = createActiveStreamSession({
+			replaceParts: () => {
+				throw snapshotError;
+			},
+		});
+		const finalized: unknown[] = [];
+		const result = await createHostedChatRunResponseStream({
+			activeStreamSession: activeStream.session,
+			agent: {},
+			assistantMessageId: "assistant-message-1",
+			assistantRunId: "run-1",
+			chatMessages: [],
+			createUiStream: async ({ onFinish }) => {
+				onFinish({
+					isAborted: false,
+					responseMessage: {
+						id: "assistant-message-1",
+						role: "assistant",
+						parts: [{ type: "text", text: "Hi" }],
+					},
+				});
+				return new ReadableStream({
+					start(controller) {
+						controller.enqueue({ type: "text-start", id: "text-1" });
+						controller.enqueue({
+							type: "text-delta",
+							id: "text-1",
+							delta: "Hi",
+						});
+						controller.enqueue({ type: "text-end", id: "text-1" });
+						controller.close();
+					},
+				});
+			},
+			failAssistantRun: async () => undefined,
+			finalizeAssistantRun: async (terminalization) => {
+				finalized.push(terminalization);
+			},
+			finalizedToolSet: { hasTools: false },
+			logLatency: () => undefined,
+			streamLatencyTracker: createStreamLatencyTracker(),
+			systemPrompt: "system",
+		});
+
+		if (!result.ok) {
+			throw result.error;
+		}
+		await expect(
+			(async () => {
+				for await (const _chunk of result.responseStream) {
+					// Consume until the snapshot persistence failure reaches the stream.
+				}
+			})(),
+		).rejects.toThrow("snapshot persistence failed");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(finalized).toEqual([
+			{
+				errorText: "snapshot persistence failed",
+				status: "failed",
+			},
+		]);
 	});
 
 	it("finalizes an SDK approval request as waiting for the user", async () => {

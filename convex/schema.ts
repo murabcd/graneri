@@ -646,6 +646,7 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		assistantMessageId: v.string(),
 		text: v.string(),
+		partsJson: v.string(),
 		updatedAt: v.number(),
 	})
 		.index("by_runId", ["runId"])

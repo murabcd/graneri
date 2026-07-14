@@ -11,11 +11,12 @@ export declare const startHostedChatRun: <
 	RunId extends string,
 	ReasoningEffort extends string,
 >(args: {
-	appendActiveStreamText: (args: {
+	updateActiveStream: (args: {
 		workspaceId: WorkspaceId;
 		chatId: ChatId;
 		runId: RunId;
-		delta: string;
+		delta?: string;
+		partsJson?: string;
 	}) => Promise<unknown>;
 	assistantMessageId: string;
 	attachableRun?: { _id: RunId } | null;

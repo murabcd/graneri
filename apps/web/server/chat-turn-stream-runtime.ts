@@ -335,8 +335,8 @@ export const runHostedChatTurnStreamRuntime = async ({
 			convexClient.mutation(api.assistantRuns.failAssistantRun, args),
 		startActiveStream: (args) =>
 			convexClient.mutation(api.chats.startActiveStream, args),
-		appendActiveStreamText: (args) =>
-			convexClient.mutation(api.chats.appendActiveStreamText, args),
+		updateActiveStream: (args) =>
+			convexClient.mutation(api.chats.updateActiveStream, args),
 		deleteActiveStreamSnapshot: (args) =>
 			convexClient.mutation(api.chats.deleteActiveStreamSnapshot, args),
 		startActiveStreamToolCall: (args) =>

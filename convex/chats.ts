@@ -90,6 +90,7 @@ const chatActiveStreamValidator = v.object({
 	chatId: v.id("chats"),
 	assistantMessageId: v.string(),
 	text: v.string(),
+	partsJson: v.string(),
 	updatedAt: v.number(),
 });
 
@@ -411,7 +412,7 @@ const toActiveStreamMessageSnapshot = (
 ): StoredUiMessageSnapshot => ({
 	id: stream.assistantMessageId,
 	role: "assistant",
-	partsJson: JSON.stringify([{ type: "text", text: stream.text }]),
+	partsJson: stream.partsJson,
 	createdAt: stream._creationTime,
 });
 
@@ -1591,6 +1592,7 @@ export const startActiveStream = mutation({
 			chatId: chat._id,
 			assistantMessageId: args.assistantMessageId,
 			text: "",
+			partsJson: "[]",
 			updatedAt: now,
 		});
 		await appendAssistantRunEvent(ctx, run, {
@@ -1610,17 +1612,21 @@ export const startActiveStream = mutation({
 	},
 });
 
-export const appendActiveStreamText = mutation({
+export const updateActiveStream = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
-		delta: v.string(),
+		delta: v.optional(v.string()),
+		partsJson: v.optional(v.string()),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		if (!args.delta) {
-			return null;
+		if (!args.delta && args.partsJson === undefined) {
+			throw new ConvexError({
+				code: "INVALID_ACTIVE_STREAM_UPDATE",
+				message: "Active stream updates require text or message parts.",
+			});
 		}
 
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
@@ -1635,12 +1641,29 @@ export const appendActiveStreamText = mutation({
 		if (run.status !== "running") {
 			throw new ConvexError({
 				code: "ASSISTANT_RUN_NOT_RUNNING",
-				message: "Active stream text cannot be appended to a non-running run.",
+				message: "Active stream cannot be updated for a non-running run.",
 			});
 		}
 
-		const stream = await getActiveStreamByRunId(ctx, args.runId);
+		if (args.partsJson !== undefined) {
+			let parts: unknown;
+			try {
+				parts = JSON.parse(args.partsJson) as unknown;
+			} catch {
+				throw new ConvexError({
+					code: "INVALID_ACTIVE_STREAM_PARTS",
+					message: "Active stream parts must be valid JSON.",
+				});
+			}
+			if (!Array.isArray(parts)) {
+				throw new ConvexError({
+					code: "INVALID_ACTIVE_STREAM_PARTS",
+					message: "Active stream parts must be an array.",
+				});
+			}
+		}
 
+		const stream = await getActiveStreamByRunId(ctx, args.runId);
 		if (!stream || stream.chatId !== chat._id || stream.runId !== args.runId) {
 			throw new ConvexError({
 				code: "ACTIVE_STREAM_NOT_FOUND",
@@ -1648,9 +1671,26 @@ export const appendActiveStreamText = mutation({
 			});
 		}
 
+		const updatedAt = Date.now();
+		const text = `${stream.text}${args.delta ?? ""}`;
+		const partsJson = args.partsJson ?? stream.partsJson;
+		requireConvexDocumentWithinLimit({
+			document: {
+				runId: stream.runId,
+				chatId: stream.chatId,
+				assistantMessageId: stream.assistantMessageId,
+				text,
+				partsJson,
+				updatedAt,
+			},
+			errorCode: "ACTIVE_STREAM_TOO_LARGE",
+			message: "Active stream snapshot exceeds the Convex document limit.",
+		});
+
 		await ctx.db.patch(stream._id, {
-			text: `${stream.text}${args.delta}`,
-			updatedAt: Date.now(),
+			text,
+			partsJson,
+			updatedAt,
 		});
 
 		return null;
@@ -1821,7 +1861,7 @@ export const stopActiveStream = mutation({
 				message: {
 					id: stream.assistantMessageId,
 					role: "assistant",
-					partsJson: JSON.stringify([{ type: "text", text: stream.text }]),
+					partsJson: stream.partsJson,
 					metadataJson: JSON.stringify({ interrupted: true }),
 					text: stoppedText,
 					createdAt: stoppedAt,

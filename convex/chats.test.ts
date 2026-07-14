@@ -482,7 +482,7 @@ test("branching fails closed when the target is unavailable", async () => {
 	expect(messages.map((message) => message.id)).toEqual(["current-message"]);
 });
 
-test("appendActiveStreamText rejects missing snapshots for detached running streams", async () => {
+test("updateActiveStream rejects missing snapshots for detached running streams", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
@@ -506,13 +506,89 @@ test("appendActiveStreamText rejects missing snapshots for detached running stre
 	});
 
 	await expect(
-		asOwner.mutation(api.chats.appendActiveStreamText, {
+		asOwner.mutation(api.chats.updateActiveStream, {
 			workspaceId,
 			chatId: "chat-missing-stream",
 			runId: run._id,
 			delta: "lost text",
 		}),
 	).rejects.toThrow("Active stream snapshot not found.");
+});
+
+test("updateActiveStream exposes complete in-progress assistant state", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-active-parts";
+
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId,
+		preview: "Prompt",
+		message: {
+			id: "msg-user-1",
+			role: "user",
+			partsJson: JSON.stringify([{ type: "text", text: "Prompt" }]),
+			text: "Prompt",
+			createdAt: 2_000,
+		},
+	});
+	const run = await startRunAndStream({ asOwner, workspaceId, chatId });
+	const parts = [
+		{ type: "reasoning", text: "Checking context", state: "streaming" },
+		{
+			type: "tool-search",
+			toolCallId: "tool-1",
+			state: "input-available",
+			input: { query: "Graneri" },
+		},
+		{ type: "text", text: "Working", state: "streaming" },
+	];
+	await asOwner.mutation(api.chats.updateActiveStream, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		delta: "Working",
+		partsJson: JSON.stringify(parts),
+	});
+
+	const messages = await asOwner.query(api.chats.getMessages, {
+		workspaceId,
+		chatId,
+	});
+
+	expect(messages.at(-1)).toMatchObject({
+		id: "stream-1",
+		role: "assistant",
+		text: "Working",
+		partsJson: JSON.stringify(parts),
+	});
+});
+
+test("updateActiveStream rejects malformed snapshots", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-invalid-active-parts";
+
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId,
+		preview: "Prompt",
+		message: {
+			id: "msg-user-1",
+			role: "user",
+			partsJson: JSON.stringify([{ type: "text", text: "Prompt" }]),
+			text: "Prompt",
+			createdAt: 2_000,
+		},
+	});
+	const run = await startRunAndStream({ asOwner, workspaceId, chatId });
+
+	await expect(
+		asOwner.mutation(api.chats.updateActiveStream, {
+			workspaceId,
+			chatId,
+			runId: run._id,
+			partsJson: JSON.stringify({ type: "text", text: "not an array" }),
+		}),
+	).rejects.toThrow("Active stream parts must be an array.");
 });
 
 test("stopActiveStream rejects a run from another chat", async () => {
@@ -579,11 +655,25 @@ test("stopActiveStream saves interrupted assistant text before deleting the snap
 		workspaceId,
 		chatId,
 	});
-	await asOwner.mutation(api.chats.appendActiveStreamText, {
+	await asOwner.mutation(api.chats.updateActiveStream, {
 		workspaceId,
 		chatId,
 		runId: run._id,
 		delta: "Partial answer before steer.",
+	});
+	const interruptedParts = [
+		{ type: "reasoning", text: "Partial reasoning", state: "done" },
+		{
+			type: "text",
+			text: "Partial answer before steer.",
+			state: "streaming",
+		},
+	];
+	await asOwner.mutation(api.chats.updateActiveStream, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		partsJson: JSON.stringify(interruptedParts),
 	});
 
 	await asOwner.mutation(api.chats.stopActiveStream, {
@@ -627,6 +717,7 @@ test("stopActiveStream saves interrupted assistant text before deleting the snap
 	expect(state.messages[1]).toMatchObject({
 		messageId: "stream-1",
 		role: "assistant",
+		partsJson: JSON.stringify(interruptedParts),
 	});
 });
 
@@ -651,7 +742,7 @@ test("stopActiveStream deletes stale terminal snapshots without saving interrupt
 		workspaceId,
 		chatId,
 	});
-	await asOwner.mutation(api.chats.appendActiveStreamText, {
+	await asOwner.mutation(api.chats.updateActiveStream, {
 		workspaceId,
 		chatId,
 		runId: run._id,
@@ -667,6 +758,9 @@ test("stopActiveStream deletes stale terminal snapshots without saving interrupt
 			chatId: run.chatId,
 			assistantMessageId: run.assistantMessageId,
 			text: "Late stale terminal text.",
+			partsJson: JSON.stringify([
+				{ type: "text", text: "Late stale terminal text." },
+			]),
 			updatedAt: 4_000,
 		});
 	});
@@ -738,7 +832,7 @@ test("an interrupted run can continue with a new assistant message", async () =>
 		workspaceId,
 		chatId,
 	});
-	await asOwner.mutation(api.chats.appendActiveStreamText, {
+	await asOwner.mutation(api.chats.updateActiveStream, {
 		workspaceId,
 		chatId,
 		runId: run._id,

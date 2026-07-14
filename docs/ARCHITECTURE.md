@@ -115,11 +115,14 @@ lifecycle events, and mandatory queue/snapshot cleanup; `assistantRuns` exposes
 the public Convex function adapters and lifecycle queries. Chat and queue modules
 must cross the state-machine seam instead of patching `assistantRuns` rows.
 Together they enforce stop/failure/completion history and the
-one-active-run-per-chat invariant. `chatActiveStreams` and active
-`chatToolCalls` are temporary render
-snapshots scoped to a run; terminal runs must leave no stream or active tool
-snapshots behind. These records do not move desktop-local tool execution out of
-the renderer/local-server bridge.
+one-active-run-per-chat invariant. `chatActiveStreams` stores the latest complete
+AI SDK message parts plus denormalized text, while active `chatToolCalls` stores
+the auditable tool lifecycle. Text and message parts are coalesced into one
+atomic snapshot update so reactive clients never observe a split producer
+checkpoint. Both tables are temporary render snapshots scoped to a run;
+terminal runs must leave no stream or active tool snapshots behind. These
+records do not move desktop-local tool execution out of the
+renderer/local-server bridge.
 `assistantRunEvents` is the durable ordered timeline for a run. It records typed
 events such as run start/stop/fail/complete, tool lifecycle changes, completed
 assistant messages, and human-input requests. Events are append-only per run and

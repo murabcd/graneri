@@ -1,4 +1,4 @@
-import { createAgentUIStream } from "ai";
+import { createAgentUIStream, readUIMessageStream } from "ai";
 import { pipeHostedActiveStreamText } from "./hosted-chat-active-stream.mjs";
 import { createHostedAssistantRunFinalizationQueue } from "./hosted-chat-run-finalization-queue.mjs";
 import { getToolApprovalRequest } from "./tool-approval-state.mjs";
@@ -93,8 +93,29 @@ export const createHostedChatRunResponseStream = async ({
 		finalizationQueue.setTerminalization(pendingTerminalization);
 		pendingTerminalization = null;
 	}
+	const [snapshotStream, eventStream] = streamLatencyTracker
+		.wrapStream(stream)
+		.tee();
+	const snapshotPersistence = (async () => {
+		for await (const message of readUIMessageStream({
+			stream: snapshotStream,
+			terminateOnError: true,
+		})) {
+			activeStreamSession.replaceParts(message.parts);
+		}
+	})().then(
+		() => ({ ok: true }),
+		(error) => ({ error, ok: false }),
+	);
+	const requireSnapshotPersistence = async () => {
+		const result = await snapshotPersistence;
+		if (!result.ok) {
+			throw result.error;
+		}
+	};
 	const persistedStream = pipeHostedActiveStreamText({
 		onError: async (error) => {
+			await snapshotPersistence;
 			finalizationQueue?.setTerminalization({
 				errorText:
 					error instanceof Error
@@ -105,10 +126,11 @@ export const createHostedChatRunResponseStream = async ({
 			await finalizationQueue?.flushAfterClientStream();
 		},
 		onFlush: async () => {
+			await requireSnapshotPersistence();
 			await finalizationQueue?.flushAfterClientStream();
 		},
 		persister: activeStreamSession,
-		stream: streamLatencyTracker.wrapStream(stream),
+		stream: eventStream,
 	});
 
 	return {

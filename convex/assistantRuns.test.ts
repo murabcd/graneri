@@ -84,7 +84,7 @@ const startRunWithSnapshots = async ({
 		runId: run._id,
 		assistantMessageId: run.assistantMessageId,
 	});
-	await asOwner.mutation(api.chats.appendActiveStreamText, {
+	await asOwner.mutation(api.chats.updateActiveStream, {
 		workspaceId,
 		chatId,
 		runId: run._id,
@@ -281,6 +281,9 @@ test("finishAssistantRun deletes all snapshots for runId without batch caps", as
 				chatId: run.chatId,
 				assistantMessageId: run.assistantMessageId,
 				text: `Partial ${index}`,
+				partsJson: JSON.stringify([
+					{ type: "text", text: `Partial ${index}` },
+				]),
 				updatedAt: 3_000 + index,
 			});
 		}

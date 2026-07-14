@@ -34,7 +34,6 @@ const appendReplayChunk = (replayChunks, chunk) => {
 };
 
 export class HostedActiveChatStreamPersister {
-	#appendActiveStreamText;
 	#acceptingAppends = true;
 	#buffer = "";
 	#chatId;
@@ -45,13 +44,14 @@ export class HostedActiveChatStreamPersister {
 	#flushPromise = null;
 	#flushTimer = null;
 	#messageId;
+	#parts = null;
 	#runId;
 	#startActiveStream;
 	#startActiveStreamToolCall;
+	#updateActiveStream;
 	#workspaceId;
 
 	constructor({
-		appendActiveStreamText,
 		chatId,
 		finishActiveStream,
 		finishActiveStreamToolCall,
@@ -59,9 +59,9 @@ export class HostedActiveChatStreamPersister {
 		runId,
 		startActiveStream,
 		startActiveStreamToolCall,
+		updateActiveStream,
 		workspaceId,
 	}) {
-		this.#appendActiveStreamText = appendActiveStreamText;
 		this.#chatId = chatId;
 		this.#finishActiveStream = finishActiveStream;
 		this.#finishActiveStreamToolCall = finishActiveStreamToolCall;
@@ -69,6 +69,7 @@ export class HostedActiveChatStreamPersister {
 		this.#runId = runId;
 		this.#startActiveStream = startActiveStream;
 		this.#startActiveStreamToolCall = startActiveStreamToolCall;
+		this.#updateActiveStream = updateActiveStream;
 		this.#workspaceId = workspaceId;
 	}
 
@@ -98,7 +99,19 @@ export class HostedActiveChatStreamPersister {
 		}
 
 		this.#buffer += delta;
+		this.#scheduleFlush();
+	}
 
+	replaceParts(parts) {
+		if (!this.#acceptingAppends || this.#discarded) {
+			return;
+		}
+
+		this.#parts = parts;
+		this.#scheduleFlush();
+	}
+
+	#scheduleFlush() {
 		if (this.#flushTimer) {
 			return;
 		}
@@ -150,21 +163,27 @@ export class HostedActiveChatStreamPersister {
 			this.#flushTimer = null;
 		}
 
-		while (this.#buffer) {
+		while (this.#buffer || this.#parts !== null) {
 			const delta = this.#buffer;
 			this.#buffer = "";
+			const parts = this.#parts;
+			this.#parts = null;
 			const previousFlush = this.#flushPromise ?? Promise.resolve();
 			const flushPromise = previousFlush
-				.then(() => {
+				.then(async () => {
 					if (this.#discarded) {
 						return undefined;
 					}
-					return this.#appendActiveStreamText({
+					await this.#updateActiveStream({
 						workspaceId: this.#workspaceId,
 						chatId: this.#chatId,
 						runId: this.#runId,
-						delta,
+						...(delta ? { delta } : {}),
+						...(parts === null
+							? {}
+							: { partsJson: stringifyToolPayload(parts) }),
 					});
+					return undefined;
 				})
 				.then(() => undefined);
 
@@ -215,6 +234,7 @@ export class HostedActiveChatStreamPersister {
 	#discardPending() {
 		this.#discarded = true;
 		this.#buffer = "";
+		this.#parts = null;
 		if (this.#flushTimer) {
 			clearTimeout(this.#flushTimer);
 			this.#flushTimer = null;
@@ -300,6 +320,9 @@ export const createHostedActiveStreamSession = ({
 		},
 		append(delta) {
 			persister.append(delta);
+		},
+		replaceParts(parts) {
+			persister.replaceParts(parts);
 		},
 		async startToolCall(args) {
 			await persister.startToolCall?.(args);

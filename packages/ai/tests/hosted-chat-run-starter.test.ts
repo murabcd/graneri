@@ -5,7 +5,7 @@ import {
 } from "../src/hosted-chat-run-starter.mjs";
 
 const createCallbacks = (overrides = {}) => ({
-	appendActiveStreamText: vi.fn(async () => null),
+	updateActiveStream: vi.fn(async () => null),
 	deleteActiveStreamSnapshot: vi.fn(async () => null),
 	failAssistantRun: vi.fn(async () => null),
 	finishActiveStreamToolCall: vi.fn(async () => null),

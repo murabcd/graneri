@@ -1,3 +1,4 @@
+import type { UIMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import {
 	createHostedActiveChatStreamSession,
@@ -26,11 +27,23 @@ const collectStream = async <T>(stream: ReadableStream<T>) => {
 const createTestActiveStreamSession = (
 	args: Omit<
 		Parameters<typeof createHostedActiveStreamSession>[0],
-		"turnInput"
-	> & { turnInput?: HostedTurnInputBuffer },
+		"persister" | "turnInput"
+	> & {
+		persister: Omit<
+			Parameters<typeof createHostedActiveStreamSession>[0]["persister"],
+			"replaceParts"
+		> & {
+			replaceParts?: (parts: UIMessage["parts"]) => void;
+		};
+		turnInput?: HostedTurnInputBuffer;
+	},
 ) =>
 	createHostedActiveStreamSession({
 		...args,
+		persister: {
+			replaceParts: () => undefined,
+			...args.persister,
+		},
 		turnInput: args.turnInput ?? createHostedTurnInputBuffer(),
 	});
 
@@ -46,7 +59,7 @@ describe("hosted active chat stream", () => {
 
 	it("batches active stream deltas and finishes through adapter callbacks", async () => {
 		const startActiveStream = vi.fn().mockResolvedValue(undefined);
-		const appendActiveStreamText = vi.fn().mockResolvedValue(undefined);
+		const updateActiveStream = vi.fn().mockResolvedValue(undefined);
 		const finishActiveStream = vi.fn().mockResolvedValue(undefined);
 		const startActiveStreamToolCall = vi.fn().mockResolvedValue(undefined);
 		const finishActiveStreamToolCall = vi.fn().mockResolvedValue(undefined);
@@ -56,7 +69,7 @@ describe("hosted active chat stream", () => {
 			messageId: "stream-1",
 			runId: "run-1",
 			startActiveStream,
-			appendActiveStreamText,
+			updateActiveStream,
 			finishActiveStream,
 			startActiveStreamToolCall,
 			finishActiveStreamToolCall,
@@ -65,6 +78,9 @@ describe("hosted active chat stream", () => {
 		await persister.start();
 		persister.append("hello");
 		persister.append(" world");
+		persister.replaceParts([
+			{ type: "text", text: "hello world", state: "streaming" },
+		]);
 		await persister.startToolCall({
 			toolCallId: "tool-call-1",
 			toolName: "search",
@@ -83,12 +99,15 @@ describe("hosted active chat stream", () => {
 			chatId: "chat-1",
 			runId: "run-1",
 		});
-		expect(appendActiveStreamText).toHaveBeenCalledTimes(1);
-		expect(appendActiveStreamText).toHaveBeenCalledWith({
+		expect(updateActiveStream).toHaveBeenCalledTimes(1);
+		expect(updateActiveStream).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
 			delta: "hello world",
+			partsJson: JSON.stringify([
+				{ type: "text", text: "hello world", state: "streaming" },
+			]),
 		});
 		expect(finishActiveStream).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
@@ -118,7 +137,7 @@ describe("hosted active chat stream", () => {
 		vi.useFakeTimers();
 		try {
 			const startActiveStream = vi.fn().mockResolvedValue(undefined);
-			const appendActiveStreamText = vi
+			const updateActiveStream = vi
 				.fn()
 				.mockRejectedValue(new Error("append failed"));
 			const finishActiveStream = vi.fn().mockResolvedValue(undefined);
@@ -128,7 +147,7 @@ describe("hosted active chat stream", () => {
 				messageId: "stream-1",
 				runId: "run-1",
 				startActiveStream,
-				appendActiveStreamText,
+				updateActiveStream,
 				finishActiveStream,
 			});
 
@@ -148,7 +167,7 @@ describe("hosted active chat stream", () => {
 		vi.useFakeTimers();
 		try {
 			const startActiveStream = vi.fn().mockResolvedValue(undefined);
-			const appendActiveStreamText = vi.fn().mockResolvedValue(undefined);
+			const updateActiveStream = vi.fn().mockResolvedValue(undefined);
 			const finishActiveStream = vi.fn().mockResolvedValue(undefined);
 			const persister = new HostedActiveChatStreamPersister({
 				workspaceId: "workspace-1",
@@ -156,7 +175,7 @@ describe("hosted active chat stream", () => {
 				messageId: "stream-1",
 				runId: "run-1",
 				startActiveStream,
-				appendActiveStreamText,
+				updateActiveStream,
 				finishActiveStream,
 			});
 
@@ -166,7 +185,7 @@ describe("hosted active chat stream", () => {
 			await persister.flush();
 			await persister.finish();
 
-			expect(appendActiveStreamText).not.toHaveBeenCalled();
+			expect(updateActiveStream).not.toHaveBeenCalled();
 			expect(finishActiveStream).not.toHaveBeenCalled();
 		} finally {
 			vi.useRealTimers();
@@ -179,7 +198,7 @@ describe("hosted active chat stream", () => {
 			resolveFirstFlush = resolve;
 		});
 		const startActiveStream = vi.fn().mockResolvedValue(undefined);
-		const appendActiveStreamText = vi
+		const updateActiveStream = vi
 			.fn()
 			.mockReturnValueOnce(firstFlush)
 			.mockResolvedValue(undefined);
@@ -190,7 +209,7 @@ describe("hosted active chat stream", () => {
 			messageId: "stream-1",
 			runId: "run-1",
 			startActiveStream,
-			appendActiveStreamText,
+			updateActiveStream,
 			finishActiveStream,
 		});
 
@@ -206,8 +225,8 @@ describe("hosted active chat stream", () => {
 		await Promise.all([firstFlushPromise, secondFlushPromise]);
 		await persister.finish();
 
-		expect(appendActiveStreamText).toHaveBeenCalledTimes(1);
-		expect(appendActiveStreamText).toHaveBeenCalledWith({
+		expect(updateActiveStream).toHaveBeenCalledTimes(1);
+		expect(updateActiveStream).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
@@ -220,7 +239,7 @@ describe("hosted active chat stream", () => {
 		vi.useFakeTimers();
 		try {
 			const startActiveStream = vi.fn().mockResolvedValue(undefined);
-			const appendActiveStreamText = vi.fn().mockResolvedValue(undefined);
+			const updateActiveStream = vi.fn().mockResolvedValue(undefined);
 			const finishActiveStream = vi.fn().mockResolvedValue(undefined);
 			const persister = new HostedActiveChatStreamPersister({
 				workspaceId: "workspace-1",
@@ -228,7 +247,7 @@ describe("hosted active chat stream", () => {
 				messageId: "stream-1",
 				runId: "run-1",
 				startActiveStream,
-				appendActiveStreamText,
+				updateActiveStream,
 				finishActiveStream,
 			});
 
@@ -238,8 +257,8 @@ describe("hosted active chat stream", () => {
 			vi.advanceTimersByTime(HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS);
 			await persister.flush();
 
-			expect(appendActiveStreamText).toHaveBeenCalledOnce();
-			expect(appendActiveStreamText).toHaveBeenCalledWith({
+			expect(updateActiveStream).toHaveBeenCalledOnce();
+			expect(updateActiveStream).toHaveBeenCalledWith({
 				workspaceId: "workspace-1",
 				chatId: "chat-1",
 				runId: "run-1",
@@ -578,7 +597,7 @@ describe("hosted active chat stream", () => {
 	it("creates chat-scoped active stream sessions through adapter callbacks", async () => {
 		const controllers = new Map();
 		const startActiveStream = vi.fn().mockResolvedValue(undefined);
-		const appendActiveStreamText = vi.fn().mockResolvedValue(undefined);
+		const updateActiveStream = vi.fn().mockResolvedValue(undefined);
 		const finishActiveStream = vi.fn().mockResolvedValue(undefined);
 		const session = createHostedActiveChatStreamSession({
 			controllers,
@@ -588,7 +607,7 @@ describe("hosted active chat stream", () => {
 			runId: "run-1",
 			callbacks: {
 				startActiveStream,
-				appendActiveStreamText,
+				updateActiveStream,
 				finishActiveStream,
 			},
 		});
@@ -604,7 +623,7 @@ describe("hosted active chat stream", () => {
 			chatId: "chat-1",
 			runId: "run-1",
 		});
-		expect(appendActiveStreamText).toHaveBeenCalledWith({
+		expect(updateActiveStream).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",

@@ -1,3 +1,4 @@
+import type { UIMessage } from "ai";
 import type { HostedTurnInputBuffer } from "./hosted-chat-turn-input-buffer.mjs";
 
 export declare const HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS = 250;
@@ -7,6 +8,7 @@ export type HostedActiveToolCallStatus = "completed" | "failed" | "denied";
 export type HostedActiveStreamPersisterLike = {
 	readonly runId?: string;
 	append(delta: string): void;
+	replaceParts?(parts: UIMessage["parts"]): void;
 	closePersistence?(): Promise<void>;
 	discardPending?(): void;
 	flush?(): Promise<void>;
@@ -27,11 +29,12 @@ export type HostedActiveStreamCallbacks<
 	WorkspaceId extends string,
 	RunId extends string,
 > = {
-	appendActiveStreamText: (args: {
+	updateActiveStream: (args: {
 		workspaceId: WorkspaceId;
 		chatId: string;
 		runId: RunId;
-		delta: string;
+		delta?: string;
+		partsJson?: string;
 	}) => Promise<unknown>;
 	finishActiveStream: (args: {
 		workspaceId: WorkspaceId;
@@ -85,6 +88,7 @@ export declare class HostedActiveChatStreamPersister<
 	get runId(): RunId;
 	start(): Promise<void>;
 	append(delta: string): void;
+	replaceParts(parts: UIMessage["parts"]): void;
 	startToolCall(args: {
 		toolCallId: string;
 		toolName: string;
@@ -110,6 +114,7 @@ export type HostedActiveStreamSession = {
 	turnInput: HostedTurnInputBuffer;
 	start(): Promise<void>;
 	append(delta: string): void;
+	replaceParts(parts: UIMessage["parts"]): void;
 	startToolCall(args: {
 		toolCallId: string;
 		toolName: string;
@@ -137,6 +142,7 @@ export declare const createHostedActiveStreamSession: (args: {
 	persister: {
 		start(): Promise<void>;
 		append(delta: string): void;
+		replaceParts(parts: UIMessage["parts"]): void;
 		startToolCall?(args: {
 			toolCallId: string;
 			toolName: string;
