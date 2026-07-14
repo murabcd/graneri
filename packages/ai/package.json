@@ -49,6 +49,10 @@
       "types": "./src/chat-context-contract.d.mts",
       "import": "./src/chat-context-contract.mjs"
     },
+    "./chart-generation-tool": {
+      "types": "./src/chart-generation-tool.d.mts",
+      "import": "./src/chart-generation-tool.mjs"
+    },
     "./context7-tools": {
       "types": "./src/context7-tools.d.mts",
       "import": "./src/context7-tools.mjs"

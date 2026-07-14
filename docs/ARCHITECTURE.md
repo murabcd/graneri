@@ -117,6 +117,15 @@ must cross the state-machine seam instead of patching `assistantRuns` rows.
 Every run has an explicit `web` or `convex` producer owner. Reconnect may attach
 only to `web` producers and must leave a running `convex` producer intact; stop
 and terminal transitions remain shared durable state regardless of producer.
+Starting a Convex-produced run is one mutation: it supersedes or rejects the
+existing run, creates the active rich-message snapshot, and schedules both the
+internal AI action and its hard-timeout watchdog atomically. The scheduled
+action derives ownership from the run, refreshes connected-app credentials
+server-side, rechecks run liveness before executable tool side effects,
+checkpoints AI SDK message parts, and atomically saves the final assistant
+message with the terminal run transition. The start mutation owns chat
+admission and supported-model validation; scheduled arguments must never contain
+a user Convex token.
 Together they enforce stop/failure/completion history and the
 one-active-run-per-chat invariant. `chatActiveStreams` stores the latest complete
 AI SDK message parts plus denormalized text, while active `chatToolCalls` stores

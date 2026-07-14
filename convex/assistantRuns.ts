@@ -86,6 +86,60 @@ const requireSingleNonTerminalRun = (runs: Doc<"assistantRuns">[]) => {
 	});
 };
 
+export const startAssistantRunForOwner = async (
+	ctx: MutationCtx,
+	args: {
+		ownerTokenIdentifier: string;
+		workspaceId: Id<"workspaces">;
+		chatId: string;
+		assistantMessageId: string;
+		producer: Doc<"assistantRuns">["producer"];
+		model: string;
+		reasoningEffort?: Doc<"assistantRuns">["reasoningEffort"];
+		policy: "reject" | "supersede";
+	},
+) => {
+	const chat = await getOwnedActiveChatById(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		args.chatId,
+	);
+
+	if (!chat) {
+		throw new ConvexError({
+			code: "CHAT_NOT_FOUND",
+			message: "Chat not found.",
+		});
+	}
+
+	const activeRuns = await getNonTerminalRunsForChat(ctx, chat._id);
+	if (activeRuns.length > 0) {
+		if (args.policy === "reject") {
+			throw new ConvexError({
+				code: "ASSISTANT_RUN_ACTIVE",
+				message: "Chat already has an active assistant run.",
+			});
+		}
+
+		await Promise.all(
+			activeRuns.map((run) =>
+				transitionAssistantRun(ctx, run, { type: "supersede" }),
+			),
+		);
+	}
+
+	return await createAssistantRun(ctx, {
+		ownerTokenIdentifier: args.ownerTokenIdentifier,
+		workspaceId: args.workspaceId,
+		chatId: chat._id,
+		assistantMessageId: args.assistantMessageId,
+		producer: args.producer,
+		model: args.model,
+		reasoningEffort: args.reasoningEffort,
+	});
+};
+
 export const startAssistantRun = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -98,46 +152,15 @@ export const startAssistantRun = mutation({
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const chat = await getOwnedActiveChatById(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
-		const activeRuns = await getNonTerminalRunsForChat(ctx, chat._id);
-		if (activeRuns.length > 0) {
-			if (args.policy === "reject") {
-				throw new ConvexError({
-					code: "ASSISTANT_RUN_ACTIVE",
-					message: "Chat already has an active assistant run.",
-				});
-			}
-
-			if (args.policy === "supersede") {
-				await Promise.all(
-					activeRuns.map((run) =>
-						transitionAssistantRun(ctx, run, { type: "supersede" }),
-					),
-				);
-			}
-		}
-
-		return await createAssistantRun(ctx, {
+		return await startAssistantRunForOwner(ctx, {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
-			chatId: chat._id,
+			chatId: args.chatId,
 			assistantMessageId: args.assistantMessageId,
 			producer: "web",
 			model: args.model,
 			reasoningEffort: args.reasoningEffort,
+			policy: args.policy,
 		});
 	},
 });

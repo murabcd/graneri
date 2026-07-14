@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
@@ -50,6 +50,144 @@ const getToolCallByRunIdAndToolCallId = async (
 			q.eq("runId", runId).eq("toolCallId", toolCallId),
 		)
 		.unique();
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+	value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: null;
+
+const getNonEmptyString = (value: unknown) =>
+	typeof value === "string" && value.length > 0 ? value : null;
+
+const getSnapshotToolName = (part: Record<string, unknown>) => {
+	if (part.type === "dynamic-tool") {
+		return getNonEmptyString(part.toolName);
+	}
+	return typeof part.type === "string" && part.type.startsWith("tool-")
+		? getNonEmptyString(part.type.slice("tool-".length))
+		: null;
+};
+
+const getSnapshotToolStatus = (state: unknown) => {
+	switch (state) {
+		case "input-streaming":
+		case "input-available":
+		case "approval-requested":
+		case "approval-responded":
+			return "pending" as const;
+		case "output-available":
+			return "completed" as const;
+		case "output-error":
+			return "failed" as const;
+		case "output-denied":
+			return "denied" as const;
+		default:
+			return null;
+	}
+};
+
+const stringifyPayload = (value: unknown) =>
+	value === undefined ? undefined : JSON.stringify(value);
+
+export const syncAssistantRunToolCalls = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+	partsJson: string,
+) => {
+	const parts = JSON.parse(partsJson) as unknown;
+	if (!Array.isArray(parts)) {
+		return;
+	}
+
+	for (const value of parts) {
+		const part = asRecord(value);
+		if (!part) {
+			continue;
+		}
+		const toolCallId = getNonEmptyString(part.toolCallId);
+		const toolName = getSnapshotToolName(part);
+		const status = getSnapshotToolStatus(part.state);
+		if (!toolCallId || !toolName || !status) {
+			continue;
+		}
+
+		const inputJson = stringifyPayload(part.input);
+		const outputJson = stringifyPayload(part.output);
+		const errorText = getNonEmptyString(part.errorText);
+		const existing = await getToolCallByRunIdAndToolCallId(
+			ctx,
+			run._id,
+			toolCallId,
+		);
+		const now = Date.now();
+		if (!existing) {
+			await ctx.db.insert("chatToolCalls", {
+				runId: run._id,
+				chatId: run.chatId,
+				toolCallId,
+				toolName,
+				status,
+				inputJson,
+				outputJson,
+				errorText: errorText ?? undefined,
+				createdAt: now,
+				updatedAt: now,
+			});
+			await appendAssistantRunEvent(ctx, run, {
+				type: "tool.started",
+				toolCallId,
+				toolName,
+				inputJson,
+			});
+			if (status !== "pending") {
+				await appendAssistantRunEvent(ctx, run, {
+					type: "tool.completed",
+					toolCallId,
+					status,
+					outputJson,
+					errorText: errorText ?? undefined,
+				});
+			}
+			continue;
+		}
+
+		if (existing.status === status) {
+			if (
+				status === "pending" &&
+				inputJson !== undefined &&
+				inputJson !== existing.inputJson
+			) {
+				await ctx.db.patch(existing._id, {
+					toolName,
+					inputJson,
+					updatedAt: now,
+				});
+			}
+			continue;
+		}
+		if (existing.status !== "pending") {
+			continue;
+		}
+
+		await ctx.db.patch(existing._id, {
+			toolName,
+			status,
+			inputJson: inputJson ?? existing.inputJson,
+			outputJson,
+			errorText: errorText ?? undefined,
+			updatedAt: now,
+		});
+		if (status !== "pending") {
+			await appendAssistantRunEvent(ctx, run, {
+				type: "tool.completed",
+				toolCallId,
+				status,
+				outputJson,
+				errorText: errorText ?? undefined,
+			});
+		}
+	}
+};
 
 const requireOwnedActiveStream = async (
 	ctx: QueryCtx | MutationCtx,

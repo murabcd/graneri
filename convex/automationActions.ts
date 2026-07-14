@@ -1,20 +1,14 @@
 "use node";
 
 import { openai } from "@ai-sdk/openai";
-import { getSelectedAppSourceIds } from "@workspace/ai/capability-metadata";
-import {
-	buildCapabilityToolSet,
-	type WorkspaceToolConnection,
-} from "@workspace/ai/capability-registry";
 import { getChatModelProviderOptions } from "@workspace/ai/models";
 import { finalizeOpenAIToolSet } from "@workspace/ai/openai-tool-search";
 import { BASE_CHAT_SYSTEM_PROMPT } from "@workspace/ai/prompts";
 import { ToolLoopAgent } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { type ActionCtx, internalAction } from "./_generated/server";
-import { listYandexUpcomingEvents } from "./yandexCalendar";
+import { internalAction } from "./_generated/server";
+import { buildServerWorkspaceTools } from "./serverWorkspaceTools";
 
 const MAX_AUTOMATION_HISTORY_MESSAGES = 40;
 
@@ -44,69 +38,6 @@ const createTextMessage = ({
 	text,
 	createdAt: Date.now(),
 });
-
-const buildAutomationYandexCalendarAdapter =
-	() =>
-	(connection: {
-		displayName: string;
-		email: string;
-		password: string;
-		serverAddress: string;
-		calendarHomePath: string;
-	}) => ({
-		listUpcomingEvents: async ({ lookaheadMs }: { lookaheadMs: number }) => {
-			const now = Date.now();
-			const result = await listYandexUpcomingEvents({
-				connection,
-				now,
-				timeMin: now,
-				timeMax: now + lookaheadMs,
-			});
-
-			return {
-				connection: connection.displayName,
-				events: result.events,
-			};
-		},
-	});
-
-const getAutomationAppTools = async (
-	ctx: ActionCtx,
-	run: {
-		appsEnabled: boolean;
-		appSources: Array<{ id: string }>;
-		ownerTokenIdentifier: string;
-		workspaceId: Id<"workspaces">;
-	},
-) => {
-	if (!run.appsEnabled) {
-		return {};
-	}
-
-	const sourceIds = getSelectedAppSourceIds(
-		run.appSources.map((source) => source.id),
-	);
-
-	if (sourceIds.length === 0) {
-		return {};
-	}
-
-	const connections = await ctx.runAction(
-		internal.appConnectionActions.getSelectedForChatInternalWithFreshTokens,
-		{
-			ownerTokenIdentifier: run.ownerTokenIdentifier,
-			workspaceId: run.workspaceId,
-			sourceIds,
-		},
-	);
-
-	return await buildCapabilityToolSet(
-		connections as WorkspaceToolConnection[],
-		{
-			yandexCalendar: buildAutomationYandexCalendarAdapter(),
-		},
-	);
-};
 
 const buildAutomationSystemPrompt = ({
 	targetLabel,
@@ -227,7 +158,13 @@ export const runAutomation = internalAction({
 					role: message.role,
 					content: message.text,
 				}));
-			const appTools = await getAutomationAppTools(ctx, run);
+			const { tools: appTools } = run.appsEnabled
+				? await buildServerWorkspaceTools(ctx, {
+						ownerTokenIdentifier: run.ownerTokenIdentifier,
+						workspaceId: run.workspaceId,
+						selectedSourceIds: run.appSources.map((source) => source.id),
+					})
+				: { tools: {} };
 			const finalizedToolSet = finalizeOpenAIToolSet({
 				...(run.webSearchEnabled
 					? {

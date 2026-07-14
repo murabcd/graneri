@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -107,6 +107,23 @@ const queuedMessageInput = (messageId: string, text: string) => ({
 	requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 });
 
+const backgroundJob = {
+	messagesJson: JSON.stringify([
+		{
+			id: "msg-user-background",
+			role: "user",
+			parts: [{ type: "text", text: "Answer in the background." }],
+		},
+	]),
+	systemPrompt: "Answer clearly.",
+	webSearchEnabled: false,
+	chartGenerationRequested: false,
+	selectedSourceIds: [],
+	defaultTimezone: "UTC",
+	model: "gpt-5.4",
+	reasoningEffort: "medium" as const,
+};
+
 const listRunEventTypes = async ({
 	asOwner,
 	runId,
@@ -151,6 +168,186 @@ test("finishAssistantRun leaves no snapshots for runId", async () => {
 	}));
 	expect(snapshots.streams).toHaveLength(0);
 	expect(snapshots.toolCalls).toHaveLength(0);
+});
+
+test("background start atomically creates a Convex-owned run and finalizes its rich snapshot", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-background-complete";
+	await createChat({ asOwner, chatId, workspaceId });
+
+	const run = await asOwner.mutation(api.assistantRunBackground.start, {
+		workspaceId,
+		chatId,
+		assistantMessageId: "msg-assistant-background",
+		policy: "reject",
+		job: backgroundJob,
+	});
+	const initialState = await t.run(async (ctx) => ({
+		storedRun: await ctx.db.get(run._id),
+		stream: await ctx.db
+			.query("chatActiveStreams")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+	}));
+
+	expect(initialState.storedRun).toMatchObject({
+		producer: "convex",
+		status: "running",
+		assistantMessageId: "msg-assistant-background",
+	});
+	expect(initialState.stream).toMatchObject({
+		text: "",
+		partsJson: "[]",
+	});
+
+	const pendingPartsJson = JSON.stringify([
+		{ type: "reasoning", text: "Considered the request." },
+		{
+			type: "tool-search_notes",
+			toolCallId: "tool-call-background",
+			state: "input-available",
+			input: { query: "answer" },
+		},
+	]);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
+			runId: run._id,
+			text: "",
+			partsJson: pendingPartsJson,
+		}),
+	).toBe(true);
+	const pendingToolCall = await t.run(async (ctx) =>
+		ctx.db
+			.query("chatToolCalls")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+	);
+	expect(pendingToolCall).toMatchObject({
+		status: "pending",
+		inputJson: JSON.stringify({ query: "answer" }),
+	});
+
+	const partsJson = JSON.stringify([
+		{ type: "reasoning", text: "Considered the request." },
+		{
+			type: "tool-search_notes",
+			toolCallId: "tool-call-background",
+			state: "output-available",
+			input: { query: "answer" },
+			output: { matches: 1 },
+		},
+		{ type: "text", text: "Background answer." },
+	]);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
+			runId: run._id,
+			text: "Background answer.",
+			partsJson,
+		}),
+	).toBe(true);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.complete, {
+			runId: run._id,
+			authorName: "Owner",
+		}),
+	).toBe(true);
+
+	const finalState = await t.run(async (ctx) => ({
+		storedRun: await ctx.db.get(run._id),
+		messages: await ctx.db.query("chatMessages").collect(),
+		streams: await ctx.db.query("chatActiveStreams").collect(),
+		toolCalls: await ctx.db.query("chatToolCalls").collect(),
+		events: await ctx.db
+			.query("assistantRunEvents")
+			.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", run._id))
+			.collect(),
+	}));
+	expect(finalState.storedRun).toMatchObject({ status: "completed" });
+	expect(finalState.messages).toContainEqual(
+		expect.objectContaining({
+			messageId: "msg-assistant-background",
+			text: "Background answer.",
+			partsJson,
+		}),
+	);
+	expect(finalState.streams).toHaveLength(0);
+	expect(finalState.toolCalls).toHaveLength(0);
+	const finalEventTypes = finalState.events.map((event) => event.event.type);
+	expect(finalEventTypes.filter((type) => type === "tool.started")).toHaveLength(
+		1,
+	);
+	expect(
+		finalEventTypes.filter((type) => type === "tool.completed"),
+	).toHaveLength(1);
+	vi.useRealTimers();
+});
+
+test("background approval waits durably and failure cleans its runtime snapshot", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-background-approval";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await asOwner.mutation(api.assistantRunBackground.start, {
+		workspaceId,
+		chatId,
+		assistantMessageId: "msg-assistant-approval",
+		policy: "reject",
+		job: backgroundJob,
+	});
+
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.waitForUser, {
+			runId: run._id,
+			pendingDecision: {
+				type: "tool_approval",
+				approvalId: "approval-1",
+				assistantMessageId: run.assistantMessageId,
+				toolCallId: "tool-call-1",
+				toolName: "delete_automation",
+			},
+		}),
+	).toBe(true);
+	const waitingState = await t.run(async (ctx) => ({
+		run: await ctx.db.get(run._id),
+		streamCount: (await ctx.db.query("chatActiveStreams").collect()).length,
+	}));
+	expect(waitingState.run).toMatchObject({
+		status: "waiting_for_user",
+		phase: "tool_approval",
+	});
+	expect(waitingState.streamCount).toBe(1);
+
+	await t.mutation(internal.assistantRunBackgroundState.fail, {
+		runId: run._id,
+		errorText: "Approval continuation failed.",
+	});
+	const failedState = await t.run(async (ctx) => ({
+		run: await ctx.db.get(run._id),
+		streamCount: (await ctx.db.query("chatActiveStreams").collect()).length,
+	}));
+	expect(failedState.run).toMatchObject({
+		status: "failed",
+		errorText: "Approval continuation failed.",
+	});
+	expect(failedState.streamCount).toBe(0);
+	vi.useRealTimers();
+});
+
+test("background start rejects unsupported models before scheduling work", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-background-invalid-model";
+	await createChat({ asOwner, chatId, workspaceId });
+
+	await expect(
+		asOwner.mutation(api.assistantRunBackground.start, {
+			workspaceId,
+			chatId,
+			assistantMessageId: "msg-assistant-invalid-model",
+			policy: "reject",
+			job: { ...backgroundJob, model: "gpt-unbounded" },
+		}),
+	).rejects.toThrow("Assistant run model is not supported.");
 });
 
 test("removeOrphanedRun deletes runtime after its chat is gone", async () => {

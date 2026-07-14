@@ -17,6 +17,12 @@ import {
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
 import {
+	createAssistantRunStream,
+	getActiveStreamForChat,
+	getActiveStreamForRun,
+	updateAssistantRunStream,
+} from "./assistantRunStreamState";
+import {
 	moveLinkedAutomationToFreshChat,
 	pauseLinkedAutomationForChat,
 	resumeLinkedAutomationForChat,
@@ -261,20 +267,12 @@ const getStoredChatMessages = async (
 const getActiveStreamByChatId = async (
 	ctx: QueryCtx | MutationCtx,
 	chatId: Doc<"chats">["_id"],
-) =>
-	await ctx.db
-		.query("chatActiveStreams")
-		.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-		.unique();
+) => await getActiveStreamForChat(ctx, chatId);
 
 const getActiveStreamByRunId = async (
 	ctx: QueryCtx | MutationCtx,
 	runId: Id<"assistantRuns">,
-) =>
-	await ctx.db
-		.query("chatActiveStreams")
-		.withIndex("by_runId", (q) => q.eq("runId", runId))
-		.unique();
+) => await getActiveStreamForRun(ctx, runId);
 
 const requireOwnedActiveChatAndRun = async (
 	ctx: MutationCtx,
@@ -749,7 +747,7 @@ const getNoteChatsByArchiveState = async (
 		)
 		.take(NOTE_CHAT_BATCH_SIZE);
 
-const saveMessageForOwnerInternal = async (
+export const saveMessageForOwnerInternal = async (
 	ctx: MutationCtx,
 	args: {
 		ownerTokenIdentifier: string;
@@ -1562,7 +1560,7 @@ export const startActiveStream = mutation({
 	returns: chatActiveStreamValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
+		const { run } = await requireOwnedActiveChatAndRun(ctx, {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			chatId: args.chatId,
@@ -1577,38 +1575,15 @@ export const startActiveStream = mutation({
 			});
 		}
 
-		const now = Date.now();
-		const existingStream = await getActiveStreamByChatId(ctx, chat._id);
+		const messageRun =
+			run.assistantMessageId === args.assistantMessageId
+				? run
+				: await transitionAssistantRun(ctx, run, {
+						type: "start_assistant_message",
+						assistantMessageId: args.assistantMessageId,
+					});
 
-		if (existingStream) {
-			throw new ConvexError({
-				code: "ACTIVE_STREAM_EXISTS",
-				message: "Chat already has an active stream snapshot.",
-			});
-		}
-
-		const streamId = await ctx.db.insert("chatActiveStreams", {
-			runId: run._id,
-			chatId: chat._id,
-			assistantMessageId: args.assistantMessageId,
-			text: "",
-			partsJson: "[]",
-			updatedAt: now,
-		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "assistant.message.started",
-			assistantMessageId: args.assistantMessageId,
-		});
-		const stream = await ctx.db.get(streamId);
-
-		if (!stream) {
-			throw new ConvexError({
-				code: "STREAM_SAVE_FAILED",
-				message: "Failed to start chat stream.",
-			});
-		}
-
-		return stream;
+		return await createAssistantRunStream(ctx, messageRun);
 	},
 });
 
@@ -1622,15 +1597,8 @@ export const updateActiveStream = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		if (!args.delta && args.partsJson === undefined) {
-			throw new ConvexError({
-				code: "INVALID_ACTIVE_STREAM_UPDATE",
-				message: "Active stream updates require text or message parts.",
-			});
-		}
-
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
+		const { run } = await requireOwnedActiveChatAndRun(ctx, {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			chatId: args.chatId,
@@ -1638,59 +1606,9 @@ export const updateActiveStream = mutation({
 			runNotFoundMessage: "Active assistant run not found.",
 		});
 
-		if (run.status !== "running") {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_NOT_RUNNING",
-				message: "Active stream cannot be updated for a non-running run.",
-			});
-		}
-
-		if (args.partsJson !== undefined) {
-			let parts: unknown;
-			try {
-				parts = JSON.parse(args.partsJson) as unknown;
-			} catch {
-				throw new ConvexError({
-					code: "INVALID_ACTIVE_STREAM_PARTS",
-					message: "Active stream parts must be valid JSON.",
-				});
-			}
-			if (!Array.isArray(parts)) {
-				throw new ConvexError({
-					code: "INVALID_ACTIVE_STREAM_PARTS",
-					message: "Active stream parts must be an array.",
-				});
-			}
-		}
-
-		const stream = await getActiveStreamByRunId(ctx, args.runId);
-		if (!stream || stream.chatId !== chat._id || stream.runId !== args.runId) {
-			throw new ConvexError({
-				code: "ACTIVE_STREAM_NOT_FOUND",
-				message: "Active stream snapshot not found.",
-			});
-		}
-
-		const updatedAt = Date.now();
-		const text = `${stream.text}${args.delta ?? ""}`;
-		const partsJson = args.partsJson ?? stream.partsJson;
-		requireConvexDocumentWithinLimit({
-			document: {
-				runId: stream.runId,
-				chatId: stream.chatId,
-				assistantMessageId: stream.assistantMessageId,
-				text,
-				partsJson,
-				updatedAt,
-			},
-			errorCode: "ACTIVE_STREAM_TOO_LARGE",
-			message: "Active stream snapshot exceeds the Convex document limit.",
-		});
-
-		await ctx.db.patch(stream._id, {
-			text,
-			partsJson,
-			updatedAt,
+		await updateAssistantRunStream(ctx, run, {
+			delta: args.delta,
+			partsJson: args.partsJson,
 		});
 
 		return null;

@@ -2,40 +2,19 @@ import type {
 	AutomationActions,
 	AutomationToolInput,
 } from "@workspace/ai/automation-tools";
+import {
+	type ChatAppSourceProvider,
+	chatAppSourceProviders,
+} from "@workspace/ai/capability-metadata";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 
 type AutomationToolTarget = AutomationToolInput["target"];
 type AutomationToolUpdateInput = AutomationToolInput & { automationId: string };
-type AutomationMutationAppSourceProvider =
-	| "context7"
-	| "figma"
-	| "google-calendar"
-	| "google-drive"
-	| "jira"
-	| "jira-mcp"
-	| "linear"
-	| "notion"
-	| "posthog"
-	| "yandex-calendar"
-	| "yandex-tracker"
-	| "zoom";
-
-const automationMutationAppSourceProviders = new Set<string>([
-	"context7",
-	"figma",
-	"google-calendar",
-	"google-drive",
-	"jira",
-	"jira-mcp",
-	"linear",
-	"notion",
-	"posthog",
-	"yandex-calendar",
-	"yandex-tracker",
-	"zoom",
-]);
+const automationMutationAppSourceProviders = new Set<string>(
+	chatAppSourceProviders,
+);
 
 const toAutomationId = (automationId: string) =>
 	automationId as Id<"automations">;
@@ -44,12 +23,12 @@ const toNoteId = (noteId: string) => noteId as Id<"notes">;
 
 const toAutomationMutationAppSourceProvider = (
 	provider: string,
-): AutomationMutationAppSourceProvider => {
+): ChatAppSourceProvider => {
 	if (!automationMutationAppSourceProviders.has(provider)) {
 		throw new Error(`Unsupported automation app source: ${provider}`);
 	}
 
-	return provider as AutomationMutationAppSourceProvider;
+	return provider as ChatAppSourceProvider;
 };
 
 const toAutomationAppSourceMutationInput = (

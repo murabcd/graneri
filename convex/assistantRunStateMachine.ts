@@ -27,6 +27,7 @@ type AppendedUserMessage = {
 };
 
 type AssistantRunTransition =
+	| { type: "start_assistant_message"; assistantMessageId: string }
 	| {
 			type: "wait_for_user";
 			pendingDecision: PendingDecision;
@@ -168,6 +169,17 @@ export const transitionAssistantRun = async (
 	const now = Date.now();
 
 	switch (transition.type) {
+		case "start_assistant_message":
+			if (run.status !== "running") {
+				return invalidTransition(
+					"Assistant run cannot start a message while it is not running.",
+				);
+			}
+			return await patchAndReloadRun(ctx, run, {
+				assistantMessageId: transition.assistantMessageId,
+				updatedAt: now,
+			});
+
 		case "wait_for_user": {
 			if (
 				run.status === "completed" ||
