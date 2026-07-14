@@ -79,6 +79,14 @@ const hostedChatConvexRouteErrorMessages = new Map([
 		"Assistant run cannot accept steered user input.",
 	],
 	["CHAT_NOT_FOUND", "Chat not found."],
+	[
+		"CONTEXT_COMPACTION_INVALID",
+		"Chat context changed while its history was being compacted.",
+	],
+	[
+		"CONTEXT_COMPACTION_STALE",
+		"Chat context changed while its history was being compacted.",
+	],
 	["TOOL_APPROVAL_INVALID", "Tool approval response is invalid."],
 	["TOOL_APPROVAL_NOT_PENDING", "Tool approval is no longer pending."],
 	["QUEUED_MESSAGE_NOT_FOUND", "Queued message is no longer available."],
@@ -124,13 +132,19 @@ export const getHostedChatConvexRouteError = (error) => {
 		code === "ASSISTANT_RUN_NOT_FOUND" ||
 		code === "INVALID_ASSISTANT_RUN_TRANSITION";
 	const isChatLifecycleError = code === "CHAT_NOT_FOUND";
+	const isContextCompactionConflict =
+		code === "CONTEXT_COMPACTION_INVALID" ||
+		code === "CONTEXT_COMPACTION_STALE";
 	const isQueuedMessageError = code.startsWith("QUEUED_MESSAGE_");
 	const isToolApprovalError = code.startsWith("TOOL_APPROVAL_");
 	const isMessageSizeError =
-		code === "CHAT_MESSAGE_TOO_LARGE" || code === "QUEUED_MESSAGE_TOO_LARGE";
+		code === "CHAT_MESSAGE_TOO_LARGE" ||
+		code === "CONTEXT_COMPACTION_TOO_LARGE" ||
+		code === "QUEUED_MESSAGE_TOO_LARGE";
 	if (
 		!isAssistantRunLifecycleError &&
 		!isChatLifecycleError &&
+		!isContextCompactionConflict &&
 		!isQueuedMessageError &&
 		!isToolApprovalError &&
 		!isMessageSizeError
@@ -148,6 +162,7 @@ export const getHostedChatConvexRouteError = (error) => {
 		statusCode:
 			isAssistantRunLifecycleError ||
 			isChatLifecycleError ||
+			isContextCompactionConflict ||
 			code === "QUEUED_MESSAGE_NOT_FOUND"
 				? 409
 				: code === "TOOL_APPROVAL_NOT_PENDING"

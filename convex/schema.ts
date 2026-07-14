@@ -542,8 +542,19 @@ export default defineSchema({
 		text: v.string(),
 		createdAt: v.number(),
 	})
+		.index("by_chatId", ["chatId"])
 		.index("by_chatId_and_createdAt", ["chatId", "createdAt"])
 		.index("by_chatId_and_messageId", ["chatId", "messageId"]),
+	chatContextCompactions: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		summary: v.string(),
+		throughCreationTime: v.number(),
+		throughMessageId: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_chatId", ["chatId"]),
 	assistantRuns: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

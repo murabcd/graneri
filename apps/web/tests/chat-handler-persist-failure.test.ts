@@ -16,6 +16,7 @@ import {
 
 const convexMock = vi.hoisted(() => ({
 	authorizeChatTurn: vi.fn(),
+	contextState: vi.fn(),
 	mutation: vi.fn(),
 	query: vi.fn(),
 }));
@@ -29,7 +30,14 @@ vi.mock("convex/browser", () => ({
 			getFunctionName(functionReference) === "aiAccess:authorizeChatTurn"
 				? convexMock.authorizeChatTurn(functionReference, args)
 				: convexMock.mutation(functionReference, args);
-		query = convexMock.query;
+		query = (
+			functionReference: FunctionReference<"query">,
+			args: Record<string, unknown>,
+		) =>
+			getFunctionName(functionReference) ===
+			"chatContextCompactions:getPreparationState"
+				? convexMock.contextState(functionReference, args)
+				: convexMock.query(functionReference, args);
 	},
 }));
 
@@ -42,6 +50,12 @@ beforeEach(() => {
 	convexMock.authorizeChatTurn.mockReset();
 	convexMock.authorizeChatTurn.mockResolvedValue({
 		tokenIdentifier: "https://graneri.test|owner",
+	});
+	convexMock.contextState.mockReset();
+	convexMock.contextState.mockResolvedValue({
+		compaction: null,
+		hasMoreMessages: false,
+		messages: [],
 	});
 	convexMock.query.mockReset();
 	convexMock.mutation.mockReset();
@@ -402,18 +416,26 @@ describe("chat handler persistence failures", () => {
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
-		convexMock.query.mockResolvedValueOnce([
-			{
-				id: "msg-1",
-				role: "user",
-				partsJson: JSON.stringify([{ type: "text", text: "Original" }]),
-			},
-			{
-				id: "msg-2",
-				role: "assistant",
-				partsJson: JSON.stringify([{ type: "text", text: "Old answer" }]),
-			},
-		]);
+		convexMock.contextState.mockResolvedValueOnce({
+			compaction: null,
+			hasMoreMessages: false,
+			messages: [
+				{
+					id: "msg-1",
+					role: "user",
+					partsJson: JSON.stringify([{ type: "text", text: "Original" }]),
+					createdAt: 1,
+					creationTime: 1,
+				},
+				{
+					id: "msg-2",
+					role: "assistant",
+					partsJson: JSON.stringify([{ type: "text", text: "Old answer" }]),
+					createdAt: 2,
+					creationTime: 2,
+				},
+			],
+		});
 		convexMock.mutation.mockRejectedValueOnce(new Error("truncate failed"));
 
 		await expect(
@@ -442,7 +464,7 @@ describe("chat handler persistence failures", () => {
 			chatId: "chat_1",
 			messageId: "msg-2",
 		});
-		expect(convexMock.query).toHaveBeenCalledTimes(3);
+		expect(convexMock.query).toHaveBeenCalledTimes(2);
 	});
 
 	it("prepares replayed queued messages from the claimed queue row before starting a run", async () => {

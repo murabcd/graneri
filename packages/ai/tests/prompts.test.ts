@@ -129,6 +129,7 @@ describe("prompt helpers", () => {
 
 	it.each([
 		"CHAT_MESSAGE_TOO_LARGE",
+		"CONTEXT_COMPACTION_TOO_LARGE",
 		"QUEUED_MESSAGE_TOO_LARGE",
 	])("maps %s Convex errors to input size failures", (code) => {
 		const error = Object.assign(new Error("Document is too large."), {
@@ -139,6 +140,21 @@ describe("prompt helpers", () => {
 			error: "Document is too large.",
 			errorCode: "input_too_large",
 			statusCode: 400,
+		});
+	});
+
+	it.each([
+		"CONTEXT_COMPACTION_INVALID",
+		"CONTEXT_COMPACTION_STALE",
+	])("maps %s Convex errors to context conflicts", (code) => {
+		const error = Object.assign(new Error("Context changed."), {
+			data: { code, message: "Context changed." },
+		});
+
+		expect(getHostedChatConvexRouteError(error)).toEqual({
+			error: "Chat context changed while its history was being compacted.",
+			errorCode: code,
+			statusCode: 409,
 		});
 	});
 

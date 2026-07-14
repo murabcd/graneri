@@ -40,6 +40,11 @@ import {
 	normalizeReasoningEffort,
 } from "../src/lib/ai/models.js";
 import { createHostedChatAutomationActions } from "./chat-automation-actions.js";
+import { prepareServerChatContextWindow } from "./chat-context-window.js";
+import type {
+	AttachableAssistantRun,
+	ChatRequestBody,
+} from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import {
 	pipeHostedActiveStreamSessionToResponse,
@@ -52,40 +57,6 @@ import {
 	createServerWideEventEmitter,
 	recordServerError,
 } from "./server-logger.js";
-
-type ChatRequestBody = {
-	id?: string;
-	workspaceId?: string | null;
-	trigger?: "submit-message" | "regenerate-message";
-	messageId?: string;
-	message?: UIMessage;
-	model?: string;
-	reasoningEffort?: "low" | "medium" | "high" | "xhigh";
-	webSearchEnabled?: boolean;
-	appsEnabled?: boolean;
-	mentions?: string[];
-	selectedSourceIds?: string[];
-	timezone?: string;
-	localFolders?: Array<{ id?: string; name?: string; path?: string }>;
-	convexToken?: string | null;
-	recipeSlug?: string | null;
-	noteContext?: {
-		noteId?: string | null;
-		title?: string;
-		text?: string;
-	};
-	continueRunId?: Id<"assistantRuns">;
-	interruptActiveRun?: boolean;
-	replayQueuedMessageId?: Id<"assistantQueuedMessages">;
-	steerQueuedMessageId?: Id<"assistantQueuedMessages">;
-	supersedeActiveRun?: boolean;
-};
-
-type AttachableAssistantRun = {
-	_id: Id<"assistantRuns">;
-	chatId: Id<"chats">;
-	status?: string;
-};
 
 const activeChatStreamControllers = new Map<
 	string,
@@ -630,12 +601,18 @@ export const handleChatRequest = async (
 	try {
 		toolApprovalResponse = getToolApprovalResponse(effectiveMessage);
 		const currentToolApprovalResponse = toolApprovalResponse;
+		const contextMessages = await prepareServerChatContextWindow({
+			chatId: id,
+			convexClient,
+			logLatency,
+			safetyIdentifier: admission.safetyIdentifier,
+			workspaceId: resolvedWorkspaceId,
+		});
 		const branchResult = await prepareHostedChatTurnBranch({
 			attachableRunId: attachableRun?._id,
 			chatId: id,
 			continueRunId,
-			getMessagesSnapshot: (args) =>
-				convexClient.query(api.chats.getMessagesSnapshot, args),
+			getMessagesSnapshot: () => Promise.resolve(contextMessages),
 			listRunEventsAfter: (args) =>
 				convexClient.query(api.assistantRunEvents.listRunEventsAfter, args),
 			logLatency,

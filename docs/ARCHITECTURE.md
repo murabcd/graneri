@@ -84,6 +84,15 @@ The hosted web chat route delegates active-run policy, same-run validation,
 queued acceptance headers, assistant-run start, stream finalization, initial
 AI SDK stream piping, and reconnect stream piping to its hosted stream runtime
 module so HTTP parsing/context assembly stays separate from turn execution.
+Long chat context is prepared before branch handling through a durable rolling
+compaction checkpoint. Convex stores the authoritative summary boundary by
+message ID and insertion time; the AI layer summarizes fixed oldest-first
+batches and then sends the summary as historical system context followed by the
+exact uncompacted tail. Compaction never deletes or rewrites saved chat
+messages, so the user-visible transcript and future pagination retain complete
+history. Checkpoint updates use optimistic boundary validation and must fail
+closed if another request changes the checkpoint while a summary is being
+generated.
 Assistant run start and active-stream session start share one runtime helper so
 both web and desktop choose the same reject/supersede policy, reuse matching
 continued runs, terminalize failed starts, and clean up partially-created stream

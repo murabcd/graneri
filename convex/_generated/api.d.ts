@@ -28,6 +28,7 @@ import type * as automations from "../automations.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarPreferences from "../calendarPreferences.js";
 import type * as chatAttachments from "../chatAttachments.js";
+import type * as chatContextCompactions from "../chatContextCompactions.js";
 import type * as chatToolCalls from "../chatToolCalls.js";
 import type * as chats from "../chats.js";
 import type * as crons from "../crons.js";
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   calendar: typeof calendar;
   calendarPreferences: typeof calendarPreferences;
   chatAttachments: typeof chatAttachments;
+  chatContextCompactions: typeof chatContextCompactions;
   chatToolCalls: typeof chatToolCalls;
   chats: typeof chats;
   crons: typeof crons;

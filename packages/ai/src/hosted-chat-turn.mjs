@@ -1,5 +1,10 @@
 export { createHostedActiveStreamKey } from "./hosted-chat-active-stream.mjs";
 export { prepareHostedChatTurnBranch } from "./hosted-chat-branch-preparer.mjs";
+export {
+	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
+	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
+	prepareHostedChatContextWindow,
+} from "./hosted-chat-context-window.mjs";
 export { stopOrphanedHostedAssistantRun } from "./hosted-chat-orphaned-run.mjs";
 export { createHostedChatQueuedInput } from "./hosted-chat-queued-input.mjs";
 export {
