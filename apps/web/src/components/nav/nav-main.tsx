@@ -9,6 +9,7 @@ import { SquarePen } from "lucide-react";
 import * as React from "react";
 import { SidebarCollapsibleGroup } from "@/components/nav/sidebar-collapsible-group";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
+import { useApplicationCommand } from "@/lib/application-command";
 
 type NavItem = {
 	title: string;
@@ -56,18 +57,29 @@ export function NavPlatform({
 	onInboxToggle: () => void;
 }) {
 	const viewItems = items.filter((item) => item.action !== "search");
-	const handleOpenAskAiShortcut = React.useEffectEvent(() => {
+	const openAskAi = React.useCallback(() => {
 		onViewChange("chat");
-	});
+	}, [onViewChange]);
+	const goHome = React.useCallback(() => {
+		onViewChange("home");
+	}, [onViewChange]);
+	const handleOpenAskAiShortcut = React.useEffectEvent(openAskAi);
+	const handleGoHomeShortcut = React.useEffectEvent(goHome);
+	useApplicationCommand("open-ask-ai", openAskAi);
+	useApplicationCommand("go-home", goHome);
 
 	React.useEffect(() => {
 		const down = (event: KeyboardEvent) => {
-			if (!matchesCommandShortcut(event, { altKey: true, code: "KeyN" })) {
+			if (matchesCommandShortcut(event, { altKey: true, code: "KeyN" })) {
+				event.preventDefault();
+				handleOpenAskAiShortcut();
 				return;
 			}
 
-			event.preventDefault();
-			handleOpenAskAiShortcut();
+			if (matchesCommandShortcut(event, { altKey: true, code: "KeyG" })) {
+				event.preventDefault();
+				handleGoHomeShortcut();
+			}
 		};
 
 		document.addEventListener("keydown", down);
@@ -106,9 +118,9 @@ export function NavPlatform({
 							>
 								{item.icon && <item.icon />}
 								<span>{item.title}</span>
-								{item.action === "view" && item.view === "chat" ? (
-									<SidebarMenuShortcutHint altKey keyLabel="N" />
-								) : null}
+								<PlatformViewShortcutHint
+									view={item.action === "view" ? item.view : undefined}
+								/>
 								{item.badge ? (
 									<span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-accent px-1 text-xs font-medium tabular-nums text-sidebar-accent-foreground">
 										{formatBadgeCount(item.badge)}
@@ -121,6 +133,14 @@ export function NavPlatform({
 			</SidebarMenu>
 		</SidebarCollapsibleGroup>
 	);
+}
+
+function PlatformViewShortcutHint({ view }: { view: NavItem["view"] }) {
+	const keyLabel = view === "chat" ? "N" : view === "home" ? "G" : null;
+
+	return keyLabel ? (
+		<SidebarMenuShortcutHint altKey keyLabel={keyLabel} />
+	) : null;
 }
 
 function NewNoteButton({ onCreateNote }: { onCreateNote: () => void }) {
@@ -169,6 +189,7 @@ function SearchButton({
 	const handleOpenSearchShortcut = React.useEffectEvent(() => {
 		onSearchOpen();
 	});
+	useApplicationCommand("open-search", onSearchOpen);
 
 	React.useEffect(() => {
 		const down = (event: KeyboardEvent) => {
@@ -220,7 +241,7 @@ function SidebarMenuShortcutHint({
 		<ShortcutHint
 			altKey={altKey}
 			keyLabel={keyLabel}
-			className="border border-border/60 bg-muted px-1.5 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
+			className="border border-border/60 bg-muted px-1.5 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/menu-item:opacity-100"
 		/>
 	);
 }

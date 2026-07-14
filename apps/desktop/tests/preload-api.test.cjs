@@ -119,7 +119,7 @@ test("forwards subscription payloads and removes the same handler on cleanup", (
 	);
 });
 
-test("wires native audio and navigation subscriptions to dedicated channels", () => {
+test("wires app commands, native audio, and navigation to dedicated channels", () => {
 	const { api, ipcRenderer } = createApi();
 	const navigationPayload = {
 		hash: "#meeting",
@@ -127,6 +127,7 @@ test("wires native audio and navigation subscriptions to dedicated channels", ()
 		search: "?id=note_1",
 	};
 	const capturePayload = { pcm16: "AAAA", type: "chunk" };
+	const appCommandPayload = "open-search";
 	const received = [];
 
 	const unsubscribeNavigate = api.onNavigate((payload) => {
@@ -135,17 +136,29 @@ test("wires native audio and navigation subscriptions to dedicated channels", ()
 	const unsubscribeCapture = api.onSystemAudioCaptureEvent((payload) => {
 		received.push(payload);
 	});
+	const unsubscribeAppCommand = api.onAppCommand((payload) => {
+		received.push(payload);
+	});
 
 	ipcRenderer.emit(desktopIpcContract.subscribe.onNavigate, navigationPayload);
 	ipcRenderer.emit(
 		desktopIpcContract.subscribe.onSystemAudioCaptureEvent,
 		capturePayload,
 	);
+	ipcRenderer.emit(
+		desktopIpcContract.subscribe.onAppCommand,
+		appCommandPayload,
+	);
 	unsubscribeNavigate();
 	unsubscribeCapture();
+	unsubscribeAppCommand();
 
-	assert.deepEqual(received, [navigationPayload, capturePayload]);
-	assert.equal(ipcRenderer.removedListeners.length, 2);
+	assert.deepEqual(received, [
+		navigationPayload,
+		capturePayload,
+		appCommandPayload,
+	]);
+	assert.equal(ipcRenderer.removedListeners.length, 3);
 	assert.equal(
 		ipcRenderer.removedListeners[0].channel,
 		desktopIpcContract.subscribe.onNavigate,
@@ -153,6 +166,10 @@ test("wires native audio and navigation subscriptions to dedicated channels", ()
 	assert.equal(
 		ipcRenderer.removedListeners[1].channel,
 		desktopIpcContract.subscribe.onSystemAudioCaptureEvent,
+	);
+	assert.equal(
+		ipcRenderer.removedListeners[2].channel,
+		desktopIpcContract.subscribe.onAppCommand,
 	);
 });
 

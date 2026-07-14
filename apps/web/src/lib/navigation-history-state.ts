@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useApplicationCommand } from "@/lib/application-command";
 
 export type NavigationHistoryState = {
 	canGoBack: boolean;
@@ -146,6 +147,21 @@ export function useNavigationHistoryState(): NavigationHistoryState {
 }
 
 export function useNavigationHistoryShortcuts() {
+	const navigateBack = React.useCallback(() => {
+		const store = window.__graneriNavigationHistoryStore;
+		if (store && store.currentIndex > 0) {
+			window.history.back();
+		}
+	}, []);
+	const navigateForward = React.useCallback(() => {
+		const store = window.__graneriNavigationHistoryStore;
+		if (store && store.currentIndex < store.maxIndex) {
+			window.history.forward();
+		}
+	}, []);
+	useApplicationCommand("navigate-back", navigateBack);
+	useApplicationCommand("navigate-forward", navigateForward);
+
 	React.useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
 			const store = window.__graneriNavigationHistoryStore;
@@ -161,13 +177,13 @@ export function useNavigationHistoryShortcuts() {
 
 			if (event.key === "[" && store.currentIndex > 0) {
 				event.preventDefault();
-				window.history.back();
+				navigateBack();
 				return;
 			}
 
 			if (event.key === "]" && store.currentIndex < store.maxIndex) {
 				event.preventDefault();
-				window.history.forward();
+				navigateForward();
 			}
 		};
 
@@ -176,5 +192,5 @@ export function useNavigationHistoryShortcuts() {
 		return () => {
 			window.removeEventListener("keydown", handleKeyDown);
 		};
-	}, []);
+	}, [navigateBack, navigateForward]);
 }

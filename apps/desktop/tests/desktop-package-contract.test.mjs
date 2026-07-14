@@ -14,14 +14,23 @@ test("desktop package contract owns the generated runtime layout", () => {
 	);
 	assert.equal(desktopPackageContract.rendererDirectory, "dist-app");
 	assert.equal(desktopPackageContract.runtimeDirectory, "dist-electron/main");
+	assert.deepEqual(desktopPackageContract.packagedNodeModules, [
+		"node-addon-api",
+		"node-gyp-build",
+		"objc-js",
+	]);
 	assert.deepEqual(desktopPackageContract.asarUnpack, [
 		"dist-electron/main/bin/**",
+		"node_modules/objc-js/prebuilds/**",
 	]);
 	assert.deepEqual(desktopPackageContract.builderFiles, [
 		"dist-electron/**/*",
 		"dist-app/**/*",
 		"package.json",
 		"!node_modules/**",
+		"node_modules/node-addon-api/**",
+		"node_modules/node-gyp-build/**",
+		"node_modules/objc-js/**",
 	]);
 });
 
@@ -30,14 +39,15 @@ test("desktop package manifest points Electron at the generated main entry", () 
 		createDesktopPackageManifest({
 			author: "Graneri",
 			description: "Graneri desktop app",
+			optionalDependencies: { "objc-js": "1.5.0" },
 			version: "0.1.0",
 		}),
 		{
 			author: "Graneri",
-			dependencies: {},
 			description: "Graneri desktop app",
 			main: "dist-electron/main/index.js",
 			name: "desktop",
+			optionalDependencies: { "objc-js": "1.5.0" },
 			productName: "Graneri",
 			type: "module",
 			version: "0.1.0",

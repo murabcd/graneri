@@ -490,6 +490,9 @@ const createDictationOverlay = ({ onClose, onRetry } = {}) => {
 				sandbox: true,
 			},
 		});
+		if (process.platform === "darwin") {
+			overlayWindow.excludedFromShownWindowsMenu = true;
+		}
 		overlayWindow.setAlwaysOnTop(true, "floating");
 		overlayWindow.setVisibleOnAllWorkspaces(true, {
 			visibleOnFullScreen: true,

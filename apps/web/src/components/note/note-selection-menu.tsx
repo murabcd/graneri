@@ -253,7 +253,7 @@ export function NoteSelectionMenu({ onComment }: { onComment: () => void }) {
 							blockMenuCloseReasonRef.current = null;
 						}
 
-						setBlockMenuOpen(nextOpen);
+						setBlockMenuOpen(() => nextOpen);
 					}}
 				>
 					<DropdownMenuTrigger asChild>

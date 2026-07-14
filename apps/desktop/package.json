@@ -32,6 +32,7 @@
   "dependencies": {
     "@ai-sdk/mcp": "^1.0.42",
     "@workspace/ai": "workspace:*",
+    "archiver": "7.0.1",
     "bash-tool": "^1.3.16",
     "convex": "^1.42.1",
     "electron-updater": "^6.6.2",
@@ -42,5 +43,8 @@
     "electron": "^42.3.3",
     "electron-builder": "^26.8.1",
     "web": "workspace:*"
+  },
+  "optionalDependencies": {
+    "objc-js": "1.5.0"
   }
 }

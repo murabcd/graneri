@@ -42,6 +42,14 @@ export interface DesktopPreferences {
 
 export type DesktopThemeSource = "dark" | "light" | "system";
 
+export type DesktopAppCommand =
+	| "go-home"
+	| "navigate-back"
+	| "navigate-forward"
+	| "open-ask-ai"
+	| "open-search"
+	| "toggle-sidebar";
+
 export type DesktopTranscriptionControllerPhase =
 	| "idle"
 	| "starting"
@@ -306,6 +314,7 @@ export interface GraneriDesktopBridge {
 		listener: (state: DesktopMeetingDetectionState) => void,
 	) => () => void;
 	onNavigate: (listener: (navigation: DesktopNavigation) => void) => () => void;
+	onAppCommand: (listener: (command: DesktopAppCommand) => void) => () => void;
 	startSystemAudioCapture: () => Promise<{
 		channels: number;
 		sampleRate: number;

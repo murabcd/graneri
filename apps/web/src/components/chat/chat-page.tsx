@@ -390,7 +390,7 @@ const useChatPageController = ({
 		void rehydrateSharedLocalFolders(localFolderStorageScope).then(
 			(folders) => {
 				if (isCurrent) {
-					setSharedLocalFolders(folders);
+					setSharedLocalFolders(() => folders);
 				}
 			},
 		);
@@ -557,7 +557,7 @@ const useChatPageController = ({
 	);
 	const handleReasoningEffortChange = React.useCallback(
 		(value: ReasoningEffort) => {
-			setReasoningEffort(value);
+			setReasoningEffort(() => value);
 			storeReasoningEffort(value);
 			storeChatReasoningEffort(chatId, value);
 
@@ -704,11 +704,11 @@ const useChatPageController = ({
 						setEditingMessageId(null);
 						clearDraft();
 						setAttachedFiles([]);
-						commitOptimisticMessage(message);
+						commitOptimisticMessage({ message });
 					});
 				},
 				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(localFolders);
+					setSharedLocalFolders(() => localFolders);
 					latestRequestBodyRef.current = requestBody;
 				},
 				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
@@ -825,7 +825,7 @@ const useChatPageController = ({
 					finishRequestPreparation();
 				},
 				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(localFolders);
+					setSharedLocalFolders(() => localFolders);
 					latestRequestBodyRef.current = requestBody;
 				},
 				rollbackOptimisticMessage,
@@ -912,7 +912,7 @@ const useChatPageController = ({
 	);
 
 	const handleWebSearchEnabledChange = React.useCallback((enabled: boolean) => {
-		setWebSearchEnabled(enabled);
+		setWebSearchEnabled(() => enabled);
 	}, []);
 
 	const handleEditMessage = React.useCallback(
@@ -925,7 +925,7 @@ const useChatPageController = ({
 				handleStop();
 			}
 
-			setEditingMessageId(messageId);
+			setEditingMessageId(() => messageId);
 			setDraft(text);
 			setDraftMetadata(
 				messageMentions.length > 0 ? { mentions: messageMentions } : null,
@@ -972,8 +972,8 @@ const useChatPageController = ({
 				handleStop();
 			}
 
-			setPendingTruncateMessageId(messageId);
-			truncateMessagesFrom(messageId);
+			setPendingTruncateMessageId(() => messageId);
+			truncateMessagesFrom({ messageId });
 			setEditingMessageId(null);
 			clearDraft();
 

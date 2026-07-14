@@ -697,7 +697,7 @@ const useAppShellState = ({
 				return;
 			}
 
-			setActiveWorkspaceId(workspaceId);
+			setActiveWorkspaceId(() => workspaceId);
 			navigateView("home");
 		},
 		[navigateView, resolvedActiveWorkspaceId],
@@ -818,7 +818,7 @@ const useAppShellState = ({
 
 	const handleAutomationDialogOpenChange = React.useCallback(
 		(open: boolean) => {
-			setAutomationDialogOpen(open);
+			setAutomationDialogOpen(() => open);
 			if (!open) {
 				setEditingAutomationId(null);
 				setAutomationChatId(null);
@@ -844,7 +844,7 @@ const useAppShellState = ({
 				setEditingAutomationId(existingAutomation.id);
 			} else {
 				setEditingAutomationId(null);
-				setAutomationChatId(chatId);
+				setAutomationChatId(() => chatId);
 			}
 
 			setAutomationDialogOpen(true);
@@ -855,7 +855,7 @@ const useAppShellState = ({
 	const handleEditAutomationOpen = React.useCallback(
 		(automationId: Id<"automations">) => {
 			setAutomationChatId(null);
-			setEditingAutomationId(automationId);
+			setEditingAutomationId(() => automationId);
 			setAutomationDialogOpen(true);
 		},
 		[],
@@ -1730,7 +1730,7 @@ function AppShellHeader({
 					titleEditPlaceholder={titleEditPlaceholder}
 					titleValue={titleValue}
 					onTitleValueChange={(value) => {
-						setTitleValue(value);
+						setTitleValue(() => value);
 						if (currentView === "note") {
 							onNoteTitleChange(value);
 						}

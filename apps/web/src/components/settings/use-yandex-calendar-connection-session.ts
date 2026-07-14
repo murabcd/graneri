@@ -32,7 +32,7 @@ export function useYandexCalendarConnectionSession({
 	);
 
 	const handleYandexCalendarDialogOpenChange = (open: boolean) => {
-		setIsYandexCalendarDialogOpen(open);
+		setIsYandexCalendarDialogOpen(() => open);
 
 		if (open) {
 			setYandexCalendarFormState({

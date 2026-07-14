@@ -37,7 +37,7 @@ export const useChatInteractionSession = ({
 	}, []);
 
 	const commitOptimisticMessage = React.useCallback(
-		(message: UIMessage) => {
+		({ message }: { message: UIMessage }) => {
 			setLocalOptimisticMessages((currentState) => ({
 				chatId,
 				messages: normalizeChatMessages([
@@ -70,7 +70,7 @@ export const useChatInteractionSession = ({
 	);
 
 	const truncateMessagesFrom = React.useCallback(
-		(messageId: string) => {
+		({ messageId }: { messageId: string }) => {
 			setMessages((currentMessages) =>
 				normalizeChatMessages(getMessagesBefore(currentMessages, messageId)),
 			);

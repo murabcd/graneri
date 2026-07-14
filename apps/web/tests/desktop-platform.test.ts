@@ -3,6 +3,7 @@ import {
 	getDesktopBridge,
 	getDesktopMeetingDetectionState,
 	isDesktopRuntime,
+	onDesktopAppCommand,
 	onDesktopMeetingDetectionState,
 	openDesktopExternalUrl,
 	requestDesktopPermission,
@@ -123,5 +124,15 @@ describe("desktop platform bridge", () => {
 		await expect(getDesktopMeetingDetectionState()).resolves.toMatchObject({
 			status: "idle",
 		});
+	});
+
+	it("proxies semantic application commands", () => {
+		const unsubscribe = vi.fn();
+		const onAppCommand = vi.fn().mockReturnValue(unsubscribe);
+		const listener = vi.fn();
+		setDesktopBridge({ onAppCommand, platform: "darwin" });
+
+		expect(onDesktopAppCommand(listener)).toBe(unsubscribe);
+		expect(onAppCommand).toHaveBeenCalledWith(listener);
 	});
 });

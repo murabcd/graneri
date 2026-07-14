@@ -27,6 +27,7 @@ import { SidebarHistoryControls } from "@/components/sidebar/sidebar-history-con
 import { TemplatesDialogEntry } from "@/components/templates/templates-dialog-entry";
 import { WorkspaceSwitcher } from "@/components/workspaces/workspace-switcher";
 import { useRecordingNoteId } from "@/hooks/use-transcription-session";
+import { useApplicationCommand } from "@/lib/application-command";
 import { getChatId } from "@/lib/chat";
 import type { ChatPluginSelection } from "@/lib/chat-plugin-prefill";
 import { SIDEBAR_NAVIGATION } from "@/lib/navigation";
@@ -587,7 +588,7 @@ export function AppSidebar({
 	onCreateNoteInsideProject,
 	...props
 }: AppSidebarProps) {
-	const { isMobile, setOpenMobile, state } = useSidebarShell();
+	const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebarShell();
 	const projects = useQuery(
 		api.projects.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -613,6 +614,7 @@ export function AppSidebar({
 		onWorkspaceSelect,
 		setOpenMobile,
 	});
+	useApplicationCommand("toggle-sidebar", toggleSidebar);
 
 	return (
 		<>

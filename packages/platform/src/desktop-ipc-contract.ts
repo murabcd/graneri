@@ -54,6 +54,7 @@ export const desktopIpcContract = Object.freeze({
 		reportMeetingWidgetSize: "app:report-meeting-widget-size",
 	}),
 	subscribe: freezeChannels({
+		onAppCommand: "app:app-command",
 		onMeetingDetectionState: "app:meeting-detection-state",
 		onMicrophoneCaptureEvent: "app:microphone-capture-event",
 		onNavigate: "app:navigate",

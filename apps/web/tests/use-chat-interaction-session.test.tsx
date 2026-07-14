@@ -45,8 +45,12 @@ it("commits, rolls back, and truncates optimistic messages atomically", () => {
 	const { result } = renderHook(useTestSession);
 
 	act(() => {
-		result.current.commitOptimisticMessage(createMessage("optimistic-1"));
-		result.current.commitOptimisticMessage(createMessage("optimistic-2"));
+		result.current.commitOptimisticMessage({
+			message: createMessage("optimistic-1"),
+		});
+		result.current.commitOptimisticMessage({
+			message: createMessage("optimistic-2"),
+		});
 	});
 	expect(result.current.messages.map((message) => message.id)).toEqual([
 		"persisted",
@@ -65,7 +69,7 @@ it("commits, rolls back, and truncates optimistic messages atomically", () => {
 		"optimistic-1",
 	]);
 
-	act(() => result.current.truncateMessagesFrom("optimistic-1"));
+	act(() => result.current.truncateMessagesFrom({ messageId: "optimistic-1" }));
 	expect(result.current.messages.map((message) => message.id)).toEqual([
 		"persisted",
 	]);

@@ -100,7 +100,7 @@ export function SidebarCollapsibleGroup({
 	const handleOpenChange = React.useCallback(
 		(nextOpen: boolean) => {
 			if (storageKey) {
-				setStoredOpen(nextOpen);
+				setStoredOpen(() => nextOpen);
 				writeStoredSectionOpen(storageKey, nextOpen);
 			}
 

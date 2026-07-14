@@ -184,9 +184,7 @@ export function VoiceSettings() {
 					</FieldContent>
 					<Select
 						value={transcriptionLanguageValue}
-						onValueChange={(value) => {
-							void handleTranscriptionLanguageChange(value);
-						}}
+						onValueChange={handleTranscriptionLanguageChange}
 					>
 						<SelectTrigger
 							size="sm"

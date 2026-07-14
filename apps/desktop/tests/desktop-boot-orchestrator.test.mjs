@@ -40,10 +40,12 @@ const createOrchestratorHarness = (overrides = {}) => {
 	const getTranscriptionPhase =
 		overrides.getTranscriptionPhase ?? (() => "idle");
 
-	const record = (name, result) => async (...args) => {
-		calls.push(args.length > 0 ? `${name}:${args.join(",")}` : name);
-		return await result;
-	};
+	const record =
+		(name, result) =>
+		async (...args) => {
+			calls.push(args.length > 0 ? `${name}:${args.join(",")}` : name);
+			return await result;
+		};
 
 	const orchestrator = createDesktopBootOrchestrator({
 		app,
@@ -84,8 +86,12 @@ const createOrchestratorHarness = (overrides = {}) => {
 		rendererDistDir: "/renderer",
 		setTrayStatusLabel: (label) => calls.push(`setTrayStatusLabel:${label}`),
 		showMainWindow: record("showMainWindow"),
+		startDesktopLogging: () => calls.push("startDesktopLogging"),
 		startMeetingDetectionMonitors: record("startMeetingDetectionMonitors"),
 		stopDesktopTranscriptionSession: record("stopDesktopTranscriptionSession"),
+		stopDesktopDiagnostics: record("stopDesktopDiagnostics"),
+		stopDesktopLogging: record("stopDesktopLogging"),
+		stopGlobalDictation: record("stopGlobalDictation"),
 		stopMeetingDetectionMonitors: record("stopMeetingDetectionMonitors"),
 		stopMicrophoneCapture: record("stopMicrophoneCapture"),
 		stopRealtimeTransport: record("stopRealtimeTransport"),
@@ -119,6 +125,7 @@ test("desktop boot orchestrator runs ready lifecycle in order", async () => {
 	await app.runReady();
 
 	assert.deepEqual(calls, [
+		"startDesktopLogging",
 		"refreshTranscriptionPolicy",
 		"refreshApplicationMenu",
 		"registerDesktopAppProtocols:default,renderer",
@@ -143,7 +150,7 @@ test("desktop boot orchestrator shows the main window for a second instance", as
 	orchestrator.start();
 	await app.emit("second-instance");
 
-	assert.deepEqual(calls, ["showMainWindow"]);
+	assert.deepEqual(calls, ["startDesktopLogging", "showMainWindow"]);
 });
 
 test("desktop boot orchestrator stops transcription on suspend only while active", async () => {
@@ -165,17 +172,32 @@ test("desktop boot orchestrator cleans runtime on window-all-closed", async () =
 	});
 
 	orchestrator.start();
+	calls.length = 0;
 	await app.emit("window-all-closed");
 
 	assert.deepEqual(calls, [
+		"stopDesktopDiagnostics",
+		"stopDesktopTranscriptionSession:[object Object]",
+		"stopGlobalDictation",
+		"stopMeetingDetectionMonitors",
 		"stopRealtimeTransport:you",
 		"stopRealtimeTransport:them",
-		"stopMeetingDetectionMonitors",
 		"stopMicrophoneCapture",
 		"stopSystemAudioCapture",
 		"closeLocalServer",
+		"stopDesktopLogging",
 		"quitCompletely",
 	]);
+});
+
+test("desktop boot orchestrator keeps runtime alive with the macOS menu bar", async () => {
+	const { app, calls, orchestrator } = createOrchestratorHarness();
+
+	orchestrator.start();
+	calls.length = 0;
+	await app.emit("window-all-closed");
+
+	assert.deepEqual(calls, []);
 });
 
 test("desktop boot orchestrator confirms quit before macOS quit", async () => {
@@ -183,6 +205,7 @@ test("desktop boot orchestrator confirms quit before macOS quit", async () => {
 	let didPreventDefault = false;
 
 	orchestrator.start();
+	calls.length = 0;
 	await app.emit("before-quit", {
 		preventDefault: () => {
 			didPreventDefault = true;
@@ -191,4 +214,35 @@ test("desktop boot orchestrator confirms quit before macOS quit", async () => {
 
 	assert.equal(didPreventDefault, true);
 	assert.deepEqual(calls, ["confirmAndQuitCompletely"]);
+});
+
+test("desktop boot orchestrator awaits complete cleanup before quitting", async () => {
+	const { app, calls, orchestrator } = createOrchestratorHarness({
+		isBypassingQuitConfirmation: () => true,
+	});
+	let didPreventDefault = false;
+
+	orchestrator.start();
+	calls.length = 0;
+	await app.emit("before-quit", {
+		preventDefault: () => {
+			didPreventDefault = true;
+		},
+	});
+
+	assert.equal(didPreventDefault, true);
+	assert.deepEqual(calls, [
+		"markQuitting",
+		"stopDesktopDiagnostics",
+		"stopDesktopTranscriptionSession:[object Object]",
+		"stopGlobalDictation",
+		"stopMeetingDetectionMonitors",
+		"stopRealtimeTransport:you",
+		"stopRealtimeTransport:them",
+		"stopMicrophoneCapture",
+		"stopSystemAudioCapture",
+		"closeLocalServer",
+		"stopDesktopLogging",
+		"quitCompletely",
+	]);
 });

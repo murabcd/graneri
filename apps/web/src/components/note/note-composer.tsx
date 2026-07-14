@@ -492,7 +492,7 @@ const useNoteComposerController = ({
 		void rehydrateSharedLocalFolders(localFolderStorageScope).then(
 			(folders) => {
 				if (isCurrent) {
-					setSharedLocalFolders(folders);
+					setSharedLocalFolders(() => folders);
 				}
 			},
 		);
@@ -1333,12 +1333,12 @@ const useNoteComposerController = ({
 						clearDraft();
 						setAttachedFiles([]);
 						resetTextareaHeight();
-						commitOptimisticMessage(message);
+						commitOptimisticMessage({ message });
 					});
 					requestComposerFocus();
 				},
 				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(localFolders);
+					setSharedLocalFolders(() => localFolders);
 					latestRequestBodyRef.current = requestBody;
 				},
 				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
@@ -1472,7 +1472,7 @@ const useNoteComposerController = ({
 				},
 				onOptimisticMessage: requestComposerFocus,
 				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(localFolders);
+					setSharedLocalFolders(() => localFolders);
 					latestRequestBodyRef.current = requestBody;
 				},
 				rollbackOptimisticMessage,
@@ -1563,7 +1563,7 @@ const useNoteComposerController = ({
 				handleStop();
 			}
 
-			setEditingMessageId(messageId);
+			setEditingMessageId(() => messageId);
 			setMessage(text);
 			setAttachedFiles([]);
 			resizeTextarea();
@@ -1616,8 +1616,8 @@ const useNoteComposerController = ({
 				handleStop();
 			}
 
-			setPendingTruncateMessageId(messageId);
-			truncateMessagesFrom(messageId);
+			setPendingTruncateMessageId(() => messageId);
+			truncateMessagesFrom({ messageId });
 			setEditingMessageId(null);
 			clearDraft();
 			setAttachedFiles([]);
@@ -2472,7 +2472,7 @@ function ChatInlinePopoverFooter({
 
 	const selectRecipeIndex = React.useCallback((index: number) => {
 		selectedRecipeIndexRef.current = index;
-		setSelectedRecipeIndex(index);
+		setSelectedRecipeIndex(() => index);
 	}, []);
 	const closeRecipePicker = React.useCallback(() => {
 		activeMentionRangeRef.current = null;
@@ -2563,7 +2563,7 @@ function ChatInlinePopoverFooter({
 								: recipes;
 							activeMentionRangeRef.current = range;
 							filteredRecipesRef.current = nextRecipes;
-							setActiveMentionQuery(query);
+							setActiveMentionQuery(() => query);
 							selectRecipeIndex(0);
 							setRecipePickerPosition(
 								getMentionPickerPosition({
@@ -3169,7 +3169,8 @@ function TranscriptInlinePopoverFooter({
 export const NoteComposer = React.memo(function NoteComposer(
 	props: NoteComposerProps,
 ) {
-	const controller = useNoteComposerController(props);
+	const composerProps = props;
+	const controller = useNoteComposerController(composerProps);
 	return (
 		<div ref={controller.rootRef} className="relative w-full">
 			{controller.canGenerateNotes ? (

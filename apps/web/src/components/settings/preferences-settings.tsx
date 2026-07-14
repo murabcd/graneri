@@ -150,9 +150,7 @@ export function PreferencesSettings() {
 							desktopState.isSaving ||
 							!desktopState.preferences.canLaunchAtLogin
 						}
-						onCheckedChange={(checked) => {
-							void handleLaunchAtLoginChange(checked);
-						}}
+						onCheckedChange={handleLaunchAtLoginChange}
 					/>
 				) : null}
 				<Field
@@ -164,9 +162,7 @@ export function PreferencesSettings() {
 					</FieldContent>
 					<Select
 						value={userPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT}
-						onValueChange={(value) => {
-							void handleSendShortcutChange(value);
-						}}
+						onValueChange={handleSendShortcutChange}
 						disabled={userPreferences === undefined || isSavingSendShortcut}
 					>
 						<SelectTrigger

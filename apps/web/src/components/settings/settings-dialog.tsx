@@ -2459,7 +2459,8 @@ function ManageAccountForm(props: {
 	onCancel: () => void;
 	onSave: () => void;
 }) {
-	return useManageAccountFormElement(props);
+	const formProps = props;
+	return useManageAccountFormElement(formProps);
 }
 
 function getInitials(name: string, email: string) {

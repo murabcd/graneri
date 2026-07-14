@@ -1551,7 +1551,7 @@ function useNoteSearch(searchableText: string) {
 		});
 	}, []);
 	const handleQueryChange = React.useCallback((value: string) => {
-		setQuery(value);
+		setQuery(() => value);
 		setIndex(0);
 	}, []);
 	const handlePrevious = React.useCallback(() => {

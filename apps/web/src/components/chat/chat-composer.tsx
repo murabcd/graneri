@@ -570,7 +570,7 @@ function ChatComposerTextEditor({
 
 	const selectMentionIndex = React.useCallback((index: number) => {
 		selectedMentionIndexRef.current = index;
-		setSelectedMentionIndex(index);
+		setSelectedMentionIndex(() => index);
 	}, []);
 	const closeMentionPicker = React.useCallback(() => {
 		noteMentionRangeRef.current = null;
@@ -744,7 +744,7 @@ function ChatComposerTextEditor({
 							noteMentionRangeRef.current = range;
 							visibleMentionDocumentsRef.current = nextDocuments;
 							visibleMentionItemsRef.current = nextItems;
-							setDocumentSearchTerm(query);
+							setDocumentSearchTerm(() => query);
 							selectMentionIndex(0);
 							requestAnimationFrame(() => {
 								const rect = getMentionAnchorRect(editor, range);

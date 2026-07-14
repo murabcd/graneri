@@ -140,17 +140,9 @@ export const createDesktopNavigationState = ({
 		}
 	};
 
-	const reset = async () => {
-		lastNavigation = { ...defaultLastNavigation };
-		await save();
-	};
-
 	return {
 		get: () => lastNavigation,
 		load,
 		remember,
-		reset,
 	};
 };
-
-export const getDefaultDesktopNavigation = () => ({ ...defaultLastNavigation });

@@ -681,7 +681,8 @@ function useCreateAutomationDialogElement({
 }
 
 export function CreateAutomationDialog(props: CreateAutomationDialogProps) {
-	return useCreateAutomationDialogElement(props);
+	const dialogProps = props;
+	return useCreateAutomationDialogElement(dialogProps);
 }
 
 // react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap adapter owns one editor instance, its suggestion refs, and imperative synchronization.
@@ -765,7 +766,7 @@ function AutomationPromptEditor({
 
 	const selectIndex = React.useCallback((index: number) => {
 		selectedIndexRef.current = index;
-		setSelectedIndex(index);
+		setSelectedIndex(() => index);
 	}, []);
 	const closePicker = React.useCallback(() => {
 		mentionRangeRef.current = null;
@@ -916,7 +917,7 @@ function AutomationPromptEditor({
 							mentionRangeRef.current = range;
 							visibleNoteSourcesRef.current = nextNotes;
 							visibleItemsRef.current = nextItems;
-							setSearchTerm(query);
+							setSearchTerm(() => query);
 							selectIndex(0);
 							requestAnimationFrame(() => {
 								const rect = getMentionAnchorRect(editor, range);

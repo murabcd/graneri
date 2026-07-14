@@ -427,6 +427,11 @@ const scanRuntimeImports = (packagedResources) => {
 	const packagedFilePaths = new Set(
 		packagedResources.files.map((file) => file.relativePath),
 	);
+	for (const packageName of desktopPackageContract.packagedNodeModules) {
+		if (!packagedResources.hasPackagePath(join("node_modules", packageName))) {
+			throw new Error(`Packaged native dependency is missing: ${packageName}`);
+		}
+	}
 	const packagedConvexDeployments = getConfigurationConvexDeployments(allText);
 
 	if (

@@ -257,6 +257,9 @@ export const createMeetingDetection = ({
 			icon: dockIconPath,
 			webPreferences: createRendererWebPreferences({ preloadPath }),
 		});
+		if (process.platform === "darwin") {
+			meetingWidgetWindow.excludedFromShownWindowsMenu = true;
+		}
 
 		meetingWidgetWindow.setAlwaysOnTop(true, "floating");
 		meetingWidgetWindow.setVisibleOnAllWorkspaces(true, {

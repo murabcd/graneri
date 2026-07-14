@@ -107,7 +107,7 @@ export function AppearanceSettings() {
 		key: SavingPreference,
 		errorLabel: string,
 	) => {
-		setSavingPreference(key);
+		setSavingPreference(() => key);
 
 		try {
 			await updateUserPreferences(patch);
@@ -206,9 +206,7 @@ export function AppearanceSettings() {
 							</FieldContent>
 							<Select
 								value={reduceMotion}
-								onValueChange={(value) => {
-									void handleReduceMotionChange(value);
-								}}
+								onValueChange={handleReduceMotionChange}
 								disabled={savingPreference === "reduceMotion"}
 							>
 								<SelectTrigger
@@ -238,18 +236,14 @@ export function AppearanceSettings() {
 							label="Font smoothing"
 							checked={fontSmoothing}
 							disabled={savingPreference === "fontSmoothing"}
-							onCheckedChange={(checked) => {
-								void handleFontSmoothingChange(checked);
-							}}
+							onCheckedChange={handleFontSmoothingChange}
 						/>
 						<SettingsSwitchRow
 							id="settings-translucent-sidebar"
 							label="Translucent sidebar"
 							checked={translucentSidebar}
 							disabled={savingPreference === "translucentSidebar"}
-							onCheckedChange={(checked) => {
-								void handleTranslucentSidebarChange(checked);
-							}}
+							onCheckedChange={handleTranslucentSidebarChange}
 						/>
 					</>
 				) : null}

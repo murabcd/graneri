@@ -7,6 +7,7 @@ import {
 	app,
 	BrowserWindow,
 	clipboard,
+	contentTracing,
 	dialog,
 	globalShortcut,
 	ipcMain,
@@ -34,11 +35,10 @@ import {
 } from "./desktop-app-protocol.mjs";
 import { createDesktopBootOrchestrator } from "./desktop-boot-orchestrator.mjs";
 import { createDesktopContentSecurityPolicy } from "./desktop-content-security-policy.mjs";
+import { createDesktopDiagnostics } from "./desktop-diagnostics.mjs";
+import { createDesktopDiagnosticsPaths } from "./desktop-diagnostics-paths.mjs";
 import { createDesktopDictationTranscription } from "./desktop-dictation-transcription.mjs";
-import {
-	createDesktopNavigationState,
-	getDefaultDesktopNavigation,
-} from "./desktop-navigation-state.mjs";
+import { createDesktopNavigationState } from "./desktop-navigation-state.mjs";
 import { createDesktopPreferencesStore } from "./desktop-preferences.mjs";
 import { createDesktopRealtimeTransport } from "./desktop-realtime-transport.mjs";
 import { createDesktopRecordingPowerSaveBlocker } from "./desktop-recording-power-save.mjs";
@@ -58,15 +58,22 @@ import {
 	getDesktopUpdaterUnavailableTrayLabel,
 	isDesktopUpdaterAvailable,
 } from "./desktop-updater.mjs";
+import { createDesktopViewCommands } from "./desktop-view-commands.mjs";
 import { createDesktopWindow } from "./desktop-window.mjs";
 import { loadRootEnv } from "./env.mjs";
 import { createGlobalDictation } from "./global-dictation.mjs";
 import { getDictationPreferencePatchForHotkeyMode } from "./global-dictation-policy.mjs";
 import { startLocalServer } from "./local-server.mjs";
-import { emitWideEvent, logError, logInfo, serializeError } from "./logger.mjs";
+import {
+	emitWideEvent,
+	initializeDesktopFileLogging,
+	logError,
+	logInfo,
+	serializeError,
+	stopDesktopFileLogging,
+} from "./logger.mjs";
 import { createMeetingDetection } from "./meeting-detection.mjs";
 import { createNativeAudioCapture } from "./native-audio-capture.mjs";
-import { toErrorLogDetails } from "./network.mjs";
 import { getRuntimeConfig, hydrateRuntimeConfig } from "./runtime-config.mjs";
 
 const { autoUpdater } = electronUpdater;
@@ -87,6 +94,7 @@ const desktopContentSecurityPolicy = createDesktopContentSecurityPolicy({
 });
 
 const runtimeDir = dirname(fileURLToPath(import.meta.url));
+const marketingSiteUrl = "https://graneri-oss.vercel.app";
 const rendererDistDir =
 	app.isPackaged === true
 		? resolve(runtimeDir, "..", "..", "dist-app")
@@ -108,6 +116,18 @@ const transcriptDraftsDirPath = join(
 	"transcript-drafts",
 );
 const noteDraftsDirPath = join(app.getPath("userData"), "note-drafts");
+const desktopDiagnosticsPaths = createDesktopDiagnosticsPaths({
+	userDataPath: app.getPath("userData"),
+});
+const desktopDiagnostics = createDesktopDiagnostics({
+	contentTracing,
+	logError,
+	logInfo,
+	paths: desktopDiagnosticsPaths,
+	processName: app.getName(),
+	processRef: process,
+	shell,
+});
 const microphoneCaptureEventChannel =
 	desktopIpcContract.subscribe.onMicrophoneCaptureEvent;
 const systemAudioCaptureEventChannel =
@@ -119,6 +139,7 @@ const transcriptionSessionEventChannel =
 const meetingDetectionStateChannel =
 	desktopIpcContract.subscribe.onMeetingDetectionState;
 const desktopNavigationChannel = desktopIpcContract.subscribe.onNavigate;
+const desktopAppCommandChannel = desktopIpcContract.subscribe.onAppCommand;
 const maxRecoveryAttempts = 3;
 const recoveryBackoffMs = [750, 1_500, 3_000];
 const systemAudioAttachRetryBackoffMs = [750, 1_500, 3_000];
@@ -1823,6 +1844,12 @@ const showMainWindow = async (options = {}) => {
 	await requireDesktopService(desktopWindow, "desktopWindow").show(options);
 };
 
+const desktopViewCommands = createDesktopViewCommands({
+	appCommandChannel: desktopAppCommandChannel,
+	getWindow: () =>
+		requireDesktopService(desktopWindow, "desktopWindow").getWindow(),
+});
+
 desktopTray = createDesktopTray({
 	app,
 	confirmAndQuitCompletely: () => confirmAndQuitCompletely(),
@@ -2753,57 +2780,56 @@ const handleCheckForUpdates = async () => {
 	).checkForUpdates();
 };
 
-const handleRestartApp = () => {
-	isBypassingQuitConfirmation = true;
-	isQuitting = true;
-	app.relaunch();
-	app.quit();
+const openDesktopHelpUrl = async ({ event, url }) => {
+	try {
+		await shell.openExternal(url);
+		logInfo({ event, url });
+	} catch (error) {
+		logError({ error, event: `${event}_failed`, url });
+	}
 };
 
-const handleDesktopSignOut = async () => {
+const recordPerformanceTrace = async () => {
 	try {
-		const desktopAuthClient = getDesktopAuthClient();
-		await desktopAuthClient.$fetch("/sign-out", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-			},
-			body: JSON.stringify({}),
-			throw: true,
-		});
-		await requireDesktopService(
-			desktopNavigationState,
-			"desktopNavigationState",
-		).reset();
-		const defaultLastNavigation = getDefaultDesktopNavigation();
-		await requireDesktopService(desktopWindow, "desktopWindow").loadUrlAndFocus(
-			await getNavigationUrl(defaultLastNavigation),
-		);
+		await desktopDiagnostics.recordPerformanceTrace();
 	} catch (error) {
-		const errorDetails = toErrorLogDetails(error);
-		logError({
-			error: errorDetails,
-			message: "Failed to sign out from desktop menu.",
-		});
-		await showUpdateMessageBox({
-			type: "error",
-			title: "Sign Out Failed",
-			message: `Couldn't sign out of ${app.getName()}.`,
-			detail: errorDetails.message,
-		});
+		logError({ error, event: "desktop.performance_trace_start_failed" });
+	}
+};
+
+const toggleUnifiedLog = async () => {
+	try {
+		await desktopDiagnostics.toggleUnifiedLog();
+	} catch (error) {
+		logError({ error, event: "desktop.unified_log_toggle_failed" });
+	}
+};
+
+const showLogsInFinder = async () => {
+	try {
+		await desktopDiagnostics.showLogsInFinder();
+	} catch (error) {
+		logError({ error, event: "desktop.troubleshooting_logs_open_failed" });
 	}
 };
 
 desktopAppMenu = createDesktopAppMenu({
 	appName: () => app.getName(),
 	confirmAndQuitCompletely,
+	desktopViewCommands,
 	handleCheckForUpdates,
-	handleDesktopSignOut,
-	handleRestartApp,
 	handleTrayQuit: () => handleTrayQuit(),
 	hideApp,
+	openLearnMore: () =>
+		openDesktopHelpUrl({
+			event: "desktop.help_learn_more_opened",
+			url: marketingSiteUrl,
+		}),
+	recordPerformanceTrace,
+	showLogsInFinder,
 	showAboutMessageBox,
 	showMainWindow,
+	toggleUnifiedLog,
 });
 
 const refreshApplicationMenu = () => {
@@ -2878,9 +2904,21 @@ createDesktopBootOrchestrator({
 	rendererDistDir,
 	setTrayStatusLabel,
 	showMainWindow,
+	startDesktopLogging: () => {
+		initializeDesktopFileLogging({
+			logFilePath: desktopDiagnosticsPaths.appLogPath,
+			version: app.getVersion(),
+		});
+		logInfo({
+			event: "desktop.file_logging_initialized",
+			filename: "graneri.log",
+		});
+	},
 	startGlobalDictation: () => globalDictation.start(),
 	startMeetingDetectionMonitors,
 	stopDesktopTranscriptionSession,
+	stopDesktopDiagnostics: () => desktopDiagnostics.stop(),
+	stopDesktopLogging: stopDesktopFileLogging,
 	stopGlobalDictation: () => globalDictation.stop(),
 	stopMeetingDetectionMonitors,
 	stopMicrophoneCapture,

@@ -103,6 +103,8 @@ const bundleDesktopMain = async () => {
 			`--outdir=${bundledMainDir}`,
 			"--external",
 			"electron",
+			"--external",
+			"objc-js",
 			"--sourcemap=none",
 		],
 		{
@@ -128,6 +130,37 @@ const bundleDesktopMain = async () => {
 			await rm(resolve(distDir, entry.name), { force: true });
 		}
 	}
+};
+
+const copyMacOSRuntimeNodeModules = async () => {
+	if (process.platform !== "darwin") {
+		return;
+	}
+
+	const nodeModulesDir = resolve(packageAppDir, "node_modules");
+	const objcJsRoot = resolve(dirname(require.resolve("objc-js")), "..");
+	const objcJsRequire = createRequire(resolve(objcJsRoot, "package.json"));
+	const nodeAddonApiRoot = dirname(
+		objcJsRequire.resolve("node-addon-api/package.json"),
+	);
+	const nodeGypBuildRoot = dirname(
+		objcJsRequire.resolve("node-gyp-build/package.json"),
+	);
+	const packageRoots = new Map([
+		["node-addon-api", nodeAddonApiRoot],
+		["node-gyp-build", nodeGypBuildRoot],
+		["objc-js", objcJsRoot],
+	]);
+
+	await mkdir(nodeModulesDir, { recursive: true });
+	await Promise.all(
+		desktopPackageContract.packagedNodeModules.map((packageName) =>
+			cp(packageRoots.get(packageName), resolve(nodeModulesDir, packageName), {
+				dereference: true,
+				recursive: true,
+			}),
+		),
+	);
 };
 
 const bundleDesktopPreload = async () => {
@@ -208,4 +241,5 @@ await copyRuntimeSources();
 await bundleDesktopPreload();
 await bundleDesktopMain();
 await copyNativeRuntimeTools();
+await copyMacOSRuntimeNodeModules();
 await stagePackageApp();

@@ -41,6 +41,7 @@ import {
 } from "@/app/use-desktop-permissions-session";
 import { SharedNotePageEntry } from "@/components/note/shared-note-page-entry";
 import { WorkspaceComposer } from "@/components/workspaces/workspace-composer";
+import { useDesktopApplicationCommands } from "@/lib/application-command";
 import { type AuthSession, authClient } from "@/lib/auth-client";
 import { DESKTOP_AUTH_SAFE_TOP_CLASS } from "@/lib/desktop-chrome";
 import { useNavigationHistoryShortcuts } from "@/lib/navigation-history-state";
@@ -174,7 +175,7 @@ const useAppBootstrapState = () => {
 				return;
 			}
 
-			setAuthenticatingProvider(provider);
+			setAuthenticatingProvider(() => provider);
 
 			try {
 				setAuthError(null);
@@ -479,6 +480,7 @@ function MainApp() {
 }
 
 function App() {
+	useDesktopApplicationCommands();
 	useNavigationHistoryShortcuts();
 
 	return <MainApp />;

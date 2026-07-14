@@ -1,11 +1,23 @@
+const packagedNodeModules = Object.freeze([
+	"node-addon-api",
+	"node-gyp-build",
+	"objc-js",
+]);
+
 export const desktopPackageContract = {
 	appDirectory: ".package-app",
-	asarUnpack: ["dist-electron/main/bin/**"],
+	asarUnpack: [
+		"dist-electron/main/bin/**",
+		"node_modules/objc-js/prebuilds/**",
+	],
 	builderFiles: [
 		"dist-electron/**/*",
 		"dist-app/**/*",
 		"package.json",
 		"!node_modules/**",
+		...packagedNodeModules.map(
+			(packageName) => `node_modules/${packageName}/**`,
+		),
 	],
 	mainEntry: "dist-electron/main/index.js",
 	packagedResourcesPath: "release/mac-arm64/Graneri.app/Contents/Resources/app",
@@ -14,6 +26,7 @@ export const desktopPackageContract = {
 	rendererDirectory: "dist-app",
 	runtimeDirectory: "dist-electron/main",
 	runtimeImportDirectory: "dist-electron/",
+	packagedNodeModules,
 };
 
 export const createDesktopPackageManifest = (desktopPackage) => ({
@@ -24,5 +37,7 @@ export const createDesktopPackageManifest = (desktopPackage) => ({
 	author: desktopPackage.author,
 	type: "module",
 	main: desktopPackageContract.mainEntry,
-	dependencies: {},
+	optionalDependencies: {
+		"objc-js": desktopPackage.optionalDependencies["objc-js"],
+	},
 });

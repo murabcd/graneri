@@ -75,7 +75,7 @@ export default function ChatMessages({
 				return;
 			}
 
-			setMessageIdPendingDelete(messageId);
+			setMessageIdPendingDelete(() => messageId);
 		},
 		[messageIdPendingDelete, onDeleteMessage],
 	);

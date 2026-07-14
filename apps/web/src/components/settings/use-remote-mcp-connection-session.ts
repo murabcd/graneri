@@ -91,7 +91,7 @@ export const useRemoteMcpConnectionSession = ({
 
 	const handleOpenChange = useCallback(
 		(open: boolean) => {
-			setIsOpen(open);
+			setIsOpen(() => open);
 			setFormState(
 				open
 					? createFormState(connection, defaultFormState, defaultDisplayName)

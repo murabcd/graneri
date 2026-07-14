@@ -37,23 +37,63 @@ export const createDesktopBootOrchestrator = ({
 	rendererDistDir,
 	setTrayStatusLabel,
 	showMainWindow,
+	startDesktopLogging,
 	startGlobalDictation = () => {},
 	startMeetingDetectionMonitors,
 	stopDesktopTranscriptionSession,
+	stopDesktopDiagnostics,
+	stopDesktopLogging,
 	stopGlobalDictation = async () => {},
 	stopMeetingDetectionMonitors,
 	stopMicrophoneCapture,
 	stopRealtimeTransport,
 	stopSystemAudioCapture,
 }) => {
-	const stopDesktopRuntime = async () => {
-		await stopRealtimeTransport("you");
-		await stopRealtimeTransport("them");
-		await stopGlobalDictation();
-		await stopMeetingDetectionMonitors();
-		await stopMicrophoneCapture();
-		await stopSystemAudioCapture();
-		await closeLocalServer();
+	let desktopRuntimeStopPromise = null;
+	let hasStoppedDesktopRuntime = false;
+	let isQuitCleanupPending = false;
+
+	const runShutdownOperation = async (name, operation) => {
+		try {
+			await operation();
+		} catch (error) {
+			logError({
+				error,
+				event: "desktop.shutdown_operation_failed",
+				operation: name,
+			});
+		}
+	};
+
+	const stopDesktopRuntime = () => {
+		desktopRuntimeStopPromise ??= (async () => {
+			await runShutdownOperation("diagnostics", stopDesktopDiagnostics);
+			await runShutdownOperation("transcription", () =>
+				stopDesktopTranscriptionSession({ reason: "shutdown" }),
+			);
+			await runShutdownOperation("global_dictation", stopGlobalDictation);
+			await runShutdownOperation(
+				"meeting_detection",
+				stopMeetingDetectionMonitors,
+			);
+			await Promise.all([
+				runShutdownOperation("realtime_you", () =>
+					stopRealtimeTransport("you"),
+				),
+				runShutdownOperation("realtime_them", () =>
+					stopRealtimeTransport("them"),
+				),
+			]);
+			await Promise.all([
+				runShutdownOperation("microphone_capture", stopMicrophoneCapture),
+				runShutdownOperation("system_audio_capture", stopSystemAudioCapture),
+			]);
+			await runShutdownOperation("local_server", closeLocalServer);
+			await runShutdownOperation("logging", stopDesktopLogging);
+			hasStoppedDesktopRuntime = true;
+		})();
+
+		return desktopRuntimeStopPromise;
 	};
 
 	const registerReadyHandler = () => {
@@ -118,16 +158,17 @@ export const createDesktopBootOrchestrator = ({
 
 	const registerWindowAllClosedHandler = () => {
 		app.on("window-all-closed", async () => {
-			await stopDesktopRuntime();
-
-			if (processPlatform !== "darwin" || !isKeepOpenInMenuBarEnabled()) {
-				quitCompletely();
+			if (processPlatform === "darwin" && isKeepOpenInMenuBarEnabled()) {
+				return;
 			}
+
+			await stopDesktopRuntime();
+			quitCompletely();
 		});
 	};
 
 	const registerBeforeQuitHandler = () => {
-		app.on("before-quit", (event) => {
+		app.on("before-quit", async (event) => {
 			if (processPlatform === "darwin" && !isBypassingQuitConfirmation()) {
 				event.preventDefault();
 				void confirmAndQuitCompletely();
@@ -135,7 +176,18 @@ export const createDesktopBootOrchestrator = ({
 			}
 
 			markQuitting();
-			void stopDesktopRuntime();
+			if (hasStoppedDesktopRuntime) {
+				return;
+			}
+
+			event.preventDefault();
+			if (isQuitCleanupPending) {
+				return;
+			}
+
+			isQuitCleanupPending = true;
+			await stopDesktopRuntime();
+			quitCompletely();
 		});
 	};
 
@@ -144,6 +196,7 @@ export const createDesktopBootOrchestrator = ({
 			quitCompletely();
 			return;
 		}
+		startDesktopLogging();
 
 		app.on("second-instance", () => {
 			void showMainWindow();

@@ -89,7 +89,7 @@ export const useComposerDraft = <TMetadata>(
 		(nextDraft: ComposerDraftSnapshot<TMetadata>) => {
 			draftRef.current = nextDraft;
 			React.startTransition(() => {
-				setDraftState(nextDraft);
+				setDraftState(() => nextDraft);
 			});
 			persist(nextDraft);
 		},

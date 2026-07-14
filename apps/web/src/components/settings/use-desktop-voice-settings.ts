@@ -30,7 +30,7 @@ export function useDesktopVoiceSettings(enabled: boolean) {
 				if (isCancelled) {
 					return;
 				}
-				setPreferences(nextPreferences);
+				setPreferences(() => nextPreferences);
 			})
 			.catch((error) => {
 				logError({
@@ -63,8 +63,8 @@ export function useDesktopVoiceSettings(enabled: boolean) {
 		request: () => Promise<DesktopPreferences>;
 	}) => {
 		const previousPreferences = preferences;
-		setSavingPreference(key);
-		setPreferences(optimisticPreferences);
+		setSavingPreference(() => key);
+		setPreferences(() => optimisticPreferences);
 
 		try {
 			setPreferences(await request());

@@ -441,7 +441,7 @@ function InboxPaneHeader({
 				<DropdownMenu
 					open={actionsOpen}
 					onOpenChange={(open) => {
-						setActionsOpen(open);
+						setActionsOpen(() => open);
 						if (open) {
 							setFiltersOpen(false);
 						}
@@ -503,7 +503,7 @@ function InboxPaneHeader({
 				<DropdownMenu
 					open={filtersOpen}
 					onOpenChange={(open) => {
-						setFiltersOpen(open);
+						setFiltersOpen(() => open);
 						if (open) {
 							setActionsOpen(false);
 						}
@@ -676,20 +676,21 @@ const InboxPanel = React.memo(function InboxPanel({
 	};
 
 	const handleOpenItem = async (item: InboxItem) => {
+		const openedItem = item;
 		// Opening any inbox item should mark it read before navigation or external handoff.
-		await handleMarkItemRead(item);
+		await handleMarkItemRead(openedItem);
 
-		if (item.provider === "notes" && item.kind === "note-comment") {
-			window.history.pushState(null, "", item.url);
+		if (openedItem.provider === "notes" && openedItem.kind === "note-comment") {
+			window.history.pushState(null, "", openedItem.url);
 			window.dispatchEvent(new PopStateEvent("popstate"));
 			return;
 		}
 
-		if (await openDesktopExternalUrl(item.url)) {
+		if (await openDesktopExternalUrl(openedItem.url)) {
 			return;
 		}
 
-		window.open(item.url, "_blank", "noopener,noreferrer");
+		window.open(openedItem.url, "_blank", "noopener,noreferrer");
 	};
 
 	if (!activeWorkspaceId) {

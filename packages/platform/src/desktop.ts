@@ -1,4 +1,5 @@
 import type {
+	DesktopAppCommand,
 	DesktopMeetingDetectionState,
 	DesktopNavigation,
 	DesktopPermissionId,
@@ -211,6 +212,10 @@ export const setDesktopTrayCalendarState = async (
 export const onDesktopNavigate = (
 	listener: (navigation: DesktopNavigation) => void,
 ) => getDesktopBridge()?.onNavigate?.(listener) ?? undefined;
+
+export const onDesktopAppCommand = (
+	listener: (command: DesktopAppCommand) => void,
+) => getDesktopBridge()?.onAppCommand?.(listener) ?? undefined;
 
 export const onDesktopMeetingDetectionState = (
 	listener: (state: DesktopMeetingDetectionState) => void,

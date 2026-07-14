@@ -53,6 +53,9 @@ method parity with that catalog, preload methods are derived from it, and the
 main process fails startup when a required handler is missing, duplicated, or
 unexpected. Desktop builds bundle the preload so the shared catalog does not
 become a packaged runtime dependency.
+Native application-menu commands that act on renderer state cross this same
+bridge as typed semantic commands. Electron must not synthesize keyboard input;
+renderer command owners share the action handlers used by real shortcuts.
 
 `packages/ai`
 : Shared AI runtime code. It must not import Convex server modules or
@@ -592,6 +595,16 @@ compose concrete adapters, but lifecycle ordering for single-instance handling,
 ready startup, suspend handling, window-all-closed cleanup, and before-quit
 cleanup must stay behind the boot orchestrator interface.
 
+Desktop diagnostics are owned by Electron in
+`apps/desktop/src/desktop-diagnostics.mjs`. The native Help menu may start a
+bounded Chromium performance trace, toggle a macOS unified-log stream, and open
+the dedicated `userData/troubleshooting-logs` directory. Structured desktop
+events are persisted asynchronously to a size-rotated
+`troubleshooting-logs/graneri.log`. `desktop-diagnostics-paths.mjs` is the single
+owner of these filesystem locations. Diagnostic streams, active traces, local
+services, and the file logger must finish through the awaited boot-orchestrator
+shutdown path before Electron is allowed to quit.
+
 Electron Builder packages dependencies from `apps/desktop/package.json`.
 `@workspace/ai` is a direct desktop dependency because desktop main-process
 code consumes its public modules. Any third-party package imported by packaged
@@ -601,8 +614,11 @@ modules must also be declared there.
 The desktop build packages generated runtime artifacts only. Packaged Electron
 main code lives in `dist-electron/main/index.js`, and packaged renderer assets
 live in `dist-app`. Packaged windows load renderer assets through `app://ui`.
-Packaged runtime code must not rely on source-tree imports or a packaged
-`node_modules` tree.
+Packaged runtime code must not rely on source-tree imports. JavaScript runtime
+dependencies belong in the main-process bundle. The only packaged
+`node_modules` exception is a native module that cannot be bundled: it must be
+declared as a platform-specific optional dependency, staged explicitly with its
+runtime dependencies, and covered by the package contract and verifier.
 
 The generated package shape is owned by
 `apps/desktop/scripts/desktop-package-contract.mjs`. Build scripts, Electron

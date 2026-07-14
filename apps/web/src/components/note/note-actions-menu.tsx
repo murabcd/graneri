@@ -96,7 +96,7 @@ const ensureNoteHasRequiredFields = <T extends Doc<"notes">>(
 const normalizeNoteList = <T extends Doc<"notes">>(notes: Array<T>) =>
 	notes.map((note) => ensureNoteHasRequiredFields(note));
 
-function useNoteStarControl(noteId: Id<"notes">) {
+function useNoteStarControl({ noteId }: { noteId: Id<"notes"> }) {
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const [isUpdatingStar, setIsUpdatingStar] = React.useState(false);
 	const note = useQuery(
@@ -209,7 +209,9 @@ export function NoteStarButton({
 	noteId: Id<"notes">;
 	className?: string;
 }) {
-	const { handleToggleStar, isUpdatingStar, note } = useNoteStarControl(noteId);
+	const { handleToggleStar, isUpdatingStar, note } = useNoteStarControl({
+		noteId,
+	});
 	const isStarred = note?.isStarred ?? false;
 
 	return (
@@ -285,7 +287,9 @@ function useNoteActionsMenu({
 	const [isRenaming, setIsRenaming] = React.useState(false);
 	const [isUpdatingShare, setIsUpdatingShare] = React.useState(false);
 	const [isUpdatingProject, setIsUpdatingProject] = React.useState(false);
-	const { handleToggleStar, isUpdatingStar, note } = useNoteStarControl(noteId);
+	const { handleToggleStar, isUpdatingStar, note } = useNoteStarControl({
+		noteId,
+	});
 	const projects = useQuery(
 		api.projects.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -427,7 +431,7 @@ function useNoteActionsMenu({
 
 	const handleRenameValueChange = React.useCallback(
 		(value: string) => {
-			setRenameValue(value);
+			setRenameValue(() => value);
 			if (renameOpen) {
 				onRenamePreviewChange?.(value);
 			}
@@ -931,7 +935,7 @@ function NoteProjectMoveSubmenu({
 	const searchInputRef = React.useRef<HTMLInputElement>(null);
 
 	const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-		setOpen(nextOpen);
+		setOpen(() => nextOpen);
 		if (!nextOpen) {
 			setSearchValue("");
 		}

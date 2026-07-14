@@ -51,7 +51,7 @@ export const submitAutomationConfirmationChatTurn = async <
 	displayActiveRun: ActiveRun;
 	enqueueQueuedMessage: EnqueueQueuedChatTurn;
 	isAiRequestPending: boolean;
-	commitOptimisticMessage: (message: UIMessage) => void;
+	commitOptimisticMessage: ({ message }: { message: UIMessage }) => void;
 	onBeforeSubmit?: () => void;
 	onFinally?: () => void;
 	onOptimisticMessage?: () => void;
@@ -78,7 +78,7 @@ export const submitAutomationConfirmationChatTurn = async <
 			onOptimisticMessage: (message) => {
 				optimisticMessageId = message.id;
 				flushSync(() => {
-					commitOptimisticMessage(message);
+					commitOptimisticMessage({ message });
 				});
 				onOptimisticMessage?.();
 			},

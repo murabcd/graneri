@@ -95,7 +95,7 @@ export function WorkspaceSwitcher({
 		setCreateOpen(true);
 	};
 	const handleCreateOpenChange = (nextOpen: boolean) => {
-		setCreateOpen(nextOpen);
+		setCreateOpen(() => nextOpen);
 
 		if (!nextOpen) {
 			setName("");

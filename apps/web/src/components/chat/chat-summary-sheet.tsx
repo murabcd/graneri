@@ -664,7 +664,7 @@ function SummaryAddPopover({
 }) {
 	const [open, setOpen] = React.useState(false);
 	const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-		setOpen(nextOpen);
+		setOpen(() => nextOpen);
 	}, []);
 
 	return (

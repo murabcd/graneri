@@ -171,8 +171,8 @@ export const useChatMessagesSnapshot = ({
 			isFetching: boolean;
 			messages: StoredChatMessage[] | undefined;
 		}) => {
-			setMessages(nextMessages);
-			setIsFetching(nextIsFetching);
+			setMessages(() => nextMessages);
+			setIsFetching(() => nextIsFetching);
 		},
 		[],
 	);

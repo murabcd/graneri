@@ -251,7 +251,7 @@ export const useApplicationNavigationSession = ({
 
 	const setInboxOpen = React.useCallback((open: boolean) => {
 		inboxOpenRef.current = open;
-		setInboxOpenState(open);
+		setInboxOpenState(() => open);
 		if (open) {
 			setSettings({ status: "closed" });
 		}

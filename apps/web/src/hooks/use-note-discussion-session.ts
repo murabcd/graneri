@@ -167,7 +167,7 @@ export const useNoteDiscussionSession = ({
 	);
 	const handleReasoningEffortChange = React.useCallback(
 		(value: ReasoningEffort) => {
-			setReasoningEffort(value);
+			setReasoningEffort(() => value);
 			storeReasoningEffort(value);
 			storeChatReasoningEffort(currentChatId, value);
 
@@ -235,7 +235,7 @@ export const useNoteDiscussionSession = ({
 			}
 
 			prefetchNoteChat(chatId);
-			setCurrentChatId(chatId);
+			setCurrentChatId(() => chatId);
 		},
 		[currentChatId, prefetchNoteChat],
 	);
