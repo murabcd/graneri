@@ -28,14 +28,9 @@ import {
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
+import type { AttachableAssistantRun } from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
-
-type AttachableAssistantRun = {
-	_id: Id<"assistantRuns">;
-	chatId: Id<"chats">;
-	status?: string;
-};
 
 type HostedQueuedInput = ReturnType<
 	typeof createHostedChatQueuedInput<

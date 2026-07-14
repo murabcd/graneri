@@ -1,4 +1,6 @@
 import type { UIMessage } from "ai";
+import type { FunctionReturnType } from "convex/server";
+import type { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 
 export type ChatRequestBody = {
@@ -29,8 +31,6 @@ export type ChatRequestBody = {
 	supersedeActiveRun?: boolean;
 };
 
-export type AttachableAssistantRun = {
-	_id: Id<"assistantRuns">;
-	chatId: Id<"chats">;
-	status?: string;
-};
+export type AttachableAssistantRun = NonNullable<
+	FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
+>;

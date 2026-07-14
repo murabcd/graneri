@@ -135,6 +135,7 @@ export const startAssistantRun = mutation({
 			workspaceId: args.workspaceId,
 			chatId: chat._id,
 			assistantMessageId: args.assistantMessageId,
+			producer: "web",
 			model: args.model,
 			reasoningEffort: args.reasoningEffort,
 		});

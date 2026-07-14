@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
 import {
+	assistantRunProducerValidator,
 	assistantRunStatusValidator,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
@@ -588,6 +589,7 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		chatId: v.id("chats"),
 		assistantMessageId: v.string(),
+		producer: assistantRunProducerValidator,
 		status: assistantRunStatusValidator,
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),

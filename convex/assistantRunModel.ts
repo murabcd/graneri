@@ -16,6 +16,11 @@ export const assistantRunStatusValidator = v.union(
 	v.literal("completed"),
 );
 
+export const assistantRunProducerValidator = v.union(
+	v.literal("web"),
+	v.literal("convex"),
+);
+
 export const pendingDecisionValidator = v.union(
 	v.object({
 		type: v.literal("choose_workspace"),
@@ -56,6 +61,7 @@ export const assistantRunValidator = v.object({
 	workspaceId: v.id("workspaces"),
 	chatId: v.id("chats"),
 	assistantMessageId: v.string(),
+	producer: assistantRunProducerValidator,
 	interruptedAssistantMessageIds: v.optional(v.array(v.string())),
 	status: assistantRunStatusValidator,
 	model: v.string(),

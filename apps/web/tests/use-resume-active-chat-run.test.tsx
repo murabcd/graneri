@@ -5,9 +5,13 @@ import type { Id } from "../../../convex/_generated/dataModel";
 
 type ActiveRun = Parameters<typeof useResumeActiveChatRun>[0]["activeRun"];
 
-const createActiveRun = (status: "running" | "waiting_for_user") =>
+const createActiveRun = (
+	status: "running" | "waiting_for_user",
+	producer: "convex" | "web" = "web",
+) =>
 	({
 		_id: "run_1",
+		producer,
 		status,
 	}) as unknown as ActiveRun;
 
@@ -53,5 +57,19 @@ describe("useResumeActiveChatRun", () => {
 		rerender({ activeRun: createActiveRun("running") });
 
 		await waitFor(() => expect(resumeStream).toHaveBeenCalledTimes(2));
+	});
+
+	it("does not reconnect Convex-owned producers through the web stream", () => {
+		const resumeStream = vi.fn().mockResolvedValue(undefined);
+		renderHook(() =>
+			useResumeActiveChatRun({
+				activeRun: createActiveRun("running", "convex"),
+				chatId: "chat_1",
+				resumeStream,
+				workspaceId: "workspace_1" as Id<"workspaces">,
+			}),
+		);
+
+		expect(resumeStream).not.toHaveBeenCalled();
 	});
 });

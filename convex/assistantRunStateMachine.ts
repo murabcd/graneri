@@ -9,12 +9,14 @@ import {
 } from "./assistantQueuedMessages";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import type {
+	assistantRunProducerValidator,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
 
 type PendingDecision = Infer<typeof pendingDecisionValidator>;
+type AssistantRunProducer = Infer<typeof assistantRunProducerValidator>;
 type ReasoningEffort = Infer<typeof reasoningEffortValidator>;
 type StopReason = Infer<typeof stopReasonValidator>;
 type AssistantRunPatch = Partial<WithoutSystemFields<Doc<"assistantRuns">>>;
@@ -125,6 +127,7 @@ export const createAssistantRun = async (
 		workspaceId: Id<"workspaces">;
 		chatId: Id<"chats">;
 		assistantMessageId: string;
+		producer: AssistantRunProducer;
 		model: string;
 		reasoningEffort?: ReasoningEffort;
 	},

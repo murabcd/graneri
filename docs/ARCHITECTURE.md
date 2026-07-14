@@ -114,6 +114,9 @@ Hosted chat runs are durable Convex lifecycle records.
 lifecycle events, and mandatory queue/snapshot cleanup; `assistantRuns` exposes
 the public Convex function adapters and lifecycle queries. Chat and queue modules
 must cross the state-machine seam instead of patching `assistantRuns` rows.
+Every run has an explicit `web` or `convex` producer owner. Reconnect may attach
+only to `web` producers and must leave a running `convex` producer intact; stop
+and terminal transitions remain shared durable state regardless of producer.
 Together they enforce stop/failure/completion history and the
 one-active-run-per-chat invariant. `chatActiveStreams` stores the latest complete
 AI SDK message parts plus denormalized text, while active `chatToolCalls` stores

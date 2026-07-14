@@ -667,6 +667,7 @@ test("attachable run query fails closed when multiple active runs exist", async 
 			workspaceId,
 			chatId: run.chatId,
 			assistantMessageId: "chat-multiple-active-assistant-2",
+			producer: "web",
 			status: "waiting_for_user",
 			model: "gpt-5",
 			reasoningEffort: undefined,

@@ -411,6 +411,7 @@ test("runNow does not start while the automation chat has an active assistant ru
 			workspaceId,
 			chatId: chat._id,
 			assistantMessageId: "assistant-running",
+			producer: "web",
 			status: "running",
 			model: "gpt-5.4",
 			reasoningEffort: "medium",

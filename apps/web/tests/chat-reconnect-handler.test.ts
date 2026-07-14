@@ -130,4 +130,19 @@ describe("chat reconnect handler", () => {
 		});
 		expect(convexMock.mutation).not.toHaveBeenCalled();
 	});
+
+	it("preserves Convex-owned running producers when no web stream exists", async () => {
+		convexMock.query.mockResolvedValueOnce({
+			_id: "run_1",
+			status: "running",
+			producer: "convex",
+			assistantMessageId: "assistant_1",
+		});
+
+		await expect(getChatReconnectRequest()).resolves.toEqual({
+			status: 204,
+			body: "",
+		});
+		expect(convexMock.mutation).not.toHaveBeenCalled();
+	});
 });

@@ -93,6 +93,7 @@ const insertDuplicateActiveRun = async ({
 			workspaceId,
 			chatId: run.chatId,
 			assistantMessageId: `${run.assistantMessageId}-duplicate`,
+			producer: "web",
 			status: "running",
 			model: "gpt-5",
 			startedAt: 3_000,
