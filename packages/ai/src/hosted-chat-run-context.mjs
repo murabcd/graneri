@@ -141,6 +141,7 @@ export const buildHostedChatRunContext = async ({
 
 	return {
 		...runPlan,
+		coreToolPolicyState: coreToolPolicy.state,
 		localFolderRoots,
 		selectedAppConnections,
 	};

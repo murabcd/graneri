@@ -87,6 +87,12 @@ describe("hosted chat run context", () => {
 			{ id: "folder-1", name: "Project", path: "/tmp/project" },
 		]);
 		expect(context.selectedAppConnections).toHaveLength(0);
+		expect(context.coreToolPolicyState).toEqual({
+			chartGenerationRequested: false,
+			imageGenerationEnabled: false,
+			imageGenerationRequested: false,
+			webSearchEnabled: false,
+		});
 		expect(context.finalizedToolSet.hasTools).toBe(true);
 		expect(Object.keys(context.tools)).toEqual(
 			expect.arrayContaining([

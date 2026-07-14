@@ -85,6 +85,10 @@
       "types": "./src/hosted-route-catalog.d.mts",
       "import": "./src/hosted-route-catalog.mjs"
     },
+    "./image-generation-tool": {
+      "types": "./src/image-generation-tool.d.mts",
+      "import": "./src/image-generation-tool.mjs"
+    },
     "./local-folder-tools": {
       "types": "./src/local-folder-tools.d.mts",
       "import": "./src/local-folder-tools.mjs"

@@ -76,6 +76,12 @@ export declare const buildHostedChatRunContext: (args: {
 }) => Promise<{
 	agent: ToolLoopAgent<never, ToolSet, never>;
 	agentTools: ToolSet | undefined;
+	coreToolPolicyState: {
+		chartGenerationRequested: boolean;
+		imageGenerationEnabled: boolean;
+		imageGenerationRequested: boolean;
+		webSearchEnabled: boolean;
+	};
 	enabledTools: ToolSet;
 	finalizedToolSet: {
 		tools: ToolSet;

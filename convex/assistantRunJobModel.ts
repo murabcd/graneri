@@ -6,6 +6,7 @@ export const assistantRunJobValidator = v.object({
 	systemPrompt: v.string(),
 	webSearchEnabled: v.boolean(),
 	chartGenerationRequested: v.boolean(),
+	imageGenerationRequested: v.boolean(),
 	selectedSourceIds: v.array(v.string()),
 	defaultTimezone: v.string(),
 	model: v.string(),

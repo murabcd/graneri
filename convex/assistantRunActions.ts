@@ -7,6 +7,7 @@ import {
 	createChartGenerationTool,
 } from "@workspace/ai/chart-generation-tool";
 import { getHostedChatMessageText } from "@workspace/ai/hosted-chat-runtime";
+import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
 import { getChatModelProviderOptions } from "@workspace/ai/models";
 import { finalizeOpenAIToolSet } from "@workspace/ai/openai-tool-search";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
@@ -24,6 +25,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { createAssistantRunAutomationActions } from "./assistantRunAutomationActions";
+import { createAssistantRunGeneratedImageUploader } from "./assistantRunGeneratedImage";
 import type { AssistantRunJob } from "./assistantRunJobModel";
 import { buildServerWorkspaceTools } from "./serverWorkspaceTools";
 
@@ -150,6 +152,17 @@ export const run = internalAction({
 						: {}),
 					...(context.job.chartGenerationRequested
 						? { generate_chart: createChartGenerationTool() }
+						: {}),
+					...(context.job.imageGenerationRequested
+						? {
+								generate_image: createImageGenerationTool({
+									uploadGeneratedImage:
+										createAssistantRunGeneratedImageUploader({
+											requireActiveRun,
+											storage: ctx.storage,
+										}),
+								}),
+							}
 						: {}),
 					...automationContext.tools,
 					...appTools,

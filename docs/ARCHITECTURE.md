@@ -132,9 +132,11 @@ input. Approval pauses save the assistant approval message and checkpoint that
 message into the job. Accepting the matching response atomically updates the
 checkpoint, clears the previous temporary stream/tool rows, creates the next
 assistant stream, and schedules the continuation with a generation-bound
-watchdog so an older turn cannot expire the resumed one. Terminal run cleanup and chat
-retirement must delete the job row; access tokens and connected-app credentials
-must never enter it.
+watchdog so an older turn cannot expire the resumed one. Terminal run cleanup
+and chat retirement must delete the job row; access tokens and connected-app
+credentials must never enter it. Convex-owned turns save generated-image
+artifacts directly through Convex File Storage, so those files do not depend on
+the lifetime of the hosted HTTP request.
 Together they enforce stop/failure/completion history and the
 one-active-run-per-chat invariant. `chatActiveStreams` stores the latest complete
 AI SDK message parts plus denormalized text, while active `chatToolCalls` stores

@@ -1508,6 +1508,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 				systemPrompt: "Test",
 				webSearchEnabled: false,
 				chartGenerationRequested: false,
+				imageGenerationRequested: false,
 				selectedSourceIds: [],
 				defaultTimezone: "UTC",
 				model: "gpt-5.4",

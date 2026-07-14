@@ -118,6 +118,7 @@ const backgroundJob = {
 	systemPrompt: "Answer clearly.",
 	webSearchEnabled: false,
 	chartGenerationRequested: false,
+	imageGenerationRequested: false,
 	selectedSourceIds: [],
 	defaultTimezone: "UTC",
 	model: "gpt-5.4",
