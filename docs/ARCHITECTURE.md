@@ -119,11 +119,13 @@ failures, not background cleanup. A failed finalization attempt must leave the
 same terminalization pending so a later flush can retry; it must not poison the
 finalization queue with a permanently rejected in-flight promise.
 Reconnect recovery follows the same no-leftover rule: when a reconnect finds a
-non-terminal run without a live in-process stream producer, the route must mark
-the run stopping, attempt to save/delete the active stream snapshot, and
-terminalize the run in a `finally` path. Snapshot cleanup failures may still
-surface to the caller, but they must not leave the run blocking future queue
-drain or chat sends. Manual stop uses the same shape: record durable stop
+running run without a live in-process stream producer, the route must mark the
+run stopping, attempt to save/delete the active stream snapshot, and terminalize
+the run in a `finally` path. A `waiting_for_user` run intentionally has no live
+stream producer and must remain pending across reloads; both the renderer and
+reconnect route skip stream attachment for that state. Snapshot cleanup failures
+may still surface to the caller, but they must not leave the run blocking future
+queue drain or chat sends. Manual stop uses the same shape: record durable stop
 intent before stream cleanup, and terminalize in `finally` after cleanup is
 attempted.
 Snapshots remain the live render surface; historical inspection, future missed

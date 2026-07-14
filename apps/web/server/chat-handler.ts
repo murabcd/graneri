@@ -955,6 +955,12 @@ export const handleChatReconnectRequest = async (
 		return;
 	}
 
+	if (attachableRun.status === "waiting_for_user") {
+		response.statusCode = 204;
+		response.end();
+		return;
+	}
+
 	const streamKey = createHostedActiveStreamKey({
 		workspaceId,
 		chatId: id,

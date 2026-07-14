@@ -27,9 +27,11 @@ export const useResumeActiveChatRun = ({
 
 	React.useEffect(() => {
 		let cancelled = false;
+		const shouldResetResumeKey =
+			!workspaceId || !enabled || activeRun?.status === "waiting_for_user";
 
-		if (!workspaceId || !enabled || !activeRun) {
-			if (!workspaceId || !enabled) {
+		if (shouldResetResumeKey || !activeRun) {
+			if (shouldResetResumeKey) {
 				resumedRunKeyRef.current = null;
 			}
 			return () => {

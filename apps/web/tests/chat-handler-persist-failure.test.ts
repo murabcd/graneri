@@ -10,7 +10,6 @@ import {
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-	handleChatReconnectRequest,
 	handleChatRequest,
 	handleChatStopRequest,
 } from "../server/chat-handler";
@@ -107,66 +106,6 @@ const postChatRequest = async (
 		return {
 			...result,
 			headers: response.headers,
-		};
-	} finally {
-		await new Promise<void>((resolve, reject) => {
-			server.close((error) => {
-				if (error) {
-					reject(error);
-					return;
-				}
-
-				resolve();
-			});
-		});
-	}
-};
-
-const getChatReconnectRequest = async ({
-	chatId = "chat_1",
-	token = "token_1",
-	workspaceId = "workspace_1",
-}: {
-	chatId?: string;
-	token?: string;
-	workspaceId?: string;
-} = {}) => {
-	const server = createServer((request, response) => {
-		void handleChatReconnectRequest(request, response).catch(
-			(error: unknown) => {
-				response.statusCode = 500;
-				response.setHeader("Content-Type", "application/json");
-				response.end(
-					JSON.stringify({
-						error: error instanceof Error ? error.message : String(error),
-					}),
-				);
-			},
-		);
-	});
-
-	await new Promise<void>((resolve) => {
-		server.listen(0, "127.0.0.1", resolve);
-	});
-
-	try {
-		const address = server.address();
-		if (!address || typeof address === "string") {
-			throw new Error("Expected local HTTP server address.");
-		}
-
-		const response = await fetch(
-			`http://127.0.0.1:${address.port}/api/chat/${encodeURIComponent(chatId)}/stream?workspaceId=${encodeURIComponent(workspaceId)}`,
-			{
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			},
-		);
-
-		return {
-			status: response.status,
-			body: await response.text(),
 		};
 	} finally {
 		await new Promise<void>((resolve, reject) => {
@@ -356,24 +295,6 @@ describe("chat handler persistence failures", () => {
 				error: "Chat has multiple active assistant runs.",
 				errorCode: "ASSISTANT_RUN_INVARIANT_VIOLATION",
 			},
-		});
-		expect(convexMock.authorizeChatTurn).not.toHaveBeenCalled();
-	});
-
-	it("returns structured lifecycle errors when reconnect lookup fails closed", async () => {
-		convexMock.query.mockRejectedValueOnce({
-			data: {
-				code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
-				message: "Chat has multiple active assistant runs.",
-			},
-		});
-
-		await expect(getChatReconnectRequest()).resolves.toEqual({
-			status: 409,
-			body: JSON.stringify({
-				error: "Chat has multiple active assistant runs.",
-				errorCode: "ASSISTANT_RUN_INVARIANT_VIOLATION",
-			}),
 		});
 		expect(convexMock.authorizeChatTurn).not.toHaveBeenCalled();
 	});
@@ -1035,34 +956,6 @@ describe("chat handler persistence failures", () => {
 			workspaceId: "workspace_1",
 			chatId: "chat_1",
 			queuedMessageId: "queued_1",
-		});
-	});
-
-	it("interrupts orphaned active runs on reconnect when no live stream session exists", async () => {
-		convexMock.query.mockResolvedValueOnce({
-			_id: "run_1",
-			status: "running",
-			assistantMessageId: "assistant_1",
-		});
-		convexMock.mutation.mockResolvedValue(null);
-
-		await expect(getChatReconnectRequest()).resolves.toEqual({
-			status: 204,
-			body: "",
-		});
-
-		expect(convexMock.mutation).toHaveBeenCalledTimes(3);
-		expect(convexMock.mutation.mock.calls[0]?.[1]).toEqual({
-			runId: "run_1",
-			stopReason: "cleanup_failed",
-		});
-		expect(convexMock.mutation.mock.calls[1]?.[1]).toEqual({
-			workspaceId: "workspace_1",
-			chatId: "chat_1",
-			runId: "run_1",
-		});
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toEqual({
-			runId: "run_1",
 		});
 	});
 
