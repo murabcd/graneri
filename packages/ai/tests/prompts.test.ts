@@ -127,6 +127,21 @@ describe("prompt helpers", () => {
 		});
 	});
 
+	it.each([
+		"CHAT_MESSAGE_TOO_LARGE",
+		"QUEUED_MESSAGE_TOO_LARGE",
+	])("maps %s Convex errors to input size failures", (code) => {
+		const error = Object.assign(new Error("Document is too large."), {
+			data: { code, message: "Document is too large." },
+		});
+
+		expect(getHostedChatConvexRouteError(error)).toEqual({
+			error: "Document is too large.",
+			errorCode: "input_too_large",
+			statusCode: 400,
+		});
+	});
+
 	it("maps missing Convex chat API functions to deployment skew route errors", () => {
 		for (const missingFunction of [
 			"assistantQueuedMessages:claimReadyForRun",
@@ -453,10 +468,7 @@ describe("prompt helpers", () => {
 			toHostedQueuedUserMessage({
 				messageId: "queued-message-1",
 				metadataJson: JSON.stringify({ client: "ignored-for-trust" }),
-				partsJson: JSON.stringify([
-					{ type: "text", text: "Use the queued text" },
-					{ type: "file", url: "file://not-model-input" },
-				]),
+				text: "Use the queued text",
 			}),
 		).toEqual({
 			id: "queued-message-1",
@@ -467,7 +479,7 @@ describe("prompt helpers", () => {
 		expect(() =>
 			toHostedQueuedUserMessage({
 				messageId: "queued-message-empty",
-				partsJson: JSON.stringify([{ type: "text", text: "   " }]),
+				text: "   ",
 			}),
 		).toThrow("Queued chat message cannot be empty.");
 	});

@@ -24,10 +24,8 @@ export {
 	hostedChatSteerQueuedMessageIdHeader,
 	hostedChatSteerQueuedMessageIdsHeader,
 	hostedChatSteerTurnIdHeader,
-	MAX_HOSTED_CHAT_INPUT_TEXT_CHARS,
 	validateHostedChatActiveRunPolicy,
 	validateHostedChatInput,
-	validateHostedChatInputTextLimit,
 	validateHostedChatRequestInput,
 	validateHostedChatSteerRoute,
 } from "./hosted-chat-runtime.mjs";

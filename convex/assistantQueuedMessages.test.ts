@@ -1,6 +1,7 @@
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
+import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -11,8 +12,6 @@ const ownerIdentity = {
 	name: "Owner",
 	email: "owner@example.com",
 };
-const MAX_INPUT_TEXT_CHARS = 1_048_576;
-
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
@@ -104,7 +103,6 @@ const insertDuplicateActiveRun = async ({
 
 const queuedMessageInput = (messageId: string, text: string) => ({
 	messageId,
-	partsJson: JSON.stringify([{ type: "text", text }]),
 	text,
 	requestBodyJson: JSON.stringify({
 		model: "gpt-5",
@@ -180,12 +178,10 @@ test("oversized queued follow-ups are rejected before claim", async () => {
 			runId: run._id,
 			message: queuedMessageInput(
 				"queued-large",
-				"x".repeat(MAX_INPUT_TEXT_CHARS + 1),
+				"x".repeat(MAX_CONVEX_DOCUMENT_BYTES),
 			),
 		}),
-	).rejects.toThrow(
-		`Input exceeds the maximum length of ${MAX_INPUT_TEXT_CHARS} characters.`,
-	);
+	).rejects.toThrow("Queued message exceeds Convex's 1 MiB document limit.");
 });
 
 test("queued follow-ups reject invalid durable payloads before claim", async () => {
@@ -207,12 +203,6 @@ test("queued follow-ups reject invalid durable payloads before claim", async () 
 
 	await expect(
 		enqueue({
-			...queuedMessageInput("queued-invalid-parts", "Valid text"),
-			partsJson: JSON.stringify([{ type: "text", text: "   " }]),
-		}),
-	).rejects.toThrow("Queued message parts are invalid.");
-	await expect(
-		enqueue({
 			...queuedMessageInput("queued-invalid-metadata", "Valid text"),
 			metadataJson: JSON.stringify([]),
 		}),
@@ -230,23 +220,13 @@ test("queued follow-ups reject invalid durable payloads before claim", async () 
 	).rejects.toThrow("Queued message id cannot be empty.");
 	await expect(
 		enqueue({
-			...queuedMessageInput("queued-text-mismatch", "Stored text"),
-			partsJson: JSON.stringify([
-				{ type: "text", text: "Different model text" },
-			]),
-		}),
-	).rejects.toThrow("Queued message text must match queued message parts.");
-	await expect(
-		enqueue({
 			...queuedMessageInput("queued-local-folders", "Valid text"),
 			requestBodyJson: JSON.stringify({
 				localFolders: [{ id: "folder-1", path: "/tmp" }],
 				model: "gpt-5",
 			}),
 		}),
-	).rejects.toThrow(
-		"Queued messages cannot persist local folder selections.",
-	);
+	).rejects.toThrow("Queued messages cannot persist local folder selections.");
 });
 
 test("claimNextForRun claims one pending follow-up per run", async () => {
@@ -356,7 +336,11 @@ test("claimReadyForRun claims a targeted follow-up and remaining ready input", a
 
 test("queued follow-ups only attach to the current active run", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-current-active-queue", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-current-active-queue",
+		workspaceId,
+	});
 	const oldRun = await startRun({
 		asOwner,
 		chatId: "chat-current-active-queue",
@@ -382,7 +366,11 @@ test("queued follow-ups only attach to the current active run", async () => {
 
 test("claimNextForRun only claims for the current active run", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-current-active-claim", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-current-active-claim",
+		workspaceId,
+	});
 	const oldRun = await startRun({
 		asOwner,
 		chatId: "chat-current-active-claim",
@@ -419,7 +407,11 @@ test("claimNextForRun only claims for the current active run", async () => {
 
 test("claimNextForRun fails closed when multiple active runs exist", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-duplicate-active-run", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-duplicate-active-run",
+		workspaceId,
+	});
 	const run = await startRun({
 		asOwner,
 		chatId: "chat-duplicate-active-run",
@@ -495,7 +487,7 @@ test("claimNextForRun rejects invalid durable payloads before claiming", async (
 	);
 	await t.run(async (ctx) => {
 		await ctx.db.patch(queuedMessage._id, {
-			partsJson: JSON.stringify([{ type: "text", text: "Tampered" }]),
+			requestBodyJson: "[]",
 		});
 	});
 
@@ -503,7 +495,7 @@ test("claimNextForRun rejects invalid durable payloads before claiming", async (
 		asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
 			runId: run._id,
 		}),
-	).rejects.toThrow("Queued message text must match queued message parts.");
+	).rejects.toThrow("Queued message request body is invalid.");
 	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
 
 	expect(persistedMessage?.status).toBe("queued");
@@ -590,7 +582,11 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 test("claimNextForRun reclaims stale claimed follow-ups for the active run", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-reclaim-run", workspaceId });
-	const run = await startRun({ asOwner, chatId: "chat-reclaim-run", workspaceId });
+	const run = await startRun({
+		asOwner,
+		chatId: "chat-reclaim-run",
+		workspaceId,
+	});
 
 	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
 		workspaceId,
@@ -1405,7 +1401,11 @@ test("completed assistant runs leave queued follow-ups claimable by chat", async
 
 test("claimNextForChat fails closed when multiple active runs exist", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-duplicate-active-chat", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-duplicate-active-chat",
+		workspaceId,
+	});
 	const run = await startRun({
 		asOwner,
 		chatId: "chat-duplicate-active-chat",
@@ -1461,8 +1461,16 @@ test("getClaimedForChat fails closed when multiple active runs exist", async () 
 
 test("getClaimedForChat rejects claimed rows from another chat", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-claimed-replay-owner", workspaceId });
-	await createChat({ asOwner, chatId: "chat-claimed-replay-other", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-claimed-replay-owner",
+		workspaceId,
+	});
+	await createChat({
+		asOwner,
+		chatId: "chat-claimed-replay-other",
+		workspaceId,
+	});
 	const run = await startRun({
 		asOwner,
 		chatId: "chat-claimed-replay-owner",
@@ -1496,7 +1504,11 @@ test("getClaimedForChat rejects claimed rows from another chat", async () => {
 
 test("getClaimedForChat rejects missing chat scope", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-claimed-replay-missing", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-claimed-replay-missing",
+		workspaceId,
+	});
 	const run = await startRun({
 		asOwner,
 		chatId: "chat-claimed-replay-missing",
@@ -1530,7 +1542,11 @@ test("getClaimedForChat rejects missing chat scope", async () => {
 
 test("getClaimedForChat rejects queued rows", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-claimed-replay-status", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-claimed-replay-status",
+		workspaceId,
+	});
 	const run = await startRun({
 		asOwner,
 		chatId: "chat-claimed-replay-status",
@@ -1583,7 +1599,7 @@ test("claimNextForChat rejects invalid durable payloads before claiming", async 
 	});
 	await t.run(async (ctx) => {
 		await ctx.db.patch(queuedMessage._id, {
-			text: "Tampered",
+			requestBodyJson: "[]",
 		});
 	});
 
@@ -1592,7 +1608,7 @@ test("claimNextForChat rejects invalid durable payloads before claiming", async 
 			workspaceId,
 			chatId: "chat-terminal-invalid",
 		}),
-	).rejects.toThrow("Queued message text must match queued message parts.");
+	).rejects.toThrow("Queued message request body is invalid.");
 	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
 
 	expect(persistedMessage?.status).toBe("queued");
@@ -1679,7 +1695,7 @@ test("getClaimedForChat rejects invalid claimed durable payloads", async () => {
 	}
 	await t.run(async (ctx) => {
 		await ctx.db.patch(claimedMessage._id, {
-			partsJson: JSON.stringify([{ type: "text", text: "Tampered" }]),
+			requestBodyJson: "[]",
 		});
 	});
 
@@ -1689,7 +1705,7 @@ test("getClaimedForChat rejects invalid claimed durable payloads", async () => {
 			chatId: "chat-claimed-invalid",
 			queuedMessageId: claimedMessage._id,
 		}),
-	).rejects.toThrow("Queued message text must match queued message parts.");
+	).rejects.toThrow("Queued message request body is invalid.");
 });
 
 test("completed assistant runs delete claimed follow-ups instead of recovering them", async () => {

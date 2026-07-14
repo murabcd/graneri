@@ -32,7 +32,6 @@ const createQueuedMessage = ({
 		createdAt: 1,
 		messageId,
 		ownerTokenIdentifier: "owner",
-		partsJson: JSON.stringify([{ type: "text", text }]),
 		requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 		runId,
 		status: "queued",
@@ -94,6 +93,7 @@ describe("useQueuedFollowUpControls", () => {
 					continueRunId: runId,
 					model: "gpt-5",
 					steerQueuedMessageId: "queued-1",
+					workspaceId,
 				},
 			},
 		);
@@ -249,6 +249,7 @@ describe("useQueuedFollowUpControls", () => {
 					continueRunId: runId,
 					model: "gpt-5",
 					steerQueuedMessageId: "queued-1",
+					workspaceId,
 				},
 			},
 		);
@@ -269,6 +270,7 @@ describe("useQueuedFollowUpControls", () => {
 					continueRunId: runId,
 					model: "gpt-5",
 					steerQueuedMessageId: "queued-2",
+					workspaceId,
 				},
 			},
 		);

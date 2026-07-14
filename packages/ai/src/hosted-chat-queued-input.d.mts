@@ -4,7 +4,7 @@ type QueuedUserMessage<QueuedMessageId extends string> = {
 	_id: QueuedMessageId;
 	messageId: string;
 	metadataJson?: string;
-	partsJson: string;
+	text: string;
 };
 
 export declare const createHostedChatQueuedInput: <

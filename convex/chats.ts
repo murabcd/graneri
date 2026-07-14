@@ -22,6 +22,7 @@ import {
 	pauseLinkedAutomationForChat,
 	resumeLinkedAutomationForChat,
 } from "./automationRunStateMachine";
+import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
 	clampWhitespace,
 	createResourceAccess,
@@ -136,7 +137,6 @@ type RemoveAllChatsResult = {
 
 const MAX_CHAT_PREVIEW_LENGTH = 180;
 const MAX_CHAT_TITLE_LENGTH = 80;
-const MAX_CHAT_INPUT_TEXT_CHARS = 1_048_576;
 const MAX_RETURNED_CHATS = 100;
 const MAX_RETURNED_CHAT_MESSAGES = 200;
 const REMOVE_CHAT_MESSAGES_BATCH_SIZE = 100;
@@ -162,56 +162,6 @@ const normalizeOptionalChatTitle = (value: string | undefined) =>
 
 const normalizeChatPreview = (value: string | undefined) =>
 	truncate(clampWhitespace(value ?? ""), MAX_CHAT_PREVIEW_LENGTH);
-
-const getTextPartCharCount = (partsJson: string) => {
-	try {
-		const parts = JSON.parse(partsJson) as unknown;
-		if (!Array.isArray(parts)) {
-			return 0;
-		}
-
-		return parts.reduce((count, part) => {
-			if (
-				typeof part === "object" &&
-				part !== null &&
-				"type" in part &&
-				part.type === "text" &&
-				"text" in part &&
-				typeof part.text === "string"
-			) {
-				return count + Array.from(part.text).length;
-			}
-			return count;
-		}, 0);
-	} catch {
-		return 0;
-	}
-};
-
-const requireUserMessageInputWithinLimit = (message: {
-	role: "system" | "user" | "assistant";
-	partsJson: string;
-	text: string;
-}) => {
-	if (message.role !== "user") {
-		return;
-	}
-
-	const actualChars = Math.max(
-		Array.from(message.text).length,
-		getTextPartCharCount(message.partsJson),
-	);
-	if (actualChars <= MAX_CHAT_INPUT_TEXT_CHARS) {
-		return;
-	}
-
-	throw new ConvexError({
-		code: "INPUT_TOO_LARGE",
-		message: `Input exceeds the maximum length of ${MAX_CHAT_INPUT_TEXT_CHARS} characters.`,
-		actualChars,
-		maxChars: MAX_CHAT_INPUT_TEXT_CHARS,
-	});
-};
 
 const getOwnedChatById = async (
 	ctx: QueryCtx | MutationCtx,
@@ -666,15 +616,12 @@ const isAcceptedQueuedMessagePayload = ({
 		partsJson: string;
 		text: string;
 	};
-	queuedMessage: Pick<
-		Doc<"assistantQueuedMessages">,
-		"messageId" | "partsJson" | "text"
-	>;
+	queuedMessage: Pick<Doc<"assistantQueuedMessages">, "messageId" | "text">;
 }) =>
 	message.id === queuedMessage.messageId &&
 	message.text === queuedMessage.text &&
 	getModelTextPartSignature(message.partsJson) ===
-		getModelTextPartSignature(queuedMessage.partsJson);
+		JSON.stringify([{ type: "text", text: queuedMessage.text }]);
 
 const getExistingStorageMetadata = async (
 	ctx: MutationCtx,
@@ -808,7 +755,6 @@ const saveMessageForOwnerInternal = async (
 	},
 ) => {
 	await requireOwnedWorkspace(ctx, args.ownerTokenIdentifier, args.workspaceId);
-	requireUserMessageInputWithinLimit(args.message);
 	const now = Date.now();
 	const normalizedTitle = normalizeOptionalChatTitle(args.title);
 	const normalizedPreview = normalizeChatPreview(
@@ -887,28 +833,34 @@ const saveMessageForOwnerInternal = async (
 			q.eq("chatId", chatId).eq("messageId", storedMessageId),
 		)
 		.unique();
+	const storedMessageDocument = {
+		chatId,
+		ownerTokenIdentifier: args.ownerTokenIdentifier,
+		messageId: storedMessageId,
+		role: args.message.role,
+		partsJson: args.message.partsJson,
+		metadataJson: args.message.metadataJson,
+		text: args.message.text,
+		createdAt: messageCreatedAt,
+	};
+	requireConvexDocumentWithinLimit({
+		document: existingMessage
+			? {
+					...storedMessageDocument,
+					_id: existingMessage._id,
+					_creationTime: existingMessage._creationTime,
+				}
+			: storedMessageDocument,
+		errorCode: "CHAT_MESSAGE_TOO_LARGE",
+		message: "Chat message exceeds Convex's 1 MiB document limit.",
+	});
 
 	const messageId =
 		existingMessage?._id ??
-		(await ctx.db.insert("chatMessages", {
-			chatId,
-			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			messageId: storedMessageId,
-			role: args.message.role,
-			partsJson: args.message.partsJson,
-			metadataJson: args.message.metadataJson,
-			text: args.message.text,
-			createdAt: messageCreatedAt,
-		}));
+		(await ctx.db.insert("chatMessages", storedMessageDocument));
 
 	if (existingMessage) {
-		await ctx.db.patch(existingMessage._id, {
-			role: args.message.role,
-			partsJson: args.message.partsJson,
-			metadataJson: args.message.metadataJson,
-			text: args.message.text,
-			createdAt: messageCreatedAt,
-		});
+		await ctx.db.replace(existingMessage._id, storedMessageDocument);
 	}
 
 	const [chat, message] = await Promise.all([

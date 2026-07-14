@@ -157,9 +157,13 @@ selections; follow-ups that need local folders must wait for the active answer
 instead of entering the durable queue. Completed runs leave queued follow-ups
 for the client drain path, which claims the next queued item only after no
 non-terminal run remains for the chat. User input uses upstream app-server input
-gates: HTTP chat routes, client queue serialization, `saveMessage`, and
-queued-message mutations reject empty user text and more than 1,048,576 text
-characters before the input can enter the AI SDK loop or durable queue state.
+gates: HTTP chat routes and client queue serialization reject empty user text
+before it can enter the AI SDK loop or durable queue state. Convex chat and
+queued-message mutations enforce the actual 1 MiB document limit with
+`getDocumentSize` at the write boundary instead of approximating storage size
+from character counts. Queued rows persist one canonical text value plus the
+minimum replay context: they omit credentials, desktop-local folder selections,
+duplicate workspace identity, and note contents that can be reloaded by note ID.
 Claimed replay is still server-owned: the client
 rebuilds request state through the queued-intent module with a fresh Convex
 token and sends `replayQueuedMessageId`; `/api/chat` must load the claimed

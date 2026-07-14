@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
 	createQueuedUserMessageId,
 	fromQueuedUserMessage,
-	MAX_HOSTED_CHAT_INPUT_TEXT_CHARS,
 	toQueuedUserMessageInput,
 } from "@/lib/chat-queue";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -61,21 +60,30 @@ describe("chat queue serialization", () => {
 		);
 	});
 
-	it("removes the cached Convex token before persisting queued request state", () => {
+	it("persists only replay-owned request state", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
 				convexToken: "token",
 				localFolders: [],
+				mentions: ["note-1"],
 				model: "gpt-5",
+				reasoningEffort: "high",
+				replayQueuedMessageId: "stale-replay",
+				selectedSourceIds: ["source-1"],
 				timezone: "UTC",
+				webSearchEnabled: true,
+				workspaceId: "workspace-1",
 			},
 			text: "Follow up",
 		});
 
-		expect(JSON.parse(queuedMessage.requestBodyJson)).toMatchObject({
-			convexToken: null,
-			localFolders: [],
+		expect(JSON.parse(queuedMessage.requestBodyJson)).toEqual({
+			mentions: ["note-1"],
 			model: "gpt-5",
+			reasoningEffort: "high",
+			selectedSourceIds: ["source-1"],
+			timezone: "UTC",
+			webSearchEnabled: true,
 		});
 	});
 
@@ -91,9 +99,6 @@ describe("chat queue serialization", () => {
 		});
 
 		expect(queuedMessage.text).toBe("Follow this up");
-		expect(JSON.parse(queuedMessage.partsJson)).toEqual([
-			{ type: "text", text: "Follow this up" },
-		]);
 	});
 
 	it("rejects empty queued message text", () => {
@@ -110,20 +115,49 @@ describe("chat queue serialization", () => {
 		).toThrow("Queued chat message cannot be empty.");
 	});
 
-	it("rejects queued message text above the input cap", () => {
-		expect(() =>
-			toQueuedUserMessageInput({
-				requestBody: {
-					convexToken: "token",
-					localFolders: [],
-					model: "gpt-5",
-					timezone: "UTC",
+	it("stores only the note id for persisted note context", () => {
+		const queuedMessage = toQueuedUserMessageInput({
+			requestBody: {
+				convexToken: "token",
+				localFolders: [],
+				model: "gpt-5",
+				noteContext: {
+					noteId: "note-1",
+					title: "Meeting",
+					text: "Large note body",
 				},
-				text: "x".repeat(MAX_HOSTED_CHAT_INPUT_TEXT_CHARS + 1),
-			}),
-		).toThrow(
-			`Input exceeds the maximum length of ${MAX_HOSTED_CHAT_INPUT_TEXT_CHARS} characters.`,
+				recipeSlug: "summary",
+			},
+			text: "Follow up",
+		});
+
+		expect(JSON.parse(queuedMessage.requestBodyJson).noteContext).toEqual({
+			noteId: "note-1",
+		});
+		expect(JSON.parse(queuedMessage.requestBodyJson).recipeSlug).toBe(
+			"summary",
 		);
+	});
+
+	it("bounds unsaved note context before durable queue persistence", () => {
+		const queuedMessage = toQueuedUserMessageInput({
+			requestBody: {
+				convexToken: "token",
+				localFolders: [],
+				model: "gpt-5",
+				noteContext: {
+					noteId: null,
+					title: "t".repeat(20_000),
+					text: "n".repeat(20_000),
+				},
+			},
+			text: "Follow up",
+		});
+
+		const noteContext = JSON.parse(queuedMessage.requestBodyJson).noteContext;
+		expect(noteContext.noteId).toBeNull();
+		expect(noteContext.title).toHaveLength(16_000);
+		expect(noteContext.text).toHaveLength(16_000);
 	});
 
 	it("restores queued request state with a fresh Convex token", async () => {
@@ -142,6 +176,7 @@ describe("chat queue serialization", () => {
 			queuedMessage: {
 				...queuedMessage,
 				_id: "queued-message-1",
+				workspaceId,
 			},
 			resolveConvexToken: async () => "fresh-token",
 		});
@@ -150,6 +185,7 @@ describe("chat queue serialization", () => {
 			convexToken: "fresh-token",
 			model: "gpt-5",
 			replayQueuedMessageId: "queued-message-1",
+			workspaceId,
 		});
 		expect(prepared.message.messageId).toBeUndefined();
 		expect(prepared.message.metadata).toEqual({ selectedModel: "gpt-5" });
@@ -172,6 +208,7 @@ describe("chat queue serialization", () => {
 				queuedMessage: {
 					...queuedMessage,
 					_id: "queued-message-1",
+					workspaceId,
 				},
 				resolveConvexToken: async () => null,
 			}),
@@ -196,6 +233,7 @@ describe("chat queue serialization", () => {
 				queuedMessage: {
 					...queuedMessage,
 					_id: "",
+					workspaceId,
 				},
 				resolveConvexToken: async () => "fresh-token",
 			}),
@@ -218,6 +256,7 @@ describe("chat queue serialization", () => {
 			queuedMessage: {
 				...queuedMessage,
 				_id: "queued-message-1",
+				workspaceId,
 			},
 			resolveConvexToken: async () => "fresh-token",
 		});
@@ -244,6 +283,7 @@ describe("chat queue serialization", () => {
 			queuedMessage: {
 				...queuedMessage,
 				_id: "queued-message-1",
+				workspaceId,
 			},
 			resolveConvexToken: async () => "fresh-token",
 		});
@@ -260,6 +300,7 @@ describe("chat queue serialization", () => {
 					messageId: "queued-1",
 					requestBodyJson: "[]",
 					text: "Follow up",
+					workspaceId,
 				},
 				resolveConvexToken: async () => "fresh-token",
 			}),

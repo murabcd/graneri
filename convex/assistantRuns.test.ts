@@ -103,7 +103,6 @@ const startRunWithSnapshots = async ({
 
 const queuedMessageInput = (messageId: string, text: string) => ({
 	messageId,
-	partsJson: JSON.stringify([{ type: "text", text }]),
 	text,
 	requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 });
@@ -429,7 +428,6 @@ test("finishStoppedAssistantRun idempotently removes stale queued rows", async (
 			chatId: run.chatId,
 			runId: run._id,
 			messageId: "stale-queued",
-			partsJson: JSON.stringify([{ type: "text", text: "Stale queued" }]),
 			text: "Stale queued",
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			status: "queued",
@@ -443,7 +441,6 @@ test("finishStoppedAssistantRun idempotently removes stale queued rows", async (
 			chatId: run.chatId,
 			runId: run._id,
 			messageId: "stale-claimed",
-			partsJson: JSON.stringify([{ type: "text", text: "Stale claimed" }]),
 			text: "Stale claimed",
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			status: "claimed",
@@ -481,7 +478,11 @@ test("finishStoppedAssistantRun idempotently removes stale queued rows", async (
 
 test("waitForUserDecision cleans stale queued rows on terminal re-entry", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-terminal-wait-cleanup", workspaceId });
+	await createChat({
+		asOwner,
+		chatId: "chat-terminal-wait-cleanup",
+		workspaceId,
+	});
 	const run = await startRunWithSnapshots({
 		asOwner,
 		chatId: "chat-terminal-wait-cleanup",
@@ -499,7 +500,6 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 			chatId: run.chatId,
 			runId: run._id,
 			messageId: "stale-terminal-queued",
-			partsJson: JSON.stringify([{ type: "text", text: "Stale queued" }]),
 			text: "Stale queued",
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			status: "queued",
@@ -513,7 +513,6 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 			chatId: run.chatId,
 			runId: run._id,
 			messageId: "stale-terminal-claimed",
-			partsJson: JSON.stringify([{ type: "text", text: "Stale claimed" }]),
 			text: "Stale claimed",
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			status: "claimed",
@@ -621,10 +620,13 @@ test("assistant runs reject concurrent starts instead of leaving two active runs
 		}),
 	).rejects.toThrow("Chat already has an active assistant run.");
 
-	const attachableRun = await asOwner.query(api.assistantRuns.getAttachableRun, {
-		workspaceId,
-		chatId: "chat-concurrent",
-	});
+	const attachableRun = await asOwner.query(
+		api.assistantRuns.getAttachableRun,
+		{
+			workspaceId,
+			chatId: "chat-concurrent",
+		},
+	);
 	const rows = await t.run(async (ctx) => ({
 		oldRun: await ctx.db.get(oldRun._id),
 		oldStreams: await ctx.db

@@ -12,7 +12,7 @@ const queuedMessage = ({
 }) => ({
 	_id: id,
 	messageId,
-	partsJson: JSON.stringify([{ type: "text", text }]),
+	text,
 });
 
 describe("hosted chat queued input", () => {

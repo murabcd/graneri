@@ -313,8 +313,8 @@ describe("chat handler persistence failures", () => {
 		convexMock.query.mockResolvedValueOnce(null);
 		convexMock.query.mockRejectedValueOnce({
 			data: {
-				code: "QUEUED_MESSAGE_INVALID_PARTS",
-				message: "Queued message parts are invalid.",
+				code: "QUEUED_MESSAGE_INVALID_REQUEST_BODY",
+				message: "Queued message request body is invalid.",
 			},
 		});
 
@@ -330,8 +330,8 @@ describe("chat handler persistence failures", () => {
 		).resolves.toEqual({
 			status: 400,
 			body: {
-				error: "Queued message parts are invalid.",
-				errorCode: "QUEUED_MESSAGE_INVALID_PARTS",
+				error: "Queued message request body is invalid.",
+				errorCode: "QUEUED_MESSAGE_INVALID_REQUEST_BODY",
 			},
 		});
 	});
@@ -533,7 +533,7 @@ describe("chat handler persistence failures", () => {
 		convexMock.query.mockResolvedValueOnce({
 			_id: "queued_1",
 			messageId: "message_1",
-			partsJson: JSON.stringify([{ type: "text", text: "queued replay" }]),
+			text: "queued replay",
 			metadataJson: undefined,
 		});
 		convexMock.query.mockResolvedValueOnce([]);
@@ -617,7 +617,7 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 		]);
@@ -664,7 +664,7 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 		]);
@@ -711,7 +711,7 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 		]);
@@ -759,7 +759,7 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 		]);
@@ -807,7 +807,7 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 		]);
@@ -858,7 +858,7 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 		]);
@@ -909,15 +909,13 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 			{
 				_id: "queued_2",
 				messageId: "message_2",
-				partsJson: JSON.stringify([
-					{ type: "text", text: "queued steer follow-up" },
-				]),
+				text: "queued steer follow-up",
 				metadataJson: undefined,
 			},
 		]);
@@ -991,7 +989,7 @@ describe("chat handler persistence failures", () => {
 			{
 				_id: "queued_1",
 				messageId: "message_1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued steer" }]),
+				text: "queued steer",
 				metadataJson: undefined,
 			},
 		]);

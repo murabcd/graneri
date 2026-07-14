@@ -17,7 +17,6 @@ const createQueuedFollowUpMessage = (text: string): QueuedFollowUpMessage =>
 		createdAt: 1,
 		messageId: "queued-user-message-1",
 		ownerTokenIdentifier: "owner",
-		partsJson: JSON.stringify([{ type: "text", text }]),
 		requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 		runId,
 		status: "queued",

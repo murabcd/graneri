@@ -14,8 +14,6 @@ import { buildChatSystemPrompt, CHAT_TITLE_SYSTEM_PROMPT } from "./prompts.mjs";
 const MAX_CHAT_PREVIEW_LENGTH = 180;
 const MAX_CHAT_TITLE_LENGTH = 80;
 const MAX_NOTE_CONTEXT_LENGTH = 16_000;
-export const MAX_HOSTED_CHAT_INPUT_TEXT_CHARS = 1_048_576;
-export const HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE = "input_too_large";
 export const HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE = "input_empty";
 
 export const hostedChatSteerAcceptedHeader = "X-Graneri-Steer-Accepted";
@@ -124,10 +122,13 @@ export const getHostedChatConvexRouteError = (error) => {
 		code === "INVALID_ASSISTANT_RUN_TRANSITION";
 	const isChatLifecycleError = code === "CHAT_NOT_FOUND";
 	const isQueuedMessageError = code.startsWith("QUEUED_MESSAGE_");
+	const isMessageSizeError =
+		code === "CHAT_MESSAGE_TOO_LARGE" || code === "QUEUED_MESSAGE_TOO_LARGE";
 	if (
 		!isAssistantRunLifecycleError &&
 		!isChatLifecycleError &&
-		!isQueuedMessageError
+		!isQueuedMessageError &&
+		!isMessageSizeError
 	) {
 		return null;
 	}
@@ -138,7 +139,7 @@ export const getHostedChatConvexRouteError = (error) => {
 			(typeof data.message === "string"
 				? data.message
 				: "Queued chat request failed validation."),
-		errorCode: code,
+		errorCode: isMessageSizeError ? "input_too_large" : code,
 		statusCode:
 			isAssistantRunLifecycleError ||
 			isChatLifecycleError ||
@@ -274,27 +275,10 @@ export const validateHostedChatSteerRoute = ({
 };
 
 export const getHostedChatInputValidationErrorResponse = (error) => {
-	const code = error && typeof error === "object" ? error.code : undefined;
-	if (code === HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE) {
-		return {
-			errorCode: HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE,
-			payload: {
-				error: "input must not be empty",
-			},
-		};
-	}
-
-	const actualChars =
-		error && typeof error === "object" && "actualChars" in error
-			? error.actualChars
-			: undefined;
 	return {
-		errorCode: HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE,
+		errorCode: HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE,
 		payload: {
-			error: `Input exceeds the maximum length of ${MAX_HOSTED_CHAT_INPUT_TEXT_CHARS} characters.`,
-			input_error_code: HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE,
-			max_chars: MAX_HOSTED_CHAT_INPUT_TEXT_CHARS,
-			actual_chars: typeof actualChars === "number" ? actualChars : undefined,
+			error: error instanceof Error ? error.message : "input must not be empty",
 		},
 	};
 };
@@ -383,44 +367,16 @@ export const getHostedChatMessageText = (message) =>
 			.join("\n\n"),
 	);
 
-export const getHostedChatMessageTextCharCount = (message) =>
-	message.parts
-		.filter(
-			(part) =>
-				part.type === "text" &&
-				typeof part.text === "string" &&
-				part.text.length > 0,
-		)
-		.reduce((count, part) => count + Array.from(part.text).length, 0);
-
-export const createHostedChatInputTooLargeError = (actualChars) => {
-	const error = new Error(
-		`Input exceeds the maximum length of ${MAX_HOSTED_CHAT_INPUT_TEXT_CHARS} characters.`,
-	);
-	error.code = HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE;
-	error.maxChars = MAX_HOSTED_CHAT_INPUT_TEXT_CHARS;
-	error.actualChars = actualChars;
-	return error;
-};
-
 export const createHostedChatInputEmptyError = () => {
 	const error = new Error("input must not be empty");
 	error.code = HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE;
 	return error;
 };
 
-export const validateHostedChatInputTextLimit = (message) => {
-	const actualChars = getHostedChatMessageTextCharCount(message);
-	if (actualChars > MAX_HOSTED_CHAT_INPUT_TEXT_CHARS) {
-		throw createHostedChatInputTooLargeError(actualChars);
-	}
-};
-
 export const validateHostedChatInput = (message) => {
 	if (!getHostedChatMessageText(message)) {
 		throw createHostedChatInputEmptyError();
 	}
-	validateHostedChatInputTextLimit(message);
 };
 
 export const getHostedChatPreviewFromMessage = (message) =>
@@ -488,35 +444,18 @@ const parseStoredMessageMetadata = (metadataJson) => {
 	}
 };
 
-const parseHostedQueuedMessageParts = (partsJson) => {
-	const parts = JSON.parse(partsJson);
-	if (!Array.isArray(parts)) {
-		throw new Error("Queued chat message parts are invalid.");
-	}
-
-	const textParts = parts.flatMap((part) =>
-		part &&
-		typeof part === "object" &&
-		part.type === "text" &&
-		typeof part.text === "string" &&
-		part.text.trim().length > 0
-			? [{ type: "text", text: part.text }]
-			: [],
-	);
-
-	if (textParts.length === 0) {
+export const toHostedQueuedUserMessage = (queuedMessage) => {
+	if (!queuedMessage.text.trim()) {
 		throw new Error("Queued chat message cannot be empty.");
 	}
 
-	return textParts;
+	return {
+		id: queuedMessage.messageId,
+		role: "user",
+		metadata: parseStoredMessageMetadata(queuedMessage.metadataJson),
+		parts: [{ type: "text", text: queuedMessage.text }],
+	};
 };
-
-export const toHostedQueuedUserMessage = (queuedMessage) => ({
-	id: queuedMessage.messageId,
-	role: "user",
-	metadata: parseStoredMessageMetadata(queuedMessage.metadataJson),
-	parts: parseHostedQueuedMessageParts(queuedMessage.partsJson),
-});
 
 export const fromHostedStoredMessages = (messages) =>
 	messages.flatMap((message) => {

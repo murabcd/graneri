@@ -47,7 +47,6 @@ describe("useQueuedChatDrain", () => {
 				createdAt: 1,
 				messageId: "queued-message-1",
 				ownerTokenIdentifier: "owner",
-				partsJson: JSON.stringify([{ type: "text", text: "Queued" }]),
 				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 				runId: "run-1",
 				status: "queued",
@@ -126,6 +125,7 @@ describe("useQueuedChatDrain", () => {
 					convexToken: "fresh-token",
 					model: "gpt-5",
 					replayQueuedMessageId: "queued-1",
+					workspaceId: "workspace-1",
 				},
 			},
 		);

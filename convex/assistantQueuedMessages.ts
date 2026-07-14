@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Value, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
@@ -7,6 +7,7 @@ import {
 	getOwnedActiveChatById,
 	isNonTerminalRun,
 } from "./assistantRunLifecycle";
+import { requireConvexDocumentWithinLimit } from "./documentSize";
 import { createResourceAccess } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess(
@@ -26,7 +27,6 @@ const queuedMessageValidator = v.object({
 	chatId: v.id("chats"),
 	runId: v.id("assistantRuns"),
 	messageId: v.string(),
-	partsJson: v.string(),
 	metadataJson: v.optional(v.string()),
 	text: v.string(),
 	requestBodyJson: v.string(),
@@ -38,22 +38,28 @@ const queuedMessageValidator = v.object({
 
 const queuedMessageInputValidator = v.object({
 	messageId: v.string(),
-	partsJson: v.string(),
 	metadataJson: v.optional(v.string()),
 	text: v.string(),
 	requestBodyJson: v.string(),
 });
 type QueuedMessageInput = {
 	messageId: string;
-	partsJson: string;
 	metadataJson?: string;
 	text: string;
 	requestBodyJson: string;
 };
 
 const queuedMessagesListLimit = 20;
-const MAX_QUEUED_MESSAGE_TEXT_CHARS = 1_048_576;
 const CLAIMED_QUEUE_MESSAGE_STALE_MS = 5 * 60 * 1000;
+
+const requireQueuedMessageWithinDocumentLimit = (
+	document: Record<string, Value | undefined>,
+) =>
+	requireConvexDocumentWithinLimit({
+		document,
+		errorCode: "QUEUED_MESSAGE_TOO_LARGE",
+		message: "Queued message exceeds Convex's 1 MiB document limit.",
+	});
 
 const parseJson = (value: string, errorCode: string, message: string) => {
 	try {
@@ -69,29 +75,6 @@ const parseJson = (value: string, errorCode: string, message: string) => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
 
-const getQueuedTextPartCharCount = (parts: unknown[]) =>
-	parts.reduce<number>(
-		(count, part) =>
-			isRecord(part) && part.type === "text" && typeof part.text === "string"
-				? count + Array.from(part.text).length
-				: count,
-		0,
-	);
-
-const getQueuedTextFromParts = (parts: unknown[]) =>
-	parts
-		.flatMap((part) =>
-			isRecord(part) &&
-			part.type === "text" &&
-			typeof part.text === "string" &&
-			part.text.length > 0
-				? [part.text]
-				: [],
-		)
-		.join("\n\n")
-		.replace(/\s+/g, " ")
-		.trim();
-
 const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 	if (!message.messageId.trim()) {
 		throw new ConvexError({
@@ -104,46 +87,6 @@ const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 		throw new ConvexError({
 			code: "QUEUED_MESSAGE_EMPTY",
 			message: "Queued message cannot be empty.",
-		});
-	}
-
-	const parts = parseJson(
-		message.partsJson,
-		"QUEUED_MESSAGE_INVALID_PARTS",
-		"Queued message parts are invalid.",
-	);
-	if (
-		!Array.isArray(parts) ||
-		!parts.some(
-			(part) =>
-				isRecord(part) &&
-				part.type === "text" &&
-				typeof part.text === "string" &&
-				part.text.trim().length > 0,
-		)
-	) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_INVALID_PARTS",
-			message: "Queued message parts are invalid.",
-		});
-	}
-	const modelText = getQueuedTextFromParts(parts);
-	if (message.text !== modelText) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_TEXT_MISMATCH",
-			message: "Queued message text must match queued message parts.",
-		});
-	}
-	const actualChars = Math.max(
-		Array.from(message.text).length,
-		getQueuedTextPartCharCount(parts),
-	);
-	if (actualChars > MAX_QUEUED_MESSAGE_TEXT_CHARS) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_TOO_LARGE",
-			message: `Input exceeds the maximum length of ${MAX_QUEUED_MESSAGE_TEXT_CHARS} characters.`,
-			actualChars,
-			maxChars: MAX_QUEUED_MESSAGE_TEXT_CHARS,
 		});
 	}
 
@@ -247,7 +190,6 @@ const requireValidSavedQueuedMessage = (
 	requireValidQueuedMessageInput({
 		messageId: queuedMessage.messageId,
 		metadataJson: queuedMessage.metadataJson,
-		partsJson: queuedMessage.partsJson,
 		requestBodyJson: queuedMessage.requestBodyJson,
 		text: queuedMessage.text,
 	});
@@ -399,13 +341,12 @@ export const enqueueForActiveRun = mutation({
 		requireValidQueuedMessageInput(args.message);
 
 		const now = Date.now();
-		const queuedMessageId = await ctx.db.insert("assistantQueuedMessages", {
+		const queuedMessageDocument = {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			chatId: chat._id,
 			runId: run._id,
 			messageId: args.message.messageId,
-			partsJson: args.message.partsJson,
 			metadataJson: args.message.metadataJson,
 			text: args.message.text,
 			requestBodyJson: args.message.requestBodyJson,
@@ -413,7 +354,12 @@ export const enqueueForActiveRun = mutation({
 			createdAt: now,
 			updatedAt: now,
 			claimedAt: undefined,
-		});
+		} as const;
+		requireQueuedMessageWithinDocumentLimit(queuedMessageDocument);
+		const queuedMessageId = await ctx.db.insert(
+			"assistantQueuedMessages",
+			queuedMessageDocument,
+		);
 		const queuedMessage = await ctx.db.get(queuedMessageId);
 
 		if (!queuedMessage) {
@@ -827,24 +773,19 @@ export const updateQueued = mutation({
 		requireValidQueuedMessageInput(args.message);
 
 		const now = Date.now();
-		await ctx.db.patch(queuedMessage._id, {
-			messageId: args.message.messageId,
-			partsJson: args.message.partsJson,
-			metadataJson: args.message.metadataJson,
-			text: args.message.text,
-			requestBodyJson: args.message.requestBodyJson,
-			updatedAt: now,
-		});
-
-		return {
+		const updatedQueuedMessage = {
 			...queuedMessage,
 			messageId: args.message.messageId,
-			partsJson: args.message.partsJson,
 			metadataJson: args.message.metadataJson,
 			text: args.message.text,
 			requestBodyJson: args.message.requestBodyJson,
 			updatedAt: now,
 		};
+		requireQueuedMessageWithinDocumentLimit(updatedQueuedMessage);
+		const { _creationTime, _id, ...replacement } = updatedQueuedMessage;
+		await ctx.db.replace(_id, replacement);
+
+		return updatedQueuedMessage;
 	},
 });
 

@@ -1,7 +1,6 @@
 import {
 	clampHostedChatWhitespace,
-	MAX_HOSTED_CHAT_INPUT_TEXT_CHARS,
-	validateHostedChatInputTextLimit,
+	clampHostedNoteContext,
 } from "@workspace/ai/hosted-chat-runtime";
 import type { UIMessage } from "ai";
 
@@ -17,14 +16,13 @@ type QueuedMessage = {
 	metadataJson?: string;
 	requestBodyJson: string;
 	text: string;
+	workspaceId: string;
 };
 
 const generatedQueuedMessageIdPrefix = "queued-";
 
 export const createQueuedUserMessageId = () =>
 	`${generatedQueuedMessageIdPrefix}${crypto.randomUUID()}`;
-
-export { MAX_HOSTED_CHAT_INPUT_TEXT_CHARS };
 
 const isRecord = (value: unknown): value is QueuedRequestBody =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
@@ -58,6 +56,42 @@ const parseQueuedMessageMetadata = (
 	return parsed as UIMessage["metadata"];
 };
 
+const sanitizeQueuedNoteContext = (value: unknown) => {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+
+	const noteId = typeof value.noteId === "string" ? value.noteId : null;
+	if (noteId) {
+		return { noteId };
+	}
+
+	return {
+		noteId: null,
+		title:
+			typeof value.title === "string"
+				? clampHostedNoteContext(value.title)
+				: "",
+		text:
+			typeof value.text === "string" ? clampHostedNoteContext(value.text) : "",
+	};
+};
+
+const sanitizeQueuedRequestBody = (requestBody: QueuedRequestBody) => {
+	const durableNoteContext = sanitizeQueuedNoteContext(requestBody.noteContext);
+
+	return {
+		mentions: requestBody.mentions,
+		model: requestBody.model,
+		reasoningEffort: requestBody.reasoningEffort,
+		recipeSlug: requestBody.recipeSlug,
+		selectedSourceIds: requestBody.selectedSourceIds,
+		timezone: requestBody.timezone,
+		webSearchEnabled: requestBody.webSearchEnabled,
+		...(durableNoteContext ? { noteContext: durableNoteContext } : {}),
+	};
+};
+
 export const toQueuedUserMessageInput = ({
 	messageId,
 	metadata,
@@ -74,11 +108,6 @@ export const toQueuedUserMessageInput = ({
 		throw new Error("Queued chat message cannot be empty.");
 	}
 	const resolvedMessageId = messageId ?? createQueuedUserMessageId();
-	validateHostedChatInputTextLimit({
-		id: resolvedMessageId,
-		role: "user",
-		parts: [{ type: "text", text }],
-	});
 
 	if (hasDurableUnsafeLocalFolders(requestBody)) {
 		throw new Error(
@@ -86,17 +115,11 @@ export const toQueuedUserMessageInput = ({
 		);
 	}
 
-	const sanitizedRequestBody = {
-		...requestBody,
-		convexToken: null,
-	};
-
 	return {
 		messageId: resolvedMessageId,
-		partsJson: JSON.stringify([{ type: "text", text: canonicalText }]),
 		metadataJson: metadata === undefined ? undefined : JSON.stringify(metadata),
 		text: canonicalText,
-		requestBodyJson: JSON.stringify(sanitizedRequestBody),
+		requestBodyJson: JSON.stringify(sanitizeQueuedRequestBody(requestBody)),
 	};
 };
 
@@ -125,6 +148,7 @@ export const fromQueuedUserMessage = async ({
 			...requestBody,
 			convexToken,
 			replayQueuedMessageId: queuedMessage._id,
+			workspaceId: queuedMessage.workspaceId,
 		},
 		message: {
 			messageId:

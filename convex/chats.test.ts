@@ -1,6 +1,7 @@
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
+import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -11,8 +12,6 @@ const ownerIdentity = {
 	name: "Owner",
 	email: "owner@example.com",
 };
-const MAX_INPUT_TEXT_CHARS = 1_048_576;
-
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
@@ -95,7 +94,7 @@ test("chat titles preserve organization and person name capitalization", async (
 
 test("oversized user messages are rejected before chat persistence", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
-	const oversizedInput = "x".repeat(MAX_INPUT_TEXT_CHARS + 1);
+	const oversizedInput = "x".repeat(MAX_CONVEX_DOCUMENT_BYTES);
 
 	await expect(
 		asOwner.mutation(api.chats.saveMessage, {
@@ -110,9 +109,7 @@ test("oversized user messages are rejected before chat persistence", async () =>
 				createdAt: 2_000,
 			},
 		}),
-	).rejects.toThrow(
-		`Input exceeds the maximum length of ${MAX_INPUT_TEXT_CHARS} characters.`,
-	);
+	).rejects.toThrow("Chat message exceeds Convex's 1 MiB document limit.");
 });
 
 test("new chats use one placeholder title before generated title arrives", async () => {
@@ -299,7 +296,6 @@ test("truncating from an edited message removes that branch of the chat", async 
 			runId: run._id,
 			message: {
 				messageId: "msg-queued-1",
-				partsJson: JSON.stringify([{ type: "text", text: "queued follow-up" }]),
 				text: "queued follow-up",
 				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			},
@@ -311,7 +307,6 @@ test("truncating from an edited message removes that branch of the chat", async 
 		runId: run._id,
 		message: {
 			messageId: "msg-queued-2",
-			partsJson: JSON.stringify([{ type: "text", text: "next follow-up" }]),
 			text: "next follow-up",
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 		},
@@ -678,7 +673,6 @@ test("an interrupted run can continue with a new assistant message", async () =>
 			runId: run._id,
 			message: {
 				messageId: "msg-user-2",
-				partsJson: JSON.stringify([{ type: "text", text: "Steer" }]),
 				text: "Steer",
 				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			},
@@ -871,7 +865,6 @@ test("accepting a steered user message requires the claimed queued payload", asy
 			runId: run._id,
 			message: {
 				messageId: "msg-user-2",
-				partsJson: JSON.stringify([{ type: "text", text: "Queued steer" }]),
 				text: "Queued steer",
 				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			},
@@ -967,7 +960,6 @@ test("accepting a steered user message resumes a waiting run", async () => {
 			runId: run._id,
 			message: {
 				messageId: "msg-user-2",
-				partsJson: JSON.stringify([{ type: "text", text: "Use notes" }]),
 				text: "Use notes",
 				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			},
@@ -1027,10 +1019,12 @@ test("accepting a steered user message resumes a waiting run", async () => {
 	expect(state.savedRun?.pendingDecision).toBeUndefined();
 	expect(state.steeredMessage?.text).toBe("Use notes");
 	expect(
-		(await asOwner.query(api.assistantRunEvents.listRunEventsAfter, {
-			runId: run._id,
-			limit: 20,
-		})).map((eventRecord) => eventRecord.event.type),
+		(
+			await asOwner.query(api.assistantRunEvents.listRunEventsAfter, {
+				runId: run._id,
+				limit: 20,
+			})
+		).map((eventRecord) => eventRecord.event.type),
 	).toEqual([
 		"run.started",
 		"assistant.message.started",
@@ -1067,7 +1061,6 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 		runId: run._id,
 		message: {
 			messageId: "msg-user-2",
-			partsJson: JSON.stringify([{ type: "text", text: "First steer" }]),
 			text: "First steer",
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 		},
@@ -1080,7 +1073,6 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 			runId: run._id,
 			message: {
 				messageId: "msg-user-3",
-				partsJson: JSON.stringify([{ type: "text", text: "Second steer" }]),
 				text: "Second steer",
 				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			},
@@ -1104,7 +1096,7 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 			message: {
 				id: queuedMessage.messageId,
 				role: "user" as const,
-				partsJson: queuedMessage.partsJson,
+				partsJson: JSON.stringify([{ type: "text", text: queuedMessage.text }]),
 				text: queuedMessage.text,
 				createdAt: 2_001 + index,
 			},
@@ -1147,10 +1139,12 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 		"msg-user-2",
 	]);
 	expect(
-		(await asOwner.query(api.assistantRunEvents.listRunEventsAfter, {
-			runId: run._id,
-			limit: 20,
-		})).map((eventRecord) => eventRecord.event.type),
+		(
+			await asOwner.query(api.assistantRunEvents.listRunEventsAfter, {
+				runId: run._id,
+				limit: 20,
+			})
+		).map((eventRecord) => eventRecord.event.type),
 	).toEqual([
 		"run.started",
 		"assistant.message.started",
@@ -1190,7 +1184,6 @@ test("accepting a queued user message atomically saves and deletes the claim", a
 			runId: run._id,
 			message: {
 				messageId: "msg-user-2",
-				partsJson: JSON.stringify([{ type: "text", text: "Queued replay" }]),
 				text: "Queued replay",
 				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 			},
@@ -1274,7 +1267,6 @@ test("accepting a queued user message requires the claimed queued payload", asyn
 		runId: run._id,
 		message: {
 			messageId: "msg-user-2",
-			partsJson: JSON.stringify([{ type: "text", text: "Queued replay" }]),
 			text: "Queued replay",
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 		},
@@ -1340,7 +1332,6 @@ test("removing a chat deletes assistant run runtime records", async () => {
 		runId: run._id,
 		message: {
 			messageId: "queued-message-1",
-			partsJson: JSON.stringify([{ type: "text", text: "Next" }]),
 			text: "Next",
 			requestBodyJson: "{}",
 		},

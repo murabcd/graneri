@@ -17,7 +17,6 @@ const createQueuedMessage = () => ({
 	createdAt: 1,
 	messageId: "queued-message-1",
 	ownerTokenIdentifier: "owner",
-	partsJson: JSON.stringify([{ type: "text", text: "Queued" }]),
 	requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 	runId,
 	status: "claimed" as const,
@@ -39,6 +38,7 @@ describe("queued chat intent", () => {
 				convexToken: "fresh-token",
 				model: "gpt-5",
 				replayQueuedMessageId: queuedMessageId,
+				workspaceId,
 			},
 			message: {
 				text: "Queued",
@@ -60,6 +60,7 @@ describe("queued chat intent", () => {
 				continueRunId: runId,
 				model: "gpt-5",
 				steerQueuedMessageId: queuedMessageId,
+				workspaceId,
 			},
 			message: {
 				text: "Queued",

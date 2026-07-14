@@ -6,8 +6,6 @@ export declare const hostedChatSteerTurnIdHeader: "X-Graneri-Turn-Id";
 export declare const hostedChatSteerQueuedMessageIdHeader: "X-Graneri-Queued-Message-Id";
 export declare const hostedChatSteerQueuedMessageIdsHeader: "X-Graneri-Queued-Message-Ids";
 export declare const hostedChatReplayQueuedMessageIdHeader: "X-Graneri-Replay-Queued-Message-Id";
-export declare const MAX_HOSTED_CHAT_INPUT_TEXT_CHARS: 1048576;
-export declare const HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE: "input_too_large";
 export declare const HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE: "input_empty";
 export declare const HOSTED_CHAT_CONVEX_DEPLOYMENT_OUT_OF_SYNC_ERROR_CODE: "convex_deployment_out_of_sync";
 export declare const getHostedChatSteerAcceptanceHeaders: (args: {
@@ -60,14 +58,9 @@ export declare const validateHostedChatSteerRoute: (args: {
 export declare const getHostedChatInputValidationErrorResponse: (
 	error: unknown,
 ) => {
-	errorCode:
-		| typeof HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE
-		| typeof HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE;
+	errorCode: typeof HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE;
 	payload: {
 		error: string;
-		input_error_code?: typeof HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE;
-		max_chars?: typeof MAX_HOSTED_CHAT_INPUT_TEXT_CHARS;
-		actual_chars?: number;
 	};
 };
 export declare const validateHostedChatRequestInput: (args: {
@@ -75,15 +68,9 @@ export declare const validateHostedChatRequestInput: (args: {
 	replayQueuedMessageId?: string | null;
 	steerQueuedMessageId?: string | null;
 }) => null | {
-	errorCode:
-		| "message_missing"
-		| typeof HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE
-		| typeof HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE;
+	errorCode: "message_missing" | typeof HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE;
 	payload: {
 		error: string;
-		input_error_code?: typeof HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE;
-		max_chars?: typeof MAX_HOSTED_CHAT_INPUT_TEXT_CHARS;
-		actual_chars?: number;
 	};
 	statusCode: 400;
 };
@@ -98,22 +85,9 @@ export declare const validateHostedChatActiveRunPolicy: (args: {
 	errorCode: "active_run_exists";
 	statusCode: 409;
 };
-export declare const getHostedChatMessageTextCharCount: (
-	message: UIMessage,
-) => number;
-export declare const createHostedChatInputTooLargeError: (
-	actualChars: number,
-) => Error & {
-	code: typeof HOSTED_CHAT_INPUT_TOO_LARGE_ERROR_CODE;
-	maxChars: typeof MAX_HOSTED_CHAT_INPUT_TEXT_CHARS;
-	actualChars: number;
-};
 export declare const createHostedChatInputEmptyError: () => Error & {
 	code: typeof HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE;
 };
-export declare const validateHostedChatInputTextLimit: (
-	message: UIMessage,
-) => void;
 export declare const validateHostedChatInput: (message: UIMessage) => void;
 export declare const clampHostedChatWhitespace: (value: string) => string;
 export declare const clampHostedNoteContext: (value: string) => string;
@@ -133,7 +107,7 @@ export declare const toHostedStoredMessage: (message: UIMessage) => {
 export declare const toHostedQueuedUserMessage: (queuedMessage: {
 	messageId: string;
 	metadataJson?: string;
-	partsJson: string;
+	text: string;
 }) => UIMessage;
 export declare const buildHostedChatSaveMessageArgs: <
 	WorkspaceId extends string,

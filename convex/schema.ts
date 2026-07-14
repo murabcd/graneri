@@ -581,7 +581,6 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		runId: v.id("assistantRuns"),
 		messageId: v.string(),
-		partsJson: v.string(),
 		metadataJson: v.optional(v.string()),
 		text: v.string(),
 		requestBodyJson: v.string(),
