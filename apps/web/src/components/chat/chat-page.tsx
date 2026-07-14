@@ -63,8 +63,6 @@ import {
 } from "@/lib/ai/reasoning-effort";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { getChatId } from "@/lib/chat";
-import { getPendingAutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
-import { submitAutomationConfirmationChatTurn } from "@/lib/chat-automation-confirmation-submit";
 import { getChatText } from "@/lib/chat-message";
 import { normalizeChatMessages } from "@/lib/chat-message-state";
 import {
@@ -480,9 +478,11 @@ const useChatPageController = ({
 		isChatUiPending,
 		isPreparingRequest,
 		latestRequestBodyRef,
+		pendingToolApproval,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
 		regenerate,
+		respondToToolApproval,
 		restoreEditedQueuedMessage,
 		rollbackOptimisticMessage,
 		sendMessage,
@@ -507,10 +507,6 @@ const useChatPageController = ({
 		stopExternalRun: stopRunningAutomation,
 		workspaceId: activeWorkspaceId,
 	});
-	const automationDeleteConfirmation = React.useMemo(
-		() => getPendingAutomationDeleteConfirmation(displayMessages),
-		[displayMessages],
-	);
 	const hasMessages = displayMessages.length > 0 || isAutomationRunning;
 	const isNotesLoading = notes === undefined;
 	const selectedModel =
@@ -785,110 +781,6 @@ const useChatPageController = ({
 		webSearchEnabled,
 	]);
 
-	const submitAutomationConfirmationResponse = React.useCallback(
-		async (text: string) => {
-			const outgoingText = text.trim();
-			if (
-				!outgoingText ||
-				hasUploadingAttachments(attachedFiles) ||
-				(isChatRequestPending && !displayActiveRun && !activeRun) ||
-				isAutomationRunning
-			) {
-				return;
-			}
-
-			const finishRequestPreparation = beginRequestPreparation();
-			await submitAutomationConfirmationChatTurn({
-				activeRun,
-				activeWorkspaceId,
-				buildRequestBody: (confirmationText) =>
-					buildWorkspaceChatRequestBody({
-						localFolderStorageScope,
-						mentions: [],
-						model: selectedModel.model,
-						reasoningEffort: selectedReasoningEffort,
-						resolveConvexToken: getCachedConvexToken,
-						selectedSourceIds: [],
-						text: confirmationText,
-						webSearchEnabled,
-						workspaceId: activeWorkspaceId,
-					}),
-				chatId,
-				commitOptimisticMessage,
-				displayActiveRun,
-				enqueueQueuedMessage,
-				isAiRequestPending,
-				onBeforeSubmit: () => {
-					chatPersistedCallback?.(chatId);
-				},
-				onFinally: () => {
-					finishRequestPreparation();
-				},
-				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(() => localFolders);
-					latestRequestBodyRef.current = requestBody;
-				},
-				rollbackOptimisticMessage,
-				sendMessage,
-				setQueuedMessages,
-				text: outgoingText,
-			});
-		},
-		[
-			activeWorkspaceId,
-			activeRun,
-			attachedFiles,
-			beginRequestPreparation,
-			chatId,
-			commitOptimisticMessage,
-			displayActiveRun,
-			enqueueQueuedMessage,
-			isAiRequestPending,
-			isAutomationRunning,
-			isChatRequestPending,
-			latestRequestBodyRef,
-			localFolderStorageScope,
-			chatPersistedCallback,
-			selectedReasoningEffort,
-			selectedModel.model,
-			rollbackOptimisticMessage,
-			sendMessage,
-			setQueuedMessages,
-			webSearchEnabled,
-		],
-	);
-
-	const handleAutomationConfirmationCancel = React.useCallback(() => {
-		if (!automationDeleteConfirmation) {
-			return;
-		}
-
-		void submitAutomationConfirmationResponse(
-			`Cancel deletion of automation ${automationDeleteConfirmation.automationId}.`,
-		);
-	}, [automationDeleteConfirmation, submitAutomationConfirmationResponse]);
-
-	const handleAutomationConfirmationConfirm = React.useCallback(() => {
-		if (!automationDeleteConfirmation) {
-			return;
-		}
-
-		void submitAutomationConfirmationResponse(
-			`Confirm delete automation ${automationDeleteConfirmation.automationId}.`,
-		);
-	}, [automationDeleteConfirmation, submitAutomationConfirmationResponse]);
-
-	const handleAutomationConfirmationTextAnswer = React.useCallback(
-		(answer: string) => {
-			if (!automationDeleteConfirmation) {
-				return;
-			}
-
-			void submitAutomationConfirmationResponse(answer);
-		},
-		[automationDeleteConfirmation, submitAutomationConfirmationResponse],
-	);
-
 	const handleDraftKeyDown = React.useCallback(
 		(event: KeyboardEvent) => {
 			if (
@@ -965,6 +857,43 @@ const useChatPageController = ({
 		sharedLocalFolders,
 		webSearchEnabled,
 	]);
+	const handleToolApprovalResponse = React.useCallback(
+		async (approved: boolean) => {
+			if (!pendingToolApproval || isPreparingRequest) {
+				return;
+			}
+
+			const finishRequestPreparation = beginRequestPreparation();
+			try {
+				const requestBody = await buildRequestBody();
+				await respondToToolApproval({
+					approval: pendingToolApproval,
+					approved,
+					requestBody,
+				});
+			} catch (error) {
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to submit tool approval",
+				});
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to submit tool approval",
+				);
+			} finally {
+				finishRequestPreparation();
+			}
+		},
+		[
+			beginRequestPreparation,
+			buildRequestBody,
+			isPreparingRequest,
+			pendingToolApproval,
+			respondToToolApproval,
+		],
+	);
 
 	const handleDeleteMessage = React.useCallback(
 		(messageId: string) => {
@@ -1105,11 +1034,9 @@ const useChatPageController = ({
 		webSearchEnabled,
 		workspaceSources,
 		appSources,
-		automationDeleteConfirmation,
-		isAutomationConfirmationSubmitting: isPreparingRequest,
-		onAutomationConfirmationCancel: handleAutomationConfirmationCancel,
-		onAutomationConfirmationConfirm: handleAutomationConfirmationConfirm,
-		onAutomationConfirmationTextAnswer: handleAutomationConfirmationTextAnswer,
+		pendingToolApproval,
+		isToolApprovalSubmitting: isPreparingRequest,
+		onToolApprovalResponse: handleToolApprovalResponse,
 		editingMessageId,
 		mentions,
 		handleCancelEdit,
@@ -1437,17 +1364,9 @@ export function ChatPage({
 					? "Ask for follow-up"
 					: "Ask anything. @ to use tools or mention notes"
 			}
-			automationConfirmation={controller.automationDeleteConfirmation}
-			isAutomationConfirmationSubmitting={
-				controller.isAutomationConfirmationSubmitting
-			}
-			onAutomationConfirmationCancel={controller.onAutomationConfirmationCancel}
-			onAutomationConfirmationConfirm={
-				controller.onAutomationConfirmationConfirm
-			}
-			onAutomationConfirmationTextAnswer={
-				controller.onAutomationConfirmationTextAnswer
-			}
+			toolApproval={controller.pendingToolApproval}
+			isToolApprovalSubmitting={controller.isToolApprovalSubmitting}
+			onToolApprovalResponse={controller.onToolApprovalResponse}
 			queuedFollowUps={queuedFollowUps}
 			onQueuedFollowUpsReorder={controller.onQueuedFollowUpsReorder}
 			onDraftChange={controller.setDraft}

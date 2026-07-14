@@ -19,6 +19,7 @@ export const defineAiTool = ({
 		tool({
 			description,
 			inputSchema,
+			needsApproval: policy.requiresApproval ?? false,
 			metadata: {
 				ui,
 			},

@@ -34,6 +34,13 @@ export const pendingDecisionValidator = v.union(
 		type: v.literal("clarify_scope"),
 		question: v.string(),
 	}),
+	v.object({
+		type: v.literal("tool_approval"),
+		approvalId: v.string(),
+		assistantMessageId: v.string(),
+		toolCallId: v.string(),
+		toolName: v.string(),
+	}),
 );
 
 export const stopReasonValidator = v.union(

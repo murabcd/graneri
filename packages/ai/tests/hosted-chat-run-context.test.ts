@@ -232,7 +232,7 @@ describe("chat automation tools", () => {
 		expect(resumeResult).toMatchObject({ isPaused: false });
 	});
 
-	it("requires explicit delete wording for deletion", async () => {
+	it("uses SDK approval before deleting an automation", async () => {
 		let deleteCount = 0;
 		const context = createAutomationContext({
 			deleteAutomation: async () => {
@@ -244,35 +244,12 @@ describe("chat automation tools", () => {
 		await expect(
 			context.tools.delete_automation.execute?.({
 				automationId: "automation-1",
-				confirmationText: "change it",
-			}),
-		).rejects.toThrow(/requires an explicit delete or remove/u);
-
-		await expect(
-			context.tools.delete_automation.execute?.({
-				automationId: "automation-1",
-				confirmationText: "delete this automation",
-			}),
-		).resolves.toMatchObject({
-			confirmation: expect.objectContaining({
-				kind: "delete_automation",
-				title: "Delete automation?",
-			}),
-			id: "automation-1",
-			requiresConfirmation: true,
-		});
-		expect(deleteCount).toBe(0);
-
-		await expect(
-			context.tools.delete_automation.execute?.({
-				automationId: "automation-1",
-				confirmed: true,
-				confirmationText: "delete this automation",
 			}),
 		).resolves.toMatchObject({
 			id: "automation-1",
 			deleted: true,
 		});
 		expect(deleteCount).toBe(1);
+		expect(context.tools.delete_automation.needsApproval).toBe(true);
 	});
 });

@@ -17,6 +17,7 @@ import {
 	validateHostedChatActiveRunPolicy,
 } from "@workspace/ai/hosted-chat-turn";
 import type { ReasoningEffort } from "@workspace/ai/models";
+import type { ToolApprovalResponse } from "@workspace/ai/tool-approval-state";
 import {
 	consumeStream,
 	type InferUITools,
@@ -117,6 +118,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	supersedeActiveRun,
 	systemPrompt,
 	tools,
+	toolApprovalResponse,
 	trigger,
 	turnController,
 	wideEvent,
@@ -149,6 +151,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	supersedeActiveRun?: boolean;
 	systemPrompt: string;
 	tools: HostedRunContext["tools"];
+	toolApprovalResponse: ToolApprovalResponse | null;
 	trigger?: "submit-message" | "regenerate-message";
 	turnController: HostedTurnController;
 	wideEvent: ServerWideEvent;
@@ -194,7 +197,50 @@ export const runHostedChatTurnStreamRuntime = async ({
 		return { activeStreamSession: null, ok: false };
 	}
 
+	const assistantMessageId = `stream-${crypto.randomUUID()}`;
 	let pendingQueuedAcceptanceHeaders: Record<string, string> | null = null;
+	if (toolApprovalResponse) {
+		try {
+			const approvalMessage = chatMessages.at(-1);
+			if (
+				!continueRunId ||
+				!approvalMessage ||
+				approvalMessage.id !== toolApprovalResponse.assistantMessageId
+			) {
+				throw new Error(
+					"Tool approval response requires its pending assistant run.",
+				);
+			}
+			await convexClient.mutation(api.toolApprovals.acceptResponse, {
+				workspaceId,
+				chatId,
+				message: {
+					id: approvalMessage.id,
+					role: approvalMessage.role,
+					partsJson: JSON.stringify(approvalMessage.parts),
+					metadataJson: approvalMessage.metadata
+						? JSON.stringify(approvalMessage.metadata)
+						: undefined,
+					text: "",
+					createdAt: Date.now(),
+				},
+				runId: continueRunId,
+				nextAssistantMessageId: assistantMessageId,
+			});
+		} catch (error) {
+			const routeError = getHostedChatConvexRouteError(error);
+			wideEvent.outcome = "error";
+			wideEvent.status_code = routeError?.statusCode ?? 500;
+			wideEvent.error_code =
+				routeError?.errorCode ?? "tool_approval_persist_failed";
+			emitWideEvent("error");
+			sendJson(response, wideEvent.status_code, {
+				error: routeError?.error ?? "Failed to persist tool approval response.",
+				errorCode: routeError?.errorCode,
+			});
+			return { activeStreamSession: null, ok: false };
+		}
+	}
 	if (lastUserMessage) {
 		const isQueuedAccept = isHostedQueuedUserMessageAccept({
 			continueRunId,
@@ -272,7 +318,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 		attempted: Boolean(lastUserMessage),
 	});
 
-	const assistantMessageId = `stream-${crypto.randomUUID()}`;
 	const startedRun = await startHostedChatRun({
 		workspaceId,
 		chatId,
@@ -382,6 +427,11 @@ export const runHostedChatTurnStreamRuntime = async ({
 			wideEvent.error_code = "assistant_run_failed";
 			emitWideEvent("error");
 		},
+		onWaitingForUser: () => {
+			wideEvent.outcome = "success";
+			wideEvent.status_code = 200;
+			emitWideEvent(wideEvent.errors?.length ? "error" : "info");
+		},
 		onFinalizeError: () => {
 			wideEvent.outcome = "error";
 			wideEvent.status_code = 500;
@@ -406,6 +456,8 @@ export const runHostedChatTurnStreamRuntime = async ({
 		shouldGenerateChatTitle,
 		updateChatTitle: (args) =>
 			convexClient.mutation(api.chats.updateTitle, args),
+		waitForUserDecision: (args) =>
+			convexClient.mutation(api.assistantRuns.waitForUserDecision, args),
 		workspaceId,
 	});
 	const responseStreamResult = await createHostedChatRunResponseStream({

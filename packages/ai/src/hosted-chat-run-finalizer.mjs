@@ -26,12 +26,14 @@ export const createHostedAssistantRunFinalizer = ({
 	onCompleted,
 	onFailed,
 	onFinalizeError,
+	onWaitingForUser,
 	onTitleGenerationError,
 	reasoningEffort,
 	safetyIdentifier,
 	saveAssistantMessageForRun,
 	shouldGenerateChatTitle,
 	updateChatTitle,
+	waitForUserDecision,
 	workspaceId,
 }) => {
 	const getRunResponseMessage = (responseMessage) =>
@@ -42,7 +44,7 @@ export const createHostedAssistantRunFinalizer = ({
 					id: assistantMessageId,
 				};
 
-	const finalizeCompletedRun = async ({ responseMessage }) => {
+	const saveRunResponseMessage = async ({ responseMessage }) => {
 		const runResponseMessage = getRunResponseMessage(responseMessage);
 		logLatency("stream.persist_save_start", {
 			messageId: runResponseMessage.id,
@@ -126,8 +128,11 @@ export const createHostedAssistantRunFinalizer = ({
 
 	return async (terminalization) => {
 		try {
-			if (terminalization.status === "completed") {
-				const shouldFinalizeRun = await finalizeCompletedRun(terminalization);
+			if (
+				terminalization.status === "completed" ||
+				terminalization.status === "waiting_for_user"
+			) {
+				const shouldFinalizeRun = await saveRunResponseMessage(terminalization);
 				if (!shouldFinalizeRun) {
 					await closePersistenceForTerminalization();
 					logLatency("stream.persistence_closed_for_terminal_run", {
@@ -153,6 +158,19 @@ export const createHostedAssistantRunFinalizer = ({
 					status: terminalization.status,
 				});
 				onCompleted?.();
+				return;
+			}
+
+			if (terminalization.status === "waiting_for_user") {
+				await waitForUserDecision({
+					runId: assistantRunId,
+					pendingDecision: terminalization.pendingDecision,
+				});
+				logLatency("stream.finalize_done", {
+					runId: assistantRunId,
+					status: terminalization.status,
+				});
+				onWaitingForUser?.();
 				return;
 			}
 

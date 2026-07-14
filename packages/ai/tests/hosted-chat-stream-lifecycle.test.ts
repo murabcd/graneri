@@ -154,4 +154,66 @@ describe("hosted chat stream lifecycle", () => {
 		]);
 		expect(errors).toHaveLength(1);
 	});
+
+	it("finalizes an SDK approval request as waiting for the user", async () => {
+		const activeStream = createActiveStreamSession();
+		const finalized: unknown[] = [];
+		const result = await createHostedChatRunResponseStream({
+			activeStreamSession: activeStream.session,
+			agent: {},
+			assistantMessageId: "assistant-message-1",
+			assistantRunId: "run-1",
+			chatMessages: [],
+			createUiStream: async ({ onFinish }) => {
+				onFinish({
+					isAborted: false,
+					responseMessage: {
+						id: "assistant-message-1",
+						role: "assistant",
+						parts: [
+							{
+								type: "tool-delete_automation",
+								toolCallId: "call-1",
+								input: { automationId: "automation-1" },
+								approval: { id: "approval-1" },
+								state: "approval-requested",
+							},
+						],
+					},
+				});
+				return new ReadableStream({
+					start: (controller) => controller.close(),
+				});
+			},
+			failAssistantRun: async () => undefined,
+			finalizeAssistantRun: async (terminalization) => {
+				finalized.push(terminalization);
+			},
+			finalizedToolSet: { hasTools: true },
+			logLatency: () => undefined,
+			streamLatencyTracker: createStreamLatencyTracker(),
+			systemPrompt: "system",
+		});
+
+		if (!result.ok) {
+			throw result.error;
+		}
+		for await (const _chunk of result.responseStream) {
+			// Consume the stream so queued finalization flushes.
+		}
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(finalized).toEqual([
+			expect.objectContaining({
+				pendingDecision: {
+					type: "tool_approval",
+					approvalId: "approval-1",
+					assistantMessageId: "assistant-message-1",
+					toolCallId: "call-1",
+					toolName: "delete_automation",
+				},
+				status: "waiting_for_user",
+			}),
+		]);
+	});
 });

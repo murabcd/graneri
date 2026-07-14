@@ -11,8 +11,23 @@ type FailedAssistantRunTerminalization = {
 	status: "failed";
 };
 
+export type HostedToolApprovalPendingDecision = {
+	type: "tool_approval";
+	approvalId: string;
+	assistantMessageId: string;
+	toolCallId: string;
+	toolName: string;
+};
+
+type WaitingAssistantRunTerminalization = {
+	pendingDecision: HostedToolApprovalPendingDecision;
+	responseMessage: UIMessage;
+	status: "waiting_for_user";
+};
+
 export type HostedAssistantRunTerminalization =
 	| CompletedAssistantRunTerminalization
+	| WaitingAssistantRunTerminalization
 	| FailedAssistantRunTerminalization;
 
 type HostedActiveStreamSessionLike = {
@@ -70,6 +85,7 @@ export declare const createHostedAssistantRunFinalizer: <
 		error: unknown;
 		terminalization: HostedAssistantRunTerminalization;
 	}) => void;
+	onWaitingForUser?: () => void;
 	onTitleGenerationError?: (args: {
 		error: unknown;
 		responseMessage: UIMessage;
@@ -90,6 +106,10 @@ export declare const createHostedAssistantRunFinalizer: <
 		onlyIfReplaceable: true;
 		title: string;
 		workspaceId: WorkspaceId;
+	}) => Promise<unknown>;
+	waitForUserDecision: (args: {
+		pendingDecision: HostedToolApprovalPendingDecision;
+		runId: AssistantRunId;
 	}) => Promise<unknown>;
 	workspaceId: WorkspaceId;
 }) => (terminalization: HostedAssistantRunTerminalization) => Promise<void>;

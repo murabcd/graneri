@@ -10,6 +10,7 @@ import { buildHostedRoutePath } from "./hosted-route-catalog.mjs";
 import { aiLogger, serializeError } from "./logger.mjs";
 import { CHAT_TITLE_MODEL_ID } from "./models.mjs";
 import { buildChatSystemPrompt, CHAT_TITLE_SYSTEM_PROMPT } from "./prompts.mjs";
+import { getToolApprovalResponse } from "./tool-approval-state.mjs";
 
 const MAX_CHAT_PREVIEW_LENGTH = 180;
 const MAX_CHAT_TITLE_LENGTH = 80;
@@ -78,6 +79,8 @@ const hostedChatConvexRouteErrorMessages = new Map([
 		"Assistant run cannot accept steered user input.",
 	],
 	["CHAT_NOT_FOUND", "Chat not found."],
+	["TOOL_APPROVAL_INVALID", "Tool approval response is invalid."],
+	["TOOL_APPROVAL_NOT_PENDING", "Tool approval is no longer pending."],
 	["QUEUED_MESSAGE_NOT_FOUND", "Queued message is no longer available."],
 	["QUEUED_MESSAGE_NOT_EDITABLE", "Queued message cannot be edited."],
 ]);
@@ -122,12 +125,14 @@ export const getHostedChatConvexRouteError = (error) => {
 		code === "INVALID_ASSISTANT_RUN_TRANSITION";
 	const isChatLifecycleError = code === "CHAT_NOT_FOUND";
 	const isQueuedMessageError = code.startsWith("QUEUED_MESSAGE_");
+	const isToolApprovalError = code.startsWith("TOOL_APPROVAL_");
 	const isMessageSizeError =
 		code === "CHAT_MESSAGE_TOO_LARGE" || code === "QUEUED_MESSAGE_TOO_LARGE";
 	if (
 		!isAssistantRunLifecycleError &&
 		!isChatLifecycleError &&
 		!isQueuedMessageError &&
+		!isToolApprovalError &&
 		!isMessageSizeError
 	) {
 		return null;
@@ -145,7 +150,9 @@ export const getHostedChatConvexRouteError = (error) => {
 			isChatLifecycleError ||
 			code === "QUEUED_MESSAGE_NOT_FOUND"
 				? 409
-				: 400,
+				: code === "TOOL_APPROVAL_NOT_PENDING"
+					? 409
+					: 400,
 	};
 };
 
@@ -298,7 +305,12 @@ export const validateHostedChatRequestInput = ({
 		};
 	}
 
-	if (message && !steerQueuedMessageId && !replayQueuedMessageId) {
+	if (
+		message &&
+		!getToolApprovalResponse(message) &&
+		!steerQueuedMessageId &&
+		!replayQueuedMessageId
+	) {
 		try {
 			validateHostedChatInput(message);
 		} catch (error) {

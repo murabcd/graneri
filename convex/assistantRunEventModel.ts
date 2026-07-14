@@ -59,7 +59,13 @@ export const assistantRunEventValidator = v.union(
 			v.literal("choose_note"),
 			v.literal("authorize_source"),
 			v.literal("clarify_scope"),
+			v.literal("tool_approval"),
 		),
+	}),
+	v.object({
+		type: v.literal("input.resolved"),
+		decisionType: v.literal("tool_approval"),
+		approved: v.boolean(),
 	}),
 	v.object({
 		type: v.literal("run.completed"),

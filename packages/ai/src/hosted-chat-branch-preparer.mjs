@@ -19,6 +19,7 @@ export const prepareHostedChatTurnBranch = async ({
 	messages = [],
 	onTruncateError,
 	pendingMessages = [],
+	prepareMessage,
 	shouldLoadStoredMessages = true,
 	storedMessagesForStatelessBranch = [],
 	trigger,
@@ -39,13 +40,16 @@ export const prepareHostedChatTurnBranch = async ({
 	logLatency?.("convex.messages_loaded", {
 		messageCount: storedMessages.length,
 	});
+	const preparedMessage = prepareMessage
+		? await prepareMessage({ message, storedMessages })
+		: message;
 
 	const branchStoredMessages = shouldLoadStoredMessages
 		? storedMessages
 		: storedMessagesForStatelessBranch;
 	const preparedBranch = prepareHostedChatBranch({
 		interruptedAssistantMessageIds,
-		message,
+		message: preparedMessage,
 		messageId,
 		messages,
 		pendingMessages,

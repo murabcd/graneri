@@ -30,7 +30,12 @@ type AssistantRunTransition =
 			pendingDecision: PendingDecision;
 			phase?: string;
 	  }
-	| { type: "resume_after_user_decision"; phase?: string }
+	| {
+			type: "resume_after_user_decision";
+			assistantMessageId?: string;
+			approved?: boolean;
+			phase?: string;
+	  }
 	| { type: "append_user_messages"; messages: AppendedUserMessage[] }
 	| { type: "complete" }
 	| { type: "fail"; errorText?: string }
@@ -196,7 +201,16 @@ export const transitionAssistantRun = async (
 					"Assistant run cannot resume from a user decision.",
 				);
 			}
+			if (typeof transition.approved === "boolean") {
+				await appendAssistantRunEvent(ctx, run, {
+					type: "input.resolved",
+					decisionType: "tool_approval",
+					approved: transition.approved,
+				});
+			}
 			return await patchAndReloadRun(ctx, run, {
+				assistantMessageId:
+					transition.assistantMessageId ?? run.assistantMessageId,
 				status: "running",
 				pendingDecision: undefined,
 				phase: transition.phase,

@@ -57,17 +57,6 @@ export type AutomationToolResult = {
 	chatId: string;
 };
 
-export type AutomationConfirmationToolResult = {
-	id: string;
-	requiresConfirmation: true;
-	confirmation: {
-		kind: "delete_automation";
-		message: string;
-		options: Array<{ id: "confirm" | "cancel"; label: string }>;
-		title: string;
-	};
-};
-
 export type AutomationActions = {
 	createAutomation: (
 		automation: AutomationToolInput,

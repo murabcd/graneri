@@ -44,6 +44,12 @@ const createFinalizerHarness = () => {
 	const onFailed = vi.fn(() => {
 		calls.push("onFailed");
 	});
+	const onWaitingForUser = vi.fn(() => {
+		calls.push("onWaitingForUser");
+	});
+	const waitForUserDecision = vi.fn(async () => {
+		calls.push("waitForUserDecision");
+	});
 	const onFinalizeError = vi.fn();
 	const logError = vi.fn();
 	const logLatency = vi.fn();
@@ -63,11 +69,13 @@ const createFinalizerHarness = () => {
 		onCompleted,
 		onFailed,
 		onFinalizeError,
+		onWaitingForUser,
 		reasoningEffort: "low",
 		safetyIdentifier: "hashed-user-identifier",
 		saveAssistantMessageForRun,
 		shouldGenerateChatTitle: false,
 		updateChatTitle: vi.fn(),
+		waitForUserDecision,
 		workspaceId: "workspace-1",
 	});
 
@@ -81,7 +89,9 @@ const createFinalizerHarness = () => {
 		onCompleted,
 		onFailed,
 		onFinalizeError,
+		onWaitingForUser,
 		saveAssistantMessageForRun,
+		waitForUserDecision,
 	};
 };
 
@@ -136,6 +146,35 @@ describe("hosted assistant run finalizer", () => {
 		expect(harness.finishAssistantRun).toHaveBeenCalledWith({
 			runId: "assistant-run-1",
 		});
+	});
+
+	it("saves, closes, and pauses runs with pending tool approval", async () => {
+		const harness = createFinalizerHarness();
+
+		await harness.finalizeAssistantRun({
+			pendingDecision: {
+				type: "tool_approval",
+				approvalId: "approval-1",
+				assistantMessageId: "assistant-message-1",
+				toolCallId: "call-1",
+				toolName: "delete_automation",
+			},
+			responseMessage: createMessage(),
+			status: "waiting_for_user",
+		});
+
+		expect(harness.waitForUserDecision).toHaveBeenCalledWith({
+			pendingDecision: expect.objectContaining({ approvalId: "approval-1" }),
+			runId: "assistant-run-1",
+		});
+		expect(harness.finishAssistantRun).not.toHaveBeenCalled();
+		expect(harness.calls).toEqual([
+			"saveAssistantMessageForRun",
+			"closePersistence",
+			"waitForUserDecision",
+			"onWaitingForUser",
+			"cleanup",
+		]);
 	});
 
 	it("cleans up without finishing when the assistant message was already terminal", async () => {

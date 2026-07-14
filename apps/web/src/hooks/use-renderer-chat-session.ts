@@ -1,6 +1,13 @@
 import { useChat } from "@ai-sdk/react";
+import {
+	getPendingToolApproval,
+	type ToolApprovalRequest,
+} from "@workspace/ai/tool-approval-state";
 import type { ChatAddToolOutputFunction, UIMessage } from "ai";
-import { lastAssistantMessageIsCompleteWithToolCalls } from "ai";
+import {
+	lastAssistantMessageIsCompleteWithApprovalResponses,
+	lastAssistantMessageIsCompleteWithToolCalls,
+} from "ai";
 import type { FunctionReturnType } from "convex/server";
 import * as React from "react";
 import { toast } from "sonner";
@@ -33,6 +40,10 @@ type AttachableRun =
 	| undefined;
 
 const EMPTY_STREAMING_MESSAGE_IDS = new Set<string>();
+
+const shouldAutomaticallyContinueChat = (args: { messages: UIMessage[] }) =>
+	lastAssistantMessageIsCompleteWithApprovalResponses(args) ||
+	lastAssistantMessageIsCompleteWithToolCalls(args);
 
 export const useRendererChatSession = ({
 	activeRun,
@@ -83,13 +94,14 @@ export const useRendererChatSession = ({
 		stop,
 		resumeStream,
 		addToolOutput,
+		addToolApprovalResponse,
 	} = useChat({
 		id: chatId,
 		experimental_throttle: CHAT_STREAM_UI_THROTTLE_MS,
 		messages: persistedMessages,
 		transport,
 		onToolCall: handleToolCall,
-		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+		sendAutomaticallyWhen: shouldAutomaticallyContinueChat,
 	});
 	const {
 		beginRequestPreparation,
@@ -221,6 +233,39 @@ export const useRendererChatSession = ({
 				resolvedMessages: persistedMessages,
 			}),
 		[chatId, localOptimisticMessages, mergedDisplayMessages, persistedMessages],
+	);
+	const pendingToolApproval = React.useMemo(
+		() => getPendingToolApproval(displayMessages),
+		[displayMessages],
+	);
+	const respondToToolApproval = React.useCallback(
+		async ({
+			approval,
+			approved,
+			requestBody,
+		}: {
+			approval: ToolApprovalRequest;
+			approved: boolean;
+			requestBody: Record<string, unknown>;
+		}) => {
+			if (!displayActiveRun) {
+				throw new Error("Tool approval requires an active assistant run.");
+			}
+
+			latestRequestBodyRef.current = requestBody;
+			await addToolApprovalResponse({
+				id: approval.approvalId,
+				approved,
+				reason: approved ? "Approved by user." : "Denied by user.",
+				options: {
+					body: {
+						...requestBody,
+						continueRunId: displayActiveRun._id,
+					},
+				},
+			});
+		},
+		[addToolApprovalResponse, displayActiveRun],
 	);
 	const localMessageIds = React.useMemo(
 		() =>
@@ -360,9 +405,11 @@ export const useRendererChatSession = ({
 		isChatUiPending,
 		isPreparingRequest,
 		latestRequestBodyRef,
+		pendingToolApproval,
 		queuedMessages,
 		...queuedFollowUpControls,
 		regenerate,
+		respondToToolApproval,
 		rollbackOptimisticMessage,
 		sendMessage,
 		setMessages,

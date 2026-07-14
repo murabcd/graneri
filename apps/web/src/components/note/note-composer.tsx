@@ -84,8 +84,8 @@ import {
 	useRevokeAttachmentObjectUrls,
 } from "@/components/ai-elements/file-attachment-controls";
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
-import { ChatAutomationConfirmationBar } from "@/components/chat/chat-automation-confirmation-bar";
 import { ChatQueuedFollowUpBar } from "@/components/chat/chat-queued-follow-up-bar";
+import { ChatToolApprovalBar } from "@/components/chat/chat-tool-approval-bar";
 import {
 	ASSISTANT_CHAT_CONTENT_CLASS,
 	CHAT_MESSAGE_MAX_WIDTH_CLASS,
@@ -119,8 +119,6 @@ import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
-import { getPendingAutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
-import { submitAutomationConfirmationChatTurn } from "@/lib/chat-automation-confirmation-submit";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import {
 	buildNoteChatRequestBody,
@@ -302,10 +300,6 @@ const useNoteComposerController = ({
 	>(null);
 	const [presentationModeState, setPresentationModeState] =
 		React.useState<NoteChatPresentation>("inline");
-	const [
-		isAutomationConfirmationSubmitting,
-		setIsAutomationConfirmationSubmitting,
-	] = React.useState(false);
 	const [, startTranscriptPanelTransition] = React.useTransition();
 	const inlinePopoverHeightStorageKey = getNoteScopedStorageKeyForViewport({
 		prefix: INLINE_POPOVER_HEIGHT_STORAGE_KEY_PREFIX,
@@ -621,9 +615,11 @@ const useNoteComposerController = ({
 		isChatUiPending,
 		isPreparingRequest,
 		latestRequestBodyRef,
+		pendingToolApproval,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
 		regenerate,
+		respondToToolApproval,
 		restoreEditedQueuedMessage,
 		rollbackOptimisticMessage,
 		sendMessage,
@@ -649,10 +645,6 @@ const useNoteComposerController = ({
 		resumeEnabled: hasStoredCurrentChat,
 		workspaceId: activeWorkspaceId,
 	});
-	const automationDeleteConfirmation = React.useMemo(
-		() => getPendingAutomationDeleteConfirmation(displayChatMessages),
-		[displayChatMessages],
-	);
 
 	React.useEffect(() => {
 		if (!activeWorkspaceId) {
@@ -1427,113 +1419,6 @@ const useNoteComposerController = ({
 		await handleSend();
 	};
 
-	const submitAutomationConfirmationResponse = React.useCallback(
-		async (text: string) => {
-			const outgoingText = text.trim();
-			if (!outgoingText || isAutomationConfirmationSubmitting) {
-				return;
-			}
-
-			setIsAutomationConfirmationSubmitting(true);
-			const finishRequestPreparation = beginRequestPreparation();
-			if (presentationMode === "inline") {
-				setPanelMode("chat");
-			} else {
-				openRightSidebar(presentationMode);
-			}
-
-			const currentNoteContext = readNoteContext();
-			await submitAutomationConfirmationChatTurn({
-				activeRun,
-				activeWorkspaceId,
-				buildRequestBody: (confirmationText) =>
-					buildNoteChatRequestBody({
-						localFolderStorageScope,
-						model: selectedModel.model,
-						noteContext: {
-							noteId: currentNoteContext.noteId,
-							title: currentNoteContext.title,
-							text: currentNoteContext.text,
-						},
-						reasoningEffort: selectedReasoningEffort,
-						recipeSlug: null,
-						resolveConvexToken: getCachedConvexToken,
-						text: confirmationText,
-					}),
-				chatId: currentChatId,
-				commitOptimisticMessage,
-				displayActiveRun,
-				enqueueQueuedMessage,
-				isAiRequestPending,
-				onFinally: () => {
-					setIsAutomationConfirmationSubmitting(false);
-					finishRequestPreparation();
-					requestComposerFocus();
-				},
-				onOptimisticMessage: requestComposerFocus,
-				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(() => localFolders);
-					latestRequestBodyRef.current = requestBody;
-				},
-				rollbackOptimisticMessage,
-				sendMessage,
-				setQueuedMessages,
-				text: outgoingText,
-			});
-		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[
-			activeRun,
-			activeWorkspaceId,
-			beginRequestPreparation,
-			commitOptimisticMessage,
-			currentChatId,
-			displayActiveRun,
-			enqueueQueuedMessage,
-			isAiRequestPending,
-			isAutomationConfirmationSubmitting,
-			latestRequestBodyRef,
-			localFolderStorageScope,
-			openRightSidebar,
-			presentationMode,
-			readNoteContext,
-			requestComposerFocus,
-			rollbackOptimisticMessage,
-			selectedModel.model,
-			selectedReasoningEffort,
-			sendMessage,
-			setPanelMode,
-			setQueuedMessages,
-		],
-	);
-
-	const handleAutomationConfirmationCancel = React.useCallback(() => {
-		if (!automationDeleteConfirmation) {
-			return;
-		}
-
-		void submitAutomationConfirmationResponse(
-			`Cancel deletion of automation ${automationDeleteConfirmation.automationId}.`,
-		);
-	}, [automationDeleteConfirmation, submitAutomationConfirmationResponse]);
-
-	const handleAutomationConfirmationConfirm = React.useCallback(() => {
-		if (!automationDeleteConfirmation) {
-			return;
-		}
-
-		void submitAutomationConfirmationResponse(
-			`Confirm delete automation ${automationDeleteConfirmation.automationId}.`,
-		);
-	}, [automationDeleteConfirmation, submitAutomationConfirmationResponse]);
-
-	const handleAutomationConfirmationTextAnswer = React.useCallback(
-		(answer: string) => {
-			void submitAutomationConfirmationResponse(answer);
-		},
-		[submitAutomationConfirmationResponse],
-	);
-
 	const handleComposerValueChange = (nextValue: string) => {
 		setMessage(nextValue);
 	};
@@ -1609,6 +1494,54 @@ const useNoteComposerController = ({
 		selectedRecipe?.slug,
 		sharedLocalFolders,
 	]);
+	const handleToolApprovalResponse = React.useCallback(
+		async (approved: boolean) => {
+			if (!pendingToolApproval || isPreparingRequest) {
+				return;
+			}
+
+			const finishRequestPreparation = beginRequestPreparation();
+			if (presentationMode === "inline") {
+				setPanelMode("chat");
+			} else {
+				openRightSidebar(presentationMode);
+			}
+
+			try {
+				const requestBody = await buildRequestBody();
+				await respondToToolApproval({
+					approval: pendingToolApproval,
+					approved,
+					requestBody,
+				});
+			} catch (error) {
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to submit tool approval",
+				});
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to submit tool approval",
+				);
+			} finally {
+				finishRequestPreparation();
+				requestComposerFocus();
+			}
+		},
+		[
+			beginRequestPreparation,
+			buildRequestBody,
+			isPreparingRequest,
+			openRightSidebar,
+			pendingToolApproval,
+			presentationMode,
+			requestComposerFocus,
+			respondToToolApproval,
+			setPanelMode,
+		],
+	);
 
 	const handleDeleteMessage = React.useCallback(
 		(messageId: string) => {
@@ -1888,11 +1821,9 @@ const useNoteComposerController = ({
 		setSelectedRecipeSlug,
 		reasoningEffort: selectedReasoningEffort,
 		selectedModel,
-		automationDeleteConfirmation,
-		isAutomationConfirmationSubmitting,
-		onAutomationConfirmationCancel: handleAutomationConfirmationCancel,
-		onAutomationConfirmationConfirm: handleAutomationConfirmationConfirm,
-		onAutomationConfirmationTextAnswer: handleAutomationConfirmationTextAnswer,
+		pendingToolApproval,
+		isToolApprovalSubmitting: isPreparingRequest,
+		onToolApprovalResponse: handleToolApprovalResponse,
 		queuedFollowUps,
 		onQueuedFollowUpsReorder,
 		suppressRecipePickerUntilUserActionRef,
@@ -3259,13 +3190,11 @@ function ChatComposerForm({
 					<div className="pointer-events-auto">{topAccessory}</div>
 				</div>
 			) : null}
-			{controller.automationDeleteConfirmation ? (
-				<ChatAutomationConfirmationBar
-					confirmation={controller.automationDeleteConfirmation}
-					disabled={controller.isAutomationConfirmationSubmitting}
-					onCancel={controller.onAutomationConfirmationCancel}
-					onConfirm={controller.onAutomationConfirmationConfirm}
-					onTextAnswer={controller.onAutomationConfirmationTextAnswer}
+			{controller.pendingToolApproval ? (
+				<ChatToolApprovalBar
+					approval={controller.pendingToolApproval}
+					disabled={controller.isToolApprovalSubmitting}
+					onRespond={controller.onToolApprovalResponse}
 				/>
 			) : null}
 			{controller.queuedFollowUps.length > 0 ? (

@@ -141,6 +141,13 @@ Human-blocking assistant work uses `waiting_for_user` plus a typed
 decision instead of creating a second active run. Normal duplicate sends must
 reject before persisting a new user message when a chat already has a
 non-terminal run; clients must queue follow-ups against the active run.
+Tool approval uses the AI SDK v6 approval protocol rather than tool-specific
+confirmation payloads or synthetic user messages. The first stream persists the
+assistant message in `approval-requested` state and moves the run to
+`waiting_for_user` with a `tool_approval` decision. The response mutation must
+atomically verify the approval id, assistant message id, tool call id, and tool
+name, persist the `approval-responded` message, update the next assistant message
+id, and resume that same run before a replacement stream starts.
 `startAssistantRun` only supports reject or explicit supersede policies;
 it must never return an existing active run as a fallback. Assistant runs are
 created directly as `running`; queued work is represented by
@@ -241,6 +248,7 @@ matching behavior, not identical storage.
 | No queued assistant-run fallback exists. | Runs start directly as `running`; durable follow-ups live only in `assistantQueuedMessages`. | Implemented |
 | Stale claimed input is not an invisible leftover. | Claim mutations requeue stale claimed rows before attempting the next claim; terminal run cleanup deletes queued and claimed rows for that run. | Implemented |
 | Waiting-for-user input resumes the same turn. | `waiting_for_user` runs can claim and accept steered input, clear `pendingDecision`, append `turn.steer.accepted`, and continue without creating a second run. | Implemented |
+| Destructive tools pause for durable user approval. | AI SDK approval parts are persisted on the assistant message; Convex stores a typed `tool_approval` decision, validates the matching response atomically, appends `input.resolved`, and resumes the same run. | Implemented |
 | Pending input is local to a turn and can be drained into the next turn state. | Hosted active stream sessions expose `extendPendingInput`, `takePendingInput`, `hasPendingInput`, and `clearPendingInput`; running steer interruptions append the steered message, drain the active session, and feed ordered pending user messages into the next AI SDK prompt branch with message-id de-duplication against persisted history. | Implemented |
 | Multiple active-turn inputs can accumulate before the model loop drains them. | Graneri can persist multiple queued follow-ups, the renderer accepts distinct manual steer intents into a FIFO while one steer request is in flight, `claimReadyForRun` claims the targeted row plus ready queued rows for the same active run, `acceptSteeredUserMessages` atomically saves/deletes the accepted batch, and active stream replacement carries ordered pending input until it is drained into the next prompt branch. | Implemented |
 | Activity subscribers can distinguish mailbox work from steered input. | Hosted active stream sessions expose `subscribePendingInputActivity`; pending steered input reports `steer`, queued mailbox-style input reports `mailbox`, and subscribing after input is already pending returns the pending activity. | Implemented |

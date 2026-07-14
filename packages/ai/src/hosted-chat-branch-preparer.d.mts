@@ -7,8 +7,9 @@ type LogLatencyDetails = Record<
 
 type StoredHostedChatMessage = {
 	id: string;
-	role: string;
-	partsJson?: string | null;
+	role: UIMessage["role"];
+	partsJson: string;
+	metadataJson?: string;
 };
 
 type AssistantRunEvent = {
@@ -54,6 +55,10 @@ export declare const prepareHostedChatTurnBranch: <
 		messageId: string;
 	}) => Promise<boolean> | boolean;
 	pendingMessages?: UIMessage[];
+	prepareMessage?: (args: {
+		message?: UIMessage | null;
+		storedMessages: StoredHostedChatMessage[];
+	}) => Promise<UIMessage | null | undefined> | UIMessage | null | undefined;
 	shouldLoadStoredMessages?: boolean;
 	storedMessagesForStatelessBranch?: StoredHostedChatMessage[];
 	trigger?: "submit-message" | "regenerate-message";

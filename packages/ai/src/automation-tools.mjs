@@ -347,52 +347,15 @@ const createDeleteAutomationTool = ({ deleteAutomation }) =>
 			"Delete an automation by id. Only use when the current user message explicitly asks to delete, remove, or permanently disable that automation.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
-			confirmed: z
-				.boolean()
-				.optional()
-				.describe(
-					"Set to true only after the user confirms deletion in the current turn.",
-				),
-			confirmationText: z
-				.string()
-				.min(1)
-				.describe(
-					"The exact current user instruction that explicitly asks to delete, remove, or permanently disable the automation.",
-				),
 		}),
 		policy: {
 			access: "write",
 			capability: "write",
 			provider: "graneri",
+			requiresApproval: true,
 		},
 		ui: toolUiMetadata.delete_automation,
-		execute: async ({ automationId, confirmed, confirmationText }) => {
-			if (
-				!/\b(delete|remove|permanently disable|disable permanently)\b/iu.test(
-					confirmationText,
-				)
-			) {
-				throw new Error(
-					"Deleting automations requires an explicit delete or remove instruction in the current user message.",
-				);
-			}
-
-			if (confirmed !== true) {
-				return {
-					id: automationId,
-					requiresConfirmation: true,
-					confirmation: {
-						kind: "delete_automation",
-						title: "Delete automation?",
-						message: "This automation will stop running and be removed.",
-						options: [
-							{ id: "confirm", label: "Delete" },
-							{ id: "cancel", label: "Cancel" },
-						],
-					},
-				};
-			}
-
+		execute: async ({ automationId }) => {
 			await deleteAutomation({ automationId });
 
 			return {

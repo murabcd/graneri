@@ -24,6 +24,12 @@ import {
 	validateHostedChatSteerRoute,
 } from "@workspace/ai/hosted-chat-turn";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
+import {
+	createCanonicalToolApprovalResponse,
+	getToolApprovalResponse,
+	getToolApprovalResponses,
+	type ToolApprovalResponse,
+} from "@workspace/ai/tool-approval-state";
 import { type InferUITools, type UIMessage, validateUIMessages } from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
@@ -519,6 +525,9 @@ export const handleChatRequest = async (
 		interruptActiveRun: (args) =>
 			interruptActiveChatRun({ ...args, client: convexClient }),
 		validateInput: (inputMessage) => {
+			if (getToolApprovalResponse(inputMessage)) {
+				return { ok: true };
+			}
 			try {
 				validateHostedChatInput(inputMessage);
 				return { ok: true };
@@ -615,9 +624,12 @@ export const handleChatRequest = async (
 	let tools: Awaited<ReturnType<typeof buildHostedChatRunContext>>["tools"];
 	let chatMessages: UIMessage<unknown, never, InferUITools<typeof tools>>[];
 	let lastUserMessage: UIMessage | undefined;
+	let toolApprovalResponse: ToolApprovalResponse | null;
 	let shouldGenerateChatTitle: boolean;
 	let activeStreamSession: HostedActiveStreamSession | null = null;
 	try {
+		toolApprovalResponse = getToolApprovalResponse(effectiveMessage);
+		const currentToolApprovalResponse = toolApprovalResponse;
 		const branchResult = await prepareHostedChatTurnBranch({
 			attachableRunId: attachableRun?._id,
 			chatId: id,
@@ -628,7 +640,7 @@ export const handleChatRequest = async (
 				convexClient.query(api.assistantRunEvents.listRunEventsAfter, args),
 			logLatency,
 			message: effectiveMessage,
-			messageId,
+			messageId: toolApprovalResponse ? undefined : messageId,
 			onTruncateError: async ({ error, messageId: truncateMessageId }) => {
 				if (
 					queuedInput.hasClaimed &&
@@ -656,6 +668,18 @@ export const handleChatRequest = async (
 				return true;
 			},
 			pendingMessages: pendingSteerMessages,
+			prepareMessage: currentToolApprovalResponse
+				? ({ storedMessages }) =>
+						createCanonicalToolApprovalResponse({
+							approvalResponse: currentToolApprovalResponse,
+							approvalResponses: getToolApprovalResponses(effectiveMessage),
+							storedMessage: storedMessages.find(
+								(storedMessage) =>
+									storedMessage.id ===
+									currentToolApprovalResponse.assistantMessageId,
+							),
+						})
+				: undefined,
 			trigger,
 			truncateFromMessage: (args) =>
 				convexClient.mutation(api.chats.truncateFromMessage, args),
@@ -743,8 +767,9 @@ export const handleChatRequest = async (
 		logLatency("chat.messages_validated", {
 			chatMessageCount: chatMessages.length,
 		});
-		lastUserMessage =
-			effectiveMessage.role === "user"
+		lastUserMessage = toolApprovalResponse
+			? undefined
+			: effectiveMessage.role === "user"
 				? effectiveMessage
 				: [...chatMessages]
 						.reverse()
@@ -802,6 +827,7 @@ export const handleChatRequest = async (
 		supersedeActiveRun,
 		systemPrompt,
 		tools,
+		toolApprovalResponse,
 		trigger,
 		turnController,
 		wideEvent,

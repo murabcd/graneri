@@ -461,6 +461,25 @@ describe("prompt helpers", () => {
 				steerQueuedMessageId: null,
 			}),
 		).toBeNull();
+		expect(
+			validateHostedChatRequestInput({
+				message: {
+					id: "assistant-approval",
+					role: "assistant",
+					parts: [
+						{
+							type: "tool-delete_automation",
+							toolCallId: "call-1",
+							input: { automationId: "automation-1" },
+							approval: { id: "approval-1", approved: true },
+							state: "approval-responded",
+						},
+					],
+				},
+				replayQueuedMessageId: null,
+				steerQueuedMessageId: null,
+			}),
+		).toBeNull();
 	});
 
 	it("reconstructs accepted steer messages from durable queued content", () => {

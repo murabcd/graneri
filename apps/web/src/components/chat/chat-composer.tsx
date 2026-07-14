@@ -1,6 +1,7 @@
 import type { Editor, JSONContent, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
+import type { ToolApprovalRequest } from "@workspace/ai/tool-approval-state";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -41,17 +42,16 @@ import {
 } from "@/components/ai-elements/file-attachment-controls";
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
 import { AppSourceIcon } from "@/components/app-source-icon";
-import { ChatAutomationConfirmationBar } from "@/components/chat/chat-automation-confirmation-bar";
 import {
 	ChatQueuedFollowUpBar,
 	type QueuedFollowUpBarItem,
 } from "@/components/chat/chat-queued-follow-up-bar";
+import { ChatToolApprovalBar } from "@/components/chat/chat-tool-approval-bar";
 import {
 	type ChatModel,
 	ChatModelPicker,
 	type ReasoningEffort,
 } from "@/components/chat/model-picker";
-import type { AutomationDeleteConfirmation } from "@/lib/chat-automation-confirmation";
 import {
 	type ChatAppSourceProvider,
 	getAppSourceLabel,
@@ -268,13 +268,11 @@ type ChatComposerProps = {
 	editingMessageId?: string | null;
 	placeholder: string;
 	topAccessory?: React.ReactNode;
-	automationConfirmation?: AutomationDeleteConfirmation | null;
-	isAutomationConfirmationSubmitting?: boolean;
+	toolApproval?: ToolApprovalRequest | null;
+	isToolApprovalSubmitting?: boolean;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 	onQueuedFollowUpsReorder?: (ids: Array<string>) => void;
-	onAutomationConfirmationCancel?: () => void;
-	onAutomationConfirmationConfirm?: () => void;
-	onAutomationConfirmationTextAnswer?: (answer: string) => void;
+	onToolApprovalResponse?: (approved: boolean) => void;
 	onDraftChange: (value: string) => void;
 	onDraftKeyDown: (event: KeyboardEvent) => void;
 	onCancelEdit?: () => void;
@@ -311,13 +309,11 @@ export function ChatComposer({
 	editingMessageId,
 	placeholder,
 	topAccessory,
-	automationConfirmation,
-	isAutomationConfirmationSubmitting,
+	toolApproval,
+	isToolApprovalSubmitting,
 	queuedFollowUps = EMPTY_QUEUED_FOLLOW_UPS,
 	onQueuedFollowUpsReorder,
-	onAutomationConfirmationCancel,
-	onAutomationConfirmationConfirm,
-	onAutomationConfirmationTextAnswer,
+	onToolApprovalResponse,
 	onDraftChange,
 	onDraftKeyDown,
 	onCancelEdit,
@@ -390,15 +386,11 @@ export function ChatComposer({
 				onCancelEdit={onCancelEdit}
 				topAccessory={topAccessory}
 			/>
-			{automationConfirmation ? (
-				<ChatAutomationConfirmationBar
-					confirmation={automationConfirmation}
-					disabled={isAutomationConfirmationSubmitting}
-					onCancel={() => onAutomationConfirmationCancel?.()}
-					onConfirm={() => onAutomationConfirmationConfirm?.()}
-					onTextAnswer={(answer) =>
-						onAutomationConfirmationTextAnswer?.(answer)
-					}
+			{toolApproval ? (
+				<ChatToolApprovalBar
+					approval={toolApproval}
+					disabled={isToolApprovalSubmitting}
+					onRespond={(approved) => onToolApprovalResponse?.(approved)}
 				/>
 			) : null}
 			{queuedFollowUps.length > 0 ? (
@@ -411,7 +403,7 @@ export function ChatComposer({
 				data-drag-over={attachmentDropzone.isDragOver ? "true" : undefined}
 				className={cn(
 					"min-h-[132px] max-h-[32rem] max-w-full overflow-hidden border-input/30 bg-background bg-clip-padding shadow-sm has-disabled:bg-background has-disabled:opacity-100 data-[drag-over=true]:border-ring data-[drag-over=true]:ring-3 data-[drag-over=true]:ring-ring/50 dark:bg-input/30 dark:has-disabled:bg-input/30",
-					automationConfirmation || queuedFollowUps.length > 0
+					toolApproval || queuedFollowUps.length > 0
 						? "-mt-px rounded-lg"
 						: "rounded-lg",
 				)}

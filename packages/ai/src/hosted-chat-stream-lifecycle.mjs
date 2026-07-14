@@ -1,6 +1,7 @@
 import { createAgentUIStream } from "ai";
 import { pipeHostedActiveStreamText } from "./hosted-chat-active-stream.mjs";
 import { createHostedAssistantRunFinalizationQueue } from "./hosted-chat-run-finalization-queue.mjs";
+import { getToolApprovalRequest } from "./tool-approval-state.mjs";
 
 export const createHostedChatRunResponseStream = async ({
 	activeStreamSession,
@@ -40,10 +41,23 @@ export const createHostedChatRunResponseStream = async ({
 						return;
 					}
 
-					const terminalization = {
-						responseMessage,
-						status: "completed",
-					};
+					const approvalRequest = getToolApprovalRequest(responseMessage);
+					const terminalization = approvalRequest
+						? {
+								pendingDecision: {
+									type: "tool_approval",
+									approvalId: approvalRequest.approvalId,
+									assistantMessageId: approvalRequest.assistantMessageId,
+									toolCallId: approvalRequest.toolCallId,
+									toolName: approvalRequest.toolName,
+								},
+								responseMessage,
+								status: "waiting_for_user",
+							}
+						: {
+								responseMessage,
+								status: "completed",
+							};
 					if (finalizationQueue) {
 						finalizationQueue.setTerminalization(terminalization);
 						return;
