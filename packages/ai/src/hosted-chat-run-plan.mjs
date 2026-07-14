@@ -1,4 +1,4 @@
-import { createHostedChatAgent } from "./hosted-chat-agent.mjs";
+import { prepareHostedAssistantExecution } from "./hosted-chat-execution.mjs";
 import { buildHostedChatRuntimePrompt } from "./hosted-chat-runtime.mjs";
 
 export const buildHostedChatRunPlan = ({
@@ -32,7 +32,7 @@ export const buildHostedChatRunPlan = ({
 		...appTools,
 		...localFolderTools,
 	};
-	const agentPlan = createHostedChatAgent({
+	const agentPlan = prepareHostedAssistantExecution({
 		additionalAgentTools,
 		enabledTools,
 		emptyToolsWhenNone,

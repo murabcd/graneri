@@ -118,7 +118,9 @@ export const buildHostedChatRunContext = async ({
 	const localFolderRoots =
 		localFolderToolMode === "client"
 			? buildClientLocalFolderRoots(localFolders)
-			: await resolveLocalFolderRoots(localFolders);
+			: await resolveLocalFolderRoots(
+					getHostedChatLocalFolderReferencePaths(localFolders),
+				);
 	const localFolderContext = buildLocalFolderSystemContext(localFolderRoots);
 	logLatency("tools.workspace_ready", {
 		appToolCount: Object.keys(appTools).length,

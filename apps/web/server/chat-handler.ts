@@ -16,15 +16,11 @@ import {
 	validateHostedChatSteerRoute,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
-	buildHostedChatRunContext,
 	createHostedActiveStreamKey,
-	createHostedChatQueuedInput,
-	createHostedChatTurnController,
-	getHostedChatLocalFolderReferencePaths,
+	createHostedChatTurnInput,
 	type HostedActiveStreamSession,
-	prepareHostedChatTurnBranch,
+	prepareHostedChatTurn,
 	stopOrphanedHostedAssistantRun,
-	validateHostedAssistantMessages,
 } from "@workspace/ai/hosted-chat-turn";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
 import {
@@ -33,7 +29,7 @@ import {
 	getToolApprovalResponses,
 	type ToolApprovalResponse,
 } from "@workspace/ai/tool-approval-state";
-import type { InferUITools, UIMessage } from "ai";
+import type { UIMessage } from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
@@ -66,6 +62,14 @@ const activeChatStreamControllers = new Map<
 	HostedActiveStreamSession
 >();
 const AI_LATENCY_DEBUG_ENABLED = process.env.GRANERI_AI_LATENCY_DEBUG === "1";
+
+type PreparedHostedChatTurn = Extract<
+	Awaited<ReturnType<typeof prepareHostedChatTurn>>,
+	{ ok: true }
+>;
+type HostedChatRunContext = Awaited<
+	ReturnType<PreparedHostedChatTurn["complete"]>
+>;
 
 const canUseLocalFolderTools = () => process.env.GRANERI_ENV_MODE === "local";
 
@@ -478,7 +482,7 @@ export const handleChatRequest = async (
 		model: resolvedModel.model,
 		reasoningEffort: resolvedReasoningEffort,
 	});
-	const queuedInput = createHostedChatQueuedInput<
+	const { queuedInput, turnController } = createHostedChatTurnInput<
 		Id<"workspaces">,
 		string,
 		Id<"assistantRuns">,
@@ -492,12 +496,7 @@ export const handleChatRequest = async (
 			convexClient.mutation(api.assistantQueuedMessages.discardClaimed, args),
 		getClaimedForChat: (args) =>
 			convexClient.query(api.assistantQueuedMessages.getClaimedForChat, args),
-	});
-	const turnController = createHostedChatTurnController({
-		workspaceId: resolvedWorkspaceId,
-		chatId: id,
 		attachableRun,
-		queuedInput,
 		interruptActiveRun: (args) =>
 			attachableRun?.producer === "convex"
 				? Promise.resolve([...args.pendingInput])
@@ -585,25 +584,13 @@ export const handleChatRequest = async (
 		options: { tolerateMissing?: boolean } = {},
 	) =>
 		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(operation, options);
-	let preparedBranch: {
-		incomingMessages: UIMessage[];
-	};
-	let selectedAppConnections: Awaited<
-		ReturnType<typeof buildHostedChatRunContext>
-	>["selectedAppConnections"];
-	let localFolderRoots: Awaited<
-		ReturnType<typeof buildHostedChatRunContext>
-	>["localFolderRoots"];
-	let agent: Awaited<ReturnType<typeof buildHostedChatRunContext>>["agent"];
-	let finalizedToolSet: Awaited<
-		ReturnType<typeof buildHostedChatRunContext>
-	>["finalizedToolSet"];
-	let coreToolPolicyState: Awaited<
-		ReturnType<typeof buildHostedChatRunContext>
-	>["coreToolPolicyState"];
+	let selectedAppConnections: HostedChatRunContext["selectedAppConnections"];
+	let localFolderRoots: HostedChatRunContext["localFolderRoots"];
+	let agent: HostedChatRunContext["agent"];
+	let finalizedToolSet: HostedChatRunContext["finalizedToolSet"];
+	let coreToolPolicyState: HostedChatRunContext["coreToolPolicyState"];
 	let systemPrompt: string;
-	let tools: Awaited<ReturnType<typeof buildHostedChatRunContext>>["tools"];
-	let chatMessages: UIMessage<unknown, never, InferUITools<typeof tools>>[];
+	let chatMessages: UIMessage[];
 	let lastUserMessage: UIMessage | undefined;
 	let toolApprovalResponse: ToolApprovalResponse | null;
 	let shouldGenerateChatTitle: boolean;
@@ -618,76 +605,77 @@ export const handleChatRequest = async (
 			safetyIdentifier: admission.safetyIdentifier,
 			workspaceId: resolvedWorkspaceId,
 		});
-		const branchResult = await prepareHostedChatTurnBranch({
-			attachableRunId: attachableRun?._id,
-			chatId: id,
-			continueRunId,
-			getMessagesSnapshot: () => Promise.resolve(contextMessages),
-			listRunEventsAfter: (args) =>
-				convexClient.query(api.assistantRunEvents.listRunEventsAfter, args),
-			logLatency,
-			message: effectiveMessage,
-			messageId: toolApprovalResponse ? undefined : messageId,
-			onBranchError: async ({ error, messageId: branchMessageId }) => {
-				if (
-					queuedInput.hasClaimed &&
-					!(await cleanupClaimedSteerQueuedMessage(
-						"steer_queue_branch_create_cleanup",
-					))
-				) {
+		const preparedTurn = await prepareHostedChatTurn({
+			branch: {
+				attachableRunId: attachableRun?._id,
+				chatId: id,
+				continueRunId,
+				getMessagesSnapshot: () => Promise.resolve(contextMessages),
+				listRunEventsAfter: (args) =>
+					convexClient.query(api.assistantRunEvents.listRunEventsAfter, args),
+				logLatency,
+				message: effectiveMessage,
+				messageId: toolApprovalResponse ? undefined : messageId,
+				onBranchError: async ({ error, messageId: branchMessageId }) => {
+					if (
+						queuedInput.hasClaimed &&
+						!(await cleanupClaimedSteerQueuedMessage(
+							"steer_queue_branch_create_cleanup",
+						))
+					) {
+						return true;
+					}
+					recordServerError({
+						details: {
+							message_id: branchMessageId,
+						},
+						error,
+						event: wideEvent,
+						operation: "branch_create",
+					});
+					const routeError = getHostedChatConvexRouteError(error);
+					wideEvent.outcome = "error";
+					wideEvent.status_code = routeError?.statusCode ?? 500;
+					wideEvent.error_code =
+						routeError?.errorCode ?? "branch_create_failed";
+					emitWideEvent("error");
+					sendJson(response, routeError?.statusCode ?? 500, {
+						error: routeError?.error ?? "Failed to prepare edited chat branch.",
+						...(routeError ? { errorCode: routeError.errorCode } : {}),
+					});
 					return true;
-				}
-				recordServerError({
-					details: {
-						message_id: branchMessageId,
-					},
-					error,
-					event: wideEvent,
-					operation: "branch_create",
-				});
-				const routeError = getHostedChatConvexRouteError(error);
-				wideEvent.outcome = "error";
-				wideEvent.status_code = routeError?.statusCode ?? 500;
-				wideEvent.error_code = routeError?.errorCode ?? "branch_create_failed";
-				emitWideEvent("error");
-				sendJson(response, routeError?.statusCode ?? 500, {
-					error: routeError?.error ?? "Failed to prepare edited chat branch.",
-					...(routeError ? { errorCode: routeError.errorCode } : {}),
-				});
-				return true;
+				},
+				pendingMessages: pendingSteerMessages,
+				prepareMessage: currentToolApprovalResponse
+					? ({ storedMessages }) =>
+							createCanonicalToolApprovalResponse({
+								approvalResponse: currentToolApprovalResponse,
+								approvalResponses: getToolApprovalResponses(effectiveMessage),
+								storedMessage: storedMessages.find(
+									(storedMessage) =>
+										storedMessage.id ===
+										currentToolApprovalResponse.assistantMessageId,
+								),
+							})
+					: undefined,
+				trigger,
+				branchFromMessage: (args) =>
+					convexClient.mutation(api.chatBranches.branchFromMessage, args),
+				workspaceId: resolvedWorkspaceId,
 			},
-			pendingMessages: pendingSteerMessages,
-			prepareMessage: currentToolApprovalResponse
-				? ({ storedMessages }) =>
-						createCanonicalToolApprovalResponse({
-							approvalResponse: currentToolApprovalResponse,
-							approvalResponses: getToolApprovalResponses(effectiveMessage),
-							storedMessage: storedMessages.find(
-								(storedMessage) =>
-									storedMessage.id ===
-									currentToolApprovalResponse.assistantMessageId,
-							),
-						})
-				: undefined,
-			trigger,
-			branchFromMessage: (args) =>
-				convexClient.mutation(api.chatBranches.branchFromMessage, args),
-			workspaceId: resolvedWorkspaceId,
 		});
-		if (!branchResult.ok) {
+		if (!preparedTurn.ok) {
 			return;
 		}
-		preparedBranch = branchResult.preparedBranch;
-
 		({
 			agent,
+			chatMessages,
 			coreToolPolicyState,
 			finalizedToolSet,
 			localFolderRoots,
 			selectedAppConnections,
 			systemPrompt,
-			tools,
-		} = await buildHostedChatRunContext({
+		} = await preparedTurn.complete({
 			appsEnabled,
 			automationActions: createHostedChatAutomationActions({
 				convexClient,
@@ -739,22 +727,12 @@ export const handleChatRequest = async (
 			noteId: resolvedNoteId,
 			providerOptions,
 			recipeSlug,
-			resolveLocalFolderRoots: (folders) =>
-				canUseLocalFolderTools()
-					? resolveLocalFolderRoots(
-							getHostedChatLocalFolderReferencePaths(folders),
-						)
-					: [],
+			resolveLocalFolderRoots: (folderPaths) =>
+				canUseLocalFolderTools() ? resolveLocalFolderRoots(folderPaths) : [],
 			selectedSourceIds,
 			webSearchEnabled,
 			workspaceId: resolvedWorkspaceId,
 		}));
-		chatMessages = await validateHostedAssistantMessages<
-			UIMessage<unknown, never, InferUITools<typeof tools>>
-		>({
-			messages: preparedBranch.incomingMessages,
-			tools,
-		});
 		logLatency("chat.messages_validated", {
 			chatMessageCount: chatMessages.length,
 		});
@@ -824,7 +802,6 @@ export const handleChatRequest = async (
 		steeredUserMessages,
 		supersedeActiveRun,
 		systemPrompt,
-		tools,
 		toolApprovalResponse,
 		trigger,
 		turnController,

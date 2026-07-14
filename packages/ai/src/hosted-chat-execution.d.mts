@@ -12,7 +12,7 @@ export type HostedAssistantExecutionOutcome =
 	| Exclude<HostedAssistantRunTerminalization, { status: "failed" }>
 	| { responseMessage: UIMessage; status: "aborted" };
 
-export declare const createHostedAssistantAgent: (settings: {
+export declare const prepareHostedAssistantExecution: (settings: {
 	additionalAgentTools?: ToolSet;
 	enabledTools: ToolSet;
 	emptyToolsWhenNone?: boolean;
@@ -33,19 +33,12 @@ export declare const createHostedAssistantAgent: (settings: {
 	tools: ToolSet;
 };
 
-export declare const validateHostedAssistantMessages: <
-	Message extends UIMessage,
->(args: {
-	messages: unknown;
-	tools?: ToolSet;
-}) => Promise<Message[]>;
-
 export declare const getHostedAssistantExecutionOutcome: (args: {
 	isAborted: boolean;
 	responseMessage: UIMessage;
 }) => HostedAssistantExecutionOutcome;
 
-export declare const createHostedAssistantExecutionStream: (args: {
+type HostedAssistantExecutionStreamOptions = {
 	abortSignal?: AbortSignal;
 	agent: ToolLoopAgent<never, ToolSet, never>;
 	assistantMessageId: string;
@@ -66,11 +59,26 @@ export declare const createHostedAssistantExecutionStream: (args: {
 	}) => Promise<ReadableStream<UIMessageChunk>>;
 	messages: UIMessage[];
 	onError?: () => string;
-	onOutcome: (outcome: HostedAssistantExecutionOutcome) => void;
 	timeout?: { totalMs: number };
-}) => Promise<ReadableStream<UIMessageChunk>>;
+};
 
-export declare const consumeHostedAssistantExecutionStream: (args: {
-	onMessage?: (message: UIMessage) => Promise<void> | void;
+export declare function startHostedAssistantExecution(
+	args: HostedAssistantExecutionStreamOptions & {
+		delivery: {
+			mode: "consume";
+			onMessage?: (message: UIMessage) => Promise<void> | void;
+		};
+	},
+): Promise<{ outcome: HostedAssistantExecutionOutcome }>;
+
+export declare function startHostedAssistantExecution(
+	args: HostedAssistantExecutionStreamOptions & {
+		delivery: {
+			mode: "stream";
+			onMessage?: (message: UIMessage) => Promise<void> | void;
+		};
+	},
+): Promise<{
+	completion: Promise<HostedAssistantExecutionOutcome>;
 	stream: ReadableStream<UIMessageChunk>;
-}) => Promise<UIMessage | null>;
+}>;

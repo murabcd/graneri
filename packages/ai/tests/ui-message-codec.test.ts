@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
 	decodeStoredUiMessage,
 	decodeStoredUiMessagesForModelInput,
+	decodeTrustedStoredUiMessage,
 	encodeUiMessage,
+	normalizeStoredUiMessage,
 	parseUiMessagePartsJson,
 	parseUiMessagesJson,
 	tryParseUiMessagePartsJson,
 } from "../src/ui-message-codec.mjs";
 
 describe("UI message codec", () => {
-	it("round trips a stored UI message", () => {
+	it("round trips and validates a stored UI message", async () => {
 		const stored = encodeUiMessage({
 			createId: () => "generated",
 			createdAt: 123,
@@ -28,7 +30,14 @@ describe("UI message codec", () => {
 			metadataJson: '{"source":"test"}',
 			createdAt: 123,
 		});
-		expect(decodeStoredUiMessage(stored)).toEqual({
+		await expect(decodeStoredUiMessage(stored)).resolves.toEqual({
+			id: "message-1",
+			role: "assistant",
+			metadata: { source: "test" },
+			parts: [{ type: "text", text: "Hello" }],
+			createdAt: 123,
+		});
+		expect(decodeTrustedStoredUiMessage(stored)).toEqual({
 			id: "message-1",
 			role: "assistant",
 			metadata: { source: "test" },
@@ -61,6 +70,32 @@ describe("UI message codec", () => {
 				},
 			}),
 		).toThrow("UI message metadata must be JSON serializable.");
+	});
+
+	it("rejects parts that are arrays but not valid AI SDK message parts", async () => {
+		await expect(
+			decodeStoredUiMessage({
+				id: "message-1",
+				role: "assistant",
+				partsJson: '[{"type":"text","text":42}]',
+			}),
+		).rejects.toMatchObject({
+			code: "invalid_message_shape",
+			message: "Stored UI message is invalid.",
+		});
+	});
+
+	it("canonicalizes legacy text-only snapshots at the durable write seam", async () => {
+		await expect(
+			normalizeStoredUiMessage({
+				id: "message-1",
+				role: "assistant",
+				partsJson: "[]",
+				text: "Interrupted answer",
+			}),
+		).resolves.toMatchObject({
+			partsJson: '[{"type":"text","text":"Interrupted answer"}]',
+		});
 	});
 
 	it("makes tolerant model projection explicit", () => {

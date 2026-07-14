@@ -78,10 +78,10 @@ export const upsertAssistantRunJobMessage = async (
 	}
 
 	let messages: unknown[];
-	let uiMessage: ReturnType<typeof decodeStoredUiMessage>;
+	let uiMessage: Awaited<ReturnType<typeof decodeStoredUiMessage>>;
 	try {
 		messages = parseUiMessagesJson(runJob.job.messagesJson);
-		uiMessage = decodeStoredUiMessage(message);
+		uiMessage = await decodeStoredUiMessage(message);
 	} catch {
 		throw new ConvexError({
 			code: "INVALID_ASSISTANT_RUN_JOB",

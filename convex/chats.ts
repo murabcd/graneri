@@ -1,5 +1,8 @@
 import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
-import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
+import {
+	normalizeStoredUiMessage,
+	parseUiMessagePartsJson,
+} from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,10 +14,7 @@ import {
 	query,
 } from "./_generated/server";
 import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
-import {
-	deleteAcceptedQueuedMessages,
-	requireClaimedQueuedMessageAcceptance,
-} from "./assistantQueuedMessageStateMachine";
+import { acceptClaimedFollowUps } from "./assistantQueuedMessageStateMachine";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import {
@@ -733,16 +733,25 @@ export const saveMessageForOwnerInternal = async (
 	},
 ) => {
 	await requireOwnedWorkspace(ctx, args.ownerTokenIdentifier, args.workspaceId);
+	let normalizedMessage: typeof args.message;
+	try {
+		normalizedMessage = await normalizeStoredUiMessage(args.message);
+	} catch {
+		throw new ConvexError({
+			code: "INVALID_CHAT_MESSAGE",
+			message: "Chat message does not match the Stored UI Message contract.",
+		});
+	}
 	const now = Date.now();
 	const normalizedTitle = normalizeOptionalChatTitle(args.title);
 	const normalizedPreview = normalizeChatPreview(
-		args.preview ?? args.message.text,
+		args.preview ?? normalizedMessage.text,
 	);
-	const messageCreatedAt = args.message.createdAt || now;
+	const messageCreatedAt = normalizedMessage.createdAt || now;
 	const storedChatId = clampWhitespace(args.chatId);
 	const storedNoteId = args.noteId ?? undefined;
 	const storedMessageId =
-		clampWhitespace(args.message.id) ||
+		clampWhitespace(normalizedMessage.id) ||
 		`msg-${now}-${Math.random().toString(36).slice(2, 10)}`;
 
 	if (storedNoteId) {
@@ -815,10 +824,10 @@ export const saveMessageForOwnerInternal = async (
 		chatId,
 		ownerTokenIdentifier: args.ownerTokenIdentifier,
 		messageId: storedMessageId,
-		role: args.message.role,
-		partsJson: args.message.partsJson,
-		metadataJson: args.message.metadataJson,
-		text: args.message.text,
+		role: normalizedMessage.role,
+		partsJson: normalizedMessage.partsJson,
+		metadataJson: normalizedMessage.metadataJson,
+		text: normalizedMessage.text,
 		createdAt: messageCreatedAt,
 	};
 	requireConvexDocumentWithinLimit({
@@ -1233,45 +1242,49 @@ export const acceptSteeredUserMessage = mutation({
 			});
 		}
 
-		const queuedMessage = await requireClaimedQueuedMessageAcceptance(ctx, {
+		return await acceptClaimedFollowUps(ctx, {
 			chatId: chat._id,
-			contentErrorCode: "INVALID_STEERED_MESSAGE",
-			contentErrorMessage:
-				"Steered message must match the claimed queued message.",
-			invalidMessageErrorMessage:
-				"Steered message must be a non-empty user message.",
-			message: args.message,
-			notClaimedMessage: "Queued message was not accepted for steering.",
+			mode: "steer",
 			ownerTokenIdentifier,
-			queuedMessageId: args.queuedMessageId,
 			runId: run._id,
 			workspaceId: args.workspaceId,
-		});
-
-		const savedMessage = await saveMessageForOwnerInternal(ctx, {
-			ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			authorName: getAuthorName(identity),
-			chatId: args.chatId,
-			noteId: args.noteId,
-			title: args.title,
-			preview: args.preview,
-			model: args.model,
-			reasoningEffort: args.reasoningEffort,
-			message: args.message,
-		});
-		await transitionAssistantRun(ctx, run, {
-			type: "append_user_messages",
 			messages: [
 				{
-					queuedMessageId: queuedMessage._id,
-					messageId: args.message.id,
+					message: args.message,
+					queuedMessageId: args.queuedMessageId,
 				},
 			],
+			commit: async ([queuedMessage]) => {
+				if (!queuedMessage) {
+					throw new ConvexError({
+						code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
+						message: "Claimed follow-up is missing during acceptance.",
+					});
+				}
+				const savedMessage = await saveMessageForOwnerInternal(ctx, {
+					ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+					authorName: getAuthorName(identity),
+					chatId: args.chatId,
+					noteId: args.noteId,
+					title: args.title,
+					preview: args.preview,
+					model: args.model,
+					reasoningEffort: args.reasoningEffort,
+					message: args.message,
+				});
+				await transitionAssistantRun(ctx, run, {
+					type: "append_user_messages",
+					messages: [
+						{
+							queuedMessageId: queuedMessage._id,
+							messageId: args.message.id,
+						},
+					],
+				});
+				return savedMessage;
+			},
 		});
-		await deleteAcceptedQueuedMessages(ctx, [queuedMessage]);
-
-		return savedMessage;
 	},
 });
 
@@ -1330,130 +1343,123 @@ export const acceptSteeredUserMessages = mutation({
 			});
 		}
 
-		const queuedMessages = await Promise.all(
-			args.messages.map(({ message, queuedMessageId }) =>
-				requireClaimedQueuedMessageAcceptance(ctx, {
-					chatId: chat._id,
-					contentErrorCode: "INVALID_STEERED_MESSAGE",
-					contentErrorMessage:
-						"Steered message must match the claimed queued message.",
-					invalidMessageErrorMessage:
-						"Steered message must be a non-empty user message.",
-					message,
-					notClaimedMessage: "Queued message was not accepted for steering.",
+		const commitSteeredFollowUps = async (
+			queuedMessages: ReadonlyArray<Doc<"assistantQueuedMessages">>,
+		) => {
+			const convexStream =
+				run.producer === "convex"
+					? await getActiveStreamForRun(ctx, run._id)
+					: null;
+			if (
+				run.producer === "convex" &&
+				(!convexStream ||
+					convexStream.assistantMessageId !== run.assistantMessageId)
+			) {
+				throw new ConvexError({
+					code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
+					message:
+						"Convex assistant run stream does not match its active generation.",
+				});
+			}
+			if (run.producer === "convex") {
+				await consumeChatTurnAdmissionReservation(ctx, {
 					ownerTokenIdentifier,
-					queuedMessageId,
-					runId: run._id,
-					workspaceId: args.workspaceId,
-				}),
-			),
-		);
+					reservationId: args.admissionReservationId,
+				});
+			}
 
-		const convexStream =
-			run.producer === "convex"
-				? await getActiveStreamForRun(ctx, run._id)
-				: null;
-		if (
-			run.producer === "convex" &&
-			(!convexStream ||
-				convexStream.assistantMessageId !== run.assistantMessageId)
-		) {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
-				message:
-					"Convex assistant run stream does not match its active generation.",
-			});
-		}
-		if (run.producer === "convex") {
-			await consumeChatTurnAdmissionReservation(ctx, {
-				ownerTokenIdentifier,
-				reservationId: args.admissionReservationId,
-			});
-		}
-
-		if (convexStream && run.status === "running") {
-			const stream = convexStream;
-			if (stream.text.trim() || stream.partsJson !== "[]") {
-				const interruptedMetadataJson = JSON.stringify({ interrupted: true });
-				await saveMessageForOwnerInternal(ctx, {
-					ownerTokenIdentifier,
-					workspaceId: args.workspaceId,
-					authorName: getAuthorName(identity),
-					chatId: args.chatId,
-					model: run.model,
-					reasoningEffort: run.reasoningEffort,
-					message: {
+			if (convexStream && run.status === "running") {
+				const stream = convexStream;
+				if (stream.text.trim() || stream.partsJson !== "[]") {
+					const interruptedMetadataJson = JSON.stringify({ interrupted: true });
+					await saveMessageForOwnerInternal(ctx, {
+						ownerTokenIdentifier,
+						workspaceId: args.workspaceId,
+						authorName: getAuthorName(identity),
+						chatId: args.chatId,
+						model: run.model,
+						reasoningEffort: run.reasoningEffort,
+						message: {
+							id: stream.assistantMessageId,
+							role: "assistant",
+							partsJson: stream.partsJson,
+							metadataJson: interruptedMetadataJson,
+							text: stream.text.trim(),
+							createdAt: Date.now(),
+						},
+					});
+					await appendAssistantRunEvent(ctx, run, {
+						type: "assistant.message.interrupted",
+						assistantMessageId: stream.assistantMessageId,
+					});
+					await upsertAssistantRunJobMessage(ctx, run._id, {
 						id: stream.assistantMessageId,
 						role: "assistant",
 						partsJson: stream.partsJson,
 						metadataJson: interruptedMetadataJson,
-						text: stream.text.trim(),
-						createdAt: Date.now(),
-					},
-				});
-				await appendAssistantRunEvent(ctx, run, {
-					type: "assistant.message.interrupted",
-					assistantMessageId: stream.assistantMessageId,
-				});
-				await upsertAssistantRunJobMessage(ctx, run._id, {
-					id: stream.assistantMessageId,
-					role: "assistant",
-					partsJson: stream.partsJson,
-					metadataJson: interruptedMetadataJson,
-				});
+					});
+				}
 			}
-		}
 
-		const savedMessages = [];
-		for (const { message } of args.messages) {
-			const savedMessage = await saveMessageForOwnerInternal(ctx, {
-				ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-				authorName: getAuthorName(identity),
-				chatId: args.chatId,
-				noteId: args.noteId,
-				title: args.title,
-				preview: args.preview,
-				model: args.model,
-				reasoningEffort: args.reasoningEffort,
-				message,
+			const savedMessages = [];
+			for (const { message } of args.messages) {
+				const savedMessage = await saveMessageForOwnerInternal(ctx, {
+					ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+					authorName: getAuthorName(identity),
+					chatId: args.chatId,
+					noteId: args.noteId,
+					title: args.title,
+					preview: args.preview,
+					model: args.model,
+					reasoningEffort: args.reasoningEffort,
+					message,
+				});
+				savedMessages.push(savedMessage);
+				if (run.producer === "convex") {
+					await upsertAssistantRunJobMessage(ctx, run._id, message);
+				}
+			}
+
+			const transitionMessages = queuedMessages.map((queuedMessage, index) => {
+				const message = args.messages[index]?.message;
+				if (!message) {
+					throw new ConvexError({
+						code: "INVALID_STEERED_MESSAGE",
+						message: "Steered message must be a non-empty user message.",
+					});
+				}
+
+				return {
+					queuedMessageId: queuedMessage._id,
+					messageId: message.id,
+				};
 			});
-			savedMessages.push(savedMessage);
+			const continuedRun = await transitionAssistantRun(ctx, run, {
+				type: "append_user_messages",
+				messages: transitionMessages,
+			});
+			const messageRun = await transitionAssistantRun(ctx, continuedRun, {
+				type: "start_assistant_message",
+				assistantMessageId: args.nextAssistantMessageId,
+			});
 			if (run.producer === "convex") {
-				await upsertAssistantRunJobMessage(ctx, run._id, message);
+				await cleanupAssistantRunSnapshots(ctx, run._id);
+				await createAssistantRunStream(ctx, messageRun);
+				await scheduleAssistantRunExecution(ctx, messageRun);
 			}
-		}
+			return savedMessages;
+		};
 
-		const transitionMessages = queuedMessages.map((queuedMessage, index) => {
-			const message = args.messages[index]?.message;
-			if (!message) {
-				throw new ConvexError({
-					code: "INVALID_STEERED_MESSAGE",
-					message: "Steered message must be a non-empty user message.",
-				});
-			}
-
-			return {
-				queuedMessageId: queuedMessage._id,
-				messageId: message.id,
-			};
+		return await acceptClaimedFollowUps(ctx, {
+			chatId: chat._id,
+			mode: "steer",
+			ownerTokenIdentifier,
+			runId: run._id,
+			workspaceId: args.workspaceId,
+			messages: args.messages,
+			commit: commitSteeredFollowUps,
 		});
-		const continuedRun = await transitionAssistantRun(ctx, run, {
-			type: "append_user_messages",
-			messages: transitionMessages,
-		});
-		const messageRun = await transitionAssistantRun(ctx, continuedRun, {
-			type: "start_assistant_message",
-			assistantMessageId: args.nextAssistantMessageId,
-		});
-		if (run.producer === "convex") {
-			await cleanupAssistantRunSnapshots(ctx, run._id);
-			await createAssistantRunStream(ctx, messageRun);
-			await scheduleAssistantRunExecution(ctx, messageRun);
-		}
-		await deleteAcceptedQueuedMessages(ctx, queuedMessages);
-
-		return savedMessages;
 	},
 });
 
@@ -1490,35 +1496,31 @@ export const acceptQueuedUserMessage = mutation({
 			});
 		}
 
-		const queuedMessage = await requireClaimedQueuedMessageAcceptance(ctx, {
+		return await acceptClaimedFollowUps(ctx, {
 			chatId: chat._id,
-			contentErrorCode: "INVALID_QUEUED_MESSAGE",
-			contentErrorMessage:
-				"Queued message must match the claimed queued message.",
-			invalidMessageErrorMessage:
-				"Queued message must be a non-empty user message.",
-			message: args.message,
-			notClaimedMessage: "Queued message was not accepted for replay.",
-			ownerTokenIdentifier,
-			queuedMessageId: args.queuedMessageId,
-			workspaceId: args.workspaceId,
-		});
-
-		const savedMessage = await saveMessageForOwnerInternal(ctx, {
+			mode: "replay",
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
-			authorName: getAuthorName(identity),
-			chatId: args.chatId,
-			noteId: args.noteId,
-			title: args.title,
-			preview: args.preview,
-			model: args.model,
-			reasoningEffort: args.reasoningEffort,
-			message: args.message,
+			messages: [
+				{
+					message: args.message,
+					queuedMessageId: args.queuedMessageId,
+				},
+			],
+			commit: async () =>
+				await saveMessageForOwnerInternal(ctx, {
+					ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+					authorName: getAuthorName(identity),
+					chatId: args.chatId,
+					noteId: args.noteId,
+					title: args.title,
+					preview: args.preview,
+					model: args.model,
+					reasoningEffort: args.reasoningEffort,
+					message: args.message,
+				}),
 		});
-		await deleteAcceptedQueuedMessages(ctx, [queuedMessage]);
-
-		return savedMessage;
 	},
 });
 

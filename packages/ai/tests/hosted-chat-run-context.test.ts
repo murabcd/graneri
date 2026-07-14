@@ -5,6 +5,7 @@ import {
 	getHostedChatLocalFolderReferenceIds,
 	getHostedChatLocalFolderReferencePaths,
 } from "../src/hosted-chat-run-context.mjs";
+import { prepareHostedChatTurn } from "../src/hosted-chat-turn-preparer.mjs";
 
 describe("hosted chat run context", () => {
 	it("extracts web local folder paths and desktop local folder ids", () => {
@@ -34,7 +35,24 @@ describe("hosted chat run context", () => {
 			mutation: async () => null,
 		};
 
-		const context = await buildHostedChatRunContext({
+		const preparedTurn = await prepareHostedChatTurn({
+			branch: {
+				branchFromMessage: async () => undefined,
+				chatId: "chat-1",
+				getMessagesSnapshot: async () => [],
+				listRunEventsAfter: async () => [],
+				message: {
+					id: "message-1",
+					role: "user",
+					parts: [{ type: "text", text: "Use the project" }],
+				},
+				workspaceId: "workspace-1",
+			},
+		});
+		if (!preparedTurn.ok) {
+			throw new Error("Expected hosted turn preparation to succeed.");
+		}
+		const context = await preparedTurn.complete({
 			appsEnabled: false,
 			automationActions: {
 				createAutomation: async (automation) => {
@@ -108,9 +126,7 @@ describe("hosted chat run context", () => {
 		);
 		expect(context.systemPrompt).toContain("stored note");
 		expect(context.systemPrompt).toContain("Project");
-		expect(localFolderArguments).toEqual([
-			[{ id: "folder-1", path: "/tmp/project" }],
-		]);
+		expect(localFolderArguments).toEqual([["/tmp/project"]]);
 		expect(automations).toEqual([]);
 		expect(latencyStages).toEqual([
 			"context.sources_loaded",

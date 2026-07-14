@@ -70,7 +70,7 @@ export declare const buildHostedChatRunContext: (args: {
 	providerOptions?: ProviderOptions;
 	recipeSlug?: string | null;
 	resolveLocalFolderRoots: (
-		localFolders: LocalFolderReference[],
+		localFolderPaths: string[],
 	) => Promise<LocalFolderRoot[]> | LocalFolderRoot[];
 	selectedSourceIds?: string[];
 	webSearchEnabled?: boolean;

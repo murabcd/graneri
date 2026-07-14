@@ -11,17 +11,16 @@ import {
 	getHostedChatMessageText,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
-	consumeHostedAssistantExecutionStream,
-	createHostedAssistantAgent,
-	createHostedAssistantExecutionStream,
-	getHostedAssistantExecutionOutcome,
-	type HostedAssistantExecutionOutcome,
-	validateHostedAssistantMessages,
+	prepareHostedAssistantExecution,
+	startHostedAssistantExecution,
 } from "@workspace/ai/hosted-chat-turn";
 import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
 import { getChatModelProviderOptions } from "@workspace/ai/models";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
-import { parseUiMessagesJson } from "@workspace/ai/ui-message-codec";
+import {
+	parseUiMessagesJson,
+	validateUiMessages,
+} from "@workspace/ai/ui-message-codec";
 import type { InferAgentUIMessage, ToolSet, UIMessage } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -45,7 +44,7 @@ const parseMessages = async <Message extends UIMessage>(
 	job: AssistantRunJob,
 ) => {
 	const messages = parseUiMessagesJson(job.messagesJson);
-	return await validateHostedAssistantMessages<Message>({ messages });
+	return await validateUiMessages<Message>({ messages });
 };
 
 const getErrorText = (error: unknown) =>
@@ -170,7 +169,7 @@ export const run = internalAction({
 				},
 				requireActiveRun,
 			);
-			const { agent } = createHostedAssistantAgent({
+			const { agent } = prepareHostedAssistantExecution({
 				enabledTools,
 				model: context.model,
 				systemPrompt: context.job.systemPrompt,
@@ -188,20 +187,7 @@ export const run = internalAction({
 				context.job,
 			);
 			await requireActiveRun();
-			const executionState: {
-				outcome: HostedAssistantExecutionOutcome | null;
-			} = { outcome: null };
 			let lastFlushAt = 0;
-			const stream = await createHostedAssistantExecutionStream({
-				agent,
-				assistantMessageId: context.assistantMessageId,
-				messages,
-				timeout: { totalMs: BACKGROUND_RUN_TIMEOUT_MS },
-				onOutcome: (outcome) => {
-					executionState.outcome = outcome;
-				},
-			});
-
 			const persistSnapshot = async (message: UIMessage) => {
 				const persisted = await ctx.runMutation(
 					internal.assistantRunBackgroundState.replaceSnapshot,
@@ -218,27 +204,24 @@ export const run = internalAction({
 				lastFlushAt = Date.now();
 			};
 
-			const latestMessage = await consumeHostedAssistantExecutionStream({
-				stream,
-				onMessage: async (message) => {
-					if (Date.now() - lastFlushAt >= SNAPSHOT_FLUSH_INTERVAL_MS) {
-						await persistSnapshot(message);
-					}
+			const execution = await startHostedAssistantExecution({
+				agent,
+				assistantMessageId: context.assistantMessageId,
+				messages,
+				timeout: { totalMs: BACKGROUND_RUN_TIMEOUT_MS },
+				delivery: {
+					mode: "consume",
+					onMessage: async (message) => {
+						if (Date.now() - lastFlushAt >= SNAPSHOT_FLUSH_INTERVAL_MS) {
+							await persistSnapshot(message);
+						}
+					},
 				},
 			});
 
-			const responseMessage =
-				executionState.outcome?.responseMessage ?? latestMessage;
-			if (!responseMessage) {
-				throw new Error("Assistant run completed without a response message.");
-			}
+			const { outcome: executionOutcome } = execution;
+			const { responseMessage } = executionOutcome;
 			await persistSnapshot(responseMessage);
-			const executionOutcome =
-				executionState.outcome ??
-				getHostedAssistantExecutionOutcome({
-					isAborted: false,
-					responseMessage,
-				});
 			if (executionOutcome.status === "aborted") {
 				throw new Error("Assistant run exceeded its execution timeout.");
 			}

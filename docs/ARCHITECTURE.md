@@ -72,12 +72,18 @@ prompt construction, active-turn input preparation, branch preparation,
 tool-loop setup, message persistence payloads, and active-stream persistence
 behavior; the hosted web route provides Convex reads and writes, request
 transport, and desktop-local tool declarations through small adapter callbacks.
+The route-facing hosted-turn interface exposes intention-level preparation:
+`createHostedChatTurnInput` couples the durable Follow-up adapter to its turn
+controller, while `prepareHostedChatTurn` owns branch-first preparation and
+completes run-context assembly with AI SDK message validation. Callers must not
+independently reconstruct either sequence from the private leaf modules.
 The producer-neutral assistant execution module owns AI SDK agent construction,
-stream creation and consumption, tool-approval outcome detection, and
-completed/aborted outcome classification. Web and Convex remain producer
-adapters: web owns desktop-local tool streaming and HTTP delivery, while Convex
-owns liveness checks, durable snapshot cadence, scheduling, and transactional
-finalization.
+stream creation, rich-message reconstruction, explicit streamed or consumed
+delivery, tool-approval outcome detection, and completed/aborted outcome
+classification. Stored-message validation belongs to the UI message codec.
+Web and Convex remain producer adapters: web owns desktop-local tool streaming
+and HTTP delivery, while Convex owns liveness checks, durable snapshot cadence,
+scheduling, and transactional finalization.
 Turn input buffering is separate from active-stream transport: the hosted turn
 input buffer owns pending steer/mailbox ordering, wait-agent activity
 notifications, and mailbox deferral rules, while active-stream sessions own
@@ -122,9 +128,11 @@ lifecycle events, and mandatory queue/snapshot cleanup; `assistantRuns` exposes
 the public Convex function adapters and lifecycle queries. Chat and queue modules
 must cross the state-machine seam instead of patching `assistantRuns` rows.
 `assistantQueuedMessageStateMachine` owns follow-up claim, stale-claim recovery,
-acceptance validation, accepted-row deletion, and terminal cleanup. Public queue
-functions and chat persistence mutations are adapters to that state machine and
-must not reproduce its transition rules.
+acceptance validation, accepted-row deletion, and terminal cleanup. Acceptance
+is one state-machine operation: it validates every claim, invokes the adapter's
+transactional chat/run commit, and deletes the accepted rows only after that
+commit succeeds. Public queue functions and chat persistence mutations are
+adapters to that state machine and must not reproduce its transition rules.
 Every run has an explicit `web` or `convex` producer owner. Reconnect may attach
 only to `web` producers and must leave a running `convex` producer intact; stop
 and terminal transitions remain shared durable state regardless of producer.
@@ -251,7 +259,10 @@ duplicate workspace identity, and note contents that can be reloaded by note ID.
 Rich message JSON crosses storage and runtime boundaries only through
 `@workspace/ai/ui-message-codec`. Strict consumers fail closed on malformed
 parts, metadata, or message arrays; historical model-input projection may skip
-malformed rows only through the codec's explicitly tolerant helpers.
+malformed rows only through the codec's explicitly tolerant helpers. The
+durable chat-message write seam validates AI SDK message semantics and stores
+canonical parts JSON, including normalization of legacy interrupted snapshots
+that contain text but no rich parts.
 Claimed replay is still server-owned: the client
 rebuilds request state through the queued-intent module with a fresh Convex
 token and sends `replayQueuedMessageId`; `/api/chat` must load the claimed

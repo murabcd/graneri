@@ -1,3 +1,5 @@
+import { validateUIMessages } from "ai";
+
 const createCodecError = (code, message, cause) => {
 	const error = new Error(message, cause === undefined ? undefined : { cause });
 	error.name = "UIMessageCodecError";
@@ -80,6 +82,9 @@ export const parseUiMessagesJson = (messagesJson) => {
 	return messages;
 };
 
+export const validateUiMessages = ({ messages, tools }) =>
+	validateUIMessages({ messages, tools });
+
 export const encodeUiMessage = ({
 	createId,
 	createdAt = Date.now(),
@@ -103,7 +108,7 @@ export const encodeUiMessage = ({
 	createdAt,
 });
 
-export const decodeStoredUiMessage = (message) => ({
+const decodeStoredUiMessageValue = (message) => ({
 	id: message.id,
 	role: message.role,
 	parts: parseUiMessagePartsJson(message.partsJson),
@@ -112,6 +117,52 @@ export const decodeStoredUiMessage = (message) => ({
 		: { metadata: parseUiMessageMetadataJson(message.metadataJson) }),
 	...(message.createdAt === undefined ? {} : { createdAt: message.createdAt }),
 });
+
+export const decodeTrustedStoredUiMessage = decodeStoredUiMessageValue;
+
+export const decodeStoredUiMessage = async (message) => {
+	const decoded = decodeStoredUiMessageValue(message);
+	const candidate =
+		decoded.parts.length === 0 &&
+		typeof message.text === "string" &&
+		message.text.trim().length > 0
+			? { ...decoded, parts: [{ type: "text", text: message.text }] }
+			: decoded;
+	let validated;
+	try {
+		[validated] = await validateUiMessages({ messages: [candidate] });
+	} catch (error) {
+		throw createCodecError(
+			"invalid_message_shape",
+			"Stored UI message is invalid.",
+			error,
+		);
+	}
+	if (!validated) {
+		throw createCodecError(
+			"invalid_message_shape",
+			"Stored UI message is invalid.",
+		);
+	}
+	return {
+		...validated,
+		...(message.createdAt === undefined
+			? {}
+			: { createdAt: message.createdAt }),
+	};
+};
+
+export const normalizeStoredUiMessage = async (message) => {
+	const decoded = await decodeStoredUiMessage(message);
+	return {
+		...message,
+		partsJson: stringifyJson(
+			decoded.parts,
+			"parts_not_serializable",
+			"UI message parts must be JSON serializable.",
+		),
+	};
+};
 
 export const decodeStoredUiMessagesForModelInput = (messages) =>
 	messages.flatMap((message) => {

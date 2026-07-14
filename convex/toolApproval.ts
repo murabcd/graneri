@@ -3,7 +3,7 @@ import {
 	getToolApprovalResponses,
 	type ToolApprovalResponse,
 } from "@workspace/ai/tool-approval-state";
-import { tryParseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
+import { decodeTrustedStoredUiMessage } from "@workspace/ai/ui-message-codec";
 import type { Infer } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
@@ -20,8 +20,17 @@ type ToolApprovalMessageInput = {
 	partsJson: string;
 };
 
-const parseParts = (partsJson: string) =>
-	tryParseUiMessagePartsJson(partsJson) ?? [];
+const parseParts = (partsJson: string) => {
+	try {
+		return decodeTrustedStoredUiMessage({
+			id: "stored-tool-approval",
+			role: "assistant",
+			partsJson,
+		}).parts;
+	} catch {
+		return [];
+	}
+};
 
 export const requireMatchingToolApprovalResponse = (
 	message: ToolApprovalMessageInput,

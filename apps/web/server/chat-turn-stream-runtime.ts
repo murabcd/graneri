@@ -8,21 +8,19 @@ import {
 	validateHostedChatActiveRunPolicy,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
-	type buildHostedChatRunContext,
 	createHostedAssistantRunFinalizer,
-	type createHostedChatQueuedInput,
 	createHostedChatRunResponseStream,
-	type createHostedChatTurnController,
+	type createHostedChatTurnInput,
 	type HostedActiveStreamSession,
 	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,
+	type prepareHostedChatTurn,
 	startHostedChatRun,
 } from "@workspace/ai/hosted-chat-turn";
 import type { ReasoningEffort } from "@workspace/ai/models";
 import type { ToolApprovalResponse } from "@workspace/ai/tool-approval-state";
 import {
 	consumeStream,
-	type InferUITools,
 	pipeUIMessageStreamToResponse,
 	type UIMessage,
 	type UIMessageChunk,
@@ -34,8 +32,8 @@ import type { AttachableAssistantRun } from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 
-type HostedQueuedInput = ReturnType<
-	typeof createHostedChatQueuedInput<
+type HostedTurnInput = ReturnType<
+	typeof createHostedChatTurnInput<
 		Id<"workspaces">,
 		string,
 		Id<"assistantRuns">,
@@ -43,16 +41,14 @@ type HostedQueuedInput = ReturnType<
 	>
 >;
 
-type HostedTurnController = ReturnType<
-	typeof createHostedChatTurnController<
-		Id<"workspaces">,
-		string,
-		Id<"assistantRuns">,
-		Id<"assistantQueuedMessages">
-	>
->;
+type HostedQueuedInput = HostedTurnInput["queuedInput"];
+type HostedTurnController = HostedTurnInput["turnController"];
 
-type HostedRunContext = Awaited<ReturnType<typeof buildHostedChatRunContext>>;
+type PreparedHostedTurn = Extract<
+	Awaited<ReturnType<typeof prepareHostedChatTurn>>,
+	{ ok: true }
+>;
+type HostedRunContext = Awaited<ReturnType<PreparedHostedTurn["complete"]>>;
 
 type SendJson = (
 	response: ServerResponse,
@@ -119,7 +115,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 	steeredUserMessages,
 	supersedeActiveRun,
 	systemPrompt,
-	tools,
 	toolApprovalResponse,
 	trigger,
 	turnController,
@@ -132,7 +127,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	appsEnabled: boolean;
 	attachableRun: AttachableAssistantRun | null;
 	chatId: string;
-	chatMessages: UIMessage<unknown, never, InferUITools<typeof tools>>[];
+	chatMessages: UIMessage[];
 	convexClient: ConvexHttpClient;
 	continueRunId?: Id<"assistantRuns"> | null;
 	coreToolPolicyState: HostedRunContext["coreToolPolicyState"];
@@ -157,7 +152,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 	steeredUserMessages: UIMessage[];
 	supersedeActiveRun?: boolean;
 	systemPrompt: string;
-	tools: HostedRunContext["tools"];
 	toolApprovalResponse: ToolApprovalResponse | null;
 	trigger?: "submit-message" | "regenerate-message";
 	turnController: HostedTurnController;

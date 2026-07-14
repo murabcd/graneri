@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHostedChatTurnController } from "../src/hosted-chat-turn-controller.mjs";
+import { createHostedChatTurnInput } from "../src/hosted-chat-turn-input.mjs";
 
 const userMessage = (id: string, text: string) => ({
 	id,
@@ -33,6 +34,29 @@ const createController = ({
 	});
 
 describe("hosted chat turn controller", () => {
+	it("constructs the coupled queue and controller through one turn-input boundary", async () => {
+		const turnInput = createHostedChatTurnInput({
+			attachableRun: null,
+			chatId: "chat-1",
+			claimReadyForRun: vi.fn(async () => []),
+			discardClaimed: vi.fn(async () => undefined),
+			getClaimedForChat: vi.fn(async () => null),
+			interruptActiveRun: vi.fn(async () => []),
+			validateInput: vi.fn(() => ({ ok: true })),
+			workspaceId: "workspace-1",
+		});
+
+		expect(turnInput.queuedInput.hasClaimed).toBe(false);
+		await expect(
+			turnInput.turnController.prepareInput({
+				message: userMessage("message-1", "Hello"),
+			}),
+		).resolves.toMatchObject({
+			effectiveMessage: { id: "message-1" },
+			ok: true,
+		});
+	});
+
 	it("claims and interrupts running turns before returning steered input", async () => {
 		const firstMessage = userMessage("queued-1", "First");
 		const secondMessage = userMessage("queued-2", "Second");

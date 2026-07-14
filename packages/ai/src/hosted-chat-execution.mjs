@@ -1,16 +1,9 @@
-import {
-	createAgentUIStream,
-	readUIMessageStream,
-	validateUIMessages,
-} from "ai";
+import { createAgentUIStream, readUIMessageStream } from "ai";
 import { createHostedChatAgent } from "./hosted-chat-agent.mjs";
 import { getToolApprovalRequest } from "./tool-approval-state.mjs";
 
-export const createHostedAssistantAgent = (settings) =>
+export const prepareHostedAssistantExecution = (settings) =>
 	createHostedChatAgent(settings);
-
-export const validateHostedAssistantMessages = ({ messages, tools }) =>
-	validateUIMessages({ messages, tools });
 
 export const getHostedAssistantExecutionOutcome = ({
 	isAborted,
@@ -36,7 +29,7 @@ export const getHostedAssistantExecutionOutcome = ({
 	return { responseMessage, status: "completed" };
 };
 
-export const createHostedAssistantExecutionStream = async ({
+const createHostedAssistantExecutionStream = async ({
 	abortSignal,
 	agent,
 	assistantMessageId,
@@ -61,10 +54,7 @@ export const createHostedAssistantExecutionStream = async ({
 		...(onError ? { onError } : {}),
 	});
 
-export const consumeHostedAssistantExecutionStream = async ({
-	onMessage,
-	stream,
-}) => {
+const consumeHostedAssistantExecutionStream = async ({ onMessage, stream }) => {
 	let latestMessage = null;
 	for await (const message of readUIMessageStream({
 		stream,
@@ -74,4 +64,72 @@ export const consumeHostedAssistantExecutionStream = async ({
 		await onMessage?.(message);
 	}
 	return latestMessage;
+};
+
+const requireHostedAssistantExecutionOutcome = ({ latestMessage, outcome }) => {
+	if (outcome) {
+		return outcome;
+	}
+	if (!latestMessage) {
+		throw new Error(
+			"Assistant execution completed without a response message.",
+		);
+	}
+	return getHostedAssistantExecutionOutcome({
+		isAborted: false,
+		responseMessage: latestMessage,
+	});
+};
+
+export const startHostedAssistantExecution = async ({
+	abortSignal,
+	agent,
+	assistantMessageId,
+	createUiStream,
+	delivery,
+	messages,
+	timeout,
+}) => {
+	let finishedOutcome = null;
+	const stream = await createHostedAssistantExecutionStream({
+		agent,
+		assistantMessageId,
+		messages,
+		...(abortSignal ? { abortSignal } : {}),
+		...(createUiStream ? { createUiStream } : {}),
+		...(timeout ? { timeout } : {}),
+		onError: () => "Something went wrong.",
+		onOutcome: (outcome) => {
+			finishedOutcome = outcome;
+		},
+	});
+
+	if (delivery.mode === "consume") {
+		const latestMessage = await consumeHostedAssistantExecutionStream({
+			stream,
+			onMessage: delivery.onMessage,
+		});
+		return {
+			outcome: requireHostedAssistantExecutionOutcome({
+				latestMessage,
+				outcome: finishedOutcome,
+			}),
+		};
+	}
+
+	const [observationStream, deliveryStream] = stream.tee();
+	const completion = consumeHostedAssistantExecutionStream({
+		stream: observationStream,
+		onMessage: delivery.onMessage,
+	}).then((latestMessage) =>
+		requireHostedAssistantExecutionOutcome({
+			latestMessage,
+			outcome: finishedOutcome,
+		}),
+	);
+
+	return {
+		completion,
+		stream: deliveryStream,
+	};
 };

@@ -419,7 +419,7 @@ const getModelTextPartSignature = (partsJson: string) => {
 	);
 };
 
-export const requireClaimedQueuedMessageAcceptance = async (
+const requireClaimedFollowUpAcceptance = async (
 	ctx: MutationCtx,
 	{
 		chatId,
@@ -479,11 +479,62 @@ export const requireClaimedQueuedMessageAcceptance = async (
 	return queuedMessage;
 };
 
-export const deleteAcceptedQueuedMessages = async (
+const deleteAcceptedFollowUps = async (
 	ctx: MutationCtx,
 	messages: ReadonlyArray<Doc<"assistantQueuedMessages">>,
 ) => {
 	await Promise.all(messages.map((message) => ctx.db.delete(message._id)));
+};
+
+type ClaimedFollowUpInput = {
+	queuedMessageId: Id<"assistantQueuedMessages">;
+	message: { id: string; partsJson: string; role: string; text: string };
+};
+
+type ClaimedFollowUpScope =
+	| { mode: "replay" }
+	| { mode: "steer"; runId: Id<"assistantRuns"> };
+
+export const acceptClaimedFollowUps = async <Result>(
+	ctx: MutationCtx,
+	args: {
+		chatId: Id<"chats">;
+		commit: (
+			claimedMessages: ReadonlyArray<Doc<"assistantQueuedMessages">>,
+		) => Promise<Result>;
+		messages: ReadonlyArray<ClaimedFollowUpInput>;
+		ownerTokenIdentifier: string;
+		workspaceId: Id<"workspaces">;
+	} & ClaimedFollowUpScope,
+) => {
+	const isSteer = args.mode === "steer";
+	const claimedMessages = await Promise.all(
+		args.messages.map(({ message, queuedMessageId }) =>
+			requireClaimedFollowUpAcceptance(ctx, {
+				chatId: args.chatId,
+				contentErrorCode: isSteer
+					? "INVALID_STEERED_MESSAGE"
+					: "INVALID_QUEUED_MESSAGE",
+				contentErrorMessage: isSteer
+					? "Steered message must match the claimed queued message."
+					: "Queued message must match the claimed queued message.",
+				invalidMessageErrorMessage: isSteer
+					? "Steered message must be a non-empty user message."
+					: "Queued message must be a non-empty user message.",
+				message,
+				notClaimedMessage: isSteer
+					? "Queued message was not accepted for steering."
+					: "Queued message was not accepted for replay.",
+				ownerTokenIdentifier: args.ownerTokenIdentifier,
+				queuedMessageId,
+				...(args.mode === "steer" ? { runId: args.runId } : {}),
+				workspaceId: args.workspaceId,
+			}),
+		),
+	);
+	const result = await args.commit(claimedMessages);
+	await deleteAcceptedFollowUps(ctx, claimedMessages);
+	return result;
 };
 
 const discardMessagesForRunByStatus = async (

@@ -1,4 +1,4 @@
-import { decodeStoredUiMessage } from "@workspace/ai/ui-message-codec";
+import { decodeTrustedStoredUiMessage } from "@workspace/ai/ui-message-codec";
 import type { UIMessage } from "ai";
 
 type TimestampedUIMessage = UIMessage & {
@@ -15,7 +15,7 @@ export type StoredChatMessage = {
 
 export const toStoredChatMessages = (
 	messages: StoredChatMessage[],
-): UIMessage[] => messages.map(decodeStoredUiMessage);
+): UIMessage[] => messages.map(decodeTrustedStoredUiMessage);
 
 export const getUIMessageSeedKey = (messages: UIMessage[]) =>
 	messages

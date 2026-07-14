@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import * as hostedTurn from "../src/hosted-chat-turn.mjs";
 
 type PackageExport = {
 	types: string;
@@ -114,5 +115,26 @@ describe("AI package boundary", () => {
 			"./hosted-chat-runtime",
 			"./hosted-chat-turn",
 		]);
+	});
+
+	it("keeps the hosted turn interface intention-level", () => {
+		expect(Object.keys(hostedTurn).sort()).toEqual([
+			"createHostedActiveStreamKey",
+			"createHostedAssistantRunFinalizer",
+			"createHostedChatRunResponseStream",
+			"createHostedChatTurnInput",
+			"isHostedQueuedUserMessageAccept",
+			"persistHostedChatUserMessage",
+			"prepareHostedAssistantExecution",
+			"prepareHostedChatContextWindow",
+			"prepareHostedChatTurn",
+			"startHostedAssistantExecution",
+			"startHostedChatRun",
+			"stopOrphanedHostedAssistantRun",
+		]);
+		expect(hostedTurn).not.toHaveProperty("buildHostedChatRunContext");
+		expect(hostedTurn).not.toHaveProperty("prepareHostedChatTurnBranch");
+		expect(hostedTurn).not.toHaveProperty("createHostedChatQueuedInput");
+		expect(hostedTurn).not.toHaveProperty("createHostedChatTurnController");
 	});
 });
