@@ -5,6 +5,34 @@ export const HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS = 250;
 export const createHostedActiveStreamKey = ({ workspaceId, chatId }) =>
 	`${workspaceId}:${chatId}`;
 
+const replayCoalescibleDeltaTypes = new Set([
+	"reasoning-delta",
+	"text-delta",
+	"tool-input-delta",
+]);
+
+const appendReplayChunk = (replayChunks, chunk) => {
+	const previousChunk = replayChunks.at(-1);
+	const chunkId = chunk?.id ?? chunk?.toolCallId;
+	const previousChunkId = previousChunk?.id ?? previousChunk?.toolCallId;
+	if (
+		replayCoalescibleDeltaTypes.has(chunk?.type) &&
+		chunkId &&
+		chunkId === previousChunkId &&
+		chunk?.type === previousChunk?.type &&
+		typeof chunk.delta === "string" &&
+		typeof previousChunk.delta === "string"
+	) {
+		replayChunks[replayChunks.length - 1] = {
+			...previousChunk,
+			delta: previousChunk.delta + chunk.delta,
+		};
+		return;
+	}
+
+	replayChunks.push(chunk);
+};
+
 export class HostedActiveChatStreamPersister {
 	#appendActiveStreamText;
 	#acceptingAppends = true;
@@ -216,7 +244,7 @@ export const createHostedActiveStreamSession = ({
 			return;
 		}
 
-		replayChunks.push(chunk);
+		appendReplayChunk(replayChunks, chunk);
 		for (const subscriber of subscribers) {
 			subscriber.enqueue(chunk);
 		}

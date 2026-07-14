@@ -534,6 +534,47 @@ describe("hosted active chat stream", () => {
 		expect(controllers.has(streamKey)).toBe(false);
 	});
 
+	it("coalesces completed delta history for reconnect replay", async () => {
+		const controllers = new Map();
+		const streamKey = "workspace-1:chat-1";
+		const session = createTestActiveStreamSession({
+			controllers,
+			streamKey,
+			persister: {
+				start: vi.fn().mockResolvedValue(undefined),
+				append: vi.fn(),
+				closePersistence: vi.fn().mockResolvedValue(undefined),
+				finish: vi.fn().mockResolvedValue(undefined),
+			},
+		});
+		const source = new ReadableStream({
+			start(controller) {
+				controller.enqueue({ type: "text-start", id: "text-1" });
+				controller.enqueue({
+					type: "text-delta",
+					id: "text-1",
+					delta: "hello",
+				});
+				controller.enqueue({
+					type: "text-delta",
+					id: "text-1",
+					delta: " world",
+				});
+				controller.close();
+			},
+		});
+
+		await session.start();
+		await collectStream(session.startBroadcast(source));
+		const replayedChunks = await collectStream(session.subscribe());
+
+		expect(replayedChunks).toEqual([
+			{ type: "text-start", id: "text-1" },
+			{ type: "text-delta", id: "text-1", delta: "hello world" },
+		]);
+		session.cleanup();
+	});
+
 	it("creates chat-scoped active stream sessions through adapter callbacks", async () => {
 		const controllers = new Map();
 		const startActiveStream = vi.fn().mockResolvedValue(undefined);

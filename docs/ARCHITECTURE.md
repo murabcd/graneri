@@ -75,7 +75,11 @@ transport, and desktop-local tool declarations through small adapter callbacks.
 Turn input buffering is separate from active-stream transport: the hosted turn
 input buffer owns pending steer/mailbox ordering, wait-agent activity
 notifications, and mailbox deferral rules, while active-stream sessions own
-broadcast, replay, abort, and persistence.
+broadcast, replay, abort, and persistence. Renderer stream pacing must propagate
+downstream `ReadableStream` demand instead of draining frames into an already
+full consumer queue. Live reconnect history coalesces adjacent deltas for the
+same stream part so replay memory scales with semantic stream parts rather than
+token count.
 The hosted chat route uses the shared user-message persistence helper for normal
 saves, queued replay accepts, queued steer batch accepts, and continued-run
 message appends; the route keeps HTTP telemetry and response formatting while

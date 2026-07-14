@@ -119,6 +119,39 @@ describe("createFrameBudgetedStream", () => {
 			Array.from({ length: totalValues }, (_, index) => index + 1),
 		);
 	});
+
+	it("stops draining frames while the downstream reader has no demand", async () => {
+		const scheduler = createControlledScheduler();
+		let nextValue = 1;
+		const stream = createFrameBudgetedStream(
+			new ReadableStream<number>({
+				pull(controller) {
+					controller.enqueue(nextValue);
+					nextValue += 1;
+				},
+			}),
+			{
+				maxBufferedItems: 2,
+				maxItemsPerFrame: 10,
+				maxFrameMs: 100,
+				scheduleFrame: scheduler.scheduleFrame,
+				now: () => 0,
+			},
+		);
+		const reader = stream.getReader();
+
+		await flushMicrotasks();
+		scheduler.runFrame();
+		await flushMicrotasks();
+
+		expect(scheduler.pendingFrames).toBe(0);
+		expect(nextValue).toBeLessThanOrEqual(5);
+		await expect(reader.read()).resolves.toEqual({ done: false, value: 1 });
+		await flushMicrotasks();
+		expect(scheduler.pendingFrames).toBe(1);
+
+		await reader.cancel();
+	});
 });
 
 describe("FrameBudgetedChatTransport", () => {
@@ -158,9 +191,10 @@ describe("FrameBudgetedChatTransport", () => {
 			}),
 		);
 		await flushMicrotasks();
-		scheduler.runFrame();
-		await flushMicrotasks();
-		scheduler.runFrame();
+		while (scheduler.pendingFrames > 0) {
+			scheduler.runFrame();
+			await flushMicrotasks();
+		}
 
 		await expect(sent).resolves.toEqual([chunk("a"), chunk("b")]);
 
@@ -169,9 +203,10 @@ describe("FrameBudgetedChatTransport", () => {
 				new ReadableStream<UIMessageChunk>(),
 		);
 		await flushMicrotasks();
-		scheduler.runFrame();
-		await flushMicrotasks();
-		scheduler.runFrame();
+		while (scheduler.pendingFrames > 0) {
+			scheduler.runFrame();
+			await flushMicrotasks();
+		}
 
 		await expect(reconnected).resolves.toEqual([chunk("a"), chunk("b")]);
 	});

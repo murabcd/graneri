@@ -48,13 +48,18 @@ export const createFrameBudgetedStream = <T>(
 	let reader: ReadableStreamDefaultReader<T> | null = null;
 	let cancelFrame: (() => void) | null = null;
 	let isClosed = false;
+	let resumeDrain: (() => void) | null = null;
 
 	return new ReadableStream<T>({
 		cancel() {
 			isClosed = true;
+			resumeDrain = null;
 			cancelFrame?.();
 			cancelFrame = null;
 			void reader?.cancel();
+		},
+		pull() {
+			resumeDrain?.();
 		},
 		start(controller) {
 			const activeReader = source.getReader();
@@ -66,6 +71,7 @@ export const createFrameBudgetedStream = <T>(
 			let sourceError: unknown;
 
 			const queuedItemCount = () => queue.length - queueHead;
+			const hasDownstreamDemand = () => (controller.desiredSize ?? 0) > 0;
 
 			const compactQueue = () => {
 				if (queueHead === 0) {
@@ -85,7 +91,7 @@ export const createFrameBudgetedStream = <T>(
 			};
 
 			const scheduleDrain = () => {
-				if (cancelFrame || isClosed) {
+				if (cancelFrame || isClosed || !hasDownstreamDemand()) {
 					return;
 				}
 
@@ -98,6 +104,7 @@ export const createFrameBudgetedStream = <T>(
 				}
 
 				isClosed = true;
+				resumeDrain = null;
 				if (sourceError) {
 					controller.error(sourceError);
 					return;
@@ -149,6 +156,7 @@ export const createFrameBudgetedStream = <T>(
 				let emittedItems = 0;
 				while (
 					queuedItemCount() > 0 &&
+					hasDownstreamDemand() &&
 					emittedItems < maxItemsPerFrame &&
 					now() - frameStartedAt <= maxFrameMs
 				) {
@@ -159,13 +167,22 @@ export const createFrameBudgetedStream = <T>(
 
 				compactQueue();
 
-				if (queuedItemCount() > 0) {
+				if (queuedItemCount() > 0 && hasDownstreamDemand()) {
 					scheduleDrain();
 				}
 
 				void readSource();
 				closeIfDone();
 			}
+
+			resumeDrain = () => {
+				if (queuedItemCount() > 0) {
+					scheduleDrain();
+					return;
+				}
+				void readSource();
+				closeIfDone();
+			};
 
 			void readSource();
 		},
