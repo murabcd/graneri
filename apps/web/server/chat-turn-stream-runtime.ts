@@ -61,7 +61,7 @@ type SendJson = (
 
 export type HostedChatTurnStreamRuntimeResult =
 	| {
-			activeStreamSession: HostedActiveStreamSession;
+			activeStreamSession: HostedActiveStreamSession | null;
 			assistantMessageId: string;
 			assistantRunId: Id<"assistantRuns">;
 			ok: true;
@@ -89,11 +89,14 @@ export const runHostedChatTurnStreamRuntime = async ({
 	activeChatStreamControllers,
 	admissionReservationId,
 	agent,
+	appsEnabled,
 	attachableRun,
 	chatId,
 	chatMessages,
 	convexClient,
 	continueRunId,
+	coreToolPolicyState,
+	defaultTimezone,
 	emitWideEvent,
 	finalizedToolSet,
 	lastUserMessage,
@@ -110,6 +113,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	setAcceptedSteerTurnId,
 	shouldGenerateChatTitle,
 	selectedAppConnections,
+	selectedSourceIds,
 	steeredUserMessages,
 	supersedeActiveRun,
 	systemPrompt,
@@ -123,11 +127,14 @@ export const runHostedChatTurnStreamRuntime = async ({
 	activeChatStreamControllers: Map<string, HostedActiveStreamSession>;
 	admissionReservationId?: Id<"aiAdmissionReservations">;
 	agent: HostedRunContext["agent"];
+	appsEnabled: boolean;
 	attachableRun: AttachableAssistantRun | null;
 	chatId: string;
 	chatMessages: UIMessage<unknown, never, InferUITools<typeof tools>>[];
 	convexClient: ConvexHttpClient;
 	continueRunId?: Id<"assistantRuns"> | null;
+	coreToolPolicyState: HostedRunContext["coreToolPolicyState"];
+	defaultTimezone: string;
 	emitWideEvent: (level: "error" | "info") => void;
 	finalizedToolSet: HostedRunContext["finalizedToolSet"];
 	lastUserMessage?: UIMessage;
@@ -144,6 +151,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	setAcceptedSteerTurnId: (runId: Id<"assistantRuns"> | null) => void;
 	shouldGenerateChatTitle: boolean;
 	selectedAppConnections: HostedRunContext["selectedAppConnections"];
+	selectedSourceIds: string[];
 	steeredUserMessages: UIMessage[];
 	supersedeActiveRun?: boolean;
 	systemPrompt: string;
@@ -191,6 +199,41 @@ export const runHostedChatTurnStreamRuntime = async ({
 	});
 	if (!sameActiveRun.ok) {
 		turnRouteErrors.sendTurnControllerError(sameActiveRun);
+		return { activeStreamSession: null, ok: false };
+	}
+	const isSteeringConvexRun = Boolean(
+		attachableRun?.producer === "convex" &&
+			continueRunId &&
+			queuedInput.hasClaimed,
+	);
+	const shouldUseConvexProducer =
+		attachableRun?.producer === "convex" ||
+		(!attachableRun && localFolderRoots.length === 0);
+	if (attachableRun?.producer === "convex" && localFolderRoots.length > 0) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = 409;
+		wideEvent.error_code = "desktop_local_tools_require_new_run";
+		emitWideEvent("error");
+		sendJson(response, 409, {
+			error:
+				"Desktop local folders cannot be added to an active hosted run. Stop it and send the message again.",
+			errorCode: "desktop_local_tools_require_new_run",
+		});
+		return { activeStreamSession: null, ok: false };
+	}
+	if (
+		attachableRun?.producer === "convex" &&
+		!toolApprovalResponse &&
+		!isSteeringConvexRun
+	) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = 409;
+		wideEvent.error_code = "convex_run_continuation_invalid";
+		emitWideEvent("error");
+		sendJson(response, 409, {
+			error: "Hosted run continuation requires approved or steered input.",
+			errorCode: "convex_run_continuation_invalid",
+		});
 		return { activeStreamSession: null, ok: false };
 	}
 
@@ -319,6 +362,115 @@ export const runHostedChatTurnStreamRuntime = async ({
 	logLatency("convex.user_message_saved", {
 		attempted: Boolean(lastUserMessage),
 	});
+
+	if (shouldUseConvexProducer) {
+		if (!admissionReservationId) {
+			wideEvent.outcome = "error";
+			wideEvent.status_code = 500;
+			wideEvent.error_code = "ai_admission_reservation_missing";
+			emitWideEvent("error");
+			sendJson(
+				response,
+				500,
+				{ error: "Chat admission reservation is missing." },
+				pendingQueuedAcceptanceHeaders,
+			);
+			return { activeStreamSession: null, ok: false };
+		}
+
+		let assistantRunIdentity = attachableRun
+			? {
+					_id: attachableRun._id,
+					assistantMessageId:
+						attachableRun.producer === "convex"
+							? assistantMessageId
+							: attachableRun.assistantMessageId,
+				}
+			: null;
+		if (!assistantRunIdentity) {
+			try {
+				const startedBackgroundRun = await convexClient.mutation(
+					api.assistantRunBackground.start,
+					{
+						workspaceId,
+						chatId,
+						assistantMessageId,
+						admissionReservationId,
+						policy: supersedeActiveRun ? "supersede" : "reject",
+						job: {
+							messagesJson: JSON.stringify(chatMessages),
+							systemPrompt,
+							webSearchEnabled: coreToolPolicyState.webSearchEnabled,
+							chartGenerationRequested:
+								coreToolPolicyState.chartGenerationRequested,
+							imageGenerationRequested:
+								coreToolPolicyState.imageGenerationRequested,
+							shouldGenerateChatTitle,
+							selectedSourceIds: appsEnabled ? selectedSourceIds : [],
+							defaultTimezone,
+							model,
+							reasoningEffort,
+						},
+					},
+				);
+				assistantRunIdentity = {
+					_id: startedBackgroundRun._id,
+					assistantMessageId: startedBackgroundRun.assistantMessageId,
+				};
+			} catch (error) {
+				const routeError = getHostedChatConvexRouteError(error);
+				wideEvent.outcome = "error";
+				wideEvent.status_code = routeError?.statusCode ?? 500;
+				wideEvent.error_code =
+					routeError?.errorCode ?? "background_run_start_failed";
+				recordServerError({
+					error,
+					event: wideEvent,
+					operation: "background_run_start",
+				});
+				emitWideEvent("error");
+				sendJson(
+					response,
+					wideEvent.status_code,
+					{
+						error: routeError?.error ?? "Failed to start hosted assistant run.",
+						...(routeError ? { errorCode: routeError.errorCode } : {}),
+					},
+					pendingQueuedAcceptanceHeaders,
+				);
+				return { activeStreamSession: null, ok: false };
+			}
+		}
+		if (!assistantRunIdentity) {
+			throw new Error("Hosted assistant run identity was not created.");
+		}
+
+		wideEvent.assistant_run_id = assistantRunIdentity._id;
+		wideEvent.assistant_message_id = assistantRunIdentity.assistantMessageId;
+		wideEvent.tool_count = finalizedToolSet.toolCount;
+		wideEvent.deferred_tool_count = finalizedToolSet.deferredToolCount;
+		wideEvent.local_folder_root_count = 0;
+		wideEvent.app_connection_count = selectedAppConnections.length;
+		wideEvent.outcome = "success";
+		wideEvent.status_code = 200;
+		if (pendingQueuedAcceptanceHeaders) {
+			for (const [header, value] of Object.entries(
+				pendingQueuedAcceptanceHeaders,
+			)) {
+				response.setHeader(header, value);
+			}
+		}
+		response.statusCode = 200;
+		response.setHeader("Content-Type", "text/event-stream");
+		response.end();
+		emitWideEvent(wideEvent.errors?.length ? "error" : "info");
+		return {
+			activeStreamSession: null,
+			assistantMessageId: assistantRunIdentity.assistantMessageId,
+			assistantRunId: assistantRunIdentity._id,
+			ok: true,
+		};
+	}
 
 	const startedRun = await startHostedChatRun({
 		workspaceId,

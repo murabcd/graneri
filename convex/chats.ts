@@ -1944,6 +1944,39 @@ export const updateTitle = mutation({
 	},
 });
 
+export const updateTitleForCompletedRun = internalMutation({
+	args: {
+		runId: v.id("assistantRuns"),
+		title: v.string(),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const run = await ctx.db.get(args.runId);
+		if (run?.producer !== "convex" || run.status !== "completed") {
+			return false;
+		}
+		const chat = await ctx.db.get(run.chatId);
+		if (
+			!chat ||
+			chat.isArchived ||
+			chat.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
+			chat.workspaceId !== run.workspaceId
+		) {
+			return false;
+		}
+
+		const title = normalizeChatTitle(args.title);
+		if (!shouldReplaceChatTitle(chat, title)) {
+			return false;
+		}
+		await ctx.db.patch(chat._id, {
+			title,
+			updatedAt: Date.now(),
+		});
+		return true;
+	},
+});
+
 export const setChatSettings = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),

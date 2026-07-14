@@ -6,7 +6,10 @@ import {
 	buildChartGenerationPrepareStep,
 	createChartGenerationTool,
 } from "@workspace/ai/chart-generation-tool";
-import { getHostedChatMessageText } from "@workspace/ai/hosted-chat-runtime";
+import {
+	generateHostedChatTitle,
+	getHostedChatMessageText,
+} from "@workspace/ai/hosted-chat-runtime";
 import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
 import { getChatModelProviderOptions } from "@workspace/ai/models";
 import { finalizeOpenAIToolSet } from "@workspace/ai/openai-tool-search";
@@ -264,10 +267,35 @@ export const run = internalAction({
 				return null;
 			}
 
-			await ctx.runMutation(internal.assistantRunBackgroundState.complete, {
-				runId: args.runId,
-				assistantMessageId: context.assistantMessageId,
-			});
+			const completed = await ctx.runMutation(
+				internal.assistantRunBackgroundState.complete,
+				{
+					runId: args.runId,
+					assistantMessageId: context.assistantMessageId,
+				},
+			);
+			if (completed && context.job.shouldGenerateChatTitle) {
+				const lastUserMessage = [...messages]
+					.reverse()
+					.find((message) => message.role === "user");
+				if (lastUserMessage) {
+					try {
+						const title = await generateHostedChatTitle({
+							assistantMessage: responseMessage,
+							safetyIdentifier: await createSafetyIdentifier(
+								context.ownerTokenIdentifier,
+							),
+							userMessage: lastUserMessage,
+						});
+						await ctx.runMutation(internal.chats.updateTitleForCompletedRun, {
+							runId: args.runId,
+							title,
+						});
+					} catch (error) {
+						console.error("Failed to generate background chat title.", error);
+					}
+				}
+			}
 		} catch (error) {
 			if (error instanceof BackgroundRunStoppedError) {
 				return null;

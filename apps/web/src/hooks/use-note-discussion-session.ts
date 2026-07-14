@@ -101,10 +101,17 @@ export const useNoteDiscussionSession = ({
 		() => (noteChats ?? []).some((chat) => chat.chatId === currentChatId),
 		[currentChatId, noteChats],
 	);
-	const { messages: storedMessages } = useChatMessagesSnapshot({
+	const { messages: storedMessageSnapshot } = useChatMessagesSnapshot({
 		chatId: hasStoredCurrentChat ? currentChatId : null,
 		workspaceId: activeWorkspaceId,
 	});
+	const liveStoredMessages = useQuery(
+		api.chats.getMessages,
+		activeWorkspaceId && hasStoredCurrentChat
+			? { workspaceId: activeWorkspaceId, chatId: currentChatId }
+			: "skip",
+	);
+	const storedMessages = liveStoredMessages ?? storedMessageSnapshot;
 	const activeRun = useQuery(
 		api.assistantRuns.getAttachableRun,
 		activeWorkspaceId && hasStoredCurrentChat

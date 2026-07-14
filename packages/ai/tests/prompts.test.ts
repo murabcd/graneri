@@ -127,6 +127,21 @@ describe("prompt helpers", () => {
 		});
 	});
 
+	it("maps a competing active assistant run to a route conflict", () => {
+		const error = Object.assign(new Error("Run already active."), {
+			data: {
+				code: "ASSISTANT_RUN_ACTIVE",
+				message: "Run already active.",
+			},
+		});
+
+		expect(getHostedChatConvexRouteError(error)).toEqual({
+			error: "Chat already has an active assistant run.",
+			errorCode: "ASSISTANT_RUN_ACTIVE",
+			statusCode: 409,
+		});
+	});
+
 	it.each([
 		"AI_ADMISSION_EXPIRED",
 		"AI_ADMISSION_INVALID",

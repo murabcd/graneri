@@ -8,10 +8,39 @@ import {
 	getInlineHostedNoteContext,
 } from "./hosted-chat-runtime.mjs";
 import { createHostedWaitAgentTool } from "./hosted-chat-wait-agent-tool.mjs";
+import { MAX_LOCAL_FOLDER_ROOTS } from "./local-folder-tool-definitions.mjs";
 import {
+	buildClientLocalFolderTools,
 	buildLocalFolderSystemContext,
 	buildLocalFolderTools,
 } from "./local-folder-tools.mjs";
+
+const buildClientLocalFolderRoots = (localFolders) =>
+	localFolders
+		.slice(0, MAX_LOCAL_FOLDER_ROOTS)
+		.map((folder) => {
+			const path =
+				typeof folder?.path === "string" && folder.path.trim().length > 0
+					? folder.path.trim()
+					: typeof folder?.name === "string" && folder.name.trim().length > 0
+						? folder.name.trim()
+						: null;
+			if (!path) {
+				return null;
+			}
+
+			return {
+				...(typeof folder.id === "string" && folder.id.length > 0
+					? { id: folder.id }
+					: {}),
+				name:
+					typeof folder.name === "string" && folder.name.trim().length > 0
+						? folder.name.trim()
+						: path,
+				path,
+			};
+		})
+		.filter(Boolean);
 
 export const getHostedChatLocalFolderReferencePaths = (localFolders = []) =>
 	localFolders.reduce((paths, folder) => {
@@ -42,6 +71,7 @@ export const buildHostedChatRunContext = async ({
 	getStoredNoteContext,
 	getUserProfileContext,
 	localFolders = [],
+	localFolderToolMode = "server",
 	logLatency,
 	message,
 	noteContext,
@@ -85,7 +115,10 @@ export const buildHostedChatRunContext = async ({
 		convexClient,
 		workspaceId,
 	});
-	const localFolderRoots = await resolveLocalFolderRoots(localFolders);
+	const localFolderRoots =
+		localFolderToolMode === "client"
+			? buildClientLocalFolderRoots(localFolders)
+			: await resolveLocalFolderRoots(localFolders);
 	const localFolderContext = buildLocalFolderSystemContext(localFolderRoots);
 	logLatency("tools.workspace_ready", {
 		appToolCount: Object.keys(appTools).length,
@@ -125,7 +158,9 @@ export const buildHostedChatRunContext = async ({
 		localFolderContext,
 		localFolderTools:
 			localFolderRoots.length > 0
-				? buildLocalFolderTools(localFolderRoots)
+				? localFolderToolMode === "client"
+					? buildClientLocalFolderTools(localFolderRoots)
+					: buildLocalFolderTools(localFolderRoots)
 				: {},
 		model: defaultModel,
 		providerOptions,

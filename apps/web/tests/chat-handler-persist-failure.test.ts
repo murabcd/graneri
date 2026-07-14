@@ -49,6 +49,7 @@ beforeEach(() => {
 	process.env.OPENAI_API_KEY = "test-key";
 	convexMock.authorizeChatTurn.mockReset();
 	convexMock.authorizeChatTurn.mockResolvedValue({
+		admissionReservationId: "admission_1",
 		tokenIdentifier: "https://graneri.test|owner",
 	});
 	convexMock.contextState.mockReset();
@@ -109,9 +110,12 @@ const postChatRequest = async (
 			body: JSON.stringify(body),
 		});
 
+		const responseText = await response.text();
 		const result = {
 			status: response.status,
-			body: (await response.json()) as { error?: string },
+			body: responseText
+				? (JSON.parse(responseText) as { error?: string })
+				: null,
 		};
 		if (!options.includeHeaders) {
 			return result;
@@ -367,7 +371,8 @@ describe("chat handler persistence failures", () => {
 		expect(convexMock.mutation).toHaveBeenCalledTimes(1);
 	});
 
-	it("fails a started run when active stream startup fails", async () => {
+	it("starts a durable background run without a web active stream or web OpenAI key", async () => {
+		delete process.env.OPENAI_API_KEY;
 		convexMock.query.mockResolvedValueOnce({
 			model: "gpt-5.4",
 			title: "Existing chat",
@@ -378,12 +383,9 @@ describe("chat handler persistence failures", () => {
 		convexMock.mutation.mockResolvedValueOnce({ ok: true });
 		convexMock.mutation.mockResolvedValueOnce({
 			_id: "run_1",
+			assistantMessageId: "assistant_1",
 			status: "running",
 		});
-		convexMock.mutation.mockRejectedValueOnce(
-			new Error("active stream failed"),
-		);
-		convexMock.mutation.mockResolvedValueOnce(null);
 
 		await expect(
 			postChatRequest({
@@ -399,15 +401,76 @@ describe("chat handler persistence failures", () => {
 				},
 			}),
 		).resolves.toEqual({
+			status: 200,
+			body: null,
+		});
+
+		expect(convexMock.mutation).toHaveBeenCalledTimes(2);
+		expect(convexMock.mutation.mock.calls[1]?.[1]).toMatchObject({
+			admissionReservationId: "admission_1",
+			chatId: "chat_1",
+			job: {
+				model: "gpt-5.4",
+				shouldGenerateChatTitle: false,
+			},
+			workspaceId: "workspace_1",
+		});
+	});
+
+	it("keeps desktop-local tool turns on the web stream producer", async () => {
+		convexMock.query.mockResolvedValueOnce({
+			model: "gpt-5.4",
+			title: "Existing chat",
+		});
+		convexMock.query.mockResolvedValueOnce(null);
+		convexMock.query.mockResolvedValueOnce([]);
+		convexMock.query.mockResolvedValueOnce(null);
+		convexMock.mutation.mockResolvedValueOnce({ ok: true });
+		convexMock.mutation.mockResolvedValueOnce({
+			_id: "run_1",
+			assistantMessageId: "assistant_1",
+			status: "running",
+		});
+		convexMock.mutation.mockRejectedValueOnce(
+			new Error("active stream failed"),
+		);
+		convexMock.mutation.mockResolvedValueOnce(null);
+
+		await expect(
+			postChatRequest({
+				id: "chat_1",
+				workspaceId: "workspace_1",
+				convexToken: "token_1",
+				model: "gpt-5.4",
+				appsEnabled: false,
+				localFolders: [
+					{
+						id: "folder_1",
+						name: "Project",
+						path: "/Users/test/Project",
+					},
+				],
+				message: {
+					id: "message_1",
+					role: "user",
+					parts: [{ type: "text", text: "Read the shared project" }],
+				},
+			}),
+		).resolves.toEqual({
 			status: 500,
 			body: { error: "Failed to start assistant stream." },
 		});
 
-		expect(convexMock.mutation).toHaveBeenCalledTimes(4);
-		expect(convexMock.mutation.mock.calls[3]?.[1]).toEqual({
-			runId: "run_1",
-			errorText: "active stream failed",
-		});
+		expect(
+			convexMock.mutation.mock.calls.map(([reference]) =>
+				getFunctionName(reference),
+			),
+		).toEqual([
+			"chats:saveMessage",
+			"assistantRuns:startAssistantRun",
+			"chats:startActiveStream",
+			"assistantRuns:failAssistantRun",
+		]);
 	});
 
 	it("fails closed when edited branch preservation fails", async () => {
@@ -498,7 +561,7 @@ describe("chat handler persistence failures", () => {
 
 		expect(result.status).toBe(500);
 		expect(result.body).toEqual({
-			error: "Failed to start assistant stream.",
+			error: "Failed to start hosted assistant run.",
 		});
 		expect(result.headers.get(hostedChatReplayAcceptedHeader)).toBe("true");
 		expect(result.headers.get(hostedChatReplayQueuedMessageIdHeader)).toBe(
@@ -838,7 +901,7 @@ describe("chat handler persistence failures", () => {
 		});
 	});
 
-	it("accepts a steered input batch and keeps app-server-style steer acceptance headers when later stream startup fails", async () => {
+	it("accepts a steered input batch and lets the Convex producer continue it", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: "gpt-5.4",
 			title: "Existing chat",
@@ -847,6 +910,7 @@ describe("chat handler persistence failures", () => {
 			_id: "run_1",
 			status: "running",
 			assistantMessageId: "assistant_1",
+			producer: "convex",
 		});
 		convexMock.mutation.mockResolvedValueOnce([
 			{
@@ -862,12 +926,9 @@ describe("chat handler persistence failures", () => {
 				metadataJson: undefined,
 			},
 		]);
-		convexMock.mutation.mockResolvedValueOnce(null);
 		convexMock.query.mockResolvedValueOnce([]);
 		convexMock.query.mockResolvedValueOnce([]);
 		convexMock.query.mockResolvedValueOnce(null);
-		convexMock.mutation.mockResolvedValueOnce(null);
-		convexMock.mutation.mockRejectedValueOnce(new Error("start failed"));
 		convexMock.mutation.mockResolvedValueOnce(null);
 
 		const result = await postChatRequest(
@@ -883,10 +944,8 @@ describe("chat handler persistence failures", () => {
 			{ includeHeaders: true, isSteerRoute: true },
 		);
 
-		expect(result.status).toBe(500);
-		expect(result.body).toEqual({
-			error: "Failed to start assistant stream.",
-		});
+		expect(result.status).toBe(200);
+		expect(result.body).toBeNull();
 		expect(result.headers.get(hostedChatSteerAcceptedHeader)).toBe("true");
 		expect(result.headers.get(hostedChatSteerQueuedMessageIdHeader)).toBe(
 			"queued_1",
@@ -895,7 +954,9 @@ describe("chat handler persistence failures", () => {
 			"queued_1,queued_2",
 		);
 		expect(result.headers.get(hostedChatSteerTurnIdHeader)).toBe("run_1");
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toMatchObject({
+		expect(convexMock.mutation).toHaveBeenCalledTimes(2);
+		expect(convexMock.mutation.mock.calls[1]?.[1]).toMatchObject({
+			admissionReservationId: "admission_1",
 			runId: "run_1",
 			messages: [
 				expect.objectContaining({

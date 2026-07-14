@@ -459,6 +459,8 @@ export const handleChatRequest = async (
 		},
 		operation: "chat-turn",
 		request,
+		requireServerApiKey:
+			attachableRun?.producer === "web" || localFolders.length > 0,
 		response,
 	});
 	if (!admission) {
@@ -494,7 +496,9 @@ export const handleChatRequest = async (
 		attachableRun,
 		queuedInput,
 		interruptActiveRun: (args) =>
-			interruptActiveChatRun({ ...args, client: convexClient }),
+			attachableRun?.producer === "convex"
+				? Promise.resolve([...args.pendingInput])
+				: interruptActiveChatRun({ ...args, client: convexClient }),
 		validateInput: (inputMessage) => {
 			if (getToolApprovalResponse(inputMessage)) {
 				return { ok: true };
@@ -591,6 +595,9 @@ export const handleChatRequest = async (
 	let finalizedToolSet: Awaited<
 		ReturnType<typeof buildHostedChatRunContext>
 	>["finalizedToolSet"];
+	let coreToolPolicyState: Awaited<
+		ReturnType<typeof buildHostedChatRunContext>
+	>["coreToolPolicyState"];
 	let systemPrompt: string;
 	let tools: Awaited<ReturnType<typeof buildHostedChatRunContext>>["tools"];
 	let chatMessages: UIMessage<unknown, never, InferUITools<typeof tools>>[];
@@ -671,6 +678,7 @@ export const handleChatRequest = async (
 
 		({
 			agent,
+			coreToolPolicyState,
 			finalizedToolSet,
 			localFolderRoots,
 			selectedAppConnections,
@@ -721,6 +729,7 @@ export const handleChatRequest = async (
 			getUserProfileContext: () =>
 				convexClient.query(api.userPreferences.getAiProfileContext, {}),
 			localFolders,
+			localFolderToolMode: canUseLocalFolderTools() ? "server" : "client",
 			logLatency,
 			message: effectiveMessage,
 			noteContext,
@@ -782,11 +791,14 @@ export const handleChatRequest = async (
 			| Id<"aiAdmissionReservations">
 			| undefined,
 		agent,
+		appsEnabled,
 		attachableRun,
 		chatId: id,
 		chatMessages,
 		convexClient,
 		continueRunId,
+		coreToolPolicyState,
+		defaultTimezone: resolvedTimezone,
 		emitWideEvent,
 		finalizedToolSet,
 		lastUserMessage,
@@ -805,6 +817,7 @@ export const handleChatRequest = async (
 		},
 		shouldGenerateChatTitle,
 		selectedAppConnections,
+		selectedSourceIds: appsEnabled ? (selectedSourceIds ?? []) : [],
 		steeredUserMessages,
 		supersedeActiveRun,
 		systemPrompt,

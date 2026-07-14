@@ -21,3 +21,7 @@ export declare const buildLocalFolderSystemContext: (
 export declare const buildLocalFolderTools: (
 	roots: LocalFolderRoot[],
 ) => ToolSet;
+
+export declare const buildClientLocalFolderTools: (
+	roots: LocalFolderRoot[],
+) => ToolSet;

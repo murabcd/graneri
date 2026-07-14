@@ -81,6 +81,7 @@ const hostedChatConvexRouteErrorMessages = new Map([
 		"ASSISTANT_RUN_INVARIANT_VIOLATION",
 		"Chat has multiple active assistant runs.",
 	],
+	["ASSISTANT_RUN_ACTIVE", "Chat already has an active assistant run."],
 	["ASSISTANT_RUN_NOT_ACTIVE", "Assistant run is not active."],
 	["ASSISTANT_RUN_NOT_FOUND", "Assistant run not found."],
 	[
@@ -141,6 +142,7 @@ export const getHostedChatConvexRouteError = (error) => {
 	}
 
 	const isAssistantRunLifecycleError =
+		code === "ASSISTANT_RUN_ACTIVE" ||
 		code === "ASSISTANT_RUN_INVARIANT_VIOLATION" ||
 		code === "ASSISTANT_RUN_NOT_ACTIVE" ||
 		code === "ASSISTANT_RUN_NOT_FOUND" ||

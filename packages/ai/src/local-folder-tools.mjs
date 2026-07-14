@@ -10,14 +10,16 @@ import {
 import { openai } from "@ai-sdk/openai";
 import { embed, generateText, tool } from "ai";
 import { createBashTool } from "bash-tool";
-import { buildLocalFolderToolConfigs } from "./local-folder-tool-definitions.mjs";
+import {
+	buildLocalFolderToolConfigs,
+	MAX_LOCAL_FOLDER_ROOTS,
+} from "./local-folder-tool-definitions.mjs";
 import { aiLogger } from "./logger.mjs";
 import { DEFAULT_CHAT_MODEL_ID } from "./models.mjs";
 
 export { buildLocalFolderSystemContext } from "./local-folder-tool-definitions.mjs";
 export { extractTextFromUIMessage } from "./local-path-references.mjs";
 
-const MAX_ROOTS = 4;
 const MAX_DIRECTORY_ENTRIES = 200;
 const MAX_WALK_FILES = 1000;
 const MAX_FILE_BYTES = 120_000;
@@ -186,7 +188,7 @@ export const resolveLocalFolderRoots = async (references) => {
 	const roots = [];
 	const seen = new Set();
 
-	for (const source of references.slice(0, MAX_ROOTS * 2)) {
+	for (const source of references.slice(0, MAX_LOCAL_FOLDER_ROOTS * 2)) {
 		try {
 			const resolvedPath = await realpath(source);
 			const pathStat = await stat(resolvedPath);
@@ -205,7 +207,7 @@ export const resolveLocalFolderRoots = async (references) => {
 				source,
 			});
 
-			if (roots.length >= MAX_ROOTS) {
+			if (roots.length >= MAX_LOCAL_FOLDER_ROOTS) {
 				break;
 			}
 		} catch {
@@ -1006,4 +1008,19 @@ export const buildLocalFolderTools = (roots) => {
 				})),
 		}),
 	};
+};
+
+export const buildClientLocalFolderTools = (roots) => {
+	if (roots.length === 0) {
+		return {};
+	}
+
+	const configs = buildLocalFolderToolConfigs(roots, {
+		maxImageSearchResults: MAX_IMAGE_SEARCH_RESULTS,
+		providerOptions: deferredOpenAIToolOptions,
+	});
+
+	return Object.fromEntries(
+		Object.entries(configs).map(([name, config]) => [name, tool(config)]),
+	);
 };

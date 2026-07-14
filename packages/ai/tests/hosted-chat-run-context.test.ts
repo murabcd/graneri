@@ -118,6 +118,44 @@ describe("hosted chat run context", () => {
 			"tools.finalized",
 		]);
 	});
+
+	it("builds client-executed tools when local folders belong to the desktop", async () => {
+		const context = await buildHostedChatRunContext({
+			appsEnabled: false,
+			chatAttachmentsApi: {},
+			chatId: "chat-1",
+			convexClient: { query: async () => null, mutation: async () => null },
+			defaultModel: "gpt-5",
+			defaultReasoningEffort: "medium",
+			defaultTimezone: "UTC",
+			getActiveStreamSession: () => null,
+			getNotesContext: async () => "",
+			getSelectedAppConnections: async () => [],
+			getSelectedRecipe: async () => null,
+			getStoredNoteContext: async () => "",
+			getUserProfileContext: async () => null,
+			localFolders: [{ id: "folder-1", name: "Project" }],
+			localFolderToolMode: "client",
+			logLatency: () => {},
+			message: {
+				id: "message-1",
+				role: "user",
+				parts: [{ type: "text", text: "Read the project" }],
+			},
+			resolveLocalFolderRoots: () => {
+				throw new Error(
+					"desktop folders must not resolve on the hosted server",
+				);
+			},
+			workspaceId: "workspace-1",
+		});
+
+		expect(context.localFolderRoots).toEqual([
+			{ id: "folder-1", name: "Project", path: "Project" },
+		]);
+		expect(context.systemPrompt).toContain("Project");
+		expect(context.tools.read_local_file?.execute).toBeUndefined();
+	});
 });
 
 describe("chat automation tools", () => {

@@ -97,13 +97,31 @@ type HostedOpenAiAdmissionRequest = HostedOpenAiAdmissionBase &
 		  }
 	);
 
-export const admitHostedOpenAiRequest = async ({
+type HostedOpenAiAdmission = {
+	admissionReservationId?: string;
+	apiKey?: string;
+	safetyIdentifier: string;
+};
+
+export function admitHostedOpenAiRequest(
+	request: HostedOpenAiAdmissionRequest & { requireServerApiKey: false },
+): Promise<HostedOpenAiAdmission | null>;
+export function admitHostedOpenAiRequest(
+	request: HostedOpenAiAdmissionRequest & { requireServerApiKey?: true },
+): Promise<(HostedOpenAiAdmission & { apiKey: string }) | null>;
+export function admitHostedOpenAiRequest(
+	request: HostedOpenAiAdmissionRequest & { requireServerApiKey: boolean },
+): Promise<HostedOpenAiAdmission | null>;
+export async function admitHostedOpenAiRequest({
 	client,
 	onRejected,
 	operation,
 	request,
+	requireServerApiKey = true,
 	response,
-}: HostedOpenAiAdmissionRequest) => {
+}: HostedOpenAiAdmissionRequest & {
+	requireServerApiKey?: boolean;
+}): Promise<HostedOpenAiAdmission | null> {
 	const admission = await authorizeHostedOpenAiRequest({
 		client,
 		operation,
@@ -127,7 +145,7 @@ export const admitHostedOpenAiRequest = async ({
 	}
 
 	const apiKey = process.env.OPENAI_API_KEY;
-	if (!apiKey) {
+	if (requireServerApiKey && !apiKey) {
 		const rejection = {
 			error: "OPENAI_API_KEY is not configured.",
 			errorCode: "openai_api_key_missing",
@@ -144,10 +162,10 @@ export const admitHostedOpenAiRequest = async ({
 		...(admission.admissionReservationId
 			? { admissionReservationId: admission.admissionReservationId }
 			: {}),
-		apiKey,
+		...(apiKey ? { apiKey } : {}),
 		safetyIdentifier: admission.safetyIdentifier,
 	};
-};
+}
 
 export const getOpenAiSafetyProviderOptions = (safetyIdentifier: string) => ({
 	openai: { safetyIdentifier },

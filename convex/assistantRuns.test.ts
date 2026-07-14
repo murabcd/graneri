@@ -123,6 +123,7 @@ const backgroundJob = {
 	webSearchEnabled: false,
 	chartGenerationRequested: false,
 	imageGenerationRequested: false,
+	shouldGenerateChatTitle: false,
 	selectedSourceIds: [],
 	defaultTimezone: "UTC",
 	model: "gpt-5.4",
@@ -261,6 +262,29 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 			assistantMessageId: run.assistantMessageId,
 		}),
 	).toBe(true);
+	expect(
+		await t.mutation(internal.chats.updateTitleForCompletedRun, {
+			runId: run._id,
+			title: "Background answer title",
+		}),
+	).toBe(true);
+	expect(
+		await asOwner.query(api.chats.getSession, { workspaceId, chatId }),
+	).toMatchObject({ title: "Background answer title" });
+	await asOwner.mutation(api.chats.updateTitle, {
+		workspaceId,
+		chatId,
+		title: "User-selected title",
+	});
+	expect(
+		await t.mutation(internal.chats.updateTitleForCompletedRun, {
+			runId: run._id,
+			title: "Late generated title",
+		}),
+	).toBe(false);
+	expect(
+		await asOwner.query(api.chats.getSession, { workspaceId, chatId }),
+	).toMatchObject({ title: "User-selected title" });
 
 	const finalState = await t.run(async (ctx) => ({
 		storedRun: await ctx.db.get(run._id),

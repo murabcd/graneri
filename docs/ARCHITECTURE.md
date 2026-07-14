@@ -105,10 +105,11 @@ compaction checkpoint before the new turn starts. The active transcript remains
 bounded to the same recent-message window exposed to the renderer. Preserved
 branches are durable recovery data, but Graneri does not currently expose the
 reference app's full thread-fork and branch-switching UI.
-Assistant run start and active-stream session start share one runtime helper so
-both web and desktop choose the same reject/supersede policy, reuse matching
-continued runs, terminalize failed starts, and clean up partially-created stream
-sessions.
+Web-produced assistant run start and active-stream session start share one
+runtime helper so local-folder turns choose the same reject/supersede policy,
+reuse matching continued runs, terminalize failed starts, and clean up
+partially-created stream sessions. Convex-produced starts instead create the
+run, snapshot, sanitized job, and scheduled action atomically in one mutation.
 Hosted chat runs are durable Convex lifecycle records.
 `assistantRunStateMachine` owns run creation, allowed transitions, ordered
 lifecycle events, and mandatory queue/snapshot cleanup; `assistantRuns` exposes
@@ -126,6 +127,13 @@ checkpoints AI SDK message parts, and atomically saves the final assistant
 message with the terminal run transition. The start mutation consumes the
 single-use chat admission reservation and owns supported-model validation;
 scheduled arguments must never contain a user Convex token.
+Normal hosted turns use this Convex producer. The web route authenticates and
+prepares the canonical branch/context, persists the user input, starts the
+durable job, and closes its SSE response; reactive Convex message and run
+queries carry the live rich-message snapshot to workspace and note chat UIs.
+Completed first turns may generate a title after terminalization, but the title
+mutation rechecks run ownership and replaces only an untouched default title so
+a user rename always wins.
 `assistantRunJobs` retains only the sanitized model input and tool-selection
 configuration needed to resume the same Convex producer after durable user
 input. Approval pauses save the assistant approval message and checkpoint that
@@ -164,32 +172,37 @@ Active stream snapshot writes are fail-closed runtime state. Appending text or
 tool lifecycle updates to a missing snapshot, wrong run, or non-running run is a
 producer/state divergence and must surface as a stream failure that terminalizes
 the run; it must not silently drop output.
-The client stream must not close as successful until completed-run finalization
-has saved the assistant message, closed temporary stream/tool snapshots, and
-terminalized the `assistantRuns` record. Finalization failures are request
-failures, not background cleanup. A failed finalization attempt must leave the
-same terminalization pending so a later flush can retry; it must not poison the
-finalization queue with a permanently rejected in-flight promise.
-Reconnect recovery follows the same no-leftover rule: when a reconnect finds a
-running run without a live in-process stream producer, the route must mark the
-run stopping, attempt to save/delete the active stream snapshot, and terminalize
-the run in a `finally` path. A `waiting_for_user` run intentionally has no live
-stream producer and must remain pending across reloads; both the renderer and
-reconnect route skip stream attachment for that state. Snapshot cleanup failures
-may still surface to the caller, but they must not leave the run blocking future
-queue drain or chat sends. Manual stop uses the same shape: record durable stop
-intent before stream cleanup, and terminalize in `finally` after cleanup is
-attempted.
+A web-produced client stream must not close as successful until completed-run
+finalization has saved the assistant message, closed temporary stream/tool
+snapshots, and terminalized the `assistantRuns` record. Finalization failures
+are request failures, not background cleanup. A failed finalization attempt
+must leave the same terminalization pending so a later flush can retry; it must
+not poison the finalization queue with a permanently rejected in-flight
+promise. A Convex-produced route response is only a durable-start handoff and
+may close while the scheduled action continues.
+Reconnect recovery follows the same no-leftover rule for `web` producers: when
+a reconnect finds a running web run without a live in-process stream producer,
+the route must mark the run stopping, attempt to save/delete the active stream
+snapshot, and terminalize the run in a `finally` path. A `convex` producer is
+already durable and must not be failed merely because no web process owns it. A
+`waiting_for_user` run intentionally has no live stream producer and must remain
+pending across reloads; both the renderer and reconnect route skip stream
+attachment for that state. Snapshot cleanup failures may still surface to the
+caller, but they must not leave the run blocking future queue drain or chat
+sends. Manual stop uses the same shape: record durable stop intent before stream
+cleanup, and terminalize in `finally` after cleanup is attempted.
 Snapshots remain the live render surface; historical inspection, future missed
 event replay, and debugging should use run events plus saved messages rather
 than preserved snapshot rows.
-AI SDK stream resume must attach to a non-terminal `assistantRuns` record and a
-live in-process producer. It must not infer lifecycle from partial stream text.
-If Convex has an attachable run but the current process has no matching producer,
-the run fails and temporary snapshots are cleaned up rather than returning a
-synthetic stream. Resume request preparation must fail when required workspace
-or authentication state is unavailable; it must not fall back to the normal chat
-send endpoint.
+AI SDK HTTP stream resume applies only to `web` producers and must attach to a
+non-terminal `assistantRuns` record plus its live in-process producer. It must
+not infer lifecycle from partial stream text. If Convex has an attachable web
+run but the current process has no matching producer, the run fails and
+temporary snapshots are cleaned up rather than returning a synthetic stream.
+Convex producers resume through their durable job and reactive snapshot instead
+of HTTP SSE attachment. Resume request preparation must fail when required
+workspace or authentication state is unavailable; it must not fall back to the
+normal chat send endpoint.
 Human-blocking assistant work uses `waiting_for_user` plus a typed
 `pendingDecision` on the run. Producers must resume the same run after the
 decision instead of creating a second active run. Normal duplicate sends must
@@ -289,11 +302,14 @@ wait for the current run to finish.
 
 ### Queue Behavior
 
-The upstream app-server is the reference for active-turn user input semantics. Graneri keeps the
-same separation of responsibilities with its stack: AI SDK routes own the
-stream/tool loop and acceptance headers, while Convex owns durable coordination,
-atomic queue claims, lifecycle invariants, and replayable state. The target is
-matching behavior, not identical storage.
+The upstream app-server is the reference for active-turn user input semantics.
+Graneri keeps the same behavioral responsibilities with its stack: hosted HTTP
+routes own validation, context preparation, persistence handoff, and acceptance
+headers; Convex owns the normal hosted AI SDK loop, durable coordination, atomic
+queue claims, lifecycle invariants, and replayable state. Desktop-local tools
+remain the explicit exception because their AI SDK stream must return tool calls
+to the installed renderer for execution. The target is matching behavior, not
+identical storage.
 
 | Reference behavior | Graneri implementation | Status |
 | --- | --- | --- |
@@ -403,6 +419,10 @@ Convex deployment.
 Hosted URLs are public configuration, not secrets. They identify hosted Convex
 and web deployments. Never embed `OPENAI_API_KEY`, `BETTER_AUTH_SECRET`, OAuth
 client secrets, deploy keys, or signing credentials into desktop builds.
+`OPENAI_API_KEY` must be configured in the hosted Convex deployment for normal
+durable chat actions. The hosted web deployment still needs its own key for
+desktop-local chat turns, note/template generation, and realtime session
+creation; neither value belongs in a renderer or packaged desktop artifact.
 
 Official builds pass:
 
@@ -474,9 +494,10 @@ Hosted production deployments must expose the same AI HTTP routes as real
 serverless functions under `/api/*`; Vite dev/preview middleware is only the
 local development surface and is not a Vercel production route by itself.
 Each model-producing hosted chat turn must pass through Convex admission before
-Vercel starts or steers an AI SDK stream. Convex authenticates and rate-limits
-the stable identity; Vercel hashes that identity and sends it as OpenAI's safety
-identifier. Chat admission also issues a short-lived, identity-bound reservation
+the hosted route starts or continues paid AI SDK work. Convex authenticates and
+rate-limits the stable identity; the active producer hashes that identity and
+sends it as OpenAI's safety identifier. Chat admission also issues a
+short-lived, identity-bound reservation
 that exactly one Convex producer start or continuation mutation must consume
 before scheduling paid background work. Used and expired reservations cannot be
 replayed. Reconnect and stop-only requests do not consume chat admission.
@@ -489,15 +510,21 @@ model request begins; there is no unauthenticated or client-key fallback.
 `apps/web/server/hosted-openai-admission.ts` is the single web-server envelope
 for chat, note generation, template application, and realtime session
 admission. It owns operation-to-Convex authorization, rate-limit responses and
-retry headers, server API-key enforcement, and the hashed safety identity
-handoff. Route handlers report rejected admission to their wide event and own
-only their request validation, model invocation, and response-specific stream
-or payload behavior.
-The OpenAI key and streaming/tool loop remain in the web server handler (Vite
-locally and Vercel in production), while Convex continues to own authorization
-and durable run, queue, message, and lifecycle state. Development and
-production therefore execute the same chat implementation and identity
-boundary.
+retry headers, conditional web-server API-key enforcement, and the hashed
+safety identity handoff. Normal Convex-produced chat turns do not require an
+OpenAI key in Vercel; desktop-local web producers, note generation, templates,
+and realtime session creation still do. Route handlers report rejected
+admission to their wide event and own their request validation plus
+response-specific handoff, stream, or payload behavior.
+The OpenAI key and normal hosted streaming/tool loop run in the Convex internal
+action so a Vercel request lifetime is not the turn lifetime. The web handler
+retains request validation, context construction, branch preparation, user
+message persistence, acceptance headers, and the durable start handoff. Convex
+owns authorization plus run, queue, message, stream-snapshot, tool, and
+lifecycle state. Vite-local and hosted production requests use this same
+boundary. The only web-owned model loop is a turn with desktop-local folder
+scope, because its tool calls must cross back through the live renderer and
+desktop loopback server.
 
 Hosted chat consumers enter shared orchestration through
 `@workspace/ai/hosted-chat-turn`. Active-stream persistence, branch
@@ -516,7 +543,7 @@ Local-folder chat uses a hosted-model, desktop-tool bridge:
 4. The renderer executes those calls through the desktop local server against
    folders explicitly shared through the desktop bridge.
 5. The renderer attaches tool output and lets the AI SDK resubmit the
-   conversation to hosted Convex.
+   conversation to the hosted web producer for the same run.
 
 Client-side local tool outputs must resubmit with the same chat request body,
 including `localFolders`, so subsequent hosted model steps keep the same desktop

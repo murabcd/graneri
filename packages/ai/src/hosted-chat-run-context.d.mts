@@ -10,6 +10,7 @@ type LogLatencyDetails = Record<
 
 type LocalFolderReference = {
 	id?: string;
+	name?: string;
 	path?: string;
 };
 
@@ -58,6 +59,7 @@ export declare const buildHostedChatRunContext: (args: {
 	}) => Promise<string>;
 	getUserProfileContext: () => Promise<unknown>;
 	localFolders?: LocalFolderReference[];
+	localFolderToolMode?: "client" | "server";
 	logLatency: (stage: string, details?: LogLatencyDetails) => void;
 	message?: UIMessage | null;
 	noteContext?: {

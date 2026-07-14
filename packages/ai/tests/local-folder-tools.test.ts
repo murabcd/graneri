@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	buildClientLocalFolderTools,
 	buildLocalFolderSystemContext,
 	buildLocalFolderTools,
 	getImageMediaType,
@@ -74,6 +75,21 @@ describe("local folder tools", () => {
 			}
 		} finally {
 			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("exposes client-executed local tools without server executors", () => {
+		const tools = buildClientLocalFolderTools([
+			{
+				name: "shared",
+				path: "/Users/test/Documents/shared",
+			},
+		]);
+
+		expect(Object.keys(tools)).toContain("read_local_file");
+		for (const localTool of Object.values(tools)) {
+			expect(localTool.execute).toBeUndefined();
+			expect(localTool.providerOptions?.openai?.deferLoading).toBe(true);
 		}
 	});
 

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const MAX_LOCAL_FOLDER_ROOTS = 4;
+
 export const buildLocalFolderSystemContext = (roots) =>
 	roots.length === 0
 		? ""
