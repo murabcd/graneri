@@ -11,8 +11,12 @@ import {
 } from "./_generated/server";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
-import { deleteAssistantRunJob } from "./assistantRunJobState";
+import {
+	deleteAssistantRunJob,
+	upsertAssistantRunJobMessage,
+} from "./assistantRunJobState";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
+import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import {
 	cleanupAssistantRunSnapshots,
 	transitionAssistantRun,
@@ -1337,6 +1341,7 @@ export const acceptSteeredUserMessages = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		nextAssistantMessageId: v.string(),
 		messages: v.array(
 			v.object({
 				queuedMessageId: v.id("assistantQueuedMessages"),
@@ -1360,6 +1365,12 @@ export const acceptSteeredUserMessages = mutation({
 			throw new ConvexError({
 				code: "INVALID_STEERED_MESSAGE",
 				message: "Steered message batch cannot be empty.",
+			});
+		}
+		if (!args.nextAssistantMessageId.trim()) {
+			throw new ConvexError({
+				code: "INVALID_STEERED_MESSAGE",
+				message: "Steered continuation assistant message id cannot be empty.",
 			});
 		}
 
@@ -1416,22 +1427,73 @@ export const acceptSteeredUserMessages = mutation({
 			}
 		}
 
-		const savedMessages = [];
-		for (const { message } of args.messages) {
-			savedMessages.push(
+		const convexStream =
+			run.producer === "convex"
+				? await getActiveStreamForRun(ctx, run._id)
+				: null;
+		if (
+			run.producer === "convex" &&
+			(!convexStream ||
+				convexStream.assistantMessageId !== run.assistantMessageId)
+		) {
+			throw new ConvexError({
+				code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
+				message:
+					"Convex assistant run stream does not match its active generation.",
+			});
+		}
+
+		if (convexStream && run.status === "running") {
+			const stream = convexStream;
+			if (stream.text.trim() || stream.partsJson !== "[]") {
+				const interruptedMetadataJson = JSON.stringify({ interrupted: true });
 				await saveMessageForOwnerInternal(ctx, {
 					ownerTokenIdentifier,
 					workspaceId: args.workspaceId,
 					authorName: getAuthorName(identity),
 					chatId: args.chatId,
-					noteId: args.noteId,
-					title: args.title,
-					preview: args.preview,
-					model: args.model,
-					reasoningEffort: args.reasoningEffort,
-					message,
-				}),
-			);
+					model: run.model,
+					reasoningEffort: run.reasoningEffort,
+					message: {
+						id: stream.assistantMessageId,
+						role: "assistant",
+						partsJson: stream.partsJson,
+						metadataJson: interruptedMetadataJson,
+						text: stream.text.trim(),
+						createdAt: Date.now(),
+					},
+				});
+				await appendAssistantRunEvent(ctx, run, {
+					type: "assistant.message.interrupted",
+					assistantMessageId: stream.assistantMessageId,
+				});
+				await upsertAssistantRunJobMessage(ctx, run._id, {
+					id: stream.assistantMessageId,
+					role: "assistant",
+					partsJson: stream.partsJson,
+					metadataJson: interruptedMetadataJson,
+				});
+			}
+		}
+
+		const savedMessages = [];
+		for (const { message } of args.messages) {
+			const savedMessage = await saveMessageForOwnerInternal(ctx, {
+				ownerTokenIdentifier,
+				workspaceId: args.workspaceId,
+				authorName: getAuthorName(identity),
+				chatId: args.chatId,
+				noteId: args.noteId,
+				title: args.title,
+				preview: args.preview,
+				model: args.model,
+				reasoningEffort: args.reasoningEffort,
+				message,
+			});
+			savedMessages.push(savedMessage);
+			if (run.producer === "convex") {
+				await upsertAssistantRunJobMessage(ctx, run._id, message);
+			}
 		}
 
 		const transitionMessages = queuedMessages.map((queuedMessage, index) => {
@@ -1454,10 +1516,19 @@ export const acceptSteeredUserMessages = mutation({
 				messageId: message.id,
 			};
 		});
-		await transitionAssistantRun(ctx, run, {
+		const continuedRun = await transitionAssistantRun(ctx, run, {
 			type: "append_user_messages",
 			messages: transitionMessages,
 		});
+		const messageRun = await transitionAssistantRun(ctx, continuedRun, {
+			type: "start_assistant_message",
+			assistantMessageId: args.nextAssistantMessageId,
+		});
+		if (run.producer === "convex") {
+			await cleanupAssistantRunSnapshots(ctx, run._id);
+			await createAssistantRunStream(ctx, messageRun);
+			await scheduleAssistantRunExecution(ctx, messageRun);
+		}
 		await Promise.all(
 			queuedMessages.map((queuedMessage) =>
 				queuedMessage ? ctx.db.delete(queuedMessage._id) : null,

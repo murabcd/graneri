@@ -137,6 +137,11 @@ and chat retirement must delete the job row; access tokens and connected-app
 credentials must never enter it. Convex-owned turns save generated-image
 artifacts directly through Convex File Storage, so those files do not depend on
 the lifetime of the hosted HTTP request.
+Steering a Convex-owned turn atomically checkpoints any interrupted assistant
+message into both chat history and the resumable job, appends the accepted user
+message batch, rotates the assistant message id and active stream, and schedules
+the next generation. Every action checkpoint is scoped to that message id so a
+stale action cannot overwrite or fail the continued generation.
 Together they enforce stop/failure/completion history and the
 one-active-run-per-chat invariant. `chatActiveStreams` stores the latest complete
 AI SDK message parts plus denormalized text, while active `chatToolCalls` stores

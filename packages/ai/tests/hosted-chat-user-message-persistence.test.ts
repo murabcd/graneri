@@ -31,6 +31,7 @@ const createPersistenceArgs = (overrides = {}) => ({
 	chatId: "chat-1",
 	noteId: null,
 	model: "gpt-5",
+	nextAssistantMessageId: "assistant-2",
 	reasoningEffort: "medium",
 	message: userMessage("user-1", "Hello"),
 	queuedInput: createQueuedInput(),
@@ -131,6 +132,7 @@ describe("hosted chat user message persistence", () => {
 		expect(args.acceptSteeredUserMessages).toHaveBeenCalledWith(
 			expect.objectContaining({
 				runId: "run-1",
+				nextAssistantMessageId: "assistant-2",
 				messages: [
 					expect.objectContaining({ queuedMessageId: "queued-1" }),
 					expect.objectContaining({ queuedMessageId: "queued-2" }),

@@ -1269,6 +1269,7 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 		workspaceId,
 		chatId,
 		runId: run._id,
+		nextAssistantMessageId: "chat-steer-batch-assistant-2",
 		preview: "Second steer",
 		messages: claimedMessages.map((queuedMessage, index) => ({
 			queuedMessageId: queuedMessage._id,

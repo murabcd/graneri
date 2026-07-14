@@ -70,13 +70,18 @@ export const getRunnableContext = internalQuery({
 export const replaceSnapshot = internalMutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		text: v.string(),
 		partsJson: v.string(),
 	},
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
 		const run = await ctx.db.get(args.runId);
-		if (run?.producer !== "convex" || run.status !== "running") {
+		if (
+			run?.producer !== "convex" ||
+			run.status !== "running" ||
+			run.assistantMessageId !== args.assistantMessageId
+		) {
 			return false;
 		}
 
@@ -92,11 +97,16 @@ export const replaceSnapshot = internalMutation({
 export const complete = internalMutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 	},
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
 		const run = await ctx.db.get(args.runId);
-		if (run?.producer !== "convex" || run.status !== "running") {
+		if (
+			run?.producer !== "convex" ||
+			run.status !== "running" ||
+			run.assistantMessageId !== args.assistantMessageId
+		) {
 			return false;
 		}
 
@@ -211,12 +221,18 @@ export const waitForUser = internalMutation({
 export const fail = internalMutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.optional(v.string()),
 		errorText: v.string(),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const run = await ctx.db.get(args.runId);
-		if (run?.producer === "convex" && run.status === "running") {
+		if (
+			run?.producer === "convex" &&
+			run.status === "running" &&
+			(args.assistantMessageId === undefined ||
+				run.assistantMessageId === args.assistantMessageId)
+		) {
 			await transitionAssistantRun(ctx, run, {
 				type: "fail",
 				errorText: args.errorText,

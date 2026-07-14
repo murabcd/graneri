@@ -77,6 +77,7 @@ export declare const persistHostedChatUserMessage: <
 			title?: string;
 			preview: string;
 			model: string;
+			nextAssistantMessageId: string;
 			reasoningEffort: ReasoningEffort;
 			runId: RunId;
 			messages: Array<{
@@ -89,6 +90,7 @@ export declare const persistHostedChatUserMessage: <
 			messageId: string;
 		}) => Promise<unknown>;
 		continueRunId?: RunId | null;
+		nextAssistantMessageId: string;
 		queuedInput: QueuedInput<WorkspaceId, ChatId, RunId, QueuedMessageId>;
 		replayQueuedMessageId?: QueuedMessageId | null;
 		saveMessage: (

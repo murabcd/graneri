@@ -39,6 +39,7 @@ export const persistHostedChatUserMessage = async ({
 	continueRunId,
 	message,
 	model,
+	nextAssistantMessageId,
 	noteId,
 	queuedInput,
 	reasoningEffort,
@@ -71,6 +72,7 @@ export const persistHostedChatUserMessage = async ({
 			model: saveMessageArgs.model,
 			reasoningEffort: saveMessageArgs.reasoningEffort,
 			runId: continueRunId,
+			nextAssistantMessageId,
 			messages: steeredUserMessages.map((steeredMessage, index) => ({
 				queuedMessageId: queuedInput.claimedQueuedMessageIds[index],
 				message: buildSaveMessageArgs({

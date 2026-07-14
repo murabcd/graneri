@@ -77,7 +77,9 @@ const guardExecutableTools = (
 					...tool,
 					execute: async (input: unknown, options: unknown) => {
 						await requireActiveRun();
-						return await execute(input, options);
+						const result = await execute(input, options);
+						await requireActiveRun();
+						return result;
 					},
 				},
 			];
@@ -133,7 +135,10 @@ export const run = internalAction({
 					internal.assistantRunBackgroundState.getRunnableContext,
 					{ runId: args.runId },
 				);
-				if (!activeContext) {
+				if (
+					!activeContext ||
+					activeContext.assistantMessageId !== context.assistantMessageId
+				) {
 					throw new BackgroundRunStoppedError();
 				}
 			};
@@ -211,6 +216,7 @@ export const run = internalAction({
 					internal.assistantRunBackgroundState.replaceSnapshot,
 					{
 						runId: args.runId,
+						assistantMessageId: context.assistantMessageId,
 						text: getHostedChatMessageText(message),
 						partsJson: JSON.stringify(message.parts),
 					},
@@ -260,6 +266,7 @@ export const run = internalAction({
 
 			await ctx.runMutation(internal.assistantRunBackgroundState.complete, {
 				runId: args.runId,
+				assistantMessageId: context.assistantMessageId,
 			});
 		} catch (error) {
 			if (error instanceof BackgroundRunStoppedError) {
@@ -267,6 +274,7 @@ export const run = internalAction({
 			}
 			await ctx.runMutation(internal.assistantRunBackgroundState.fail, {
 				runId: args.runId,
+				assistantMessageId: context.assistantMessageId,
 				errorText: getErrorText(error),
 			});
 		}

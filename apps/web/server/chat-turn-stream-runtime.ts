@@ -248,6 +248,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 				chatId,
 				noteId,
 				model,
+				nextAssistantMessageId: assistantMessageId,
 				reasoningEffort,
 				message: lastUserMessage,
 				continueRunId,

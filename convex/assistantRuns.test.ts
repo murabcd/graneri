@@ -214,6 +214,7 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 	expect(
 		await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
 			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
 			text: "",
 			partsJson: pendingPartsJson,
 		}),
@@ -243,6 +244,7 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 	expect(
 		await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
 			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
 			text: "Background answer.",
 			partsJson,
 		}),
@@ -250,6 +252,7 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 	expect(
 		await t.mutation(internal.assistantRunBackgroundState.complete, {
 			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
 		}),
 	).toBe(true);
 
@@ -306,6 +309,7 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 	};
 	await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 		text: "",
 		partsJson: JSON.stringify([approvalRequest]),
 	});
@@ -415,6 +419,156 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 	});
 	expect(failedState.streamCount).toBe(0);
 	expect(failedState.jobCount).toBe(0);
+	vi.useRealTimers();
+});
+
+test("background steering checkpoints the interrupted generation and continues the same run", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-background-steer";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await asOwner.mutation(api.assistantRunBackground.start, {
+		workspaceId,
+		chatId,
+		assistantMessageId: "msg-assistant-before-steer",
+		policy: "reject",
+		job: backgroundJob,
+	});
+	const interruptedPartsJson = JSON.stringify([
+		{ type: "text", text: "Partial answer" },
+	]);
+	await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		text: "Partial answer",
+		partsJson: interruptedPartsJson,
+	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput(
+				"msg-user-steer",
+				"Focus on the reliability risks.",
+			),
+		},
+	);
+	const claimedMessages = await asOwner.mutation(
+		api.assistantQueuedMessages.claimReadyForRun,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
+	);
+	const acceptArgs = {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		nextAssistantMessageId: "msg-assistant-after-steer",
+		messages: claimedMessages.map((claimedMessage) => ({
+			queuedMessageId: claimedMessage._id,
+			message: {
+				id: claimedMessage.messageId,
+				role: "user" as const,
+				partsJson: JSON.stringify([
+					{ type: "text", text: claimedMessage.text },
+				]),
+				text: claimedMessage.text,
+				createdAt: 3_000,
+			},
+		})),
+	};
+	const streamId = await t.run(async (ctx) => {
+		const stream = await ctx.db
+			.query("chatActiveStreams")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique();
+		if (!stream) {
+			throw new Error("Expected background run stream.");
+		}
+		await ctx.db.patch(stream._id, {
+			assistantMessageId: "msg-assistant-corrupt",
+		});
+		return stream._id;
+	});
+	await expect(
+		asOwner.mutation(api.chats.acceptSteeredUserMessages, acceptArgs),
+	).rejects.toThrow("ASSISTANT_RUN_INVARIANT_VIOLATION");
+	expect(
+		await t.run(async (ctx) => (await ctx.db.get(queuedMessage._id))?.status),
+	).toBe("claimed");
+	await t.run(async (ctx) => {
+		await ctx.db.patch(streamId, {
+			assistantMessageId: run.assistantMessageId,
+		});
+	});
+	await asOwner.mutation(api.chats.acceptSteeredUserMessages, acceptArgs);
+
+	const state = await t.run(async (ctx) => ({
+		run: await ctx.db.get(run._id),
+		stream: await ctx.db
+			.query("chatActiveStreams")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+		messages: await ctx.db.query("chatMessages").collect(),
+		job: await ctx.db
+			.query("assistantRunJobs")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+	}));
+	expect(state.run).toMatchObject({
+		status: "running",
+		assistantMessageId: "msg-assistant-after-steer",
+	});
+	expect(state.stream).toMatchObject({
+		assistantMessageId: "msg-assistant-after-steer",
+		partsJson: "[]",
+	});
+	expect(state.messages).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				messageId: "msg-assistant-before-steer",
+				metadataJson: JSON.stringify({ interrupted: true }),
+			}),
+			expect.objectContaining({ messageId: "msg-user-steer" }),
+		]),
+	);
+	const jobMessages = JSON.parse(state.job?.job.messagesJson ?? "[]") as Array<{
+		id: string;
+		metadata?: { interrupted?: boolean };
+	}>;
+	expect(jobMessages.slice(-2)).toMatchObject([
+		{
+			id: "msg-assistant-before-steer",
+			metadata: { interrupted: true },
+		},
+		{ id: "msg-user-steer" },
+	]);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
+			runId: run._id,
+			assistantMessageId: "msg-assistant-before-steer",
+			text: "Stale answer",
+			partsJson: JSON.stringify([{ type: "text", text: "Stale answer" }]),
+		}),
+	).toBe(false);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.complete, {
+			runId: run._id,
+			assistantMessageId: "msg-assistant-before-steer",
+		}),
+	).toBe(false);
+	await t.mutation(internal.assistantRunBackgroundState.fail, {
+		runId: run._id,
+		assistantMessageId: "msg-assistant-before-steer",
+		errorText: "Stale generation failure.",
+	});
+	expect(await t.run(async (ctx) => (await ctx.db.get(run._id))?.status)).toBe(
+		"running",
+	);
+	await t.mutation(internal.assistantRunBackgroundState.fail, {
+		runId: run._id,
+		errorText: "Steering continuation failed.",
+	});
 	vi.useRealTimers();
 });
 
