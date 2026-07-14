@@ -4,11 +4,16 @@ import {
 	findReasoningEffort,
 	isSupportedChatModel,
 } from "@workspace/ai/models";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import {
 	activateAutomationRun,
 	automationChatHasActiveAssistantRun,
@@ -207,6 +212,44 @@ const automationTargetValidator = v.union(
 		kind: v.literal("workspace"),
 	}),
 );
+
+const automationCreateArgs = {
+	workspaceId: v.id("workspaces"),
+	title: v.string(),
+	prompt: v.string(),
+	model: v.optional(v.string()),
+	reasoningEffort: v.optional(reasoningEffortValidator),
+	webSearchEnabled: v.optional(v.boolean()),
+	appsEnabled: v.optional(v.boolean()),
+	appSources: v.optional(v.array(automationAppSourceValidator)),
+	schedulePeriod: automationSchedulePeriodValidator,
+	scheduledAt: v.number(),
+	timezone: v.optional(v.string()),
+	target: automationTargetValidator,
+	chatId: v.optional(v.string()),
+};
+
+const automationUpdateArgs = {
+	automationId: v.id("automations"),
+	title: v.string(),
+	prompt: v.string(),
+	model: v.optional(v.string()),
+	reasoningEffort: v.optional(reasoningEffortValidator),
+	webSearchEnabled: v.optional(v.boolean()),
+	appsEnabled: v.optional(v.boolean()),
+	appSources: v.optional(v.array(automationAppSourceValidator)),
+	schedulePeriod: automationSchedulePeriodValidator,
+	scheduledAt: v.number(),
+	timezone: v.optional(v.string()),
+	target: automationTargetValidator,
+};
+
+const automationIdArgs = {
+	automationId: v.id("automations"),
+};
+
+const automationCreateValidator = v.object(automationCreateArgs);
+const automationUpdateValidator = v.object(automationUpdateArgs);
 
 const { requireIdentity } = createResourceAccess("automations");
 
@@ -477,6 +520,325 @@ const buildAutomationRunStart = async (
 	notes: await getRecentContextNotes(ctx, automation),
 });
 
+const listAutomationsForOwner = async (
+	ctx: QueryCtx,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+) => {
+	await requireOwnedWorkspace(ctx, ownerTokenIdentifier, workspaceId);
+
+	const automations = await ctx.db
+		.query("automations")
+		.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_createdAt", (q) =>
+			q
+				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+				.eq("workspaceId", workspaceId),
+		)
+		.order("desc")
+		.take(MAX_RETURNED_AUTOMATIONS);
+
+	return automations.map(toListItem);
+};
+
+const getAutomationForOwner = async (
+	ctx: QueryCtx,
+	ownerTokenIdentifier: string,
+	automationId: Id<"automations">,
+) => {
+	const automation = await ctx.db.get(automationId);
+
+	return automation?.ownerTokenIdentifier === ownerTokenIdentifier
+		? toListItem(automation)
+		: null;
+};
+
+type CreateAutomationForOwnerArgs = Infer<typeof automationCreateValidator> & {
+	ownerTokenIdentifier: string;
+	authorName: string;
+};
+
+const createAutomationForOwner = async (
+	ctx: MutationCtx,
+	args: CreateAutomationForOwnerArgs,
+) => {
+	await requireOwnedWorkspace(ctx, args.ownerTokenIdentifier, args.workspaceId);
+	const target = await requireOwnedAutomationTarget(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		args.target,
+	);
+	const now = Date.now();
+	const prompt = normalizePrompt(args.prompt);
+	const appSources = normalizeAppSources(args.appSources);
+	const chatId = args.chatId
+		? clampWhitespace(args.chatId)
+		: createAutomationChatId();
+	if (args.chatId) {
+		const chat = await ctx.db
+			.query("chats")
+			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
+				q
+					.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("chatId", chatId),
+			)
+			.unique();
+
+		if (!chat || chat.isArchived) {
+			throw new ConvexError({
+				code: "CHAT_NOT_FOUND",
+				message: "Chat not found.",
+			});
+		}
+	}
+	const existingAutomation = await ctx.db
+		.query("automations")
+		.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
+			q
+				.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
+				.eq("workspaceId", args.workspaceId)
+				.eq("chatId", chatId),
+		)
+		.unique();
+
+	if (existingAutomation) {
+		throw new ConvexError({
+			code: "AUTOMATION_CHAT_ALREADY_EXISTS",
+			message: "This chat already has an automation.",
+		});
+	}
+	const nextRunAt = getNextAutomationRunAt({
+		from: now,
+		scheduledAt: args.scheduledAt,
+		schedulePeriod: args.schedulePeriod,
+	});
+	const automationId = await ctx.db.insert("automations", {
+		ownerTokenIdentifier: args.ownerTokenIdentifier,
+		workspaceId: args.workspaceId,
+		authorName: args.authorName,
+		title: normalizeTitle(args.title),
+		prompt,
+		model: normalizeModel(args.model),
+		reasoningEffort: normalizeReasoningEffort(args.reasoningEffort),
+		webSearchEnabled: args.webSearchEnabled ?? false,
+		appsEnabled: args.appsEnabled ?? true,
+		appSources,
+		schedulePeriod: args.schedulePeriod,
+		scheduledAt: args.scheduledAt,
+		timezone: normalizeTimezone(args.timezone),
+		targetKind: target.kind,
+		targetNoteIds: target.targetNoteIds,
+		targetLabel: target.targetLabel,
+		chatId,
+		isPaused: false,
+		nextRunAt,
+		lastRunAt: undefined,
+		activeRunId: undefined,
+		scheduledFunctionId: undefined,
+		createdAt: now,
+		updatedAt: now,
+	});
+	const scheduledFunctionId = await scheduleAutomationRun(
+		ctx,
+		automationId,
+		nextRunAt,
+	);
+	await ctx.db.patch(automationId, { scheduledFunctionId });
+
+	const automation = await ctx.db.get(automationId);
+	if (!automation) {
+		throw new ConvexError({
+			code: "AUTOMATION_SAVE_FAILED",
+			message: "Failed to save automation.",
+		});
+	}
+	return toListItem(automation);
+};
+
+type UpdateAutomationForOwnerArgs = Infer<typeof automationUpdateValidator> & {
+	ownerTokenIdentifier: string;
+};
+
+const updateAutomationForOwner = async (
+	ctx: MutationCtx,
+	args: UpdateAutomationForOwnerArgs,
+) => {
+	const automation = await requireOwnedAutomation(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.automationId,
+	);
+	const target = await requireOwnedAutomationTarget(
+		ctx,
+		args.ownerTokenIdentifier,
+		automation.workspaceId,
+		args.target,
+	);
+	await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
+	const now = Date.now();
+	const prompt = normalizePrompt(args.prompt);
+	const appSources = normalizeAppSources(args.appSources);
+	const nextRunAt = automation.isPaused
+		? undefined
+		: getNextAutomationRunAt({
+				from: now,
+				scheduledAt: args.scheduledAt,
+				schedulePeriod: args.schedulePeriod,
+			});
+	const scheduledFunctionId = nextRunAt
+		? await scheduleAutomationRun(ctx, automation._id, nextRunAt)
+		: undefined;
+
+	await ctx.db.patch(automation._id, {
+		title: normalizeTitle(args.title),
+		prompt,
+		model: normalizeModel(args.model),
+		reasoningEffort: normalizeReasoningEffort(args.reasoningEffort),
+		webSearchEnabled: args.webSearchEnabled ?? false,
+		appsEnabled: args.appsEnabled ?? true,
+		appSources,
+		schedulePeriod: args.schedulePeriod,
+		scheduledAt: args.scheduledAt,
+		timezone: normalizeTimezone(args.timezone),
+		targetKind: target.kind,
+		targetNoteIds: target.targetNoteIds,
+		targetLabel: target.targetLabel,
+		nextRunAt,
+		scheduledFunctionId,
+		updatedAt: now,
+	});
+
+	const updatedAutomation = await ctx.db.get(automation._id);
+	if (!updatedAutomation) {
+		throw new ConvexError({
+			code: "AUTOMATION_SAVE_FAILED",
+			message: "Failed to save automation.",
+		});
+	}
+
+	return toListItem(updatedAutomation);
+};
+
+const toggleAutomationForOwner = async (
+	ctx: MutationCtx,
+	ownerTokenIdentifier: string,
+	automationId: Id<"automations">,
+) => {
+	const automation = await requireOwnedAutomation(
+		ctx,
+		ownerTokenIdentifier,
+		automationId,
+	);
+	const now = Date.now();
+
+	if (!automation.isPaused) {
+		await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
+		await ctx.db.patch(automation._id, {
+			isPaused: true,
+			nextRunAt: undefined,
+			scheduledFunctionId: undefined,
+			updatedAt: now,
+		});
+	} else {
+		const nextRunAt = getNextAutomationRunAt({
+			from: now,
+			scheduledAt: automation.scheduledAt,
+			schedulePeriod: automation.schedulePeriod,
+		});
+		const scheduledFunctionId = await scheduleAutomationRun(
+			ctx,
+			automation._id,
+			nextRunAt,
+		);
+		await ctx.db.patch(automation._id, {
+			isPaused: false,
+			nextRunAt,
+			scheduledFunctionId,
+			updatedAt: now,
+		});
+	}
+
+	const updatedAutomation = await ctx.db.get(automation._id);
+	if (!updatedAutomation) {
+		throw new ConvexError({
+			code: "AUTOMATION_SAVE_FAILED",
+			message: "Failed to save automation.",
+		});
+	}
+
+	return toListItem(updatedAutomation);
+};
+
+const runAutomationNowForOwner = async (
+	ctx: MutationCtx,
+	ownerTokenIdentifier: string,
+	automationId: Id<"automations">,
+) => {
+	const automation = await requireOwnedAutomation(
+		ctx,
+		ownerTokenIdentifier,
+		automationId,
+	);
+	const now = Date.now();
+
+	if (automation.activeRunId) {
+		return {
+			status: "already_running" as const,
+			chatId: automation.chatId,
+		};
+	}
+
+	if (await automationChatHasActiveAssistantRun(ctx, automation)) {
+		return {
+			status: "chat_busy" as const,
+			chatId: automation.chatId,
+		};
+	}
+
+	const run = await reserveAutomationRun(ctx, {
+		automationId: automation._id,
+		scheduledFor: now,
+		reason: "manual",
+	});
+	if (run.status !== "reserved") {
+		return {
+			status: "already_running" as const,
+			chatId: automation.chatId,
+		};
+	}
+
+	await ctx.scheduler.runAfter(0, internal.automationActions.runAutomation, {
+		automationId: automation._id,
+		scheduledFor: now,
+		reason: "manual",
+		reservedRunId: run.runId,
+	});
+
+	return {
+		status: "started" as const,
+		chatId: automation.chatId,
+		runId: run.runId,
+	};
+};
+
+const removeAutomationForOwner = async (
+	ctx: MutationCtx,
+	ownerTokenIdentifier: string,
+	automationId: Id<"automations">,
+) => {
+	const automation = await requireOwnedAutomation(
+		ctx,
+		ownerTokenIdentifier,
+		automationId,
+	);
+	await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
+	await ctx.db.delete(automation._id);
+	await ctx.scheduler.runAfter(0, internal.automations.removeOrphanedRuns, {
+		automationId: automation._id,
+	});
+};
+
 export const list = query({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -484,20 +846,11 @@ export const list = query({
 	returns: v.array(automationListItemValidator),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-
-		const automations = await ctx.db
-			.query("automations")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_createdAt", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId),
-			)
-			.order("desc")
-			.take(MAX_RETURNED_AUTOMATIONS);
-
-		return automations.map(toListItem);
+		return await listAutomationsForOwner(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 	},
 });
 
@@ -508,17 +861,11 @@ export const get = query({
 	returns: v.union(automationListItemValidator, v.null()),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const automation = await ctx.db.get(args.automationId);
-
-		if (
-			!automation ||
-			automation.ownerTokenIdentifier !== ownerTokenIdentifier
-		) {
-			return null;
-		}
-
-		return toListItem(automation);
+		return await getAutomationForOwner(
+			ctx,
+			identity.tokenIdentifier,
+			args.automationId,
+		);
 	},
 });
 
@@ -564,328 +911,158 @@ export const getRunningRunForChat = query({
 });
 
 export const create = mutation({
-	args: {
-		workspaceId: v.id("workspaces"),
-		title: v.string(),
-		prompt: v.string(),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
-		webSearchEnabled: v.optional(v.boolean()),
-		appsEnabled: v.optional(v.boolean()),
-		appSources: v.optional(v.array(automationAppSourceValidator)),
-		schedulePeriod: automationSchedulePeriodValidator,
-		scheduledAt: v.number(),
-		timezone: v.optional(v.string()),
-		target: automationTargetValidator,
-		chatId: v.optional(v.string()),
-	},
+	args: automationCreateArgs,
 	returns: automationListItemValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const target = await requireOwnedAutomationTarget(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			args.target,
-		);
-		const now = Date.now();
-		const prompt = normalizePrompt(args.prompt);
-		const appSources = normalizeAppSources(args.appSources);
-		const chatId = args.chatId
-			? clampWhitespace(args.chatId)
-			: createAutomationChatId();
-		if (args.chatId) {
-			const chat = await ctx.db
-				.query("chats")
-				.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
-					q
-						.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-						.eq("workspaceId", args.workspaceId)
-						.eq("chatId", chatId),
-				)
-				.unique();
-
-			if (!chat || chat.isArchived) {
-				throw new ConvexError({
-					code: "CHAT_NOT_FOUND",
-					message: "Chat not found.",
-				});
-			}
-		}
-		const existingAutomation = await ctx.db
-			.query("automations")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId)
-					.eq("chatId", chatId),
-			)
-			.unique();
-
-		if (existingAutomation) {
-			throw new ConvexError({
-				code: "AUTOMATION_CHAT_ALREADY_EXISTS",
-				message: "This chat already has an automation.",
-			});
-		}
-		const nextRunAt = getNextAutomationRunAt({
-			from: now,
-			scheduledAt: args.scheduledAt,
-			schedulePeriod: args.schedulePeriod,
-		});
-		const automationId = await ctx.db.insert("automations", {
-			ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
+		return await createAutomationForOwner(ctx, {
+			...args,
+			ownerTokenIdentifier: identity.tokenIdentifier,
 			authorName: getAuthorName(identity),
-			title: normalizeTitle(args.title),
-			prompt,
-			model: normalizeModel(args.model),
-			reasoningEffort: normalizeReasoningEffort(args.reasoningEffort),
-			webSearchEnabled: args.webSearchEnabled ?? false,
-			appsEnabled: args.appsEnabled ?? true,
-			appSources,
-			schedulePeriod: args.schedulePeriod,
-			scheduledAt: args.scheduledAt,
-			timezone: normalizeTimezone(args.timezone),
-			targetKind: target.kind,
-			targetNoteIds: target.targetNoteIds,
-			targetLabel: target.targetLabel,
-			chatId,
-			isPaused: false,
-			nextRunAt,
-			lastRunAt: undefined,
-			activeRunId: undefined,
-			scheduledFunctionId: undefined,
-			createdAt: now,
-			updatedAt: now,
 		});
-		const scheduledFunctionId = await scheduleAutomationRun(
-			ctx,
-			automationId,
-			nextRunAt,
-		);
-		await ctx.db.patch(automationId, {
-			scheduledFunctionId,
-		});
-
-		const automation = await ctx.db.get(automationId);
-		if (!automation) {
-			throw new ConvexError({
-				code: "AUTOMATION_SAVE_FAILED",
-				message: "Failed to save automation.",
-			});
-		}
-		return toListItem(automation);
 	},
 });
 
 export const update = mutation({
-	args: {
-		automationId: v.id("automations"),
-		title: v.string(),
-		prompt: v.string(),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
-		webSearchEnabled: v.optional(v.boolean()),
-		appsEnabled: v.optional(v.boolean()),
-		appSources: v.optional(v.array(automationAppSourceValidator)),
-		schedulePeriod: automationSchedulePeriodValidator,
-		scheduledAt: v.number(),
-		timezone: v.optional(v.string()),
-		target: automationTargetValidator,
-	},
+	args: automationUpdateArgs,
 	returns: automationListItemValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const automation = await requireOwnedAutomation(
-			ctx,
-			ownerTokenIdentifier,
-			args.automationId,
-		);
-		const target = await requireOwnedAutomationTarget(
-			ctx,
-			ownerTokenIdentifier,
-			automation.workspaceId,
-			args.target,
-		);
-		await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
-		const now = Date.now();
-		const prompt = normalizePrompt(args.prompt);
-		const appSources = normalizeAppSources(args.appSources);
-		const nextRunAt = automation.isPaused
-			? undefined
-			: getNextAutomationRunAt({
-					from: now,
-					scheduledAt: args.scheduledAt,
-					schedulePeriod: args.schedulePeriod,
-				});
-		const scheduledFunctionId = nextRunAt
-			? await scheduleAutomationRun(ctx, automation._id, nextRunAt)
-			: undefined;
-
-		await ctx.db.patch(automation._id, {
-			title: normalizeTitle(args.title),
-			prompt,
-			model: normalizeModel(args.model),
-			reasoningEffort: normalizeReasoningEffort(args.reasoningEffort),
-			webSearchEnabled: args.webSearchEnabled ?? false,
-			appsEnabled: args.appsEnabled ?? true,
-			appSources,
-			schedulePeriod: args.schedulePeriod,
-			scheduledAt: args.scheduledAt,
-			timezone: normalizeTimezone(args.timezone),
-			targetKind: target.kind,
-			targetNoteIds: target.targetNoteIds,
-			targetLabel: target.targetLabel,
-			nextRunAt,
-			scheduledFunctionId,
-			updatedAt: now,
+		return await updateAutomationForOwner(ctx, {
+			...args,
+			ownerTokenIdentifier: identity.tokenIdentifier,
 		});
-
-		const updatedAutomation = await ctx.db.get(automation._id);
-		if (!updatedAutomation) {
-			throw new ConvexError({
-				code: "AUTOMATION_SAVE_FAILED",
-				message: "Failed to save automation.",
-			});
-		}
-
-		return toListItem(updatedAutomation);
 	},
 });
 
 export const togglePaused = mutation({
-	args: {
-		automationId: v.id("automations"),
-	},
+	args: automationIdArgs,
 	returns: automationListItemValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const automation = await requireOwnedAutomation(
+		return await toggleAutomationForOwner(
 			ctx,
-			ownerTokenIdentifier,
+			identity.tokenIdentifier,
 			args.automationId,
 		);
-		const now = Date.now();
-
-		if (!automation.isPaused) {
-			await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
-			await ctx.db.patch(automation._id, {
-				isPaused: true,
-				nextRunAt: undefined,
-				scheduledFunctionId: undefined,
-				updatedAt: now,
-			});
-		} else {
-			const nextRunAt = getNextAutomationRunAt({
-				from: now,
-				scheduledAt: automation.scheduledAt,
-				schedulePeriod: automation.schedulePeriod,
-			});
-			const scheduledFunctionId = await scheduleAutomationRun(
-				ctx,
-				automation._id,
-				nextRunAt,
-			);
-			await ctx.db.patch(automation._id, {
-				isPaused: false,
-				nextRunAt,
-				scheduledFunctionId,
-				updatedAt: now,
-			});
-		}
-
-		const updatedAutomation = await ctx.db.get(automation._id);
-		if (!updatedAutomation) {
-			throw new ConvexError({
-				code: "AUTOMATION_SAVE_FAILED",
-				message: "Failed to save automation.",
-			});
-		}
-
-		return toListItem(updatedAutomation);
 	},
 });
 
 export const runNow = mutation({
-	args: {
-		automationId: v.id("automations"),
-	},
+	args: automationIdArgs,
 	returns: automationRunNowValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const automation = await requireOwnedAutomation(
+		return await runAutomationNowForOwner(
 			ctx,
-			ownerTokenIdentifier,
+			identity.tokenIdentifier,
 			args.automationId,
 		);
-		const now = Date.now();
-
-		if (automation.activeRunId) {
-			return {
-				status: "already_running" as const,
-				chatId: automation.chatId,
-			};
-		}
-
-		if (await automationChatHasActiveAssistantRun(ctx, automation)) {
-			return {
-				status: "chat_busy" as const,
-				chatId: automation.chatId,
-			};
-		}
-
-		const run = await reserveAutomationRun(ctx, {
-			automationId: automation._id,
-			scheduledFor: now,
-			reason: "manual",
-		});
-		if (run.status !== "reserved") {
-			return {
-				status: "already_running" as const,
-				chatId: automation.chatId,
-			};
-		}
-
-		await ctx.scheduler.runAfter(0, internal.automationActions.runAutomation, {
-			automationId: automation._id,
-			scheduledFor: now,
-			reason: "manual",
-			reservedRunId: run.runId,
-		});
-
-		return {
-			status: "started" as const,
-			chatId: automation.chatId,
-			runId: run.runId,
-		};
 	},
 });
 
 export const remove = mutation({
-	args: {
-		automationId: v.id("automations"),
-	},
+	args: automationIdArgs,
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const automation = await requireOwnedAutomation(
+		await removeAutomationForOwner(
 			ctx,
-			ownerTokenIdentifier,
+			identity.tokenIdentifier,
 			args.automationId,
 		);
-		await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
-		await ctx.db.delete(automation._id);
-		await ctx.scheduler.runAfter(0, internal.automations.removeOrphanedRuns, {
-			automationId: automation._id,
-		});
 
+		return null;
+	},
+});
+
+export const listForOwner = internalQuery({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.array(automationListItemValidator),
+	handler: async (ctx, args) =>
+		await listAutomationsForOwner(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.workspaceId,
+		),
+});
+
+export const getForOwner = internalQuery({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		...automationIdArgs,
+	},
+	returns: v.union(automationListItemValidator, v.null()),
+	handler: async (ctx, args) =>
+		await getAutomationForOwner(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.automationId,
+		),
+});
+
+export const createForOwner = internalMutation({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		authorName: v.string(),
+		...automationCreateArgs,
+	},
+	returns: automationListItemValidator,
+	handler: async (ctx, args) => await createAutomationForOwner(ctx, args),
+});
+
+export const updateForOwner = internalMutation({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		...automationUpdateArgs,
+	},
+	returns: automationListItemValidator,
+	handler: async (ctx, args) => await updateAutomationForOwner(ctx, args),
+});
+
+export const togglePausedForOwner = internalMutation({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		...automationIdArgs,
+	},
+	returns: automationListItemValidator,
+	handler: async (ctx, args) =>
+		await toggleAutomationForOwner(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.automationId,
+		),
+});
+
+export const runNowForOwner = internalMutation({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		...automationIdArgs,
+	},
+	returns: automationRunNowValidator,
+	handler: async (ctx, args) =>
+		await runAutomationNowForOwner(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.automationId,
+		),
+});
+
+export const removeForOwner = internalMutation({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		...automationIdArgs,
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		await removeAutomationForOwner(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.automationId,
+		);
 		return null;
 	},
 });

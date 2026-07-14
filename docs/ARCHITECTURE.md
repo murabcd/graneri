@@ -352,7 +352,9 @@ checks, terminal transitions, and chat-linked pause/resume/move consequences
 must enter through that module. `convex/automationSchedule.ts` is the canonical
 home for next-run calculation and scheduled-function registration; definition
 CRUD may invoke it but must not reproduce schedule arithmetic or cancellation
-behavior.
+behavior. Authenticated automation functions and background AI producers share
+the same owner-scoped CRUD operations; internal producers receive the owner from
+durable run state and must never persist or forward a user Convex token.
 Hosted auth provider configuration is fail-closed: missing OAuth
 provider credentials must reject configuration instead of substituting
 placeholder client ids or secrets.

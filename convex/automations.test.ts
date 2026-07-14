@@ -42,6 +42,88 @@ const createWorkspace = async () => {
 	};
 };
 
+test("owner-scoped automation adapters reuse the authenticated CRUD boundary", async () => {
+	const { t, workspaceId } = await createWorkspace();
+	const automation = await t.mutation(internal.automations.createForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		authorName: "Background agent",
+		workspaceId,
+		title: "Daily review",
+		prompt: "Review the workspace.",
+		model: "gpt-5.4",
+		reasoningEffort: "medium",
+		webSearchEnabled: false,
+		appsEnabled: true,
+		appSources: [],
+		schedulePeriod: "daily",
+		scheduledAt: 2_000,
+		timezone: "UTC",
+		target: { kind: "workspace" },
+	});
+
+	const listed = await t.query(internal.automations.listForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+	});
+	const fetched = await t.query(internal.automations.getForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		automationId: automation.id,
+	});
+	const updated = await t.mutation(internal.automations.updateForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		automationId: automation.id,
+		title: "Weekday review",
+		prompt: "Review the workspace on weekdays.",
+		model: "gpt-5.4",
+		reasoningEffort: "high",
+		webSearchEnabled: true,
+		appsEnabled: true,
+		appSources: [],
+		schedulePeriod: "weekdays",
+		scheduledAt: 3_000,
+		timezone: "UTC",
+		target: { kind: "workspace" },
+	});
+	const paused = await t.mutation(internal.automations.togglePausedForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		automationId: automation.id,
+	});
+
+	expect(listed).toHaveLength(1);
+	expect(fetched).toMatchObject({
+		id: automation.id,
+		authorName: "Background agent",
+	});
+	expect(updated).toMatchObject({
+		title: "Weekday review",
+		reasoningEffort: "high",
+		webSearchEnabled: true,
+	});
+	expect(paused).toMatchObject({ isPaused: true, nextRunAt: null });
+
+	await t.mutation(internal.automations.removeForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		automationId: automation.id,
+	});
+	expect(
+		await t.query(internal.automations.getForOwner, {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			automationId: automation.id,
+		}),
+	).toBeNull();
+});
+
+test("owner-scoped automation adapters reject a mismatched workspace owner", async () => {
+	const { t, workspaceId } = await createWorkspace();
+
+	await expect(
+		t.query(internal.automations.listForOwner, {
+			ownerTokenIdentifier: "test|other",
+			workspaceId,
+		}),
+	).rejects.toThrow("Workspace not found.");
+});
+
 test("creating an automation leaves existing chat messages unchanged", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
