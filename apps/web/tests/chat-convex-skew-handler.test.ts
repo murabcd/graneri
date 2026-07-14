@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleChatRequest } from "../server/chat-handler";
 
 const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
+const previousConvexUrl = process.env.CONVEX_URL;
 const convexMocks = vi.hoisted(() => ({
 	query: vi.fn(),
 	mutation: vi.fn(),
@@ -23,14 +24,19 @@ afterEach(() => {
 	convexMocks.action.mockReset();
 	if (previousOpenAiApiKey === undefined) {
 		delete process.env.OPENAI_API_KEY;
-		return;
+	} else {
+		process.env.OPENAI_API_KEY = previousOpenAiApiKey;
 	}
-
-	process.env.OPENAI_API_KEY = previousOpenAiApiKey;
+	if (previousConvexUrl === undefined) {
+		delete process.env.CONVEX_URL;
+	} else {
+		process.env.CONVEX_URL = previousConvexUrl;
+	}
 });
 
 const postSteerRequestWithMockedConvex = async () => {
 	process.env.OPENAI_API_KEY = "test-key";
+	process.env.CONVEX_URL = "https://example.convex.cloud";
 	convexMocks.query.mockRejectedValue(
 		new Error(
 			"Could not find public function for 'assistantQueuedMessages:claimReadyForRun'.",

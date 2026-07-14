@@ -68,6 +68,15 @@ const hostedChatSteerRejectionReasonsByErrorCode = new Map([
 ]);
 
 const hostedChatConvexRouteErrorMessages = new Map([
+	["AI_ADMISSION_EXPIRED", "Chat request admission expired. Please try again."],
+	[
+		"AI_ADMISSION_INVALID",
+		"Chat request admission is no longer valid. Please try again.",
+	],
+	[
+		"AI_ADMISSION_REQUIRED",
+		"Chat request admission is required. Please try again.",
+	],
 	[
 		"ASSISTANT_RUN_INVARIANT_VIOLATION",
 		"Chat has multiple active assistant runs.",
@@ -136,6 +145,7 @@ export const getHostedChatConvexRouteError = (error) => {
 		code === "ASSISTANT_RUN_NOT_ACTIVE" ||
 		code === "ASSISTANT_RUN_NOT_FOUND" ||
 		code === "INVALID_ASSISTANT_RUN_TRANSITION";
+	const isAdmissionError = code.startsWith("AI_ADMISSION_");
 	const isChatLifecycleError = code === "CHAT_NOT_FOUND";
 	const isChatBranchTargetError =
 		code === "CHAT_BRANCH_TARGET_INVALID" ||
@@ -151,6 +161,7 @@ export const getHostedChatConvexRouteError = (error) => {
 		code === "CONTEXT_COMPACTION_TOO_LARGE" ||
 		code === "QUEUED_MESSAGE_TOO_LARGE";
 	if (
+		!isAdmissionError &&
 		!isAssistantRunLifecycleError &&
 		!isChatBranchTargetError &&
 		!isChatLifecycleError &&
@@ -170,6 +181,7 @@ export const getHostedChatConvexRouteError = (error) => {
 				: "Queued chat request failed validation."),
 		errorCode: isMessageSizeError ? "input_too_large" : code,
 		statusCode:
+			isAdmissionError ||
 			isAssistantRunLifecycleError ||
 			isChatLifecycleError ||
 			isContextCompactionConflict ||

@@ -897,6 +897,14 @@ export default defineSchema({
 		"ownerTokenIdentifier",
 		"operation",
 	]),
+	aiAdmissionReservations: defineTable({
+		ownerTokenIdentifier: v.string(),
+		operation: v.literal("chat-turn"),
+		createdAt: v.number(),
+		expiresAt: v.number(),
+	})
+		.index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
+		.index("by_expiresAt", ["expiresAt"]),
 	transcriptSessions: defineTable({
 		ownerTokenIdentifier: v.string(),
 		noteId: v.id("notes"),

@@ -22,9 +22,17 @@ test("chat turn authorization returns the authenticated stable identifier", asyn
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
 
-	await expect(
-		asOwner.mutation(api.aiAccess.authorizeChatTurn),
-	).resolves.toEqual({ tokenIdentifier: ownerIdentity.tokenIdentifier });
+	const authorization = await asOwner.mutation(api.aiAccess.authorizeChatTurn);
+	expect(authorization).toMatchObject({
+		tokenIdentifier: ownerIdentity.tokenIdentifier,
+	});
+	expect(authorization.admissionReservationId).toBeTruthy();
+	expect(
+		await t.run((ctx) => ctx.db.get(authorization.admissionReservationId)),
+	).toMatchObject({
+		operation: "chat-turn",
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+	});
 });
 
 test("chat turn authorization is rate limited per identity", async () => {
@@ -113,4 +121,20 @@ test("AI rate-limit state is removed with its owner", async () => {
 		async (ctx) => await ctx.db.query("aiRateLimits").collect(),
 	);
 	expect(limits).toEqual([]);
+});
+
+test("chat admission reservations are removed with their owner", async () => {
+	const t = convexTest(schema, modules);
+	const asOwner = t.withIdentity(ownerIdentity);
+	await asOwner.mutation(api.aiAccess.authorizeChatTurn);
+
+	await t.mutation(internal.aiAdmissionReservations.removeAllForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+	});
+
+	expect(
+		await t.run(async (ctx) =>
+			ctx.db.query("aiAdmissionReservations").collect(),
+		),
+	).toEqual([]);
 });

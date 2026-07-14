@@ -123,9 +123,9 @@ internal AI action and its hard-timeout watchdog atomically. The scheduled
 action derives ownership from the run, refreshes connected-app credentials
 server-side, rechecks run liveness before executable tool side effects,
 checkpoints AI SDK message parts, and atomically saves the final assistant
-message with the terminal run transition. The start mutation owns chat
-admission and supported-model validation; scheduled arguments must never contain
-a user Convex token.
+message with the terminal run transition. The start mutation consumes the
+single-use chat admission reservation and owns supported-model validation;
+scheduled arguments must never contain a user Convex token.
 `assistantRunJobs` retains only the sanitized model input and tool-selection
 configuration needed to resume the same Convex producer after durable user
 input. Approval pauses save the assistant approval message and checkpoint that
@@ -476,7 +476,10 @@ local development surface and is not a Vercel production route by itself.
 Each model-producing hosted chat turn must pass through Convex admission before
 Vercel starts or steers an AI SDK stream. Convex authenticates and rate-limits
 the stable identity; Vercel hashes that identity and sends it as OpenAI's safety
-identifier. Reconnect and stop-only requests do not consume chat admission.
+identifier. Chat admission also issues a short-lived, identity-bound reservation
+that exactly one Convex producer start or continuation mutation must consume
+before scheduling paid background work. Used and expired reservations cannot be
+replayed. Reconnect and stop-only requests do not consume chat admission.
 Hosted note enhancement and template application follow the same boundary:
 their renderer requests carry the current Convex bearer token, both routes
 consume one shared per-identity `note-generation` admission bucket, and the web

@@ -87,6 +87,7 @@ export const pipeHostedActiveStreamSessionToResponse = ({
 
 export const runHostedChatTurnStreamRuntime = async ({
 	activeChatStreamControllers,
+	admissionReservationId,
 	agent,
 	attachableRun,
 	chatId,
@@ -120,6 +121,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	workspaceId,
 }: {
 	activeChatStreamControllers: Map<string, HostedActiveStreamSession>;
+	admissionReservationId?: Id<"aiAdmissionReservations">;
 	agent: HostedRunContext["agent"];
 	attachableRun: AttachableAssistantRun | null;
 	chatId: string;
@@ -209,6 +211,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 			await convexClient.mutation(api.toolApprovals.acceptResponse, {
 				workspaceId,
 				chatId,
+				admissionReservationId,
 				message: {
 					id: approvalMessage.id,
 					role: approvalMessage.role,
@@ -258,7 +261,10 @@ export const runHostedChatTurnStreamRuntime = async ({
 				acceptQueuedUserMessage: (args) =>
 					convexClient.mutation(api.chats.acceptQueuedUserMessage, args),
 				acceptSteeredUserMessages: (args) =>
-					convexClient.mutation(api.chats.acceptSteeredUserMessages, args),
+					convexClient.mutation(api.chats.acceptSteeredUserMessages, {
+						...args,
+						admissionReservationId,
+					}),
 				appendUserMessageToRun: (args) =>
 					convexClient.mutation(
 						api.assistantRuns.appendUserMessageToAssistantRun,

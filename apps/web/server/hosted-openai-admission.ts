@@ -141,6 +141,9 @@ export const admitHostedOpenAiRequest = async ({
 	}
 
 	return {
+		...(admission.admissionReservationId
+			? { admissionReservationId: admission.admissionReservationId }
+			: {}),
 		apiKey,
 		safetyIdentifier: admission.safetyIdentifier,
 	};

@@ -778,6 +778,9 @@ export const handleChatRequest = async (
 
 	const streamRuntimeResult = await runHostedChatTurnStreamRuntime({
 		activeChatStreamControllers,
+		admissionReservationId: admission.admissionReservationId as
+			| Id<"aiAdmissionReservations">
+			| undefined,
 		agent,
 		attachableRun,
 		chatId: id,

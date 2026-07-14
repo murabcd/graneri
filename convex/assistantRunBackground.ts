@@ -1,7 +1,7 @@
 import { isSupportedChatModel } from "@workspace/ai/models";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation } from "./_generated/server";
-import { consumeAiRateLimit } from "./aiRateLimits";
+import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
 import { assistantRunJobValidator } from "./assistantRunJobModel";
 import { createAssistantRunJob } from "./assistantRunJobState";
 import { assistantRunValidator } from "./assistantRunModel";
@@ -18,6 +18,7 @@ export const start = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		assistantMessageId: v.string(),
+		admissionReservationId: v.id("aiAdmissionReservations"),
 		policy: v.union(v.literal("reject"), v.literal("supersede")),
 		job: assistantRunJobValidator,
 	},
@@ -47,8 +48,8 @@ export const start = mutation({
 
 		const identity = await requireIdentity(ctx);
 		const authorName = getAuthorName(identity);
-		await consumeAiRateLimit(ctx, {
-			operation: "chat-turn",
+		await consumeChatTurnAdmissionReservation(ctx, {
+			reservationId: args.admissionReservationId,
 			ownerTokenIdentifier: identity.tokenIdentifier,
 		});
 		const run = await startAssistantRunForOwner(ctx, {

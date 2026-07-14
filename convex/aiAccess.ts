@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
+import { createChatTurnAdmissionReservation } from "./aiAdmissionReservations";
 import { consumeAiRateLimit } from "./aiRateLimits";
 import { createResourceAccess } from "./domain";
 
@@ -30,9 +31,19 @@ const authorizeAiRequest = async (
 export const authorizeChatTurn = mutation({
 	args: {},
 	returns: v.object({
+		admissionReservationId: v.id("aiAdmissionReservations"),
 		tokenIdentifier: v.string(),
 	}),
-	handler: async (ctx) => await authorizeAiRequest(ctx, "chat-turn"),
+	handler: async (ctx) => {
+		const authorization = await authorizeAiRequest(ctx, "chat-turn");
+		return {
+			...authorization,
+			admissionReservationId: await createChatTurnAdmissionReservation(
+				ctx,
+				authorization.tokenIdentifier,
+			),
+		};
+	},
 });
 
 export const authorizeNoteGeneration = mutation({

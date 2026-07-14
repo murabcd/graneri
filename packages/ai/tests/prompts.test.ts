@@ -128,6 +128,21 @@ describe("prompt helpers", () => {
 	});
 
 	it.each([
+		"AI_ADMISSION_EXPIRED",
+		"AI_ADMISSION_INVALID",
+		"AI_ADMISSION_REQUIRED",
+	])("maps %s Convex errors to retryable chat conflicts", (code) => {
+		const error = Object.assign(new Error("Admission failed."), {
+			data: { code, message: "Admission failed." },
+		});
+
+		expect(getHostedChatConvexRouteError(error)).toMatchObject({
+			errorCode: code,
+			statusCode: 409,
+		});
+	});
+
+	it.each([
 		"CHAT_BRANCH_MESSAGE_TOO_LARGE",
 		"CHAT_MESSAGE_TOO_LARGE",
 		"CONTEXT_COMPACTION_TOO_LARGE",

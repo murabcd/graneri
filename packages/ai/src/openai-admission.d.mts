@@ -1,5 +1,6 @@
 type OpenAiAdmission =
 	| {
+			admissionReservationId?: string;
 			ok: true;
 			safetyIdentifier: string;
 	  }
@@ -15,6 +16,9 @@ type OpenAiAdmission =
 	  };
 
 export declare const authorizeOpenAiRequest: (args: {
-	authorize: () => Promise<{ tokenIdentifier: string }>;
+	authorize: () => Promise<{
+		admissionReservationId?: string;
+		tokenIdentifier: string;
+	}>;
 	rateLimitError: string;
 }) => Promise<OpenAiAdmission>;

@@ -9,6 +9,7 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
+import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import {
@@ -1341,6 +1342,7 @@ export const acceptSteeredUserMessages = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		admissionReservationId: v.optional(v.id("aiAdmissionReservations")),
 		nextAssistantMessageId: v.string(),
 		messages: v.array(
 			v.object({
@@ -1440,6 +1442,12 @@ export const acceptSteeredUserMessages = mutation({
 				code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
 				message:
 					"Convex assistant run stream does not match its active generation.",
+			});
+		}
+		if (run.producer === "convex") {
+			await consumeChatTurnAdmissionReservation(ctx, {
+				ownerTokenIdentifier,
+				reservationId: args.admissionReservationId,
 			});
 		}
 

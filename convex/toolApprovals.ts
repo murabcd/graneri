@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation } from "./_generated/server";
+import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
 import { upsertAssistantRunJobMessage } from "./assistantRunJobState";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
@@ -38,6 +39,7 @@ export const acceptResponse = mutation({
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
 		nextAssistantMessageId: v.string(),
+		admissionReservationId: v.optional(v.id("aiAdmissionReservations")),
 		message: chatMessageInputValidator,
 	},
 	returns: v.null(),
@@ -119,6 +121,10 @@ export const acceptResponse = mutation({
 		});
 		await ctx.db.replace(existingMessage._id, storedMessage);
 		if (run.producer === "convex") {
+			await consumeChatTurnAdmissionReservation(ctx, {
+				ownerTokenIdentifier,
+				reservationId: args.admissionReservationId,
+			});
 			await upsertAssistantRunJobMessage(ctx, run._id, canonicalMessage);
 		}
 		await cleanupAssistantRunSnapshots(ctx, run._id);

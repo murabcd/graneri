@@ -9,6 +9,7 @@
  */
 
 import type * as aiAccess from "../aiAccess.js";
+import type * as aiAdmissionReservations from "../aiAdmissionReservations.js";
 import type * as aiRateLimits from "../aiRateLimits.js";
 import type * as appConnectionActions from "../appConnectionActions.js";
 import type * as appConnectionProviders from "../appConnectionProviders.js";
@@ -85,6 +86,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   aiAccess: typeof aiAccess;
+  aiAdmissionReservations: typeof aiAdmissionReservations;
   aiRateLimits: typeof aiRateLimits;
   appConnectionActions: typeof appConnectionActions;
   appConnectionProviders: typeof appConnectionProviders;

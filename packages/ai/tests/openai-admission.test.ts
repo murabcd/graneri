@@ -26,6 +26,21 @@ describe("OpenAI request admission", () => {
 		});
 	});
 
+	it("preserves a single-use admission reservation", async () => {
+		await expect(
+			authorizeOpenAiRequest({
+				authorize: async () => ({
+					admissionReservationId: "admission-1",
+					tokenIdentifier: "https://graneri.test|owner",
+				}),
+				rateLimitError: "Too many requests.",
+			}),
+		).resolves.toMatchObject({
+			admissionReservationId: "admission-1",
+			ok: true,
+		});
+	});
+
 	it("returns caller-specific retry guidance", async () => {
 		await expect(
 			authorizeOpenAiRequest({

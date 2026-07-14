@@ -39,6 +39,10 @@ type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
 type AsOwner = WorkspaceFixture["asOwner"];
 type WorkspaceId = WorkspaceFixture["workspaceId"];
 
+const reserveChatTurn = async (asOwner: AsOwner) =>
+	(await asOwner.mutation(api.aiAccess.authorizeChatTurn))
+		.admissionReservationId;
+
 const createChat = async ({
 	asOwner,
 	chatId,
@@ -176,11 +180,13 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const chatId = "chat-background-complete";
 	await createChat({ asOwner, chatId, workspaceId });
+	const admissionReservationId = await reserveChatTurn(asOwner);
 
 	const run = await asOwner.mutation(api.assistantRunBackground.start, {
 		workspaceId,
 		chatId,
 		assistantMessageId: "msg-assistant-background",
+		admissionReservationId,
 		policy: "reject",
 		job: backgroundJob,
 	});
@@ -285,6 +291,16 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 	expect(
 		finalEventTypes.filter((type) => type === "tool.completed"),
 	).toHaveLength(1);
+	await expect(
+		asOwner.mutation(api.assistantRunBackground.start, {
+			workspaceId,
+			chatId,
+			assistantMessageId: "msg-assistant-reused-admission",
+			admissionReservationId,
+			policy: "reject",
+			job: backgroundJob,
+		}),
+	).rejects.toThrow("Assistant generation admission reservation is invalid.");
 	vi.useRealTimers();
 });
 
@@ -297,6 +313,7 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 		workspaceId,
 		chatId,
 		assistantMessageId: "msg-assistant-approval",
+		admissionReservationId: await reserveChatTurn(asOwner),
 		policy: "reject",
 		job: backgroundJob,
 	});
@@ -353,6 +370,7 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 		workspaceId,
 		chatId,
 		runId: run._id,
+		admissionReservationId: await reserveChatTurn(asOwner),
 		nextAssistantMessageId: "msg-assistant-after-approval",
 		message: {
 			id: run.assistantMessageId,
@@ -431,6 +449,7 @@ test("background steering checkpoints the interrupted generation and continues t
 		workspaceId,
 		chatId,
 		assistantMessageId: "msg-assistant-before-steer",
+		admissionReservationId: await reserveChatTurn(asOwner),
 		policy: "reject",
 		job: backgroundJob,
 	});
@@ -463,6 +482,7 @@ test("background steering checkpoints the interrupted generation and continues t
 		workspaceId,
 		chatId,
 		runId: run._id,
+		admissionReservationId: await reserveChatTurn(asOwner),
 		nextAssistantMessageId: "msg-assistant-after-steer",
 		messages: claimedMessages.map((claimedMessage) => ({
 			queuedMessageId: claimedMessage._id,
@@ -582,10 +602,47 @@ test("background start rejects unsupported models before scheduling work", async
 			workspaceId,
 			chatId,
 			assistantMessageId: "msg-assistant-invalid-model",
+			admissionReservationId: await reserveChatTurn(asOwner),
 			policy: "reject",
 			job: { ...backgroundJob, model: "gpt-unbounded" },
 		}),
 	).rejects.toThrow("Assistant run model is not supported.");
+});
+
+test("background admission reservations are bound to their authenticated owner", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-background-admission-owner";
+	await createChat({ asOwner, chatId, workspaceId });
+	const admissionReservationId = await reserveChatTurn(asOwner);
+	const asIntruder = t.withIdentity({
+		...ownerIdentity,
+		subject: "intruder-subject",
+		tokenIdentifier: "test|intruder",
+	});
+
+	await expect(
+		asIntruder.mutation(api.assistantRunBackground.start, {
+			workspaceId,
+			chatId,
+			assistantMessageId: "msg-assistant-intruder",
+			admissionReservationId,
+			policy: "reject",
+			job: backgroundJob,
+		}),
+	).rejects.toThrow("Assistant generation admission reservation is invalid.");
+
+	await expect(
+		asOwner.mutation(api.assistantRunBackground.start, {
+			workspaceId,
+			chatId,
+			assistantMessageId: "msg-assistant-owner",
+			admissionReservationId,
+			policy: "reject",
+			job: backgroundJob,
+		}),
+	).resolves.toMatchObject({ producer: "convex", status: "running" });
+	vi.useRealTimers();
 });
 
 test("removeOrphanedRun deletes runtime after its chat is gone", async () => {

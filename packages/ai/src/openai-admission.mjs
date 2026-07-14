@@ -8,6 +8,9 @@ export const authorizeOpenAiRequest = async ({ authorize, rateLimitError }) => {
 	try {
 		const authorization = await authorize();
 		return {
+			...(authorization.admissionReservationId
+				? { admissionReservationId: authorization.admissionReservationId }
+				: {}),
 			ok: true,
 			safetyIdentifier: await createSafetyIdentifier(
 				authorization.tokenIdentifier,
