@@ -17,13 +17,13 @@ export const prepareHostedChatTurnBranch = async ({
 	message,
 	messageId,
 	messages = [],
-	onTruncateError,
+	onBranchError,
 	pendingMessages = [],
 	prepareMessage,
 	shouldLoadStoredMessages = true,
 	storedMessagesForStatelessBranch = [],
 	trigger,
-	truncateFromMessage,
+	branchFromMessage,
 	workspaceId,
 }) => {
 	const storedMessages = shouldLoadStoredMessages
@@ -56,24 +56,24 @@ export const prepareHostedChatTurnBranch = async ({
 		storedMessages: branchStoredMessages,
 		trigger,
 	});
-	const shouldTruncateChatBranch = preparedBranch.shouldTruncateChatBranch;
+	const shouldCreateChatBranch = preparedBranch.shouldCreateChatBranch;
 
-	if (shouldTruncateChatBranch && preparedBranch.truncateMessageId) {
+	if (shouldCreateChatBranch && preparedBranch.branchMessageId) {
 		try {
-			await truncateFromMessage({
+			await branchFromMessage({
 				workspaceId,
 				chatId,
-				messageId: preparedBranch.truncateMessageId,
+				messageId: preparedBranch.branchMessageId,
 			});
 		} catch (error) {
-			const handled = await onTruncateError?.({
+			const handled = await onBranchError?.({
 				error,
-				messageId: preparedBranch.truncateMessageId,
+				messageId: preparedBranch.branchMessageId,
 			});
 			if (handled) {
 				return {
 					ok: false,
-					reason: "truncate_error_handled",
+					reason: "branch_error_handled",
 				};
 			}
 			throw error;
@@ -82,13 +82,13 @@ export const prepareHostedChatTurnBranch = async ({
 
 	logLatency?.("chat.branch_ready", {
 		incomingMessageCount: preparedBranch.incomingMessages.length,
-		shouldTruncateChatBranch,
+		shouldCreateChatBranch,
 	});
 
 	return {
 		ok: true,
 		preparedBranch,
-		shouldTruncateChatBranch,
+		shouldCreateChatBranch,
 		storedMessages,
 	};
 };

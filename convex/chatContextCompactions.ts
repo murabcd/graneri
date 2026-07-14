@@ -2,7 +2,7 @@ import {
 	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
 	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
 	type HostedChatContextMessage,
-} from "@workspace/ai/hosted-chat-turn";
+} from "@workspace/ai/chat-context-contract";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";

@@ -545,6 +545,34 @@ export default defineSchema({
 		.index("by_chatId", ["chatId"])
 		.index("by_chatId_and_createdAt", ["chatId", "createdAt"])
 		.index("by_chatId_and_messageId", ["chatId", "messageId"]),
+	chatBranches: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		forkedFromMessageId: v.string(),
+		retainedThroughMessageId: v.optional(v.string()),
+		messageCount: v.number(),
+		preview: v.string(),
+		createdAt: v.number(),
+	}).index("by_chatId_and_createdAt", ["chatId", "createdAt"]),
+	chatBranchMessages: defineTable({
+		branchId: v.id("chatBranches"),
+		chatId: v.id("chats"),
+		ownerTokenIdentifier: v.string(),
+		sequence: v.number(),
+		messageId: v.string(),
+		role: v.union(
+			v.literal("system"),
+			v.literal("user"),
+			v.literal("assistant"),
+		),
+		partsJson: v.string(),
+		metadataJson: v.optional(v.string()),
+		text: v.string(),
+		createdAt: v.number(),
+	})
+		.index("by_chatId", ["chatId"])
+		.index("by_branchId_and_sequence", ["branchId", "sequence"]),
 	chatContextCompactions: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

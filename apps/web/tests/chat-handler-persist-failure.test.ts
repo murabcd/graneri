@@ -410,7 +410,7 @@ describe("chat handler persistence failures", () => {
 		});
 	});
 
-	it("fails closed when edited branch truncation fails", async () => {
+	it("fails closed when edited branch preservation fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: "gpt-5.4",
 			title: "Existing chat",
@@ -436,7 +436,7 @@ describe("chat handler persistence failures", () => {
 				},
 			],
 		});
-		convexMock.mutation.mockRejectedValueOnce(new Error("truncate failed"));
+		convexMock.mutation.mockRejectedValueOnce(new Error("branch failed"));
 
 		await expect(
 			postChatRequest({

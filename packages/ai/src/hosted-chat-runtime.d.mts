@@ -154,8 +154,8 @@ export declare const prepareHostedChatBranch: (args: {
 }) => {
 	editedMessageIndex: number;
 	incomingMessages: UIMessage[];
-	shouldTruncateChatBranch: boolean;
-	truncateMessageId: string | undefined;
+	branchMessageId: string | undefined;
+	shouldCreateChatBranch: boolean;
 };
 export declare const getInlineHostedNoteContext: (args: {
 	title?: string;

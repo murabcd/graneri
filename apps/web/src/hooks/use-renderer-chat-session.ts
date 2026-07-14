@@ -109,7 +109,7 @@ export const useRendererChatSession = ({
 		isPreparingRequest,
 		localOptimisticMessages,
 		rollbackOptimisticMessage,
-		truncateMessagesFrom,
+		branchMessagesFrom,
 	} = useChatInteractionSession({ chatId, setMessages });
 	React.useEffect(() => {
 		addToolOutputRef.current = addToolOutput;
@@ -417,6 +417,6 @@ export const useRendererChatSession = ({
 		status,
 		stopCurrentStream,
 		streamingMessageIds,
-		truncateMessagesFrom,
+		branchMessagesFrom,
 	};
 };

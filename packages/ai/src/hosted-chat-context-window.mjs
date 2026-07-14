@@ -1,9 +1,15 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
+import {
+	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
+	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
+} from "./chat-context-contract.mjs";
 import { CHAT_TITLE_MODEL_ID, getChatModelProviderOptions } from "./models.mjs";
 
-export const HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT = 200;
-export const HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE = 100;
+export {
+	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
+	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
+};
 
 const MAX_COMPACTION_ROUNDS = 10;
 const MAX_COMPACTION_SUMMARY_CHARS = 12_000;

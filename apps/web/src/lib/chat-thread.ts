@@ -9,7 +9,7 @@ export const getMessagesBefore = (messages: UIMessage[], messageId: string) => {
 	return targetIndex >= 0 ? messages.slice(0, targetIndex) : messages;
 };
 
-export const applyPendingMessageTruncation = (
+export const applyPendingBranchReplacement = (
 	messages: UIMessage[],
 	messageId: string | null,
 ) => (messageId ? getMessagesBefore(messages, messageId) : messages);

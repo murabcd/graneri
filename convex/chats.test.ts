@@ -236,7 +236,7 @@ test("chat star state toggles and persists", async () => {
 	expect(session?.isStarred).toBe(false);
 });
 
-test("truncating from an edited message removes that branch of the chat", async () => {
+test("branching from an edited message preserves the replaced branch", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
@@ -315,14 +315,41 @@ test("truncating from an edited message removes that branch of the chat", async 
 		runId: run._id,
 		queuedMessageId: queuedMessage._id,
 	});
+	await t.run(async (ctx) => {
+		const chat = await ctx.db
+			.query("chats")
+			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
+					.eq("workspaceId", workspaceId)
+					.eq("chatId", "chat-edit"),
+			)
+			.unique();
+		if (!chat) {
+			throw new Error("Expected chat to exist.");
+		}
+		await ctx.db.insert("chatContextCompactions", {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			workspaceId,
+			chatId: chat._id,
+			summary: "Earlier context",
+			throughCreationTime: 1,
+			throughMessageId: "earlier-message",
+			createdAt: 2_300,
+			updatedAt: 2_300,
+		});
+	});
 
-	const result = await asOwner.mutation(api.chats.truncateFromMessage, {
+	const result = await asOwner.mutation(api.chatBranches.branchFromMessage, {
 		workspaceId,
 		chatId: "chat-edit",
 		messageId: "msg-1",
 	});
 
-	expect(result.deletedCount).toBe(3);
+	expect(result.branchedCount).toBe(3);
+	if (!result.branchId) {
+		throw new Error("Expected a preserved chat branch.");
+	}
 
 	const messages = await asOwner.query(api.chats.getMessages, {
 		workspaceId,
@@ -330,6 +357,27 @@ test("truncating from an edited message removes that branch of the chat", async 
 	});
 
 	expect(messages).toHaveLength(0);
+	const branch = await t.run(async (ctx) => ctx.db.get(result.branchId));
+	expect(branch).toEqual(
+		expect.objectContaining({
+			forkedFromMessageId: "msg-1",
+			messageCount: 3,
+			preview: "Second prompt",
+		}),
+	);
+	const preservedBranchMessages = await t.run(async (ctx) =>
+		ctx.db
+			.query("chatBranchMessages")
+			.withIndex("by_branchId_and_sequence", (q) =>
+				q.eq("branchId", result.branchId),
+			)
+			.collect(),
+	);
+	expect(preservedBranchMessages.map((message) => message.messageId)).toEqual([
+		"msg-1",
+		"msg-2",
+		"msg-3",
+	]);
 
 	const relatedRows = await t.run(async (ctx) => {
 		const chat = await ctx.db
@@ -348,6 +396,10 @@ test("truncating from an edited message removes that branch of the chat", async 
 
 		const activeStream = await ctx.db
 			.query("chatActiveStreams")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+			.unique();
+		const compaction = await ctx.db
+			.query("chatContextCompactions")
 			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
 			.unique();
 		const toolCalls = await ctx.db
@@ -377,6 +429,7 @@ test("truncating from an edited message removes that branch of the chat", async 
 		return {
 			activeStream,
 			claimedMessages,
+			compaction,
 			queuedMessages,
 			runEvents,
 			runRow,
@@ -385,6 +438,7 @@ test("truncating from an edited message removes that branch of the chat", async 
 	});
 
 	expect(relatedRows.activeStream).toBeNull();
+	expect(relatedRows.compaction).toBeNull();
 	expect(relatedRows.runRow).toMatchObject({
 		status: "stopped",
 		stopReason: "superseded",
@@ -395,6 +449,37 @@ test("truncating from an edited message removes that branch of the chat", async 
 		"run.stopped",
 	);
 	expect(relatedRows.toolCallCount).toBe(0);
+});
+
+test("branching fails closed when the target is unavailable", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "chat-stale-branch",
+		preview: "Current prompt",
+		message: {
+			id: "current-message",
+			role: "user",
+			partsJson: JSON.stringify([{ type: "text", text: "Current prompt" }]),
+			text: "Current prompt",
+			createdAt: 2_000,
+		},
+	});
+
+	await expect(
+		asOwner.mutation(api.chatBranches.branchFromMessage, {
+			workspaceId,
+			chatId: "chat-stale-branch",
+			messageId: "missing-message",
+		}),
+	).rejects.toThrow("Chat branch target is no longer available.");
+
+	const messages = await asOwner.query(api.chats.getMessages, {
+		workspaceId,
+		chatId: "chat-stale-branch",
+	});
+	expect(messages.map((message) => message.id)).toEqual(["current-message"]);
 });
 
 test("appendActiveStreamText rejects missing snapshots for detached running streams", async () => {

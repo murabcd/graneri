@@ -63,7 +63,7 @@ describe("hosted chat branch preparer", () => {
 				},
 			],
 			trigger: "submit-message",
-			truncateFromMessage: async () => undefined,
+			branchFromMessage: async () => undefined,
 			workspaceId: "workspace-1",
 		});
 
@@ -99,7 +99,7 @@ describe("hosted chat branch preparer", () => {
 				},
 			],
 			shouldLoadStoredMessages: false,
-			truncateFromMessage: async () => undefined,
+			branchFromMessage: async () => undefined,
 			workspaceId: "workspace-1",
 		});
 
@@ -113,7 +113,7 @@ describe("hosted chat branch preparer", () => {
 		).toEqual(["existing-1"]);
 	});
 
-	it("lets routes handle truncate failures without continuing the run", async () => {
+	it("lets routes handle branch failures without continuing the run", async () => {
 		const handledMessageIds: string[] = [];
 		const result = await prepareHostedChatTurnBranch({
 			chatId: "chat-1",
@@ -131,20 +131,20 @@ describe("hosted chat branch preparer", () => {
 				parts: [{ type: "text", text: "Edited" }],
 			},
 			messageId: "user-1",
-			onTruncateError: ({ messageId }) => {
+			onBranchError: ({ messageId }) => {
 				handledMessageIds.push(messageId);
 				return true;
 			},
 			trigger: "submit-message",
-			truncateFromMessage: async () => {
-				throw new Error("truncate failed");
+			branchFromMessage: async () => {
+				throw new Error("branch failed");
 			},
 			workspaceId: "workspace-1",
 		});
 
 		expect(result).toEqual({
 			ok: false,
-			reason: "truncate_error_handled",
+			reason: "branch_error_handled",
 		});
 		expect(handledMessageIds).toEqual(["user-1"]);
 	});

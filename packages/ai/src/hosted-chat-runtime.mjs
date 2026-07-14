@@ -79,6 +79,11 @@ const hostedChatConvexRouteErrorMessages = new Map([
 		"Assistant run cannot accept steered user input.",
 	],
 	["CHAT_NOT_FOUND", "Chat not found."],
+	["CHAT_BRANCH_TARGET_INVALID", "Chat branch target is invalid."],
+	[
+		"CHAT_BRANCH_TARGET_NOT_FOUND",
+		"Chat branch target is no longer available.",
+	],
 	[
 		"CONTEXT_COMPACTION_INVALID",
 		"Chat context changed while its history was being compacted.",
@@ -132,17 +137,22 @@ export const getHostedChatConvexRouteError = (error) => {
 		code === "ASSISTANT_RUN_NOT_FOUND" ||
 		code === "INVALID_ASSISTANT_RUN_TRANSITION";
 	const isChatLifecycleError = code === "CHAT_NOT_FOUND";
+	const isChatBranchTargetError =
+		code === "CHAT_BRANCH_TARGET_INVALID" ||
+		code === "CHAT_BRANCH_TARGET_NOT_FOUND";
 	const isContextCompactionConflict =
 		code === "CONTEXT_COMPACTION_INVALID" ||
 		code === "CONTEXT_COMPACTION_STALE";
 	const isQueuedMessageError = code.startsWith("QUEUED_MESSAGE_");
 	const isToolApprovalError = code.startsWith("TOOL_APPROVAL_");
 	const isMessageSizeError =
+		code === "CHAT_BRANCH_MESSAGE_TOO_LARGE" ||
 		code === "CHAT_MESSAGE_TOO_LARGE" ||
 		code === "CONTEXT_COMPACTION_TOO_LARGE" ||
 		code === "QUEUED_MESSAGE_TOO_LARGE";
 	if (
 		!isAssistantRunLifecycleError &&
+		!isChatBranchTargetError &&
 		!isChatLifecycleError &&
 		!isContextCompactionConflict &&
 		!isQueuedMessageError &&
@@ -163,6 +173,7 @@ export const getHostedChatConvexRouteError = (error) => {
 			isAssistantRunLifecycleError ||
 			isChatLifecycleError ||
 			isContextCompactionConflict ||
+			code === "CHAT_BRANCH_TARGET_NOT_FOUND" ||
 			code === "QUEUED_MESSAGE_NOT_FOUND"
 				? 409
 				: code === "TOOL_APPROVAL_NOT_PENDING"
@@ -549,7 +560,7 @@ export const prepareHostedChatBranch = ({
 	const incomingMessages = message
 		? [...baseMessages, ...pendingIncomingMessages]
 		: messages;
-	const truncateMessageId =
+	const branchMessageId =
 		messageId &&
 		((trigger === "submit-message" && editedMessageIndex >= 0) ||
 			trigger === "regenerate-message")
@@ -559,8 +570,8 @@ export const prepareHostedChatBranch = ({
 	return {
 		editedMessageIndex,
 		incomingMessages,
-		shouldTruncateChatBranch: Boolean(truncateMessageId),
-		truncateMessageId,
+		branchMessageId,
+		shouldCreateChatBranch: Boolean(branchMessageId),
 	};
 };
 

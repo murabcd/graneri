@@ -41,7 +41,7 @@ it("keeps preparation pending until every lease finishes", () => {
 	expect(result.current.isPreparingRequest).toBe(false);
 });
 
-it("commits, rolls back, and truncates optimistic messages atomically", () => {
+it("commits, rolls back, and branches optimistic messages atomically", () => {
 	const { result } = renderHook(useTestSession);
 
 	act(() => {
@@ -69,7 +69,7 @@ it("commits, rolls back, and truncates optimistic messages atomically", () => {
 		"optimistic-1",
 	]);
 
-	act(() => result.current.truncateMessagesFrom({ messageId: "optimistic-1" }));
+	act(() => result.current.branchMessagesFrom({ messageId: "optimistic-1" }));
 	expect(result.current.messages.map((message) => message.id)).toEqual([
 		"persisted",
 	]);

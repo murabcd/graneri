@@ -97,6 +97,14 @@ messages, so the user-visible transcript and future pagination retain complete
 history. Checkpoint updates use optimistic boundary validation and must fail
 closed if another request changes the checkpoint while a summary is being
 generated.
+Editing a user message or regenerating an assistant response replaces the active
+suffix without destroying it. Convex atomically moves the replaced active rows
+into `chatBranches` and `chatBranchMessages`, retains their attachment storage
+references, stops superseded run state, and clears the rolling context
+compaction checkpoint before the new turn starts. The active transcript remains
+bounded to the same recent-message window exposed to the renderer. Preserved
+branches are durable recovery data, but Graneri does not currently expose the
+reference app's full thread-fork and branch-switching UI.
 Assistant run start and active-stream session start share one runtime helper so
 both web and desktop choose the same reject/supersede policy, reuse matching
 continued runs, terminalize failed starts, and clean up partially-created stream
@@ -228,16 +236,19 @@ must treat non-2xx steer responses with these headers as accepted empty streams
 instead of rolling back the queued UI item; pre-accept failures without the
 headers still surface as normal send failures. Stop, supersede, and
 completed-run cleanup remove claimed queue rows for terminalized run state.
-Any chat-level cleanup path that stops an active run, including branch
-truncation and chat removal, must also append the stopped run event, delete live
+Any chat-level cleanup path that stops an active run, including active-branch
+replacement and chat removal, must also append the stopped run event, delete live
 snapshots, and discard both queued and claimed follow-ups for the stopped run.
 Client cleanup mutations for individual queued or claimed rows must be scoped
 by workspace and chat and must fail closed when the row belongs to another chat
 or is in the wrong queue state; wrong-scope cleanup must preserve the row rather
 than hide a stale client or cross-session bug.
-Chat deletion and branch truncation must fail closed on invalid persisted
-attachment metadata or storage ids; cleanup must not silently skip malformed
-stored attachment references and continue deleting surrounding chat state.
+Chat deletion must fail closed on invalid persisted attachment metadata or
+storage ids, including attachment references retained by preserved branches;
+cleanup must not silently skip malformed stored attachment references and
+continue deleting surrounding chat state. Branch replacement retains attachment
+references and defers physical storage deletion until the chat is permanently
+retired.
 Otherwise stale claimed rows are requeued by Convex claim mutations before the
 next claim attempt, because `claimed` represents an unaccepted in-flight
 operation and must not become an invisible durable leftover after a client or
@@ -269,6 +280,7 @@ matching behavior, not identical storage.
 | Activity subscribers can distinguish mailbox work from steered input. | Hosted active stream sessions expose `subscribePendingInputActivity`; pending steered input reports `steer`, queued mailbox-style input reports `mailbox`, and subscribing after input is already pending returns the pending activity. | Implemented |
 | A model tool can wait for mailbox or steer activity. | Graneri exposes a runtime-only AI SDK `wait_agent` tool. It subscribes to hosted active stream activity, wakes immediately on already-pending activity, returns app-server-compatible `{ message, timed_out }` results for mailbox, steer, and timeout, and aborts with the active turn. | Implemented |
 | Mailbox delivery is accepted into turn state. | Hosted active stream sessions keep mailbox-style pending input separate from steered input, can defer mailbox delivery after an answer boundary, and reopen delivery when steered input arrives. Replacement sessions carry both steer and mailbox pending input forward. | Implemented |
+| Editing or regeneration does not destroy the replaced history. | Convex archives the replaced active suffix and retains its attachment references before starting the replacement turn. A full thread-fork and branch-switching UI is not exposed yet. | Partial |
 | A model can create and manage live subagents. | Graneri does not expose subagent tools because the product does not have subagents. Runtime tools such as `spawn_agent`, `send_message`, `followup_task`, `list_agents`, and `interrupt_agent` are intentionally out of scope. | Not applicable |
 
 The current queue, steering, replay, and run-lifecycle slice is close to the reference
@@ -279,7 +291,7 @@ boundary into the next prompt branch, while Convex remains the durable source of
 truth for user input, chat runs, crash recovery, and cross-process coordination.
 Renderer chat interaction ownership is shared across workspace and note chat
 surfaces. `use-chat-interaction-session.ts` owns request-preparation leases and
-atomic optimistic message commit, rollback, and truncation;
+atomic optimistic message commit, rollback, and active-branch replacement;
 `use-renderer-chat-session.ts` composes that state with AI SDK streaming,
 durable queued follow-ups, and stop arbitration. Persisted/external/local stop
 ordering enters through `chat-interaction-session.ts`. Chat surfaces provide

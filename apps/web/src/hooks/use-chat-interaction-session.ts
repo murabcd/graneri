@@ -69,7 +69,7 @@ export const useChatInteractionSession = ({
 		[chatId, setMessages],
 	);
 
-	const truncateMessagesFrom = React.useCallback(
+	const branchMessagesFrom = React.useCallback(
 		({ messageId }: { messageId: string }) => {
 			setMessages((currentMessages) =>
 				normalizeChatMessages(getMessagesBefore(currentMessages, messageId)),
@@ -94,6 +94,6 @@ export const useChatInteractionSession = ({
 		isPreparingRequest: preparingRequestCount > 0,
 		localOptimisticMessages,
 		rollbackOptimisticMessage,
-		truncateMessagesFrom,
+		branchMessagesFrom,
 	};
 };

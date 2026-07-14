@@ -126,7 +126,7 @@ import {
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { submitChatTurn } from "@/lib/chat-submit-session";
-import { applyPendingMessageTruncation } from "@/lib/chat-thread";
+import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
@@ -496,7 +496,7 @@ const useNoteComposerController = ({
 		};
 	}, [localFolderStorageScope]);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
-	const truncateFromMessage = useMutation(api.chats.truncateFromMessage);
+	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
 	);
@@ -587,20 +587,21 @@ const useNoteComposerController = ({
 		() => toStoredChatMessages(storedMessages ?? []),
 		[storedMessages],
 	);
-	const [pendingTruncateMessageId, setPendingTruncateMessageId] =
-		React.useState<string | null>(null);
-	const activePendingTruncateMessageId =
-		pendingTruncateMessageId &&
-		initialMessages.some((message) => message.id === pendingTruncateMessageId)
-			? pendingTruncateMessageId
+	const [pendingBranchMessageId, setPendingBranchMessageId] = React.useState<
+		string | null
+	>(null);
+	const activePendingBranchMessageId =
+		pendingBranchMessageId &&
+		initialMessages.some((message) => message.id === pendingBranchMessageId)
+			? pendingBranchMessageId
 			: null;
 	const visibleInitialMessages = React.useMemo(
 		() =>
-			applyPendingMessageTruncation(
+			applyPendingBranchReplacement(
 				initialMessages,
-				activePendingTruncateMessageId,
+				activePendingBranchMessageId,
 			),
-		[activePendingTruncateMessageId, initialMessages],
+		[activePendingBranchMessageId, initialMessages],
 	);
 	const {
 		beginRequestPreparation,
@@ -628,7 +629,7 @@ const useNoteComposerController = ({
 		status: chatStatus,
 		stopCurrentStream,
 		streamingMessageIds,
-		truncateMessagesFrom,
+		branchMessagesFrom,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
 		activeRun,
@@ -1549,8 +1550,8 @@ const useNoteComposerController = ({
 				handleStop();
 			}
 
-			setPendingTruncateMessageId(() => messageId);
-			truncateMessagesFrom({ messageId });
+			setPendingBranchMessageId(() => messageId);
+			branchMessagesFrom({ messageId });
 			setEditingMessageId(null);
 			clearDraft();
 			setAttachedFiles([]);
@@ -1560,7 +1561,7 @@ const useNoteComposerController = ({
 				return;
 			}
 
-			void truncateFromMessage({
+			void branchFromMessage({
 				workspaceId: activeWorkspaceId,
 				chatId: currentChatId,
 				messageId,
@@ -1571,7 +1572,7 @@ const useNoteComposerController = ({
 					message: "Failed to delete note chat message",
 				});
 				toast.error("Failed to delete message");
-				setPendingTruncateMessageId(null);
+				setPendingBranchMessageId(null);
 			});
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
@@ -1582,8 +1583,8 @@ const useNoteComposerController = ({
 			resetTextareaHeight,
 			clearDraft,
 			handleStop,
-			truncateFromMessage,
-			truncateMessagesFrom,
+			branchFromMessage,
+			branchMessagesFrom,
 		],
 	);
 

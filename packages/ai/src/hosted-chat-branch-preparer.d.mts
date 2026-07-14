@@ -20,10 +20,10 @@ type AssistantRunEvent = {
 };
 
 type PreparedHostedChatTurnBranch = {
+	branchMessageId?: string;
 	editedMessageIndex: number;
 	incomingMessages: UIMessage[];
-	shouldTruncateChatBranch: boolean;
-	truncateMessageId?: string;
+	shouldCreateChatBranch: boolean;
 };
 
 export declare const getHostedInterruptedAssistantMessageIds: (
@@ -50,7 +50,7 @@ export declare const prepareHostedChatTurnBranch: <
 	message?: UIMessage | null;
 	messageId?: string | null;
 	messages?: UIMessage[];
-	onTruncateError?: (args: {
+	onBranchError?: (args: {
 		error: unknown;
 		messageId: string;
 	}) => Promise<boolean> | boolean;
@@ -62,7 +62,7 @@ export declare const prepareHostedChatTurnBranch: <
 	shouldLoadStoredMessages?: boolean;
 	storedMessagesForStatelessBranch?: StoredHostedChatMessage[];
 	trigger?: "submit-message" | "regenerate-message";
-	truncateFromMessage: (args: {
+	branchFromMessage: (args: {
 		workspaceId: WorkspaceId;
 		chatId: ChatId;
 		messageId: string;
@@ -72,11 +72,11 @@ export declare const prepareHostedChatTurnBranch: <
 	| {
 			ok: true;
 			preparedBranch: PreparedHostedChatTurnBranch;
-			shouldTruncateChatBranch: boolean;
+			shouldCreateChatBranch: boolean;
 			storedMessages: StoredHostedChatMessage[];
 	  }
 	| {
 			ok: false;
-			reason: "truncate_error_handled";
+			reason: "branch_error_handled";
 	  }
 >;

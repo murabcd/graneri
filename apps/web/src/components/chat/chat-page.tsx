@@ -76,7 +76,7 @@ import {
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { submitChatTurn } from "@/lib/chat-submit-session";
-import { applyPendingMessageTruncation } from "@/lib/chat-thread";
+import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
@@ -397,7 +397,7 @@ const useChatPageController = ({
 			isCurrent = false;
 		};
 	}, [localFolderStorageScope]);
-	const truncateFromMessage = useMutation(api.chats.truncateFromMessage);
+	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const persistChatSettings = useMutation(api.chats.setChatSettings);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
 	const enqueueQueuedMessage = useMutation(
@@ -431,27 +431,28 @@ const useChatPageController = ({
 		});
 		return true;
 	}, [runningAutomationRun, stopAutomationRun]);
-	// Truncation is local optimistic state reconciled with persisted chat messages.
-	const [pendingTruncateMessageId, setPendingTruncateMessageId] =
-		React.useState<string | null>(null);
+	// Branch replacement is local optimistic state reconciled with persisted messages.
+	const [pendingBranchMessageId, setPendingBranchMessageId] = React.useState<
+		string | null
+	>(null);
 
 	const persistedMessages = React.useMemo(
 		() =>
 			storedMessages === undefined ? [] : toStoredChatMessages(storedMessages),
 		[storedMessages],
 	);
-	const activePendingTruncateMessageId =
-		pendingTruncateMessageId &&
-		persistedMessages.some((message) => message.id === pendingTruncateMessageId)
-			? pendingTruncateMessageId
+	const activePendingBranchMessageId =
+		pendingBranchMessageId &&
+		persistedMessages.some((message) => message.id === pendingBranchMessageId)
+			? pendingBranchMessageId
 			: null;
 	const visiblePersistedMessages = React.useMemo(
 		() =>
-			applyPendingMessageTruncation(
+			applyPendingBranchReplacement(
 				persistedMessages,
-				activePendingTruncateMessageId,
+				activePendingBranchMessageId,
 			),
-		[activePendingTruncateMessageId, persistedMessages],
+		[activePendingBranchMessageId, persistedMessages],
 	);
 
 	React.useEffect(() => {
@@ -490,7 +491,7 @@ const useChatPageController = ({
 		setQueuedMessages,
 		stopCurrentStream,
 		streamingMessageIds,
-		truncateMessagesFrom,
+		branchMessagesFrom,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
 		activeRun,
@@ -901,8 +902,8 @@ const useChatPageController = ({
 				handleStop();
 			}
 
-			setPendingTruncateMessageId(() => messageId);
-			truncateMessagesFrom({ messageId });
+			setPendingBranchMessageId(() => messageId);
+			branchMessagesFrom({ messageId });
 			setEditingMessageId(null);
 			clearDraft();
 
@@ -910,7 +911,7 @@ const useChatPageController = ({
 				return;
 			}
 
-			void truncateFromMessage({
+			void branchFromMessage({
 				workspaceId: activeWorkspaceId,
 				chatId,
 				messageId,
@@ -921,7 +922,7 @@ const useChatPageController = ({
 					message: "Failed to delete message",
 				});
 				toast.error("Failed to delete message");
-				setPendingTruncateMessageId(null);
+				setPendingBranchMessageId(null);
 			});
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
@@ -930,9 +931,9 @@ const useChatPageController = ({
 			chatId,
 			handleStop,
 			canStop,
-			truncateMessagesFrom,
+			branchMessagesFrom,
 			clearDraft,
-			truncateFromMessage,
+			branchFromMessage,
 		],
 	);
 

@@ -1,3 +1,4 @@
+import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -8,11 +9,9 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
+import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
-import {
-	getOwnedActiveChatById,
-	nonTerminalRunStatuses,
-} from "./assistantRunLifecycle";
+import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import {
 	cleanupAssistantRunSnapshots,
 	transitionAssistantRun,
@@ -22,6 +21,7 @@ import {
 	pauseLinkedAutomationForChat,
 	resumeLinkedAutomationForChat,
 } from "./automationRunStateMachine";
+import { normalizeChatPreview } from "./chatFormatting";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
 	clampWhitespace,
@@ -135,10 +135,9 @@ type RemoveAllChatsResult = {
 	hasMore: boolean;
 };
 
-const MAX_CHAT_PREVIEW_LENGTH = 180;
 const MAX_CHAT_TITLE_LENGTH = 80;
 const MAX_RETURNED_CHATS = 100;
-const MAX_RETURNED_CHAT_MESSAGES = 200;
+const MAX_RETURNED_CHAT_MESSAGES = HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT;
 const REMOVE_CHAT_MESSAGES_BATCH_SIZE = 100;
 const REMOVE_CHAT_RUNTIME_BATCH_SIZE = 100;
 const NOTE_CHAT_BATCH_SIZE = 25;
@@ -159,9 +158,6 @@ const normalizeChatTitle = (value: string | undefined) => {
 
 const normalizeOptionalChatTitle = (value: string | undefined) =>
 	value === undefined ? undefined : normalizeChatTitle(value);
-
-const normalizeChatPreview = (value: string | undefined) =>
-	truncate(clampWhitespace(value ?? ""), MAX_CHAT_PREVIEW_LENGTH);
 
 const getOwnedChatById = async (
 	ctx: QueryCtx | MutationCtx,
@@ -320,33 +316,6 @@ const requireOwnedActiveChatAndRun = async (
 	}
 
 	return { chat, run };
-};
-
-const stopActiveRunsForChat = async (
-	ctx: MutationCtx,
-	chatId: Doc<"chats">["_id"],
-) => {
-	const activeRunBatches = await Promise.all(
-		nonTerminalRunStatuses.map((status) =>
-			ctx.db
-				.query("assistantRuns")
-				.withIndex("by_chatId_and_status", (q) =>
-					q.eq("chatId", chatId).eq("status", status),
-				)
-				.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
-		),
-	);
-	const activeRuns = activeRunBatches.flat();
-
-	await Promise.all(
-		activeRuns.map((run) =>
-			transitionAssistantRun(ctx, run, { type: "supersede" }),
-		),
-	);
-
-	return activeRunBatches.some(
-		(runs) => runs.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE,
-	);
 };
 
 const deleteRunEventsBatch = async (
@@ -647,7 +616,7 @@ const getExistingStorageMetadata = async (
 
 const deleteChatMessageAttachments = async (
 	ctx: MutationCtx,
-	messages: Doc<"chatMessages">[],
+	messages: Array<{ partsJson: string }>,
 ) => {
 	const storageIds = new Set(
 		messages.flatMap((message) => getMessageAttachmentStorageIds(message)),
@@ -705,17 +674,59 @@ const deleteChatMessageBatch = async (
 	ctx: MutationCtx,
 	chatId: Doc<"chats">["_id"],
 ) => {
-	const messages = await ctx.db
+	const activeMessages = await ctx.db
 		.query("chatMessages")
 		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
 		.take(REMOVE_CHAT_MESSAGES_BATCH_SIZE);
+	if (activeMessages.length > 0) {
+		await deleteChatMessageAttachments(ctx, activeMessages);
+		await Promise.all(
+			activeMessages.map((message) => ctx.db.delete(message._id)),
+		);
+		let hasPreservedBranches =
+			activeMessages.length === REMOVE_CHAT_MESSAGES_BATCH_SIZE;
+		if (!hasPreservedBranches) {
+			const [branch, branchMessage] = await Promise.all([
+				ctx.db
+					.query("chatBranches")
+					.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
+					.first(),
+				ctx.db
+					.query("chatBranchMessages")
+					.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+					.first(),
+			]);
+			hasPreservedBranches = branch !== null || branchMessage !== null;
+		}
+		return {
+			deletedCount: activeMessages.length,
+			hasMore: hasPreservedBranches,
+		};
+	}
 
-	await deleteChatMessageAttachments(ctx, messages);
-	await Promise.all(messages.map((message) => ctx.db.delete(message._id)));
+	const branchMessages = await ctx.db
+		.query("chatBranchMessages")
+		.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+		.take(REMOVE_CHAT_MESSAGES_BATCH_SIZE);
+	if (branchMessages.length > 0) {
+		await deleteChatMessageAttachments(ctx, branchMessages);
+		await Promise.all(
+			branchMessages.map((message) => ctx.db.delete(message._id)),
+		);
+		return {
+			deletedCount: branchMessages.length,
+			hasMore: true,
+		};
+	}
 
+	const branches = await ctx.db
+		.query("chatBranches")
+		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
+		.take(REMOVE_CHAT_MESSAGES_BATCH_SIZE);
+	await Promise.all(branches.map((branch) => ctx.db.delete(branch._id)));
 	return {
-		deletedCount: messages.length,
-		hasMore: messages.length === REMOVE_CHAT_MESSAGES_BATCH_SIZE,
+		deletedCount: 0,
+		hasMore: branches.length === REMOVE_CHAT_MESSAGES_BATCH_SIZE,
 	};
 };
 
@@ -1847,67 +1858,6 @@ export const saveMessageForOwner = internalMutation({
 		message: chatMessageValidator,
 	}),
 	handler: async (ctx, args) => await saveMessageForOwnerInternal(ctx, args),
-});
-
-export const truncateFromMessage = mutation({
-	args: {
-		workspaceId: v.id("workspaces"),
-		chatId: v.string(),
-		messageId: v.string(),
-	},
-	returns: v.object({
-		deletedCount: v.number(),
-	}),
-	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const chat = await getOwnedChatById(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			clampWhitespace(args.chatId),
-		);
-
-		if (!chat || chat.isArchived) {
-			return { deletedCount: 0 };
-		}
-
-		const targetMessageId = clampWhitespace(args.messageId);
-
-		if (!targetMessageId) {
-			return { deletedCount: 0 };
-		}
-
-		const messages = await ctx.db
-			.query("chatMessages")
-			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chat._id))
-			.take(MAX_RETURNED_CHAT_MESSAGES);
-		const targetIndex = messages.findIndex(
-			(message) => message.messageId === targetMessageId,
-		);
-
-		if (targetIndex < 0) {
-			return { deletedCount: 0 };
-		}
-
-		const messagesToDelete = messages.slice(targetIndex);
-		const previousMessage = targetIndex > 0 ? messages[targetIndex - 1] : null;
-		await deleteChatMessageAttachments(ctx, messagesToDelete);
-		await Promise.all(
-			messagesToDelete.map((message) => ctx.db.delete(message._id)),
-		);
-		await stopActiveRunsForChat(ctx, chat._id);
-
-		await ctx.db.patch(chat._id, {
-			preview: previousMessage?.text ?? "",
-			updatedAt: Date.now(),
-			lastMessageAt: previousMessage?.createdAt ?? chat.createdAt,
-		});
-
-		return {
-			deletedCount: messagesToDelete.length,
-		};
-	},
 });
 
 export const updateTitle = mutation({

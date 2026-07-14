@@ -128,6 +128,7 @@ describe("prompt helpers", () => {
 	});
 
 	it.each([
+		"CHAT_BRANCH_MESSAGE_TOO_LARGE",
 		"CHAT_MESSAGE_TOO_LARGE",
 		"CONTEXT_COMPACTION_TOO_LARGE",
 		"QUEUED_MESSAGE_TOO_LARGE",
@@ -140,6 +141,21 @@ describe("prompt helpers", () => {
 			error: "Document is too large.",
 			errorCode: "input_too_large",
 			statusCode: 400,
+		});
+	});
+
+	it("maps missing chat branch targets to route conflicts", () => {
+		const error = Object.assign(new Error("Branch target is unavailable."), {
+			data: {
+				code: "CHAT_BRANCH_TARGET_NOT_FOUND",
+				message: "Branch target is unavailable.",
+			},
+		});
+
+		expect(getHostedChatConvexRouteError(error)).toEqual({
+			error: "Chat branch target is no longer available.",
+			errorCode: "CHAT_BRANCH_TARGET_NOT_FOUND",
+			statusCode: 409,
 		});
 	});
 
@@ -577,8 +593,8 @@ describe("prompt helpers", () => {
 		});
 
 		expect(branch.editedMessageIndex).toBe(1);
-		expect(branch.shouldTruncateChatBranch).toBe(true);
-		expect(branch.truncateMessageId).toBe("msg-2");
+		expect(branch.shouldCreateChatBranch).toBe(true);
+		expect(branch.branchMessageId).toBe("msg-2");
 		expect(branch.incomingMessages.map((message) => message.id)).toEqual([
 			"msg-1",
 			"edited-message",
@@ -673,7 +689,7 @@ describe("prompt helpers", () => {
 		]);
 	});
 
-	it("prepares regenerated hosted chat branches even when the snapshot is stale", () => {
+	it("delegates stale regenerated branches to durable target validation", () => {
 		const branch = prepareHostedChatBranch({
 			message: {
 				id: "retry-message",
@@ -686,8 +702,8 @@ describe("prompt helpers", () => {
 		});
 
 		expect(branch.editedMessageIndex).toBe(-1);
-		expect(branch.shouldTruncateChatBranch).toBe(true);
-		expect(branch.truncateMessageId).toBe("missing-message");
+		expect(branch.shouldCreateChatBranch).toBe(true);
+		expect(branch.branchMessageId).toBe("missing-message");
 		expect(branch.incomingMessages).toHaveLength(1);
 	});
 

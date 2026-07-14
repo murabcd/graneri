@@ -618,29 +618,31 @@ export const handleChatRequest = async (
 			logLatency,
 			message: effectiveMessage,
 			messageId: toolApprovalResponse ? undefined : messageId,
-			onTruncateError: async ({ error, messageId: truncateMessageId }) => {
+			onBranchError: async ({ error, messageId: branchMessageId }) => {
 				if (
 					queuedInput.hasClaimed &&
 					!(await cleanupClaimedSteerQueuedMessage(
-						"steer_queue_branch_truncate_cleanup",
+						"steer_queue_branch_create_cleanup",
 					))
 				) {
 					return true;
 				}
 				recordServerError({
 					details: {
-						message_id: truncateMessageId,
+						message_id: branchMessageId,
 					},
 					error,
 					event: wideEvent,
-					operation: "branch_truncate",
+					operation: "branch_create",
 				});
+				const routeError = getHostedChatConvexRouteError(error);
 				wideEvent.outcome = "error";
-				wideEvent.status_code = 500;
-				wideEvent.error_code = "branch_truncate_failed";
+				wideEvent.status_code = routeError?.statusCode ?? 500;
+				wideEvent.error_code = routeError?.errorCode ?? "branch_create_failed";
 				emitWideEvent("error");
-				sendJson(response, 500, {
-					error: "Failed to prepare edited chat branch.",
+				sendJson(response, routeError?.statusCode ?? 500, {
+					error: routeError?.error ?? "Failed to prepare edited chat branch.",
+					...(routeError ? { errorCode: routeError.errorCode } : {}),
 				});
 				return true;
 			},
@@ -658,8 +660,8 @@ export const handleChatRequest = async (
 						})
 				: undefined,
 			trigger,
-			truncateFromMessage: (args) =>
-				convexClient.mutation(api.chats.truncateFromMessage, args),
+			branchFromMessage: (args) =>
+				convexClient.mutation(api.chatBranches.branchFromMessage, args),
 			workspaceId: resolvedWorkspaceId,
 		});
 		if (!branchResult.ok) {

@@ -81,6 +81,67 @@ test("chat retirement reports progress and retries exact message batches", async
 	).resolves.toEqual({ retiredCount: 0, hasMore: false });
 });
 
+test("chat retirement deletes preserved branch messages and metadata", async () => {
+	vi.useFakeTimers();
+	const { t, workspaceId } = await createWorkspace();
+	const { branchId, chatId } = await t.run(async (ctx) => {
+		const chatId = await ctx.db.insert("chats", {
+			ownerTokenIdentifier,
+			workspaceId,
+			chatId: "branched-chat",
+			starredSortOrder: 0,
+			title: "Branched chat",
+			preview: "Current branch",
+			isArchived: true,
+			createdAt: 1_000,
+			updatedAt: 1_000,
+			lastMessageAt: 1_000,
+		});
+		const branchId = await ctx.db.insert("chatBranches", {
+			ownerTokenIdentifier,
+			workspaceId,
+			chatId,
+			forkedFromMessageId: "replaced-message",
+			messageCount: 1,
+			preview: "Replaced branch",
+			createdAt: 1_100,
+		});
+		await ctx.db.insert("chatBranchMessages", {
+			branchId,
+			chatId,
+			ownerTokenIdentifier,
+			sequence: 0,
+			messageId: "replaced-message",
+			role: "assistant",
+			partsJson: "[]",
+			text: "Replaced branch",
+			createdAt: 1_050,
+		});
+		return { branchId, chatId };
+	});
+
+	const progress = await t.mutation(internal.resourceRetirement.retireChat, {
+		chatId,
+	});
+	expect(progress).toEqual({ retiredCount: 0, hasMore: true });
+
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+	const remaining = await t.run(async (ctx) => ({
+		branch: await ctx.db.get(branchId),
+		branchMessages: await ctx.db
+			.query("chatBranchMessages")
+			.withIndex("by_branchId_and_sequence", (q) => q.eq("branchId", branchId))
+			.collect(),
+		chat: await ctx.db.get(chatId),
+	}));
+	expect(remaining).toEqual({
+		branch: null,
+		branchMessages: [],
+		chat: null,
+	});
+});
+
 test("note retirement owns linked chat continuation and is idempotent", async () => {
 	vi.useFakeTimers();
 	const { t, workspaceId } = await createWorkspace();

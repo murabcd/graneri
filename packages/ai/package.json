@@ -45,6 +45,10 @@
       "types": "./src/chat-latency-logger.d.mts",
       "import": "./src/chat-latency-logger.mjs"
     },
+    "./chat-context-contract": {
+      "types": "./src/chat-context-contract.d.mts",
+      "import": "./src/chat-context-contract.mjs"
+    },
     "./context7-tools": {
       "types": "./src/context7-tools.d.mts",
       "import": "./src/context7-tools.mjs"
