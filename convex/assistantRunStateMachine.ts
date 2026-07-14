@@ -8,6 +8,7 @@ import {
 	discardQueuedForRunInternal,
 } from "./assistantQueuedMessages";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
+import { deleteAssistantRunJob } from "./assistantRunJobState";
 import type {
 	assistantRunProducerValidator,
 	pendingDecisionValidator,
@@ -97,6 +98,7 @@ const cleanupTerminalRunRuntime = async (
 	run: Doc<"assistantRuns">,
 ) => {
 	await cleanupAssistantRunSnapshots(ctx, run._id);
+	await deleteAssistantRunJob(ctx, run._id);
 	if (run.status === "completed") {
 		await discardClaimedForRunInternal(ctx, run._id);
 		return;
@@ -274,6 +276,7 @@ export const transitionAssistantRun = async (
 			});
 			await appendAssistantRunEvent(ctx, run, { type: "run.completed" });
 			await cleanupAssistantRunSnapshots(ctx, run._id);
+			await deleteAssistantRunJob(ctx, run._id);
 			await discardClaimedForRunInternal(ctx, run._id);
 			return await requireSavedRun(ctx, run._id);
 
@@ -300,6 +303,7 @@ export const transitionAssistantRun = async (
 				});
 			}
 			await cleanupAssistantRunSnapshots(ctx, run._id);
+			await deleteAssistantRunJob(ctx, run._id);
 			await discardQueuedForRunInternal(ctx, run._id);
 			return await requireSavedRun(ctx, run._id);
 
@@ -339,6 +343,7 @@ export const transitionAssistantRun = async (
 				stopReason: run.stopReason,
 			});
 			await cleanupAssistantRunSnapshots(ctx, run._id);
+			await deleteAssistantRunJob(ctx, run._id);
 			await discardQueuedForRunInternal(ctx, run._id);
 			return await requireSavedRun(ctx, run._id);
 
@@ -363,6 +368,7 @@ export const transitionAssistantRun = async (
 				stopReason: "superseded",
 			});
 			await cleanupAssistantRunSnapshots(ctx, run._id);
+			await deleteAssistantRunJob(ctx, run._id);
 			await discardQueuedForRunInternal(ctx, run._id);
 			return await requireSavedRun(ctx, run._id);
 
@@ -398,6 +404,7 @@ export const transitionAssistantRun = async (
 				});
 			}
 			await cleanupAssistantRunSnapshots(ctx, run._id);
+			await deleteAssistantRunJob(ctx, run._id);
 			await discardQueuedForRunInternal(ctx, run._id);
 			return await requireSavedRun(ctx, run._id);
 	}
@@ -451,6 +458,7 @@ export const deleteAssistantRunRuntimeBatch = async (
 	]);
 
 	await cleanupAssistantRunSnapshots(ctx, runId);
+	await deleteAssistantRunJob(ctx, runId);
 
 	return eventsHaveMore || queuedMessagesHaveMore;
 };

@@ -1498,6 +1498,25 @@ test("removing a chat deletes assistant run runtime records", async () => {
 		workspaceId,
 		chatId: "chat-remove-runtime",
 	});
+	await t.run(async (ctx) =>
+		ctx.db.insert("assistantRunJobs", {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			runId: run._id,
+			authorName: "Owner",
+			job: {
+				messagesJson: "[]",
+				systemPrompt: "Test",
+				webSearchEnabled: false,
+				chartGenerationRequested: false,
+				selectedSourceIds: [],
+				defaultTimezone: "UTC",
+				model: "gpt-5.4",
+				reasoningEffort: "medium",
+			},
+			createdAt: 2_000,
+			updatedAt: 2_000,
+		}),
+	);
 	await asOwner.mutation(api.chatToolCalls.startActiveStreamToolCall, {
 		workspaceId,
 		chatId: "chat-remove-runtime",
@@ -1526,6 +1545,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 		events: await ctx.db.query("assistantRunEvents").take(1),
 		queuedMessages: await ctx.db.query("assistantQueuedMessages").take(1),
 		toolCalls: await ctx.db.query("chatToolCalls").take(1),
+		jobs: await ctx.db.query("assistantRunJobs").take(1),
 		runs: await ctx.db.query("assistantRuns").take(1),
 	}));
 
@@ -1533,6 +1553,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 	expect(rows.events).toHaveLength(0);
 	expect(rows.queuedMessages).toHaveLength(0);
 	expect(rows.toolCalls).toHaveLength(0);
+	expect(rows.jobs).toHaveLength(0);
 	expect(rows.runs).toHaveLength(0);
 });
 

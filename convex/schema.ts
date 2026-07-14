@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
+import { assistantRunJobValidator } from "./assistantRunJobModel";
 import {
 	assistantRunProducerValidator,
 	assistantRunStatusValidator,
@@ -616,6 +617,14 @@ export default defineSchema({
 		event: assistantRunEventValidator,
 		createdAt: v.number(),
 	}).index("by_runId_and_eventIndex", ["runId", "eventIndex"]),
+	assistantRunJobs: defineTable({
+		ownerTokenIdentifier: v.string(),
+		runId: v.id("assistantRuns"),
+		authorName: v.string(),
+		job: assistantRunJobValidator,
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_runId", ["runId"]),
 	assistantQueuedMessages: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

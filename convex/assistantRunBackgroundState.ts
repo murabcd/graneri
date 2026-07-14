@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
+import { assistantRunJobValidator } from "./assistantRunJobModel";
+import {
+	getAssistantRunJob,
+	upsertAssistantRunJobMessage,
+} from "./assistantRunJobState";
 import {
 	reasoningEffortValidator,
 	toolApprovalPendingDecisionValidator,
@@ -16,11 +21,13 @@ import { syncAssistantRunToolCalls } from "./chatToolCalls";
 const backgroundRunContextValidator = v.union(
 	v.object({
 		ownerTokenIdentifier: v.string(),
+		authorName: v.string(),
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		assistantMessageId: v.string(),
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),
+		job: assistantRunJobValidator,
 	}),
 	v.null(),
 );
@@ -35,17 +42,27 @@ export const getRunnableContext = internalQuery({
 		}
 
 		const chat = await ctx.db.get(run.chatId);
-		if (!chat || chat.isArchived) {
+		const runJob = await getAssistantRunJob(ctx, run._id);
+		if (
+			!chat ||
+			chat.isArchived ||
+			!runJob ||
+			runJob.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
+			runJob.job.model !== run.model ||
+			runJob.job.reasoningEffort !== run.reasoningEffort
+		) {
 			return null;
 		}
 
 		return {
 			ownerTokenIdentifier: run.ownerTokenIdentifier,
+			authorName: runJob.authorName,
 			workspaceId: run.workspaceId,
 			chatId: chat.chatId,
 			assistantMessageId: run.assistantMessageId,
 			model: run.model,
 			reasoningEffort: run.reasoningEffort,
+			job: runJob.job,
 		};
 	},
 });
@@ -75,7 +92,6 @@ export const replaceSnapshot = internalMutation({
 export const complete = internalMutation({
 	args: {
 		runId: v.id("assistantRuns"),
-		authorName: v.string(),
 	},
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
@@ -85,10 +101,13 @@ export const complete = internalMutation({
 		}
 
 		const chat = await ctx.db.get(run.chatId);
+		const runJob = await getAssistantRunJob(ctx, run._id);
 		const stream = await getActiveStreamForRun(ctx, run._id);
 		if (
 			!chat ||
 			chat.isArchived ||
+			!runJob ||
+			runJob.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
 			!stream ||
 			stream.assistantMessageId !== run.assistantMessageId
 		) {
@@ -102,7 +121,7 @@ export const complete = internalMutation({
 		await saveMessageForOwnerInternal(ctx, {
 			ownerTokenIdentifier: run.ownerTokenIdentifier,
 			workspaceId: run.workspaceId,
-			authorName: args.authorName,
+			authorName: runJob.authorName,
 			chatId: chat.chatId,
 			model: run.model,
 			reasoningEffort: run.reasoningEffort,
@@ -137,6 +156,48 @@ export const waitForUser = internalMutation({
 		if (args.pendingDecision.assistantMessageId !== run.assistantMessageId) {
 			return false;
 		}
+		const chat = await ctx.db.get(run.chatId);
+		const runJob = await getAssistantRunJob(ctx, run._id);
+		const stream = await getActiveStreamForRun(ctx, run._id);
+		if (
+			!chat ||
+			chat.isArchived ||
+			!runJob ||
+			runJob.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
+			!stream ||
+			stream.assistantMessageId !== run.assistantMessageId
+		) {
+			await transitionAssistantRun(ctx, run, {
+				type: "fail",
+				errorText: "Assistant approval request could not be persisted.",
+			});
+			return false;
+		}
+
+		await saveMessageForOwnerInternal(ctx, {
+			ownerTokenIdentifier: run.ownerTokenIdentifier,
+			workspaceId: run.workspaceId,
+			authorName: runJob.authorName,
+			chatId: chat.chatId,
+			model: run.model,
+			reasoningEffort: run.reasoningEffort,
+			message: {
+				id: run.assistantMessageId,
+				role: "assistant",
+				partsJson: stream.partsJson,
+				text: stream.text,
+				createdAt: Date.now(),
+			},
+		});
+		await appendAssistantRunEvent(ctx, run, {
+			type: "message.completed",
+			assistantMessageId: run.assistantMessageId,
+		});
+		await upsertAssistantRunJobMessage(ctx, run._id, {
+			id: run.assistantMessageId,
+			role: "assistant",
+			partsJson: stream.partsJson,
+		});
 
 		await transitionAssistantRun(ctx, run, {
 			type: "wait_for_user",
@@ -155,10 +216,7 @@ export const fail = internalMutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const run = await ctx.db.get(args.runId);
-		if (
-			run?.producer === "convex" &&
-			(run.status === "running" || run.status === "waiting_for_user")
-		) {
+		if (run?.producer === "convex" && run.status === "running") {
 			await transitionAssistantRun(ctx, run, {
 				type: "fail",
 				errorText: args.errorText,

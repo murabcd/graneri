@@ -249,7 +249,6 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 	expect(
 		await t.mutation(internal.assistantRunBackgroundState.complete, {
 			runId: run._id,
-			authorName: "Owner",
 		}),
 	).toBe(true);
 
@@ -258,6 +257,7 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 		messages: await ctx.db.query("chatMessages").collect(),
 		streams: await ctx.db.query("chatActiveStreams").collect(),
 		toolCalls: await ctx.db.query("chatToolCalls").collect(),
+		jobs: await ctx.db.query("assistantRunJobs").collect(),
 		events: await ctx.db
 			.query("assistantRunEvents")
 			.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", run._id))
@@ -273,10 +273,11 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 	);
 	expect(finalState.streams).toHaveLength(0);
 	expect(finalState.toolCalls).toHaveLength(0);
+	expect(finalState.jobs).toHaveLength(0);
 	const finalEventTypes = finalState.events.map((event) => event.event.type);
-	expect(finalEventTypes.filter((type) => type === "tool.started")).toHaveLength(
-		1,
-	);
+	expect(
+		finalEventTypes.filter((type) => type === "tool.started"),
+	).toHaveLength(1);
 	expect(
 		finalEventTypes.filter((type) => type === "tool.completed"),
 	).toHaveLength(1);
@@ -295,6 +296,18 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 		policy: "reject",
 		job: backgroundJob,
 	});
+	const approvalRequest = {
+		type: "tool-delete_automation",
+		toolCallId: "tool-call-1",
+		input: { automationId: "automation-1" },
+		approval: { id: "approval-1" },
+		state: "approval-requested",
+	};
+	await t.mutation(internal.assistantRunBackgroundState.replaceSnapshot, {
+		runId: run._id,
+		text: "",
+		partsJson: JSON.stringify([approvalRequest]),
+	});
 
 	expect(
 		await t.mutation(internal.assistantRunBackgroundState.waitForUser, {
@@ -311,12 +324,80 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 	const waitingState = await t.run(async (ctx) => ({
 		run: await ctx.db.get(run._id),
 		streamCount: (await ctx.db.query("chatActiveStreams").collect()).length,
+		jobCount: (await ctx.db.query("assistantRunJobs").collect()).length,
+		messages: await ctx.db.query("chatMessages").collect(),
 	}));
 	expect(waitingState.run).toMatchObject({
 		status: "waiting_for_user",
 		phase: "tool_approval",
 	});
 	expect(waitingState.streamCount).toBe(1);
+	expect(waitingState.jobCount).toBe(1);
+	expect(waitingState.messages).toContainEqual(
+		expect.objectContaining({ messageId: run.assistantMessageId }),
+	);
+	await t.mutation(internal.assistantRunBackgroundState.fail, {
+		runId: run._id,
+		errorText: "Stale action failure.",
+	});
+	expect(await t.run(async (ctx) => (await ctx.db.get(run._id))?.status)).toBe(
+		"waiting_for_user",
+	);
+
+	await asOwner.mutation(api.toolApprovals.acceptResponse, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		nextAssistantMessageId: "msg-assistant-after-approval",
+		message: {
+			id: run.assistantMessageId,
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{
+					...approvalRequest,
+					approval: { id: "approval-1", approved: true },
+					state: "approval-responded",
+				},
+			]),
+			text: "",
+			createdAt: Date.now(),
+		},
+	});
+	const resumedState = await t.run(async (ctx) => ({
+		run: await ctx.db.get(run._id),
+		stream: await ctx.db
+			.query("chatActiveStreams")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+		jobCount: (await ctx.db.query("assistantRunJobs").collect()).length,
+		job: await ctx.db
+			.query("assistantRunJobs")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+	}));
+	expect(resumedState.run).toMatchObject({
+		status: "running",
+		assistantMessageId: "msg-assistant-after-approval",
+	});
+	expect(resumedState.stream).toMatchObject({
+		assistantMessageId: "msg-assistant-after-approval",
+		partsJson: "[]",
+	});
+	expect(resumedState.jobCount).toBe(1);
+	const resumedMessages = JSON.parse(
+		resumedState.job?.job.messagesJson ?? "[]",
+	) as Array<{ id: string; parts: Array<{ state?: string }> }>;
+	expect(resumedMessages.at(-1)).toMatchObject({
+		id: run.assistantMessageId,
+		parts: [expect.objectContaining({ state: "approval-responded" })],
+	});
+	await t.mutation(internal.assistantRunBackground.expire, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+	expect(await t.run(async (ctx) => (await ctx.db.get(run._id))?.status)).toBe(
+		"running",
+	);
 
 	await t.mutation(internal.assistantRunBackgroundState.fail, {
 		runId: run._id,
@@ -325,12 +406,14 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 	const failedState = await t.run(async (ctx) => ({
 		run: await ctx.db.get(run._id),
 		streamCount: (await ctx.db.query("chatActiveStreams").collect()).length,
+		jobCount: (await ctx.db.query("assistantRunJobs").collect()).length,
 	}));
 	expect(failedState.run).toMatchObject({
 		status: "failed",
 		errorText: "Approval continuation failed.",
 	});
 	expect(failedState.streamCount).toBe(0);
+	expect(failedState.jobCount).toBe(0);
 	vi.useRealTimers();
 });
 
@@ -478,9 +561,7 @@ test("finishAssistantRun deletes all snapshots for runId without batch caps", as
 				chatId: run.chatId,
 				assistantMessageId: run.assistantMessageId,
 				text: `Partial ${index}`,
-				partsJson: JSON.stringify([
-					{ type: "text", text: `Partial ${index}` },
-				]),
+				partsJson: JSON.stringify([{ type: "text", text: `Partial ${index}` }]),
 				updatedAt: 3_000 + index,
 			});
 		}

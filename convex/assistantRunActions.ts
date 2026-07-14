@@ -24,10 +24,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { createAssistantRunAutomationActions } from "./assistantRunAutomationActions";
-import {
-	type AssistantRunJob,
-	assistantRunJobValidator,
-} from "./assistantRunJobModel";
+import type { AssistantRunJob } from "./assistantRunJobModel";
 import { buildServerWorkspaceTools } from "./serverWorkspaceTools";
 
 const SNAPSHOT_FLUSH_INTERVAL_MS = 250;
@@ -88,8 +85,6 @@ const guardExecutableTools = (
 export const run = internalAction({
 	args: {
 		runId: v.id("assistantRuns"),
-		authorName: v.string(),
-		job: assistantRunJobValidator,
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
@@ -98,6 +93,10 @@ export const run = internalAction({
 			{ runId: args.runId },
 		);
 		if (!context) {
+			await ctx.runMutation(internal.assistantRunBackgroundState.fail, {
+				runId: args.runId,
+				errorText: "Assistant run background job was not found.",
+			});
 			return null;
 		}
 
@@ -111,21 +110,21 @@ export const run = internalAction({
 				{
 					ownerTokenIdentifier: context.ownerTokenIdentifier,
 					workspaceId: context.workspaceId,
-					selectedSourceIds: args.job.selectedSourceIds,
+					selectedSourceIds: context.job.selectedSourceIds,
 				},
 			);
 			const automationContext = buildChatAutomationContext({
 				appConnections: connections,
 				automationActions: createAssistantRunAutomationActions(ctx, {
 					ownerTokenIdentifier: context.ownerTokenIdentifier,
-					authorName: args.authorName,
+					authorName: context.authorName,
 					workspaceId: context.workspaceId,
 				}),
 				chatId: context.chatId,
 				defaultModel: context.model,
 				defaultReasoningEffort: context.reasoningEffort ?? "medium",
-				defaultTimezone: args.job.defaultTimezone,
-				webSearchEnabled: args.job.webSearchEnabled,
+				defaultTimezone: context.job.defaultTimezone,
+				webSearchEnabled: context.job.webSearchEnabled,
 			});
 			const requireActiveRun = async () => {
 				const activeContext = await ctx.runQuery(
@@ -138,7 +137,7 @@ export const run = internalAction({
 			};
 			const enabledTools = guardExecutableTools(
 				{
-					...(args.job.webSearchEnabled
+					...(context.job.webSearchEnabled
 						? {
 								web_search: openai.tools.webSearch({
 									searchContextSize: "medium",
@@ -149,7 +148,7 @@ export const run = internalAction({
 								}),
 							}
 						: {}),
-					...(args.job.chartGenerationRequested
+					...(context.job.chartGenerationRequested
 						? { generate_chart: createChartGenerationTool() }
 						: {}),
 					...automationContext.tools,
@@ -160,8 +159,8 @@ export const run = internalAction({
 			const finalizedToolSet = finalizeOpenAIToolSet(enabledTools);
 			const agent = new ToolLoopAgent({
 				model: openai(context.model),
-				instructions: args.job.systemPrompt,
-				prepareStep: args.job.chartGenerationRequested
+				instructions: context.job.systemPrompt,
+				prepareStep: context.job.chartGenerationRequested
 					? buildChartGenerationPrepareStep()
 					: undefined,
 				providerOptions: getChatModelProviderOptions(context.model, {
@@ -173,7 +172,7 @@ export const run = internalAction({
 				tools: finalizedToolSet.hasTools ? finalizedToolSet.tools : undefined,
 			});
 			const messages = await parseMessages<InferAgentUIMessage<typeof agent>>(
-				args.job,
+				context.job,
 			);
 			await requireActiveRun();
 			let finishedMessage: UIMessage | null = null;
@@ -248,7 +247,6 @@ export const run = internalAction({
 
 			await ctx.runMutation(internal.assistantRunBackgroundState.complete, {
 				runId: args.runId,
-				authorName: args.authorName,
 			});
 		} catch (error) {
 			if (error instanceof BackgroundRunStoppedError) {

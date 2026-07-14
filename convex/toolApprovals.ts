@@ -1,7 +1,13 @@
 import { ConvexError, v } from "convex/values";
 import { mutation } from "./_generated/server";
+import { upsertAssistantRunJobMessage } from "./assistantRunJobState";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
-import { transitionAssistantRun } from "./assistantRunStateMachine";
+import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
+import {
+	cleanupAssistantRunSnapshots,
+	transitionAssistantRun,
+} from "./assistantRunStateMachine";
+import { createAssistantRunStream } from "./assistantRunStreamState";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import { createResourceAccess } from "./domain";
 import {
@@ -112,11 +118,19 @@ export const acceptResponse = mutation({
 			message: "Chat message exceeds Convex's 1 MiB document limit.",
 		});
 		await ctx.db.replace(existingMessage._id, storedMessage);
-		await transitionAssistantRun(ctx, run, {
+		if (run.producer === "convex") {
+			await upsertAssistantRunJobMessage(ctx, run._id, canonicalMessage);
+		}
+		await cleanupAssistantRunSnapshots(ctx, run._id);
+		const resumedRun = await transitionAssistantRun(ctx, run, {
 			type: "resume_after_user_decision",
 			approved: approval.approved,
 			assistantMessageId: args.nextAssistantMessageId,
 		});
+		if (run.producer === "convex") {
+			await createAssistantRunStream(ctx, resumedRun);
+			await scheduleAssistantRunExecution(ctx, resumedRun);
+		}
 
 		return null;
 	},

@@ -126,6 +126,15 @@ checkpoints AI SDK message parts, and atomically saves the final assistant
 message with the terminal run transition. The start mutation owns chat
 admission and supported-model validation; scheduled arguments must never contain
 a user Convex token.
+`assistantRunJobs` retains only the sanitized model input and tool-selection
+configuration needed to resume the same Convex producer after durable user
+input. Approval pauses save the assistant approval message and checkpoint that
+message into the job. Accepting the matching response atomically updates the
+checkpoint, clears the previous temporary stream/tool rows, creates the next
+assistant stream, and schedules the continuation with a generation-bound
+watchdog so an older turn cannot expire the resumed one. Terminal run cleanup and chat
+retirement must delete the job row; access tokens and connected-app credentials
+must never enter it.
 Together they enforce stop/failure/completion history and the
 one-active-run-per-chat invariant. `chatActiveStreams` stores the latest complete
 AI SDK message parts plus denormalized text, while active `chatToolCalls` stores

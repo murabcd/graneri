@@ -1,16 +1,16 @@
 import { isSupportedChatModel } from "@workspace/ai/models";
 import { ConvexError, v } from "convex/values";
-import { internal } from "./_generated/api";
 import { internalMutation, mutation } from "./_generated/server";
 import { consumeAiRateLimit } from "./aiRateLimits";
 import { assistantRunJobValidator } from "./assistantRunJobModel";
+import { createAssistantRunJob } from "./assistantRunJobState";
 import { assistantRunValidator } from "./assistantRunModel";
+import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import { transitionAssistantRun } from "./assistantRunStateMachine";
 import { createAssistantRunStream } from "./assistantRunStreamState";
 import { startAssistantRunForOwner } from "./assistantRuns";
 import { createResourceAccess, getAuthorName } from "./domain";
 
-const BACKGROUND_RUN_WATCHDOG_MS = 11 * 60 * 1000;
 const { requireIdentity } = createResourceAccess("assistantRuns");
 
 export const start = mutation({
@@ -46,6 +46,7 @@ export const start = mutation({
 		}
 
 		const identity = await requireIdentity(ctx);
+		const authorName = getAuthorName(identity);
 		await consumeAiRateLimit(ctx, {
 			operation: "chat-turn",
 			ownerTokenIdentifier: identity.tokenIdentifier,
@@ -61,27 +62,29 @@ export const start = mutation({
 			policy: args.policy,
 		});
 		await createAssistantRunStream(ctx, run);
-		await ctx.scheduler.runAfter(0, internal.assistantRunActions.run, {
-			runId: run._id,
-			authorName: getAuthorName(identity),
+		await createAssistantRunJob(ctx, run, {
+			authorName,
 			job: args.job,
 		});
-		await ctx.scheduler.runAfter(
-			BACKGROUND_RUN_WATCHDOG_MS,
-			internal.assistantRunBackground.expire,
-			{ runId: run._id },
-		);
+		await scheduleAssistantRunExecution(ctx, run);
 
 		return run;
 	},
 });
 
 export const expire = internalMutation({
-	args: { runId: v.id("assistantRuns") },
+	args: {
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const run = await ctx.db.get(args.runId);
-		if (run?.producer === "convex" && run.status === "running") {
+		if (
+			run?.producer === "convex" &&
+			run.status === "running" &&
+			run.assistantMessageId === args.assistantMessageId
+		) {
 			await transitionAssistantRun(ctx, run, {
 				type: "fail",
 				errorText: "Assistant run exceeded the background execution limit.",

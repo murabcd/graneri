@@ -67,11 +67,6 @@ test("accepting a matching tool approval resumes the same run atomically", async
 			createdAt: 2_001,
 		},
 	});
-	await asOwner.mutation(api.chats.deleteActiveStreamSnapshot, {
-		workspaceId,
-		chatId,
-		runId: run._id,
-	});
 	await asOwner.mutation(api.assistantRuns.waitForUserDecision, {
 		runId: run._id,
 		pendingDecision: {
@@ -103,6 +98,12 @@ test("accepting a matching tool approval resumes the same run atomically", async
 			createdAt: 2_002,
 		},
 	});
+	await asOwner.mutation(api.chats.startActiveStream, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		assistantMessageId: "stream-2",
+	});
 
 	const state = await t.run(async (ctx) => {
 		const savedRun = await ctx.db.get(run._id);
@@ -123,7 +124,11 @@ test("accepting a matching tool approval resumes the same run atomically", async
 					)
 					.unique()
 			: null;
-		return { message, savedRun };
+		const stream = await ctx.db
+			.query("chatActiveStreams")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique();
+		return { message, savedRun, stream };
 	});
 
 	expect(state.savedRun).toMatchObject({
@@ -131,6 +136,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 		status: "running",
 	});
 	expect(state.savedRun?.pendingDecision).toBeUndefined();
+	expect(state.stream).toMatchObject({ assistantMessageId: "stream-2" });
 	expect(JSON.parse(state.message?.partsJson ?? "[]")).toEqual([
 		expect.objectContaining({
 			state: "approval-responded",
