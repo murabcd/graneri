@@ -1,4 +1,5 @@
 import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
+import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -10,6 +11,10 @@ import {
 	query,
 } from "./_generated/server";
 import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
+import {
+	deleteAcceptedQueuedMessages,
+	requireClaimedQueuedMessageAcceptance,
+} from "./assistantQueuedMessageStateMachine";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import {
@@ -537,11 +542,7 @@ const getMessageAttachmentStorageIds = (
 	message: Pick<Doc<"chatMessages">, "partsJson">,
 ) => {
 	try {
-		const parts = JSON.parse(message.partsJson) as unknown;
-
-		if (!Array.isArray(parts)) {
-			throw new Error("Chat message parts must be an array.");
-		}
+		const parts = parseUiMessagePartsJson(message.partsJson);
 
 		return parts.flatMap((part) => {
 			const storageId = getStorageIdFromFilePart(part);
@@ -557,51 +558,6 @@ const getMessageAttachmentStorageIds = (
 		});
 	}
 };
-
-const getModelTextPartSignature = (partsJson: string) => {
-	try {
-		const parts = JSON.parse(partsJson) as unknown;
-
-		if (!Array.isArray(parts)) {
-			return null;
-		}
-
-		return JSON.stringify(
-			parts.flatMap((part) => {
-				if (
-					typeof part === "object" &&
-					part !== null &&
-					"type" in part &&
-					part.type === "text" &&
-					"text" in part &&
-					typeof part.text === "string" &&
-					part.text.trim().length > 0
-				) {
-					return [{ type: "text", text: part.text }];
-				}
-				return [];
-			}),
-		);
-	} catch {
-		return null;
-	}
-};
-
-const isAcceptedQueuedMessagePayload = ({
-	message,
-	queuedMessage,
-}: {
-	message: {
-		id: string;
-		partsJson: string;
-		text: string;
-	};
-	queuedMessage: Pick<Doc<"assistantQueuedMessages">, "messageId" | "text">;
-}) =>
-	message.id === queuedMessage.messageId &&
-	message.text === queuedMessage.text &&
-	getModelTextPartSignature(message.partsJson) ===
-		JSON.stringify([{ type: "text", text: queuedMessage.text }]);
 
 const getExistingStorageMetadata = async (
 	ctx: MutationCtx,
@@ -1277,38 +1233,20 @@ export const acceptSteeredUserMessage = mutation({
 			});
 		}
 
-		const queuedMessage = await ctx.db.get(args.queuedMessageId);
-		if (
-			!queuedMessage ||
-			queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			queuedMessage.workspaceId !== args.workspaceId ||
-			queuedMessage.chatId !== chat._id ||
-			queuedMessage.runId !== run._id ||
-			queuedMessage.status !== "claimed"
-		) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_NOT_CLAIMED",
-				message: "Queued message was not accepted for steering.",
-			});
-		}
-
-		if (args.message.role !== "user" || !args.message.text.trim()) {
-			throw new ConvexError({
-				code: "INVALID_STEERED_MESSAGE",
-				message: "Steered message must be a non-empty user message.",
-			});
-		}
-		if (
-			!isAcceptedQueuedMessagePayload({
-				message: args.message,
-				queuedMessage,
-			})
-		) {
-			throw new ConvexError({
-				code: "INVALID_STEERED_MESSAGE",
-				message: "Steered message must match the claimed queued message.",
-			});
-		}
+		const queuedMessage = await requireClaimedQueuedMessageAcceptance(ctx, {
+			chatId: chat._id,
+			contentErrorCode: "INVALID_STEERED_MESSAGE",
+			contentErrorMessage:
+				"Steered message must match the claimed queued message.",
+			invalidMessageErrorMessage:
+				"Steered message must be a non-empty user message.",
+			message: args.message,
+			notClaimedMessage: "Queued message was not accepted for steering.",
+			ownerTokenIdentifier,
+			queuedMessageId: args.queuedMessageId,
+			runId: run._id,
+			workspaceId: args.workspaceId,
+		});
 
 		const savedMessage = await saveMessageForOwnerInternal(ctx, {
 			ownerTokenIdentifier,
@@ -1331,7 +1269,7 @@ export const acceptSteeredUserMessage = mutation({
 				},
 			],
 		});
-		await ctx.db.delete(queuedMessage._id);
+		await deleteAcceptedQueuedMessages(ctx, [queuedMessage]);
 
 		return savedMessage;
 	},
@@ -1393,41 +1331,23 @@ export const acceptSteeredUserMessages = mutation({
 		}
 
 		const queuedMessages = await Promise.all(
-			args.messages.map((message) => ctx.db.get(message.queuedMessageId)),
-		);
-		for (const [index, queuedMessage] of queuedMessages.entries()) {
-			const message = args.messages[index]?.message;
-			if (
-				!queuedMessage ||
-				queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-				queuedMessage.workspaceId !== args.workspaceId ||
-				queuedMessage.chatId !== chat._id ||
-				queuedMessage.runId !== run._id ||
-				queuedMessage.status !== "claimed"
-			) {
-				throw new ConvexError({
-					code: "QUEUED_MESSAGE_NOT_CLAIMED",
-					message: "Queued message was not accepted for steering.",
-				});
-			}
-			if (message?.role !== "user" || !message.text.trim()) {
-				throw new ConvexError({
-					code: "INVALID_STEERED_MESSAGE",
-					message: "Steered message must be a non-empty user message.",
-				});
-			}
-			if (
-				!isAcceptedQueuedMessagePayload({
+			args.messages.map(({ message, queuedMessageId }) =>
+				requireClaimedQueuedMessageAcceptance(ctx, {
+					chatId: chat._id,
+					contentErrorCode: "INVALID_STEERED_MESSAGE",
+					contentErrorMessage:
+						"Steered message must match the claimed queued message.",
+					invalidMessageErrorMessage:
+						"Steered message must be a non-empty user message.",
 					message,
-					queuedMessage,
-				})
-			) {
-				throw new ConvexError({
-					code: "INVALID_STEERED_MESSAGE",
-					message: "Steered message must match the claimed queued message.",
-				});
-			}
-		}
+					notClaimedMessage: "Queued message was not accepted for steering.",
+					ownerTokenIdentifier,
+					queuedMessageId,
+					runId: run._id,
+					workspaceId: args.workspaceId,
+				}),
+			),
+		);
 
 		const convexStream =
 			run.producer === "convex"
@@ -1505,12 +1425,6 @@ export const acceptSteeredUserMessages = mutation({
 		}
 
 		const transitionMessages = queuedMessages.map((queuedMessage, index) => {
-			if (!queuedMessage) {
-				throw new ConvexError({
-					code: "QUEUED_MESSAGE_NOT_CLAIMED",
-					message: "Queued message was not accepted for steering.",
-				});
-			}
 			const message = args.messages[index]?.message;
 			if (!message) {
 				throw new ConvexError({
@@ -1537,11 +1451,7 @@ export const acceptSteeredUserMessages = mutation({
 			await createAssistantRunStream(ctx, messageRun);
 			await scheduleAssistantRunExecution(ctx, messageRun);
 		}
-		await Promise.all(
-			queuedMessages.map((queuedMessage) =>
-				queuedMessage ? ctx.db.delete(queuedMessage._id) : null,
-			),
-		);
+		await deleteAcceptedQueuedMessages(ctx, queuedMessages);
 
 		return savedMessages;
 	},
@@ -1580,37 +1490,19 @@ export const acceptQueuedUserMessage = mutation({
 			});
 		}
 
-		const queuedMessage = await ctx.db.get(args.queuedMessageId);
-		if (
-			!queuedMessage ||
-			queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			queuedMessage.workspaceId !== args.workspaceId ||
-			queuedMessage.chatId !== chat._id ||
-			queuedMessage.status !== "claimed"
-		) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_NOT_CLAIMED",
-				message: "Queued message was not accepted for replay.",
-			});
-		}
-
-		if (args.message.role !== "user" || !args.message.text.trim()) {
-			throw new ConvexError({
-				code: "INVALID_QUEUED_MESSAGE",
-				message: "Queued message must be a non-empty user message.",
-			});
-		}
-		if (
-			!isAcceptedQueuedMessagePayload({
-				message: args.message,
-				queuedMessage,
-			})
-		) {
-			throw new ConvexError({
-				code: "INVALID_QUEUED_MESSAGE",
-				message: "Queued message must match the claimed queued message.",
-			});
-		}
+		const queuedMessage = await requireClaimedQueuedMessageAcceptance(ctx, {
+			chatId: chat._id,
+			contentErrorCode: "INVALID_QUEUED_MESSAGE",
+			contentErrorMessage:
+				"Queued message must match the claimed queued message.",
+			invalidMessageErrorMessage:
+				"Queued message must be a non-empty user message.",
+			message: args.message,
+			notClaimedMessage: "Queued message was not accepted for replay.",
+			ownerTokenIdentifier,
+			queuedMessageId: args.queuedMessageId,
+			workspaceId: args.workspaceId,
+		});
 
 		const savedMessage = await saveMessageForOwnerInternal(ctx, {
 			ownerTokenIdentifier,
@@ -1624,7 +1516,7 @@ export const acceptQueuedUserMessage = mutation({
 			reasoningEffort: args.reasoningEffort,
 			message: args.message,
 		});
-		await ctx.db.delete(queuedMessage._id);
+		await deleteAcceptedQueuedMessages(ctx, [queuedMessage]);
 
 		return savedMessage;
 	},

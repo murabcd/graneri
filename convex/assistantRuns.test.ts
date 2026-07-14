@@ -633,6 +633,29 @@ test("background start rejects unsupported models before scheduling work", async
 	).rejects.toThrow("Assistant run model is not supported.");
 });
 
+test("background start distinguishes malformed message JSON from invalid shape", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-background-invalid-messages";
+	await createChat({ asOwner, chatId, workspaceId });
+	const admissionReservationId = await reserveChatTurn(asOwner);
+	const startWithMessagesJson = (messagesJson: string) =>
+		asOwner.mutation(api.assistantRunBackground.start, {
+			workspaceId,
+			chatId,
+			assistantMessageId: "msg-assistant-invalid-messages",
+			admissionReservationId,
+			policy: "reject",
+			job: { ...backgroundJob, messagesJson },
+		});
+
+	await expect(startWithMessagesJson("{")).rejects.toThrow(
+		"Assistant run messages must be valid JSON.",
+	);
+	await expect(startWithMessagesJson("{}")).rejects.toThrow(
+		"Assistant run messages must be an array.",
+	);
+});
+
 test("background admission reservations are bound to their authenticated owner", async () => {
 	vi.useFakeTimers();
 	const { asOwner, t, workspaceId } = await createWorkspace();

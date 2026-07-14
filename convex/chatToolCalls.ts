@@ -1,3 +1,4 @@
+import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -94,10 +95,7 @@ export const syncAssistantRunToolCalls = async (
 	run: Doc<"assistantRuns">,
 	partsJson: string,
 ) => {
-	const parts = JSON.parse(partsJson) as unknown;
-	if (!Array.isArray(parts)) {
-		return;
-	}
+	const parts = parseUiMessagePartsJson(partsJson);
 
 	for (const value of parts) {
 		const part = asRecord(value);

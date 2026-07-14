@@ -10,20 +10,19 @@ import {
 	generateHostedChatTitle,
 	getHostedChatMessageText,
 } from "@workspace/ai/hosted-chat-runtime";
+import {
+	consumeHostedAssistantExecutionStream,
+	createHostedAssistantAgent,
+	createHostedAssistantExecutionStream,
+	getHostedAssistantExecutionOutcome,
+	type HostedAssistantExecutionOutcome,
+	validateHostedAssistantMessages,
+} from "@workspace/ai/hosted-chat-turn";
 import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
 import { getChatModelProviderOptions } from "@workspace/ai/models";
-import { finalizeOpenAIToolSet } from "@workspace/ai/openai-tool-search";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
-import { getToolApprovalRequest } from "@workspace/ai/tool-approval-state";
-import {
-	createAgentUIStream,
-	type InferAgentUIMessage,
-	readUIMessageStream,
-	ToolLoopAgent,
-	type ToolSet,
-	type UIMessage,
-	validateUIMessages,
-} from "ai";
+import { parseUiMessagesJson } from "@workspace/ai/ui-message-codec";
+import type { InferAgentUIMessage, ToolSet, UIMessage } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
@@ -45,14 +44,8 @@ class BackgroundRunStoppedError extends Error {
 const parseMessages = async <Message extends UIMessage>(
 	job: AssistantRunJob,
 ) => {
-	let messages: unknown;
-	try {
-		messages = JSON.parse(job.messagesJson) as unknown;
-	} catch {
-		throw new Error("Assistant run messages must be valid JSON.");
-	}
-
-	return (await validateUIMessages({ messages })) as Message[];
+	const messages = parseUiMessagesJson(job.messagesJson);
+	return await validateHostedAssistantMessages<Message>({ messages });
 };
 
 const getErrorText = (error: unknown) =>
@@ -177,10 +170,10 @@ export const run = internalAction({
 				},
 				requireActiveRun,
 			);
-			const finalizedToolSet = finalizeOpenAIToolSet(enabledTools);
-			const agent = new ToolLoopAgent({
-				model: openai(context.model),
-				instructions: context.job.systemPrompt,
+			const { agent } = createHostedAssistantAgent({
+				enabledTools,
+				model: context.model,
+				systemPrompt: context.job.systemPrompt,
 				prepareStep: context.job.chartGenerationRequested
 					? buildChartGenerationPrepareStep()
 					: undefined,
@@ -190,27 +183,22 @@ export const run = internalAction({
 						context.ownerTokenIdentifier,
 					),
 				}),
-				tools: finalizedToolSet.hasTools ? finalizedToolSet.tools : undefined,
 			});
 			const messages = await parseMessages<InferAgentUIMessage<typeof agent>>(
 				context.job,
 			);
 			await requireActiveRun();
-			let finishedMessage: UIMessage | null = null;
-			let latestMessage: UIMessage | null = null;
-			let wasAborted = false;
+			const executionState: {
+				outcome: HostedAssistantExecutionOutcome | null;
+			} = { outcome: null };
 			let lastFlushAt = 0;
-			const stream = await createAgentUIStream({
+			const stream = await createHostedAssistantExecutionStream({
 				agent,
-				uiMessages: messages,
-				originalMessages: messages,
-				generateMessageId: () => context.assistantMessageId,
-				sendReasoning: true,
-				sendSources: true,
+				assistantMessageId: context.assistantMessageId,
+				messages,
 				timeout: { totalMs: BACKGROUND_RUN_TIMEOUT_MS },
-				onFinish: ({ isAborted, responseMessage }) => {
-					wasAborted = isAborted;
-					finishedMessage = responseMessage;
+				onOutcome: (outcome) => {
+					executionState.outcome = outcome;
 				},
 			});
 
@@ -230,38 +218,37 @@ export const run = internalAction({
 				lastFlushAt = Date.now();
 			};
 
-			for await (const message of readUIMessageStream({
+			const latestMessage = await consumeHostedAssistantExecutionStream({
 				stream,
-				terminateOnError: true,
-			})) {
-				latestMessage = message;
-				if (Date.now() - lastFlushAt >= SNAPSHOT_FLUSH_INTERVAL_MS) {
-					await persistSnapshot(message);
-				}
-			}
+				onMessage: async (message) => {
+					if (Date.now() - lastFlushAt >= SNAPSHOT_FLUSH_INTERVAL_MS) {
+						await persistSnapshot(message);
+					}
+				},
+			});
 
-			const responseMessage = finishedMessage ?? latestMessage;
+			const responseMessage =
+				executionState.outcome?.responseMessage ?? latestMessage;
 			if (!responseMessage) {
 				throw new Error("Assistant run completed without a response message.");
 			}
 			await persistSnapshot(responseMessage);
-			if (wasAborted) {
+			const executionOutcome =
+				executionState.outcome ??
+				getHostedAssistantExecutionOutcome({
+					isAborted: false,
+					responseMessage,
+				});
+			if (executionOutcome.status === "aborted") {
 				throw new Error("Assistant run exceeded its execution timeout.");
 			}
 
-			const approvalRequest = getToolApprovalRequest(responseMessage);
-			if (approvalRequest) {
+			if (executionOutcome.status === "waiting_for_user") {
 				await ctx.runMutation(
 					internal.assistantRunBackgroundState.waitForUser,
 					{
 						runId: args.runId,
-						pendingDecision: {
-							type: "tool_approval",
-							approvalId: approvalRequest.approvalId,
-							assistantMessageId: approvalRequest.assistantMessageId,
-							toolCallId: approvalRequest.toolCallId,
-							toolName: approvalRequest.toolName,
-						},
+						pendingDecision: executionOutcome.pendingDecision,
 					},
 				);
 				return null;

@@ -6,7 +6,7 @@ import type { MutationCtx } from "./_generated/server";
 import {
 	discardClaimedForRunInternal,
 	discardQueuedForRunInternal,
-} from "./assistantQueuedMessages";
+} from "./assistantQueuedMessageStateMachine";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import { deleteAssistantRunJob } from "./assistantRunJobState";
 import type {

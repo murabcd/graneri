@@ -1,3 +1,4 @@
+import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -97,19 +98,18 @@ export const updateAssistantRunStream = async (
 	}
 
 	if (args.partsJson !== undefined) {
-		let parts: unknown;
 		try {
-			parts = JSON.parse(args.partsJson) as unknown;
-		} catch {
+			parseUiMessagePartsJson(args.partsJson);
+		} catch (error) {
+			const isInvalidPartsShape =
+				error instanceof Error &&
+				"code" in error &&
+				error.code === "invalid_parts_shape";
 			throw new ConvexError({
 				code: "INVALID_ACTIVE_STREAM_PARTS",
-				message: "Active stream parts must be valid JSON.",
-			});
-		}
-		if (!Array.isArray(parts)) {
-			throw new ConvexError({
-				code: "INVALID_ACTIVE_STREAM_PARTS",
-				message: "Active stream parts must be an array.",
+				message: isInvalidPartsShape
+					? "Active stream parts must be an array."
+					: "Active stream parts must be valid JSON.",
 			});
 		}
 	}

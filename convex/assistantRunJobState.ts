@@ -1,3 +1,7 @@
+import {
+	decodeStoredUiMessage,
+	parseUiMessagesJson,
+} from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -73,34 +77,17 @@ export const upsertAssistantRunJobMessage = async (
 		});
 	}
 
-	let messages: unknown;
-	let parts: unknown;
-	let metadata: unknown;
+	let messages: unknown[];
+	let uiMessage: ReturnType<typeof decodeStoredUiMessage>;
 	try {
-		messages = JSON.parse(runJob.job.messagesJson) as unknown;
-		parts = JSON.parse(message.partsJson) as unknown;
-		metadata = message.metadataJson
-			? (JSON.parse(message.metadataJson) as unknown)
-			: undefined;
+		messages = parseUiMessagesJson(runJob.job.messagesJson);
+		uiMessage = decodeStoredUiMessage(message);
 	} catch {
 		throw new ConvexError({
 			code: "INVALID_ASSISTANT_RUN_JOB",
 			message: "Assistant run background messages are invalid.",
 		});
 	}
-	if (!Array.isArray(messages) || !Array.isArray(parts)) {
-		throw new ConvexError({
-			code: "INVALID_ASSISTANT_RUN_JOB",
-			message: "Assistant run background messages are invalid.",
-		});
-	}
-
-	const uiMessage = {
-		id: message.id,
-		role: message.role,
-		parts,
-		...(metadata === undefined ? {} : { metadata }),
-	};
 	const existingIndex = messages.findIndex(
 		(value) =>
 			value !== null &&

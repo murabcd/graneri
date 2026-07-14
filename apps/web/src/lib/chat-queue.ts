@@ -2,6 +2,7 @@ import {
 	clampHostedChatWhitespace,
 	clampHostedNoteContext,
 } from "@workspace/ai/hosted-chat-runtime";
+import { parseUiMessageMetadataJson } from "@workspace/ai/ui-message-codec";
 import type { UIMessage } from "ai";
 
 type QueuedRequestBody = Record<string, unknown>;
@@ -43,11 +44,8 @@ const parseQueuedRequestBody = (requestBodyJson: string): QueuedRequestBody => {
 const parseQueuedMessageMetadata = (
 	metadataJson: string | undefined,
 ): UIMessage["metadata"] | undefined => {
-	if (metadataJson === undefined) {
-		return undefined;
-	}
-
-	const parsed = JSON.parse(metadataJson) as unknown;
+	const parsed =
+		parseUiMessageMetadataJson<UIMessage["metadata"]>(metadataJson);
 
 	if (parsed !== undefined && !isRecord(parsed)) {
 		throw new Error("Queued chat message metadata is invalid.");

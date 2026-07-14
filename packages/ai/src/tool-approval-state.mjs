@@ -1,3 +1,8 @@
+import {
+	parseUiMessagePartsJson,
+	tryParseUiMessageMetadataJson,
+} from "./ui-message-codec.mjs";
+
 const asRecord = (value) =>
 	value && typeof value === "object" && !Array.isArray(value) ? value : null;
 
@@ -75,11 +80,8 @@ export const createCanonicalToolApprovalResponse = ({
 
 	let storedParts;
 	try {
-		storedParts = JSON.parse(storedMessage.partsJson);
+		storedParts = parseUiMessagePartsJson(storedMessage.partsJson);
 	} catch {
-		storedParts = null;
-	}
-	if (!Array.isArray(storedParts)) {
 		throw new Error("Pending tool approval message is invalid.");
 	}
 
@@ -119,14 +121,7 @@ export const createCanonicalToolApprovalResponse = ({
 		throw new Error("Pending tool approval does not match the response.");
 	}
 
-	let metadata;
-	try {
-		metadata = storedMessage.metadataJson
-			? JSON.parse(storedMessage.metadataJson)
-			: undefined;
-	} catch {
-		metadata = undefined;
-	}
+	const metadata = tryParseUiMessageMetadataJson(storedMessage.metadataJson);
 
 	return {
 		id: storedMessage.id,

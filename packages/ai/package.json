@@ -137,6 +137,10 @@
       "types": "./src/tool-approval-state.d.mts",
       "import": "./src/tool-approval-state.mjs"
     },
+    "./ui-message-codec": {
+      "types": "./src/ui-message-codec.d.mts",
+      "import": "./src/ui-message-codec.mjs"
+    },
     "./transcription": {
       "types": "./src/transcription.d.mts",
       "import": "./src/transcription.mjs"

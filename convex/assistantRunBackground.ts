@@ -1,4 +1,5 @@
 import { isSupportedChatModel } from "@workspace/ai/models";
+import { parseUiMessagesJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation } from "./_generated/server";
 import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
@@ -24,19 +25,18 @@ export const start = mutation({
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
-		let messages: unknown;
 		try {
-			messages = JSON.parse(args.job.messagesJson) as unknown;
-		} catch {
+			parseUiMessagesJson(args.job.messagesJson);
+		} catch (error) {
+			const isInvalidMessagesShape =
+				error instanceof Error &&
+				"code" in error &&
+				error.code === "invalid_messages_shape";
 			throw new ConvexError({
 				code: "INVALID_ASSISTANT_RUN_JOB",
-				message: "Assistant run messages must be valid JSON.",
-			});
-		}
-		if (!Array.isArray(messages)) {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_JOB",
-				message: "Assistant run messages must be an array.",
+				message: isInvalidMessagesShape
+					? "Assistant run messages must be an array."
+					: "Assistant run messages must be valid JSON.",
 			});
 		}
 		if (!isSupportedChatModel(args.job.model)) {

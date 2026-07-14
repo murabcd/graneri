@@ -6,22 +6,25 @@ import {
 import { createChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
 import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
 import {
-	buildHostedChatRunContext,
 	buildHostedNotesContext,
-	createHostedActiveStreamKey,
-	createHostedChatQueuedInput,
-	createHostedChatTurnController,
 	getHostedChatConvexRouteError,
 	getHostedChatInputValidationErrorResponse,
-	getHostedChatLocalFolderReferencePaths,
 	getHostedChatSteerTelemetry,
 	getStoredHostedNoteContext,
-	type HostedActiveStreamSession,
-	prepareHostedChatTurnBranch,
-	stopOrphanedHostedAssistantRun,
 	validateHostedChatInput,
 	validateHostedChatRequestInput,
 	validateHostedChatSteerRoute,
+} from "@workspace/ai/hosted-chat-runtime";
+import {
+	buildHostedChatRunContext,
+	createHostedActiveStreamKey,
+	createHostedChatQueuedInput,
+	createHostedChatTurnController,
+	getHostedChatLocalFolderReferencePaths,
+	type HostedActiveStreamSession,
+	prepareHostedChatTurnBranch,
+	stopOrphanedHostedAssistantRun,
+	validateHostedAssistantMessages,
 } from "@workspace/ai/hosted-chat-turn";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
 import {
@@ -30,7 +33,7 @@ import {
 	getToolApprovalResponses,
 	type ToolApprovalResponse,
 } from "@workspace/ai/tool-approval-state";
-import { type InferUITools, type UIMessage, validateUIMessages } from "ai";
+import type { InferUITools, UIMessage } from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
@@ -746,7 +749,7 @@ export const handleChatRequest = async (
 			webSearchEnabled,
 			workspaceId: resolvedWorkspaceId,
 		}));
-		chatMessages = await validateUIMessages<
+		chatMessages = await validateHostedAssistantMessages<
 			UIMessage<unknown, never, InferUITools<typeof tools>>
 		>({
 			messages: preparedBranch.incomingMessages,

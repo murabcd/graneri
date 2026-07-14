@@ -72,6 +72,12 @@ prompt construction, active-turn input preparation, branch preparation,
 tool-loop setup, message persistence payloads, and active-stream persistence
 behavior; the hosted web route provides Convex reads and writes, request
 transport, and desktop-local tool declarations through small adapter callbacks.
+The producer-neutral assistant execution module owns AI SDK agent construction,
+stream creation and consumption, tool-approval outcome detection, and
+completed/aborted outcome classification. Web and Convex remain producer
+adapters: web owns desktop-local tool streaming and HTTP delivery, while Convex
+owns liveness checks, durable snapshot cadence, scheduling, and transactional
+finalization.
 Turn input buffering is separate from active-stream transport: the hosted turn
 input buffer owns pending steer/mailbox ordering, wait-agent activity
 notifications, and mailbox deferral rules, while active-stream sessions own
@@ -115,6 +121,10 @@ Hosted chat runs are durable Convex lifecycle records.
 lifecycle events, and mandatory queue/snapshot cleanup; `assistantRuns` exposes
 the public Convex function adapters and lifecycle queries. Chat and queue modules
 must cross the state-machine seam instead of patching `assistantRuns` rows.
+`assistantQueuedMessageStateMachine` owns follow-up claim, stale-claim recovery,
+acceptance validation, accepted-row deletion, and terminal cleanup. Public queue
+functions and chat persistence mutations are adapters to that state machine and
+must not reproduce its transition rules.
 Every run has an explicit `web` or `convex` producer owner. Reconnect may attach
 only to `web` producers and must leave a running `convex` producer intact; stop
 and terminal transitions remain shared durable state regardless of producer.
@@ -238,6 +248,10 @@ queued-message mutations enforce the actual 1 MiB document limit with
 from character counts. Queued rows persist one canonical text value plus the
 minimum replay context: they omit credentials, desktop-local folder selections,
 duplicate workspace identity, and note contents that can be reloaded by note ID.
+Rich message JSON crosses storage and runtime boundaries only through
+`@workspace/ai/ui-message-codec`. Strict consumers fail closed on malformed
+parts, metadata, or message arrays; historical model-input projection may skip
+malformed rows only through the codec's explicitly tolerant helpers.
 Claimed replay is still server-owned: the client
 rebuilds request state through the queued-intent module with a fresh Convex
 token and sends `replayQueuedMessageId`; `/api/chat` must load the claimed
@@ -532,7 +546,9 @@ preparation, queued input, run start/finalization, and transport-event modules
 are package internals; app and route code must not bind to their individual
 file boundaries. Browser-safe request validation and acceptance-header helpers
 remain isolated in `@workspace/ai/hosted-chat-runtime` so renderer bundles do
-not traverse server-only orchestration dependencies. Bearer-token parsing is
+not traverse server-only orchestration dependencies. The turn interface does
+not re-export those request helpers; server consumers import each interface by
+its runtime responsibility. Bearer-token parsing is
 the separate `@workspace/ai/hosted-chat-http` transport utility.
 
 Local-folder chat uses a hosted-model, desktop-tool bridge:

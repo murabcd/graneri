@@ -11,6 +11,11 @@ import { aiLogger, serializeError } from "./logger.mjs";
 import { CHAT_TITLE_MODEL_ID } from "./models.mjs";
 import { buildChatSystemPrompt, CHAT_TITLE_SYSTEM_PROMPT } from "./prompts.mjs";
 import { getToolApprovalResponse } from "./tool-approval-state.mjs";
+import {
+	decodeStoredUiMessagesForModelInput,
+	encodeUiMessage,
+	tryParseUiMessageMetadataJson,
+} from "./ui-message-codec.mjs";
 
 const MAX_CHAT_PREVIEW_LENGTH = 180;
 const MAX_CHAT_TITLE_LENGTH = 80;
@@ -435,15 +440,8 @@ export const getHostedChatPreviewFromMessage = (message) =>
 	truncate(getHostedChatMessageText(message), MAX_CHAT_PREVIEW_LENGTH);
 
 export const toHostedStoredMessage = (message) => ({
-	id: message.id || generateMessageId(),
-	role: message.role,
-	partsJson: JSON.stringify(message.parts),
-	metadataJson:
-		message.metadata === undefined
-			? undefined
-			: JSON.stringify(message.metadata),
+	...encodeUiMessage({ createId: generateMessageId, message }),
 	text: getHostedChatMessageText(message),
-	createdAt: Date.now(),
 });
 
 export const buildHostedChatSaveMessageArgs = ({
@@ -465,37 +463,6 @@ export const buildHostedChatSaveMessageArgs = ({
 	message: toHostedStoredMessage(message),
 });
 
-const parseStoredMessagePartsForModelInput = (partsJson) => {
-	try {
-		const parts = JSON.parse(partsJson);
-		if (!Array.isArray(parts)) {
-			return [];
-		}
-
-		return parts.flatMap((part) =>
-			part.type === "text" &&
-			typeof part.text === "string" &&
-			part.text.length > 0
-				? [{ type: "text", text: part.text }]
-				: [],
-		);
-	} catch {
-		return [];
-	}
-};
-
-const parseStoredMessageMetadata = (metadataJson) => {
-	if (metadataJson === undefined) {
-		return undefined;
-	}
-
-	try {
-		return JSON.parse(metadataJson);
-	} catch {
-		return undefined;
-	}
-};
-
 export const toHostedQueuedUserMessage = (queuedMessage) => {
 	if (!queuedMessage.text.trim()) {
 		throw new Error("Queued chat message cannot be empty.");
@@ -504,28 +471,12 @@ export const toHostedQueuedUserMessage = (queuedMessage) => {
 	return {
 		id: queuedMessage.messageId,
 		role: "user",
-		metadata: parseStoredMessageMetadata(queuedMessage.metadataJson),
+		metadata: tryParseUiMessageMetadataJson(queuedMessage.metadataJson),
 		parts: [{ type: "text", text: queuedMessage.text }],
 	};
 };
 
-export const fromHostedStoredMessages = (messages) =>
-	messages.flatMap((message) => {
-		const parts = parseStoredMessagePartsForModelInput(message.partsJson);
-
-		if (parts.length === 0) {
-			return [];
-		}
-
-		return [
-			{
-				id: message.id,
-				role: message.role,
-				metadata: parseStoredMessageMetadata(message.metadataJson),
-				parts,
-			},
-		];
-	});
+export const fromHostedStoredMessages = decodeStoredUiMessagesForModelInput;
 
 export const prepareHostedChatBranch = ({
 	interruptedAssistantMessageIds = [],

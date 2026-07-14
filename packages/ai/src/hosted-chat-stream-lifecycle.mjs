@@ -1,7 +1,9 @@
-import { createAgentUIStream, readUIMessageStream } from "ai";
 import { pipeHostedActiveStreamText } from "./hosted-chat-active-stream.mjs";
+import {
+	consumeHostedAssistantExecutionStream,
+	createHostedAssistantExecutionStream,
+} from "./hosted-chat-execution.mjs";
 import { createHostedAssistantRunFinalizationQueue } from "./hosted-chat-run-finalization-queue.mjs";
-import { getToolApprovalRequest } from "./tool-approval-state.mjs";
 
 export const createHostedChatRunResponseStream = async ({
 	activeStreamSession,
@@ -9,7 +11,7 @@ export const createHostedChatRunResponseStream = async ({
 	assistantMessageId,
 	assistantRunId,
 	chatMessages,
-	createUiStream = createAgentUIStream,
+	createUiStream,
 	failAssistantRun,
 	finalizeAssistantRun,
 	finalizedToolSet,
@@ -27,37 +29,17 @@ export const createHostedChatRunResponseStream = async ({
 
 	const stream = await (async () => {
 		try {
-			return await createUiStream({
+			return await createHostedAssistantExecutionStream({
 				agent,
-				uiMessages: chatMessages,
+				messages: chatMessages,
 				abortSignal: activeStreamSession.abortSignal,
-				originalMessages: chatMessages,
-				generateMessageId: () => assistantMessageId,
-				sendReasoning: true,
-				sendSources: true,
-				onFinish: ({ isAborted, responseMessage }) => {
+				assistantMessageId,
+				createUiStream,
+				onOutcome: (terminalization) => {
 					logLatency("stream.finish", streamLatencyTracker.getFinishDetails());
-					if (isAborted) {
+					if (terminalization.status === "aborted") {
 						return;
 					}
-
-					const approvalRequest = getToolApprovalRequest(responseMessage);
-					const terminalization = approvalRequest
-						? {
-								pendingDecision: {
-									type: "tool_approval",
-									approvalId: approvalRequest.approvalId,
-									assistantMessageId: approvalRequest.assistantMessageId,
-									toolCallId: approvalRequest.toolCallId,
-									toolName: approvalRequest.toolName,
-								},
-								responseMessage,
-								status: "waiting_for_user",
-							}
-						: {
-								responseMessage,
-								status: "completed",
-							};
 					if (finalizationQueue) {
 						finalizationQueue.setTerminalization(terminalization);
 						return;
@@ -97,12 +79,10 @@ export const createHostedChatRunResponseStream = async ({
 		.wrapStream(stream)
 		.tee();
 	const snapshotPersistence = (async () => {
-		for await (const message of readUIMessageStream({
+		await consumeHostedAssistantExecutionStream({
 			stream: snapshotStream,
-			terminateOnError: true,
-		})) {
-			activeStreamSession.replaceParts(message.parts);
-		}
+			onMessage: (message) => activeStreamSession.replaceParts(message.parts),
+		});
 	})().then(
 		() => ({ ok: true }),
 		(error) => ({ error, ok: false }),

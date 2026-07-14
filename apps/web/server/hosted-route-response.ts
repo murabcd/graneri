@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import { getHostedChatConvexRouteError } from "@workspace/ai/hosted-chat-turn";
+import { getHostedChatConvexRouteError } from "@workspace/ai/hosted-chat-runtime";
 
 const sendJson = (
 	response: ServerResponse,

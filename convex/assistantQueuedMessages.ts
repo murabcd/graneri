@@ -1,9 +1,18 @@
 import { ConvexError, type Value, v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
-	getNonTerminalRunsForChat,
+	claimQueuedMessageForChat,
+	claimQueuedMessagesForRun,
+	discardQueuedForRunInternal,
+	getScopedQueuedMessageForChat,
+	isCurrentNonTerminalRunForChat,
+	requireOwnedAssistantRun,
+	requireSavedQueuedMessage,
+	requireSingleActiveRunForChat,
+	requireValidQueuedMessageInput,
+	requireValidStoredQueuedMessage,
+} from "./assistantQueuedMessageStateMachine";
+import {
 	getOwnedActiveChatById,
 	isNonTerminalRun,
 } from "./assistantRunLifecycle";
@@ -42,15 +51,7 @@ const queuedMessageInputValidator = v.object({
 	text: v.string(),
 	requestBodyJson: v.string(),
 });
-type QueuedMessageInput = {
-	messageId: string;
-	metadataJson?: string;
-	text: string;
-	requestBodyJson: string;
-};
-
 const queuedMessagesListLimit = 20;
-const CLAIMED_QUEUE_MESSAGE_STALE_MS = 5 * 60 * 1000;
 
 const requireQueuedMessageWithinDocumentLimit = (
 	document: Record<string, Value | undefined>,
@@ -60,246 +61,6 @@ const requireQueuedMessageWithinDocumentLimit = (
 		errorCode: "QUEUED_MESSAGE_TOO_LARGE",
 		message: "Queued message exceeds Convex's 1 MiB document limit.",
 	});
-
-const parseJson = (value: string, errorCode: string, message: string) => {
-	try {
-		return JSON.parse(value) as unknown;
-	} catch {
-		throw new ConvexError({
-			code: errorCode,
-			message,
-		});
-	}
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
-const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
-	if (!message.messageId.trim()) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_ID_EMPTY",
-			message: "Queued message id cannot be empty.",
-		});
-	}
-
-	if (!message.text.trim()) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_EMPTY",
-			message: "Queued message cannot be empty.",
-		});
-	}
-
-	if (message.metadataJson !== undefined) {
-		const metadata = parseJson(
-			message.metadataJson,
-			"QUEUED_MESSAGE_INVALID_METADATA",
-			"Queued message metadata is invalid.",
-		);
-		if (!isRecord(metadata)) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_INVALID_METADATA",
-				message: "Queued message metadata is invalid.",
-			});
-		}
-	}
-
-	const requestBody = parseJson(
-		message.requestBodyJson,
-		"QUEUED_MESSAGE_INVALID_REQUEST_BODY",
-		"Queued message request body is invalid.",
-	);
-	if (!isRecord(requestBody)) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_INVALID_REQUEST_BODY",
-			message: "Queued message request body is invalid.",
-		});
-	}
-	if (
-		Array.isArray(requestBody.localFolders) &&
-		requestBody.localFolders.length > 0
-	) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_LOCAL_FOLDERS_UNSAFE",
-			message: "Queued messages cannot persist local folder selections.",
-		});
-	}
-};
-
-const getOwnedRun = async (
-	ctx: QueryCtx | MutationCtx,
-	ownerTokenIdentifier: string,
-	runId: Id<"assistantRuns">,
-) => {
-	const run = await ctx.db.get(runId);
-
-	if (!run || run.ownerTokenIdentifier !== ownerTokenIdentifier) {
-		throw new ConvexError({
-			code: "ASSISTANT_RUN_NOT_FOUND",
-			message: "Assistant run not found.",
-		});
-	}
-
-	return run;
-};
-
-const requireSavedQueuedMessage = async (
-	ctx: QueryCtx | MutationCtx,
-	queuedMessageId: Id<"assistantQueuedMessages">,
-) => {
-	const queuedMessage = await ctx.db.get(queuedMessageId);
-
-	if (!queuedMessage) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_NOT_FOUND",
-			message: "Queued message not found.",
-		});
-	}
-
-	return queuedMessage;
-};
-
-const isCurrentNonTerminalRunForChat = async (
-	ctx: QueryCtx | MutationCtx,
-	run: Doc<"assistantRuns">,
-) => {
-	const activeRuns = await requireNoDuplicateActiveRunsForChat(ctx, run.chatId);
-
-	return activeRuns[0]?._id === run._id;
-};
-
-const requireNoDuplicateActiveRunsForChat = async (
-	ctx: QueryCtx | MutationCtx,
-	chatId: Id<"chats">,
-) => {
-	const activeRuns = await getNonTerminalRunsForChat(ctx, chatId);
-
-	if (activeRuns.length > 1) {
-		throw new ConvexError({
-			code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
-			message: "Chat has multiple active assistant runs.",
-		});
-	}
-
-	return activeRuns;
-};
-
-const requireValidSavedQueuedMessage = (
-	queuedMessage: Doc<"assistantQueuedMessages">,
-) => {
-	requireValidQueuedMessageInput({
-		messageId: queuedMessage.messageId,
-		metadataJson: queuedMessage.metadataJson,
-		requestBodyJson: queuedMessage.requestBodyJson,
-		text: queuedMessage.text,
-	});
-};
-
-const getScopedQueuedMessageForChat = async (
-	ctx: QueryCtx | MutationCtx,
-	{
-		chatId,
-		ownerTokenIdentifier,
-		queuedMessageId,
-		workspaceId,
-	}: {
-		chatId: string;
-		ownerTokenIdentifier: string;
-		queuedMessageId: Id<"assistantQueuedMessages">;
-		workspaceId: Id<"workspaces">;
-	},
-) => {
-	const chat = await getOwnedActiveChatById(
-		ctx,
-		ownerTokenIdentifier,
-		workspaceId,
-		chatId,
-	);
-
-	if (!chat) {
-		throw new ConvexError({
-			code: "CHAT_NOT_FOUND",
-			message: "Chat not found.",
-		});
-	}
-
-	const queuedMessage = await ctx.db.get(queuedMessageId);
-	if (
-		!queuedMessage ||
-		queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-		queuedMessage.workspaceId !== workspaceId ||
-		queuedMessage.chatId !== chat._id
-	) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_NOT_FOUND",
-			message: "Queued message is no longer available.",
-		});
-	}
-
-	return { chat, queuedMessage };
-};
-
-const isStaleClaimedMessage = (
-	message: { claimedAt?: number; updatedAt: number },
-	now: number,
-) =>
-	now -
-		(message.claimedAt !== undefined ? message.claimedAt : message.updatedAt) >=
-	CLAIMED_QUEUE_MESSAGE_STALE_MS;
-
-const requeueStaleClaimedMessagesForRun = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-	now: number,
-) => {
-	const staleClaimedMessageIds: Array<Id<"assistantQueuedMessages">> = [];
-	for await (const message of ctx.db
-		.query("assistantQueuedMessages")
-		.withIndex("by_runId_and_status", (q) =>
-			q.eq("runId", runId).eq("status", "claimed"),
-		)) {
-		if (isStaleClaimedMessage(message, now)) {
-			staleClaimedMessageIds.push(message._id);
-		}
-	}
-
-	await Promise.all(
-		staleClaimedMessageIds.map((messageId) =>
-			ctx.db.patch(messageId, {
-				status: "queued",
-				updatedAt: now,
-				claimedAt: undefined,
-			}),
-		),
-	);
-};
-
-const requeueStaleClaimedMessagesForChat = async (
-	ctx: MutationCtx,
-	chatId: Id<"chats">,
-	now: number,
-) => {
-	const staleClaimedMessageIds: Array<Id<"assistantQueuedMessages">> = [];
-	for await (const message of ctx.db
-		.query("assistantQueuedMessages")
-		.withIndex("by_chatId_and_status_and_createdAt", (q) =>
-			q.eq("chatId", chatId).eq("status", "claimed"),
-		)) {
-		if (isStaleClaimedMessage(message, now)) {
-			staleClaimedMessageIds.push(message._id);
-		}
-	}
-
-	await Promise.all(
-		staleClaimedMessageIds.map((messageId) =>
-			ctx.db.patch(messageId, {
-				status: "queued",
-				updatedAt: now,
-				claimedAt: undefined,
-			}),
-		),
-	);
-};
 
 export const enqueueForActiveRun = mutation({
 	args: {
@@ -325,7 +86,11 @@ export const enqueueForActiveRun = mutation({
 			});
 		}
 
-		const run = await getOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		const run = await requireOwnedAssistantRun(
+			ctx,
+			ownerTokenIdentifier,
+			args.runId,
+		);
 		if (
 			run.workspaceId !== args.workspaceId ||
 			run.chatId !== chat._id ||
@@ -392,7 +157,7 @@ export const listQueuedForChat = query({
 			return [];
 		}
 
-		await requireNoDuplicateActiveRunsForChat(ctx, chat._id);
+		await requireSingleActiveRunForChat(ctx, chat._id);
 
 		const queuedMessages = await ctx.db
 			.query("assistantQueuedMessages")
@@ -416,85 +181,14 @@ export const claimNextForRun = mutation({
 	handler: async (ctx, args) => {
 		const isTargetedClaim = Boolean(args.queuedMessageId);
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const run = await getOwnedRun(ctx, ownerTokenIdentifier, args.runId);
-
-		if (run.status !== "running" && run.status !== "waiting_for_user") {
-			if (isTargetedClaim) {
-				throw new ConvexError({
-					code: "ASSISTANT_RUN_NOT_ACTIVE",
-					message: "Assistant run is not active.",
-				});
-			}
-			return null;
-		}
-		if (!(await isCurrentNonTerminalRunForChat(ctx, run))) {
-			if (isTargetedClaim) {
-				throw new ConvexError({
-					code: "ASSISTANT_RUN_NOT_ACTIVE",
-					message: "Assistant run is not active.",
-				});
-			}
-			return null;
-		}
-
-		const now = Date.now();
-		await requeueStaleClaimedMessagesForRun(ctx, run._id, now);
-		const existingClaimedMessage = await ctx.db
-			.query("assistantQueuedMessages")
-			.withIndex("by_runId_and_status", (q) =>
-				q.eq("runId", run._id).eq("status", "claimed"),
-			)
-			.first();
-		if (existingClaimedMessage) {
-			if (isTargetedClaim) {
-				throw new ConvexError({
-					code: "QUEUED_MESSAGE_NOT_FOUND",
-					message: "Queued message is no longer available.",
-				});
-			}
-			return null;
-		}
-
-		const nextQueuedMessage = args.queuedMessageId
-			? await ctx.db.get(args.queuedMessageId)
-			: await ctx.db
-					.query("assistantQueuedMessages")
-					.withIndex("by_runId_and_status_and_createdAt", (q) =>
-						q.eq("runId", run._id).eq("status", "queued"),
-					)
-					.first();
-
-		if (!nextQueuedMessage) {
-			if (args.queuedMessageId) {
-				throw new ConvexError({
-					code: "QUEUED_MESSAGE_NOT_FOUND",
-					message: "Queued message is no longer available.",
-				});
-			}
-			return null;
-		}
-		if (
-			nextQueuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			nextQueuedMessage.runId !== run._id ||
-			nextQueuedMessage.status !== "queued"
-		) {
-			if (args.queuedMessageId) {
-				throw new ConvexError({
-					code: "QUEUED_MESSAGE_NOT_FOUND",
-					message: "Queued message is no longer available.",
-				});
-			}
-			return null;
-		}
-		requireValidSavedQueuedMessage(nextQueuedMessage);
-
-		await ctx.db.patch(nextQueuedMessage._id, {
-			status: "claimed",
-			updatedAt: now,
-			claimedAt: now,
+		const messages = await claimQueuedMessagesForRun(ctx, {
+			includeReady: false,
+			ownerTokenIdentifier,
+			queuedMessageId: args.queuedMessageId,
+			runId: args.runId,
+			targetRequired: isTargetedClaim,
 		});
-
-		return await requireSavedQueuedMessage(ctx, nextQueuedMessage._id);
+		return messages[0] ?? null;
 	},
 });
 
@@ -506,89 +200,13 @@ export const claimReadyForRun = mutation({
 	returns: v.array(queuedMessageValidator),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const run = await getOwnedRun(ctx, ownerTokenIdentifier, args.runId);
-
-		if (
-			(run.status !== "running" && run.status !== "waiting_for_user") ||
-			!(await isCurrentNonTerminalRunForChat(ctx, run))
-		) {
-			throw new ConvexError({
-				code: "ASSISTANT_RUN_NOT_ACTIVE",
-				message: "Assistant run is not active.",
-			});
-		}
-
-		const now = Date.now();
-		await requeueStaleClaimedMessagesForRun(ctx, run._id, now);
-		const existingClaimedMessage = await ctx.db
-			.query("assistantQueuedMessages")
-			.withIndex("by_runId_and_status", (q) =>
-				q.eq("runId", run._id).eq("status", "claimed"),
-			)
-			.first();
-		if (existingClaimedMessage) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_NOT_FOUND",
-				message: "Queued message is no longer available.",
-			});
-		}
-
-		const targetedMessage = await ctx.db.get(args.queuedMessageId);
-		if (
-			!targetedMessage ||
-			targetedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			targetedMessage.runId !== run._id ||
-			targetedMessage.status !== "queued"
-		) {
-			throw new ConvexError({
-				code: "QUEUED_MESSAGE_NOT_FOUND",
-				message: "Queued message is no longer available.",
-			});
-		}
-		requireValidSavedQueuedMessage(targetedMessage);
-
-		const queuedMessages = await ctx.db
-			.query("assistantQueuedMessages")
-			.withIndex("by_runId_and_status_and_createdAt", (q) =>
-				q.eq("runId", run._id).eq("status", "queued"),
-			)
-			.take(queuedMessagesListLimit);
-		const claimedMessages = [
-			targetedMessage,
-			...queuedMessages
-				.sort((a, b) => a.createdAt - b.createdAt)
-				.filter((message) => message._id !== targetedMessage._id),
-		].slice(0, queuedMessagesListLimit);
-
-		for (const queuedMessage of claimedMessages) {
-			if (
-				queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-				queuedMessage.runId !== run._id ||
-				queuedMessage.status !== "queued"
-			) {
-				throw new ConvexError({
-					code: "QUEUED_MESSAGE_NOT_FOUND",
-					message: "Queued message is no longer available.",
-				});
-			}
-			requireValidSavedQueuedMessage(queuedMessage);
-		}
-
-		await Promise.all(
-			claimedMessages.map((queuedMessage) =>
-				ctx.db.patch(queuedMessage._id, {
-					status: "claimed",
-					updatedAt: now,
-					claimedAt: now,
-				}),
-			),
-		);
-
-		return await Promise.all(
-			claimedMessages.map((queuedMessage) =>
-				requireSavedQueuedMessage(ctx, queuedMessage._id),
-			),
-		);
+		return await claimQueuedMessagesForRun(ctx, {
+			includeReady: true,
+			ownerTokenIdentifier,
+			queuedMessageId: args.queuedMessageId,
+			runId: args.runId,
+			targetRequired: true,
+		});
 	},
 });
 
@@ -600,51 +218,11 @@ export const claimNextForChat = mutation({
 	returns: v.union(queuedMessageValidator, v.null()),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const chat = await getOwnedActiveChatById(
-			ctx,
+		return await claimQueuedMessageForChat(ctx, {
+			chatId: args.chatId,
 			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			return null;
-		}
-
-		const activeRuns = await requireNoDuplicateActiveRunsForChat(ctx, chat._id);
-		if (activeRuns.length > 0) {
-			return null;
-		}
-
-		const now = Date.now();
-		await requeueStaleClaimedMessagesForChat(ctx, chat._id, now);
-		const nextQueuedMessage = await ctx.db
-			.query("assistantQueuedMessages")
-			.withIndex("by_chatId_and_status_and_createdAt", (q) =>
-				q.eq("chatId", chat._id).eq("status", "queued"),
-			)
-			.first();
-
-		if (!nextQueuedMessage) {
-			return null;
-		}
-		if (
-			nextQueuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			nextQueuedMessage.workspaceId !== args.workspaceId ||
-			nextQueuedMessage.chatId !== chat._id ||
-			nextQueuedMessage.status !== "queued"
-		) {
-			return null;
-		}
-		requireValidSavedQueuedMessage(nextQueuedMessage);
-
-		await ctx.db.patch(nextQueuedMessage._id, {
-			status: "claimed",
-			updatedAt: now,
-			claimedAt: now,
+			workspaceId: args.workspaceId,
 		});
-
-		return await requireSavedQueuedMessage(ctx, nextQueuedMessage._id);
 	},
 });
 
@@ -663,7 +241,7 @@ export const getClaimedForChat = query({
 			queuedMessageId: args.queuedMessageId,
 			workspaceId: args.workspaceId,
 		});
-		await requireNoDuplicateActiveRunsForChat(ctx, chat._id);
+		await requireSingleActiveRunForChat(ctx, chat._id);
 
 		if (queuedMessage.status !== "claimed") {
 			throw new ConvexError({
@@ -671,7 +249,7 @@ export const getClaimedForChat = query({
 				message: "Queued message is not claimed.",
 			});
 		}
-		requireValidSavedQueuedMessage(queuedMessage);
+		requireValidStoredQueuedMessage(queuedMessage);
 
 		return queuedMessage;
 	},
@@ -768,7 +346,7 @@ export const updateQueued = mutation({
 				message: "Queued message cannot be edited.",
 			});
 		}
-		await requireNoDuplicateActiveRunsForChat(ctx, chat._id);
+		await requireSingleActiveRunForChat(ctx, chat._id);
 
 		requireValidQueuedMessageInput(args.message);
 
@@ -812,7 +390,7 @@ export const reorderQueuedForChat = mutation({
 			});
 		}
 
-		await requireNoDuplicateActiveRunsForChat(ctx, chat._id);
+		await requireSingleActiveRunForChat(ctx, chat._id);
 
 		const uniqueQueuedMessageIds = [...new Set(args.queuedMessageIds)];
 		const queuedMessages = await Promise.all(
@@ -881,44 +459,13 @@ export const discardQueuedForRun = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const run = await getOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		const run = await requireOwnedAssistantRun(
+			ctx,
+			ownerTokenIdentifier,
+			args.runId,
+		);
 		await discardQueuedForRunInternal(ctx, run._id);
 
 		return null;
 	},
 });
-
-export const discardQueuedForRunInternal = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	await discardMessagesForRunByStatus(ctx, runId, ["queued", "claimed"]);
-};
-
-export const discardClaimedForRunInternal = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	await discardMessagesForRunByStatus(ctx, runId, ["claimed"]);
-};
-
-const discardMessagesForRunByStatus = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-	statuses: ReadonlyArray<"queued" | "claimed">,
-) => {
-	const queuedMessageIds: Array<Id<"assistantQueuedMessages">> = [];
-	for (const status of statuses) {
-		for await (const message of ctx.db
-			.query("assistantQueuedMessages")
-			.withIndex("by_runId_and_status", (q) =>
-				q.eq("runId", runId).eq("status", status),
-			)) {
-			queuedMessageIds.push(message._id);
-		}
-	}
-
-	await Promise.all(
-		queuedMessageIds.map((messageId) => ctx.db.delete(messageId)),
-	);
-};

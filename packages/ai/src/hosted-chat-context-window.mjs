@@ -5,6 +5,7 @@ import {
 	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
 } from "./chat-context-contract.mjs";
 import { CHAT_TITLE_MODEL_ID, getChatModelProviderOptions } from "./models.mjs";
+import { tryParseUiMessagePartsJson } from "./ui-message-codec.mjs";
 
 export {
 	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
@@ -36,12 +37,7 @@ const stringifyValue = (value) => {
 };
 
 const renderStoredMessage = (message) => {
-	let parts;
-	try {
-		parts = JSON.parse(message.partsJson);
-	} catch {
-		parts = [];
-	}
+	const parts = tryParseUiMessagePartsJson(message.partsJson) ?? [];
 
 	const content = Array.isArray(parts)
 		? parts.flatMap((value) => {
