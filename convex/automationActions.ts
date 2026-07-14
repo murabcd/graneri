@@ -9,7 +9,7 @@ import {
 import { getChatModelProviderOptions } from "@workspace/ai/models";
 import { finalizeOpenAIToolSet } from "@workspace/ai/openai-tool-search";
 import { BASE_CHAT_SYSTEM_PROMPT } from "@workspace/ai/prompts";
-import { stepCountIs, ToolLoopAgent } from "ai";
+import { ToolLoopAgent } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -256,7 +256,6 @@ export const runAutomation = internalAction({
 					notes: run.notes,
 				}),
 				tools: finalizedToolSet.hasTools ? tools : undefined,
-				stopWhen: finalizedToolSet.hasTools ? stepCountIs(5) : undefined,
 			});
 			const result = await automationAgent.generate({
 				messages,

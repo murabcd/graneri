@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { stepCountIs, ToolLoopAgent } from "ai";
+import { ToolLoopAgent } from "ai";
 import { finalizeOpenAIToolSet } from "./openai-tool-search.mjs";
 
 export const buildHostedChatAgentToolSet = ({
@@ -43,7 +43,6 @@ export const createHostedChatAgent = ({
 		instructions: systemPrompt,
 		tools: agentTools ?? (emptyToolsWhenNone ? {} : undefined),
 		prepareStep,
-		stopWhen: agentTools ? stepCountIs(5) : undefined,
 	});
 
 	return {
