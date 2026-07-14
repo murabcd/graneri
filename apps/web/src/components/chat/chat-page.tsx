@@ -17,11 +17,9 @@ import * as React from "react";
 // react-doctor-disable-next-line react-doctor/no-flush-sync -- submitChatTurn continues into imperative request/paint work that must observe the committed optimistic message.
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import {
-	type ChatAttachment,
-	useRevokeAttachmentObjectUrls,
-} from "@/components/ai-elements/file-attachment-controls";
+import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
+import { useRevokeAttachmentObjectUrls } from "@/components/ai-elements/use-file-attachments";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import {
 	escapeChatMessageSelectorValue,
@@ -40,7 +38,7 @@ import type {
 } from "@/components/chat/model-picker";
 import { COMPOSER_DOCK_WRAPPER_CLASS } from "@/components/layout/composer-dock";
 import { PageTitle } from "@/components/layout/page-title";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useAppSources } from "@/hooks/use-app-sources";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";

@@ -77,13 +77,15 @@ import * as React from "react";
 import { createPortal, flushSync } from "react-dom";
 import { toast } from "sonner";
 import {
-	type ChatAttachment,
 	FileAttachmentButton,
 	FileAttachmentChips,
+} from "@/components/ai-elements/file-attachment-controls";
+import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
+import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
+import {
 	useFileAttachmentDropzone,
 	useRevokeAttachmentObjectUrls,
-} from "@/components/ai-elements/file-attachment-controls";
-import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
+} from "@/components/ai-elements/use-file-attachments";
 import { ChatQueuedFollowUpBar } from "@/components/chat/chat-queued-follow-up-bar";
 import { ChatToolApprovalBar } from "@/components/chat/chat-tool-approval-bar";
 import {
@@ -108,7 +110,7 @@ import {
 	useResizableSidePanel,
 	useResizeHandle,
 } from "@/components/layout/resizable-side-panel";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import {
 	type NoteChatGroups,

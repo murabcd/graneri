@@ -26,7 +26,7 @@ import {
 } from "@/components/settings/connection-settings-state";
 import { useRemoteMcpConnectionSession } from "@/components/settings/use-remote-mcp-connection-session";
 import { useYandexCalendarConnectionSession } from "@/components/settings/use-yandex-calendar-connection-session";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useLinkedAccounts } from "@/hooks/use-linked-accounts";
 import { authClient } from "@/lib/auth-client";
 import {

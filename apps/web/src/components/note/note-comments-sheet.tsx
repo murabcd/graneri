@@ -84,8 +84,6 @@ import {
 import {
 	DesktopDockedSidePanel,
 	DockedPanelPinButton,
-	useDockedPanelInset,
-	useDockedPanelOverlayWidth,
 } from "@/components/layout/docked-side-panel";
 import { parseCssLengthToPixels } from "@/components/layout/parse-css-length";
 import {
@@ -93,6 +91,10 @@ import {
 	useResizableSidePanel,
 } from "@/components/layout/resizable-side-panel";
 import { useDesktopPanelPin } from "@/components/layout/use-desktop-panel-pin";
+import {
+	useDockedPanelInset,
+	useDockedPanelOverlayWidth,
+} from "@/components/layout/use-docked-panel-widths";
 import { getDesktopCommentsPanelPinnedStorageKey } from "@/components/note/note-comments-panel-state";
 import {
 	buildCommentTree,
@@ -109,7 +111,7 @@ import {
 	type ThreadView,
 } from "@/components/note/note-comments-utils";
 import { writeTextToClipboard } from "@/components/note/share-note";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import { getErrorMessage } from "@/lib/error-message";
 import { logError } from "@/lib/logger";

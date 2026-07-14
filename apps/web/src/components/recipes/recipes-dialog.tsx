@@ -20,7 +20,7 @@ import {
 	ManageDialogHeader,
 	ManageDialogSidebarNav,
 } from "@/components/ui/manage-dialog-navigation";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import {
 	createUniqueDraftName,
 	createUniqueDraftSlug,

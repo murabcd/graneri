@@ -80,7 +80,7 @@ import {
 	ChatModelPicker,
 	type ReasoningEffort,
 } from "@/components/chat/model-picker";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { type AppSource, useAppSources } from "@/hooks/use-app-sources";
 import { getStoredChatModel, storeChatModel } from "@/lib/ai/chat-model";
 import { defaultChatModel, findChatModel } from "@/lib/ai/models";

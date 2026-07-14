@@ -6,7 +6,7 @@ import {
 } from "@workspace/ui/components/select";
 import { useQuery } from "convex/react";
 import * as React from "react";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import {
 	ENHANCED_NOTE_TEMPLATE_SLUG,
 	getSelectableNoteTemplates,

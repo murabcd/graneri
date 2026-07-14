@@ -14,12 +14,12 @@ import { toast } from "sonner";
 import { ChatActionsMenu } from "@/components/chat/chat-actions-menu";
 import { ProjectSidebarItem } from "@/components/nav/nav-projects";
 import { SidebarCollapsibleGroup } from "@/components/nav/sidebar-collapsible-group";
+import { SidebarSortableList } from "@/components/nav/sidebar-sortable-list";
+import { resolveSidebarSortableItems } from "@/components/nav/sidebar-sortable-utils";
 import {
 	type SidebarSortableBindings,
-	SidebarSortableList,
 	useSidebarSortableBindings,
-} from "@/components/nav/sidebar-sortable-list";
-import { resolveSidebarSortableItems } from "@/components/nav/sidebar-sortable-utils";
+} from "@/components/nav/use-sidebar-sortable-bindings";
 import { NoteActionsMenu } from "@/components/note/note-actions-menu";
 import { getChatId } from "@/lib/chat";
 import { logError } from "@/lib/logger";

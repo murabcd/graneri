@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@workspace/ui/components/button";
-import { useOptionalDockedPanelWidths } from "@workspace/ui/components/sidebar";
 import {
 	Tooltip,
 	TooltipContent,
@@ -12,146 +11,9 @@ import { cn } from "@workspace/ui/lib/utils";
 import { Pin } from "lucide-react";
 import * as React from "react";
 import { ResizableSidePanelHandle } from "@/components/layout/resizable-side-panel";
-
-type DockedPanelSide = "left" | "right";
-
-type DockedPanelWidthsUpdate = {
-	leftInsetPanelWidth?: string | null;
-	leftOverlayPanelWidth?: string | null;
-	rightInsetPanelWidth?: string | null;
-	rightOverlayPanelWidth?: string | null;
-};
+import type { DockedPanelSide } from "@/components/layout/use-docked-panel-widths";
 
 const DOCKED_PANEL_TRANSITION_DURATION_MS = 300;
-const useIsomorphicLayoutEffect =
-	typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
-
-function getDockedPanelInsetWidth({
-	isMobile,
-	isPinned,
-	open,
-	panelWidth,
-}: {
-	isMobile: boolean;
-	isPinned: boolean;
-	open: boolean;
-	panelWidth: number;
-}) {
-	return !isMobile && open && isPinned ? `${panelWidth}px` : null;
-}
-
-function getDockedPanelOverlayWidth({
-	isMobile,
-	isPinned,
-	open,
-	panelWidth,
-}: {
-	isMobile: boolean;
-	isPinned: boolean;
-	open: boolean;
-	panelWidth: number;
-}) {
-	return !isMobile && open && !isPinned ? `${panelWidth}px` : null;
-}
-
-const clearDockedPanelWidths = (widths: DockedPanelWidthsUpdate) => {
-	const nextWidths: DockedPanelWidthsUpdate = {};
-
-	if ("leftInsetPanelWidth" in widths) {
-		nextWidths.leftInsetPanelWidth = null;
-	}
-
-	if ("leftOverlayPanelWidth" in widths) {
-		nextWidths.leftOverlayPanelWidth = null;
-	}
-
-	if ("rightInsetPanelWidth" in widths) {
-		nextWidths.rightInsetPanelWidth = null;
-	}
-
-	if ("rightOverlayPanelWidth" in widths) {
-		nextWidths.rightOverlayPanelWidth = null;
-	}
-
-	return nextWidths;
-};
-
-function useSyncDockedPanelWidths({
-	leftInsetPanelWidth,
-	leftOverlayPanelWidth,
-	rightInsetPanelWidth,
-	rightOverlayPanelWidth,
-}: DockedPanelWidthsUpdate) {
-	const dockedPanelWidths = useOptionalDockedPanelWidths();
-
-	useIsomorphicLayoutEffect(() => {
-		if (!dockedPanelWidths) {
-			return;
-		}
-
-		const widths: DockedPanelWidthsUpdate = {};
-
-		if (leftInsetPanelWidth !== undefined) {
-			widths.leftInsetPanelWidth = leftInsetPanelWidth;
-		}
-
-		if (leftOverlayPanelWidth !== undefined) {
-			widths.leftOverlayPanelWidth = leftOverlayPanelWidth;
-		}
-
-		if (rightInsetPanelWidth !== undefined) {
-			widths.rightInsetPanelWidth = rightInsetPanelWidth;
-		}
-
-		if (rightOverlayPanelWidth !== undefined) {
-			widths.rightOverlayPanelWidth = rightOverlayPanelWidth;
-		}
-
-		dockedPanelWidths.syncDockedPanelWidths(widths);
-
-		return () => {
-			dockedPanelWidths.syncDockedPanelWidths(clearDockedPanelWidths(widths));
-		};
-	}, [
-		dockedPanelWidths,
-		leftInsetPanelWidth,
-		leftOverlayPanelWidth,
-		rightInsetPanelWidth,
-		rightOverlayPanelWidth,
-	]);
-}
-
-export function useDockedPanelInset(args: {
-	side: DockedPanelSide;
-	isMobile: boolean;
-	isPinned: boolean;
-	open: boolean;
-	panelWidth: number;
-}) {
-	const insetPanelWidth = getDockedPanelInsetWidth(args);
-
-	useSyncDockedPanelWidths(
-		args.side === "left"
-			? { leftInsetPanelWidth: insetPanelWidth }
-			: { rightInsetPanelWidth: insetPanelWidth },
-	);
-}
-
-export function useDockedPanelOverlayWidth(args: {
-	side: DockedPanelSide;
-	isMobile: boolean;
-	isPinned: boolean;
-	open: boolean;
-	panelWidth: number;
-}) {
-	const overlayPanelWidth = getDockedPanelOverlayWidth(args);
-
-	useSyncDockedPanelWidths(
-		args.side === "left"
-			? { leftOverlayPanelWidth: overlayPanelWidth }
-			: { rightOverlayPanelWidth: overlayPanelWidth },
-	);
-}
 
 export function DockedPanelPinButton({
 	isPinned,

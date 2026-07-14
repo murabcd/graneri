@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 import { MarkdownStreamEntry } from "@/components/chat/markdown-stream-entry";
 import { COMPOSER_DOCK_WRAPPER_CLASS } from "@/components/layout/composer-dock";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
 import { logError } from "@/lib/logger";
 import {

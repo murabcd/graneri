@@ -35,12 +35,12 @@ import {
 import * as React from "react";
 import { createPortal } from "react-dom";
 import {
-	type ChatAttachment,
 	FileAttachmentButton,
 	FileAttachmentChips,
-	useFileAttachmentDropzone,
 } from "@/components/ai-elements/file-attachment-controls";
+import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
+import { useFileAttachmentDropzone } from "@/components/ai-elements/use-file-attachments";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import {
 	ChatQueuedFollowUpBar,

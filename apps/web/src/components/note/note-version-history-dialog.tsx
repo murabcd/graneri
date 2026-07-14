@@ -28,7 +28,7 @@ import {
 	ManageDialogHeader,
 	ManageDialogSidebarNav,
 } from "@/components/ui/manage-dialog-navigation";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { logError } from "@/lib/logger";
 import { removeNoteDraft } from "@/lib/note-draft";
 import {

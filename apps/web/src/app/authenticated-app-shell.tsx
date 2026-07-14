@@ -121,10 +121,8 @@ import { optimisticRenameNote } from "@/components/note/optimistic-rename-note";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { NoteTemplateSelect } from "@/components/templates/note-template-select";
-import {
-	ActiveWorkspaceProvider,
-	useActiveWorkspaceId,
-} from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
+import { ActiveWorkspaceProvider } from "@/hooks/active-workspace-provider";
 import { useAutomationActions } from "@/hooks/use-automation-actions";
 import { prefetchChatMessagesSnapshot } from "@/hooks/use-chat-messages-snapshot";
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
@@ -286,14 +284,15 @@ const useAppShellState = ({
 		React.useState<NoteEditorActions | null>(null);
 	const [currentNoteCommentsOpener, setCurrentNoteCommentsOpener] =
 		React.useState<(() => void) | null>(null);
+	const handleLocationSynchronized = React.useCallback(() => {
+		setAutomationDialogOpen(false);
+		setEditingAutomationId(null);
+		setAutomationChatId(null);
+		setCurrentNoteEditorActions(null);
+		setCurrentNoteCommentsOpener(null);
+	}, []);
 	const navigation = useApplicationNavigationSession({
-		onLocationSynchronized: () => {
-			setAutomationDialogOpen(false);
-			setEditingAutomationId(null);
-			setAutomationChatId(null);
-			setCurrentNoteEditorActions(null);
-			setCurrentNoteCommentsOpener(null);
-		},
+		onLocationSynchronized: handleLocationSynchronized,
 	});
 	const {
 		clearScheduledAutoStart,

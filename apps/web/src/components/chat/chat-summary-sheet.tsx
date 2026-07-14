@@ -72,13 +72,15 @@ import {
 import {
 	DesktopDockedSidePanel,
 	DockedPanelPinButton,
-	useDockedPanelInset,
-	useDockedPanelOverlayWidth,
 } from "@/components/layout/docked-side-panel";
 import {
 	ResizableSidePanelHandle,
 	useResizableSidePanel,
 } from "@/components/layout/resizable-side-panel";
+import {
+	useDockedPanelInset,
+	useDockedPanelOverlayWidth,
+} from "@/components/layout/use-docked-panel-widths";
 import {
 	SearchCommand,
 	type SearchCommandItem,

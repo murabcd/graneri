@@ -75,15 +75,17 @@ import {
 import {
 	DesktopDockedSidePanel,
 	DockedPanelPinButton,
-	useDockedPanelInset,
-	useDockedPanelOverlayWidth,
 } from "@/components/layout/docked-side-panel";
 import {
 	ResizableSidePanelHandle,
 	useResizableSidePanel,
 } from "@/components/layout/resizable-side-panel";
 import { useDesktopPanelPin } from "@/components/layout/use-desktop-panel-pin";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import {
+	useDockedPanelInset,
+	useDockedPanelOverlayWidth,
+} from "@/components/layout/use-docked-panel-widths";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { getAvatarSrc } from "@/lib/avatar";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import { getErrorMessage } from "@/lib/error-message";

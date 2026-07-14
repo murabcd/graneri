@@ -101,12 +101,12 @@ import {
 	SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME,
 	type SidebarSortOption,
 } from "./sidebar-sort-options";
+import { SidebarSortableList } from "./sidebar-sortable-list";
+import { resolveSidebarSortableItems } from "./sidebar-sortable-utils";
 import {
 	type SidebarSortableBindings,
-	SidebarSortableList,
 	useSidebarSortableBindings,
-} from "./sidebar-sortable-list";
-import { resolveSidebarSortableItems } from "./sidebar-sortable-utils";
+} from "./use-sidebar-sortable-bindings";
 
 const SIDEBAR_PROJECT_SKELETON_IDS = [
 	"sidebar-project-skeleton-1",

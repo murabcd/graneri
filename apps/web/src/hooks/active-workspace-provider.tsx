@@ -1,10 +1,6 @@
-import * as React from "react";
-import { use } from "react";
+import type * as React from "react";
 import type { Id } from "../../../../convex/_generated/dataModel";
-
-const ActiveWorkspaceContext = React.createContext<Id<"workspaces"> | null>(
-	null,
-);
+import { ActiveWorkspaceContext } from "./active-workspace-context";
 
 export function ActiveWorkspaceProvider({
 	workspaceId,
@@ -18,8 +14,4 @@ export function ActiveWorkspaceProvider({
 			{children}
 		</ActiveWorkspaceContext.Provider>
 	);
-}
-
-export function useActiveWorkspaceId() {
-	return use(ActiveWorkspaceContext);
 }

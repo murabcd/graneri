@@ -28,7 +28,7 @@ import { Archive, Clock, Pencil, Star, StarOff } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
-import { useActiveWorkspaceId } from "@/hooks/use-active-workspace";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { getChatId } from "@/lib/chat";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../../convex/_generated/api";
