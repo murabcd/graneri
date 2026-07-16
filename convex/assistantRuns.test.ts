@@ -41,6 +41,45 @@ type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
 type AsOwner = WorkspaceFixture["asOwner"];
 type WorkspaceId = WorkspaceFixture["workspaceId"];
 
+const userQuestionDecision = (assistantMessageId: string, question: string) => ({
+	type: "user_question" as const,
+	assistantMessageId,
+	toolCallId: `${assistantMessageId}-question`,
+	question,
+});
+
+const saveUserQuestion = async ({
+	asOwner,
+	assistantMessageId,
+	chatId,
+	question,
+	workspaceId,
+}: {
+	asOwner: AsOwner;
+	assistantMessageId: string;
+	chatId: string;
+	question: string;
+	workspaceId: WorkspaceId;
+}) =>
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId,
+		message: {
+			id: assistantMessageId,
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{
+					type: "tool-request_user_input",
+					toolCallId: `${assistantMessageId}-question`,
+					state: "input-available",
+					input: { question },
+				},
+			]),
+			text: "",
+			createdAt: 2_001,
+		},
+	});
+
 const reserveChatTurn = async (asOwner: AsOwner) =>
 	(await asOwner.mutation(api.aiAccess.authorizeChatTurn))
 		.admissionReservationId;
@@ -1079,10 +1118,10 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 		api.assistantRuns.waitForUserDecision,
 		{
 			runId: run._id,
-			pendingDecision: {
-				type: "clarify_scope",
-				question: "Clarify?",
-			},
+			pendingDecision: userQuestionDecision(
+				run.assistantMessageId,
+				"Clarify?",
+			),
 		},
 	);
 
@@ -1222,10 +1261,10 @@ test("attachable run query fails closed when multiple active runs exist", async 
 			model: "gpt-5",
 			reasoningEffort: undefined,
 			phase: undefined,
-			pendingDecision: {
-				type: "clarify_scope",
-				question: "Choose a scope.",
-			},
+			pendingDecision: userQuestionDecision(
+				"chat-multiple-active-assistant-2",
+				"Choose a scope.",
+			),
 			stopReason: undefined,
 			errorText: undefined,
 			startedAt: run.startedAt + 1,
@@ -1334,7 +1373,7 @@ test("active run queries are driven by non-terminal assistant runs", async () =>
 	expect(terminalChatIds).not.toContain("chat-active");
 });
 
-test("assistant runs can durably wait for and resume from user decisions", async () => {
+test("assistant runs durably wait for user questions", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-decision", workspaceId });
 	const run = await asOwner.mutation(api.assistantRuns.startAssistantRun, {
@@ -1344,26 +1383,33 @@ test("assistant runs can durably wait for and resume from user decisions", async
 		model: "gpt-5",
 		policy: "reject",
 	});
+	await saveUserQuestion({
+		asOwner,
+		assistantMessageId: run.assistantMessageId,
+		chatId: "chat-decision",
+		question: "May I search Drive for the requested context?",
+		workspaceId,
+	});
 
 	const waitingRun = await asOwner.mutation(
 		api.assistantRuns.waitForUserDecision,
 		{
 			runId: run._id,
 			phase: "selecting-source",
-			pendingDecision: {
-				type: "authorize_source",
-				source: "google_drive",
-				reason: "Search Drive for the requested context.",
-			},
+			pendingDecision: userQuestionDecision(
+				run.assistantMessageId,
+				"May I search Drive for the requested context?",
+			),
 		},
 	);
 
 	expect(waitingRun.status).toBe("waiting_for_user");
 	expect(waitingRun.phase).toBe("selecting-source");
 	expect(waitingRun.pendingDecision).toEqual({
-		type: "authorize_source",
-		source: "google_drive",
-		reason: "Search Drive for the requested context.",
+		...userQuestionDecision(
+			run.assistantMessageId,
+			"May I search Drive for the requested context?",
+		),
 	});
 	expect(await listRunEventTypes({ asOwner, runId: run._id })).toEqual([
 		"run.started",
@@ -1384,22 +1430,45 @@ test("assistant runs can durably wait for and resume from user decisions", async
 			runId: run._id,
 		}),
 	).rejects.toThrow("Assistant run cannot be completed.");
-
-	const resumedRun = await asOwner.mutation(
-		api.assistantRuns.resumeAssistantRunAfterUserDecision,
-		{
-			runId: run._id,
-			phase: "running-tools",
-		},
-	);
-
-	expect(resumedRun.status).toBe("running");
-	expect(resumedRun.pendingDecision).toBeUndefined();
-	expect(resumedRun.phase).toBe("running-tools");
 });
 
-test("appended user input resumes a waiting run", async () => {
+test("assistant runs reject questions that do not match stored assistant input", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
+	await createChat({ asOwner, chatId: "chat-invalid-decision", workspaceId });
+	const run = await asOwner.mutation(api.assistantRuns.startAssistantRun, {
+		workspaceId,
+		chatId: "chat-invalid-decision",
+		assistantMessageId: "chat-invalid-decision-assistant-1",
+		model: "gpt-5",
+		policy: "reject",
+	});
+	await saveUserQuestion({
+		asOwner,
+		assistantMessageId: run.assistantMessageId,
+		chatId: "chat-invalid-decision",
+		question: "Which notes should I search?",
+		workspaceId,
+	});
+
+	await expect(
+		asOwner.mutation(api.assistantRuns.waitForUserDecision, {
+			runId: run._id,
+			pendingDecision: userQuestionDecision(
+				run.assistantMessageId,
+				"A client-modified question",
+			),
+		}),
+	).rejects.toThrow("Stored assistant question does not match");
+
+	const savedRun = await asOwner.query(api.assistantRuns.getAttachableRun, {
+		workspaceId,
+		chatId: "chat-invalid-decision",
+	});
+	expect(savedRun?.status).toBe("running");
+});
+
+test("appended user input resolves the question and resumes its run", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-append-decision", workspaceId });
 	const run = await asOwner.mutation(api.assistantRuns.startAssistantRun, {
 		workspaceId,
@@ -1408,11 +1477,29 @@ test("appended user input resumes a waiting run", async () => {
 		model: "gpt-5",
 		policy: "reject",
 	});
+	await saveUserQuestion({
+		asOwner,
+		assistantMessageId: run.assistantMessageId,
+		chatId: "chat-append-decision",
+		question: "Which scope should I use?",
+		workspaceId,
+	});
 	await asOwner.mutation(api.assistantRuns.waitForUserDecision, {
 		runId: run._id,
-		pendingDecision: {
-			type: "clarify_scope",
-			question: "Which scope should I use?",
+		pendingDecision: userQuestionDecision(
+			run.assistantMessageId,
+			"Which scope should I use?",
+		),
+	});
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "chat-append-decision",
+		message: {
+			id: "msg-user-answer",
+			role: "user",
+			partsJson: JSON.stringify([{ type: "text", text: "Use all notes." }]),
+			text: "Use all notes.",
+			createdAt: 2_002,
 		},
 	});
 
@@ -1426,10 +1513,30 @@ test("appended user input resumes a waiting run", async () => {
 
 	expect(resumedRun.status).toBe("running");
 	expect(resumedRun.pendingDecision).toBeUndefined();
+	const resolvedQuestion = await t.run(async (ctx) => {
+		const chat = await ctx.db.get(resumedRun.chatId);
+		return chat
+			? await ctx.db
+					.query("chatMessages")
+					.withIndex("by_chatId_and_messageId", (q) =>
+						q
+							.eq("chatId", chat._id)
+							.eq("messageId", run.assistantMessageId),
+					)
+					.unique()
+			: null;
+	});
+	expect(JSON.parse(resolvedQuestion?.partsJson ?? "[]")).toEqual([
+		expect.objectContaining({
+			state: "output-available",
+			output: { answered: true },
+		}),
+	]);
 	expect(await listRunEventTypes({ asOwner, runId: run._id })).toEqual([
 		"run.started",
 		"input.requested",
 		"user.message.appended",
+		"input.resolved",
 	]);
 });
 
@@ -1443,12 +1550,19 @@ test("stopping a waiting-for-user run clears the pending decision", async () => 
 		model: "gpt-5",
 		policy: "reject",
 	});
+	await saveUserQuestion({
+		asOwner,
+		assistantMessageId: run.assistantMessageId,
+		chatId: "chat-stop-decision",
+		question: "Which notes should I search?",
+		workspaceId,
+	});
 	await asOwner.mutation(api.assistantRuns.waitForUserDecision, {
 		runId: run._id,
-		pendingDecision: {
-			type: "clarify_scope",
-			question: "Which notes should I search?",
-		},
+		pendingDecision: userQuestionDecision(
+			run.assistantMessageId,
+			"Which notes should I search?",
+		),
 	});
 
 	const stoppingRun = await asOwner.mutation(
@@ -1634,12 +1748,19 @@ test("cleanupExpiredAssistantRuns preserves waiting-for-user runs", async () => 
 		model: "gpt-5",
 		policy: "reject",
 	});
+	await saveUserQuestion({
+		asOwner,
+		assistantMessageId: run.assistantMessageId,
+		chatId: "chat-waiting-expired",
+		question: "Which notes should I search?",
+		workspaceId,
+	});
 	await asOwner.mutation(api.assistantRuns.waitForUserDecision, {
 		runId: run._id,
-		pendingDecision: {
-			type: "clarify_scope",
-			question: "Which notes should I search?",
-		},
+		pendingDecision: userQuestionDecision(
+			run.assistantMessageId,
+			"Which notes should I search?",
+		),
 	});
 	await t.run(async (ctx) => {
 		await ctx.db.patch(run._id, {
@@ -1655,8 +1776,10 @@ test("cleanupExpiredAssistantRuns preserves waiting-for-user runs", async () => 
 	expect(result.expired).toBe(0);
 	const savedRun = await t.run((ctx) => ctx.db.get(run._id));
 	expect(savedRun?.status).toBe("waiting_for_user");
-	expect(savedRun?.pendingDecision).toEqual({
-		type: "clarify_scope",
-		question: "Which notes should I search?",
-	});
+	expect(savedRun?.pendingDecision).toEqual(
+		userQuestionDecision(
+			run.assistantMessageId,
+			"Which notes should I search?",
+		),
+	);
 });

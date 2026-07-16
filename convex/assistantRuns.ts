@@ -19,6 +19,10 @@ import {
 	deleteAssistantRunRuntimeBatch,
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
+import {
+	requireAssistantRunUserQuestion,
+	resolveAssistantRunUserQuestion,
+} from "./assistantRunUserQuestions";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess("assistantRuns");
@@ -283,27 +287,16 @@ export const waitForUserDecision = mutation({
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		if (
+			run.status === "running" &&
+			args.pendingDecision.type === "user_question"
+		) {
+			await requireAssistantRunUserQuestion(ctx, run, args.pendingDecision);
+		}
 
 		return await transitionAssistantRun(ctx, run, {
 			type: "wait_for_user",
 			pendingDecision: args.pendingDecision,
-			phase: args.phase,
-		});
-	},
-});
-
-export const resumeAssistantRunAfterUserDecision = mutation({
-	args: {
-		runId: v.id("assistantRuns"),
-		phase: v.optional(v.string()),
-	},
-	returns: assistantRunValidator,
-	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
-
-		return await transitionAssistantRun(ctx, run, {
-			type: "resume_after_user_decision",
 			phase: args.phase,
 		});
 	},
@@ -331,6 +324,7 @@ export const appendUserMessageToAssistantRun = mutation({
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		await resolveAssistantRunUserQuestion(ctx, run, [args.messageId]);
 
 		return await transitionAssistantRun(ctx, run, {
 			type: "append_user_messages",

@@ -112,6 +112,10 @@ describe("hosted chat run context", () => {
 			webSearchEnabled: false,
 		});
 		expect(context.finalizedToolSet.hasTools).toBe(true);
+		expect(context.agentTools?.request_user_input?.execute).toBeUndefined();
+		expect(context.agentTools?.wait_agent?.execute).toEqual(
+			expect.any(Function),
+		);
 		expect(Object.keys(context.tools)).toEqual(
 			expect.arrayContaining([
 				"create_automation",

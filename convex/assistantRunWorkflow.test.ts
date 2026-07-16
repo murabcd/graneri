@@ -133,6 +133,119 @@ test("step checkpoints are idempotent and accumulate usage once", async () => {
 	});
 });
 
+test("user answers resolve the question and continue the durable workflow", async () => {
+	const { asOwner, chatId, run, t, workspaceId } = await createBackgroundRun();
+	const question = "Which notes should I search?";
+	const partsJson = JSON.stringify([
+		{
+			type: "tool-request_user_input",
+			toolCallId: "question-1",
+			state: "input-available",
+			input: { question },
+		},
+	]);
+	await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		stepIndex: 0,
+		text: "",
+		partsJson,
+		outcome: "waiting_for_user",
+		usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
+		pendingDecision: {
+			type: "user_question",
+			assistantMessageId: run.assistantMessageId,
+			toolCallId: "question-1",
+			question,
+		},
+	});
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.applyStepOutcome, {
+			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+		}),
+	).toBe("waiting_for_user");
+
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: {
+				messageId: "user-answer-1",
+				text: "Search all meeting notes.",
+				requestBodyJson: "{}",
+			},
+		},
+	);
+	const claimedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.claimNextForRun,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
+	);
+	if (!claimedMessage) {
+		throw new Error("Expected the question answer to be claimed.");
+	}
+	const admission = await asOwner.mutation(api.aiAccess.authorizeChatTurn);
+	await asOwner.mutation(api.chats.acceptSteeredUserMessages, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		admissionReservationId: admission.admissionReservationId,
+		nextAssistantMessageId: "assistant-2",
+		messages: [
+			{
+				queuedMessageId: claimedMessage._id,
+				message: {
+					id: "user-answer-1",
+					role: "user",
+					partsJson: JSON.stringify([
+						{ type: "text", text: "Search all meeting notes." },
+					]),
+					text: "Search all meeting notes.",
+					createdAt: 3_000,
+				},
+			},
+		],
+	});
+
+	const state = await t.run(async (ctx) => ({
+		run: await ctx.db.get(run._id),
+		job: await ctx.db
+			.query("assistantRunJobs")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+		stream: await ctx.db
+			.query("chatActiveStreams")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+	}));
+	expect(state.run).toMatchObject({
+		status: "running",
+		assistantMessageId: "assistant-2",
+	});
+	expect(state.run?.pendingDecision).toBeUndefined();
+	expect(state.stream).toMatchObject({ assistantMessageId: "assistant-2" });
+	expect(state.job?.execution).toMatchObject({
+		assistantMessageId: "assistant-2",
+		completedStepCount: 1,
+		usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
+		workflowId: expect.any(String),
+	});
+	const messages = JSON.parse(state.job?.job.messagesJson ?? "[]") as Array<{
+		id: string;
+		parts: Array<{ state?: string; output?: unknown }>;
+	}>;
+	expect(messages.slice(-2)).toMatchObject([
+		{
+			id: run.assistantMessageId,
+			parts: [{ state: "output-available", output: { answered: true } }],
+		},
+		{ id: "user-answer-1" },
+	]);
+});
+
 test("tool execution receipts reuse completed effects and fail closed when ambiguous", async () => {
 	const { run, t } = await createBackgroundRun();
 	const identity = {

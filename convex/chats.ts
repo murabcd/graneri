@@ -28,6 +28,7 @@ import {
 	cleanupAssistantRunToolExecutions,
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
+import { resolveAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import {
 	createAssistantRunStream,
 	getActiveStreamForChat,
@@ -1214,86 +1215,6 @@ export const saveMessage = mutation({
 	},
 });
 
-export const acceptSteeredUserMessage = mutation({
-	args: {
-		workspaceId: v.id("workspaces"),
-		chatId: v.string(),
-		runId: v.id("assistantRuns"),
-		queuedMessageId: v.id("assistantQueuedMessages"),
-		noteId: v.optional(v.id("notes")),
-		title: v.optional(v.string()),
-		preview: v.optional(v.string()),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
-		message: chatMessageInputValidator,
-	},
-	returns: v.object({
-		chat: chatValidator,
-		message: chatMessageValidator,
-	}),
-	handler: async (ctx, args) => {
-		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
-			ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			chatId: args.chatId,
-			runId: args.runId,
-		});
-
-		if (run.status !== "running" && run.status !== "waiting_for_user") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot accept steered user input.",
-			});
-		}
-
-		return await acceptClaimedFollowUps(ctx, {
-			chatId: chat._id,
-			mode: "steer",
-			ownerTokenIdentifier,
-			runId: run._id,
-			workspaceId: args.workspaceId,
-			messages: [
-				{
-					message: args.message,
-					queuedMessageId: args.queuedMessageId,
-				},
-			],
-			commit: async ([queuedMessage]) => {
-				if (!queuedMessage) {
-					throw new ConvexError({
-						code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
-						message: "Claimed follow-up is missing during acceptance.",
-					});
-				}
-				const savedMessage = await saveMessageForOwnerInternal(ctx, {
-					ownerTokenIdentifier,
-					workspaceId: args.workspaceId,
-					authorName: getAuthorName(identity),
-					chatId: args.chatId,
-					noteId: args.noteId,
-					title: args.title,
-					preview: args.preview,
-					model: args.model,
-					reasoningEffort: args.reasoningEffort,
-					message: args.message,
-				});
-				await transitionAssistantRun(ctx, run, {
-					type: "append_user_messages",
-					messages: [
-						{
-							queuedMessageId: queuedMessage._id,
-							messageId: args.message.id,
-						},
-					],
-				});
-				return savedMessage;
-			},
-		});
-	},
-});
-
 export const acceptSteeredUserMessages = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -1406,7 +1327,6 @@ export const acceptSteeredUserMessages = mutation({
 					});
 				}
 			}
-
 			const savedMessages = [];
 			for (const { message } of args.messages) {
 				const savedMessage = await saveMessageForOwnerInternal(ctx, {
@@ -1426,6 +1346,11 @@ export const acceptSteeredUserMessages = mutation({
 					await upsertAssistantRunJobMessage(ctx, run._id, message);
 				}
 			}
+			await resolveAssistantRunUserQuestion(
+				ctx,
+				run,
+				savedMessages.map(({ message }) => message.messageId),
+			);
 
 			const transitionMessages = queuedMessages.map((queuedMessage, index) => {
 				const message = args.messages[index]?.message;

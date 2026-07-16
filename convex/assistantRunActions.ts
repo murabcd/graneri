@@ -21,6 +21,7 @@ import {
 	parseUiMessagesJson,
 	validateUiMessages,
 } from "@workspace/ai/ui-message-codec";
+import { createHostedRequestUserInputTool } from "@workspace/ai/hosted-user-question";
 import {
 	lastAssistantMessageIsCompleteWithToolCalls,
 	stepCountIs,
@@ -296,6 +297,9 @@ export const runStep = internalAction({
 				},
 			);
 			const { agent } = prepareHostedAssistantExecution({
+				additionalAgentTools: {
+					request_user_input: createHostedRequestUserInputTool(),
+				},
 				enabledTools,
 				model: context.model,
 				systemPrompt: context.job.systemPrompt,

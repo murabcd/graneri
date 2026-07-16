@@ -29,24 +29,15 @@ export const toolApprovalPendingDecisionValidator = v.object({
 	toolName: v.string(),
 });
 
+export const userQuestionPendingDecisionValidator = v.object({
+	type: v.literal("user_question"),
+	assistantMessageId: v.string(),
+	toolCallId: v.string(),
+	question: v.string(),
+});
+
 export const pendingDecisionValidator = v.union(
-	v.object({
-		type: v.literal("choose_workspace"),
-		question: v.string(),
-	}),
-	v.object({
-		type: v.literal("choose_note"),
-		question: v.string(),
-	}),
-	v.object({
-		type: v.literal("authorize_source"),
-		source: v.string(),
-		reason: v.string(),
-	}),
-	v.object({
-		type: v.literal("clarify_scope"),
-		question: v.string(),
-	}),
+	userQuestionPendingDecisionValidator,
 	toolApprovalPendingDecisionValidator,
 );
 

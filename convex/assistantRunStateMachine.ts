@@ -38,7 +38,6 @@ type AssistantRunTransition =
 			type: "resume_after_user_decision";
 			assistantMessageId?: string;
 			approved?: boolean;
-			phase?: string;
 	  }
 	| { type: "append_user_messages"; messages: AppendedUserMessage[] }
 	| { type: "complete" }
@@ -248,7 +247,7 @@ export const transitionAssistantRun = async (
 					transition.assistantMessageId ?? run.assistantMessageId,
 				status: "running",
 				pendingDecision: undefined,
-				phase: transition.phase,
+				phase: undefined,
 				updatedAt: now,
 			});
 
@@ -256,6 +255,14 @@ export const transitionAssistantRun = async (
 			if (run.status !== "running" && run.status !== "waiting_for_user") {
 				return invalidTransition(
 					"Assistant run cannot accept steered user input.",
+				);
+			}
+			if (
+				run.status === "waiting_for_user" &&
+				run.pendingDecision?.type !== "user_question"
+			) {
+				return invalidTransition(
+					"Assistant run is waiting for a different user decision.",
 				);
 			}
 			for (const message of transition.messages) {
@@ -272,6 +279,10 @@ export const transitionAssistantRun = async (
 				});
 			}
 			if (run.status === "waiting_for_user") {
+				await appendAssistantRunEvent(ctx, run, {
+					type: "input.resolved",
+					decisionType: "user_question",
+				});
 				return await patchAndReloadRun(ctx, run, {
 					status: "running",
 					pendingDecision: undefined,

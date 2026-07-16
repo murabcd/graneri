@@ -85,6 +85,10 @@
       "types": "./src/hosted-chat-turn.d.mts",
       "import": "./src/hosted-chat-turn.mjs"
     },
+    "./hosted-user-question": {
+      "types": "./src/hosted-user-question.d.mts",
+      "import": "./src/hosted-user-question.mjs"
+    },
     "./hosted-route-catalog": {
       "types": "./src/hosted-route-catalog.d.mts",
       "import": "./src/hosted-route-catalog.mjs"

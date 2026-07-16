@@ -177,6 +177,36 @@ describe("hosted assistant run finalizer", () => {
 		]);
 	});
 
+	it("saves, closes, and pauses runs with a pending user question", async () => {
+		const harness = createFinalizerHarness();
+
+		await harness.finalizeAssistantRun({
+			pendingDecision: {
+				type: "user_question",
+				assistantMessageId: "assistant-message-1",
+				toolCallId: "question-1",
+				question: "Which notes should I search?",
+			},
+			responseMessage: createMessage(),
+			status: "waiting_for_user",
+		});
+
+		expect(harness.waitForUserDecision).toHaveBeenCalledWith({
+			pendingDecision: expect.objectContaining({
+				type: "user_question",
+				toolCallId: "question-1",
+			}),
+			runId: "assistant-run-1",
+		});
+		expect(harness.calls).toEqual([
+			"saveAssistantMessageForRun",
+			"closePersistence",
+			"waitForUserDecision",
+			"onWaitingForUser",
+			"cleanup",
+		]);
+	});
+
 	it("cleans up without finishing when the assistant message was already terminal", async () => {
 		const harness = createFinalizerHarness();
 		harness.saveAssistantMessageForRun.mockImplementationOnce(async () => {

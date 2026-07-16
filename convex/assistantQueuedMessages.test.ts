@@ -38,6 +38,13 @@ type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
 type AsOwner = WorkspaceFixture["asOwner"];
 type WorkspaceId = WorkspaceFixture["workspaceId"];
 
+const userQuestionDecision = (assistantMessageId: string, question: string) => ({
+	type: "user_question" as const,
+	assistantMessageId,
+	toolCallId: `${assistantMessageId}-question`,
+	question,
+});
+
 const createChat = async ({
 	asOwner,
 	chatId,
@@ -517,12 +524,30 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 		runId: waitingRun._id,
 		message: queuedMessageInput("queued-waiting", "Wait"),
 	});
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "chat-non-running-claim",
+		message: {
+			id: waitingRun.assistantMessageId,
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{
+					type: "tool-request_user_input",
+					toolCallId: `${waitingRun.assistantMessageId}-question`,
+					state: "input-available",
+					input: { question: "Clarify scope" },
+				},
+			]),
+			text: "",
+			createdAt: 2_001,
+		},
+	});
 	await asOwner.mutation(api.assistantRuns.waitForUserDecision, {
 		runId: waitingRun._id,
-		pendingDecision: {
-			type: "clarify_scope",
-			question: "Clarify scope",
-		},
+		pendingDecision: userQuestionDecision(
+			waitingRun.assistantMessageId,
+			"Clarify scope",
+		),
 	});
 
 	const waitingClaim = await asOwner.mutation(

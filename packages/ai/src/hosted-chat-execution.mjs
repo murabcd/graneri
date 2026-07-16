@@ -1,5 +1,6 @@
 import { createAgentUIStream, readUIMessageStream } from "ai";
 import { createHostedChatAgent } from "./hosted-chat-agent.mjs";
+import { getHostedUserQuestionRequest } from "./hosted-user-question.mjs";
 import { getToolApprovalRequest } from "./tool-approval-state.mjs";
 
 export const prepareHostedAssistantExecution = (settings) =>
@@ -13,6 +14,12 @@ export const getHostedAssistantExecutionOutcome = ({
 		return { responseMessage, status: "aborted" };
 	}
 	const approvalRequest = getToolApprovalRequest(responseMessage);
+	const userQuestion = getHostedUserQuestionRequest(responseMessage);
+	if (approvalRequest && userQuestion) {
+		throw new Error(
+			"Assistant execution requested approval and user input in one step.",
+		);
+	}
 	if (approvalRequest) {
 		return {
 			pendingDecision: {
@@ -22,6 +29,13 @@ export const getHostedAssistantExecutionOutcome = ({
 				toolCallId: approvalRequest.toolCallId,
 				toolName: approvalRequest.toolName,
 			},
+			responseMessage,
+			status: "waiting_for_user",
+		};
+	}
+	if (userQuestion) {
+		return {
+			pendingDecision: userQuestion,
 			responseMessage,
 			status: "waiting_for_user",
 		};

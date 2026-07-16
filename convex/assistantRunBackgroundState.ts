@@ -21,9 +21,9 @@ import {
 import {
 	pendingDecisionValidator,
 	reasoningEffortValidator,
-	toolApprovalPendingDecisionValidator,
 } from "./assistantRunModel";
 import { transitionAssistantRun } from "./assistantRunStateMachine";
+import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import {
 	getActiveStreamForRun,
 	updateAssistantRunStream,
@@ -46,9 +46,7 @@ const backgroundRunContextValidator = v.union(
 	v.null(),
 );
 
-type ToolApprovalPendingDecision = Infer<
-	typeof toolApprovalPendingDecisionValidator
->;
+type PendingDecision = Infer<typeof pendingDecisionValidator>;
 
 const getFinalizationContext = async (
 	ctx: MutationCtx,
@@ -110,10 +108,10 @@ const completeRun = async (ctx: MutationCtx, run: Doc<"assistantRuns">) => {
 	return true;
 };
 
-const waitForToolApproval = async (
+const waitForUserDecision = async (
 	ctx: MutationCtx,
 	run: Doc<"assistantRuns">,
-	pendingDecision: ToolApprovalPendingDecision,
+	pendingDecision: PendingDecision,
 ) => {
 	if (pendingDecision.assistantMessageId !== run.assistantMessageId) {
 		return false;
@@ -122,11 +120,14 @@ const waitForToolApproval = async (
 	if (!context) {
 		await transitionAssistantRun(ctx, run, {
 			type: "fail",
-			errorText: "Assistant approval request could not be persisted.",
+			errorText: "Assistant user decision could not be persisted.",
 		});
 		return false;
 	}
 	await saveActiveAssistantMessage(ctx, run, context);
+	if (pendingDecision.type === "user_question") {
+		await requireAssistantRunUserQuestion(ctx, run, pendingDecision);
+	}
 	await upsertAssistantRunJobMessage(ctx, run._id, {
 		id: run.assistantMessageId,
 		role: "assistant",
@@ -135,7 +136,7 @@ const waitForToolApproval = async (
 	await transitionAssistantRun(ctx, run, {
 		type: "wait_for_user",
 		pendingDecision,
-		phase: "tool_approval",
+		phase: pendingDecision.type,
 	});
 	return true;
 };
@@ -321,14 +322,14 @@ export const applyStepOutcome = internalMutation({
 				);
 			}
 		} else if (checkpoint.outcome === "waiting_for_user") {
-			if (checkpoint.pendingDecision?.type !== "tool_approval") {
+			if (!checkpoint.pendingDecision) {
 				await transitionAssistantRun(ctx, run, {
 					type: "fail",
 					errorText: "Assistant run paused without a supported decision.",
 				});
 				return "completed";
 			}
-			await waitForToolApproval(ctx, run, checkpoint.pendingDecision);
+			await waitForUserDecision(ctx, run, checkpoint.pendingDecision);
 		}
 		return checkpoint.outcome;
 	},

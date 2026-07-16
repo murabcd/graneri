@@ -32,6 +32,7 @@ import type * as assistantRunScheduling from "../assistantRunScheduling.js";
 import type * as assistantRunStateMachine from "../assistantRunStateMachine.js";
 import type * as assistantRunStreamState from "../assistantRunStreamState.js";
 import type * as assistantRunToolExecutions from "../assistantRunToolExecutions.js";
+import type * as assistantRunUserQuestions from "../assistantRunUserQuestions.js";
 import type * as assistantRunWorkflow from "../assistantRunWorkflow.js";
 import type * as assistantRunWorkflowManager from "../assistantRunWorkflowManager.js";
 import type * as assistantRuns from "../assistantRuns.js";
@@ -113,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   assistantRunStateMachine: typeof assistantRunStateMachine;
   assistantRunStreamState: typeof assistantRunStreamState;
   assistantRunToolExecutions: typeof assistantRunToolExecutions;
+  assistantRunUserQuestions: typeof assistantRunUserQuestions;
   assistantRunWorkflow: typeof assistantRunWorkflow;
   assistantRunWorkflowManager: typeof assistantRunWorkflowManager;
   assistantRuns: typeof assistantRuns;

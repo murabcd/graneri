@@ -19,7 +19,7 @@ const createTextStream = () =>
 	});
 
 describe("hosted assistant execution", () => {
-	it("classifies completion and approval outcomes", () => {
+	it("classifies completion, approval, and question outcomes", () => {
 		const completedMessage = {
 			id: "assistant-1",
 			role: "assistant" as const,
@@ -59,6 +59,60 @@ describe("hosted assistant execution", () => {
 				toolName: "delete_note",
 			},
 		});
+
+		const questionMessage = {
+			id: "assistant-3",
+			role: "assistant" as const,
+			parts: [
+				{
+					type: "tool-request_user_input" as const,
+					state: "input-available" as const,
+					toolCallId: "call-2",
+					input: { question: "Which workspace should I use?" },
+				},
+			],
+		};
+		expect(
+			getHostedAssistantExecutionOutcome({
+				isAborted: false,
+				responseMessage: questionMessage,
+			}),
+		).toMatchObject({
+			status: "waiting_for_user",
+			pendingDecision: {
+				type: "user_question",
+				assistantMessageId: "assistant-3",
+				toolCallId: "call-2",
+				question: "Which workspace should I use?",
+			},
+		});
+	});
+
+	it("rejects mixed human-blocking decisions in one step", () => {
+		expect(() =>
+			getHostedAssistantExecutionOutcome({
+				isAborted: false,
+				responseMessage: {
+					id: "assistant-mixed",
+					role: "assistant",
+					parts: [
+						{
+							type: "tool-delete_note",
+							state: "approval-requested",
+							toolCallId: "approval-call",
+							input: { noteId: "note-1" },
+							approval: { id: "approval-1" },
+						},
+						{
+							type: "tool-request_user_input",
+							state: "input-available",
+							toolCallId: "question-call",
+							input: { question: "Which scope should I use?" },
+						},
+					],
+				},
+			}),
+		).toThrow("approval and user input");
 	});
 
 	it("consumes rich message snapshots and returns the final snapshot", async () => {
