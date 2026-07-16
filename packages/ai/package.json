@@ -69,6 +69,10 @@
       "types": "./src/dictation-transcription.d.mts",
       "import": "./src/dictation-transcription.mjs"
     },
+    "./hosted-assistant-execution": {
+      "types": "./src/hosted-chat-execution.d.mts",
+      "import": "./src/hosted-chat-execution.mjs"
+    },
     "./hosted-chat-http": {
       "types": "./src/hosted-chat-http.d.mts",
       "import": "./src/hosted-chat-http.mjs"

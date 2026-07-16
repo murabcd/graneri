@@ -25,6 +25,7 @@ import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import {
 	cleanupAssistantRunSnapshots,
+	cleanupAssistantRunToolExecutions,
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
 import {
@@ -374,6 +375,11 @@ const deleteChatRuntimeBatch = async (
 		runs.map((run) => deleteRunEventsBatch(ctx, run._id)),
 	);
 	const deletableRuns = runs.filter((_, index) => !eventBatchesHaveMore[index]);
+	await Promise.all(
+		deletableRuns.map((run) =>
+			cleanupAssistantRunToolExecutions(ctx, run._id),
+		),
+	);
 
 	await Promise.all([
 		...activeStreams.map((stream) => ctx.db.delete(stream._id)),

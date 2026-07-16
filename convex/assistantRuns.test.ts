@@ -1,3 +1,4 @@
+import workflowTest from "@convex-dev/workflow/test";
 import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -15,6 +16,7 @@ const ownerIdentity = {
 
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
+	workflowTest.register(t);
 	const asOwner = t.withIdentity(ownerIdentity);
 
 	const workspaceId = await t.run(async (ctx) =>
@@ -257,11 +259,23 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 		}),
 	).toBe(true);
 	expect(
-		await t.mutation(internal.assistantRunBackgroundState.complete, {
+		await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
 			runId: run._id,
 			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+			text: "Background answer.",
+			partsJson,
+			outcome: "completed",
+			usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
 		}),
 	).toBe(true);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.applyStepOutcome, {
+			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+		}),
+	).toBe("completed");
 	expect(
 		await t.mutation(internal.chats.updateTitleForCompletedRun, {
 			runId: run._id,
@@ -356,8 +370,14 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 	});
 
 	expect(
-		await t.mutation(internal.assistantRunBackgroundState.waitForUser, {
+		await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
 			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+			text: "",
+			partsJson: JSON.stringify([approvalRequest]),
+			outcome: "waiting_for_user",
+			usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
 			pendingDecision: {
 				type: "tool_approval",
 				approvalId: "approval-1",
@@ -367,6 +387,13 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 			},
 		}),
 	).toBe(true);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.applyStepOutcome, {
+			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+		}),
+	).toBe("waiting_for_user");
 	const waitingState = await t.run(async (ctx) => ({
 		run: await ctx.db.get(run._id),
 		streamCount: (await ctx.db.query("chatActiveStreams").collect()).length,
@@ -438,14 +465,6 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 		id: run.assistantMessageId,
 		parts: [expect.objectContaining({ state: "approval-responded" })],
 	});
-	await t.mutation(internal.assistantRunBackground.expire, {
-		runId: run._id,
-		assistantMessageId: run.assistantMessageId,
-	});
-	expect(await t.run(async (ctx) => (await ctx.db.get(run._id))?.status)).toBe(
-		"running",
-	);
-
 	await t.mutation(internal.assistantRunBackgroundState.fail, {
 		runId: run._id,
 		errorText: "Approval continuation failed.",
@@ -593,12 +612,6 @@ test("background steering checkpoints the interrupted generation and continues t
 			assistantMessageId: "msg-assistant-before-steer",
 			text: "Stale answer",
 			partsJson: JSON.stringify([{ type: "text", text: "Stale answer" }]),
-		}),
-	).toBe(false);
-	expect(
-		await t.mutation(internal.assistantRunBackgroundState.complete, {
-			runId: run._id,
-			assistantMessageId: "msg-assistant-before-steer",
 		}),
 	).toBe(false);
 	await t.mutation(internal.assistantRunBackgroundState.fail, {

@@ -311,6 +311,21 @@ test("branching from an edited message preserves the replaced branch", async () 
 			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
 		},
 	});
+	await t.run(async (ctx) =>
+		ctx.db.insert("assistantRunToolExecutions", {
+			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+			ordinal: 0,
+			toolCallId: "tool-call-1",
+			toolName: "search",
+			inputJson: "{}",
+			status: "completed",
+			outputJson: "{\"hasValue\":true,\"value\":{}}",
+			createdAt: 2_000,
+			updatedAt: 2_000,
+		}),
+	);
 	await asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
 		runId: run._id,
 		queuedMessageId: queuedMessage._id,
@@ -1516,6 +1531,11 @@ test("removing a chat deletes assistant run runtime records", async () => {
 				model: "gpt-5.4",
 				reasoningEffort: "medium",
 			},
+			execution: {
+				assistantMessageId: run.assistantMessageId,
+				completedStepCount: 0,
+				usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+			},
 			createdAt: 2_000,
 			updatedAt: 2_000,
 		}),
@@ -1550,6 +1570,9 @@ test("removing a chat deletes assistant run runtime records", async () => {
 		toolCalls: await ctx.db.query("chatToolCalls").take(1),
 		jobs: await ctx.db.query("assistantRunJobs").take(1),
 		runs: await ctx.db.query("assistantRuns").take(1),
+		toolExecutions: await ctx.db
+			.query("assistantRunToolExecutions")
+			.take(1),
 	}));
 
 	expect(rows.activeStreams).toHaveLength(0);
@@ -1558,6 +1581,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 	expect(rows.toolCalls).toHaveLength(0);
 	expect(rows.jobs).toHaveLength(0);
 	expect(rows.runs).toHaveLength(0);
+	expect(rows.toolExecutions).toHaveLength(0);
 });
 
 test("removing a chat fails closed on malformed attachment storage ids", async () => {

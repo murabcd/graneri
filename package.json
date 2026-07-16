@@ -50,13 +50,14 @@
     "packages/*"
   ],
   "dependencies": {
-    "@workspace/ai": "workspace:*",
     "@ai-sdk/mcp": "^1.0.42",
     "@ai-sdk/openai": "3.0.63",
     "@ai-sdk/react": "3.0.184",
     "@convex-dev/better-auth": "^0.11.3",
+    "@convex-dev/workflow": "0.4.4",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
+    "@workspace/ai": "workspace:*",
     "ai": "6.0.182",
     "bash-tool": "^1.3.16",
     "better-auth": "1.5.5",

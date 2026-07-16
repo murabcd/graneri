@@ -13,7 +13,7 @@ import {
 import {
 	prepareHostedAssistantExecution,
 	startHostedAssistantExecution,
-} from "@workspace/ai/hosted-chat-turn";
+} from "@workspace/ai/hosted-assistant-execution";
 import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
 import { getChatModelProviderOptions } from "@workspace/ai/models";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
@@ -21,17 +21,30 @@ import {
 	parseUiMessagesJson,
 	validateUiMessages,
 } from "@workspace/ai/ui-message-codec";
-import type { InferAgentUIMessage, ToolSet, UIMessage } from "ai";
+import {
+	lastAssistantMessageIsCompleteWithToolCalls,
+	stepCountIs,
+	type InferAgentUIMessage,
+	type LanguageModelUsage,
+	type ToolSet,
+	type UIMessage,
+} from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalAction, type ActionCtx } from "./_generated/server";
 import { createAssistantRunAutomationActions } from "./assistantRunAutomationActions";
 import { createAssistantRunGeneratedImageUploader } from "./assistantRunGeneratedImage";
-import type { AssistantRunJob } from "./assistantRunJobModel";
+import type {
+	AssistantRunJob,
+	AssistantRunStepOutcome,
+	AssistantRunStepUsage,
+} from "./assistantRunJobModel";
+import { assistantRunStepOutcomeValidator } from "./assistantRunJobModel";
 import { buildServerWorkspaceTools } from "./serverWorkspaceTools";
 
 const SNAPSHOT_FLUSH_INTERVAL_MS = 250;
-const BACKGROUND_RUN_TIMEOUT_MS = 9 * 60 * 1000;
+const BACKGROUND_STEP_TIMEOUT_MS = 9 * 60 * 1000;
 
 class BackgroundRunStoppedError extends Error {
 	constructor() {
@@ -50,6 +63,46 @@ const parseMessages = async <Message extends UIMessage>(
 const getErrorText = (error: unknown) =>
 	error instanceof Error ? error.message : "Unknown assistant run error";
 
+const canonicalizeJson = (value: unknown): unknown => {
+	if (Array.isArray(value)) {
+		return value.map(canonicalizeJson);
+	}
+	if (value !== null && typeof value === "object") {
+		return Object.fromEntries(
+			Object.entries(value)
+				.sort(([left], [right]) => left.localeCompare(right))
+				.map(([key, entry]) => [key, canonicalizeJson(entry)]),
+		);
+	}
+	return value;
+};
+
+const serializeToolInput = (input: unknown) =>
+	JSON.stringify(canonicalizeJson(input));
+
+const serializeToolOutput = (output: unknown) =>
+	JSON.stringify({ hasValue: output !== undefined, value: output ?? null });
+
+const parseToolOutput = (outputJson: string) => {
+	const envelope = JSON.parse(outputJson) as {
+		hasValue?: boolean;
+		value?: unknown;
+	};
+	return envelope.hasValue ? envelope.value : undefined;
+};
+
+const getToolCallId = (options: unknown, fallback: string) => {
+	if (
+		options !== null &&
+		typeof options === "object" &&
+		"toolCallId" in options &&
+		typeof options.toolCallId === "string"
+	) {
+		return options.toolCallId;
+	}
+	return fallback;
+};
+
 type UnknownToolExecute = (
 	input: unknown,
 	options: unknown,
@@ -57,9 +110,16 @@ type UnknownToolExecute = (
 
 const guardExecutableTools = (
 	tools: ToolSet,
-	requireActiveRun: () => Promise<void>,
-): ToolSet =>
-	Object.fromEntries(
+	args: {
+		runId: Id<"assistantRuns">;
+		assistantMessageId: string;
+		stepIndex: number;
+		requireActiveRun: () => Promise<void>;
+		runMutation: ActionCtx["runMutation"];
+	},
+): ToolSet => {
+	let nextOrdinal = 0;
+	return Object.fromEntries(
 		Object.entries(tools).map(([name, tool]) => {
 			if (!tool.execute) {
 				return [name, tool];
@@ -71,32 +131,95 @@ const guardExecutableTools = (
 				{
 					...tool,
 					execute: async (input: unknown, options: unknown) => {
-						await requireActiveRun();
-						const result = await execute(input, options);
-						await requireActiveRun();
-						return result;
+						const ordinal = nextOrdinal++;
+						const toolCallId = getToolCallId(
+							options,
+							`${args.assistantMessageId}:${args.stepIndex}:${ordinal}`,
+						);
+						const inputJson = serializeToolInput(input);
+						const identity = {
+							runId: args.runId,
+							assistantMessageId: args.assistantMessageId,
+							stepIndex: args.stepIndex,
+							ordinal,
+							toolCallId,
+							toolName: name,
+							inputJson,
+						};
+						await args.requireActiveRun();
+						const claim = (await args.runMutation(
+							internal.assistantRunToolExecutions.claim,
+							identity,
+						)) as
+							| { type: "execute" }
+							| { type: "reuse"; outputJson: string }
+							| { type: "failed"; errorText: string };
+						if (claim.type === "reuse") {
+							return parseToolOutput(claim.outputJson);
+						}
+						if (claim.type === "failed") {
+							throw new Error(claim.errorText);
+						}
+
+						try {
+							const result = await execute(input, options);
+							await args.runMutation(
+								internal.assistantRunToolExecutions.complete,
+								{ ...identity, outputJson: serializeToolOutput(result) },
+							);
+							await args.requireActiveRun();
+							return result;
+						} catch (error) {
+							await args.runMutation(
+								internal.assistantRunToolExecutions.fail,
+								{ ...identity, errorText: getErrorText(error) },
+							);
+							throw error;
+						}
 					},
 				},
 			];
 		}),
 	) as ToolSet;
+};
 
-export const run = internalAction({
+const toStepUsage = (
+	usage: LanguageModelUsage | undefined,
+): AssistantRunStepUsage => ({
+	inputTokens: usage?.inputTokens ?? 0,
+	outputTokens: usage?.outputTokens ?? 0,
+	totalTokens: usage?.totalTokens ?? 0,
+});
+
+const actionResultValidator = v.object({
+	outcome: v.union(assistantRunStepOutcomeValidator, v.literal("stale")),
+});
+
+type AssistantRunStepActionResult = {
+	outcome: AssistantRunStepOutcome | "stale";
+};
+
+export const runStep = internalAction({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+		stepIndex: v.number(),
 	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
+	returns: actionResultValidator,
+	handler: async (ctx, args): Promise<AssistantRunStepActionResult> => {
 		const context = await ctx.runQuery(
 			internal.assistantRunBackgroundState.getRunnableContext,
-			{ runId: args.runId },
+			args,
 		);
 		if (!context) {
-			await ctx.runMutation(internal.assistantRunBackgroundState.fail, {
-				runId: args.runId,
-				errorText: "Assistant run background job was not found.",
-			});
-			return null;
+			return { outcome: "stale" } as const;
+		}
+		const existingCheckpoint = context.execution.lastCheckpoint;
+		if (existingCheckpoint?.stepIndex === args.stepIndex) {
+			return { outcome: existingCheckpoint.outcome };
+		}
+		if (context.execution.completedStepCount !== args.stepIndex) {
+			return { outcome: "stale" } as const;
 		}
 
 		try {
@@ -128,12 +251,9 @@ export const run = internalAction({
 			const requireActiveRun = async () => {
 				const activeContext = await ctx.runQuery(
 					internal.assistantRunBackgroundState.getRunnableContext,
-					{ runId: args.runId },
+					args,
 				);
-				if (
-					!activeContext ||
-					activeContext.assistantMessageId !== context.assistantMessageId
-				) {
+				if (!activeContext) {
 					throw new BackgroundRunStoppedError();
 				}
 			};
@@ -167,7 +287,13 @@ export const run = internalAction({
 					...automationContext.tools,
 					...appTools,
 				},
-				requireActiveRun,
+				{
+					runId: args.runId,
+					assistantMessageId: args.assistantMessageId,
+					stepIndex: args.stepIndex,
+					requireActiveRun,
+					runMutation: ctx.runMutation.bind(ctx),
+				},
 			);
 			const { agent } = prepareHostedAssistantExecution({
 				enabledTools,
@@ -182,18 +308,20 @@ export const run = internalAction({
 						context.ownerTokenIdentifier,
 					),
 				}),
+				stopWhen: stepCountIs(1),
 			});
 			const messages = await parseMessages<InferAgentUIMessage<typeof agent>>(
 				context.job,
 			);
 			await requireActiveRun();
 			let lastFlushAt = 0;
+			let stepUsage: LanguageModelUsage | undefined;
 			const persistSnapshot = async (message: UIMessage) => {
 				const persisted = await ctx.runMutation(
 					internal.assistantRunBackgroundState.replaceSnapshot,
 					{
 						runId: args.runId,
-						assistantMessageId: context.assistantMessageId,
+						assistantMessageId: args.assistantMessageId,
 						text: getHostedChatMessageText(message),
 						partsJson: JSON.stringify(message.parts),
 					},
@@ -206,9 +334,12 @@ export const run = internalAction({
 
 			const execution = await startHostedAssistantExecution({
 				agent,
-				assistantMessageId: context.assistantMessageId,
+				assistantMessageId: args.assistantMessageId,
 				messages,
-				timeout: { totalMs: BACKGROUND_RUN_TIMEOUT_MS },
+				timeout: { totalMs: BACKGROUND_STEP_TIMEOUT_MS },
+				onStepFinish: (step) => {
+					stepUsage = step.usage;
+				},
 				delivery: {
 					mode: "consume",
 					onMessage: async (message) => {
@@ -221,62 +352,78 @@ export const run = internalAction({
 
 			const { outcome: executionOutcome } = execution;
 			const { responseMessage } = executionOutcome;
-			await persistSnapshot(responseMessage);
 			if (executionOutcome.status === "aborted") {
-				throw new Error("Assistant run exceeded its execution timeout.");
+				throw new Error("Assistant step exceeded its execution timeout.");
 			}
-
+			let outcome: AssistantRunStepOutcome;
 			if (executionOutcome.status === "waiting_for_user") {
-				await ctx.runMutation(
-					internal.assistantRunBackgroundState.waitForUser,
-					{
-						runId: args.runId,
-						pendingDecision: executionOutcome.pendingDecision,
-					},
-				);
-				return null;
+				outcome = "waiting_for_user";
+			} else if (
+				lastAssistantMessageIsCompleteWithToolCalls({
+					messages: [responseMessage],
+				})
+			) {
+				outcome = "continue";
+			} else {
+				outcome = "completed";
 			}
 
-			const completed = await ctx.runMutation(
-				internal.assistantRunBackgroundState.complete,
+			const checkpointed = await ctx.runMutation(
+				internal.assistantRunBackgroundState.checkpointStep,
 				{
 					runId: args.runId,
-					assistantMessageId: context.assistantMessageId,
+					assistantMessageId: args.assistantMessageId,
+					stepIndex: args.stepIndex,
+					text: getHostedChatMessageText(responseMessage),
+					partsJson: JSON.stringify(responseMessage.parts),
+					outcome,
+					usage: toStepUsage(stepUsage),
+					pendingDecision:
+						executionOutcome.status === "waiting_for_user"
+							? executionOutcome.pendingDecision
+							: undefined,
 				},
 			);
-			if (completed && context.job.shouldGenerateChatTitle) {
-				const lastUserMessage = [...messages]
-					.reverse()
-					.find((message) => message.role === "user");
-				if (lastUserMessage) {
-					try {
-						const title = await generateHostedChatTitle({
-							assistantMessage: responseMessage,
-							safetyIdentifier: await createSafetyIdentifier(
-								context.ownerTokenIdentifier,
-							),
-							userMessage: lastUserMessage,
-						});
-						await ctx.runMutation(internal.chats.updateTitleForCompletedRun, {
-							runId: args.runId,
-							title,
-						});
-					} catch (error) {
-						console.error("Failed to generate background chat title.", error);
-					}
-				}
-			}
+			return { outcome: checkpointed ? outcome : "stale" };
 		} catch (error) {
 			if (error instanceof BackgroundRunStoppedError) {
-				return null;
+				return { outcome: "stale" } as const;
 			}
-			await ctx.runMutation(internal.assistantRunBackgroundState.fail, {
-				runId: args.runId,
-				assistantMessageId: context.assistantMessageId,
-				errorText: getErrorText(error),
-			});
+			throw error;
 		}
+	},
+});
 
-		return null;
+export const generateTitle = internalAction({
+	args: {
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args): Promise<string | null> => {
+		const context = await ctx.runQuery(
+			internal.assistantRunBackgroundState.getRunnableContext,
+			args,
+		);
+		if (!context?.job.shouldGenerateChatTitle) {
+			return null;
+		}
+		const messages = await parseMessages(context.job);
+		const assistantMessage = [...messages]
+			.reverse()
+			.find((message) => message.role === "assistant");
+		const userMessage = [...messages]
+			.reverse()
+			.find((message) => message.role === "user");
+		if (!assistantMessage || !userMessage) {
+			return null;
+		}
+		return await generateHostedChatTitle({
+			assistantMessage,
+			safetyIdentifier: await createSafetyIdentifier(
+				context.ownerTokenIdentifier,
+			),
+			userMessage,
+		});
 	},
 });

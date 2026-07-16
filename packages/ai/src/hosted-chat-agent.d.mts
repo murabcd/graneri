@@ -1,5 +1,10 @@
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
-import type { PrepareStepFunction, ToolLoopAgent, ToolSet } from "ai";
+import type {
+	PrepareStepFunction,
+	StopCondition,
+	ToolLoopAgent,
+	ToolSet,
+} from "ai";
 
 export declare const buildHostedChatAgentToolSet: ({
 	additionalAgentTools,
@@ -26,6 +31,7 @@ export declare const createHostedChatAgent: ({
 	model,
 	prepareStep,
 	providerOptions,
+	stopWhen,
 	systemPrompt,
 }: {
 	additionalAgentTools?: ToolSet | undefined;
@@ -34,6 +40,7 @@ export declare const createHostedChatAgent: ({
 	model: string;
 	prepareStep?: PrepareStepFunction<ToolSet> | undefined;
 	providerOptions?: ProviderOptions | undefined;
+	stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
 	systemPrompt: string;
 }) => {
 	agent: ToolLoopAgent<never, ToolSet, never>;

@@ -1,7 +1,9 @@
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type {
 	PrepareStepFunction,
+	StopCondition,
 	ToolLoopAgent,
+	ToolLoopAgentOnStepFinishCallback,
 	ToolSet,
 	UIMessage,
 	UIMessageChunk,
@@ -19,6 +21,7 @@ export declare const prepareHostedAssistantExecution: (settings: {
 	model: string;
 	prepareStep?: PrepareStepFunction<ToolSet>;
 	providerOptions?: ProviderOptions;
+	stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
 	systemPrompt: string;
 }) => {
 	agent: ToolLoopAgent<never, ToolSet, never>;
@@ -56,9 +59,11 @@ type HostedAssistantExecutionStreamOptions = {
 			responseMessage: UIMessage;
 		}) => void;
 		onError?: () => string;
+		onStepFinish?: ToolLoopAgentOnStepFinishCallback<ToolSet>;
 	}) => Promise<ReadableStream<UIMessageChunk>>;
 	messages: UIMessage[];
 	onError?: () => string;
+	onStepFinish?: ToolLoopAgentOnStepFinishCallback<ToolSet>;
 	timeout?: { totalMs: number };
 };
 

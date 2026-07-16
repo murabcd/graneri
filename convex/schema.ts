@@ -1,7 +1,10 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
-import { assistantRunJobValidator } from "./assistantRunJobModel";
+import {
+	assistantRunExecutionValidator,
+	assistantRunJobValidator,
+} from "./assistantRunJobModel";
 import {
 	assistantRunProducerValidator,
 	assistantRunStatusValidator,
@@ -622,9 +625,35 @@ export default defineSchema({
 		runId: v.id("assistantRuns"),
 		authorName: v.string(),
 		job: assistantRunJobValidator,
+		execution: assistantRunExecutionValidator,
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_runId", ["runId"]),
+	assistantRunToolExecutions: defineTable({
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+		stepIndex: v.number(),
+		ordinal: v.number(),
+		toolCallId: v.string(),
+		toolName: v.string(),
+		inputJson: v.string(),
+		status: v.union(
+			v.literal("executing"),
+			v.literal("completed"),
+			v.literal("failed"),
+		),
+		outputJson: v.optional(v.string()),
+		errorText: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_runId", ["runId"])
+		.index("by_runId_and_message_and_step_and_ordinal", [
+			"runId",
+			"assistantMessageId",
+			"stepIndex",
+			"ordinal",
+		]),
 	assistantQueuedMessages: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

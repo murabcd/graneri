@@ -69,6 +69,24 @@ const requireSavedRun = async (
 	return run;
 };
 
+export const cleanupAssistantRunToolExecutions = async (
+	ctx: MutationCtx,
+	runId: Id<"assistantRuns">,
+) => {
+	const toolExecutionIds: Array<Id<"assistantRunToolExecutions">> = [];
+	for await (const toolExecution of ctx.db
+		.query("assistantRunToolExecutions")
+		.withIndex("by_runId", (q) => q.eq("runId", runId))) {
+		toolExecutionIds.push(toolExecution._id);
+	}
+
+	await Promise.all(
+		toolExecutionIds.map((toolExecutionId) =>
+			ctx.db.delete(toolExecutionId),
+		),
+	);
+};
+
 export const cleanupAssistantRunSnapshots = async (
 	ctx: MutationCtx,
 	runId: Id<"assistantRuns">,
@@ -86,10 +104,10 @@ export const cleanupAssistantRunSnapshots = async (
 		.withIndex("by_runId", (q) => q.eq("runId", runId))) {
 		toolCallIds.push(toolCall._id);
 	}
-
 	await Promise.all([
 		...streamIds.map((streamId) => ctx.db.delete(streamId)),
 		...toolCallIds.map((toolCallId) => ctx.db.delete(toolCallId)),
+		cleanupAssistantRunToolExecutions(ctx, runId),
 	]);
 };
 

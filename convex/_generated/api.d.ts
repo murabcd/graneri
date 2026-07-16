@@ -14,6 +14,7 @@ import type * as aiRateLimits from "../aiRateLimits.js";
 import type * as appConnectionActions from "../appConnectionActions.js";
 import type * as appConnectionProviders from "../appConnectionProviders.js";
 import type * as appConnections from "../appConnections.js";
+import type * as assistantQueuedMessageStateMachine from "../assistantQueuedMessageStateMachine.js";
 import type * as assistantQueuedMessages from "../assistantQueuedMessages.js";
 import type * as assistantRunActions from "../assistantRunActions.js";
 import type * as assistantRunAutomationActions from "../assistantRunAutomationActions.js";
@@ -30,6 +31,9 @@ import type * as assistantRunModel from "../assistantRunModel.js";
 import type * as assistantRunScheduling from "../assistantRunScheduling.js";
 import type * as assistantRunStateMachine from "../assistantRunStateMachine.js";
 import type * as assistantRunStreamState from "../assistantRunStreamState.js";
+import type * as assistantRunToolExecutions from "../assistantRunToolExecutions.js";
+import type * as assistantRunWorkflow from "../assistantRunWorkflow.js";
+import type * as assistantRunWorkflowManager from "../assistantRunWorkflowManager.js";
 import type * as assistantRuns from "../assistantRuns.js";
 import type * as auth from "../auth.js";
 import type * as automationActions from "../automationActions.js";
@@ -91,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   appConnectionActions: typeof appConnectionActions;
   appConnectionProviders: typeof appConnectionProviders;
   appConnections: typeof appConnections;
+  assistantQueuedMessageStateMachine: typeof assistantQueuedMessageStateMachine;
   assistantQueuedMessages: typeof assistantQueuedMessages;
   assistantRunActions: typeof assistantRunActions;
   assistantRunAutomationActions: typeof assistantRunAutomationActions;
@@ -107,6 +112,9 @@ declare const fullApi: ApiFromModules<{
   assistantRunScheduling: typeof assistantRunScheduling;
   assistantRunStateMachine: typeof assistantRunStateMachine;
   assistantRunStreamState: typeof assistantRunStreamState;
+  assistantRunToolExecutions: typeof assistantRunToolExecutions;
+  assistantRunWorkflow: typeof assistantRunWorkflow;
+  assistantRunWorkflowManager: typeof assistantRunWorkflowManager;
   assistantRuns: typeof assistantRuns;
   auth: typeof auth;
   automationActions: typeof automationActions;
@@ -184,4 +192,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
 };

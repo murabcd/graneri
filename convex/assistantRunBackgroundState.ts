@@ -1,12 +1,25 @@
+import type { Infer } from "convex/values";
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
+import {
+	internalMutation,
+	internalQuery,
+	type MutationCtx,
+} from "./_generated/server";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
-import { assistantRunJobValidator } from "./assistantRunJobModel";
+import {
+	assistantRunExecutionValidator,
+	assistantRunJobValidator,
+	assistantRunStepOutcomeValidator,
+	assistantRunStepUsageValidator,
+} from "./assistantRunJobModel";
 import {
 	getAssistantRunJob,
 	upsertAssistantRunJobMessage,
 } from "./assistantRunJobState";
 import {
+	pendingDecisionValidator,
 	reasoningEffortValidator,
 	toolApprovalPendingDecisionValidator,
 } from "./assistantRunModel";
@@ -28,12 +41,111 @@ const backgroundRunContextValidator = v.union(
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),
 		job: assistantRunJobValidator,
+		execution: assistantRunExecutionValidator,
 	}),
 	v.null(),
 );
 
+type ToolApprovalPendingDecision = Infer<
+	typeof toolApprovalPendingDecisionValidator
+>;
+
+const getFinalizationContext = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+) => {
+	const chat = await ctx.db.get(run.chatId);
+	const runJob = await getAssistantRunJob(ctx, run._id);
+	const stream = await getActiveStreamForRun(ctx, run._id);
+	if (
+		!chat ||
+		chat.isArchived ||
+		!runJob ||
+		runJob.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
+		!stream ||
+		stream.assistantMessageId !== run.assistantMessageId
+	) {
+		return null;
+	}
+	return { chat, runJob, stream };
+};
+
+const saveActiveAssistantMessage = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+	context: NonNullable<Awaited<ReturnType<typeof getFinalizationContext>>>,
+) => {
+	await saveMessageForOwnerInternal(ctx, {
+		ownerTokenIdentifier: run.ownerTokenIdentifier,
+		workspaceId: run.workspaceId,
+		authorName: context.runJob.authorName,
+		chatId: context.chat.chatId,
+		model: run.model,
+		reasoningEffort: run.reasoningEffort,
+		message: {
+			id: run.assistantMessageId,
+			role: "assistant",
+			partsJson: context.stream.partsJson,
+			text: context.stream.text,
+			createdAt: Date.now(),
+		},
+	});
+	await appendAssistantRunEvent(ctx, run, {
+		type: "message.completed",
+		assistantMessageId: run.assistantMessageId,
+	});
+};
+
+const completeRun = async (ctx: MutationCtx, run: Doc<"assistantRuns">) => {
+	const context = await getFinalizationContext(ctx, run);
+	if (!context) {
+		await transitionAssistantRun(ctx, run, {
+			type: "fail",
+			errorText: "Assistant run state could not be finalized.",
+		});
+		return false;
+	}
+	await saveActiveAssistantMessage(ctx, run, context);
+	await transitionAssistantRun(ctx, run, { type: "complete" });
+	return true;
+};
+
+const waitForToolApproval = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+	pendingDecision: ToolApprovalPendingDecision,
+) => {
+	if (pendingDecision.assistantMessageId !== run.assistantMessageId) {
+		return false;
+	}
+	const context = await getFinalizationContext(ctx, run);
+	if (!context) {
+		await transitionAssistantRun(ctx, run, {
+			type: "fail",
+			errorText: "Assistant approval request could not be persisted.",
+		});
+		return false;
+	}
+	await saveActiveAssistantMessage(ctx, run, context);
+	await upsertAssistantRunJobMessage(ctx, run._id, {
+		id: run.assistantMessageId,
+		role: "assistant",
+		partsJson: context.stream.partsJson,
+	});
+	await transitionAssistantRun(ctx, run, {
+		type: "wait_for_user",
+		pendingDecision,
+		phase: "tool_approval",
+	});
+	return true;
+};
+
 export const getRunnableContext = internalQuery({
-	args: { runId: v.id("assistantRuns") },
+	args: {
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.optional(v.string()),
+		stepIndex: v.optional(v.number()),
+	},
 	returns: backgroundRunContextValidator,
 	handler: async (ctx, args) => {
 		const run = await ctx.db.get(args.runId);
@@ -53,6 +165,14 @@ export const getRunnableContext = internalQuery({
 		) {
 			return null;
 		}
+		if (
+			(args.assistantMessageId !== undefined &&
+				run.assistantMessageId !== args.assistantMessageId) ||
+			(args.stepIndex !== undefined &&
+				runJob.execution.completedStepCount < args.stepIndex)
+		) {
+			return null;
+		}
 
 		return {
 			ownerTokenIdentifier: run.ownerTokenIdentifier,
@@ -63,6 +183,7 @@ export const getRunnableContext = internalQuery({
 			model: run.model,
 			reasoningEffort: run.reasoningEffort,
 			job: runJob.job,
+			execution: runJob.execution,
 		};
 	},
 });
@@ -94,10 +215,16 @@ export const replaceSnapshot = internalMutation({
 	},
 });
 
-export const complete = internalMutation({
+export const checkpointStep = internalMutation({
 	args: {
 		runId: v.id("assistantRuns"),
 		assistantMessageId: v.string(),
+		stepIndex: v.number(),
+		text: v.string(),
+		partsJson: v.string(),
+		outcome: assistantRunStepOutcomeValidator,
+		usage: assistantRunStepUsageValidator,
+		pendingDecision: v.optional(pendingDecisionValidator),
 	},
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
@@ -109,112 +236,124 @@ export const complete = internalMutation({
 		) {
 			return false;
 		}
-
-		const chat = await ctx.db.get(run.chatId);
 		const runJob = await getAssistantRunJob(ctx, run._id);
-		const stream = await getActiveStreamForRun(ctx, run._id);
-		if (
-			!chat ||
-			chat.isArchived ||
-			!runJob ||
-			runJob.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
-			!stream ||
-			stream.assistantMessageId !== run.assistantMessageId
-		) {
-			await transitionAssistantRun(ctx, run, {
-				type: "fail",
-				errorText: "Assistant run state could not be finalized.",
-			});
+		if (!runJob) {
+			return false;
+		}
+		const lastCheckpoint = runJob.execution.lastCheckpoint;
+		if (lastCheckpoint?.stepIndex === args.stepIndex) {
+			return true;
+		}
+		if (runJob.execution.completedStepCount !== args.stepIndex) {
 			return false;
 		}
 
-		await saveMessageForOwnerInternal(ctx, {
-			ownerTokenIdentifier: run.ownerTokenIdentifier,
-			workspaceId: run.workspaceId,
-			authorName: runJob.authorName,
-			chatId: chat.chatId,
-			model: run.model,
-			reasoningEffort: run.reasoningEffort,
-			message: {
-				id: run.assistantMessageId,
-				role: "assistant",
-				partsJson: stream.partsJson,
-				text: stream.text,
-				createdAt: Date.now(),
+		await updateAssistantRunStream(ctx, run, {
+			text: args.text,
+			partsJson: args.partsJson,
+		});
+		await syncAssistantRunToolCalls(ctx, run, args.partsJson);
+		await upsertAssistantRunJobMessage(ctx, run._id, {
+			id: run.assistantMessageId,
+			role: "assistant",
+			partsJson: args.partsJson,
+		});
+		const refreshedJob = await getAssistantRunJob(ctx, run._id);
+		if (!refreshedJob) {
+			return false;
+		}
+		await ctx.db.patch(refreshedJob._id, {
+			execution: {
+				...refreshedJob.execution,
+				assistantMessageId: run.assistantMessageId,
+				completedStepCount: args.stepIndex + 1,
+				usage: {
+					inputTokens:
+						refreshedJob.execution.usage.inputTokens +
+						args.usage.inputTokens,
+					outputTokens:
+						refreshedJob.execution.usage.outputTokens +
+						args.usage.outputTokens,
+					totalTokens:
+						refreshedJob.execution.usage.totalTokens +
+						args.usage.totalTokens,
+				},
+				lastCheckpoint: {
+					stepIndex: args.stepIndex,
+					outcome: args.outcome,
+					usage: args.usage,
+					pendingDecision: args.pendingDecision,
+				},
 			},
+			updatedAt: Date.now(),
 		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "message.completed",
-			assistantMessageId: run.assistantMessageId,
-		});
-		await transitionAssistantRun(ctx, run, { type: "complete" });
 		return true;
 	},
 });
 
-export const waitForUser = internalMutation({
+export const applyStepOutcome = internalMutation({
 	args: {
 		runId: v.id("assistantRuns"),
-		pendingDecision: toolApprovalPendingDecisionValidator,
+		assistantMessageId: v.string(),
+		stepIndex: v.number(),
+		title: v.optional(v.string()),
 	},
-	returns: v.boolean(),
+	returns: assistantRunStepOutcomeValidator,
 	handler: async (ctx, args) => {
 		const run = await ctx.db.get(args.runId);
-		if (run?.producer !== "convex" || run.status !== "running") {
-			return false;
-		}
-		if (args.pendingDecision.assistantMessageId !== run.assistantMessageId) {
-			return false;
-		}
-		const chat = await ctx.db.get(run.chatId);
-		const runJob = await getAssistantRunJob(ctx, run._id);
-		const stream = await getActiveStreamForRun(ctx, run._id);
+		const runJob = await getAssistantRunJob(ctx, args.runId);
+		const checkpoint = runJob?.execution.lastCheckpoint;
 		if (
-			!chat ||
-			chat.isArchived ||
-			!runJob ||
-			runJob.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
-			!stream ||
-			stream.assistantMessageId !== run.assistantMessageId
+			run?.producer !== "convex" ||
+			run.status !== "running" ||
+			run.assistantMessageId !== args.assistantMessageId ||
+			checkpoint?.stepIndex !== args.stepIndex
+		) {
+			return "completed";
+		}
+		if (checkpoint.outcome === "completed") {
+			const completed = await completeRun(ctx, run);
+			if (completed && args.title) {
+				await ctx.scheduler.runAfter(
+					0,
+					internal.chats.updateTitleForCompletedRun,
+					{ runId: run._id, title: args.title },
+				);
+			}
+		} else if (checkpoint.outcome === "waiting_for_user") {
+			if (checkpoint.pendingDecision?.type !== "tool_approval") {
+				await transitionAssistantRun(ctx, run, {
+					type: "fail",
+					errorText: "Assistant run paused without a supported decision.",
+				});
+				return "completed";
+			}
+			await waitForToolApproval(ctx, run, checkpoint.pendingDecision);
+		}
+		return checkpoint.outcome;
+	},
+});
+
+export const reachStepLimit = internalMutation({
+	args: {
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+		maxSteps: v.number(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const run = await ctx.db.get(args.runId);
+		if (
+			run?.producer === "convex" &&
+			run.status === "running" &&
+			run.assistantMessageId === args.assistantMessageId
 		) {
 			await transitionAssistantRun(ctx, run, {
 				type: "fail",
-				errorText: "Assistant approval request could not be persisted.",
+				errorText: `Assistant run reached its ${args.maxSteps}-step execution limit.`,
 			});
-			return false;
 		}
-
-		await saveMessageForOwnerInternal(ctx, {
-			ownerTokenIdentifier: run.ownerTokenIdentifier,
-			workspaceId: run.workspaceId,
-			authorName: runJob.authorName,
-			chatId: chat.chatId,
-			model: run.model,
-			reasoningEffort: run.reasoningEffort,
-			message: {
-				id: run.assistantMessageId,
-				role: "assistant",
-				partsJson: stream.partsJson,
-				text: stream.text,
-				createdAt: Date.now(),
-			},
-		});
-		await appendAssistantRunEvent(ctx, run, {
-			type: "message.completed",
-			assistantMessageId: run.assistantMessageId,
-		});
-		await upsertAssistantRunJobMessage(ctx, run._id, {
-			id: run.assistantMessageId,
-			role: "assistant",
-			partsJson: stream.partsJson,
-		});
-
-		await transitionAssistantRun(ctx, run, {
-			type: "wait_for_user",
-			pendingDecision: args.pendingDecision,
-			phase: "tool_approval",
-		});
-		return true;
+		return null;
 	},
 });
 

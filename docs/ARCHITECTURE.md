@@ -80,7 +80,10 @@ independently reconstruct either sequence from the private leaf modules.
 The producer-neutral assistant execution module owns AI SDK agent construction,
 stream creation, rich-message reconstruction, explicit streamed or consumed
 delivery, tool-approval outcome detection, and completed/aborted outcome
-classification. Stored-message validation belongs to the UI message codec.
+classification. Convex imports this runtime-neutral module through
+`@workspace/ai/hosted-assistant-execution`; it must not import the broader
+hosted-turn interface because that graph includes web and desktop-local tool
+implementations. Stored-message validation belongs to the UI message codec.
 Web and Convex remain producer adapters: web owns desktop-local tool streaming
 and HTTP delivery, while Convex owns liveness checks, durable snapshot cadence,
 scheduling, and transactional finalization.
@@ -137,32 +140,47 @@ Every run has an explicit `web` or `convex` producer owner. Reconnect may attach
 only to `web` producers and must leave a running `convex` producer intact; stop
 and terminal transitions remain shared durable state regardless of producer.
 Starting a Convex-produced run is one mutation: it supersedes or rejects the
-existing run, creates the active rich-message snapshot, and schedules both the
-internal AI action and its hard-timeout watchdog atomically. The scheduled
-action derives ownership from the run, refreshes connected-app credentials
-server-side, rechecks run liveness before executable tool side effects,
-checkpoints AI SDK message parts, and atomically saves the final assistant
-message with the terminal run transition. The start mutation consumes the
+existing run, creates the active rich-message snapshot and sanitized job, and
+starts a durable Convex Workflow atomically. Workflow owns the ordered turn
+journal and uses its internal Workpool with at most ten concurrently executing
+steps. Each retryable action performs exactly one AI SDK model/tool step with a
+nine-minute timeout; Convex then checkpoints the complete message parts,
+cumulative token usage, outcome, and next step index before Workflow advances.
+A logical run may execute at most twenty model/tool steps across steering and
+human-input continuations. There is no separate whole-turn watchdog.
+The action derives ownership from the run, refreshes connected-app credentials
+server-side, and rechecks generation-bound liveness before and after executable
+tool side effects. Custom tool calls use durable logical-step receipts: a
+completed retry reuses its stored result, changed input fails closed, and an
+ambiguous side effect is never executed a second time. Workflow action retries
+are explicit and bounded to three attempts with exponential backoff; mutation
+steps retain Workflow's exactly-once semantics. The start mutation consumes the
 single-use chat admission reservation and owns supported-model validation;
-scheduled arguments must never contain a user Convex token.
+workflow arguments must never contain a user Convex token.
 Normal hosted turns use this Convex producer. The web route authenticates and
 prepares the canonical branch/context, persists the user input, starts the
 durable job, and closes its SSE response; reactive Convex message and run
 queries carry the live rich-message snapshot to workspace and note chat UIs.
-Completed first turns may generate a title after terminalization, but the title
-mutation rechecks run ownership and replaces only an untouched default title so
-a user rename always wins.
+Completed first turns may generate a title in a separate retryable read-only
+Workflow step. The completion mutation applies it only after it terminalizes
+the matching generation, and the title mutation replaces only an untouched
+default title so a user rename always wins.
 `assistantRunJobs` retains only the sanitized model input and tool-selection
 configuration needed to resume the same Convex producer after durable user
 input. Approval pauses save the assistant approval message and checkpoint that
 message into the job. Accepting the matching response atomically updates the
 checkpoint, clears the previous temporary stream/tool rows, creates the next
-assistant stream, and schedules the continuation with a generation-bound
-watchdog so an older turn cannot expire the resumed one. Terminal run cleanup
-and chat retirement must delete the job row; access tokens and connected-app
-credentials must never enter it. Convex-owned turns save generated-image
-artifacts directly through Convex File Storage, so those files do not depend on
-the lifetime of the hosted HTTP request.
+assistant stream, and starts the continuation Workflow from the cumulative step
+index. A previous Workflow may finish an already-running action after steering,
+approval, stop, or cancellation, because component cancellation cannot stop an
+in-progress action; generation fencing makes every stale snapshot, checkpoint,
+tool receipt, completion, and failure harmless. Workflow completion performs
+generation-bound failure handling and removes its component journal. Terminal
+run cleanup and chat retirement must delete the job row and tool execution
+receipts; access tokens and connected-app credentials must never enter them.
+Convex-owned turns save generated-image artifacts directly through Convex File
+Storage, so those files do not depend on the lifetime of the hosted HTTP
+request.
 Steering a Convex-owned turn atomically checkpoints any interrupted assistant
 message into both chat history and the resumable job, appends the accepted user
 message batch, rotates the assistant message id and active stream, and schedules

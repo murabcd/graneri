@@ -2,6 +2,7 @@ import {
 	decodeStoredUiMessage,
 	parseUiMessagesJson,
 } from "@workspace/ai/ui-message-codec";
+import type { WorkflowId } from "@convex-dev/workflow";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -44,8 +45,40 @@ export const createAssistantRunJob = async (
 		runId: run._id,
 		authorName: args.authorName,
 		job: args.job,
+		execution: {
+			assistantMessageId: run.assistantMessageId,
+			completedStepCount: 0,
+			usage: {
+				inputTokens: 0,
+				outputTokens: 0,
+				totalTokens: 0,
+			},
+		},
 		createdAt: now,
 		updatedAt: now,
+	});
+};
+
+export const setAssistantRunWorkflow = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+	workflowId: WorkflowId,
+) => {
+	const runJob = await getAssistantRunJob(ctx, run._id);
+	if (!runJob) {
+		throw new ConvexError({
+			code: "ASSISTANT_RUN_JOB_NOT_FOUND",
+			message: "Assistant run background job not found.",
+		});
+	}
+
+	await ctx.db.patch(runJob._id, {
+		execution: {
+			...runJob.execution,
+			workflowId,
+			assistantMessageId: run.assistantMessageId,
+		},
+		updatedAt: Date.now(),
 	});
 };
 

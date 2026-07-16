@@ -31,6 +31,7 @@ export const createHostedChatAgent = ({
 	model,
 	prepareStep,
 	providerOptions,
+	stopWhen,
 	systemPrompt,
 }) => {
 	const { agentTools, finalizedToolSet, tools } = buildHostedChatAgentToolSet({
@@ -43,6 +44,7 @@ export const createHostedChatAgent = ({
 		instructions: systemPrompt,
 		tools: agentTools ?? (emptyToolsWhenNone ? {} : undefined),
 		prepareStep,
+		stopWhen,
 	});
 
 	return {

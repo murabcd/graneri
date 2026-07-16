@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	getHostedAssistantExecutionOutcome,
 	startHostedAssistantExecution,
@@ -115,6 +115,24 @@ describe("hosted assistant execution", () => {
 		});
 		expect(seen).toHaveLength(3);
 		expect(chunks).toHaveLength(3);
+	});
+
+	it("forwards step completion to durable execution adapters", async () => {
+		const onStepFinish = vi.fn();
+		const step = { usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 } };
+		await startHostedAssistantExecution({
+			agent: {} as never,
+			assistantMessageId: "assistant-1",
+			messages: [],
+			onStepFinish,
+			createUiStream: async (options) => {
+				await options.onStepFinish?.(step as never);
+				return createTextStream();
+			},
+			delivery: { mode: "consume" },
+		});
+
+		expect(onStepFinish).toHaveBeenCalledWith(step);
 	});
 
 	it("fails closed when the SDK produces no finish result or message", async () => {

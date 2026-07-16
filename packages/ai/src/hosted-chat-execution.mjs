@@ -37,6 +37,7 @@ const createHostedAssistantExecutionStream = async ({
 	messages,
 	onError,
 	onOutcome,
+	onStepFinish,
 	timeout,
 }) =>
 	await createUiStream({
@@ -51,6 +52,7 @@ const createHostedAssistantExecutionStream = async ({
 		onFinish: (result) => {
 			onOutcome(getHostedAssistantExecutionOutcome(result));
 		},
+		...(onStepFinish ? { onStepFinish } : {}),
 		...(onError ? { onError } : {}),
 	});
 
@@ -88,6 +90,7 @@ export const startHostedAssistantExecution = async ({
 	createUiStream,
 	delivery,
 	messages,
+	onStepFinish,
 	timeout,
 }) => {
 	let finishedOutcome = null;
@@ -97,6 +100,7 @@ export const startHostedAssistantExecution = async ({
 		messages,
 		...(abortSignal ? { abortSignal } : {}),
 		...(createUiStream ? { createUiStream } : {}),
+		...(onStepFinish ? { onStepFinish } : {}),
 		...(timeout ? { timeout } : {}),
 		onError: () => "Something went wrong.",
 		onOutcome: (outcome) => {

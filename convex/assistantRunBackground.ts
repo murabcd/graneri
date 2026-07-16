@@ -1,13 +1,12 @@
 import { isSupportedChatModel } from "@workspace/ai/models";
 import { parseUiMessagesJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
 import { assistantRunJobValidator } from "./assistantRunJobModel";
 import { createAssistantRunJob } from "./assistantRunJobState";
 import { assistantRunValidator } from "./assistantRunModel";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
-import { transitionAssistantRun } from "./assistantRunStateMachine";
 import { createAssistantRunStream } from "./assistantRunStreamState";
 import { startAssistantRunForOwner } from "./assistantRuns";
 import { createResourceAccess, getAuthorName } from "./domain";
@@ -70,27 +69,5 @@ export const start = mutation({
 		await scheduleAssistantRunExecution(ctx, run);
 
 		return run;
-	},
-});
-
-export const expire = internalMutation({
-	args: {
-		runId: v.id("assistantRuns"),
-		assistantMessageId: v.string(),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const run = await ctx.db.get(args.runId);
-		if (
-			run?.producer === "convex" &&
-			run.status === "running" &&
-			run.assistantMessageId === args.assistantMessageId
-		) {
-			await transitionAssistantRun(ctx, run, {
-				type: "fail",
-				errorText: "Assistant run exceeded the background execution limit.",
-			});
-		}
-		return null;
 	},
 });
