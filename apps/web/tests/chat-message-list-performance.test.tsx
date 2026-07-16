@@ -358,9 +358,7 @@ describe("ChatMessageListContent performance", () => {
 		fireEvent.click(
 			screen.getByRole("button", { name: "Load earlier messages" }),
 		);
-		fireEvent.click(
-			screen.getByRole("button", { name: "Continue in new chat" }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: "Fork chat" }));
 
 		expect(onLoadEarlierMessages).toHaveBeenCalledOnce();
 		expect(onForkMessage).toHaveBeenCalledWith("assistant-1");

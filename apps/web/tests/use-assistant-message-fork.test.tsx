@@ -69,6 +69,6 @@ describe("useAssistantMessageFork", () => {
 
 		expect(onForked).not.toHaveBeenCalled();
 		expect(logError).toHaveBeenCalledWith(expect.objectContaining({ error }));
-		expect(toastError).toHaveBeenCalledWith("Failed to continue in a new chat");
+		expect(toastError).toHaveBeenCalledWith("Failed to fork chat");
 	});
 });

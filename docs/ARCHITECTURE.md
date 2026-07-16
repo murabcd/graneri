@@ -92,9 +92,16 @@ input buffer owns pending steer/mailbox ordering, wait-agent activity
 notifications, and mailbox deferral rules, while active-stream sessions own
 broadcast, replay, abort, and persistence. Renderer stream pacing must propagate
 downstream `ReadableStream` demand instead of draining frames into an already
-full consumer queue. Live reconnect history coalesces adjacent deltas for the
-same stream part so replay memory scales with semantic stream parts rather than
-token count.
+full consumer queue. The web producer's broadcast also waits for every live
+subscriber's positive `desiredSize` before reading or publishing another model
+chunk; reconnect catch-up pauses the producer instead of creating a second
+unbounded queue. Live reconnect history coalesces adjacent deltas for the same
+stream part and is capped at 512 semantic chunks or 4 MiB, with at most four
+simultaneous subscribers. Crossing a replay cap leaves the current live stream
+running but rejects later replay subscriptions explicitly; it never falls back
+to an incomplete protocol stream. The Node SSE writer waits for
+`ServerResponse` drain and cancels its subscription when the socket closes; it
+must not attach a fast tee consumer that bypasses response pressure.
 The hosted chat route uses the shared user-message persistence helper for normal
 saves, queued replay accepts, queued steer batch accepts, and continued-run
 message appends; the route keeps HTTP telemetry and response formatting while
@@ -389,7 +396,7 @@ identical storage.
 | A model tool can wait for mailbox or steer activity. | Graneri exposes a runtime-only AI SDK `wait_agent` tool. It subscribes to hosted active stream activity, wakes immediately on already-pending activity, returns app-server-compatible `{ message, timed_out }` results for mailbox, steer, and timeout, and aborts with the active turn. | Implemented |
 | Mailbox delivery is accepted into turn state. | Hosted active stream sessions keep mailbox-style pending input separate from steered input, can defer mailbox delivery after an answer boundary, and reopen delivery when steered input arrives. Replacement sessions carry both steer and mailbox pending input forward. | Implemented |
 | Long visible history is explicit and recoverable. | The renderer subscribes to cursor-paginated newest-first Convex pages, prepends the active rich stream on the first page, and offers an explicit `Load earlier messages` action until the stored transcript is exhausted. | Implemented |
-| An assistant answer can continue in a new chat without changing its source. | The assistant message action creates an immutable fork through the selected stored answer, records its lineage, shares attachment lifetime safely, opens the new chat, and discloses any ancestry omitted by the bounded copy. | Implemented |
+| An assistant answer can fork into a new chat without changing its source. | The `Fork chat` assistant message action creates an immutable fork through the selected stored answer, records its lineage, shares attachment lifetime safely, opens the new chat, and discloses any ancestry omitted by the bounded copy. | Implemented |
 | Editing or regeneration does not destroy the replaced history. | Convex archives the replaced active suffix and retains its attachment references before starting the replacement turn. A full thread-fork and branch-switching UI is not exposed yet. | Partial |
 | A model can create and manage live subagents. | Graneri does not expose subagent tools because the product does not have subagents. Runtime tools such as `spawn_agent`, `send_message`, `followup_task`, `list_agents`, and `interrupt_agent` are intentionally out of scope. | Not applicable |
 

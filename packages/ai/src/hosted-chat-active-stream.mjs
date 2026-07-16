@@ -1,37 +1,10 @@
+import { createHostedChatStreamBroadcast } from "./hosted-chat-stream-broadcast.mjs";
 import { createHostedTurnInputBuffer } from "./hosted-chat-turn-input-buffer.mjs";
 
 export const HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS = 250;
 
 export const createHostedActiveStreamKey = ({ workspaceId, chatId }) =>
 	`${workspaceId}:${chatId}`;
-
-const replayCoalescibleDeltaTypes = new Set([
-	"reasoning-delta",
-	"text-delta",
-	"tool-input-delta",
-]);
-
-const appendReplayChunk = (replayChunks, chunk) => {
-	const previousChunk = replayChunks.at(-1);
-	const chunkId = chunk?.id ?? chunk?.toolCallId;
-	const previousChunkId = previousChunk?.id ?? previousChunk?.toolCallId;
-	if (
-		replayCoalescibleDeltaTypes.has(chunk?.type) &&
-		chunkId &&
-		chunkId === previousChunkId &&
-		chunk?.type === previousChunk?.type &&
-		typeof chunk.delta === "string" &&
-		typeof previousChunk.delta === "string"
-	) {
-		replayChunks[replayChunks.length - 1] = {
-			...previousChunk,
-			delta: previousChunk.delta + chunk.delta,
-		};
-		return;
-	}
-
-	replayChunks.push(chunk);
-};
 
 export class HostedActiveChatStreamPersister {
 	#acceptingAppends = true;
@@ -249,51 +222,7 @@ export const createHostedActiveStreamSession = ({
 	turnInput,
 }) => {
 	const abortController = new AbortController();
-	const subscribers = new Set();
-	const replayChunks = [];
-	let broadcastStarted = false;
-	let broadcastClosed = false;
-	let broadcastError = null;
-
-	const removeSubscriber = (controller) => {
-		subscribers.delete(controller);
-	};
-
-	const publishChunk = (chunk) => {
-		if (broadcastClosed) {
-			return;
-		}
-
-		appendReplayChunk(replayChunks, chunk);
-		for (const subscriber of subscribers) {
-			subscriber.enqueue(chunk);
-		}
-	};
-
-	const closeBroadcast = () => {
-		if (broadcastClosed) {
-			return;
-		}
-
-		broadcastClosed = true;
-		for (const subscriber of subscribers) {
-			subscriber.close();
-		}
-		subscribers.clear();
-	};
-
-	const errorBroadcast = (error) => {
-		if (broadcastClosed) {
-			return;
-		}
-
-		broadcastClosed = true;
-		broadcastError = error;
-		for (const subscriber of subscribers) {
-			subscriber.error(error);
-		}
-		subscribers.clear();
-	};
+	const broadcast = createHostedChatStreamBroadcast();
 
 	const session = {
 		abort(reason) {
@@ -316,7 +245,7 @@ export const createHostedActiveStreamSession = ({
 			await persister.start();
 		},
 		isBroadcastClosed() {
-			return broadcastClosed;
+			return broadcast.isClosed();
 		},
 		append(delta) {
 			persister.append(delta);
@@ -340,7 +269,7 @@ export const createHostedActiveStreamSession = ({
 			try {
 				await persister.finish();
 			} finally {
-				closeBroadcast();
+				broadcast.close();
 				if (controllers.get(streamKey) === session) {
 					controllers.delete(streamKey);
 				}
@@ -349,62 +278,16 @@ export const createHostedActiveStreamSession = ({
 		cleanup() {
 			turnInput.clear();
 			persister.discardPending?.();
-			closeBroadcast();
+			broadcast.close();
 			if (controllers.get(streamKey) === session) {
 				controllers.delete(streamKey);
 			}
 		},
 		subscribe() {
-			let streamController = null;
-			return new ReadableStream({
-				start(controller) {
-					streamController = controller;
-					if (broadcastError) {
-						controller.error(broadcastError);
-						return;
-					}
-
-					for (const chunk of replayChunks) {
-						controller.enqueue(chunk);
-					}
-
-					if (broadcastClosed) {
-						controller.close();
-						return;
-					}
-
-					subscribers.add(controller);
-				},
-				cancel(_reason) {
-					if (streamController) {
-						removeSubscriber(streamController);
-					}
-				},
-			});
+			return broadcast.subscribe();
 		},
 		startBroadcast(stream) {
-			if (broadcastStarted) {
-				return session.subscribe();
-			}
-
-			broadcastStarted = true;
-			const reader = stream.getReader();
-			void (async () => {
-				try {
-					for (;;) {
-						const { done, value } = await reader.read();
-						if (done) {
-							closeBroadcast();
-							return;
-						}
-						publishChunk(value);
-					}
-				} catch (error) {
-					errorBroadcast(error);
-				}
-			})();
-
-			return session.subscribe();
+			return broadcast.start(stream);
 		},
 	};
 

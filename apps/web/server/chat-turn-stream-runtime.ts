@@ -19,18 +19,14 @@ import {
 } from "@workspace/ai/hosted-chat-turn";
 import type { ReasoningEffort } from "@workspace/ai/models";
 import type { ToolApprovalResponse } from "@workspace/ai/tool-approval-state";
-import {
-	consumeStream,
-	pipeUIMessageStreamToResponse,
-	type UIMessage,
-	type UIMessageChunk,
-} from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 import type { AttachableAssistantRun } from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
+import { pipeUiMessageStreamToServerResponse } from "./ui-message-response-stream.js";
 
 type HostedTurnInput = ReturnType<
 	typeof createHostedChatTurnInput<
@@ -76,10 +72,9 @@ export const pipeHostedActiveStreamSessionToResponse = ({
 	activeStreamSession: HostedActiveStreamSession;
 	response: ServerResponse;
 }) => {
-	pipeUIMessageStreamToResponse({
+	void pipeUiMessageStreamToServerResponse({
 		response,
 		stream: activeStreamSession.subscribe<UIMessageChunk>(),
-		consumeSseStream: consumeStream,
 	});
 };
 
@@ -661,10 +656,9 @@ export const runHostedChatTurnStreamRuntime = async ({
 		}
 	}
 
-	pipeUIMessageStreamToResponse({
+	void pipeUiMessageStreamToServerResponse({
 		response,
 		stream: responseStreamResult.responseStream,
-		consumeSseStream: consumeStream,
 	});
 
 	return {

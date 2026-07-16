@@ -36,9 +36,9 @@ export const useAssistantMessageFork = ({
 				logError({
 					event: "client.error",
 					error,
-					message: "Failed to continue chat from assistant message",
+					message: "Failed to fork chat from assistant message",
 				});
-				toast.error("Failed to continue in a new chat");
+				toast.error("Failed to fork chat");
 			}
 		},
 		[chatId, forkFromAssistantMessage, onForked, workspaceId],

@@ -206,14 +206,14 @@ function AssistantMessageActions({
 						variant="ghost"
 						size="icon-sm"
 						className="size-7 text-muted-foreground hover:text-foreground"
-						aria-label="Continue in new chat"
+						aria-label="Fork chat"
 						disabled={!onForkMessage || isStreaming}
 						onClick={() => onForkMessage?.(messageId)}
 					>
 						<GitFork className="size-3.5" />
 					</Button>
 				</TooltipTrigger>
-				<TooltipContent>Continue in new chat</TooltipContent>
+				<TooltipContent>Fork chat</TooltipContent>
 			</Tooltip>
 			<CopyMessageButton text={messageText} />
 			<CreateNoteButton messageText={messageText} onPlusAction={onPlusAction} />
