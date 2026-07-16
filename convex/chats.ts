@@ -1,8 +1,5 @@
 import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
-import {
-	normalizeStoredUiMessage,
-	parseUiMessagePartsJson,
-} from "@workspace/ai/ui-message-codec";
+import { normalizeStoredUiMessage } from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -40,6 +37,10 @@ import {
 	pauseLinkedAutomationForChat,
 	resumeLinkedAutomationForChat,
 } from "./automationRunStateMachine";
+import {
+	deleteChatMessageAttachmentReferences,
+	syncChatMessageAttachmentReferences,
+} from "./chatAttachmentReferences";
 import { normalizeChatPreview } from "./chatFormatting";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
@@ -72,6 +73,9 @@ const chatFields = {
 	authorName: v.optional(v.string()),
 	chatId: v.string(),
 	noteId: v.optional(v.id("notes")),
+	forkedFromChatId: v.optional(v.string()),
+	forkedFromMessageId: v.optional(v.string()),
+	historyOmittedBefore: v.optional(v.boolean()),
 	isStarred: v.optional(v.boolean()),
 	starredSortOrder: v.number(),
 	title: v.string(),
@@ -161,7 +165,6 @@ const MAX_RETURNED_CHAT_MESSAGES = HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT;
 const REMOVE_CHAT_MESSAGES_BATCH_SIZE = 100;
 const REMOVE_CHAT_RUNTIME_BATCH_SIZE = 100;
 const NOTE_CHAT_BATCH_SIZE = 25;
-const CONVEX_STORAGE_PATH_SEGMENT = "/api/storage/";
 
 type ChatArchiveState = "archived" | "active";
 
@@ -504,103 +507,6 @@ const getStoredUiMessagesForOwner = async (
 	);
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null;
-
-const getStorageIdFromFilePart = (part: unknown): Id<"_storage"> | null => {
-	if (!isRecord(part) || part.type !== "file") {
-		return null;
-	}
-
-	const providerMetadata = part.providerMetadata;
-	if (isRecord(providerMetadata)) {
-		const graneriMetadata = providerMetadata.graneri;
-		if (
-			isRecord(graneriMetadata) &&
-			typeof graneriMetadata.storageId === "string"
-		) {
-			return graneriMetadata.storageId as Id<"_storage">;
-		}
-	}
-
-	if (typeof part.url !== "string") {
-		return null;
-	}
-
-	const url = new URL(part.url);
-	const storagePathIndex = url.pathname.indexOf(CONVEX_STORAGE_PATH_SEGMENT);
-
-	if (storagePathIndex === -1) {
-		return null;
-	}
-
-	const storageId = url.pathname
-		.slice(storagePathIndex + CONVEX_STORAGE_PATH_SEGMENT.length)
-		.split("/")[0];
-
-	if (!storageId) {
-		return null;
-	}
-
-	return storageId as Id<"_storage">;
-};
-
-const getMessageAttachmentStorageIds = (
-	message: Pick<Doc<"chatMessages">, "partsJson">,
-) => {
-	try {
-		const parts = parseUiMessagePartsJson(message.partsJson);
-
-		return parts.flatMap((part) => {
-			const storageId = getStorageIdFromFilePart(part);
-			return storageId ? [storageId] : [];
-		});
-	} catch (error) {
-		throw new ConvexError({
-			code: "INVALID_CHAT_ATTACHMENT_METADATA",
-			message:
-				error instanceof Error
-					? error.message
-					: "Chat attachment metadata is invalid.",
-		});
-	}
-};
-
-const getExistingStorageMetadata = async (
-	ctx: MutationCtx,
-	storageId: string,
-) => {
-	const normalizedStorageId = ctx.db.system.normalizeId("_storage", storageId);
-
-	if (!normalizedStorageId) {
-		throw new ConvexError({
-			code: "INVALID_CHAT_ATTACHMENT_STORAGE_ID",
-			message: "Chat attachment storage id is invalid.",
-		});
-	}
-
-	return await ctx.db.system.get(normalizedStorageId);
-};
-
-const deleteChatMessageAttachments = async (
-	ctx: MutationCtx,
-	messages: Array<{ partsJson: string }>,
-) => {
-	const storageIds = new Set(
-		messages.flatMap((message) => getMessageAttachmentStorageIds(message)),
-	);
-
-	await Promise.all(
-		Array.from(storageIds, async (storageId) => {
-			const metadata = await getExistingStorageMetadata(ctx, storageId);
-
-			if (metadata) {
-				await ctx.storage.delete(metadata._id);
-			}
-		}),
-	);
-};
-
 const requireOwnedNoteId = async (
 	ctx: QueryCtx | MutationCtx,
 	ownerTokenIdentifier: string,
@@ -647,7 +553,7 @@ const deleteChatMessageBatch = async (
 		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
 		.take(REMOVE_CHAT_MESSAGES_BATCH_SIZE);
 	if (activeMessages.length > 0) {
-		await deleteChatMessageAttachments(ctx, activeMessages);
+		await deleteChatMessageAttachmentReferences(ctx, activeMessages);
 		await Promise.all(
 			activeMessages.map((message) => ctx.db.delete(message._id)),
 		);
@@ -677,7 +583,7 @@ const deleteChatMessageBatch = async (
 		.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
 		.take(REMOVE_CHAT_MESSAGES_BATCH_SIZE);
 	if (branchMessages.length > 0) {
-		await deleteChatMessageAttachments(ctx, branchMessages);
+		await deleteChatMessageAttachmentReferences(ctx, branchMessages);
 		await Promise.all(
 			branchMessages.map((message) => ctx.db.delete(message._id)),
 		);
@@ -856,6 +762,11 @@ export const saveMessageForOwnerInternal = async (
 	if (existingMessage) {
 		await ctx.db.replace(existingMessage._id, storedMessageDocument);
 	}
+	await syncChatMessageAttachmentReferences(ctx, {
+		chatId,
+		messageId: storedMessageId,
+		partsJson: storedMessageDocument.partsJson,
+	});
 
 	const [chat, message] = await Promise.all([
 		ctx.db.get(chatId),
@@ -1002,23 +913,6 @@ export const toggleStar = mutation({
 		return {
 			isStarred,
 		};
-	},
-});
-
-export const getMessages = query({
-	args: {
-		workspaceId: v.id("workspaces"),
-		chatId: v.string(),
-	},
-	returns: v.array(storedUiMessageValidator),
-	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		return await getStoredUiMessagesForOwner(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
 	},
 });
 

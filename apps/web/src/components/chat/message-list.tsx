@@ -1,4 +1,5 @@
 import { Bubble, BubbleContent } from "@workspace/ui/components/bubble";
+import { Button } from "@workspace/ui/components/button";
 import { Marker, MarkerContent } from "@workspace/ui/components/marker";
 import { Message, MessageContent } from "@workspace/ui/components/message";
 import {
@@ -7,7 +8,7 @@ import {
 } from "@workspace/ui/components/message-scroller";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import { FileText, Paperclip } from "lucide-react";
+import { FileText, LoaderCircle, Paperclip } from "lucide-react";
 import * as React from "react";
 import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
 import { Reasoning } from "@/components/ai-elements/reasoning";
@@ -57,6 +58,7 @@ import { getMentionProvider } from "@/lib/tiptap-mention";
 
 export type ChatMessageActionContext = {
 	displayText: string;
+	isStreamingAssistantMessage: boolean;
 	message: UIMessage;
 	messageText: string;
 	timestamp: string | null;
@@ -77,6 +79,10 @@ export function ChatMessageListContent({
 	breathingSpaceClassName = "min-h-[max(140px,24vh)] w-full",
 	errorClassName,
 	includeSources = true,
+	hasEarlierMessages = false,
+	historyOmittedBefore = false,
+	isLoadingEarlierMessages = false,
+	onLoadEarlierMessages,
 	scrollAnchorUserMessages = true,
 	renderAssistantActions,
 	renderUserActions,
@@ -93,6 +99,10 @@ export function ChatMessageListContent({
 	breathingSpaceClassName?: string;
 	errorClassName?: string;
 	includeSources?: boolean;
+	hasEarlierMessages?: boolean;
+	historyOmittedBefore?: boolean;
+	isLoadingEarlierMessages?: boolean;
+	onLoadEarlierMessages?: () => void;
 	scrollAnchorUserMessages?: boolean;
 	renderAssistantActions?: (
 		context: ChatMessageActionContext,
@@ -142,6 +152,29 @@ export function ChatMessageListContent({
 
 	return (
 		<MessageScrollerContent className={className}>
+			{historyOmittedBefore && !hasEarlierMessages ? (
+				<p className="py-2 text-center text-muted-foreground text-xs">
+					Earlier history was not copied into this chat.
+				</p>
+			) : null}
+			{hasEarlierMessages ? (
+				<div className="flex justify-center py-2">
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						disabled={isLoadingEarlierMessages}
+						onClick={onLoadEarlierMessages}
+					>
+						{isLoadingEarlierMessages ? (
+							<LoaderCircle className="animate-spin" />
+						) : null}
+						{isLoadingEarlierMessages
+							? "Loading earlier messages"
+							: "Load earlier messages"}
+					</Button>
+				</div>
+			) : null}
 			{turns.map((turn, turnIndex) => {
 				const isLastTurn = turnIndex === turns.length - 1;
 				const turnKey = turn.userMessage?.id ?? `assistant-turn-${turnIndex}`;
@@ -250,11 +283,12 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	const isInterruptedAssistantMessage =
 		message.role === "assistant" &&
 		(metadata?.interrupted === true || streamingMessageIds.has(message.id));
-	const isStreamingAssistantMessage =
+	const isStreamingAssistantMessage = Boolean(
 		message.role === "assistant" &&
-		!isInterruptedAssistantMessage &&
-		isLoading &&
-		message.id === lastMessageId;
+			!isInterruptedAssistantMessage &&
+			isLoading &&
+			message.id === lastMessageId,
+	);
 	const isEmpty = displayText.length === 0;
 	const timestamp = formatChatMessageTimestamp(
 		getChatMessageTimestamp(message),
@@ -274,6 +308,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 
 	const actionContext = {
 		displayText,
+		isStreamingAssistantMessage,
 		message,
 		messageText,
 		timestamp,

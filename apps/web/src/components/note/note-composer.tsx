@@ -111,6 +111,7 @@ import {
 	useResizeHandle,
 } from "@/components/layout/resizable-side-panel";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
+import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import {
 	type NoteChatGroups,
@@ -462,8 +463,12 @@ const useNoteComposerController = ({
 		handleSelectedModelChange,
 		hasKnownNoteChat,
 		hasStoredCurrentChat,
+		hasEarlierMessages,
+		historyOmittedBefore,
+		isLoadingEarlierMessages,
 		isNoteChatsLoading,
 		latestNoteChat,
+		loadEarlierMessages,
 		noteChats,
 		openDraftChat: startDraftChat,
 		prefetchNoteChat: handlePrefetchNoteChat,
@@ -1642,6 +1647,11 @@ const useNoteComposerController = ({
 			stopCurrentStream,
 		],
 	);
+	const handleForkMessage = useAssistantMessageFork({
+		workspaceId: activeWorkspaceId,
+		chatId: currentChatId,
+		onForked: selectNoteChat,
+	});
 
 	const handleSelectChat = (chatId: string) => {
 		if (currentChatId === chatId) {
@@ -1753,13 +1763,18 @@ const useNoteComposerController = ({
 		exportTranscript: transcriptSession.exportTranscript,
 		fullTranscript: transcriptSession.fullTranscript,
 		groupedNoteChats,
+		hasEarlierMessages,
+		historyOmittedBefore,
 		handleCancelEdit,
 		handleComposerFocus,
 		handleComposerPointerDown,
 		handleDeleteMessage,
 		handleEditMessage,
+		handleForkMessage,
 		handleGenerateNotes: transcriptSession.handleGenerateNotes,
 		handleHideChat,
+		isLoadingEarlierMessages,
+		loadEarlierMessages,
 		composerEditorRef,
 		handleComposerKeyDown,
 		handleComposerValueChange,
@@ -3543,11 +3558,16 @@ function NoteComposerPanels({
 			chatMessages={controller.chatMessages}
 			disableAddToNote={!onAddMessageToNote}
 			disablePadding={controller.isSidebarPresentation}
+			hasEarlierMessages={controller.hasEarlierMessages}
+			historyOmittedBefore={controller.historyOmittedBefore}
 			isChatLoading={controller.isChatLoading}
+			isLoadingEarlierMessages={controller.isLoadingEarlierMessages}
 			onAddMessageToNote={onAddMessageToNote}
 			onDeleteMessage={controller.handleDeleteMessage}
 			onEditMessage={controller.handleEditMessage}
+			onForkMessage={controller.handleForkMessage}
 			onRegenerateMessage={controller.handleRegenerateMessage}
+			onLoadEarlierMessages={controller.loadEarlierMessages}
 			streamingMessageIds={controller.streamingMessageIds}
 		/>
 	);

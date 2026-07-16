@@ -38,6 +38,19 @@ type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
 type AsOwner = WorkspaceFixture["asOwner"];
 type WorkspaceId = WorkspaceFixture["workspaceId"];
 
+const readChatMessages = async (
+	asOwner: AsOwner,
+	workspaceId: WorkspaceId,
+	chatId: string,
+) =>
+	(
+		await asOwner.query(api.chatThreads.readPage, {
+			workspaceId,
+			chatId,
+			paginationOpts: { cursor: null, numItems: 100 },
+		})
+	).page;
+
 const userQuestionDecision = (assistantMessageId: string, question: string) => ({
 	type: "user_question" as const,
 	assistantMessageId,
@@ -405,10 +418,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 		throw new Error("Expected a preserved chat branch.");
 	}
 
-	const messages = await asOwner.query(api.chats.getMessages, {
-		workspaceId,
-		chatId: "chat-edit",
-	});
+	const messages = await readChatMessages(asOwner, workspaceId, "chat-edit");
 
 	expect(messages).toHaveLength(0);
 	const branch = await t.run(async (ctx) => ctx.db.get(result.branchId));
@@ -529,10 +539,11 @@ test("branching fails closed when the target is unavailable", async () => {
 		}),
 	).rejects.toThrow("Chat branch target is no longer available.");
 
-	const messages = await asOwner.query(api.chats.getMessages, {
+	const messages = await readChatMessages(
+		asOwner,
 		workspaceId,
-		chatId: "chat-stale-branch",
-	});
+		"chat-stale-branch",
+	);
 	expect(messages.map((message) => message.id)).toEqual(["current-message"]);
 });
 
@@ -604,12 +615,9 @@ test("updateActiveStream exposes complete in-progress assistant state", async ()
 		partsJson: JSON.stringify(parts),
 	});
 
-	const messages = await asOwner.query(api.chats.getMessages, {
-		workspaceId,
-		chatId,
-	});
+	const messages = await readChatMessages(asOwner, workspaceId, chatId);
 
-	expect(messages.at(-1)).toMatchObject({
+	expect(messages.find((message) => message.id === "stream-1")).toMatchObject({
 		id: "stream-1",
 		role: "assistant",
 		text: "Working",
@@ -1017,10 +1025,7 @@ test("an interrupted run can continue with a new assistant message", async () =>
 			unknown
 		>,
 	).toEqual({ interrupted: true });
-	const uiMessages = await asOwner.query(api.chats.getMessages, {
-		workspaceId,
-		chatId,
-	});
+	const uiMessages = await readChatMessages(asOwner, workspaceId, chatId);
 	const interruptedUiMessage = uiMessages.find(
 		(message) => message.id === run.assistantMessageId,
 	);
@@ -1664,33 +1669,28 @@ test("removing a chat deletes assistant run runtime records", async () => {
 	expect(rows.toolExecutions).toHaveLength(0);
 });
 
-test("removing a chat fails closed on malformed attachment storage ids", async () => {
+test("saving a chat fails closed on malformed attachment storage ids", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
-	await asOwner.mutation(api.chats.saveMessage, {
-		workspaceId,
-		chatId: "chat-with-invalid-attachment",
-		preview: "Invalid attachment",
-		message: {
-			id: "msg-invalid-attachment",
-			role: "user",
-			partsJson: JSON.stringify([
-				{
-					type: "file",
-					mediaType: "text/plain",
-					filename: "invalid.txt",
-					url: "https://example.convex.site/api/storage/not-valid",
-				},
-			]),
-			text: "Invalid attachment",
-			createdAt: 2_000,
-		},
-	});
-
 	await expect(
-		asOwner.mutation(api.chats.remove, {
+		asOwner.mutation(api.chats.saveMessage, {
 			workspaceId,
 			chatId: "chat-with-invalid-attachment",
+			preview: "Invalid attachment",
+			message: {
+				id: "msg-invalid-attachment",
+				role: "user",
+				partsJson: JSON.stringify([
+					{
+						type: "file",
+						mediaType: "text/plain",
+						filename: "invalid.txt",
+						url: "https://example.convex.site/api/storage/not-valid",
+					},
+				]),
+				text: "Invalid attachment",
+				createdAt: 2_000,
+			},
 		}),
 	).rejects.toThrow("Chat attachment storage id is invalid.");
 
@@ -1699,7 +1699,7 @@ test("removing a chat fails closed on malformed attachment storage ids", async (
 		chatId: "chat-with-invalid-attachment",
 	});
 
-	expect(session).not.toBeNull();
+	expect(session).toBeNull();
 });
 
 test("message snapshots return only replay fields", async () => {

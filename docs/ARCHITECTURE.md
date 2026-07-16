@@ -116,10 +116,15 @@ Editing a user message or regenerating an assistant response replaces the active
 suffix without destroying it. Convex atomically moves the replaced active rows
 into `chatBranches` and `chatBranchMessages`, retains their attachment storage
 references, stops superseded run state, and clears the rolling context
-compaction checkpoint before the new turn starts. The active transcript remains
-bounded to the same recent-message window exposed to the renderer. Preserved
-branches are durable recovery data, but Graneri does not currently expose the
-reference app's full thread-fork and branch-switching UI.
+compaction checkpoint before the new turn starts. The renderer reads active
+history through cursor-paginated `chatThreads.readPage` pages and explicitly
+offers older pages instead of silently truncating the transcript. Preserved
+replacement branches remain durable recovery data. Separately, an assistant
+message can be continued in a new immutable chat: Convex copies the bounded
+prefix through that answer, records the source chat and message, leaves the
+source unchanged, and visibly marks the fork when still-earlier ancestry could
+not be copied. Graneri does not expose a switcher for preserved replacement
+branches.
 Web-produced assistant run start and active-stream session start share one
 runtime helper so local-folder turns choose the same reject/supersede policy,
 reuse matching continued runs, terminalize failed starts, and clean up
@@ -343,9 +348,11 @@ than hide a stale client or cross-session bug.
 Chat deletion must fail closed on invalid persisted attachment metadata or
 storage ids, including attachment references retained by preserved branches;
 cleanup must not silently skip malformed stored attachment references and
-continue deleting surrounding chat state. Branch replacement retains attachment
-references and defers physical storage deletion until the chat is permanently
-retired.
+continue deleting surrounding chat state. Active and forked chat messages own
+explicit attachment-reference rows, so deleting one chat releases only its
+references and physical storage is removed only after the final referencing
+chat is permanently retired. Branch replacement retains attachment references
+until its owning chat is retired.
 Otherwise stale claimed rows are requeued by Convex claim mutations before the
 next claim attempt, because `claimed` represents an unaccepted in-flight
 operation and must not become an invisible durable leftover after a client or
@@ -381,6 +388,8 @@ identical storage.
 | Activity subscribers can distinguish mailbox work from steered input. | Hosted active stream sessions expose `subscribePendingInputActivity`; pending steered input reports `steer`, queued mailbox-style input reports `mailbox`, and subscribing after input is already pending returns the pending activity. | Implemented |
 | A model tool can wait for mailbox or steer activity. | Graneri exposes a runtime-only AI SDK `wait_agent` tool. It subscribes to hosted active stream activity, wakes immediately on already-pending activity, returns app-server-compatible `{ message, timed_out }` results for mailbox, steer, and timeout, and aborts with the active turn. | Implemented |
 | Mailbox delivery is accepted into turn state. | Hosted active stream sessions keep mailbox-style pending input separate from steered input, can defer mailbox delivery after an answer boundary, and reopen delivery when steered input arrives. Replacement sessions carry both steer and mailbox pending input forward. | Implemented |
+| Long visible history is explicit and recoverable. | The renderer subscribes to cursor-paginated newest-first Convex pages, prepends the active rich stream on the first page, and offers an explicit `Load earlier messages` action until the stored transcript is exhausted. | Implemented |
+| An assistant answer can continue in a new chat without changing its source. | The assistant message action creates an immutable fork through the selected stored answer, records its lineage, shares attachment lifetime safely, opens the new chat, and discloses any ancestry omitted by the bounded copy. | Implemented |
 | Editing or regeneration does not destroy the replaced history. | Convex archives the replaced active suffix and retains its attachment references before starting the replacement turn. A full thread-fork and branch-switching UI is not exposed yet. | Partial |
 | A model can create and manage live subagents. | Graneri does not expose subagent tools because the product does not have subagents. Runtime tools such as `spawn_agent`, `send_message`, `followup_task`, `list_agents`, and `interrupt_agent` are intentionally out of scope. | Not applicable |
 

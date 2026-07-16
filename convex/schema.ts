@@ -440,6 +440,9 @@ export default defineSchema({
 		authorName: v.optional(v.string()),
 		chatId: v.string(),
 		noteId: v.optional(v.id("notes")),
+		forkedFromChatId: v.optional(v.string()),
+		forkedFromMessageId: v.optional(v.string()),
+		historyOmittedBefore: v.optional(v.boolean()),
 		isStarred: v.optional(v.boolean()),
 		starredSortOrder: v.number(),
 		title: v.string(),
@@ -550,6 +553,13 @@ export default defineSchema({
 		.index("by_chatId", ["chatId"])
 		.index("by_chatId_and_createdAt", ["chatId", "createdAt"])
 		.index("by_chatId_and_messageId", ["chatId", "messageId"]),
+	chatAttachmentReferences: defineTable({
+		chatId: v.id("chats"),
+		messageId: v.string(),
+		storageId: v.id("_storage"),
+	})
+		.index("by_chatId_and_messageId", ["chatId", "messageId"])
+		.index("by_storageId", ["storageId"]),
 	chatBranches: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

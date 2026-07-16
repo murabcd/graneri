@@ -40,7 +40,9 @@ import { COMPOSER_DOCK_WRAPPER_CLASS } from "@/components/layout/composer-dock";
 import { PageTitle } from "@/components/layout/page-title";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useAppSources } from "@/hooks/use-app-sources";
+import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
+import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import {
 	getStoredChatModel as getStoredLocalChatModel,
@@ -287,6 +289,7 @@ const useChatPageController = ({
 	chatId,
 	pluginPrefill,
 	onChatPersisted: chatPersistedCallback,
+	onOpenChat,
 	chats,
 	isChatsLoading,
 	activeStreamingChatIds,
@@ -295,6 +298,7 @@ const useChatPageController = ({
 	| "chatId"
 	| "pluginPrefill"
 	| "onChatPersisted"
+	| "onOpenChat"
 	| "chats"
 	| "isChatsLoading"
 	| "activeStreamingChatIds"
@@ -406,10 +410,15 @@ const useChatPageController = ({
 	);
 	const stopAutomationRun = useMutation(api.automations.stopRun);
 	const userPreferences = useQuery(api.userPreferences.get, {});
-	const storedMessages = useQuery(
-		api.chats.getMessages,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId, chatId } : "skip",
-	);
+	const {
+		hasEarlierMessages,
+		isLoadingEarlierMessages,
+		loadEarlierMessages,
+		messages: storedMessages,
+	} = usePaginatedChatMessages({
+		chatId,
+		workspaceId: activeWorkspaceId,
+	});
 	const activeRun = useQuery(
 		api.assistantRuns.getAttachableRun,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId, chatId } : "skip",
@@ -435,8 +444,7 @@ const useChatPageController = ({
 	>(null);
 
 	const persistedMessages = React.useMemo(
-		() =>
-			storedMessages === undefined ? [] : toStoredChatMessages(storedMessages),
+		() => toStoredChatMessages(storedMessages),
 		[storedMessages],
 	);
 	const activePendingBranchMessageId =
@@ -983,6 +991,18 @@ const useChatPageController = ({
 			stopCurrentStream,
 		],
 	);
+	const handleForkedChat = React.useCallback(
+		(forkChatId: string) => {
+			chatPersistedCallback?.(forkChatId);
+			onOpenChat(forkChatId);
+		},
+		[chatPersistedCallback, onOpenChat],
+	);
+	const handleForkMessage = useAssistantMessageFork({
+		workspaceId: activeWorkspaceId,
+		chatId,
+		onForked: handleForkedChat,
+	});
 	const handleOpenMention = React.useCallback((sourceId: string) => {
 		setSummaryOpen(true);
 		setSummaryOpenSourceRequest((current) => ({
@@ -1014,6 +1034,10 @@ const useChatPageController = ({
 		activeStreamingChatIds: visibleActiveStreamingChatIds,
 		canStop,
 		isLoading: isChatUiPending,
+		hasEarlierMessages,
+		historyOmittedBefore: currentChat?.historyOmittedBefore === true,
+		isLoadingEarlierMessages,
+		loadEarlierMessages,
 		isNotesLoading,
 		messages: displayMessages,
 		streamingMessageIds,
@@ -1042,6 +1066,7 @@ const useChatPageController = ({
 		queuedFollowUps,
 		onQueuedFollowUpsReorder,
 		onDeleteMessage: handleDeleteMessage,
+		onForkMessage: handleForkMessage,
 		onOpenMention: handleOpenMention,
 		onEditMessage: handleEditMessage,
 		onRegenerateMessage: handleRegenerateMessage,
@@ -1072,6 +1097,7 @@ export function ChatPage({
 		pluginPrefill,
 		// The controller must call the latest parent persistence callback after submit.
 		onChatPersisted,
+		onOpenChat,
 		// Query results are inputs to render and stream reconciliation.
 		chats,
 		// Loading state is query-derived and controls render fallback only.
@@ -1445,11 +1471,18 @@ export function ChatPage({
 												messages={controller.messages}
 												error={controller.error}
 												isLoading={controller.isLoading}
+												hasEarlierMessages={controller.hasEarlierMessages}
+												historyOmittedBefore={controller.historyOmittedBefore}
+												isLoadingEarlierMessages={
+													controller.isLoadingEarlierMessages
+												}
 												onDeleteMessage={controller.onDeleteMessage}
 												onEditMessage={controller.onEditMessage}
+												onForkMessage={controller.onForkMessage}
 												onOpenMention={controller.onOpenMention}
 												onPlusAction={handleCreateNoteFromResponse}
 												onRegenerateMessage={controller.onRegenerateMessage}
+												onLoadEarlierMessages={controller.loadEarlierMessages}
 												streamingMessageIds={controller.streamingMessageIds}
 											/>
 										</div>

@@ -6,7 +6,15 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import { Check, Copy, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
+import {
+	Check,
+	Copy,
+	GitFork,
+	PenLine,
+	Plus,
+	RotateCcw,
+	Trash2,
+} from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
@@ -26,6 +34,7 @@ type ChatMessagesActionProps = {
 		mentions: ChatComposerMention[],
 	) => void;
 	onDeleteMessage?: (messageId: string) => void;
+	onForkMessage?: (messageId: string) => void;
 	onPlusAction?: (
 		content: string,
 	) => Promise<"created" | undefined> | "created" | undefined;
@@ -38,30 +47,40 @@ type ChatMessagesActionProps = {
 export type ChatMessagesProps = {
 	messages: UIMessage[];
 	error?: Error;
+	hasEarlierMessages?: boolean;
+	historyOmittedBefore?: boolean;
 	isLoading?: boolean;
+	isLoadingEarlierMessages?: boolean;
 	onEditMessage?: (
 		messageId: string,
 		text: string,
 		mentions: ChatComposerMention[],
 	) => void;
 	onDeleteMessage?: (messageId: string) => void;
+	onForkMessage?: (messageId: string) => void;
 	onPlusAction?: (
 		content: string,
 	) => Promise<"created" | undefined> | "created" | undefined;
 	onRegenerateMessage?: (messageId: string) => void;
 	onOpenMention?: (noteId: string) => void;
+	onLoadEarlierMessages?: () => void;
 	streamingMessageIds?: ReadonlySet<string>;
 };
 
 export default function ChatMessages({
 	messages,
 	error,
+	hasEarlierMessages,
+	historyOmittedBefore,
 	isLoading,
+	isLoadingEarlierMessages,
 	onEditMessage,
 	onDeleteMessage,
+	onForkMessage,
 	onPlusAction,
 	onRegenerateMessage,
 	onOpenMention,
+	onLoadEarlierMessages,
 	streamingMessageIds,
 }: ChatMessagesProps) {
 	const [messageIdPendingDelete, setMessageIdPendingDelete] = React.useState<
@@ -84,16 +103,23 @@ export default function ChatMessages({
 		[],
 	);
 	const renderAssistantActions = React.useCallback(
-		({ message, messageText, timestamp }: ChatMessageActionContext) => (
+		({
+			isStreamingAssistantMessage,
+			message,
+			messageText,
+			timestamp,
+		}: ChatMessageActionContext) => (
 			<AssistantMessageActions
+				isStreaming={isStreamingAssistantMessage}
 				messageId={message.id}
 				messageText={messageText}
 				onPlusAction={onPlusAction}
+				onForkMessage={onForkMessage}
 				onRegenerateMessage={onRegenerateMessage}
 				timestamp={timestamp}
 			/>
 		),
-		[onPlusAction, onRegenerateMessage],
+		[onForkMessage, onPlusAction, onRegenerateMessage],
 	);
 	const renderUserActions = React.useCallback(
 		({ message, messageText, timestamp }: ChatMessageActionContext) => (
@@ -117,8 +143,12 @@ export default function ChatMessages({
 			className="space-y-4"
 			error={error}
 			errorClassName="px-4"
+			hasEarlierMessages={hasEarlierMessages}
+			historyOmittedBefore={historyOmittedBefore}
 			isLoading={isLoading}
+			isLoadingEarlierMessages={isLoadingEarlierMessages}
 			messages={messages}
+			onLoadEarlierMessages={onLoadEarlierMessages}
 			textContainerClassName="mt-2 flex flex-row items-start gap-2 first:mt-0"
 			turnClassName={getTurnClassName}
 			renderAssistantActions={renderAssistantActions}
@@ -130,15 +160,19 @@ export default function ChatMessages({
 }
 
 function AssistantMessageActions({
+	isStreaming,
 	messageId,
 	messageText,
 	onPlusAction,
+	onForkMessage,
 	onRegenerateMessage,
 	timestamp,
 }: {
+	isStreaming: boolean;
 	messageId: string;
 	messageText: string;
 	onPlusAction?: ChatMessagesActionProps["onPlusAction"];
+	onForkMessage?: (messageId: string) => void;
 	onRegenerateMessage?: (messageId: string) => void;
 	timestamp: string | null;
 }) {
@@ -164,6 +198,22 @@ function AssistantMessageActions({
 					</Button>
 				</TooltipTrigger>
 				<TooltipContent>Regenerate</TooltipContent>
+			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-sm"
+						className="size-7 text-muted-foreground hover:text-foreground"
+						aria-label="Continue in new chat"
+						disabled={!onForkMessage || isStreaming}
+						onClick={() => onForkMessage?.(messageId)}
+					>
+						<GitFork className="size-3.5" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent>Continue in new chat</TooltipContent>
 			</Tooltip>
 			<CopyMessageButton text={messageText} />
 			<CreateNoteButton messageText={messageText} onPlusAction={onPlusAction} />

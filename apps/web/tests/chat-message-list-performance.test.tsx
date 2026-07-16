@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
 	MessageScroller,
 	MessageScrollerProvider,
@@ -331,5 +331,59 @@ describe("ChatMessageListContent performance", () => {
 				.querySelector('[data-message-id="assistant-1"]')
 				?.getAttribute("data-scroll-anchor"),
 		).toBe("false");
+	});
+
+	it("exposes paginated history and assistant fork actions", () => {
+		const onForkMessage = vi.fn();
+		const onLoadEarlierMessages = vi.fn();
+		render(
+			<TooltipProvider>
+				<TestMessageScroller>
+					<ChatMessages
+						hasEarlierMessages={true}
+						messages={[
+							createTextMessage({
+								id: "assistant-1",
+								role: "assistant",
+								text: "Fork this answer.",
+							}),
+						]}
+						onForkMessage={onForkMessage}
+						onLoadEarlierMessages={onLoadEarlierMessages}
+					/>
+				</TestMessageScroller>
+			</TooltipProvider>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Load earlier messages" }),
+		);
+		fireEvent.click(
+			screen.getByRole("button", { name: "Continue in new chat" }),
+		);
+
+		expect(onLoadEarlierMessages).toHaveBeenCalledOnce();
+		expect(onForkMessage).toHaveBeenCalledWith("assistant-1");
+	});
+
+	it("discloses ancestry omitted from a fork", () => {
+		render(
+			<TestMessageScroller>
+				<ChatMessageListContent
+					historyOmittedBefore
+					messages={[
+						createTextMessage({
+							id: "assistant-1",
+							role: "assistant",
+							text: "Forked answer.",
+						}),
+					]}
+				/>
+			</TestMessageScroller>,
+		);
+
+		expect(
+			screen.getByText("Earlier history was not copied into this chat."),
+		).toBeTruthy();
 	});
 });

@@ -5,6 +5,7 @@ import {
 	prefetchChatMessagesSnapshot,
 	useChatMessagesSnapshot,
 } from "@/hooks/use-chat-messages-snapshot";
+import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import {
 	type ChatModel,
 	getStoredChatModel as getStoredLocalChatModel,
@@ -105,13 +106,16 @@ export const useNoteDiscussionSession = ({
 		chatId: hasStoredCurrentChat ? currentChatId : null,
 		workspaceId: activeWorkspaceId,
 	});
-	const liveStoredMessages = useQuery(
-		api.chats.getMessages,
-		activeWorkspaceId && hasStoredCurrentChat
-			? { workspaceId: activeWorkspaceId, chatId: currentChatId }
-			: "skip",
-	);
-	const storedMessages = liveStoredMessages ?? storedMessageSnapshot;
+	const {
+		hasEarlierMessages,
+		isLoadingEarlierMessages,
+		loadEarlierMessages,
+		messages: storedMessages,
+	} = usePaginatedChatMessages({
+		chatId: hasStoredCurrentChat ? currentChatId : null,
+		fallbackMessages: storedMessageSnapshot,
+		workspaceId: activeWorkspaceId,
+	});
 	const activeRun = useQuery(
 		api.assistantRuns.getAttachableRun,
 		activeWorkspaceId && hasStoredCurrentChat
@@ -266,10 +270,16 @@ export const useNoteDiscussionSession = ({
 			latestNoteChat || selectedNoteChat || currentChatSession,
 		),
 		hasStoredCurrentChat,
+		hasEarlierMessages,
+		historyOmittedBefore:
+			(selectedNoteChat?.historyOmittedBefore ??
+				currentChatSession?.historyOmittedBefore) === true,
+		isLoadingEarlierMessages,
 		isNoteChatsLoading: Boolean(
 			noteId && activeWorkspaceId && noteChats === undefined,
 		),
 		latestNoteChat,
+		loadEarlierMessages,
 		noteChats,
 		openDraftChat,
 		prefetchNoteChat,

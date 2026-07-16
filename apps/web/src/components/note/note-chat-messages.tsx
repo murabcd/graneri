@@ -12,7 +12,7 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import { Copy, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Copy, GitFork, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
@@ -27,11 +27,16 @@ export type NoteChatMessagesProps = {
 	chatMessages: UIMessage[];
 	disableAddToNote: boolean;
 	disablePadding: boolean;
+	hasEarlierMessages?: boolean;
+	historyOmittedBefore?: boolean;
 	isChatLoading: boolean;
+	isLoadingEarlierMessages?: boolean;
 	onAddMessageToNote?: (text: string) => Promise<void> | void;
 	onDeleteMessage?: (messageId: string) => void;
 	onEditMessage?: (messageId: string, text: string) => void;
+	onForkMessage?: (messageId: string) => void;
 	onRegenerateMessage?: (messageId: string) => void;
+	onLoadEarlierMessages?: () => void;
 	streamingMessageIds?: ReadonlySet<string>;
 };
 
@@ -40,26 +45,38 @@ export default function NoteChatMessages({
 	chatMessages,
 	disableAddToNote,
 	disablePadding,
+	hasEarlierMessages,
+	historyOmittedBefore,
 	isChatLoading,
+	isLoadingEarlierMessages,
 	onAddMessageToNote,
 	onDeleteMessage,
 	onEditMessage,
+	onForkMessage,
 	onRegenerateMessage,
+	onLoadEarlierMessages,
 	streamingMessageIds,
 }: NoteChatMessagesProps) {
 	const getTurnClassName = React.useCallback(() => "flex flex-col gap-3", []);
 	const renderAssistantActions = React.useCallback(
-		({ displayText, message, timestamp }: ChatMessageActionContext) => (
+		({
+			displayText,
+			isStreamingAssistantMessage,
+			message,
+			timestamp,
+		}: ChatMessageActionContext) => (
 			<NoteAssistantMessageActions
 				disableAddToNote={disableAddToNote}
 				displayText={displayText}
+				isStreaming={isStreamingAssistantMessage}
 				messageId={message.id}
 				onAddMessageToNote={onAddMessageToNote}
+				onForkMessage={onForkMessage}
 				onRegenerateMessage={onRegenerateMessage}
 				timestamp={timestamp}
 			/>
 		),
-		[disableAddToNote, onAddMessageToNote, onRegenerateMessage],
+		[disableAddToNote, onAddMessageToNote, onForkMessage, onRegenerateMessage],
 	);
 	const renderUserActions = React.useCallback(
 		({ displayText, message, timestamp }: ChatMessageActionContext) => (
@@ -86,10 +103,14 @@ export default function NoteChatMessages({
 					<ChatMessageListContent
 						breathingSpaceClassName="min-h-16 w-full shrink-0"
 						error={chatError}
+						hasEarlierMessages={hasEarlierMessages}
+						historyOmittedBefore={historyOmittedBefore}
 						includeSources={false}
 						isLoading={isChatLoading}
+						isLoadingEarlierMessages={isLoadingEarlierMessages}
 						messageStackClassName="gap-2"
 						messages={chatMessages}
+						onLoadEarlierMessages={onLoadEarlierMessages}
 						scrollAnchorUserMessages={false}
 						textContainerClassName=""
 						turnClassName={getTurnClassName}
@@ -112,15 +133,19 @@ export default function NoteChatMessages({
 function NoteAssistantMessageActions({
 	disableAddToNote,
 	displayText,
+	isStreaming,
 	messageId,
 	onAddMessageToNote,
+	onForkMessage,
 	onRegenerateMessage,
 	timestamp,
 }: {
 	disableAddToNote: boolean;
 	displayText: string;
+	isStreaming: boolean;
 	messageId: string;
 	onAddMessageToNote?: (text: string) => Promise<void> | void;
+	onForkMessage?: (messageId: string) => void;
 	onRegenerateMessage?: (messageId: string) => void;
 	timestamp: string | null;
 }) {
@@ -143,6 +168,22 @@ function NoteAssistantMessageActions({
 					</Button>
 				</TooltipTrigger>
 				<TooltipContent>Regenerate</TooltipContent>
+			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-sm"
+						className="size-7 text-muted-foreground hover:text-foreground"
+						aria-label="Continue in new chat"
+						disabled={!onForkMessage || isStreaming}
+						onClick={() => onForkMessage?.(messageId)}
+					>
+						<GitFork className="size-3.5" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent>Continue in new chat</TooltipContent>
 			</Tooltip>
 			<NoteCopyMessageButton text={displayText} />
 			<NoteAddToNoteButton

@@ -42,6 +42,21 @@ const createWorkspace = async () => {
 	};
 };
 
+type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
+
+const readChatMessages = async (
+	asOwner: WorkspaceFixture["asOwner"],
+	workspaceId: WorkspaceFixture["workspaceId"],
+	chatId: string,
+) =>
+	(
+		await asOwner.query(api.chatThreads.readPage, {
+			workspaceId,
+			chatId,
+			paginationOpts: { cursor: null, numItems: 100 },
+		})
+	).page;
+
 test("owner-scoped automation adapters reuse the authenticated CRUD boundary", async () => {
 	const { t, workspaceId } = await createWorkspace();
 	const automation = await t.mutation(internal.automations.createForOwner, {
@@ -161,10 +176,11 @@ test("creating an automation leaves existing chat messages unchanged", async () 
 		chatId: "chat-existing",
 	});
 
-	const messages = await asOwner.query(api.chats.getMessages, {
+	const messages = await readChatMessages(
+		asOwner,
 		workspaceId,
-		chatId: automation.chatId,
-	});
+		automation.chatId,
+	);
 
 	expect(messages).toHaveLength(1);
 	expect(messages[0]).toMatchObject({
@@ -205,10 +221,11 @@ test("creating a workspace automation does not seed a chat transcript", async ()
 		label: "Workspace",
 	});
 
-	const messages = await asOwner.query(api.chats.getMessages, {
+	const messages = await readChatMessages(
+		asOwner,
 		workspaceId,
-		chatId: automation.chatId,
-	});
+		automation.chatId,
+	);
 
 	expect(messages).toHaveLength(0);
 });
@@ -250,10 +267,11 @@ test("creating a chat automation keeps the existing chat transcript unchanged", 
 		chatId: "chat-ai-created",
 	});
 
-	const messages = await asOwner.query(api.chats.getMessages, {
+	const messages = await readChatMessages(
+		asOwner,
 		workspaceId,
-		chatId: automation.chatId,
-	});
+		automation.chatId,
+	);
 
 	expect(messages).toHaveLength(1);
 	expect(messages[0]).toMatchObject({
@@ -300,10 +318,11 @@ test("creating a note automation does not seed a chat transcript", async () => {
 		},
 	});
 
-	const messages = await asOwner.query(api.chats.getMessages, {
+	const messages = await readChatMessages(
+		asOwner,
 		workspaceId,
-		chatId: automation.chatId,
-	});
+		automation.chatId,
+	);
 
 	expect(messages).toHaveLength(0);
 });
