@@ -3802,10 +3802,18 @@ function NoteTranscriptPanel({
 					<MessageScrollerContent className="gap-4">
 						{isDeferringTranscriptEntries &&
 						deferredDisplayTranscriptEntries.length === 0 ? (
-							<div className="flex flex-1 py-12" aria-hidden="true" />
+							<MessageScrollerItem
+								aria-hidden="true"
+								className="flex flex-1 py-12"
+								messageId="transcript-deferred-placeholder"
+							/>
 						) : null}
 						{isProgressivelyRenderingTranscript ? (
-							<div className="h-4" aria-hidden="true" />
+							<MessageScrollerItem
+								aria-hidden="true"
+								className="h-4"
+								messageId="transcript-progressive-spacer"
+							/>
 						) : null}
 						{renderedTranscriptEntries.map((utterance) => {
 							const isUserTranscript = utterance.speaker === "you";

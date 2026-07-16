@@ -12,7 +12,13 @@ import {
 } from "@workspace/ui/components/message-scroller";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import { FileText, GitFork, LoaderCircle, Paperclip } from "lucide-react";
+import {
+	CornerDownRight,
+	FileText,
+	GitFork,
+	LoaderCircle,
+	Paperclip,
+} from "lucide-react";
 import * as React from "react";
 import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
 import { Reasoning } from "@/components/ai-elements/reasoning";
@@ -169,24 +175,31 @@ export function ChatMessageListContent({
 	return (
 		<MessageScrollerContent className={className}>
 			{historyMarkerState?.kind === "fork" ? (
-				<Marker className="py-2">
-					<MarkerIcon>
-						<GitFork className="size-4" />
-					</MarkerIcon>
-					<MarkerContent>Forked from another chat</MarkerContent>
-				</Marker>
+				<MessageScrollerItem messageId="chat-fork-marker">
+					<Marker className="py-2">
+						<MarkerIcon>
+							<GitFork className="size-4" />
+						</MarkerIcon>
+						<MarkerContent>Forked from another chat</MarkerContent>
+					</Marker>
+				</MessageScrollerItem>
 			) : null}
 			{historyMarkerState?.kind === "fork" &&
 			historyMarkerState.historyOmittedBefore &&
 			!hasEarlierMessages ? (
-				<Marker className="py-2" variant="separator">
-					<MarkerContent>
-						Earlier history was not copied into this fork.
-					</MarkerContent>
-				</Marker>
+				<MessageScrollerItem messageId="chat-fork-history-omitted-marker">
+					<Marker className="py-2" variant="separator">
+						<MarkerContent>
+							Earlier history was not copied into this fork.
+						</MarkerContent>
+					</Marker>
+				</MessageScrollerItem>
 			) : null}
 			{hasEarlierMessages ? (
-				<div className="flex justify-center py-2">
+				<MessageScrollerItem
+					className="flex justify-center py-2"
+					messageId="chat-history-loader"
+				>
 					<Button
 						type="button"
 						variant="ghost"
@@ -201,7 +214,7 @@ export function ChatMessageListContent({
 							? "Loading earlier messages"
 							: "Load earlier messages"}
 					</Button>
-				</div>
+				</MessageScrollerItem>
 			) : null}
 			{turns.map((turn, turnIndex) => {
 				const isLastTurn = turnIndex === turns.length - 1;
@@ -256,13 +269,20 @@ export function ChatMessageListContent({
 			})}
 
 			{showAssistantBreathingSpace ? (
-				<div aria-hidden="true" className={breathingSpaceClassName} />
+				<MessageScrollerItem
+					aria-hidden="true"
+					className={breathingSpaceClassName}
+					messageId="assistant-breathing-space"
+				/>
 			) : null}
 
 			{error ? (
-				<p className={cn("text-sm text-destructive", errorClassName)}>
-					{error.message}
-				</p>
+				<MessageScrollerItem
+					className={cn("text-sm text-destructive", errorClassName)}
+					messageId="chat-error"
+				>
+					<p>{error.message}</p>
+				</MessageScrollerItem>
 			) : null}
 		</MessageScrollerContent>
 	);
@@ -647,6 +667,9 @@ const InterruptedMessageStatus = React.memo(
 	function InterruptedMessageStatus() {
 		return (
 			<Marker className="mt-2">
+				<MarkerIcon>
+					<CornerDownRight className="size-4" />
+				</MarkerIcon>
 				<MarkerContent>Steered conversation</MarkerContent>
 			</Marker>
 		);

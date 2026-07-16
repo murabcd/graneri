@@ -70,6 +70,22 @@ function TestMessageScroller({ children }: { children: React.ReactNode }) {
 	);
 }
 
+const expectCanonicalMessageScrollerRows = () => {
+	const contents = document.querySelectorAll(
+		'[data-slot="message-scroller-content"]',
+	);
+	expect(contents.length).toBeGreaterThan(0);
+	for (const content of contents) {
+		const applicationRows = Array.from(content.children).filter(
+			(child) => !child.hasAttribute("data-message-scroller-spacer"),
+		);
+		expect(applicationRows.length).toBeGreaterThan(0);
+		for (const child of applicationRows) {
+			expect(child.getAttribute("data-slot")).toBe("message-scroller-item");
+		}
+	}
+};
+
 describe("ChatMessageListContent performance", () => {
 	afterEach(() => {
 		cleanup();
@@ -183,6 +199,9 @@ describe("ChatMessageListContent performance", () => {
 		expect(markdown?.getAttribute("data-link-safety")).toBe("false");
 		expect(document.body.textContent).toContain("# Interrupted answer");
 		expect(document.body.textContent).toContain("Steered conversation");
+		expect(
+			document.querySelector('[data-slot="marker-icon"] svg'),
+		).not.toBeNull();
 	});
 
 	it("marks steer handoff assistant text as a completed steered conversation", () => {
@@ -362,16 +381,19 @@ describe("ChatMessageListContent performance", () => {
 
 		expect(onLoadEarlierMessages).toHaveBeenCalledOnce();
 		expect(onForkMessage).toHaveBeenCalledWith("assistant-1");
+		expectCanonicalMessageScrollerRows();
 	});
 
 	it("discloses ancestry omitted from a fork", () => {
 		render(
 			<TestMessageScroller>
 				<ChatMessageListContent
+					error={new Error("Chat failed.")}
 					historyMarkerState={{
 						kind: "fork",
 						historyOmittedBefore: true,
 					}}
+					isLoading
 					messages={[
 						createTextMessage({
 							id: "assistant-1",
@@ -387,6 +409,7 @@ describe("ChatMessageListContent performance", () => {
 			screen.getByText("Earlier history was not copied into this fork."),
 		).toBeTruthy();
 		expect(screen.getByText("Forked from another chat")).toBeTruthy();
+		expectCanonicalMessageScrollerRows();
 	});
 
 	it("marks a fork even when its full ancestry was copied", () => {
