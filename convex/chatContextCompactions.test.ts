@@ -53,6 +53,12 @@ test("context compaction advances a verified chat message boundary", async () =>
 		api.chatContextCompactions.getPreparationState,
 		{ workspaceId, chatId: "chat-context" },
 	);
+	await expect(
+		asOwner.query(api.chatContextCompactions.getDisplayState, {
+			workspaceId,
+			chatId: "chat-context",
+		}),
+	).resolves.toBeNull();
 	expect(initial.hasMoreMessages).toBe(true);
 	expect(initial.messages).toHaveLength(201);
 	const boundary = initial.messages[99];
@@ -80,6 +86,12 @@ test("context compaction advances a verified chat message boundary", async () =>
 		throughCreationTime: boundary.creationTime,
 		throughMessageId: boundary.id,
 	});
+	await expect(
+		asOwner.query(api.chatContextCompactions.getDisplayState, {
+			workspaceId,
+			chatId: "chat-context",
+		}),
+	).resolves.toEqual({ throughMessageId: "message-100" });
 
 	const prepared = await asOwner.query(
 		api.chatContextCompactions.getPreparationState,

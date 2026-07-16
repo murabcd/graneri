@@ -107,6 +107,7 @@ export const useNoteDiscussionSession = ({
 		workspaceId: activeWorkspaceId,
 	});
 	const {
+		compactionThroughMessageId,
 		hasEarlierMessages,
 		isLoadingEarlierMessages,
 		loadEarlierMessages,
@@ -271,9 +272,20 @@ export const useNoteDiscussionSession = ({
 		),
 		hasStoredCurrentChat,
 		hasEarlierMessages,
-		historyOmittedBefore:
-			(selectedNoteChat?.historyOmittedBefore ??
-				currentChatSession?.historyOmittedBefore) === true,
+		historyMarkerState:
+			(selectedNoteChat?.forkedFromChatId ??
+				currentChatSession?.forkedFromChatId) !== undefined
+				? {
+						kind: "fork" as const,
+						compactionThroughMessageId,
+						historyOmittedBefore:
+							(selectedNoteChat?.historyOmittedBefore ??
+								currentChatSession?.historyOmittedBefore) === true,
+					}
+				: {
+						kind: "original" as const,
+						compactionThroughMessageId,
+					},
 		isLoadingEarlierMessages,
 		isNoteChatsLoading: Boolean(
 			noteId && activeWorkspaceId && noteChats === undefined,

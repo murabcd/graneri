@@ -17,26 +17,36 @@ import * as React from "react";
 import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
 import {
+	type ChatHistoryMarkerState,
 	type ChatMessageActionContext,
 	ChatMessageListContent,
 } from "@/components/chat/message-list";
 import { NOTE_POPOVER_SCROLLER_BUTTON_CLASS } from "./note-popover-scroll";
+
+type NoteChatHistoryPagination =
+	| { status: "complete" }
+	| {
+			status: "available" | "loading";
+			onLoad: () => void;
+	  };
+
+const COMPLETE_CHAT_HISTORY: NoteChatHistoryPagination = {
+	status: "complete",
+};
 
 export type NoteChatMessagesProps = {
 	chatError: Error | undefined;
 	chatMessages: UIMessage[];
 	disableAddToNote: boolean;
 	disablePadding: boolean;
-	hasEarlierMessages?: boolean;
-	historyOmittedBefore?: boolean;
+	historyPagination?: NoteChatHistoryPagination;
+	historyMarkerState?: ChatHistoryMarkerState;
 	isChatLoading: boolean;
-	isLoadingEarlierMessages?: boolean;
 	onAddMessageToNote?: (text: string) => Promise<void> | void;
 	onDeleteMessage?: (messageId: string) => void;
 	onEditMessage?: (messageId: string, text: string) => void;
 	onForkMessage?: (messageId: string) => void;
 	onRegenerateMessage?: (messageId: string) => void;
-	onLoadEarlierMessages?: () => void;
 	streamingMessageIds?: ReadonlySet<string>;
 };
 
@@ -45,18 +55,22 @@ export default function NoteChatMessages({
 	chatMessages,
 	disableAddToNote,
 	disablePadding,
-	hasEarlierMessages,
-	historyOmittedBefore,
+	historyPagination = COMPLETE_CHAT_HISTORY,
+	historyMarkerState,
 	isChatLoading,
-	isLoadingEarlierMessages,
 	onAddMessageToNote,
 	onDeleteMessage,
 	onEditMessage,
 	onForkMessage,
 	onRegenerateMessage,
-	onLoadEarlierMessages,
 	streamingMessageIds,
 }: NoteChatMessagesProps) {
+	const hasEarlierMessages = historyPagination.status !== "complete";
+	const isLoadingEarlierMessages = historyPagination.status === "loading";
+	const onLoadEarlierMessages =
+		historyPagination.status === "complete"
+			? undefined
+			: historyPagination.onLoad;
 	const getTurnClassName = React.useCallback(() => "flex flex-col gap-3", []);
 	const renderAssistantActions = React.useCallback(
 		({
@@ -104,7 +118,7 @@ export default function NoteChatMessages({
 						breathingSpaceClassName="min-h-16 w-full shrink-0"
 						error={chatError}
 						hasEarlierMessages={hasEarlierMessages}
-						historyOmittedBefore={historyOmittedBefore}
+						historyMarkerState={historyMarkerState}
 						includeSources={false}
 						isLoading={isChatLoading}
 						isLoadingEarlierMessages={isLoadingEarlierMessages}

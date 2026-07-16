@@ -411,6 +411,7 @@ const useChatPageController = ({
 	const stopAutomationRun = useMutation(api.automations.stopRun);
 	const userPreferences = useQuery(api.userPreferences.get, {});
 	const {
+		compactionThroughMessageId,
 		hasEarlierMessages,
 		isLoadingEarlierMessages,
 		loadEarlierMessages,
@@ -1035,7 +1036,17 @@ const useChatPageController = ({
 		canStop,
 		isLoading: isChatUiPending,
 		hasEarlierMessages,
-		historyOmittedBefore: currentChat?.historyOmittedBefore === true,
+		historyMarkerState:
+			currentChat?.forkedFromChatId !== undefined
+				? {
+						kind: "fork" as const,
+						compactionThroughMessageId,
+						historyOmittedBefore: currentChat.historyOmittedBefore === true,
+					}
+				: {
+						kind: "original" as const,
+						compactionThroughMessageId,
+					},
 		isLoadingEarlierMessages,
 		loadEarlierMessages,
 		isNotesLoading,
@@ -1472,7 +1483,7 @@ export function ChatPage({
 												error={controller.error}
 												isLoading={controller.isLoading}
 												hasEarlierMessages={controller.hasEarlierMessages}
-												historyOmittedBefore={controller.historyOmittedBefore}
+												historyMarkerState={controller.historyMarkerState}
 												isLoadingEarlierMessages={
 													controller.isLoadingEarlierMessages
 												}

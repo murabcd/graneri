@@ -1,6 +1,10 @@
 import { Bubble, BubbleContent } from "@workspace/ui/components/bubble";
 import { Button } from "@workspace/ui/components/button";
-import { Marker, MarkerContent } from "@workspace/ui/components/marker";
+import {
+	Marker,
+	MarkerContent,
+	MarkerIcon,
+} from "@workspace/ui/components/marker";
 import { Message, MessageContent } from "@workspace/ui/components/message";
 import {
 	MessageScrollerContent,
@@ -8,7 +12,7 @@ import {
 } from "@workspace/ui/components/message-scroller";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import { FileText, LoaderCircle, Paperclip } from "lucide-react";
+import { FileText, GitFork, LoaderCircle, Paperclip } from "lucide-react";
 import * as React from "react";
 import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
 import { Reasoning } from "@/components/ai-elements/reasoning";
@@ -64,6 +68,17 @@ export type ChatMessageActionContext = {
 	timestamp: string | null;
 };
 
+export type ChatHistoryMarkerState =
+	| {
+			kind: "original";
+			compactionThroughMessageId?: string | null;
+	  }
+	| {
+			kind: "fork";
+			compactionThroughMessageId?: string | null;
+			historyOmittedBefore: boolean;
+	  };
+
 const EMPTY_MESSAGE_PARTS: UIMessage["parts"] = [];
 const EMPTY_CHART_ARTIFACTS: ReturnType<typeof extractChatChartArtifacts> = [];
 const EMPTY_MESSAGE_IDS = new Set<string>();
@@ -80,7 +95,7 @@ export function ChatMessageListContent({
 	errorClassName,
 	includeSources = true,
 	hasEarlierMessages = false,
-	historyOmittedBefore = false,
+	historyMarkerState,
 	isLoadingEarlierMessages = false,
 	onLoadEarlierMessages,
 	scrollAnchorUserMessages = true,
@@ -100,7 +115,7 @@ export function ChatMessageListContent({
 	errorClassName?: string;
 	includeSources?: boolean;
 	hasEarlierMessages?: boolean;
-	historyOmittedBefore?: boolean;
+	historyMarkerState?: ChatHistoryMarkerState;
 	isLoadingEarlierMessages?: boolean;
 	onLoadEarlierMessages?: () => void;
 	scrollAnchorUserMessages?: boolean;
@@ -133,6 +148,8 @@ export function ChatMessageListContent({
 	}, [isLoading, normalizedMessages]);
 	const lastMessage = displayMessages[displayMessages.length - 1];
 	const forcedStreamingMessageIds = streamingMessageIds ?? EMPTY_MESSAGE_IDS;
+	const compactionThroughMessageId =
+		historyMarkerState?.compactionThroughMessageId;
 	const turns = React.useMemo(
 		() => groupMessagesIntoTurns(displayMessages),
 		[displayMessages],
@@ -149,13 +166,24 @@ export function ChatMessageListContent({
 					extractToolParts(message).length > 0 ||
 					(includeSources && collectMessageSources(message).length > 0),
 			));
-
 	return (
 		<MessageScrollerContent className={className}>
-			{historyOmittedBefore && !hasEarlierMessages ? (
-				<p className="py-2 text-center text-muted-foreground text-xs">
-					Earlier history was not copied into this chat.
-				</p>
+			{historyMarkerState?.kind === "fork" ? (
+				<Marker className="py-2">
+					<MarkerIcon>
+						<GitFork className="size-4" />
+					</MarkerIcon>
+					<MarkerContent>Forked from another chat</MarkerContent>
+				</Marker>
+			) : null}
+			{historyMarkerState?.kind === "fork" &&
+			historyMarkerState.historyOmittedBefore &&
+			!hasEarlierMessages ? (
+				<Marker className="py-2" variant="separator">
+					<MarkerContent>
+						Earlier history was not copied into this fork.
+					</MarkerContent>
+				</Marker>
 			) : null}
 			{hasEarlierMessages ? (
 				<div className="flex justify-center py-2">
@@ -193,29 +221,35 @@ export function ChatMessageListContent({
 						className={turnClassName?.(isLastTurn)}
 					>
 						{turnMessages.map((message) => (
-							<div
-								key={message.id}
-								data-chat-message-scroll-row={message.id}
-								data-message-id={message.id}
-								data-scroll-anchor={
-									scrollAnchorUserMessages && message.role === "user"
-										? "true"
-										: "false"
-								}
-							>
-								<ChatMessageListItem
-									message={message}
-									includeSources={includeSources}
-									isLoading={isLoading}
-									lastMessageId={lastMessage?.id}
-									messageStackClassName={messageStackClassName}
-									renderAssistantActions={renderAssistantActions}
-									renderUserActions={renderUserActions}
-									onOpenMention={onOpenMention}
-									streamingMessageIds={forcedStreamingMessageIds}
-									textContainerClassName={textContainerClassName}
-								/>
-							</div>
+							<React.Fragment key={message.id}>
+								<div
+									data-chat-message-scroll-row={message.id}
+									data-message-id={message.id}
+									data-scroll-anchor={
+										scrollAnchorUserMessages && message.role === "user"
+											? "true"
+											: "false"
+									}
+								>
+									<ChatMessageListItem
+										message={message}
+										includeSources={includeSources}
+										isLoading={isLoading}
+										lastMessageId={lastMessage?.id}
+										messageStackClassName={messageStackClassName}
+										renderAssistantActions={renderAssistantActions}
+										renderUserActions={renderUserActions}
+										onOpenMention={onOpenMention}
+										streamingMessageIds={forcedStreamingMessageIds}
+										textContainerClassName={textContainerClassName}
+									/>
+								</div>
+								{message.id === compactionThroughMessageId ? (
+									<Marker className="my-2" variant="separator">
+										<MarkerContent>Conversation compacted</MarkerContent>
+									</Marker>
+								) : null}
+							</React.Fragment>
 						))}
 					</MessageScrollerItem>
 				);

@@ -1,4 +1,4 @@
-import { usePaginatedQuery } from "convex/react";
+import { usePaginatedQuery, useQuery } from "convex/react";
 import * as React from "react";
 import type { StoredChatMessage } from "@/lib/chat-snapshot";
 import { api } from "../../../../convex/_generated/api";
@@ -32,6 +32,10 @@ export const usePaginatedChatMessages = ({
 		chatId && workspaceId ? { chatId, workspaceId } : "skip",
 		{ initialNumItems: CHAT_HISTORY_PAGE_SIZE },
 	);
+	const compactionDisplayState = useQuery(
+		api.chatContextCompactions.getDisplayState,
+		chatId && workspaceId ? { chatId, workspaceId } : "skip",
+	);
 	const messages = React.useMemo(() => {
 		if (
 			pagination.status === "LoadingFirstPage" &&
@@ -49,6 +53,8 @@ export const usePaginatedChatMessages = ({
 	}, [pagination]);
 
 	return {
+		compactionThroughMessageId:
+			compactionDisplayState?.throughMessageId ?? null,
 		hasEarlierMessages:
 			pagination.status === "CanLoadMore" ||
 			pagination.status === "LoadingMore",

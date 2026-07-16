@@ -29,6 +29,10 @@ const compactionValidator = v.object({
 	updatedAt: v.number(),
 });
 
+const compactionDisplayStateValidator = v.object({
+	throughMessageId: v.string(),
+});
+
 const toContextMessage = (message: {
 	messageId: string;
 	role: "system" | "user" | "assistant";
@@ -94,6 +98,35 @@ export const getPreparationState = query({
 			hasMoreMessages: messages.length > HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
 			messages: messages.map(toContextMessage),
 		};
+	},
+});
+
+export const getDisplayState = query({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+	},
+	returns: v.union(compactionDisplayStateValidator, v.null()),
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		const chat = await getOwnedActiveChatById(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			args.chatId,
+		);
+		if (!chat) {
+			return null;
+		}
+
+		const compaction = await ctx.db
+			.query("chatContextCompactions")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+			.unique();
+
+		return compaction
+			? { throughMessageId: compaction.throughMessageId }
+			: null;
 	},
 });
 

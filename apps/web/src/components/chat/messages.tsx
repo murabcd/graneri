@@ -19,6 +19,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
 import {
+	type ChatHistoryMarkerState,
 	type ChatMessageActionContext,
 	ChatMessageListContent,
 } from "@/components/chat/message-list";
@@ -48,7 +49,7 @@ export type ChatMessagesProps = {
 	messages: UIMessage[];
 	error?: Error;
 	hasEarlierMessages?: boolean;
-	historyOmittedBefore?: boolean;
+	historyMarkerState?: ChatHistoryMarkerState;
 	isLoading?: boolean;
 	isLoadingEarlierMessages?: boolean;
 	onEditMessage?: (
@@ -71,7 +72,7 @@ export default function ChatMessages({
 	messages,
 	error,
 	hasEarlierMessages,
-	historyOmittedBefore,
+	historyMarkerState,
 	isLoading,
 	isLoadingEarlierMessages,
 	onEditMessage,
@@ -144,7 +145,7 @@ export default function ChatMessages({
 			error={error}
 			errorClassName="px-4"
 			hasEarlierMessages={hasEarlierMessages}
-			historyOmittedBefore={historyOmittedBefore}
+			historyMarkerState={historyMarkerState}
 			isLoading={isLoading}
 			isLoadingEarlierMessages={isLoadingEarlierMessages}
 			messages={messages}

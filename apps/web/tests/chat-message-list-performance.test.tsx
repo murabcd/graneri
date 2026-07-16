@@ -368,7 +368,10 @@ describe("ChatMessageListContent performance", () => {
 		render(
 			<TestMessageScroller>
 				<ChatMessageListContent
-					historyOmittedBefore
+					historyMarkerState={{
+						kind: "fork",
+						historyOmittedBefore: true,
+					}}
 					messages={[
 						createTextMessage({
 							id: "assistant-1",
@@ -381,7 +384,70 @@ describe("ChatMessageListContent performance", () => {
 		);
 
 		expect(
-			screen.getByText("Earlier history was not copied into this chat."),
+			screen.getByText("Earlier history was not copied into this fork."),
 		).toBeTruthy();
+		expect(screen.getByText("Forked from another chat")).toBeTruthy();
+	});
+
+	it("marks a fork even when its full ancestry was copied", () => {
+		render(
+			<TestMessageScroller>
+				<ChatMessageListContent
+					historyMarkerState={{
+						kind: "fork",
+						historyOmittedBefore: false,
+					}}
+					messages={[
+						createTextMessage({
+							id: "assistant-1",
+							role: "assistant",
+							text: "Forked answer.",
+						}),
+					]}
+				/>
+			</TestMessageScroller>,
+		);
+
+		expect(screen.getByText("Forked from another chat")).toBeTruthy();
+		expect(
+			screen.queryByText("Earlier history was not copied into this fork."),
+		).toBeNull();
+	});
+
+	it("places the compaction marker after its exact message boundary", () => {
+		render(
+			<TestMessageScroller>
+				<ChatMessageListContent
+					historyMarkerState={{
+						kind: "original",
+						compactionThroughMessageId: "assistant-1",
+					}}
+					messages={[
+						createTextMessage({
+							id: "user-1",
+							role: "user",
+							text: "Earlier question.",
+						}),
+						createTextMessage({
+							id: "assistant-1",
+							role: "assistant",
+							text: "Earlier answer.",
+						}),
+						createTextMessage({
+							id: "user-2",
+							role: "user",
+							text: "New question.",
+						}),
+					]}
+				/>
+			</TestMessageScroller>,
+		);
+
+		const boundaryMessage = document.querySelector(
+			'[data-message-id="assistant-1"]',
+		);
+		expect(boundaryMessage?.nextElementSibling?.textContent).toContain(
+			"Conversation compacted",
+		);
 	});
 });

@@ -464,7 +464,7 @@ const useNoteComposerController = ({
 		hasKnownNoteChat,
 		hasStoredCurrentChat,
 		hasEarlierMessages,
-		historyOmittedBefore,
+		historyMarkerState,
 		isLoadingEarlierMessages,
 		isNoteChatsLoading,
 		latestNoteChat,
@@ -1748,6 +1748,21 @@ const useNoteComposerController = ({
 	const handleComposerFocus = React.useCallback(() => {
 		openInlineChatFromComposer();
 	}, [openInlineChatFromComposer]);
+	const historyPagination = React.useMemo(
+		() =>
+			isLoadingEarlierMessages
+				? {
+						status: "loading" as const,
+						onLoad: loadEarlierMessages,
+					}
+				: hasEarlierMessages
+					? {
+							status: "available" as const,
+							onLoad: loadEarlierMessages,
+						}
+					: { status: "complete" as const },
+		[hasEarlierMessages, isLoadingEarlierMessages, loadEarlierMessages],
+	);
 
 	return {
 		autoStartKey: transcriptSession.autoStartKey,
@@ -1763,8 +1778,8 @@ const useNoteComposerController = ({
 		exportTranscript: transcriptSession.exportTranscript,
 		fullTranscript: transcriptSession.fullTranscript,
 		groupedNoteChats,
-		hasEarlierMessages,
-		historyOmittedBefore,
+		historyPagination,
+		historyMarkerState,
 		handleCancelEdit,
 		handleComposerFocus,
 		handleComposerPointerDown,
@@ -1773,8 +1788,6 @@ const useNoteComposerController = ({
 		handleForkMessage,
 		handleGenerateNotes: transcriptSession.handleGenerateNotes,
 		handleHideChat,
-		isLoadingEarlierMessages,
-		loadEarlierMessages,
 		composerEditorRef,
 		handleComposerKeyDown,
 		handleComposerValueChange,
@@ -3558,16 +3571,14 @@ function NoteComposerPanels({
 			chatMessages={controller.chatMessages}
 			disableAddToNote={!onAddMessageToNote}
 			disablePadding={controller.isSidebarPresentation}
-			hasEarlierMessages={controller.hasEarlierMessages}
-			historyOmittedBefore={controller.historyOmittedBefore}
+			historyPagination={controller.historyPagination}
+			historyMarkerState={controller.historyMarkerState}
 			isChatLoading={controller.isChatLoading}
-			isLoadingEarlierMessages={controller.isLoadingEarlierMessages}
 			onAddMessageToNote={onAddMessageToNote}
 			onDeleteMessage={controller.handleDeleteMessage}
 			onEditMessage={controller.handleEditMessage}
 			onForkMessage={controller.handleForkMessage}
 			onRegenerateMessage={controller.handleRegenerateMessage}
-			onLoadEarlierMessages={controller.loadEarlierMessages}
 			streamingMessageIds={controller.streamingMessageIds}
 		/>
 	);
