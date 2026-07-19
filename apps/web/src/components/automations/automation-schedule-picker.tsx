@@ -1,4 +1,3 @@
-import type { AutomationCustomFrequency } from "@workspace/ai/automation-schedule";
 import type { AutomationDeliveryPolicy } from "@workspace/ai/automation-tools";
 import { Button } from "@workspace/ui/components/button";
 import { Calendar } from "@workspace/ui/components/calendar";
@@ -37,9 +36,12 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import { CalendarIcon, ChevronDown, Clock } from "lucide-react";
 import {
-	AUTOMATION_SCHEDULE_PERIODS,
-	type AutomationSchedulePeriod,
-} from "./automation-types";
+	type AutomationScheduleDraft,
+	getAutomationScheduleDraftLabel,
+	setAutomationScheduleMonthDay,
+	updateAutomationScheduleDraft,
+} from "./automation-schedule-draft";
+import { AUTOMATION_SCHEDULE_PERIODS } from "./automation-types";
 
 const AUTOMATION_PICKER_TRIGGER_CLASS_NAME =
 	"group/automation-picker min-w-0 max-w-full justify-start rounded-full font-normal text-muted-foreground";
@@ -88,15 +90,6 @@ const formatDateLabel = (value: string) => {
 				year: "numeric",
 			}).format(date)
 		: "Choose date";
-};
-
-const setLocalDateDay = (value: string, day: number) => {
-	const [year, month] = value.split("-").map(Number);
-	if (!year || !month) {
-		return value;
-	}
-	const lastDay = new Date(year, month, 0).getDate();
-	return `${value.slice(0, 8)}${String(Math.min(day, lastDay)).padStart(2, "0")}`;
 };
 
 function AutomationDatePicker({
@@ -204,42 +197,28 @@ function AutomationWeekdayPicker({
 export function AutomationSchedulePicker({
 	open,
 	onOpenChange,
-	scheduleLabel,
-	schedulePeriod,
-	scheduleDate,
-	scheduleTime,
-	scheduleTimezone,
-	scheduleWeekdays,
-	customFrequency,
-	customInterval,
+	value,
 	deliveryPolicy,
-	onSchedulePeriodChange,
-	onScheduleDateChange,
-	onScheduleTimeChange,
-	onScheduleWeekdaysChange,
-	onCustomFrequencyChange,
-	onCustomIntervalChange,
+	onChange,
 	onDeliveryPolicyChange,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	scheduleLabel: string;
-	schedulePeriod: AutomationSchedulePeriod;
-	scheduleDate: string;
-	scheduleTime: string;
-	scheduleTimezone: string;
-	scheduleWeekdays: number[];
-	customFrequency: AutomationCustomFrequency;
-	customInterval: number;
+	value: AutomationScheduleDraft;
 	deliveryPolicy: AutomationDeliveryPolicy;
-	onSchedulePeriodChange: (value: AutomationSchedulePeriod) => void;
-	onScheduleDateChange: (value: string) => void;
-	onScheduleTimeChange: (value: string) => void;
-	onScheduleWeekdaysChange: (value: number[]) => void;
-	onCustomFrequencyChange: (value: AutomationCustomFrequency) => void;
-	onCustomIntervalChange: (value: number) => void;
+	onChange: (value: AutomationScheduleDraft) => void;
 	onDeliveryPolicyChange: (value: AutomationDeliveryPolicy) => void;
 }) {
+	const {
+		period: schedulePeriod,
+		date: scheduleDate,
+		time: scheduleTime,
+		timezone: scheduleTimezone,
+		weekdays: scheduleWeekdays,
+		customFrequency,
+		customInterval,
+	} = value;
+	const scheduleLabel = getAutomationScheduleDraftLabel(value);
 	const customFrequencyOption =
 		CUSTOM_FREQUENCIES.find((option) => option.value === customFrequency) ??
 		CUSTOM_FREQUENCIES[0];
@@ -287,8 +266,12 @@ export function AutomationSchedulePicker({
 				<div className="flex flex-col gap-1">
 					<Select
 						value={schedulePeriod}
-						onValueChange={(value) =>
-							onSchedulePeriodChange(value as AutomationSchedulePeriod)
+						onValueChange={(nextPeriod) =>
+							onChange(
+								updateAutomationScheduleDraft(value, {
+									period: nextPeriod as AutomationScheduleDraft["period"],
+								}),
+							)
 						}
 					>
 						<SelectTrigger
@@ -312,8 +295,13 @@ export function AutomationSchedulePicker({
 						<>
 							<Select
 								value={customFrequency}
-								onValueChange={(value) =>
-									onCustomFrequencyChange(value as AutomationCustomFrequency)
+								onValueChange={(nextFrequency) =>
+									onChange(
+										updateAutomationScheduleDraft(value, {
+											customFrequency:
+												nextFrequency as AutomationScheduleDraft["customFrequency"],
+										}),
+									)
 								}
 							>
 								<SelectTrigger
@@ -340,14 +328,10 @@ export function AutomationSchedulePicker({
 									max={99}
 									value={customInterval}
 									onChange={(event) =>
-										onCustomIntervalChange(
-											Math.max(
-												1,
-												Math.min(
-													99,
-													Math.trunc(event.target.valueAsNumber || 1),
-												),
-											),
+										onChange(
+											updateAutomationScheduleDraft(value, {
+												customInterval: event.target.valueAsNumber,
+											}),
 										)
 									}
 									aria-label="Repeat interval"
@@ -362,7 +346,9 @@ export function AutomationSchedulePicker({
 							{customFrequency === "weekly" ? (
 								<AutomationWeekdayPicker
 									value={scheduleWeekdays}
-									onChange={onScheduleWeekdaysChange}
+									onChange={(weekdays) =>
+										onChange(updateAutomationScheduleDraft(value, { weekdays }))
+									}
 								/>
 							) : null}
 							{customFrequency === "monthly" ? (
@@ -371,15 +357,14 @@ export function AutomationSchedulePicker({
 									min={1}
 									max={31}
 									value={monthDay}
-									onChange={(event) => {
-										const nextDay = Math.max(
-											1,
-											Math.min(31, Math.trunc(event.target.valueAsNumber || 1)),
-										);
-										onScheduleDateChange(
-											setLocalDateDay(scheduleDate, nextDay),
-										);
-									}}
+									onChange={(event) =>
+										onChange(
+											setAutomationScheduleMonthDay(
+												value,
+												event.target.valueAsNumber,
+											),
+										)
+									}
 									aria-label="Day of month"
 									className={cn(
 										"appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
@@ -391,7 +376,9 @@ export function AutomationSchedulePicker({
 								<AutomationDatePicker
 									value={scheduleDate}
 									timezone={scheduleTimezone}
-									onChange={onScheduleDateChange}
+									onChange={(date) =>
+										onChange(updateAutomationScheduleDraft(value, { date }))
+									}
 								/>
 							) : null}
 						</>
@@ -401,14 +388,22 @@ export function AutomationSchedulePicker({
 						<AutomationDatePicker
 							value={scheduleDate}
 							timezone={scheduleTimezone}
-							onChange={onScheduleDateChange}
+							onChange={(date) =>
+								onChange(updateAutomationScheduleDraft(value, { date }))
+							}
 						/>
 					) : null}
 					<Input
 						id="automation-schedule-time"
 						type="time"
 						value={scheduleTime}
-						onChange={(event) => onScheduleTimeChange(event.target.value)}
+						onChange={(event) =>
+							onChange(
+								updateAutomationScheduleDraft(value, {
+									time: event.target.value,
+								}),
+							)
+						}
 						className={cn(
 							"appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none",
 							AUTOMATION_CONTROL_CLASS_NAME,

@@ -3,13 +3,6 @@
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
-import {
-	type AutomationCustomFrequency,
-	getAutomationCustomRecurrence,
-	getAutomationScheduleKind,
-	getAutomationScheduleLocalStart,
-	getAutomationScheduleWeekdays,
-} from "@workspace/ai/automation-schedule";
 import type { AutomationDeliveryPolicy } from "@workspace/ai/automation-tools";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -58,13 +51,10 @@ import {
 	getPromptMentionsFromContent,
 	type NoteMentionRange,
 } from "@/components/automations/automation-prompt-mentions";
-import {
-	AUTOMATION_SCHEDULE_PERIODS,
-	type AutomationDraft,
-	type AutomationSchedulePeriod,
-	type AutomationTarget,
+import type {
+	AutomationDraft,
+	AutomationTarget,
 } from "@/components/automations/automation-types";
-import { getAutomationSchedulePeriodLabel } from "@/components/automations/automation-utils";
 import {
 	ChatModelPicker,
 	type ReasoningEffort,
@@ -92,11 +82,11 @@ import {
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import {
-	createInitialScheduleLocalStart,
-	createScheduleFromFormValue,
-	getCurrentTimezone,
-	getLocalDateIsoWeekday,
-} from "./automation-schedule-form";
+	type AutomationScheduleDraft,
+	createAutomationScheduleDraft,
+	createAutomationScheduleFromDraft,
+	createDefaultAutomationScheduleDraft,
+} from "./automation-schedule-draft";
 import { AutomationSchedulePicker } from "./automation-schedule-picker";
 
 export type CreateAutomationDialogProps = {
@@ -133,13 +123,7 @@ type AutomationDialogState = {
 	promptMentions: AutomationPromptMention[];
 	selectedModel: typeof defaultChatModel;
 	reasoningEffort: ReasoningEffort;
-	schedulePeriod: AutomationSchedulePeriod;
-	scheduleDate: string;
-	scheduleTime: string;
-	scheduleTimezone: string;
-	scheduleWeekdays: number[];
-	customFrequency: AutomationCustomFrequency;
-	customInterval: number;
+	schedule: AutomationScheduleDraft;
 	deliveryPolicy: AutomationDeliveryPolicy;
 	stopCondition: string;
 	target: AutomationTarget | null;
@@ -154,7 +138,6 @@ type AutomationDialogStateUpdate =
 	| ((currentState: AutomationDialogState) => Partial<AutomationDialogState>);
 
 const createEmptyAutomationDialogState = (): AutomationDialogState => {
-	const localStart = createInitialScheduleLocalStart();
 	return {
 		schedulePickerOpen: false,
 		modelPickerOpen: false,
@@ -164,13 +147,7 @@ const createEmptyAutomationDialogState = (): AutomationDialogState => {
 		promptMentions: [],
 		selectedModel: getStoredChatModel(),
 		reasoningEffort: getStoredReasoningEffort(),
-		schedulePeriod: "daily",
-		scheduleDate: localStart.slice(0, 10),
-		scheduleTime: localStart.slice(11, 16),
-		scheduleTimezone: getCurrentTimezone(),
-		scheduleWeekdays: [getLocalDateIsoWeekday(localStart.slice(0, 10))],
-		customFrequency: "daily",
-		customInterval: 1,
+		schedule: createDefaultAutomationScheduleDraft(),
 		deliveryPolicy: "always",
 		stopCondition: "",
 		target: null,
@@ -197,14 +174,6 @@ const createAutomationDialogState = (
 	const promptMentions = getInitialAutomationMentions({
 		automation: initialAutomation,
 	});
-	const scheduleLocalStart = getAutomationScheduleLocalStart(
-		initialAutomation.schedule,
-	);
-	const customRecurrence = getAutomationCustomRecurrence(
-		initialAutomation.schedule,
-	);
-	const scheduleKind = getAutomationScheduleKind(initialAutomation.schedule);
-
 	return {
 		...emptyState,
 		title: initialAutomation.title,
@@ -212,13 +181,7 @@ const createAutomationDialogState = (
 		promptMentions,
 		selectedModel: findChatModel(initialAutomation.model) ?? defaultChatModel,
 		reasoningEffort: initialAutomation.reasoningEffort,
-		schedulePeriod: scheduleKind === "monthly" ? "custom" : scheduleKind,
-		scheduleDate: scheduleLocalStart.slice(0, 10),
-		scheduleTime: scheduleLocalStart.slice(11, 16),
-		scheduleTimezone: initialAutomation.schedule.timezone,
-		scheduleWeekdays: getAutomationScheduleWeekdays(initialAutomation.schedule),
-		customFrequency: customRecurrence.frequency,
-		customInterval: customRecurrence.interval,
+		schedule: createAutomationScheduleDraft(initialAutomation.schedule),
 		deliveryPolicy: initialAutomation.deliveryPolicy,
 		stopCondition: initialAutomation.stopCondition ?? "",
 		webSearchEnabled: initialAutomation.webSearchEnabled,
@@ -285,13 +248,7 @@ function useCreateAutomationDialogElement({
 		promptMentions,
 		selectedModel,
 		reasoningEffort,
-		schedulePeriod,
-		scheduleDate,
-		scheduleTime,
-		scheduleTimezone,
-		scheduleWeekdays,
-		customFrequency,
-		customInterval,
+		schedule,
 		deliveryPolicy,
 		stopCondition,
 		target,
@@ -484,15 +441,7 @@ function useCreateAutomationDialogElement({
 
 		setIsSaving(true);
 		try {
-			const schedule = createScheduleFromFormValue({
-				schedulePeriod,
-				scheduleDate,
-				scheduleTime,
-				scheduleTimezone,
-				scheduleWeekdays,
-				customFrequency,
-				customInterval,
-			});
+			const persistedSchedule = createAutomationScheduleFromDraft(schedule);
 			await onCreateAutomation({
 				title: trimmedTitle,
 				prompt: trimmedPrompt,
@@ -501,7 +450,7 @@ function useCreateAutomationDialogElement({
 				webSearchEnabled,
 				appsEnabled,
 				appSources: effectiveSelectedConnectedAppSources,
-				schedule,
+				schedule: persistedSchedule,
 				destination: initialAutomation?.destination ?? "standalone",
 				deliveryPolicy,
 				stopCondition: stopCondition.trim() || undefined,
@@ -522,13 +471,7 @@ function useCreateAutomationDialogElement({
 		connectedAppSources,
 		noteSources,
 		onCreateAutomation,
-		schedulePeriod,
-		scheduleDate,
-		scheduleTime,
-		scheduleTimezone,
-		scheduleWeekdays,
-		customFrequency,
-		customInterval,
+		schedule,
 		deliveryPolicy,
 		stopCondition,
 		selectedConnectedAppIds,
@@ -554,25 +497,6 @@ function useCreateAutomationDialogElement({
 		}
 	}, [onDisableAutomation]);
 
-	let scheduleLabel =
-		AUTOMATION_SCHEDULE_PERIODS.find(
-			(period) => period.value === schedulePeriod,
-		)?.label ?? "Schedule";
-	try {
-		scheduleLabel = getAutomationSchedulePeriodLabel({
-			schedule: createScheduleFromFormValue({
-				schedulePeriod,
-				scheduleDate,
-				scheduleTime,
-				scheduleTimezone,
-				scheduleWeekdays,
-				customFrequency,
-				customInterval,
-			}),
-		});
-	} catch {
-		// Keep the picker usable while a custom recurrence is being edited.
-	}
 	const canCreateAutomation =
 		title.trim().length > 0 && prompt.trim().length > 0;
 
@@ -630,47 +554,9 @@ function useCreateAutomationDialogElement({
 								<AutomationSchedulePicker
 									open={schedulePickerOpen}
 									onOpenChange={handleSchedulePickerOpenChange}
-									scheduleLabel={scheduleLabel}
-									schedulePeriod={schedulePeriod}
-									scheduleDate={scheduleDate}
-									scheduleTime={scheduleTime}
-									scheduleTimezone={scheduleTimezone}
-									scheduleWeekdays={scheduleWeekdays}
-									customFrequency={customFrequency}
-									customInterval={customInterval}
+									value={schedule}
 									deliveryPolicy={deliveryPolicy}
-									onSchedulePeriodChange={(value) =>
-										updateDialogState((currentState) => ({
-											schedulePeriod: value,
-											scheduleWeekdays:
-												value === "weekly" &&
-												currentState.scheduleWeekdays.length === 0
-													? [getLocalDateIsoWeekday(currentState.scheduleDate)]
-													: currentState.scheduleWeekdays,
-										}))
-									}
-									onScheduleDateChange={(value) =>
-										updateDialogState({ scheduleDate: value })
-									}
-									onScheduleTimeChange={(value) =>
-										updateDialogState({ scheduleTime: value })
-									}
-									onScheduleWeekdaysChange={(value) =>
-										updateDialogState({ scheduleWeekdays: value })
-									}
-									onCustomFrequencyChange={(value) =>
-										updateDialogState((currentState) => ({
-											customFrequency: value,
-											scheduleWeekdays:
-												value === "weekly" &&
-												currentState.scheduleWeekdays.length === 0
-													? [getLocalDateIsoWeekday(currentState.scheduleDate)]
-													: currentState.scheduleWeekdays,
-										}))
-									}
-									onCustomIntervalChange={(value) =>
-										updateDialogState({ customInterval: value })
-									}
+									onChange={(value) => updateDialogState({ schedule: value })}
 									onDeliveryPolicyChange={(value) =>
 										updateDialogState({ deliveryPolicy: value })
 									}
