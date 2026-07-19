@@ -3,9 +3,10 @@ import {
 	paginationResultValidator,
 } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import {
 	automationDeliveryStatusValidator,
 	automationRunReasonValidator,
@@ -30,10 +31,12 @@ const automationRunItemValidator = v.object({
 });
 
 const { requireIdentity } = createResourceAccess("automation runs");
-const MAX_CLAIMED_NOTIFICATIONS = 5;
+const MAX_LEASED_NOTIFICATIONS = 5;
+const NOTIFICATION_LEASE_DURATION_MS = 60_000;
 
 const automationNotificationValidator = v.object({
 	runId: v.id("automationRuns"),
+	leaseToken: v.string(),
 	title: v.string(),
 	body: v.string(),
 	chatId: v.string(),
@@ -111,21 +114,20 @@ const getPendingNotificationRuns = async (
 ) =>
 	await ctx.db
 		.query("automationRuns")
-		.withIndex("by_owner_workspace_unread_reason_created", (q) =>
-			q
-				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-				.eq("workspaceId", workspaceId)
-				.eq("isUnread", true)
-				.eq("reason", "scheduled"),
-		)
-		.filter((q) =>
-			q.and(
-				q.eq(q.field("archivedAt"), undefined),
-				q.eq(q.field("notificationSentAt"), undefined),
-			),
+		.withIndex(
+			"by_owner_workspace_unread_reason_notificationSentAt_notificationLeaseToken_archivedAt_createdAt",
+			(q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+					.eq("workspaceId", workspaceId)
+					.eq("isUnread", true)
+					.eq("reason", "scheduled")
+					.eq("notificationSentAt", undefined)
+					.eq("notificationLeaseToken", undefined)
+					.eq("archivedAt", undefined),
 		)
 		.order("asc")
-		.take(MAX_CLAIMED_NOTIFICATIONS);
+		.take(MAX_LEASED_NOTIFICATIONS);
 
 export const pendingNotificationSignal = query({
 	args: { workspaceId: v.id("workspaces") },
@@ -146,7 +148,7 @@ export const pendingNotificationSignal = query({
 	},
 });
 
-export const claimNotifications = mutation({
+export const leaseNotifications = mutation({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.array(automationNotificationValidator),
 	handler: async (ctx, args) => {
@@ -165,16 +167,20 @@ export const claimNotifications = mutation({
 		const notifications = [];
 		for (const run of runs) {
 			const automation = await ctx.db.get(run.automationId);
-			if (!automation) {
-				continue;
-			}
+			const leaseToken = crypto.randomUUID();
 			await ctx.db.patch(run._id, {
-				notificationSentAt: now,
+				notificationLeaseToken: leaseToken,
 				updatedAt: now,
 			});
+			await ctx.scheduler.runAfter(
+				NOTIFICATION_LEASE_DURATION_MS,
+				internal.automationRuns.releaseNotificationLease,
+				{ runId: run._id, leaseToken },
+			);
 			notifications.push({
 				runId: run._id,
-				title: automation.title,
+				leaseToken,
+				title: automation?.title ?? "Deleted automation",
 				body: (
 					run.error ??
 					run.resultSummary ??
@@ -185,6 +191,57 @@ export const claimNotifications = mutation({
 			});
 		}
 		return notifications;
+	},
+});
+
+export const acknowledgeNotification = mutation({
+	args: {
+		runId: v.id("automationRuns"),
+		leaseToken: v.string(),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const identity = await requireIdentity(ctx);
+		const run = await requireOwnedRun(
+			ctx,
+			identity.tokenIdentifier,
+			args.runId,
+		);
+		if (
+			!run ||
+			run.notificationSentAt !== undefined ||
+			run.notificationLeaseToken !== args.leaseToken
+		) {
+			return false;
+		}
+		const now = Date.now();
+		await ctx.db.patch(run._id, {
+			notificationSentAt: now,
+			notificationLeaseToken: undefined,
+			updatedAt: now,
+		});
+		return true;
+	},
+});
+
+export const releaseNotificationLease = internalMutation({
+	args: {
+		runId: v.id("automationRuns"),
+		leaseToken: v.string(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const run = await ctx.db.get(args.runId);
+		if (
+			run?.notificationSentAt === undefined &&
+			run?.notificationLeaseToken === args.leaseToken
+		) {
+			await ctx.db.patch(run._id, {
+				notificationLeaseToken: undefined,
+				updatedAt: Date.now(),
+			});
+		}
+		return null;
 	},
 });
 
@@ -225,6 +282,7 @@ export const archive = mutation({
 			await ctx.db.patch(run._id, {
 				archivedAt: now,
 				isUnread: false,
+				notificationLeaseToken: undefined,
 				readAt: run.readAt ?? now,
 				updatedAt: now,
 			});

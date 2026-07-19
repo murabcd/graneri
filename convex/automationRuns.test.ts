@@ -307,7 +307,7 @@ test("failed-only delivery publishes failed scheduled results", async () => {
 	).toBe(runId);
 });
 
-test("scheduled results are claimed once for native notification delivery", async () => {
+test("scheduled results are acknowledged only after native notification delivery", async () => {
 	const fixture = await createFixture();
 	const automation = await createAutomation(fixture);
 	const runId = await insertPendingScheduledResult(
@@ -327,25 +327,94 @@ test("scheduled results are claimed once for native notification delivery", asyn
 			workspaceId: fixture.workspaceId,
 		}),
 	).toBe(runId);
-	const firstClaim = await fixture.asOwner.mutation(
-		api.automationRuns.claimNotifications,
+	const firstLease = await fixture.asOwner.mutation(
+		api.automationRuns.leaseNotifications,
 		{ workspaceId: fixture.workspaceId },
 	);
-	const secondClaim = await fixture.asOwner.mutation(
-		api.automationRuns.claimNotifications,
+	const secondLease = await fixture.asOwner.mutation(
+		api.automationRuns.leaseNotifications,
 		{ workspaceId: fixture.workspaceId },
 	);
-	expect(firstClaim).toEqual([
+	expect(firstLease).toEqual([
 		expect.objectContaining({
 			runId,
 			title: "Daily review",
 			body: "A scheduled result.",
+			leaseToken: expect.any(String),
 		}),
 	]);
-	expect(secondClaim).toEqual([]);
+	expect(secondLease).toEqual([]);
+	const leasedRun = await fixture.t.run(async (ctx) => await ctx.db.get(runId));
+	expect(leasedRun?.notificationSentAt).toBeUndefined();
+	expect(leasedRun?.notificationLeaseToken).toBe(firstLease[0]?.leaseToken);
+
+	expect(
+		await fixture.asOwner.mutation(api.automationRuns.acknowledgeNotification, {
+			runId,
+			leaseToken: firstLease[0]?.leaseToken ?? "missing-lease-token",
+		}),
+	).toBe(true);
+	const acknowledgedRun = await fixture.t.run(
+		async (ctx) => await ctx.db.get(runId),
+	);
+	expect(acknowledgedRun?.notificationSentAt).toBe(Date.now());
+	expect(acknowledgedRun?.notificationLeaseToken).toBeUndefined();
+	expect(
+		await fixture.asOwner.query(api.automationRuns.pendingNotificationSignal, {
+			workspaceId: fixture.workspaceId,
+		}),
+	).toBeNull();
 });
 
-test("notification signals advance across bounded claim batches", async () => {
+test("notification leases are fenced and can be released for retry", async () => {
+	const fixture = await createFixture();
+	const automation = await createAutomation(fixture);
+	const runId = await insertPendingScheduledResult(
+		fixture,
+		automation,
+		"Retry this notification.",
+	);
+	await fixture.t.mutation(internal.automations.applyDeliveryDecision, {
+		automationRunId: runId,
+		meaningfulChange: true,
+		stopConditionMet: false,
+		summary: "Retry this notification.",
+	});
+	const [lease] = await fixture.asOwner.mutation(
+		api.automationRuns.leaseNotifications,
+		{ workspaceId: fixture.workspaceId },
+	);
+	if (!lease) {
+		throw new Error("Expected a notification lease.");
+	}
+
+	await fixture.t.mutation(internal.automationRuns.releaseNotificationLease, {
+		runId,
+		leaseToken: "stale-lease-token",
+	});
+	expect(
+		await fixture.asOwner.mutation(api.automationRuns.leaseNotifications, {
+			workspaceId: fixture.workspaceId,
+		}),
+	).toEqual([]);
+
+	await fixture.t.mutation(internal.automationRuns.releaseNotificationLease, {
+		runId,
+		leaseToken: lease.leaseToken,
+	});
+	expect(
+		await fixture.asOwner.query(api.automationRuns.pendingNotificationSignal, {
+			workspaceId: fixture.workspaceId,
+		}),
+	).toBe(runId);
+	const [retryLease] = await fixture.asOwner.mutation(
+		api.automationRuns.leaseNotifications,
+		{ workspaceId: fixture.workspaceId },
+	);
+	expect(retryLease?.leaseToken).not.toBe(lease.leaseToken);
+});
+
+test("notification signals advance across bounded lease batches", async () => {
 	const fixture = await createFixture();
 	const automation = await createAutomation(fixture);
 	const runIds = await fixture.t.run(async (ctx) => {
@@ -380,7 +449,7 @@ test("notification signals advance across bounded claim batches", async () => {
 		}),
 	).toBe(runIds[0]);
 	expect(
-		await fixture.asOwner.mutation(api.automationRuns.claimNotifications, {
+		await fixture.asOwner.mutation(api.automationRuns.leaseNotifications, {
 			workspaceId: fixture.workspaceId,
 		}),
 	).toHaveLength(5);
@@ -390,7 +459,7 @@ test("notification signals advance across bounded claim batches", async () => {
 		}),
 	).toBe(runIds[5]);
 	expect(
-		await fixture.asOwner.mutation(api.automationRuns.claimNotifications, {
+		await fixture.asOwner.mutation(api.automationRuns.leaseNotifications, {
 			workspaceId: fixture.workspaceId,
 		}),
 	).toHaveLength(1);

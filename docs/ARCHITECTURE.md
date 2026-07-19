@@ -507,11 +507,13 @@ unread and notification-eligible. `meaningful_change` compares a scheduled
 result with the last observed result in a retryable classification Workflow;
 routine checks remain in history without becoming unread. An optional stop
 condition is classified at the same boundary and completes the definition when
-met. Scheduled unread results are claimed transactionally before the renderer
-asks Electron to show a native notification, preventing duplicate alerts from
-multiple open clients. Clicking the alert opens the owning chat. Native alerts
-require the desktop process to be running; the durable in-app inbox remains the
-authoritative delivery surface when it is not.
+met. Scheduled unread results are leased transactionally before the renderer
+asks Electron to show a native notification, preventing concurrent alerts from
+multiple open clients. A successful display is acknowledged durably; failed or
+interrupted delivery releases its fenced lease for retry. Clicking the alert
+opens the owning chat. Native alerts require the desktop process to be running;
+the durable in-app inbox remains the authoritative delivery surface when it is
+not.
 Hosted auth provider configuration is fail-closed: missing OAuth
 provider credentials must reject configuration instead of substituting
 placeholder client ids or secrets.

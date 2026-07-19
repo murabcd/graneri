@@ -796,6 +796,7 @@ export default defineSchema({
 		deliveryStatus: v.optional(automationDeliveryStatusValidator),
 		isUnread: v.boolean(),
 		notificationSentAt: v.optional(v.number()),
+		notificationLeaseToken: v.optional(v.string()),
 		readAt: v.optional(v.number()),
 		archivedAt: v.optional(v.number()),
 		createdAt: v.number(),
@@ -807,13 +808,19 @@ export default defineSchema({
 			"workspaceId",
 			"createdAt",
 		])
-		.index("by_owner_workspace_unread_reason_created", [
-			"ownerTokenIdentifier",
-			"workspaceId",
-			"isUnread",
-			"reason",
-			"createdAt",
-		])
+		.index(
+			"by_owner_workspace_unread_reason_notificationSentAt_notificationLeaseToken_archivedAt_createdAt",
+			[
+				"ownerTokenIdentifier",
+				"workspaceId",
+				"isUnread",
+				"reason",
+				"notificationSentAt",
+				"notificationLeaseToken",
+				"archivedAt",
+				"createdAt",
+			],
+		)
 		.index("by_assistantRunId", ["assistantRunId"])
 		.index("by_status_and_startedAt", ["status", "startedAt"]),
 	appConnections: defineTable({

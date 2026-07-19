@@ -119,6 +119,7 @@ export const reserveAutomationRun = async (
 		deliveryStatus: undefined,
 		isUnread: false,
 		notificationSentAt: undefined,
+		notificationLeaseToken: undefined,
 		readAt: undefined,
 		archivedAt: undefined,
 		createdAt: now,
