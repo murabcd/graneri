@@ -108,6 +108,54 @@ const toAutomationMutationTarget = (target) =>
 				kind: "workspace",
 			};
 
+const toAutomationAdapterTarget = (target, toNoteId) =>
+	target.kind === "notes"
+		? {
+				kind: "notes",
+				noteIds: target.noteIds.map(toNoteId),
+			}
+		: {
+				kind: "workspace",
+			};
+
+const toAutomationAdapterAppSources = (appSources) =>
+	appSources.map((source) => automationAppSourceSchema.parse(source));
+
+const toAutomationCreateMutationInput = (automation, toNoteId) => ({
+	...automation,
+	appSources: toAutomationAdapterAppSources(automation.appSources),
+	target: toAutomationAdapterTarget(automation.target, toNoteId),
+});
+
+const toAutomationUpdateMutationInput = (
+	{ automationId, ...automation },
+	toAutomationId,
+	toNoteId,
+) => ({
+	automationId: toAutomationId(automationId),
+	title: automation.title,
+	prompt: automation.prompt,
+	model: automation.model,
+	reasoningEffort: automation.reasoningEffort,
+	webSearchEnabled: automation.webSearchEnabled,
+	appsEnabled: automation.appsEnabled,
+	appSources: toAutomationAdapterAppSources(automation.appSources),
+	schedule: automation.schedule,
+	deliveryPolicy: automation.deliveryPolicy,
+	stopCondition: automation.stopCondition,
+	target: toAutomationAdapterTarget(automation.target, toNoteId),
+});
+
+export const createAutomationMutationInputNormalizer = ({
+	toAutomationId,
+	toNoteId,
+}) => ({
+	automationId: toAutomationId,
+	create: (automation) => toAutomationCreateMutationInput(automation, toNoteId),
+	update: (automation) =>
+		toAutomationUpdateMutationInput(automation, toAutomationId, toNoteId),
+});
+
 export const buildAutomationCreationInstruction = ({ now, timezone }) =>
 	[
 		"When the user asks to create, schedule, run, watch, check, summarize, remind, or report on something automatically once or on a recurring cadence, use the create_automation tool.",

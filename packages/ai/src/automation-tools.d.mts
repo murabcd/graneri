@@ -1,6 +1,9 @@
 import type { ToolSet } from "ai";
 import type { AutomationSchedule } from "./automation-schedule.mjs";
-import type { AppSourceInstructionConnection } from "./capability-metadata.mjs";
+import type {
+	AppSourceInstructionConnection,
+	AppSourceProvider,
+} from "./capability-metadata.mjs";
 
 export type AutomationAppSource = {
 	id: string;
@@ -75,6 +78,60 @@ export type AutomationActions = {
 	updateAutomation?: (
 		automation: AutomationToolInput & { automationId: string },
 	) => Promise<AutomationToolResult>;
+};
+
+type AutomationMutationTarget<NoteId> =
+	| {
+			kind: "workspace";
+	  }
+	| {
+			kind: "notes";
+			noteIds: NoteId[];
+	  };
+
+type AutomationMutationAppSource = Omit<AutomationAppSource, "provider"> & {
+	provider: AppSourceProvider;
+};
+
+type AutomationCreateMutationInput<NoteId> = Omit<
+	AutomationToolInput,
+	"appSources" | "target"
+> & {
+	appSources: AutomationMutationAppSource[];
+	target: AutomationMutationTarget<NoteId>;
+};
+
+type AutomationUpdateMutationInput<AutomationId, NoteId> = Pick<
+	AutomationToolInput,
+	| "appsEnabled"
+	| "deliveryPolicy"
+	| "model"
+	| "prompt"
+	| "reasoningEffort"
+	| "schedule"
+	| "stopCondition"
+	| "title"
+	| "webSearchEnabled"
+> & {
+	automationId: AutomationId;
+	appSources: AutomationMutationAppSource[];
+	target: AutomationMutationTarget<NoteId>;
+};
+
+export declare function createAutomationMutationInputNormalizer<
+	AutomationId,
+	NoteId,
+>(mappers: {
+	toAutomationId: (automationId: string) => AutomationId;
+	toNoteId: (noteId: string) => NoteId;
+}): {
+	automationId: (automationId: string) => AutomationId;
+	create: (
+		automation: AutomationToolInput,
+	) => AutomationCreateMutationInput<NoteId>;
+	update: (
+		automation: AutomationToolInput & { automationId: string },
+	) => AutomationUpdateMutationInput<AutomationId, NoteId>;
 };
 
 export declare function buildAutomationCreationInstruction(args: {

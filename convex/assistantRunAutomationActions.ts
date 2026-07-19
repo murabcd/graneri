@@ -1,68 +1,19 @@
 "use node";
 
-import type {
-	AutomationActions,
-	AutomationToolInput,
-} from "@workspace/ai/automation-tools";
 import {
-	type ChatAppSourceProvider,
-	chatAppSourceProviders,
-} from "@workspace/ai/capability-metadata";
+	type AutomationActions,
+	createAutomationMutationInputNormalizer,
+} from "@workspace/ai/automation-tools";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 
-const automationAppSourceProviders = new Set<string>(chatAppSourceProviders);
-
-const toAutomationAppSourceProvider = (
-	provider: string,
-): ChatAppSourceProvider => {
-	if (!automationAppSourceProviders.has(provider)) {
-		throw new Error(`Unsupported automation app source: ${provider}`);
-	}
-	return provider as ChatAppSourceProvider;
-};
-
-const toAutomationMutationInput = (automation: AutomationToolInput) => ({
-	...automation,
-	appSources: automation.appSources.map((source) => ({
-		...source,
-		provider: toAutomationAppSourceProvider(source.provider),
-	})),
-	target:
-		automation.target.kind === "notes"
-			? {
-					kind: "notes" as const,
-					noteIds: automation.target.noteIds.map(
-						(noteId) => noteId as Id<"notes">,
-					),
-				}
-			: { kind: "workspace" as const },
-});
-
-const toAutomationUpdateMutationInput = (automation: AutomationToolInput) => ({
-	title: automation.title,
-	prompt: automation.prompt,
-	model: automation.model,
-	reasoningEffort: automation.reasoningEffort,
-	webSearchEnabled: automation.webSearchEnabled,
-	appsEnabled: automation.appsEnabled,
-	appSources: automation.appSources.map((source) => ({
-		...source,
-		provider: toAutomationAppSourceProvider(source.provider),
-	})),
-	schedule: automation.schedule,
-	deliveryPolicy: automation.deliveryPolicy,
-	stopCondition: automation.stopCondition,
-	target:
-		automation.target.kind === "notes"
-			? {
-					kind: "notes" as const,
-					noteIds: automation.target.noteIds.map(
-						(noteId) => noteId as Id<"notes">,
-					),
-				}
-			: { kind: "workspace" as const },
+const automationMutationInput = createAutomationMutationInputNormalizer<
+	Id<"automations">,
+	Id<"notes">
+>({
+	toAutomationId: (automationId) => automationId as Id<"automations">,
+	toNoteId: (noteId) => noteId as Id<"notes">,
 });
 
 export const createAssistantRunAutomationActions = (
@@ -78,17 +29,17 @@ export const createAssistantRunAutomationActions = (
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
 			authorName: args.authorName,
 			workspaceId: args.workspaceId,
-			...toAutomationMutationInput(automation),
+			...automationMutationInput.create(automation),
 		}),
 	deleteAutomation: async ({ automationId }) =>
 		await ctx.runMutation(internal.automations.removeForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			automationId: automationId as Id<"automations">,
+			automationId: automationMutationInput.automationId(automationId),
 		}),
 	getAutomation: async ({ automationId }) =>
 		await ctx.runQuery(internal.automations.getForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			automationId: automationId as Id<"automations">,
+			automationId: automationMutationInput.automationId(automationId),
 		}),
 	listAutomations: async () =>
 		await ctx.runQuery(internal.automations.listForOwner, {
@@ -98,17 +49,16 @@ export const createAssistantRunAutomationActions = (
 	runAutomationNow: async ({ automationId }) =>
 		await ctx.runMutation(internal.automations.runNowForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			automationId: automationId as Id<"automations">,
+			automationId: automationMutationInput.automationId(automationId),
 		}),
 	togglePaused: async ({ automationId }) =>
 		await ctx.runMutation(internal.automations.togglePausedForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			automationId: automationId as Id<"automations">,
+			automationId: automationMutationInput.automationId(automationId),
 		}),
-	updateAutomation: async ({ automationId, ...automation }) =>
+	updateAutomation: async (automation) =>
 		await ctx.runMutation(internal.automations.updateForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			automationId: automationId as Id<"automations">,
-			...toAutomationUpdateMutationInput(automation),
+			...automationMutationInput.update(automation),
 		}),
 });
