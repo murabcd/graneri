@@ -3,6 +3,11 @@
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
+import {
+	getAutomationScheduleKind,
+	getAutomationScheduleLocalStart,
+	getAutomationScheduleWeekdays,
+} from "@workspace/ai/automation-schedule";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Dialog,
@@ -26,19 +31,6 @@ import {
 	InputGroupAddon,
 	InputGroupButton,
 } from "@workspace/ui/components/input-group";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@workspace/ui/components/popover";
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@workspace/ui/components/select";
 import { Switch } from "@workspace/ui/components/switch";
 import {
 	Tooltip,
@@ -47,16 +39,10 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import { useQuery } from "convex/react";
-import {
-	Clock,
-	FileText,
-	Globe,
-	LoaderCircle,
-	Plus,
-	Settings2,
-} from "lucide-react";
+import { FileText, Globe, LoaderCircle, Plus, Settings2 } from "lucide-react";
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import {
 	type AutomationNoteSource,
@@ -102,9 +88,13 @@ import {
 } from "@/lib/tiptap-mention";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-
-const AUTOMATION_PICKER_TRIGGER_CLASS_NAME =
-	"group/automation-picker min-w-0 max-w-[180px] justify-start overflow-hidden rounded-full font-normal text-muted-foreground";
+import {
+	createInitialScheduleLocalStart,
+	createScheduleFromFormValue,
+	getCurrentTimezone,
+	getLocalDateIsoWeekday,
+} from "./automation-schedule-form";
+import { AutomationSchedulePicker } from "./automation-schedule-picker";
 
 export type CreateAutomationDialogProps = {
 	open: boolean;
@@ -131,18 +121,6 @@ const automationMentionPickerListboxProps = {
 	"aria-label": "Mention suggestions",
 };
 
-const createInitialScheduledAt = () => {
-	const nextDate = new Date();
-	nextDate.setHours(9, 0, 0, 0);
-	return nextDate;
-};
-
-const formatTimeInputValue = (value: Date) => {
-	const hours = String(value.getHours()).padStart(2, "0");
-	const minutes = String(value.getMinutes()).padStart(2, "0");
-	return `${hours}:${minutes}`;
-};
-
 type AutomationDialogState = {
 	schedulePickerOpen: boolean;
 	modelPickerOpen: boolean;
@@ -153,7 +131,13 @@ type AutomationDialogState = {
 	selectedModel: typeof defaultChatModel;
 	reasoningEffort: ReasoningEffort;
 	schedulePeriod: AutomationSchedulePeriod;
-	scheduledAt: Date;
+	scheduleDate: string;
+	scheduleTime: string;
+	scheduleTimezone: string;
+	scheduleWeekdays: number[];
+	customRrule: string;
+	deliveryPolicy: "always" | "meaningful_change";
+	stopCondition: string;
 	target: AutomationTarget | null;
 	webSearchEnabled: boolean;
 	appsEnabled: boolean;
@@ -165,23 +149,32 @@ type AutomationDialogStateUpdate =
 	| Partial<AutomationDialogState>
 	| ((currentState: AutomationDialogState) => Partial<AutomationDialogState>);
 
-const createEmptyAutomationDialogState = (): AutomationDialogState => ({
-	schedulePickerOpen: false,
-	modelPickerOpen: false,
-	appSourcesPickerOpen: false,
-	title: "",
-	prompt: "",
-	promptMentions: [],
-	selectedModel: getStoredChatModel(),
-	reasoningEffort: getStoredReasoningEffort(),
-	schedulePeriod: "daily",
-	scheduledAt: createInitialScheduledAt(),
-	target: null,
-	webSearchEnabled: false,
-	appsEnabled: true,
-	selectedConnectedAppIds: [],
-	selectedNoteIds: [],
-});
+const createEmptyAutomationDialogState = (): AutomationDialogState => {
+	const localStart = createInitialScheduleLocalStart();
+	return {
+		schedulePickerOpen: false,
+		modelPickerOpen: false,
+		appSourcesPickerOpen: false,
+		title: "",
+		prompt: "",
+		promptMentions: [],
+		selectedModel: getStoredChatModel(),
+		reasoningEffort: getStoredReasoningEffort(),
+		schedulePeriod: "daily",
+		scheduleDate: localStart.slice(0, 10),
+		scheduleTime: localStart.slice(11, 16),
+		scheduleTimezone: getCurrentTimezone(),
+		scheduleWeekdays: [getLocalDateIsoWeekday(localStart.slice(0, 10))],
+		customRrule: "FREQ=DAILY",
+		deliveryPolicy: "always",
+		stopCondition: "",
+		target: null,
+		webSearchEnabled: false,
+		appsEnabled: true,
+		selectedConnectedAppIds: [],
+		selectedNoteIds: [],
+	};
+};
 
 const createAutomationDialogState = (
 	initialAutomation: AutomationDraft | null,
@@ -199,6 +192,9 @@ const createAutomationDialogState = (
 	const promptMentions = getInitialAutomationMentions({
 		automation: initialAutomation,
 	});
+	const scheduleLocalStart = getAutomationScheduleLocalStart(
+		initialAutomation.schedule,
+	);
 
 	return {
 		...emptyState,
@@ -207,8 +203,17 @@ const createAutomationDialogState = (
 		promptMentions,
 		selectedModel: findChatModel(initialAutomation.model) ?? defaultChatModel,
 		reasoningEffort: initialAutomation.reasoningEffort,
-		schedulePeriod: initialAutomation.schedulePeriod,
-		scheduledAt: new Date(initialAutomation.scheduledAt),
+		schedulePeriod: getAutomationScheduleKind(initialAutomation.schedule),
+		scheduleDate: scheduleLocalStart.slice(0, 10),
+		scheduleTime: scheduleLocalStart.slice(11, 16),
+		scheduleTimezone: initialAutomation.schedule.timezone,
+		scheduleWeekdays: getAutomationScheduleWeekdays(initialAutomation.schedule),
+		customRrule:
+			initialAutomation.schedule.kind === "recurring"
+				? initialAutomation.schedule.rrule
+				: "FREQ=DAILY",
+		deliveryPolicy: initialAutomation.deliveryPolicy,
+		stopCondition: initialAutomation.stopCondition ?? "",
 		webSearchEnabled: initialAutomation.webSearchEnabled,
 		appsEnabled: initialAutomation.appsEnabled,
 		target:
@@ -274,7 +279,13 @@ function useCreateAutomationDialogElement({
 		selectedModel,
 		reasoningEffort,
 		schedulePeriod,
-		scheduledAt,
+		scheduleDate,
+		scheduleTime,
+		scheduleTimezone,
+		scheduleWeekdays,
+		customRrule,
+		deliveryPolicy,
+		stopCondition,
 		target,
 		webSearchEnabled,
 		appsEnabled,
@@ -395,30 +406,6 @@ function useCreateAutomationDialogElement({
 		[target],
 	);
 
-	const handleTimeChange = React.useCallback(
-		(event: React.ChangeEvent<HTMLInputElement>) => {
-			const nextValue = event.target.value;
-			if (!nextValue) {
-				return;
-			}
-
-			const [hoursString, minutesString] = nextValue.split(":");
-			const hours = Number(hoursString);
-			const minutes = Number(minutesString);
-
-			if (Number.isNaN(hours) || Number.isNaN(minutes)) {
-				return;
-			}
-
-			updateDialogState((currentState) => {
-				const nextDate = new Date(currentState.scheduledAt);
-				nextDate.setHours(hours, minutes, 0, 0);
-				return { scheduledAt: nextDate };
-			});
-		},
-		[],
-	);
-
 	const handleCreate = React.useCallback(async () => {
 		if (isSaving) {
 			return;
@@ -489,6 +476,14 @@ function useCreateAutomationDialogElement({
 
 		setIsSaving(true);
 		try {
+			const schedule = createScheduleFromFormValue({
+				schedulePeriod,
+				scheduleDate,
+				scheduleTime,
+				scheduleTimezone,
+				scheduleWeekdays,
+				customRrule,
+			});
 			await onCreateAutomation({
 				title: trimmedTitle,
 				prompt: trimmedPrompt,
@@ -497,21 +492,35 @@ function useCreateAutomationDialogElement({
 				webSearchEnabled,
 				appsEnabled,
 				appSources: effectiveSelectedConnectedAppSources,
-				schedulePeriod,
-				scheduledAt: scheduledAt.getTime(),
-				timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+				schedule,
+				destination: initialAutomation?.destination ?? "standalone",
+				deliveryPolicy,
+				stopCondition: stopCondition.trim() || undefined,
 				target: effectiveTarget,
 			});
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Unable to save this automation schedule.",
+			);
 		} finally {
 			setIsSaving(false);
 		}
 	}, [
 		isSaving,
+		initialAutomation?.destination,
 		connectedAppSources,
 		noteSources,
 		onCreateAutomation,
 		schedulePeriod,
-		scheduledAt,
+		scheduleDate,
+		scheduleTime,
+		scheduleTimezone,
+		scheduleWeekdays,
+		customRrule,
+		deliveryPolicy,
+		stopCondition,
 		selectedConnectedAppIds,
 		selectedModel.model,
 		reasoningEffort,
@@ -535,10 +544,24 @@ function useCreateAutomationDialogElement({
 		}
 	}, [onDisableAutomation]);
 
-	const scheduleLabel = getAutomationSchedulePeriodLabel({
-		schedulePeriod,
-		scheduledAt: scheduledAt.getTime(),
-	});
+	let scheduleLabel =
+		AUTOMATION_SCHEDULE_PERIODS.find(
+			(period) => period.value === schedulePeriod,
+		)?.label ?? "Schedule";
+	try {
+		scheduleLabel = getAutomationSchedulePeriodLabel({
+			schedule: createScheduleFromFormValue({
+				schedulePeriod,
+				scheduleDate,
+				scheduleTime,
+				scheduleTimezone,
+				scheduleWeekdays,
+				customRrule,
+			}),
+		});
+	} catch {
+		// Keep the picker usable while a custom recurrence is being edited.
+	}
 	const canCreateAutomation =
 		title.trim().length > 0 && prompt.trim().length > 0;
 
@@ -593,16 +616,46 @@ function useCreateAutomationDialogElement({
 								align="block-end"
 								className="flex-wrap justify-start gap-1 px-2.5 py-2"
 							>
-								<SchedulePicker
+								<AutomationSchedulePicker
 									open={schedulePickerOpen}
 									onOpenChange={handleSchedulePickerOpenChange}
 									scheduleLabel={scheduleLabel}
 									schedulePeriod={schedulePeriod}
-									scheduledAt={scheduledAt}
+									scheduleDate={scheduleDate}
+									scheduleTime={scheduleTime}
+									scheduleTimezone={scheduleTimezone}
+									scheduleWeekdays={scheduleWeekdays}
+									customRrule={customRrule}
+									deliveryPolicy={deliveryPolicy}
+									stopCondition={stopCondition}
 									onSchedulePeriodChange={(value) =>
-										updateDialogState({ schedulePeriod: value })
+										updateDialogState((currentState) => ({
+											schedulePeriod: value,
+											scheduleWeekdays:
+												value === "weekly" &&
+												currentState.scheduleWeekdays.length === 0
+													? [getLocalDateIsoWeekday(currentState.scheduleDate)]
+													: currentState.scheduleWeekdays,
+										}))
 									}
-									onTimeChange={handleTimeChange}
+									onScheduleDateChange={(value) =>
+										updateDialogState({ scheduleDate: value })
+									}
+									onScheduleTimeChange={(value) =>
+										updateDialogState({ scheduleTime: value })
+									}
+									onScheduleWeekdaysChange={(value) =>
+										updateDialogState({ scheduleWeekdays: value })
+									}
+									onCustomRruleChange={(value) =>
+										updateDialogState({ customRrule: value })
+									}
+									onDeliveryPolicyChange={(value) =>
+										updateDialogState({ deliveryPolicy: value })
+									}
+									onStopConditionChange={(value) =>
+										updateDialogState({ stopCondition: value })
+									}
 								/>
 								<AppSourcesPicker
 									open={appSourcesPickerOpen}
@@ -1290,97 +1343,5 @@ function AppSourcesPicker({
 				</DropdownMenuGroup>
 			</DropdownMenuContent>
 		</DropdownMenu>
-	);
-}
-
-// Private scheduling slot for this dialog; it shares the dialog's schedule state directly.
-// react-doctor-disable-next-line react-doctor/no-multi-comp -- private schedule-picker slot shares the dialog schedule state and is not an independent module.
-function SchedulePicker({
-	open,
-	onOpenChange,
-	scheduleLabel,
-	schedulePeriod,
-	scheduledAt,
-	onSchedulePeriodChange,
-	onTimeChange,
-}: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	scheduleLabel: string;
-	schedulePeriod: AutomationSchedulePeriod;
-	scheduledAt: Date;
-	onSchedulePeriodChange: (value: AutomationSchedulePeriod) => void;
-	onTimeChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
-	return (
-		<Popover open={open} onOpenChange={onOpenChange}>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<PopoverTrigger asChild>
-						<InputGroupButton
-							type="button"
-							variant="ghost"
-							size="sm"
-							className={cn(AUTOMATION_PICKER_TRIGGER_CLASS_NAME)}
-						>
-							<span className="flex items-center gap-2">
-								<Clock className="size-4 shrink-0 text-muted-foreground group-hover/automation-picker:text-foreground group-focus-visible/automation-picker:text-foreground group-data-[state=open]/automation-picker:text-foreground" />
-								<span>{scheduleLabel}</span>
-							</span>
-						</InputGroupButton>
-					</PopoverTrigger>
-				</TooltipTrigger>
-				<TooltipContent>Edit schedule</TooltipContent>
-			</Tooltip>
-			<PopoverContent
-				align="start"
-				sideOffset={6}
-				className="w-64 gap-0 p-1.5"
-				onInteractOutside={(event) => {
-					const target = event.target;
-					if (
-						target instanceof HTMLElement &&
-						target.closest("[data-slot='select-content']")
-					) {
-						event.preventDefault();
-					}
-				}}
-			>
-				<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-					Schedule
-				</div>
-				<div className="space-y-1">
-					<Select
-						value={schedulePeriod}
-						onValueChange={(value) =>
-							onSchedulePeriodChange(value as AutomationSchedulePeriod)
-						}
-					>
-						<SelectTrigger
-							size="sm"
-							className="w-full border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0"
-						>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectGroup>
-								{AUTOMATION_SCHEDULE_PERIODS.map((period) => (
-									<SelectItem key={period.value} value={period.value}>
-										{period.label}
-									</SelectItem>
-								))}
-							</SelectGroup>
-						</SelectContent>
-					</Select>
-					<Input
-						id="automation-schedule-time"
-						type="time"
-						value={formatTimeInputValue(scheduledAt)}
-						onChange={onTimeChange}
-						className="appearance-none border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-					/>
-				</div>
-			</PopoverContent>
-		</Popover>
 	);
 }

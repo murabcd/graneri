@@ -3,11 +3,40 @@ import { defineAiTool } from "./ai-tool-definition.mjs";
 import { automationAppSourceProviders } from "./capability-metadata.mjs";
 import { toolUiMetadata } from "./tool-ui-metadata.mjs";
 
-const automationSchedulePeriodSchema = z.enum([
-	"hourly",
-	"daily",
-	"weekdays",
-	"weekly",
+const automationScheduleSchema = z.discriminatedUnion("kind", [
+	z.object({
+		kind: z.literal("once"),
+		at: z
+			.number()
+			.finite()
+			.describe("The exact one-time run instant as Unix epoch milliseconds."),
+		timezone: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("IANA timezone. Omit to use the user's current timezone."),
+	}),
+	z.object({
+		kind: z.literal("recurring"),
+		rrule: z
+			.string()
+			.min(1)
+			.max(512)
+			.describe(
+				"RFC 5545 RRULE without DTSTART, for example FREQ=WEEKLY;BYDAY=MO,WE,FR. Do not schedule more often than hourly.",
+			),
+		startsAt: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/)
+			.describe(
+				"Local start date and time in YYYY-MM-DDTHH:mm:ss form, without a timezone offset.",
+			),
+		timezone: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("IANA timezone. Omit to use the user's current timezone."),
+	}),
 ]);
 
 const automationAppSourceSchema = z.object({
@@ -56,10 +85,11 @@ const toAutomationToolResult = (automation) => ({
 	webSearchEnabled: automation.webSearchEnabled,
 	appsEnabled: automation.appsEnabled,
 	appSources: automation.appSources,
-	schedulePeriod: automation.schedulePeriod,
-	scheduledAt: automation.scheduledAt,
-	timezone: automation.timezone,
+	schedule: automation.schedule,
 	target: automation.target,
+	destination: automation.destination,
+	deliveryPolicy: automation.deliveryPolicy,
+	stopCondition: automation.stopCondition,
 	nextRunAt: automation.nextRunAt,
 	isPaused: automation.isPaused,
 	chatId: automation.chatId,
@@ -80,12 +110,14 @@ const toAutomationMutationTarget = (target) =>
 
 export const buildAutomationCreationInstruction = ({ now, timezone }) =>
 	[
-		"When the user asks to create, schedule, run, watch, check, summarize, or report on something automatically on a recurring cadence, use the create_automation tool.",
+		"When the user asks to create, schedule, run, watch, check, summarize, remind, or report on something automatically once or on a recurring cadence, use the create_automation tool.",
 		"When the user asks to list, inspect, edit, update, pause, resume, run now, or delete existing automations, use the matching automation management tool.",
 		"Do not merely explain how to manage automations when the user's wording is an instruction to do it.",
 		"Only delete an automation when the current user message explicitly asks to delete, remove, or disable it permanently. The delete_automation tool first asks for confirmation; call it with confirmed true only after the user confirms deletion.",
 		`Current time for scheduling: ${new Date(now).toISOString()}. User timezone: ${timezone}.`,
-		'Convert relative schedules like "every day at 9am", "weekdays at 10", or "every Monday at 15:30" into a schedulePeriod and scheduledAt timestamp in the user\'s timezone.',
+		"For a one-time task, provide an exact epoch-millisecond instant. For recurring work, provide a local startsAt value, an IANA timezone, and an RFC 5545 RRULE without DTSTART. Broad local windows such as morning, afternoon, or evening are sufficient: choose a reasonable local start time and make it visible in the created schedule. Ask one focused clarification question only when the intended date, timezone, recurrence, or time window is still ambiguous.",
+		"Automations cannot run more often than once per hour.",
+		"For monitoring requests, use meaningful_change delivery so routine checks stay quiet, and include a stop condition when the user says when monitoring should end.",
 		"Use the user's requested task as the automation prompt, omitting the scheduling phrase. Keep titles short and specific.",
 	].join("\n");
 
@@ -102,7 +134,7 @@ export const createAutomationTool = ({
 		deferLoading: false,
 		name: "create_automation",
 		description:
-			"Create a recurring Graneri automation from the current chat. Use this when the user asks for a task to run automatically on a schedule.",
+			"Create a one-time or recurring Graneri automation from the current chat. Use this when the user asks for a task to run automatically on a schedule.",
 		inputSchema: z.object({
 			title: z.string().min(1).max(80),
 			prompt: z
@@ -111,12 +143,25 @@ export const createAutomationTool = ({
 				.describe(
 					"The task to run each time, without the scheduling phrase. Include enough context for future runs.",
 				),
-			schedulePeriod: automationSchedulePeriodSchema,
-			scheduledAt: z
-				.number()
-				.finite()
+			schedule: automationScheduleSchema,
+			destination: z
+				.enum(["current_chat", "standalone"])
+				.default("current_chat")
 				.describe(
-					"Unix epoch milliseconds representing the requested local time in the user's timezone.",
+					"Use current_chat when the user wants this conversation to remain the task context. Use standalone for an independent task and result thread.",
+				),
+			deliveryPolicy: z
+				.enum(["always", "meaningful_change"])
+				.default("always")
+				.describe(
+					"Use meaningful_change for monitoring tasks that should notify only when the observed state materially changes.",
+				),
+			stopCondition: z
+				.string()
+				.min(1)
+				.optional()
+				.describe(
+					"Optional condition that ends future runs once the result proves it is met.",
 				),
 			appSourceIds: z
 				.array(z.string().min(1))
@@ -133,9 +178,11 @@ export const createAutomationTool = ({
 		ui: toolUiMetadata.create_automation,
 		execute: async ({
 			appSourceIds,
+			deliveryPolicy,
+			destination,
 			prompt,
-			scheduledAt,
-			schedulePeriod,
+			schedule,
+			stopCondition,
 			title,
 		}) => {
 			const selectedAppSources =
@@ -148,13 +195,17 @@ export const createAutomationTool = ({
 				webSearchEnabled,
 				appsEnabled: selectedAppSources.length > 0,
 				appSources: selectedAppSources,
-				schedulePeriod,
-				scheduledAt,
-				timezone: defaultTimezone,
+				schedule: {
+					...schedule,
+					timezone: schedule.timezone ?? defaultTimezone,
+				},
 				target: {
 					kind: "workspace",
 				},
-				chatId,
+				destination,
+				deliveryPolicy,
+				stopCondition,
+				chatId: destination === "current_chat" ? chatId : undefined,
 			});
 
 			return toAutomationToolResult(automation);
@@ -212,13 +263,14 @@ const createUpdateAutomationTool = ({
 		deferLoading: false,
 		name: "update_automation",
 		description:
-			"Update an existing recurring Graneri automation. Omitted fields keep their current values.",
+			"Update an existing Graneri automation. Omitted fields keep their current values.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
 			title: z.string().min(1).max(80).optional(),
 			prompt: z.string().min(1).optional(),
-			schedulePeriod: automationSchedulePeriodSchema.optional(),
-			scheduledAt: z.number().finite().optional(),
+			schedule: automationScheduleSchema.optional(),
+			deliveryPolicy: z.enum(["always", "meaningful_change"]).optional(),
+			stopCondition: z.string().min(1).nullable().optional(),
 			appSourceIds: z
 				.array(z.string().min(1))
 				.optional()
@@ -235,9 +287,10 @@ const createUpdateAutomationTool = ({
 		execute: async ({
 			appSourceIds,
 			automationId,
+			deliveryPolicy,
 			prompt,
-			scheduledAt,
-			schedulePeriod,
+			schedule,
+			stopCondition,
 			title,
 		}) => {
 			const currentAutomation = await getAutomation({ automationId });
@@ -257,10 +310,20 @@ const createUpdateAutomationTool = ({
 				webSearchEnabled: currentAutomation.webSearchEnabled,
 				appsEnabled: selectedAppSources.length > 0,
 				appSources: selectedAppSources,
-				schedulePeriod: schedulePeriod ?? currentAutomation.schedulePeriod,
-				scheduledAt: scheduledAt ?? currentAutomation.scheduledAt,
-				timezone: currentAutomation.timezone ?? defaultTimezone,
+				schedule: schedule
+					? {
+							...schedule,
+							timezone: schedule.timezone ?? defaultTimezone,
+						}
+					: currentAutomation.schedule,
+				destination: currentAutomation.destination,
+				deliveryPolicy: deliveryPolicy ?? currentAutomation.deliveryPolicy,
+				stopCondition:
+					stopCondition === undefined
+						? (currentAutomation.stopCondition ?? undefined)
+						: (stopCondition ?? undefined),
 				target: toAutomationMutationTarget(currentAutomation.target),
+				chatId: currentAutomation.chatId,
 			});
 
 			return toAutomationToolResult(automation);

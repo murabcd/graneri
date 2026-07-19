@@ -1,13 +1,10 @@
-import {
-	cleanup,
-	vResultValidator,
-	vWorkflowId,
-} from "@convex-dev/workflow";
+import { cleanup, vResultValidator, vWorkflowId } from "@convex-dev/workflow";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import { transitionAssistantRun } from "./assistantRunStateMachine";
 import { assistantRunWorkflow } from "./assistantRunWorkflowManager";
+import { syncAutomationRunFromAssistant } from "./automationRunStateMachine";
 
 export const MAX_ASSISTANT_RUN_STEPS = 20;
 
@@ -105,6 +102,7 @@ export const onComplete = internalMutation({
 				});
 			}
 		}
+		await syncAutomationRunFromAssistant(ctx, args.context.runId);
 		await cleanup(ctx, components.workflow, args.workflowId);
 		return null;
 	},

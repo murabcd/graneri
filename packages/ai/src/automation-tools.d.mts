@@ -1,11 +1,6 @@
 import type { ToolSet } from "ai";
+import type { AutomationSchedule } from "./automation-schedule.mjs";
 import type { AppSourceInstructionConnection } from "./capability-metadata.mjs";
-
-export type AutomationSchedulePeriod =
-	| "hourly"
-	| "daily"
-	| "weekdays"
-	| "weekly";
 
 export type AutomationAppSource = {
 	id: string;
@@ -23,9 +18,10 @@ export type AutomationToolInput = {
 	webSearchEnabled: boolean;
 	appsEnabled: boolean;
 	appSources: AutomationAppSource[];
-	schedulePeriod: AutomationSchedulePeriod;
-	scheduledAt: number;
-	timezone: string;
+	schedule: AutomationSchedule;
+	destination: "current_chat" | "standalone";
+	deliveryPolicy: "always" | "meaningful_change";
+	stopCondition?: string;
 	target:
 		| {
 				kind: "workspace";
@@ -36,7 +32,7 @@ export type AutomationToolInput = {
 				label?: string;
 				noteIds: string[];
 		  };
-	chatId: string;
+	chatId?: string;
 };
 
 export type AutomationToolResult = {
@@ -48,12 +44,13 @@ export type AutomationToolResult = {
 	webSearchEnabled: boolean;
 	appsEnabled: boolean;
 	appSources: AutomationAppSource[];
-	schedulePeriod: AutomationSchedulePeriod;
-	scheduledAt: number;
-	timezone: string;
+	schedule: AutomationSchedule;
 	target: AutomationToolInput["target"];
 	nextRunAt: number | null;
 	isPaused: boolean;
+	destination: AutomationToolInput["destination"];
+	deliveryPolicy: AutomationToolInput["deliveryPolicy"];
+	stopCondition: string | null;
 	chatId: string;
 };
 

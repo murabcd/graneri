@@ -266,9 +266,14 @@ describe("automation prompt mentions", () => {
 			],
 			webSearchEnabled: false,
 			appsEnabled: true,
-			schedulePeriod: "weekly",
-			scheduledAt: 0,
-			timezone: "UTC",
+			schedule: {
+				kind: "recurring",
+				rrule: "FREQ=WEEKLY",
+				startsAt: "2026-07-20T09:00:00",
+				timezone: "UTC",
+			},
+			destination: "standalone",
+			deliveryPolicy: "always",
 			target: {
 				kind: "notes",
 				label: "Launch",

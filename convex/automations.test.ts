@@ -1,6 +1,9 @@
+import workflowTest from "@convex-dev/workflow/test";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { transitionAutomationRun } from "./automationRunStateMachine";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -10,6 +13,27 @@ const ownerIdentity = {
 	tokenIdentifier: "test|owner",
 	name: "Owner",
 	email: "owner@example.com",
+};
+
+const dailySchedule = {
+	kind: "recurring" as const,
+	rrule: "FREQ=DAILY",
+	startsAt: "2020-01-01T00:00:02",
+	timezone: "UTC",
+};
+
+const weekdaySchedule = {
+	kind: "recurring" as const,
+	rrule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+	startsAt: "2020-01-01T00:00:03",
+	timezone: "UTC",
+};
+
+const hourlySchedule = {
+	kind: "recurring" as const,
+	rrule: "FREQ=HOURLY",
+	startsAt: "2020-01-01T00:00:02",
+	timezone: "UTC",
 };
 
 beforeEach(() => {
@@ -22,6 +46,7 @@ afterEach(() => {
 
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
+	workflowTest.register(t);
 	const asOwner = t.withIdentity(ownerIdentity);
 
 	const workspaceId = await t.run(async (ctx) =>
@@ -70,9 +95,9 @@ test("owner-scoped automation adapters reuse the authenticated CRUD boundary", a
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "standalone",
+		deliveryPolicy: "always" as const,
+		schedule: dailySchedule,
 		target: { kind: "workspace" },
 	});
 
@@ -94,9 +119,8 @@ test("owner-scoped automation adapters reuse the authenticated CRUD boundary", a
 		webSearchEnabled: true,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "weekdays",
-		scheduledAt: 3_000,
-		timezone: "UTC",
+		schedule: weekdaySchedule,
+		deliveryPolicy: "always" as const,
 		target: { kind: "workspace" },
 	});
 	const paused = await t.mutation(internal.automations.togglePausedForOwner, {
@@ -167,9 +191,9 @@ test("creating an automation leaves existing chat messages unchanged", async () 
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "hourly",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule: hourlySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -208,9 +232,9 @@ test("creating a workspace automation does not seed a chat transcript", async ()
 				provider: "posthog",
 			},
 		],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "standalone",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -258,9 +282,9 @@ test("creating a chat automation keeps the existing chat transcript unchanged", 
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -309,9 +333,9 @@ test("creating a note automation does not seed a chat transcript", async () => {
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "standalone",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "notes",
 			noteIds: [noteId],
@@ -338,9 +362,9 @@ test("runNow reserves a manual automation run before the action executes", async
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "standalone",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -374,7 +398,27 @@ test("runNow reserves a manual automation run before the action executes", async
 	});
 	expect(rows.runs).toHaveLength(1);
 	expect(rows.runs[0]?.status).toBe("running");
+	expect(rows.runs[0]?.assistantRunId).toEqual(expect.any(String));
 	expect(rows.savedAutomation?.activeRunId).toBe(rows.runs[0]?._id);
+	const assistantRuntime = await t.run(async (ctx) => {
+		const assistantRunId = rows.runs[0]?.assistantRunId;
+		if (!assistantRunId) {
+			throw new Error("Expected an assistant run.");
+		}
+		const assistantRun = await ctx.db.get(assistantRunId);
+		const job = await ctx.db
+			.query("assistantRunJobs")
+			.withIndex("by_runId", (q) => q.eq("runId", assistantRunId))
+			.unique();
+		return { assistantRun, job };
+	});
+	expect(assistantRuntime.assistantRun).toMatchObject({
+		producer: "convex",
+		status: "running",
+	});
+	expect(assistantRuntime.job?.execution.workflowId).toEqual(
+		expect.any(String),
+	);
 });
 
 test("runNow does not start while the automation chat has an active assistant run", async () => {
@@ -403,9 +447,9 @@ test("runNow does not start while the automation chat has an active assistant ru
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -469,9 +513,9 @@ test("stopping an automation run prevents late completion from winning", async (
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "standalone",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -488,12 +532,18 @@ test("stopping an automation run prevents late completion from winning", async (
 		automationId: automation.id,
 		runId: result.runId,
 	});
-	await t.mutation(internal.automations.completeRun, {
-		automationId: automation.id,
-		runId: result.runId,
-		userMessageId: "late-user",
-		assistantMessageId: "late-assistant",
-	});
+	await t.run(
+		async (ctx) =>
+			await transitionAutomationRun(
+				ctx,
+				{ automationId: automation.id, runId: result.runId },
+				{
+					type: "complete",
+					userMessageId: "late-user",
+					assistantMessageId: "late-assistant",
+				},
+			),
+	);
 
 	const rows = await t.run(async (ctx) => ({
 		automation: await ctx.db.get(automation.id),
@@ -502,6 +552,12 @@ test("stopping an automation run prevents late completion from winning", async (
 
 	expect(rows.run?.status).toBe("stopped");
 	expect(rows.automation?.activeRunId).toBeUndefined();
+	if (rows.run?.assistantRunId) {
+		const assistantRun = await t.run((ctx) =>
+			ctx.db.get(rows.run?.assistantRunId as Id<"assistantRuns">),
+		);
+		expect(assistantRun?.status).toBe("stopped");
+	}
 });
 
 test("automation run transitions reject mismatched automation and run ids", async () => {
@@ -514,9 +570,9 @@ test("automation run transitions reject mismatched automation and run ids", asyn
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily" as const,
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "standalone" as const,
+		deliveryPolicy: "always" as const,
+		schedule: dailySchedule,
 		target: { kind: "workspace" as const },
 	};
 	const firstAutomation = await asOwner.mutation(api.automations.create, {
@@ -538,12 +594,18 @@ test("automation run transitions reject mismatched automation and run ids", asyn
 		throw new Error("Expected both automation runs to start.");
 	}
 
-	await t.mutation(internal.automations.completeRun, {
-		automationId: firstAutomation.id,
-		runId: secondRun.runId,
-		userMessageId: "wrong-user",
-		assistantMessageId: "wrong-assistant",
-	});
+	await t.run(
+		async (ctx) =>
+			await transitionAutomationRun(
+				ctx,
+				{ automationId: firstAutomation.id, runId: secondRun.runId },
+				{
+					type: "complete",
+					userMessageId: "wrong-user",
+					assistantMessageId: "wrong-assistant",
+				},
+			),
+	);
 
 	const rows = await t.run(async (ctx) => ({
 		firstAutomation: await ctx.db.get(firstAutomation.id),
@@ -586,9 +648,9 @@ test("moving a chat to trash pauses its automation and restoring resumes it", as
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -660,9 +722,9 @@ test("deleting a chat moves its automation to a fresh chat", async () => {
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -722,9 +784,9 @@ test("deleting an automation leaves its chat", async () => {
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
 		target: {
 			kind: "workspace",
 		},
@@ -761,13 +823,14 @@ test("owner cleanup removes automations and automation runs", async () => {
 			webSearchEnabled: false,
 			appsEnabled: true,
 			appSources: [],
-			schedulePeriod: "daily",
-			scheduledAt: 2_000,
-			timezone: "UTC",
+			destination: "standalone",
+			deliveryPolicy: "always",
+			schedule: dailySchedule,
 			targetKind: "workspace",
 			targetLabel: "Workspace",
 			chatId: "automation-cleanup-chat",
 			isPaused: false,
+			isCompleted: false,
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
@@ -779,6 +842,7 @@ test("owner cleanup removes automations and automation runs", async () => {
 			scheduledFor: 2_000,
 			reason: "manual",
 			status: "completed",
+			isUnread: false,
 			startedAt: 2_000,
 			completedAt: 3_000,
 			createdAt: 2_000,
@@ -812,13 +876,14 @@ test("removeOrphanedRuns deletes automation runs after automation is gone", asyn
 			webSearchEnabled: false,
 			appsEnabled: true,
 			appSources: [],
-			schedulePeriod: "daily",
-			scheduledAt: 2_000,
-			timezone: "UTC",
+			destination: "standalone",
+			deliveryPolicy: "always",
+			schedule: dailySchedule,
 			targetKind: "workspace",
 			targetLabel: "Workspace",
 			chatId: "automation-orphan-run-chat",
 			isPaused: false,
+			isCompleted: false,
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
@@ -830,6 +895,7 @@ test("removeOrphanedRuns deletes automation runs after automation is gone", asyn
 			scheduledFor: 2_000,
 			reason: "manual",
 			status: "completed",
+			isUnread: false,
 			startedAt: 2_000,
 			completedAt: 3_000,
 			createdAt: 2_000,
@@ -869,13 +935,14 @@ test("removeOrphanedRuns leaves automation runs while automation exists", async 
 			webSearchEnabled: false,
 			appsEnabled: true,
 			appSources: [],
-			schedulePeriod: "daily",
-			scheduledAt: 2_000,
-			timezone: "UTC",
+			destination: "standalone",
+			deliveryPolicy: "always",
+			schedule: dailySchedule,
 			targetKind: "workspace",
 			targetLabel: "Workspace",
 			chatId: "automation-active-run-chat",
 			isPaused: false,
+			isCompleted: false,
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
@@ -887,6 +954,7 @@ test("removeOrphanedRuns leaves automation runs while automation exists", async 
 			scheduledFor: 2_000,
 			reason: "manual",
 			status: "completed",
+			isUnread: false,
 			startedAt: 2_000,
 			completedAt: 3_000,
 			createdAt: 2_000,

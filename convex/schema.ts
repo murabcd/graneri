@@ -1,3 +1,4 @@
+import { vWorkflowId } from "@convex-dev/workflow";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
@@ -12,6 +13,15 @@ import {
 	reasoningEffortValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
+import {
+	automationAppSourceProviderValidator,
+	automationDeliveryPolicyValidator,
+	automationDeliveryStatusValidator,
+	automationDestinationValidator,
+	automationRunReasonValidator,
+	automationRunStatusValidator,
+	automationScheduleValidator,
+} from "./automationValidators";
 
 const workspaceRoleValidator = v.union(
 	v.literal("startup-generalist"),
@@ -47,30 +57,9 @@ const appConnectionProviderValidator = v.union(
 	v.literal("linear"),
 );
 
-const automationAppSourceProviderValidator = v.union(
-	appConnectionProviderValidator,
-	v.literal("google-calendar"),
-	v.literal("google-drive"),
-);
-
 const appConnectionStatusValidator = v.union(
 	v.literal("connected"),
 	v.literal("disconnected"),
-);
-
-const automationSchedulePeriodValidator = v.union(
-	v.literal("hourly"),
-	v.literal("daily"),
-	v.literal("weekdays"),
-	v.literal("weekly"),
-);
-
-const automationRunStatusValidator = v.union(
-	v.literal("running"),
-	v.literal("completed"),
-	v.literal("failed"),
-	v.literal("skipped"),
-	v.literal("stopped"),
 );
 
 const inboxItemProviderValidator = v.union(
@@ -747,14 +736,17 @@ export default defineSchema({
 				}),
 			),
 		),
-		schedulePeriod: automationSchedulePeriodValidator,
-		scheduledAt: v.number(),
-		timezone: v.string(),
+		schedule: automationScheduleValidator,
 		targetKind: v.union(v.literal("notes"), v.literal("workspace")),
 		targetNoteIds: v.optional(v.array(v.id("notes"))),
 		targetLabel: v.string(),
+		destination: automationDestinationValidator,
+		deliveryPolicy: automationDeliveryPolicyValidator,
+		stopCondition: v.optional(v.string()),
+		lastObservedResult: v.optional(v.string()),
 		chatId: v.string(),
 		isPaused: v.boolean(),
+		isCompleted: v.boolean(),
 		nextRunAt: v.optional(v.number()),
 		lastRunAt: v.optional(v.number()),
 		activeRunId: v.optional(v.id("automationRuns")),
@@ -773,6 +765,12 @@ export default defineSchema({
 			"updatedAt",
 		])
 		.index("by_isPaused_and_nextRunAt", ["isPaused", "nextRunAt"])
+		.index("by_owner_workspace_paused_nextRunAt", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"isPaused",
+			"nextRunAt",
+		])
 		.index("by_ownerTokenIdentifier_and_workspaceId_and_chatId", [
 			"ownerTokenIdentifier",
 			"workspaceId",
@@ -784,13 +782,22 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		scheduledFor: v.number(),
-		reason: v.union(v.literal("scheduled"), v.literal("manual")),
+		reason: automationRunReasonValidator,
 		status: automationRunStatusValidator,
 		error: v.optional(v.string()),
 		startedAt: v.number(),
 		completedAt: v.optional(v.number()),
 		userMessageId: v.optional(v.string()),
 		assistantMessageId: v.optional(v.string()),
+		assistantRunId: v.optional(v.id("assistantRuns")),
+		deliveryWorkflowId: v.optional(vWorkflowId),
+		resultText: v.optional(v.string()),
+		resultSummary: v.optional(v.string()),
+		deliveryStatus: v.optional(automationDeliveryStatusValidator),
+		isUnread: v.boolean(),
+		notificationSentAt: v.optional(v.number()),
+		readAt: v.optional(v.number()),
+		archivedAt: v.optional(v.number()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
@@ -800,6 +807,14 @@ export default defineSchema({
 			"workspaceId",
 			"createdAt",
 		])
+		.index("by_owner_workspace_unread_reason_created", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"isUnread",
+			"reason",
+			"createdAt",
+		])
+		.index("by_assistantRunId", ["assistantRunId"])
 		.index("by_status_and_startedAt", ["status", "startedAt"]),
 	appConnections: defineTable({
 		ownerTokenIdentifier: v.string(),

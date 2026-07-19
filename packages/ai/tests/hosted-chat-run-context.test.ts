@@ -188,15 +188,21 @@ describe("chat automation tools", () => {
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
-		schedulePeriod: "daily",
-		scheduledAt: 2_000,
-		timezone: "UTC",
+		schedule: {
+			kind: "recurring" as const,
+			rrule: "FREQ=DAILY",
+			startsAt: "2026-07-20T09:00:00",
+			timezone: "UTC",
+		},
 		target: {
 			kind: "workspace",
 			label: "Workspace",
 		},
 		nextRunAt: 86_400_000,
 		isPaused: false,
+		destination: "current_chat" as const,
+		deliveryPolicy: "always" as const,
+		stopCondition: null,
 		chatId: "chat-1",
 	};
 
@@ -239,6 +245,45 @@ describe("chat automation tools", () => {
 			"run_automation_now",
 			"update_automation",
 		]);
+		expect(context.instruction).toContain(
+			"Broad local windows such as morning, afternoon, or evening are sufficient",
+		);
+	});
+
+	it("creates one-time monitoring automations with an explicit destination", async () => {
+		const createInputs: unknown[] = [];
+		const context = createAutomationContext({
+			createAutomation: async (input: unknown) => {
+				createInputs.push(input);
+				return {
+					...automation,
+					...(input as Record<string, unknown>),
+				};
+			},
+		});
+
+		await context.tools.create_automation.execute?.({
+			title: "Watch launch",
+			prompt: "Check whether the launch is live.",
+			schedule: { kind: "once", at: 1_800_000_000_000 },
+			destination: "standalone",
+			deliveryPolicy: "meaningful_change",
+			stopCondition: "The launch is live.",
+		});
+
+		expect(createInputs).toEqual([
+			expect.objectContaining({
+				destination: "standalone",
+				deliveryPolicy: "meaningful_change",
+				stopCondition: "The launch is live.",
+				schedule: {
+					kind: "once",
+					at: 1_800_000_000_000,
+					timezone: "UTC",
+				},
+				chatId: undefined,
+			}),
+		]);
 	});
 
 	it("updates automations while preserving unspecified fields", async () => {
@@ -263,8 +308,7 @@ describe("chat automation tools", () => {
 				automationId: "automation-1",
 				title: "Updated review",
 				prompt: automation.prompt,
-				schedulePeriod: automation.schedulePeriod,
-				scheduledAt: automation.scheduledAt,
+				schedule: automation.schedule,
 			}),
 		]);
 		expect(result).toMatchObject({

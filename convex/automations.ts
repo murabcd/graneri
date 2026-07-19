@@ -1,4 +1,8 @@
 import {
+	type AutomationSchedule,
+	normalizeAutomationSchedule,
+} from "@workspace/ai/automation-schedule";
+import {
 	DEFAULT_CHAT_MODEL_ID,
 	DEFAULT_REASONING_EFFORT,
 	findReasoningEffort,
@@ -14,54 +18,33 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
+import { reasoningEffortValidator } from "./assistantRunModel";
+import { requireAutomationCapacity } from "./automationLimits";
 import {
-	activateAutomationRun,
+	removeAllAutomationsForOwner,
+	removeOrphanedAutomationRuns,
+} from "./automationRetirement";
+import { startAutomationAssistantRun } from "./automationRunOrchestration";
+import {
+	applyAutomationDeliveryDecision,
 	automationChatHasActiveAssistantRun,
 	createAutomationChatId,
-	isAutomationRunActive,
+	getAutomationDeliveryContext,
 	reserveAutomationRun,
-	transitionAutomationRun,
+	stopAutomationRun,
 } from "./automationRunStateMachine";
 import {
 	cancelAutomationSchedule,
 	getNextAutomationRunAt,
 	scheduleAutomationRun,
 } from "./automationSchedule";
+import {
+	automationAppSourceProviderValidator,
+	automationDeliveryPolicyValidator,
+	automationDestinationValidator,
+	automationScheduleValidator,
+} from "./automationValidators";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
-
-const automationSchedulePeriodValidator = v.union(
-	v.literal("hourly"),
-	v.literal("daily"),
-	v.literal("weekdays"),
-	v.literal("weekly"),
-);
-
-const automationRunReasonValidator = v.union(
-	v.literal("scheduled"),
-	v.literal("manual"),
-);
-
-const reasoningEffortValidator = v.union(
-	v.literal("low"),
-	v.literal("medium"),
-	v.literal("high"),
-	v.literal("xhigh"),
-);
-
-const automationAppSourceProviderValidator = v.union(
-	v.literal("google-calendar"),
-	v.literal("google-drive"),
-	v.literal("yandex-calendar"),
-	v.literal("yandex-tracker"),
-	v.literal("jira"),
-	v.literal("jira-mcp"),
-	v.literal("posthog"),
-	v.literal("notion"),
-	v.literal("zoom"),
-	v.literal("context7"),
-	v.literal("figma"),
-	v.literal("linear"),
-);
 
 const automationAppSourceValidator = v.object({
 	id: v.string(),
@@ -69,23 +52,7 @@ const automationAppSourceValidator = v.object({
 	provider: automationAppSourceProviderValidator,
 });
 
-type AutomationAppSource = {
-	id: string;
-	label: string;
-	provider:
-		| "google-calendar"
-		| "google-drive"
-		| "yandex-calendar"
-		| "yandex-tracker"
-		| "jira"
-		| "jira-mcp"
-		| "posthog"
-		| "notion"
-		| "zoom"
-		| "context7"
-		| "figma"
-		| "linear";
-};
+type AutomationAppSource = Infer<typeof automationAppSourceValidator>;
 
 const automationListItemValidator = v.object({
 	id: v.id("automations"),
@@ -97,9 +64,7 @@ const automationListItemValidator = v.object({
 	webSearchEnabled: v.boolean(),
 	appsEnabled: v.boolean(),
 	appSources: v.array(automationAppSourceValidator),
-	schedulePeriod: automationSchedulePeriodValidator,
-	scheduledAt: v.number(),
-	timezone: v.string(),
+	schedule: automationScheduleValidator,
 	target: v.union(
 		v.object({
 			kind: v.literal("notes"),
@@ -111,52 +76,21 @@ const automationListItemValidator = v.object({
 			label: v.string(),
 		}),
 	),
+	destination: automationDestinationValidator,
+	deliveryPolicy: automationDeliveryPolicyValidator,
+	stopCondition: v.union(v.string(), v.null()),
 	chatId: v.string(),
 	createdAt: v.number(),
 	updatedAt: v.number(),
 	isPaused: v.boolean(),
+	status: v.union(
+		v.literal("active"),
+		v.literal("paused"),
+		v.literal("completed"),
+	),
 	lastRunAt: v.union(v.number(), v.null()),
 	nextRunAt: v.union(v.number(), v.null()),
 });
-
-const automationRunStartValidator = v.union(
-	v.object({
-		status: v.literal("started"),
-		automationId: v.id("automations"),
-		runId: v.id("automationRuns"),
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		authorName: v.optional(v.string()),
-		title: v.string(),
-		prompt: v.string(),
-		model: v.string(),
-		reasoningEffort: reasoningEffortValidator,
-		chatId: v.string(),
-		targetLabel: v.string(),
-		webSearchEnabled: v.boolean(),
-		appsEnabled: v.boolean(),
-		appSources: v.array(automationAppSourceValidator),
-		scheduledFor: v.number(),
-		reason: automationRunReasonValidator,
-		notes: v.array(
-			v.object({
-				title: v.string(),
-				text: v.string(),
-				updatedAt: v.number(),
-			}),
-		),
-	}),
-	v.object({
-		status: v.literal("skipped"),
-	}),
-);
-
-const automationRunActiveValidator = v.union(
-	automationRunStartValidator,
-	v.object({
-		status: v.literal("stopped"),
-	}),
-);
 
 const automationRunNowValidator = v.union(
 	v.object({
@@ -187,13 +121,13 @@ const runningAutomationRunValidator = v.union(
 
 const MAX_RETURNED_AUTOMATIONS = 100;
 const MAX_DUE_AUTOMATIONS = 50;
-const MAX_CONTEXT_NOTES = 8;
-const MAX_CONTEXT_NOTE_LENGTH = 2_000;
 const MAX_APP_SOURCES = 8;
 const STALE_SCHEDULED_FUNCTION_MS = 2 * 60 * 1000;
-const DELETE_RUNS_BATCH_SIZE = 50;
-const DELETE_AUTOMATIONS_BATCH_SIZE = 50;
-const MAX_TARGET_NOTES = MAX_CONTEXT_NOTES;
+const MAX_TARGET_NOTES = 8;
+const MAX_AUTOMATION_PROMPT_LENGTH = 64_000;
+const MAX_AUTOMATION_STOP_CONDITION_LENGTH = 2_000;
+const MAX_AUTOMATION_SOURCE_ID_LENGTH = 512;
+const MAX_AUTOMATION_CHAT_ID_LENGTH = 256;
 type AutomationTarget =
 	| {
 			kind: "notes";
@@ -222,10 +156,11 @@ const automationCreateArgs = {
 	webSearchEnabled: v.optional(v.boolean()),
 	appsEnabled: v.optional(v.boolean()),
 	appSources: v.optional(v.array(automationAppSourceValidator)),
-	schedulePeriod: automationSchedulePeriodValidator,
-	scheduledAt: v.number(),
-	timezone: v.optional(v.string()),
+	schedule: automationScheduleValidator,
 	target: automationTargetValidator,
+	destination: automationDestinationValidator,
+	deliveryPolicy: automationDeliveryPolicyValidator,
+	stopCondition: v.optional(v.string()),
 	chatId: v.optional(v.string()),
 };
 
@@ -238,9 +173,9 @@ const automationUpdateArgs = {
 	webSearchEnabled: v.optional(v.boolean()),
 	appsEnabled: v.optional(v.boolean()),
 	appSources: v.optional(v.array(automationAppSourceValidator)),
-	schedulePeriod: automationSchedulePeriodValidator,
-	scheduledAt: v.number(),
-	timezone: v.optional(v.string()),
+	schedule: automationScheduleValidator,
+	deliveryPolicy: automationDeliveryPolicyValidator,
+	stopCondition: v.optional(v.string()),
 	target: automationTargetValidator,
 };
 
@@ -312,12 +247,12 @@ const requireOwnedAutomationTarget = async (
 	}
 
 	const noteIds = normalizeTargetNoteIds(target.noteIds);
-	const notes = [];
-	for (const noteId of noteIds) {
-		notes.push(
-			await requireOwnedNote(ctx, ownerTokenIdentifier, workspaceId, noteId),
-		);
-	}
+	const notes = await Promise.all(
+		noteIds.map(
+			async (noteId) =>
+				await requireOwnedNote(ctx, ownerTokenIdentifier, workspaceId, noteId),
+		),
+	);
 
 	return {
 		kind: "notes" as const,
@@ -378,7 +313,24 @@ const normalizePrompt = (prompt: string) => {
 			message: "Automation prompt is required.",
 		});
 	}
+	if (normalized.length > MAX_AUTOMATION_PROMPT_LENGTH) {
+		throw new ConvexError({
+			code: "PROMPT_TOO_LARGE",
+			message: "Automation prompts can contain up to 64,000 characters.",
+		});
+	}
 
+	return normalized;
+};
+
+const normalizeStopCondition = (stopCondition: string | undefined) => {
+	const normalized = stopCondition?.trim() || undefined;
+	if (normalized && normalized.length > MAX_AUTOMATION_STOP_CONDITION_LENGTH) {
+		throw new ConvexError({
+			code: "STOP_CONDITION_TOO_LARGE",
+			message: "Automation stop conditions can contain up to 2,000 characters.",
+		});
+	}
 	return normalized;
 };
 
@@ -392,6 +344,12 @@ const normalizeAppSources = (appSources: AutomationAppSource[] | undefined) => {
 
 		if (!id || !label || seenIds.has(id)) {
 			continue;
+		}
+		if (id.length > MAX_AUTOMATION_SOURCE_ID_LENGTH) {
+			throw new ConvexError({
+				code: "AUTOMATION_SOURCE_ID_TOO_LARGE",
+				message: "An automation source identifier is too long.",
+			});
 		}
 
 		seenIds.add(id);
@@ -428,8 +386,19 @@ const normalizeModel = (model: string | undefined) => {
 const normalizeReasoningEffort = (reasoningEffort: string | undefined) =>
 	findReasoningEffort(reasoningEffort)?.id ?? DEFAULT_REASONING_EFFORT;
 
-const normalizeTimezone = (timezone: string | undefined) =>
-	clampWhitespace(timezone ?? "") || "UTC";
+const normalizeSchedule = (schedule: AutomationSchedule) => {
+	try {
+		return normalizeAutomationSchedule(schedule);
+	} catch (error) {
+		throw new ConvexError({
+			code: "INVALID_AUTOMATION_SCHEDULE",
+			message:
+				error instanceof Error
+					? error.message
+					: "Automation schedule is invalid.",
+		});
+	}
+};
 
 const toListItem = (automation: Doc<"automations">) => ({
 	id: automation._id,
@@ -441,9 +410,7 @@ const toListItem = (automation: Doc<"automations">) => ({
 	webSearchEnabled: automation.webSearchEnabled ?? false,
 	appsEnabled: automation.appsEnabled ?? true,
 	appSources: automation.appSources ?? [],
-	schedulePeriod: automation.schedulePeriod,
-	scheduledAt: automation.scheduledAt,
-	timezone: automation.timezone,
+	schedule: automation.schedule,
 	target:
 		automation.targetKind === "notes"
 			? {
@@ -455,69 +422,20 @@ const toListItem = (automation: Doc<"automations">) => ({
 					kind: "workspace" as const,
 					label: automation.targetLabel,
 				},
+	destination: automation.destination,
+	deliveryPolicy: automation.deliveryPolicy,
+	stopCondition: automation.stopCondition ?? null,
 	chatId: automation.chatId,
 	createdAt: automation.createdAt,
 	updatedAt: automation.updatedAt,
 	isPaused: automation.isPaused,
+	status: automation.isCompleted
+		? ("completed" as const)
+		: automation.isPaused
+			? ("paused" as const)
+			: ("active" as const),
 	lastRunAt: automation.lastRunAt ?? null,
 	nextRunAt: automation.nextRunAt ?? null,
-});
-
-const getRecentContextNotes = async (
-	ctx: MutationCtx,
-	automation: Doc<"automations">,
-) => {
-	if (automation.targetKind === "notes") {
-		const notes = [];
-		for (const noteId of automation.targetNoteIds ?? []) {
-			const note = await ctx.db.get(noteId);
-			if (
-				note &&
-				note.ownerTokenIdentifier === automation.ownerTokenIdentifier &&
-				note.workspaceId === automation.workspaceId &&
-				!note.isArchived
-			) {
-				notes.push(note);
-			}
-		}
-
-		return notes.map((note) => ({
-			title: note.title,
-			text: truncate(note.searchableText, MAX_CONTEXT_NOTE_LENGTH),
-			updatedAt: note.updatedAt,
-		}));
-	}
-
-	return [];
-};
-
-const buildAutomationRunStart = async (
-	ctx: MutationCtx,
-	automation: Doc<"automations">,
-	runId: Id<"automationRuns">,
-	args: {
-		scheduledFor: number;
-		reason: Doc<"automationRuns">["reason"];
-	},
-) => ({
-	status: "started" as const,
-	automationId: automation._id,
-	runId,
-	ownerTokenIdentifier: automation.ownerTokenIdentifier,
-	workspaceId: automation.workspaceId,
-	authorName: automation.authorName,
-	title: automation.title,
-	prompt: automation.prompt,
-	model: normalizeModel(automation.model),
-	reasoningEffort: normalizeReasoningEffort(automation.reasoningEffort),
-	chatId: automation.chatId,
-	targetLabel: automation.targetLabel,
-	webSearchEnabled: automation.webSearchEnabled ?? false,
-	appsEnabled: automation.appsEnabled ?? true,
-	appSources: automation.appSources ?? [],
-	scheduledFor: args.scheduledFor,
-	reason: args.reason,
-	notes: await getRecentContextNotes(ctx, automation),
 });
 
 const listAutomationsForOwner = async (
@@ -562,6 +480,11 @@ const createAutomationForOwner = async (
 	args: CreateAutomationForOwnerArgs,
 ) => {
 	await requireOwnedWorkspace(ctx, args.ownerTokenIdentifier, args.workspaceId);
+	await requireAutomationCapacity(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+	);
 	const target = await requireOwnedAutomationTarget(
 		ctx,
 		args.ownerTokenIdentifier,
@@ -571,10 +494,24 @@ const createAutomationForOwner = async (
 	const now = Date.now();
 	const prompt = normalizePrompt(args.prompt);
 	const appSources = normalizeAppSources(args.appSources);
-	const chatId = args.chatId
-		? clampWhitespace(args.chatId)
-		: createAutomationChatId();
-	if (args.chatId) {
+	const requestedChatId = args.chatId ? clampWhitespace(args.chatId) : "";
+	if (requestedChatId.length > MAX_AUTOMATION_CHAT_ID_LENGTH) {
+		throw new ConvexError({
+			code: "AUTOMATION_CHAT_ID_TOO_LARGE",
+			message: "Automation chat identifier is too long.",
+		});
+	}
+	if (args.destination === "current_chat" && !requestedChatId) {
+		throw new ConvexError({
+			code: "AUTOMATION_CHAT_REQUIRED",
+			message: "Current-chat automations require a chat.",
+		});
+	}
+	const chatId =
+		args.destination === "current_chat"
+			? requestedChatId
+			: createAutomationChatId();
+	if (args.destination === "current_chat") {
 		const chat = await ctx.db
 			.query("chats")
 			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
@@ -592,27 +529,17 @@ const createAutomationForOwner = async (
 			});
 		}
 	}
-	const existingAutomation = await ctx.db
-		.query("automations")
-		.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
-			q
-				.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
-				.eq("workspaceId", args.workspaceId)
-				.eq("chatId", chatId),
-		)
-		.unique();
-
-	if (existingAutomation) {
-		throw new ConvexError({
-			code: "AUTOMATION_CHAT_ALREADY_EXISTS",
-			message: "This chat already has an automation.",
-		});
-	}
+	const schedule = normalizeSchedule(args.schedule);
 	const nextRunAt = getNextAutomationRunAt({
 		from: now,
-		scheduledAt: args.scheduledAt,
-		schedulePeriod: args.schedulePeriod,
+		schedule,
 	});
+	if (nextRunAt === null) {
+		throw new ConvexError({
+			code: "AUTOMATION_SCHEDULE_COMPLETE",
+			message: "Automation schedule must include a future run.",
+		});
+	}
 	const automationId = await ctx.db.insert("automations", {
 		ownerTokenIdentifier: args.ownerTokenIdentifier,
 		workspaceId: args.workspaceId,
@@ -624,14 +551,17 @@ const createAutomationForOwner = async (
 		webSearchEnabled: args.webSearchEnabled ?? false,
 		appsEnabled: args.appsEnabled ?? true,
 		appSources,
-		schedulePeriod: args.schedulePeriod,
-		scheduledAt: args.scheduledAt,
-		timezone: normalizeTimezone(args.timezone),
+		schedule,
 		targetKind: target.kind,
 		targetNoteIds: target.targetNoteIds,
 		targetLabel: target.targetLabel,
+		destination: args.destination,
+		deliveryPolicy: args.deliveryPolicy,
+		stopCondition: normalizeStopCondition(args.stopCondition),
+		lastObservedResult: undefined,
 		chatId,
 		isPaused: false,
+		isCompleted: false,
 		nextRunAt,
 		lastRunAt: undefined,
 		activeRunId: undefined,
@@ -679,15 +609,22 @@ const updateAutomationForOwner = async (
 	const now = Date.now();
 	const prompt = normalizePrompt(args.prompt);
 	const appSources = normalizeAppSources(args.appSources);
+	const schedule = normalizeSchedule(args.schedule);
 	const nextRunAt = automation.isPaused
 		? undefined
 		: getNextAutomationRunAt({
 				from: now,
-				scheduledAt: args.scheduledAt,
-				schedulePeriod: args.schedulePeriod,
+				schedule,
 			});
-	const scheduledFunctionId = nextRunAt
-		? await scheduleAutomationRun(ctx, automation._id, nextRunAt)
+	if (!automation.isPaused && nextRunAt === null) {
+		throw new ConvexError({
+			code: "AUTOMATION_SCHEDULE_COMPLETE",
+			message: "Automation schedule must include a future run.",
+		});
+	}
+	const normalizedNextRunAt = nextRunAt ?? undefined;
+	const scheduledFunctionId = normalizedNextRunAt
+		? await scheduleAutomationRun(ctx, automation._id, normalizedNextRunAt)
 		: undefined;
 
 	await ctx.db.patch(automation._id, {
@@ -698,13 +635,14 @@ const updateAutomationForOwner = async (
 		webSearchEnabled: args.webSearchEnabled ?? false,
 		appsEnabled: args.appsEnabled ?? true,
 		appSources,
-		schedulePeriod: args.schedulePeriod,
-		scheduledAt: args.scheduledAt,
-		timezone: normalizeTimezone(args.timezone),
+		schedule,
+		deliveryPolicy: args.deliveryPolicy,
+		stopCondition: normalizeStopCondition(args.stopCondition),
 		targetKind: target.kind,
 		targetNoteIds: target.targetNoteIds,
 		targetLabel: target.targetLabel,
-		nextRunAt,
+		nextRunAt: normalizedNextRunAt,
+		isCompleted: false,
 		scheduledFunctionId,
 		updatedAt: now,
 	});
@@ -741,11 +679,21 @@ const toggleAutomationForOwner = async (
 			updatedAt: now,
 		});
 	} else {
+		await requireAutomationCapacity(
+			ctx,
+			ownerTokenIdentifier,
+			automation.workspaceId,
+		);
 		const nextRunAt = getNextAutomationRunAt({
 			from: now,
-			scheduledAt: automation.scheduledAt,
-			schedulePeriod: automation.schedulePeriod,
+			schedule: automation.schedule,
 		});
+		if (nextRunAt === null) {
+			throw new ConvexError({
+				code: "AUTOMATION_SCHEDULE_COMPLETE",
+				message: "This automation has no future runs.",
+			});
+		}
 		const scheduledFunctionId = await scheduleAutomationRun(
 			ctx,
 			automation._id,
@@ -753,6 +701,7 @@ const toggleAutomationForOwner = async (
 		);
 		await ctx.db.patch(automation._id, {
 			isPaused: false,
+			isCompleted: false,
 			nextRunAt,
 			scheduledFunctionId,
 			updatedAt: now,
@@ -808,11 +757,11 @@ const runAutomationNowForOwner = async (
 		};
 	}
 
-	await ctx.scheduler.runAfter(0, internal.automationActions.runAutomation, {
-		automationId: automation._id,
+	await startAutomationAssistantRun(ctx, {
+		automation: run.automation,
+		automationRunId: run.runId,
 		scheduledFor: now,
 		reason: "manual",
-		reservedRunId: run.runId,
 	});
 
 	return {
@@ -833,6 +782,18 @@ const removeAutomationForOwner = async (
 		automationId,
 	);
 	await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
+	if (automation.activeRunId) {
+		await ctx.db.patch(automation._id, {
+			isPaused: true,
+			nextRunAt: undefined,
+			scheduledFunctionId: undefined,
+			updatedAt: Date.now(),
+		});
+		await stopAutomationRun(ctx, {
+			automationId: automation._id,
+			runId: automation.activeRunId,
+		});
+	}
 	await ctx.db.delete(automation._id);
 	await ctx.scheduler.runAfter(0, internal.automations.removeOrphanedRuns, {
 		automationId: automation._id,
@@ -880,7 +841,7 @@ export const getRunningRunForChat = query({
 		const ownerTokenIdentifier = identity.tokenIdentifier;
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
 
-		const automation = await ctx.db
+		const automations = await ctx.db
 			.query("automations")
 			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
 				q
@@ -888,25 +849,25 @@ export const getRunningRunForChat = query({
 					.eq("workspaceId", args.workspaceId)
 					.eq("chatId", args.chatId),
 			)
-			.unique();
+			.collect();
 
-		if (!automation?.activeRunId) {
-			return null;
+		for (const automation of automations) {
+			if (!automation.activeRunId) {
+				continue;
+			}
+			const run = await ctx.db.get(automation.activeRunId);
+			if (run?.status === "running") {
+				return {
+					automationId: automation._id,
+					runId: run._id,
+					title: automation.title,
+					scheduledFor: run.scheduledFor,
+					startedAt: run.startedAt,
+				};
+			}
 		}
 
-		const run = await ctx.db.get(automation.activeRunId);
-
-		if (run?.status !== "running") {
-			return null;
-		}
-
-		return {
-			automationId: automation._id,
-			runId: run._id,
-			title: automation.title,
-			scheduledFor: run.scheduledFor,
-			startedAt: run.startedAt,
-		};
+		return null;
 	},
 });
 
@@ -1067,58 +1028,29 @@ export const removeForOwner = internalMutation({
 	},
 });
 
-export const beginRun = internalMutation({
+export const startScheduledRun = internalMutation({
 	args: {
 		automationId: v.id("automations"),
 		scheduledFor: v.number(),
-		reason: automationRunReasonValidator,
 	},
-	returns: automationRunStartValidator,
+	returns: v.null(),
 	handler: async (ctx, args) => {
-		const reservation = await reserveAutomationRun(ctx, args);
+		const reservation = await reserveAutomationRun(ctx, {
+			...args,
+			reason: "scheduled",
+		});
 		if (reservation.status !== "reserved") {
-			return { status: "skipped" as const };
+			return null;
 		}
 
-		return await buildAutomationRunStart(
-			ctx,
-			reservation.automation,
-			reservation.runId,
-			args,
-		);
+		await startAutomationAssistantRun(ctx, {
+			automation: reservation.automation,
+			automationRunId: reservation.runId,
+			scheduledFor: args.scheduledFor,
+			reason: "scheduled",
+		});
+		return null;
 	},
-});
-
-export const activateRun = internalMutation({
-	args: {
-		automationId: v.id("automations"),
-		runId: v.id("automationRuns"),
-		scheduledFor: v.number(),
-		reason: automationRunReasonValidator,
-	},
-	returns: automationRunActiveValidator,
-	handler: async (ctx, args) => {
-		const activeRun = await activateAutomationRun(ctx, args);
-		if (activeRun.status !== "active") {
-			return { status: "stopped" as const };
-		}
-
-		return await buildAutomationRunStart(
-			ctx,
-			activeRun.automation,
-			activeRun.run._id,
-			args,
-		);
-	},
-});
-
-export const isRunActive = internalMutation({
-	args: {
-		automationId: v.id("automations"),
-		runId: v.id("automationRuns"),
-	},
-	returns: v.boolean(),
-	handler: async (ctx, args) => await isAutomationRunActive(ctx, args),
 });
 
 export const stopRun = mutation({
@@ -1143,42 +1075,41 @@ export const stopRun = mutation({
 			});
 		}
 
-		await transitionAutomationRun(ctx, args, { type: "stop" });
+		await stopAutomationRun(ctx, args);
 
 		return null;
 	},
 });
 
-export const completeRun = internalMutation({
+export const getDeliveryContext = internalQuery({
 	args: {
-		automationId: v.id("automations"),
-		runId: v.id("automationRuns"),
-		userMessageId: v.string(),
-		assistantMessageId: v.string(),
+		automationRunId: v.id("automationRuns"),
 	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		await transitionAutomationRun(ctx, args, {
-			type: "complete",
-			userMessageId: args.userMessageId,
-			assistantMessageId: args.assistantMessageId,
-		});
-		return null;
-	},
+	returns: v.union(
+		v.object({
+			ownerTokenIdentifier: v.string(),
+			title: v.string(),
+			prompt: v.string(),
+			previousResult: v.union(v.string(), v.null()),
+			resultText: v.string(),
+			stopCondition: v.union(v.string(), v.null()),
+		}),
+		v.null(),
+	),
+	handler: async (ctx, args) =>
+		await getAutomationDeliveryContext(ctx, args.automationRunId),
 });
 
-export const failRun = internalMutation({
+export const applyDeliveryDecision = internalMutation({
 	args: {
-		automationId: v.id("automations"),
-		runId: v.id("automationRuns"),
-		error: v.string(),
+		automationRunId: v.id("automationRuns"),
+		meaningfulChange: v.boolean(),
+		stopConditionMet: v.boolean(),
+		summary: v.string(),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await transitionAutomationRun(ctx, args, {
-			type: "fail",
-			error: args.error,
-		});
+		await applyAutomationDeliveryDecision(ctx, args);
 		return null;
 	},
 });
@@ -1213,11 +1144,10 @@ export const reconcileDueAutomations = internalMutation({
 
 			const scheduledFunctionId = await ctx.scheduler.runAfter(
 				0,
-				internal.automationActions.runAutomation,
+				internal.automations.startScheduledRun,
 				{
 					automationId: automation._id,
 					scheduledFor: automation.nextRunAt ?? now,
-					reason: "scheduled",
 				},
 			);
 			await ctx.db.patch(automation._id, {
@@ -1240,30 +1170,7 @@ export const removeOrphanedRuns = internalMutation({
 		hasMore: v.boolean(),
 	}),
 	handler: async (ctx, args) => {
-		const automation = await ctx.db.get(args.automationId);
-
-		if (automation) {
-			return { deletedCount: 0, hasMore: false };
-		}
-
-		const runs = await ctx.db
-			.query("automationRuns")
-			.withIndex("by_automationId_and_scheduledFor", (q) =>
-				q.eq("automationId", args.automationId),
-			)
-			.take(DELETE_RUNS_BATCH_SIZE);
-
-		await Promise.all(runs.map((run) => ctx.db.delete(run._id)));
-
-		const hasMore = runs.length === DELETE_RUNS_BATCH_SIZE;
-
-		if (hasMore) {
-			await ctx.scheduler.runAfter(0, internal.automations.removeOrphanedRuns, {
-				automationId: args.automationId,
-			});
-		}
-
-		return { deletedCount: runs.length, hasMore };
+		return await removeOrphanedAutomationRuns(ctx, args.automationId);
 	},
 });
 
@@ -1273,42 +1180,7 @@ export const removeAllForOwner = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const runs = await ctx.db
-			.query("automationRuns")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_createdAt", (q) =>
-				q.eq("ownerTokenIdentifier", args.ownerTokenIdentifier),
-			)
-			.take(DELETE_RUNS_BATCH_SIZE);
-
-		await Promise.all(runs.map((run) => ctx.db.delete(run._id)));
-
-		if (runs.length === DELETE_RUNS_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.automations.removeAllForOwner, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-			});
-			return null;
-		}
-
-		const automations = await ctx.db
-			.query("automations")
-			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_createdAt", (q) =>
-				q.eq("ownerTokenIdentifier", args.ownerTokenIdentifier),
-			)
-			.take(DELETE_AUTOMATIONS_BATCH_SIZE);
-
-		await Promise.all(
-			automations.map(async (automation) => {
-				await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
-				await ctx.db.delete(automation._id);
-			}),
-		);
-
-		if (automations.length === DELETE_AUTOMATIONS_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.automations.removeAllForOwner, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-			});
-		}
-
+		await removeAllAutomationsForOwner(ctx, args.ownerTokenIdentifier);
 		return null;
 	},
 });

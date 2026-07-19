@@ -44,13 +44,11 @@ const toAutomationTargetMutationInput = (target: AutomationToolTarget) => {
 	if (target.kind === "notes") {
 		return {
 			kind: "notes" as const,
-			label: target.label,
 			noteIds: target.noteIds.map(toNoteId),
 		};
 	}
 	return {
 		kind: "workspace" as const,
-		label: target.label,
 	};
 };
 
@@ -63,8 +61,18 @@ const toAutomationCreateMutationInput = (automation: AutomationToolInput) => ({
 const toAutomationUpdateMutationInput = (
 	automation: AutomationToolUpdateInput,
 ) => ({
-	...toAutomationCreateMutationInput(automation),
 	automationId: toAutomationId(automation.automationId),
+	title: automation.title,
+	prompt: automation.prompt,
+	model: automation.model,
+	reasoningEffort: automation.reasoningEffort,
+	webSearchEnabled: automation.webSearchEnabled,
+	appsEnabled: automation.appsEnabled,
+	appSources: toAutomationAppSourceMutationInput(automation.appSources),
+	schedule: automation.schedule,
+	deliveryPolicy: automation.deliveryPolicy,
+	stopCondition: automation.stopCondition,
+	target: toAutomationTargetMutationInput(automation.target),
 });
 
 export const createHostedChatAutomationActions = ({

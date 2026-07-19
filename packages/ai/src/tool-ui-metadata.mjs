@@ -5,7 +5,7 @@ export const toolUiMetadata = {
 		running: "Creating automation",
 		complete: "Created automation",
 		error: "Create automation failed",
-		subtitleKeys: ["title", "schedulePeriod"],
+		subtitleKeys: ["title"],
 	},
 	list_automations: {
 		groupKey: "automation",
@@ -26,7 +26,7 @@ export const toolUiMetadata = {
 		running: "Updating automation",
 		complete: "Updated automation",
 		error: "Update automation failed",
-		subtitleKeys: ["title", "schedulePeriod", "automationId"],
+		subtitleKeys: ["title", "automationId"],
 	},
 	pause_automation: {
 		groupKey: "automation",

@@ -16,10 +16,12 @@
     "@ai-sdk/mcp": "^1.0.42",
     "@ai-sdk/openai": "3.0.63",
     "@ai-sdk/provider-utils": "^4.0.19",
+    "@js-temporal/polyfill": "0.5.1",
     "ai": "6.0.182",
     "bash-tool": "^1.3.16",
     "convex": "^1.42.1",
     "pino": "^10.1.0",
+    "rrule": "2.8.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -29,6 +31,10 @@
     "vitest": "^4.1.9"
   },
   "exports": {
+    "./automation-schedule": {
+      "types": "./src/automation-schedule.d.mts",
+      "import": "./src/automation-schedule.mjs"
+    },
     "./automation-tools": {
       "types": "./src/automation-tools.d.mts",
       "import": "./src/automation-tools.mjs"
@@ -116,10 +122,6 @@
     "./openai-admission": {
       "types": "./src/openai-admission.d.mts",
       "import": "./src/openai-admission.mjs"
-    },
-    "./openai-tool-search": {
-      "types": "./src/openai-tool-search.d.mts",
-      "import": "./src/openai-tool-search.mjs"
     },
     "./pcm16-resampler": {
       "types": "./src/pcm16-resampler.d.mts",

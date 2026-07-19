@@ -40,6 +40,31 @@ const toAutomationMutationInput = (automation: AutomationToolInput) => ({
 			: { kind: "workspace" as const },
 });
 
+const toAutomationUpdateMutationInput = (automation: AutomationToolInput) => ({
+	title: automation.title,
+	prompt: automation.prompt,
+	model: automation.model,
+	reasoningEffort: automation.reasoningEffort,
+	webSearchEnabled: automation.webSearchEnabled,
+	appsEnabled: automation.appsEnabled,
+	appSources: automation.appSources.map((source) => ({
+		...source,
+		provider: toAutomationAppSourceProvider(source.provider),
+	})),
+	schedule: automation.schedule,
+	deliveryPolicy: automation.deliveryPolicy,
+	stopCondition: automation.stopCondition,
+	target:
+		automation.target.kind === "notes"
+			? {
+					kind: "notes" as const,
+					noteIds: automation.target.noteIds.map(
+						(noteId) => noteId as Id<"notes">,
+					),
+				}
+			: { kind: "workspace" as const },
+});
+
 export const createAssistantRunAutomationActions = (
 	ctx: ActionCtx,
 	args: {
@@ -84,6 +109,6 @@ export const createAssistantRunAutomationActions = (
 		await ctx.runMutation(internal.automations.updateForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
 			automationId: automationId as Id<"automations">,
-			...toAutomationMutationInput(automation),
+			...toAutomationUpdateMutationInput(automation),
 		}),
 });

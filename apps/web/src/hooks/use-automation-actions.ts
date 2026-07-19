@@ -27,9 +27,9 @@ const toAutomationMutationInput = (automation: AutomationDraft) => ({
 	webSearchEnabled: automation.webSearchEnabled,
 	appsEnabled: automation.appsEnabled,
 	appSources: automation.appSources,
-	schedulePeriod: automation.schedulePeriod,
-	scheduledAt: automation.scheduledAt,
-	timezone: automation.timezone,
+	schedule: automation.schedule,
+	deliveryPolicy: automation.deliveryPolicy,
+	stopCondition: automation.stopCondition ?? undefined,
 	target: toAutomationMutationTarget(automation.target),
 });
 
@@ -74,6 +74,7 @@ export const useAutomationActions = ({
 				} else {
 					await createAutomation({
 						workspaceId,
+						destination: automationChatId ? "current_chat" : "standalone",
 						chatId: automationChatId ?? undefined,
 						...input,
 					});
