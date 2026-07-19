@@ -118,6 +118,7 @@ export const buildAutomationCreationInstruction = ({ now, timezone }) =>
 		"For a one-time task, provide an exact epoch-millisecond instant. For recurring work, provide a local startsAt value, an IANA timezone, and an RFC 5545 RRULE without DTSTART. Broad local windows such as morning, afternoon, or evening are sufficient: choose a reasonable local start time and make it visible in the created schedule. Ask one focused clarification question only when the intended date, timezone, recurrence, or time window is still ambiguous.",
 		"Automations cannot run more often than once per hour.",
 		"For monitoring requests, use meaningful_change delivery so routine checks stay quiet, and include a stop condition when the user says when monitoring should end.",
+		"Use failed_runs_only delivery when the user asks to be notified only when the scheduled task fails.",
 		"Use the user's requested task as the automation prompt, omitting the scheduling phrase. Keep titles short and specific.",
 	].join("\n");
 
@@ -151,10 +152,10 @@ export const createAutomationTool = ({
 					"Use current_chat when the user wants this conversation to remain the task context. Use standalone for an independent task and result thread.",
 				),
 			deliveryPolicy: z
-				.enum(["always", "meaningful_change"])
+				.enum(["always", "failed_runs_only", "meaningful_change"])
 				.default("always")
 				.describe(
-					"Use meaningful_change for monitoring tasks that should notify only when the observed state materially changes.",
+					"Use failed_runs_only to notify only on failures. Use meaningful_change for monitoring tasks that should notify only when the observed state materially changes.",
 				),
 			stopCondition: z
 				.string()
@@ -269,7 +270,9 @@ const createUpdateAutomationTool = ({
 			title: z.string().min(1).max(80).optional(),
 			prompt: z.string().min(1).optional(),
 			schedule: automationScheduleSchema.optional(),
-			deliveryPolicy: z.enum(["always", "meaningful_change"]).optional(),
+			deliveryPolicy: z
+				.enum(["always", "failed_runs_only", "meaningful_change"])
+				.optional(),
 			stopCondition: z.string().min(1).nullable().optional(),
 			appSourceIds: z
 				.array(z.string().min(1))

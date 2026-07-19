@@ -248,6 +248,7 @@ describe("chat automation tools", () => {
 		expect(context.instruction).toContain(
 			"Broad local windows such as morning, afternoon, or evening are sufficient",
 		);
+		expect(context.instruction).toContain("failed_runs_only");
 	});
 
 	it("creates one-time monitoring automations with an explicit destination", async () => {
@@ -267,14 +268,14 @@ describe("chat automation tools", () => {
 			prompt: "Check whether the launch is live.",
 			schedule: { kind: "once", at: 1_800_000_000_000 },
 			destination: "standalone",
-			deliveryPolicy: "meaningful_change",
+			deliveryPolicy: "failed_runs_only",
 			stopCondition: "The launch is live.",
 		});
 
 		expect(createInputs).toEqual([
 			expect.objectContaining({
 				destination: "standalone",
-				deliveryPolicy: "meaningful_change",
+				deliveryPolicy: "failed_runs_only",
 				stopCondition: "The launch is live.",
 				schedule: {
 					kind: "once",

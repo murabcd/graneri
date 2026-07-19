@@ -2,7 +2,10 @@ import workflowTest from "@convex-dev/workflow/test";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
-import { syncAutomationRunFromAssistant } from "./automationRunStateMachine";
+import {
+	failAutomationDelivery,
+	syncAutomationRunFromAssistant,
+} from "./automationRunStateMachine";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -54,7 +57,7 @@ const createAutomation = async (
 	options: {
 		title?: string;
 		prompt?: string;
-		deliveryPolicy?: "always" | "meaningful_change";
+		deliveryPolicy?: "always" | "failed_runs_only" | "meaningful_change";
 		stopCondition?: string;
 	} = {},
 ) =>
@@ -137,6 +140,57 @@ const insertPendingScheduledResult = async (
 		return runId;
 	});
 
+const completeScheduledAssistantRun = async (
+	fixture: Fixture,
+	automation: Awaited<ReturnType<typeof createAutomation>>,
+	resultText: string,
+) => {
+	const scheduledFor = automation.nextRunAt;
+	if (scheduledFor === null) {
+		throw new Error("Expected a scheduled automation.");
+	}
+	await fixture.t.mutation(internal.automations.startScheduledRun, {
+		automationId: automation.id,
+		scheduledFor,
+	});
+	const run = await fixture.t.run(async (ctx) => {
+		const savedAutomation = await ctx.db.get(automation.id);
+		return savedAutomation?.activeRunId
+			? await ctx.db.get(savedAutomation.activeRunId)
+			: null;
+	});
+	if (!run?.assistantRunId || !run.assistantMessageId) {
+		throw new Error("Expected a durable automation assistant run.");
+	}
+	const assistantRunId = run.assistantRunId;
+
+	await fixture.t.mutation(
+		internal.assistantRunBackgroundState.checkpointStep,
+		{
+			runId: assistantRunId,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+			text: resultText,
+			partsJson: JSON.stringify([{ type: "text", text: resultText }]),
+			outcome: "completed",
+			usage: { inputTokens: 10, outputTokens: 3, totalTokens: 13 },
+		},
+	);
+	await fixture.t.mutation(
+		internal.assistantRunBackgroundState.applyStepOutcome,
+		{
+			runId: assistantRunId,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+		},
+	);
+	await fixture.t.run(
+		async (ctx) => await syncAutomationRunFromAssistant(ctx, assistantRunId),
+	);
+
+	return run;
+};
+
 test("automation delivery suppresses unchanged monitoring results", async () => {
 	const fixture = await createFixture();
 	const automation = await createAutomation(fixture, {
@@ -194,6 +248,63 @@ test("automation delivery publishes meaningful results and honors stop condition
 	});
 	expect(rows.automation).toMatchObject({ isCompleted: true });
 	expect(rows.automation).not.toHaveProperty("nextRunAt");
+});
+
+test("failed-only delivery suppresses successful scheduled results", async () => {
+	const fixture = await createFixture();
+	const automation = await createAutomation(fixture, {
+		deliveryPolicy: "failed_runs_only",
+	});
+	const run = await completeScheduledAssistantRun(
+		fixture,
+		automation,
+		"The scheduled task succeeded.",
+	);
+
+	const storedRun = await fixture.t.run(
+		async (ctx) => await ctx.db.get(run._id),
+	);
+	expect(storedRun).toMatchObject({
+		status: "completed",
+		deliveryStatus: "suppressed",
+		isUnread: false,
+		resultSummary: "The scheduled task succeeded.",
+	});
+	expect(
+		await fixture.asOwner.query(api.automationRuns.pendingNotificationSignal, {
+			workspaceId: fixture.workspaceId,
+		}),
+	).toBeNull();
+});
+
+test("failed-only delivery publishes failed scheduled results", async () => {
+	const fixture = await createFixture();
+	const automation = await createAutomation(fixture, {
+		deliveryPolicy: "failed_runs_only",
+	});
+	const runId = await insertPendingScheduledResult(
+		fixture,
+		automation,
+		"The scheduled task failed.",
+	);
+
+	await fixture.t.run(
+		async (ctx) =>
+			await failAutomationDelivery(ctx, runId, "The scheduled task failed."),
+	);
+
+	const storedRun = await fixture.t.run(async (ctx) => await ctx.db.get(runId));
+	expect(storedRun).toMatchObject({
+		status: "failed",
+		deliveryStatus: "failed",
+		isUnread: true,
+		error: "The scheduled task failed.",
+	});
+	expect(
+		await fixture.asOwner.query(api.automationRuns.pendingNotificationSignal, {
+			workspaceId: fixture.workspaceId,
+		}),
+	).toBe(runId);
 });
 
 test("scheduled results are claimed once for native notification delivery", async () => {
@@ -413,43 +524,10 @@ test("one-time automations complete after their scheduled assistant run", async 
 		target: { kind: "workspace" },
 	});
 
-	await fixture.t.mutation(internal.automations.startScheduledRun, {
-		automationId: automation.id,
-		scheduledFor,
-	});
-	const run = await fixture.t.run(async (ctx) => {
-		const savedAutomation = await ctx.db.get(automation.id);
-		return savedAutomation?.activeRunId
-			? await ctx.db.get(savedAutomation.activeRunId)
-			: null;
-	});
-	if (!run?.assistantRunId || !run.assistantMessageId) {
-		throw new Error("Expected a durable automation assistant run.");
-	}
-	const assistantRunId = run.assistantRunId;
-
-	await fixture.t.mutation(
-		internal.assistantRunBackgroundState.checkpointStep,
-		{
-			runId: run.assistantRunId,
-			assistantMessageId: run.assistantMessageId,
-			stepIndex: 0,
-			text: resultText,
-			partsJson: JSON.stringify([{ type: "text", text: resultText }]),
-			outcome: "completed",
-			usage: { inputTokens: 10, outputTokens: 3, totalTokens: 13 },
-		},
-	);
-	await fixture.t.mutation(
-		internal.assistantRunBackgroundState.applyStepOutcome,
-		{
-			runId: run.assistantRunId,
-			assistantMessageId: run.assistantMessageId,
-			stepIndex: 0,
-		},
-	);
-	await fixture.t.run(
-		async (ctx) => await syncAutomationRunFromAssistant(ctx, assistantRunId),
+	const run = await completeScheduledAssistantRun(
+		fixture,
+		automation,
+		resultText,
 	);
 
 	const [completedAutomation] = await fixture.asOwner.query(

@@ -501,7 +501,9 @@ busy chat.
 `automationRuns` is also the durable task-result inbox. Successful, failed, and
 unchanged checks retain their result summary, read state, delivery state, and
 archive state and are exposed through cursor pagination. `always` delivery
-publishes every successful result. `meaningful_change` compares a scheduled
+publishes every successful result. `failed_runs_only` retains successful runs
+without marking them unread or emitting notifications while failures remain
+unread and notification-eligible. `meaningful_change` compares a scheduled
 result with the last observed result in a retryable classification Workflow;
 routine checks remain in history without becoming unread. An optional stop
 condition is classified at the same boundary and completes the definition when

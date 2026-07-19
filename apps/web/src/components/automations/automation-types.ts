@@ -2,6 +2,7 @@ import type {
 	AutomationSchedule,
 	AutomationScheduleKind,
 } from "@workspace/ai/automation-schedule";
+import type { AutomationDeliveryPolicy } from "@workspace/ai/automation-tools";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
@@ -44,7 +45,7 @@ export type AutomationDraft = {
 	appsEnabled: boolean;
 	schedule: AutomationSchedule;
 	destination: "current_chat" | "standalone";
-	deliveryPolicy: "always" | "meaningful_change";
+	deliveryPolicy: AutomationDeliveryPolicy;
 	stopCondition?: string | null;
 	target: AutomationTarget;
 };

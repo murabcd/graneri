@@ -31,7 +31,7 @@ type AutomationRunTransition =
 			assistantMessageId: string;
 			resultText?: string;
 			resultSummary?: string;
-			deliveryStatus?: "delivered" | "unchanged";
+			deliveryStatus?: "delivered" | "suppressed" | "unchanged";
 			shouldStop?: boolean;
 	  }
 	| { type: "fail"; error: string };
@@ -236,7 +236,11 @@ export const syncAutomationRunFromAssistant = async (
 					assistantMessageId: automationRun.assistantMessageId,
 					resultText,
 					resultSummary: summarizeResult(resultText),
-					deliveryStatus: "delivered",
+					deliveryStatus:
+						automationRun.reason === "scheduled" &&
+						automation.deliveryPolicy === "failed_runs_only"
+							? "suppressed"
+							: "delivered",
 				});
 			}
 		case "failed":
@@ -301,7 +305,8 @@ export const applyAutomationDeliveryDecision = async (
 	const shouldDeliver =
 		run.reason === "manual" ||
 		automation.deliveryPolicy === "always" ||
-		args.meaningfulChange;
+		(automation.deliveryPolicy === "meaningful_change" &&
+			args.meaningfulChange);
 
 	return await transitionAutomationRun(
 		ctx,
@@ -312,7 +317,11 @@ export const applyAutomationDeliveryDecision = async (
 			assistantMessageId: run.assistantMessageId,
 			resultText: run.resultText,
 			resultSummary: truncateError(args.summary),
-			deliveryStatus: shouldDeliver ? "delivered" : "unchanged",
+			deliveryStatus: shouldDeliver
+				? "delivered"
+				: automation.deliveryPolicy === "failed_runs_only"
+					? "suppressed"
+					: "unchanged",
 			shouldStop: Boolean(automation.stopCondition) && args.stopConditionMet,
 		},
 	);
@@ -427,7 +436,8 @@ export const transitionAutomationRun = async (
 				updatedAt: now,
 			});
 			break;
-		case "complete":
+		case "complete": {
+			const deliveryStatus = transition.deliveryStatus ?? "delivered";
 			await ctx.db.patch(run._id, {
 				status: "completed",
 				completedAt: now,
@@ -435,12 +445,13 @@ export const transitionAutomationRun = async (
 				assistantMessageId: transition.assistantMessageId,
 				resultText: transition.resultText,
 				resultSummary: transition.resultSummary,
-				deliveryStatus: transition.deliveryStatus ?? "delivered",
-				isUnread: transition.deliveryStatus !== "unchanged",
+				deliveryStatus,
+				isUnread: deliveryStatus === "delivered",
 				readAt: undefined,
 				updatedAt: now,
 			});
 			break;
+		}
 		case "fail":
 			await ctx.db.patch(run._id, {
 				status: "failed",

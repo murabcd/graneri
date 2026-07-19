@@ -1,4 +1,5 @@
 import type { AutomationCustomFrequency } from "@workspace/ai/automation-schedule";
+import type { AutomationDeliveryPolicy } from "@workspace/ai/automation-tools";
 import { Button } from "@workspace/ui/components/button";
 import { Calendar } from "@workspace/ui/components/calendar";
 import {
@@ -230,14 +231,14 @@ export function AutomationSchedulePicker({
 	scheduleWeekdays: number[];
 	customFrequency: AutomationCustomFrequency;
 	customInterval: number;
-	deliveryPolicy: "always" | "meaningful_change";
+	deliveryPolicy: AutomationDeliveryPolicy;
 	onSchedulePeriodChange: (value: AutomationSchedulePeriod) => void;
 	onScheduleDateChange: (value: string) => void;
 	onScheduleTimeChange: (value: string) => void;
 	onScheduleWeekdaysChange: (value: number[]) => void;
 	onCustomFrequencyChange: (value: AutomationCustomFrequency) => void;
 	onCustomIntervalChange: (value: number) => void;
-	onDeliveryPolicyChange: (value: "always" | "meaningful_change") => void;
+	onDeliveryPolicyChange: (value: AutomationDeliveryPolicy) => void;
 }) {
 	const customFrequencyOption =
 		CUSTOM_FREQUENCIES.find((option) => option.value === customFrequency) ??
@@ -416,7 +417,7 @@ export function AutomationSchedulePicker({
 					<Select
 						value={deliveryPolicy}
 						onValueChange={(value) =>
-							onDeliveryPolicyChange(value as "always" | "meaningful_change")
+							onDeliveryPolicyChange(value as AutomationDeliveryPolicy)
 						}
 					>
 						<SelectTrigger
@@ -429,6 +430,9 @@ export function AutomationSchedulePicker({
 						<SelectContent>
 							<SelectGroup>
 								<SelectItem value="always">Notify every run</SelectItem>
+								<SelectItem value="failed_runs_only">
+									Failed runs only
+								</SelectItem>
 								<SelectItem value="meaningful_change">
 									Only meaningful changes
 								</SelectItem>

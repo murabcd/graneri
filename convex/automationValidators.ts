@@ -22,6 +22,7 @@ export const automationDestinationValidator = v.union(
 
 export const automationDeliveryPolicyValidator = v.union(
 	v.literal("always"),
+	v.literal("failed_runs_only"),
 	v.literal("meaningful_change"),
 );
 
@@ -40,6 +41,7 @@ export const automationRunReasonValidator = v.union(
 
 export const automationDeliveryStatusValidator = v.union(
 	v.literal("delivered"),
+	v.literal("suppressed"),
 	v.literal("unchanged"),
 	v.literal("failed"),
 );

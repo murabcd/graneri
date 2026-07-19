@@ -10,6 +10,7 @@ import {
 	getAutomationScheduleLocalStart,
 	getAutomationScheduleWeekdays,
 } from "@workspace/ai/automation-schedule";
+import type { AutomationDeliveryPolicy } from "@workspace/ai/automation-tools";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Dialog,
@@ -139,7 +140,7 @@ type AutomationDialogState = {
 	scheduleWeekdays: number[];
 	customFrequency: AutomationCustomFrequency;
 	customInterval: number;
-	deliveryPolicy: "always" | "meaningful_change";
+	deliveryPolicy: AutomationDeliveryPolicy;
 	stopCondition: string;
 	target: AutomationTarget | null;
 	webSearchEnabled: boolean;

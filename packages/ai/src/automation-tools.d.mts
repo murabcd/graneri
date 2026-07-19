@@ -10,6 +10,11 @@ export type AutomationAppSource = {
 
 export declare const automationAppSourceProviders: readonly AutomationAppSource["provider"][];
 
+export type AutomationDeliveryPolicy =
+	| "always"
+	| "failed_runs_only"
+	| "meaningful_change";
+
 export type AutomationToolInput = {
 	title: string;
 	prompt: string;
@@ -20,7 +25,7 @@ export type AutomationToolInput = {
 	appSources: AutomationAppSource[];
 	schedule: AutomationSchedule;
 	destination: "current_chat" | "standalone";
-	deliveryPolicy: "always" | "meaningful_change";
+	deliveryPolicy: AutomationDeliveryPolicy;
 	stopCondition?: string;
 	target:
 		| {
