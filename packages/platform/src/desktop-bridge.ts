@@ -264,6 +264,11 @@ export interface GraneriDesktopBridge {
 		notifyForScheduledMeetings: boolean;
 		notifyForAutoDetectedMeetings: boolean;
 	}) => Promise<{ ok: boolean }>;
+	showAutomationNotification: (payload: {
+		title: string;
+		body: string;
+		chatId: string;
+	}) => Promise<{ ok: boolean }>;
 	refreshTrayCalendar: () => Promise<{ ok: boolean }>;
 	setTrayCalendarState: (
 		payload: DesktopTrayCalendarState,

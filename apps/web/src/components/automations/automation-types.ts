@@ -11,7 +11,6 @@ export const AUTOMATION_SCHEDULE_PERIODS = [
 	{ value: "daily", label: "Daily" },
 	{ value: "weekdays", label: "Weekdays" },
 	{ value: "weekly", label: "Weekly" },
-	{ value: "monthly", label: "Monthly" },
 	{ value: "custom", label: "Custom" },
 ] as const;
 
@@ -59,20 +58,4 @@ export type AutomationListItem = AutomationDraft & {
 	status: "active" | "paused" | "completed";
 	lastRunAt: number | null;
 	nextRunAt: number | null;
-};
-
-export type AutomationRunListItem = {
-	id: Id<"automationRuns">;
-	automationId: Id<"automations">;
-	title: string;
-	chatId: string;
-	scheduledFor: number;
-	reason: "scheduled" | "manual";
-	status: "running" | "completed" | "failed" | "skipped" | "stopped";
-	deliveryStatus: "delivered" | "unchanged" | "failed" | null;
-	resultSummary: string | null;
-	error: string | null;
-	isUnread: boolean;
-	startedAt: number;
-	completedAt: number | null;
 };

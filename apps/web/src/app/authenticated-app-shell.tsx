@@ -124,6 +124,7 @@ import { NoteTemplateSelect } from "@/components/templates/note-template-select"
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { ActiveWorkspaceProvider } from "@/hooks/active-workspace-provider";
 import { useAutomationActions } from "@/hooks/use-automation-actions";
+import { useAutomationNotifications } from "@/hooks/use-automation-notifications";
 import { prefetchChatMessagesSnapshot } from "@/hooks/use-chat-messages-snapshot";
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
 import { type AuthSession, authClient } from "@/lib/auth-client";
@@ -420,6 +421,10 @@ const useAppShellState = ({
 			? { workspaceId: resolvedActiveWorkspaceId }
 			: "skip",
 	);
+	useAutomationNotifications({
+		isDesktopMac,
+		workspaceId: resolvedActiveWorkspaceId,
+	});
 	const projects = useQuery(
 		api.projects.list,
 		resolvedActiveWorkspaceId
@@ -832,24 +837,11 @@ const useAppShellState = ({
 		setAutomationDialogOpen(true);
 	}, []);
 
-	const handleCreateChatAutomationOpen = React.useCallback(
-		(chatId: string) => {
-			const existingAutomation = (automations ?? []).find(
-				(automation) => automation.chatId === chatId,
-			);
-
-			if (existingAutomation) {
-				setAutomationChatId(null);
-				setEditingAutomationId(existingAutomation.id);
-			} else {
-				setEditingAutomationId(null);
-				setAutomationChatId(() => chatId);
-			}
-
-			setAutomationDialogOpen(true);
-		},
-		[automations],
-	);
+	const handleCreateChatAutomationOpen = React.useCallback((chatId: string) => {
+		setEditingAutomationId(null);
+		setAutomationChatId(() => chatId);
+		setAutomationDialogOpen(true);
+	}, []);
 
 	const handleEditAutomationOpen = React.useCallback(
 		(automationId: Id<"automations">) => {

@@ -1,6 +1,20 @@
+import type { AutomationCustomFrequency } from "@workspace/ai/automation-schedule";
 import { Button } from "@workspace/ui/components/button";
+import { Calendar } from "@workspace/ui/components/calendar";
+import {
+	DropdownMenu,
+	DropdownMenuCheckboxItem,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu";
 import { Input } from "@workspace/ui/components/input";
-import { InputGroupButton } from "@workspace/ui/components/input-group";
+import {
+	InputGroup,
+	InputGroupButton,
+	InputGroupInput,
+	InputGroupText,
+} from "@workspace/ui/components/input-group";
 import {
 	Popover,
 	PopoverContent,
@@ -20,24 +34,171 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { Clock } from "lucide-react";
+import { CalendarIcon, ChevronDown, Clock } from "lucide-react";
 import {
 	AUTOMATION_SCHEDULE_PERIODS,
 	type AutomationSchedulePeriod,
 } from "./automation-types";
 
 const AUTOMATION_PICKER_TRIGGER_CLASS_NAME =
-	"group/automation-picker min-w-0 max-w-[180px] justify-start overflow-hidden rounded-full font-normal text-muted-foreground";
+	"group/automation-picker min-w-0 max-w-full justify-start rounded-full font-normal text-muted-foreground";
+const AUTOMATION_CONTROL_CLASS_NAME =
+	"border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0";
 
 const WEEKDAY_OPTIONS = [
-	{ value: 1, label: "M", name: "Monday" },
-	{ value: 2, label: "T", name: "Tuesday" },
-	{ value: 3, label: "W", name: "Wednesday" },
-	{ value: 4, label: "T", name: "Thursday" },
-	{ value: 5, label: "F", name: "Friday" },
-	{ value: 6, label: "S", name: "Saturday" },
-	{ value: 7, label: "S", name: "Sunday" },
+	{ value: 1, label: "Mo", name: "Monday" },
+	{ value: 2, label: "Tu", name: "Tuesday" },
+	{ value: 3, label: "We", name: "Wednesday" },
+	{ value: 4, label: "Th", name: "Thursday" },
+	{ value: 5, label: "Fr", name: "Friday" },
+	{ value: 6, label: "Sa", name: "Saturday" },
+	{ value: 7, label: "Su", name: "Sunday" },
 ] as const;
+
+const CUSTOM_FREQUENCIES = [
+	{ value: "hourly", label: "Hourly", singular: "hour", plural: "hours" },
+	{ value: "daily", label: "Daily", singular: "day", plural: "days" },
+	{ value: "weekly", label: "Weekly", singular: "week", plural: "weeks" },
+	{ value: "monthly", label: "Monthly", singular: "month", plural: "months" },
+	{ value: "yearly", label: "Yearly", singular: "year", plural: "years" },
+] as const;
+
+const parseLocalDate = (value: string) => {
+	const [year, month, day] = value.split("-").map(Number);
+	if (!year || !month || !day) {
+		return undefined;
+	}
+	return new Date(year, month - 1, day, 12);
+};
+
+const formatLocalDate = (date: Date) => {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+};
+
+const formatDateLabel = (value: string) => {
+	const date = parseLocalDate(value);
+	return date
+		? new Intl.DateTimeFormat(undefined, {
+				day: "numeric",
+				month: "short",
+				year: "numeric",
+			}).format(date)
+		: "Choose date";
+};
+
+const setLocalDateDay = (value: string, day: number) => {
+	const [year, month] = value.split("-").map(Number);
+	if (!year || !month) {
+		return value;
+	}
+	const lastDay = new Date(year, month, 0).getDate();
+	return `${value.slice(0, 8)}${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+};
+
+function AutomationDatePicker({
+	value,
+	timezone,
+	onChange,
+}: {
+	value: string;
+	timezone: string;
+	onChange: (value: string) => void;
+}) {
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button
+					type="button"
+					variant="outline"
+					className={cn(
+						"w-full justify-between font-normal",
+						AUTOMATION_CONTROL_CLASS_NAME,
+					)}
+				>
+					{formatDateLabel(value)}
+					<CalendarIcon data-icon="inline-end" />
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				align="start"
+				side="right"
+				sideOffset={8}
+				collisionPadding={8}
+				className="w-auto p-0"
+			>
+				<Calendar
+					mode="single"
+					selected={parseLocalDate(value)}
+					timeZone={timezone}
+					onSelect={(date) => {
+						if (date) {
+							onChange(formatLocalDate(date));
+						}
+					}}
+				/>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function AutomationWeekdayPicker({
+	value,
+	onChange,
+}: {
+	value: number[];
+	onChange: (value: number[]) => void;
+}) {
+	const label = WEEKDAY_OPTIONS.filter((day) => value.includes(day.value))
+		.map((day) => day.label)
+		.join(", ");
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					type="button"
+					variant="outline"
+					className={cn(
+						"w-full justify-between overflow-hidden font-normal",
+						AUTOMATION_CONTROL_CLASS_NAME,
+					)}
+				>
+					<span className="truncate">{label}</span>
+					<ChevronDown data-icon="inline-end" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="w-56">
+				<DropdownMenuGroup>
+					{WEEKDAY_OPTIONS.map((day) => {
+						const checked = value.includes(day.value);
+						return (
+							<DropdownMenuCheckboxItem
+								key={day.value}
+								checked={checked}
+								className="pr-8 pl-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:right-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:left-auto"
+								onSelect={(event) => event.preventDefault()}
+								onCheckedChange={(nextChecked) => {
+									if (!nextChecked && value.length === 1) {
+										return;
+									}
+									const nextValue = nextChecked
+										? [...value, day.value]
+										: value.filter((weekday) => weekday !== day.value);
+									onChange([...new Set(nextValue)].sort());
+								}}
+							>
+								{day.name}
+							</DropdownMenuCheckboxItem>
+						);
+					})}
+				</DropdownMenuGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
 
 export function AutomationSchedulePicker({
 	open,
@@ -48,16 +209,16 @@ export function AutomationSchedulePicker({
 	scheduleTime,
 	scheduleTimezone,
 	scheduleWeekdays,
-	customRrule,
+	customFrequency,
+	customInterval,
 	deliveryPolicy,
-	stopCondition,
 	onSchedulePeriodChange,
 	onScheduleDateChange,
 	onScheduleTimeChange,
 	onScheduleWeekdaysChange,
-	onCustomRruleChange,
+	onCustomFrequencyChange,
+	onCustomIntervalChange,
 	onDeliveryPolicyChange,
-	onStopConditionChange,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -67,17 +228,22 @@ export function AutomationSchedulePicker({
 	scheduleTime: string;
 	scheduleTimezone: string;
 	scheduleWeekdays: number[];
-	customRrule: string;
+	customFrequency: AutomationCustomFrequency;
+	customInterval: number;
 	deliveryPolicy: "always" | "meaningful_change";
-	stopCondition: string;
 	onSchedulePeriodChange: (value: AutomationSchedulePeriod) => void;
 	onScheduleDateChange: (value: string) => void;
 	onScheduleTimeChange: (value: string) => void;
 	onScheduleWeekdaysChange: (value: number[]) => void;
-	onCustomRruleChange: (value: string) => void;
+	onCustomFrequencyChange: (value: AutomationCustomFrequency) => void;
+	onCustomIntervalChange: (value: number) => void;
 	onDeliveryPolicyChange: (value: "always" | "meaningful_change") => void;
-	onStopConditionChange: (value: string) => void;
 }) {
+	const customFrequencyOption =
+		CUSTOM_FREQUENCIES.find((option) => option.value === customFrequency) ??
+		CUSTOM_FREQUENCIES[0];
+	const monthDay = Number(scheduleDate.slice(8, 10));
+
 	return (
 		<Popover open={open} onOpenChange={onOpenChange}>
 			<Tooltip>
@@ -106,7 +272,9 @@ export function AutomationSchedulePicker({
 					const target = event.target;
 					if (
 						target instanceof HTMLElement &&
-						target.closest("[data-slot='select-content']")
+						target.closest(
+							"[data-slot='select-content'], [data-slot='dropdown-menu-content'], [data-slot='popover-content']",
+						)
 					) {
 						event.preventDefault();
 					}
@@ -115,7 +283,7 @@ export function AutomationSchedulePicker({
 				<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
 					Schedule
 				</div>
-				<div className="space-y-1">
+				<div className="flex flex-col gap-1">
 					<Select
 						value={schedulePeriod}
 						onValueChange={(value) =>
@@ -124,7 +292,7 @@ export function AutomationSchedulePicker({
 					>
 						<SelectTrigger
 							size="sm"
-							className="w-full border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0"
+							className={cn("w-full", AUTOMATION_CONTROL_CLASS_NAME)}
 						>
 							<SelectValue />
 						</SelectTrigger>
@@ -138,56 +306,101 @@ export function AutomationSchedulePicker({
 							</SelectGroup>
 						</SelectContent>
 					</Select>
-					{["once", "monthly", "custom"].includes(schedulePeriod) ? (
-						<Input
-							id="automation-schedule-date"
-							type="date"
-							value={scheduleDate}
-							onChange={(event) => onScheduleDateChange(event.target.value)}
-							className="appearance-none border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0"
-						/>
-					) : null}
-					{schedulePeriod === "weekly" ? (
-						<fieldset
-							className="grid grid-cols-7 gap-1"
-							aria-label="Days of week"
-						>
-							{WEEKDAY_OPTIONS.map((day) => {
-								const isSelected = scheduleWeekdays.includes(day.value);
-								return (
-									<Button
-										key={day.value}
-										type="button"
-										variant={isSelected ? "secondary" : "ghost"}
-										size="icon-xs"
-										disabled={isSelected && scheduleWeekdays.length === 1}
-										aria-pressed={isSelected}
-										aria-label={`Run on ${day.name}`}
-										onClick={() => {
-											const nextDays = isSelected
-												? scheduleWeekdays.length === 1
-													? scheduleWeekdays
-													: scheduleWeekdays.filter(
-															(value) => value !== day.value,
-														)
-												: [...scheduleWeekdays, day.value].sort();
-											onScheduleWeekdaysChange(nextDays);
-										}}
-									>
-										{day.label}
-									</Button>
-								);
-							})}
-						</fieldset>
-					) : null}
+
 					{schedulePeriod === "custom" ? (
-						<Input
-							id="automation-schedule-rrule"
-							value={customRrule}
-							onChange={(event) => onCustomRruleChange(event.target.value)}
-							placeholder="FREQ=WEEKLY;BYDAY=MO,WE"
-							aria-label="RFC 5545 recurrence rule"
-							className="border-input/30 bg-input/30 font-mono text-xs shadow-none focus-visible:border-input focus-visible:ring-0"
+						<>
+							<Select
+								value={customFrequency}
+								onValueChange={(value) =>
+									onCustomFrequencyChange(value as AutomationCustomFrequency)
+								}
+							>
+								<SelectTrigger
+									size="sm"
+									aria-label="Custom recurrence frequency"
+									className={cn("w-full", AUTOMATION_CONTROL_CLASS_NAME)}
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										{CUSTOM_FREQUENCIES.map((frequency) => (
+											<SelectItem key={frequency.value} value={frequency.value}>
+												{frequency.label}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+							<InputGroup className={cn(AUTOMATION_CONTROL_CLASS_NAME)}>
+								<InputGroupInput
+									type="number"
+									min={1}
+									max={99}
+									value={customInterval}
+									onChange={(event) =>
+										onCustomIntervalChange(
+											Math.max(
+												1,
+												Math.min(
+													99,
+													Math.trunc(event.target.valueAsNumber || 1),
+												),
+											),
+										)
+									}
+									aria-label="Repeat interval"
+									className="appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+								/>
+								<InputGroupText className="pr-3">
+									{customInterval === 1
+										? customFrequencyOption.singular
+										: customFrequencyOption.plural}
+								</InputGroupText>
+							</InputGroup>
+							{customFrequency === "weekly" ? (
+								<AutomationWeekdayPicker
+									value={scheduleWeekdays}
+									onChange={onScheduleWeekdaysChange}
+								/>
+							) : null}
+							{customFrequency === "monthly" ? (
+								<Input
+									type="number"
+									min={1}
+									max={31}
+									value={monthDay}
+									onChange={(event) => {
+										const nextDay = Math.max(
+											1,
+											Math.min(31, Math.trunc(event.target.valueAsNumber || 1)),
+										);
+										onScheduleDateChange(
+											setLocalDateDay(scheduleDate, nextDay),
+										);
+									}}
+									aria-label="Day of month"
+									className={cn(
+										"appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+										AUTOMATION_CONTROL_CLASS_NAME,
+									)}
+								/>
+							) : null}
+							{customFrequency === "yearly" ? (
+								<AutomationDatePicker
+									value={scheduleDate}
+									timezone={scheduleTimezone}
+									onChange={onScheduleDateChange}
+								/>
+							) : null}
+						</>
+					) : null}
+
+					{schedulePeriod === "once" ? (
+						<AutomationDatePicker
+							value={scheduleDate}
+							timezone={scheduleTimezone}
+							onChange={onScheduleDateChange}
 						/>
 					) : null}
 					<Input
@@ -195,11 +408,11 @@ export function AutomationSchedulePicker({
 						type="time"
 						value={scheduleTime}
 						onChange={(event) => onScheduleTimeChange(event.target.value)}
-						className="appearance-none border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+						className={cn(
+							"appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none",
+							AUTOMATION_CONTROL_CLASS_NAME,
+						)}
 					/>
-					<div className="px-1 pt-0.5 text-[11px] text-muted-foreground">
-						{scheduleTimezone}
-					</div>
 					<Select
 						value={deliveryPolicy}
 						onValueChange={(value) =>
@@ -209,24 +422,19 @@ export function AutomationSchedulePicker({
 						<SelectTrigger
 							size="sm"
 							aria-label="Result notifications"
-							className="w-full border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0"
+							className={cn("w-full", AUTOMATION_CONTROL_CLASS_NAME)}
 						>
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="always">Notify every run</SelectItem>
-							<SelectItem value="meaningful_change">
-								Only meaningful changes
-							</SelectItem>
+							<SelectGroup>
+								<SelectItem value="always">Notify every run</SelectItem>
+								<SelectItem value="meaningful_change">
+									Only meaningful changes
+								</SelectItem>
+							</SelectGroup>
 						</SelectContent>
 					</Select>
-					<Input
-						id="automation-stop-condition"
-						value={stopCondition}
-						onChange={(event) => onStopConditionChange(event.target.value)}
-						placeholder="Optional stop condition"
-						className="border-input/30 bg-input/30 shadow-none focus-visible:border-input focus-visible:ring-0"
-					/>
 				</div>
 			</PopoverContent>
 		</Popover>

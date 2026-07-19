@@ -1,5 +1,6 @@
 import {
 	type AutomationSchedule,
+	type AutomationScheduleKind,
 	getAutomationScheduleKind,
 	getAutomationScheduleStartAt,
 } from "@workspace/ai/automation-schedule";
@@ -7,7 +8,7 @@ import { AUTOMATION_SCHEDULE_PERIODS } from "./automation-types";
 
 const scheduleLabelsByValue = Object.fromEntries(
 	AUTOMATION_SCHEDULE_PERIODS.map((period) => [period.value, period.label]),
-) as Record<(typeof AUTOMATION_SCHEDULE_PERIODS)[number]["value"], string>;
+) as Record<Exclude<AutomationScheduleKind, "monthly">, string>;
 
 const dateFormattersByTimezone = new Map<string, Intl.DateTimeFormat>();
 const timeFormattersByTimezone = new Map<string, Intl.DateTimeFormat>();
@@ -47,7 +48,7 @@ export function getAutomationSchedulePeriodLabel({
 	schedule: AutomationSchedule;
 }) {
 	const kind = getAutomationScheduleKind(schedule);
-	const label = scheduleLabelsByValue[kind];
+	const label = kind === "monthly" ? "Monthly" : scheduleLabelsByValue[kind];
 	const startAt = getAutomationScheduleStartAt(schedule);
 	const timezone = schedule.timezone;
 	const time = getTimeFormatter(timezone).format(startAt);
@@ -55,9 +56,6 @@ export function getAutomationSchedulePeriodLabel({
 	if (kind === "once") {
 		const date = getDateFormatter(timezone).format(startAt);
 		return `${label} on ${date} at ${time}`;
-	}
-	if (kind === "hourly") {
-		return label;
 	}
 	if (kind === "custom") {
 		return label;

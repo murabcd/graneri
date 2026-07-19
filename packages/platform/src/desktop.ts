@@ -185,6 +185,21 @@ export const setDesktopActiveWorkspaceNotificationPreferences =
 		return true;
 	};
 
+export const showDesktopAutomationNotification = async (payload: {
+	title: string;
+	body: string;
+	chatId: string;
+}) => {
+	const bridge = getDesktopBridge();
+
+	if (!bridge?.showAutomationNotification) {
+		return false;
+	}
+
+	const result = await bridge.showAutomationNotification(payload);
+	return result.ok;
+};
+
 export const refreshDesktopTrayCalendar = async () => {
 	const bridge = getDesktopBridge();
 

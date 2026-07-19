@@ -1,7 +1,8 @@
 import {
+	type AutomationCustomFrequency,
 	type AutomationSchedule,
 	createAutomationScheduleFromLocal,
-	normalizeAutomationSchedule,
+	createCustomAutomationScheduleFromLocal,
 } from "@workspace/ai/automation-schedule";
 import type { AutomationSchedulePeriod } from "./automation-types";
 
@@ -11,7 +12,8 @@ export type AutomationScheduleFormValue = {
 	scheduleTime: string;
 	scheduleTimezone: string;
 	scheduleWeekdays: number[];
-	customRrule: string;
+	customFrequency: AutomationCustomFrequency;
+	customInterval: number;
 };
 
 export const createInitialScheduleLocalStart = () => {
@@ -40,15 +42,17 @@ export const createScheduleFromFormValue = ({
 	scheduleTime,
 	scheduleTimezone,
 	scheduleWeekdays,
-	customRrule,
+	customFrequency,
+	customInterval,
 }: AutomationScheduleFormValue): AutomationSchedule => {
 	const startsAt = `${scheduleDate}T${scheduleTime}:00`;
 	if (schedulePeriod === "custom") {
-		return normalizeAutomationSchedule({
-			kind: "recurring",
-			rrule: customRrule,
+		return createCustomAutomationScheduleFromLocal({
+			frequency: customFrequency,
+			interval: customInterval,
 			startsAt,
 			timezone: scheduleTimezone,
+			weekdays: scheduleWeekdays,
 		});
 	}
 

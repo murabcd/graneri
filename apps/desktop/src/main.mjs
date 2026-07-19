@@ -11,6 +11,7 @@ import {
 	dialog,
 	globalShortcut,
 	ipcMain,
+	Notification,
 	nativeImage,
 	nativeTheme,
 	powerMonitor,
@@ -33,6 +34,7 @@ import {
 	registerDesktopAppProtocolScheme,
 	registerDesktopAppProtocols,
 } from "./desktop-app-protocol.mjs";
+import { showAutomationNotification } from "./desktop-automation-notification.mjs";
 import { createDesktopBootOrchestrator } from "./desktop-boot-orchestrator.mjs";
 import { createDesktopContentSecurityPolicy } from "./desktop-content-security-policy.mjs";
 import { createDesktopDiagnostics } from "./desktop-diagnostics.mjs";
@@ -2512,6 +2514,21 @@ registerDesktopInvokeHandler(
 		scheduleTrayCalendarRefresh(0);
 		return { ok: true };
 	},
+);
+
+registerDesktopInvokeHandler(
+	"showAutomationNotification",
+	async (_event, payload) =>
+		showAutomationNotification({
+			Notification,
+			payload,
+			onOpenChat: (chatId) => {
+				void requireDesktopService(desktopWindow, "desktopWindow").show({
+					pathname: "/chat",
+					search: `?chatId=${encodeURIComponent(chatId)}`,
+				});
+			},
+		}),
 );
 
 registerDesktopInvokeHandler("refreshTrayCalendar", async () => {

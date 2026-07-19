@@ -20,6 +20,13 @@ export type AutomationScheduleKind =
 	| "monthly"
 	| "custom";
 
+export type AutomationCustomFrequency =
+	| "hourly"
+	| "daily"
+	| "weekly"
+	| "monthly"
+	| "yearly";
+
 export declare function normalizeAutomationSchedule(
 	schedule: AutomationSchedule,
 ): AutomationSchedule;
@@ -42,6 +49,21 @@ export declare function createAutomationScheduleFromLocal(args: {
 	timezone: string;
 	weekdays?: number[];
 }): AutomationSchedule;
+
+export declare function createCustomAutomationScheduleFromLocal(args: {
+	frequency: AutomationCustomFrequency;
+	interval: number;
+	startsAt: string;
+	timezone: string;
+	weekdays?: number[];
+}): AutomationSchedule;
+
+export declare function getAutomationCustomRecurrence(
+	schedule: AutomationSchedule,
+): {
+	frequency: AutomationCustomFrequency;
+	interval: number;
+};
 
 export declare function getAutomationScheduleStartAt(
 	schedule: AutomationSchedule,

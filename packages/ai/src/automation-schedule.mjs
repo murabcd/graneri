@@ -269,6 +269,75 @@ export const createAutomationScheduleFromLocal = ({
 	});
 };
 
+export const createCustomAutomationScheduleFromLocal = ({
+	frequency,
+	interval,
+	startsAt,
+	timezone,
+	weekdays,
+}) => {
+	const normalizedInterval = Math.trunc(interval);
+	if (!Number.isFinite(interval) || normalizedInterval < 1) {
+		throw new Error("Automation recurrence interval must be at least one.");
+	}
+
+	const normalizedTimezone = normalizeTimezone(timezone);
+	const local = Temporal.PlainDateTime.from(normalizeLocalDateTime(startsAt));
+	const intervalRule = `;INTERVAL=${normalizedInterval}`;
+	let recurrence;
+
+	if (frequency === "hourly") {
+		recurrence = `FREQ=HOURLY${intervalRule}`;
+	} else if (frequency === "daily") {
+		recurrence = `FREQ=DAILY${intervalRule}`;
+	} else if (frequency === "weekly") {
+		const weekdayList = weekdays?.length ? weekdays : [local.dayOfWeek];
+		const byDay = [...new Set(weekdayList)]
+			.map((day) => WEEKDAY_CODES[day - 1])
+			.filter(Boolean)
+			.join(",");
+		recurrence = `FREQ=WEEKLY${intervalRule};BYDAY=${byDay}`;
+	} else if (frequency === "monthly") {
+		recurrence = `FREQ=MONTHLY${intervalRule};BYMONTHDAY=${local.day}`;
+	} else if (frequency === "yearly") {
+		recurrence = `FREQ=YEARLY${intervalRule};BYMONTH=${local.month};BYMONTHDAY=${local.day}`;
+	} else {
+		throw new Error("Unsupported custom automation frequency.");
+	}
+
+	return normalizeAutomationSchedule({
+		kind: "recurring",
+		rrule: recurrence,
+		startsAt: local.toString({ smallestUnit: "second" }),
+		timezone: normalizedTimezone,
+	});
+};
+
+export const getAutomationCustomRecurrence = (schedule) => {
+	if (schedule.kind === "once") {
+		return {
+			frequency: "daily",
+			interval: 1,
+		};
+	}
+
+	const options = RRule.parseString(schedule.rrule);
+	const frequency =
+		options.freq === RRule.HOURLY
+			? "hourly"
+			: options.freq === RRule.WEEKLY
+				? "weekly"
+				: options.freq === RRule.MONTHLY
+					? "monthly"
+					: options.freq === RRule.YEARLY
+						? "yearly"
+						: "daily";
+	return {
+		frequency,
+		interval: options.interval ?? 1,
+	};
+};
+
 export const getAutomationScheduleStartAt = (schedule) => {
 	const normalized = normalizeAutomationSchedule(schedule);
 	if (normalized.kind === "once") {
@@ -312,6 +381,9 @@ export const getAutomationScheduleKind = (schedule) => {
 	}
 
 	const options = RRule.parseString(schedule.rrule);
+	if (/(?:^|;)INTERVAL=/i.test(schedule.rrule)) {
+		return "custom";
+	}
 	if (options.freq === RRule.HOURLY) {
 		return "hourly";
 	}

@@ -38,6 +38,7 @@ export const desktopIpcContract = Object.freeze({
 		setKeepDictationBarVisible: "app:set-keep-dictation-bar-visible",
 		setLaunchAtLogin: "app:set-launch-at-login",
 		setNativeTheme: "app:set-native-theme",
+		showAutomationNotification: "app:show-automation-notification",
 		setTrayCalendarState: "app:set-tray-calendar-state",
 		shareLocalFolders: "app:share-local-folders",
 		startDetectedMeetingNote: "app:start-detected-meeting-note",

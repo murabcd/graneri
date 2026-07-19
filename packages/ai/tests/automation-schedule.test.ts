@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	createCustomAutomationScheduleFromLocal,
 	createSimpleAutomationSchedule,
+	getAutomationCustomRecurrence,
 	getAutomationScheduleKind,
 	getNextAutomationRunAt,
 	normalizeAutomationSchedule,
@@ -74,6 +76,49 @@ describe("automation schedule", () => {
 		});
 
 		expect(getAutomationScheduleKind(schedule)).toBe("weekdays");
+	});
+
+	it("creates and reads structured custom schedules", () => {
+		const schedule = createCustomAutomationScheduleFromLocal({
+			frequency: "weekly",
+			interval: 2,
+			startsAt: "2026-07-20T09:00:00",
+			timezone: "Europe/Moscow",
+			weekdays: [1, 3, 5],
+		});
+
+		expect(schedule).toEqual({
+			kind: "recurring",
+			rrule: "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR",
+			startsAt: "2026-07-20T09:00:00",
+			timezone: "Europe/Moscow",
+		});
+		expect(getAutomationScheduleKind(schedule)).toBe("custom");
+		expect(getAutomationCustomRecurrence(schedule)).toEqual({
+			frequency: "weekly",
+			interval: 2,
+		});
+
+		const hourlySchedule = createCustomAutomationScheduleFromLocal({
+			frequency: "hourly",
+			interval: 3,
+			startsAt: "2026-07-20T09:00:00",
+			timezone: "Europe/Moscow",
+		});
+		expect(getAutomationCustomRecurrence(hourlySchedule)).toEqual({
+			frequency: "hourly",
+			interval: 3,
+		});
+
+		const yearlySchedule = createCustomAutomationScheduleFromLocal({
+			frequency: "yearly",
+			interval: 1,
+			startsAt: "2026-07-20T09:00:00",
+			timezone: "Europe/Moscow",
+		});
+		expect(yearlySchedule).toMatchObject({
+			rrule: "FREQ=YEARLY;INTERVAL=1;BYMONTH=7;BYMONTHDAY=20",
+		});
 	});
 
 	it("rejects schedules that run more than once per hour", () => {
