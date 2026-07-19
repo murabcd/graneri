@@ -24,13 +24,11 @@ import {
 	removeAllAutomationsForOwner,
 	removeOrphanedAutomationRuns,
 } from "./automationRetirement";
-import { startAutomationAssistantRun } from "./automationRunOrchestration";
+import { startAutomationRun } from "./automationRunOrchestration";
 import {
 	applyAutomationDeliveryDecision,
-	automationChatHasActiveAssistantRun,
 	createAutomationChatId,
 	getAutomationDeliveryContext,
-	reserveAutomationRun,
 	stopAutomationRun,
 } from "./automationRunStateMachine";
 import {
@@ -730,45 +728,19 @@ const runAutomationNowForOwner = async (
 		automationId,
 	);
 	const now = Date.now();
-
-	if (automation.activeRunId) {
-		return {
-			status: "already_running" as const,
-			chatId: automation.chatId,
-		};
-	}
-
-	if (await automationChatHasActiveAssistantRun(ctx, automation)) {
-		return {
-			status: "chat_busy" as const,
-			chatId: automation.chatId,
-		};
-	}
-
-	const run = await reserveAutomationRun(ctx, {
+	const result = await startAutomationRun(ctx, {
 		automationId: automation._id,
 		scheduledFor: now,
 		reason: "manual",
 	});
-	if (run.status !== "reserved") {
-		return {
-			status: "already_running" as const,
-			chatId: automation.chatId,
-		};
+	if (result.status === "skipped") {
+		throw new ConvexError({
+			code: "AUTOMATION_RUN_START_FAILED",
+			message: "Failed to start the automation run.",
+		});
 	}
 
-	await startAutomationAssistantRun(ctx, {
-		automation: run.automation,
-		automationRunId: run.runId,
-		scheduledFor: now,
-		reason: "manual",
-	});
-
-	return {
-		status: "started" as const,
-		chatId: automation.chatId,
-		runId: run.runId,
-	};
+	return result;
 };
 
 const removeAutomationForOwner = async (
@@ -1035,18 +1007,8 @@ export const startScheduledRun = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const reservation = await reserveAutomationRun(ctx, {
+		await startAutomationRun(ctx, {
 			...args,
-			reason: "scheduled",
-		});
-		if (reservation.status !== "reserved") {
-			return null;
-		}
-
-		await startAutomationAssistantRun(ctx, {
-			automation: reservation.automation,
-			automationRunId: reservation.runId,
-			scheduledFor: args.scheduledFor,
 			reason: "scheduled",
 		});
 		return null;

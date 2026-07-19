@@ -70,7 +70,7 @@ const chatHasActiveAssistantRun = async (
 	return runs.some(Boolean);
 };
 
-export const automationChatHasActiveAssistantRun = async (
+const automationChatHasActiveAssistantRun = async (
 	ctx: MutationCtx,
 	automation: Doc<"automations">,
 ) => {
@@ -83,8 +83,14 @@ export const reserveAutomationRun = async (
 	args: ReserveAutomationRunArgs,
 ) => {
 	const automation = await ctx.db.get(args.automationId);
-	if (!automation || automation.activeRunId) {
+	if (!automation) {
 		return { status: "skipped" as const };
+	}
+	if (automation.activeRunId) {
+		return {
+			status: "already_running" as const,
+			chatId: automation.chatId,
+		};
 	}
 
 	if (
@@ -95,7 +101,7 @@ export const reserveAutomationRun = async (
 	}
 
 	if (await automationChatHasActiveAssistantRun(ctx, automation)) {
-		return { status: "skipped" as const };
+		return { status: "chat_busy" as const, chatId: automation.chatId };
 	}
 
 	const now = Date.now();

@@ -486,9 +486,11 @@ Durable task prompts are limited to 64,000 characters, stop conditions to
 the full assistant answer remains authoritative in chat history.
 
 Scheduled automation execution is not a standalone action loop. The scheduled
-mutation atomically reserves an `automationRuns` row, saves the task prompt into
-its destination chat, creates a normal Convex-owned assistant run, and starts
-the existing assistant Workflow/Workpool. Automation runs therefore inherit
+mutation delegates to one run-start orchestration operation that atomically
+reserves an `automationRuns` row, saves the task prompt into its destination
+chat, creates a normal Convex-owned assistant run, and starts the existing
+assistant Workflow/Workpool. Manual and scheduled entrypoints do not assemble
+those lifecycle steps independently. Automation runs therefore inherit
 the same rich message snapshots, approvals, focused user-question pauses,
 idempotent tool receipts, three-attempt action retries, and twenty-step logical
 limit as interactive hosted chat. `current_chat` destinations continue from the

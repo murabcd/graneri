@@ -9,6 +9,7 @@ import { createAssistantRunJob } from "./assistantRunJobState";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import { createAssistantRunStream } from "./assistantRunStreamState";
 import { startAssistantRunForOwner } from "./assistantRuns";
+import { reserveAutomationRun } from "./automationRunStateMachine";
 import { saveMessageForOwnerInternal } from "./chats";
 
 const MAX_CONTEXT_NOTES = 8;
@@ -154,7 +155,7 @@ const loadAutomationMessages = async (
 	];
 };
 
-export const startAutomationAssistantRun = async (
+const startAutomationAssistantRun = async (
 	ctx: MutationCtx,
 	args: {
 		automation: Doc<"automations">;
@@ -237,6 +238,31 @@ export const startAutomationAssistantRun = async (
 			message: "Failed to start the automation run.",
 		});
 	}
+};
 
-	return { assistantRun, run: savedRun };
+export const startAutomationRun = async (
+	ctx: MutationCtx,
+	args: {
+		automationId: Id<"automations">;
+		scheduledFor: number;
+		reason: Doc<"automationRuns">["reason"];
+	},
+) => {
+	const reservation = await reserveAutomationRun(ctx, args);
+	if (reservation.status !== "reserved") {
+		return reservation;
+	}
+
+	await startAutomationAssistantRun(ctx, {
+		automation: reservation.automation,
+		automationRunId: reservation.runId,
+		scheduledFor: args.scheduledFor,
+		reason: args.reason,
+	});
+
+	return {
+		status: "started" as const,
+		chatId: reservation.automation.chatId,
+		runId: reservation.runId,
+	};
 };
