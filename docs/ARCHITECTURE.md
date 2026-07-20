@@ -271,9 +271,9 @@ every pending question tool part in that assistant message to
 `output-available`, appends the answer, records `input.resolved`, rotates the
 assistant message generation, and resumes the same run. A normal user message
 must not bypass a pending tool approval.
-Tool approval uses the AI SDK v6 approval protocol rather than tool-specific
-confirmation payloads or synthetic user messages. The first stream persists the
-assistant message in `approval-requested` state and moves the run to
+Tool approval uses the AI SDK v7 `toolApproval` protocol rather than
+tool-specific confirmation payloads or synthetic user messages. The first
+stream persists the assistant message in `approval-requested` state and moves the run to
 `waiting_for_user` with a `tool_approval` decision. The response mutation must
 atomically verify the approval id, assistant message id, tool call id, and tool
 name, persist the `approval-responded` message, update the next assistant message

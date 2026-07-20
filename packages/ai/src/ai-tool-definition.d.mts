@@ -27,6 +27,10 @@ export type AiToolDefinition<TInput = unknown> = {
 	toAITool(): ToolSet[string];
 };
 
+export declare function requiresAiToolUserApproval(
+	toolDefinition: ToolSet[string],
+): boolean;
+
 export declare function defineAiTool<TInput, TOutput>(args: {
 	deferLoading?: boolean;
 	description: string;

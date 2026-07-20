@@ -97,7 +97,7 @@ export const useRendererChatSession = ({
 		addToolApprovalResponse,
 	} = useChat({
 		id: chatId,
-		experimental_throttle: CHAT_STREAM_UI_THROTTLE_MS,
+		throttle: CHAT_STREAM_UI_THROTTLE_MS,
 		messages: persistedMessages,
 		transport,
 		onToolCall: handleToolCall,

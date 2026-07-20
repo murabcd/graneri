@@ -362,6 +362,8 @@ describe("chat automation tools", () => {
 			deleted: true,
 		});
 		expect(deleteCount).toBe(1);
-		expect(context.tools.delete_automation.needsApproval).toBe(true);
+		expect(context.tools.delete_automation.metadata).toMatchObject({
+			graneri: { requiresApproval: true },
+		});
 	});
 });

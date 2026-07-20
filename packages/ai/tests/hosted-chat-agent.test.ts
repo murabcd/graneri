@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { defineAiTool } from "../src/ai-tool-definition.mjs";
 import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
 import { buildHostedChatRunPlan } from "../src/hosted-chat-run-plan.mjs";
 
@@ -26,6 +28,7 @@ describe("hosted chat agent tool set", () => {
 		expect(assembled.agentTools).toBeUndefined();
 		expect(assembled.finalizedToolSet.hasTools).toBe(false);
 		expect(assembled.finalizedToolSet.toolCount).toBe(0);
+		expect(assembled.toolApproval).toBeUndefined();
 	});
 
 	it("finalizes enabled tools for validation and agent execution", () => {
@@ -72,6 +75,38 @@ describe("hosted chat agent tool set", () => {
 		expect(assembled.tools.read_local_file).toBeUndefined();
 		expect(assembled.agentTools?.read_local_file).toBe(immediateTool);
 		expect(assembled.finalizedToolSet.hasTools).toBe(false);
+	});
+
+	it("maps Graneri tool policy into the AI SDK v7 approval configuration", () => {
+		const deleteTool = defineAiTool({
+			deferLoading: false,
+			description: "Delete a record.",
+			execute: async () => ({ deleted: true }),
+			inputSchema: z.object({ id: z.string() }),
+			name: "delete_record",
+			policy: {
+				access: "write",
+				capability: "write",
+				provider: "graneri",
+				requiresApproval: true,
+			},
+			ui: {
+				complete: "Deleted record",
+				icon: "trash",
+				running: "Deleting record",
+			},
+		}).toAITool();
+		const assembled = buildHostedChatAgentToolSet({
+			enabledTools: {
+				delete_record: deleteTool,
+				read_record: immediateTool,
+			},
+		});
+
+		expect(deleteTool.needsApproval).toBeUndefined();
+		expect(assembled.toolApproval).toEqual({
+			delete_record: "user-approval",
+		});
 	});
 });
 

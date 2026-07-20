@@ -2,6 +2,7 @@ import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type {
 	PrepareStepFunction,
 	StopCondition,
+	ToolApprovalConfiguration,
 	ToolLoopAgent,
 	ToolSet,
 } from "ai";
@@ -21,6 +22,7 @@ export declare const buildHostedChatAgentToolSet: ({
 		deferredToolCount: number;
 		hasToolSearch: boolean;
 	};
+	toolApproval: ToolApprovalConfiguration<ToolSet, never> | undefined;
 	tools: ToolSet;
 };
 
