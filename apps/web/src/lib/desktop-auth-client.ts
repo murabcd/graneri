@@ -37,10 +37,33 @@ let sessionRefreshCacheState:
 	| { status: "empty" }
 	| { completedAt: number; status: "fresh" } = { status: "empty" };
 let sessionRefreshGeneration = 0;
+let sessionRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
 const sessionRefreshFreshMs = 2_000;
+const sessionRetryDelayMs = 5_000;
+
+const clearSessionRetry = () => {
+	if (sessionRetryTimer === null) {
+		return;
+	}
+
+	clearTimeout(sessionRetryTimer);
+	sessionRetryTimer = null;
+};
+
+const scheduleSessionRetry = () => {
+	if (sessionRetryTimer !== null || listeners.size === 0) {
+		return;
+	}
+
+	sessionRetryTimer = setTimeout(() => {
+		sessionRetryTimer = null;
+		void refreshDesktopSession();
+	}, sessionRetryDelayMs);
+};
 
 export const resetDesktopAuthClientForTests = () => {
+	clearSessionRetry();
 	sessionState = { ...defaultSessionState };
 	pendingSessionRefresh = null;
 	sessionRefreshCacheState = { status: "empty" };
@@ -238,6 +261,7 @@ const invalidateSessionRefreshes = () => {
 	sessionRefreshGeneration += 1;
 	pendingSessionRefresh = null;
 	sessionRefreshCacheState = { status: "empty" };
+	clearSessionRetry();
 };
 
 const applySessionData = (data: DesktopSessionData, generation?: number) => {
@@ -245,6 +269,7 @@ const applySessionData = (data: DesktopSessionData, generation?: number) => {
 		return;
 	}
 
+	clearSessionRetry();
 	markSessionRefreshFresh();
 	setSessionState(
 		createSessionState({
@@ -322,7 +347,7 @@ const refreshDesktopSession = async ({
 	setSessionState((current) => ({
 		...current,
 		error: null,
-		isPending: true,
+		isRefetching: !current.isPending,
 	}));
 
 	const generation = sessionRefreshGeneration;
@@ -331,6 +356,7 @@ const refreshDesktopSession = async ({
 		path: "/get-session",
 		method: "GET",
 		headers,
+		throw: true,
 	})
 		.then((data: unknown) => {
 			const nextData = isDesktopSessionData(data) ? data : null;
@@ -351,14 +377,13 @@ const refreshDesktopSession = async ({
 			);
 
 			if (generation === sessionRefreshGeneration) {
-				markSessionRefreshFresh();
-				setSessionState(
-					createSessionState({
-						data: null,
-						error: nextError,
-						isPending: false,
-					}),
-				);
+				sessionRefreshCacheState = { status: "empty" };
+				setSessionState((current) => ({
+					...current,
+					error: nextError,
+					isRefetching: false,
+				}));
+				scheduleSessionRetry();
 			}
 
 			return {
@@ -397,7 +422,12 @@ const useDesktopSession = () => {
 		const listener = () => {
 			setState(sessionState);
 		};
+		const handleOnline = () => {
+			clearSessionRetry();
+			void refreshDesktopSession();
+		};
 		listeners.add(listener);
+		window.addEventListener("online", handleOnline);
 
 		if (sessionState.isPending) {
 			void refreshDesktopSession();
@@ -405,6 +435,10 @@ const useDesktopSession = () => {
 
 		return () => {
 			listeners.delete(listener);
+			window.removeEventListener("online", handleOnline);
+			if (listeners.size === 0) {
+				clearSessionRetry();
+			}
 		};
 	}, []);
 

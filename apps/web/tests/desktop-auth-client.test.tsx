@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	desktopAuthClient,
@@ -77,10 +77,87 @@ describe("desktop auth client", () => {
 			headers: undefined,
 			method: "GET",
 			path: "/get-session",
-			throw: undefined,
+			throw: true,
 		});
 
 		third.unmount();
+	});
+
+	it("keeps startup auth pending and recovers when the desktop comes online", async () => {
+		const session = createSession();
+		desktopBridgeMock.authFetch
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce(session);
+
+		const first = renderHook(() => desktopAuthClient.useSession());
+		const second = renderHook(() => desktopAuthClient.useSession());
+
+		await waitFor(() => {
+			expect(first.result.current.error?.message).toBe("offline");
+		});
+
+		expect(first.result.current.data).toBeNull();
+		expect(first.result.current.isPending).toBe(true);
+		expect(second.result.current.isPending).toBe(true);
+		expect(desktopBridgeMock.authFetch).toHaveBeenCalledTimes(1);
+
+		window.dispatchEvent(new Event("online"));
+
+		await waitFor(() => {
+			expect(first.result.current.data).toEqual(session);
+			expect(second.result.current.data).toEqual(session);
+		});
+
+		expect(first.result.current.isPending).toBe(false);
+		expect(second.result.current.isPending).toBe(false);
+		expect(desktopBridgeMock.authFetch).toHaveBeenCalledTimes(2);
+
+		first.unmount();
+		second.unmount();
+	});
+
+	it("retries an offline startup while the session remains mounted", async () => {
+		vi.useFakeTimers();
+		const session = createSession();
+		desktopBridgeMock.authFetch
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce(session);
+
+		const currentSession = renderHook(() => desktopAuthClient.useSession());
+
+		try {
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			expect(currentSession.result.current.isPending).toBe(true);
+			expect(desktopBridgeMock.authFetch).toHaveBeenCalledTimes(1);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5_000);
+			});
+
+			expect(currentSession.result.current.data).toEqual(session);
+			expect(currentSession.result.current.isPending).toBe(false);
+			expect(desktopBridgeMock.authFetch).toHaveBeenCalledTimes(2);
+		} finally {
+			currentSession.unmount();
+			vi.useRealTimers();
+		}
+	});
+
+	it("shows signed out only after a successful empty session response", async () => {
+		desktopBridgeMock.authFetch.mockResolvedValue(null);
+
+		const currentSession = renderHook(() => desktopAuthClient.useSession());
+
+		await waitFor(() => {
+			expect(currentSession.result.current.isPending).toBe(false);
+		});
+
+		expect(currentSession.result.current.data).toBeNull();
+		expect(currentSession.result.current.error).toBeNull();
+		currentSession.unmount();
 	});
 
 	it("hydrates the desktop session from cross-domain verification without an immediate get-session fetch", async () => {
@@ -184,7 +261,7 @@ describe("desktop auth client", () => {
 			headers: undefined,
 			method: "GET",
 			path: "/get-session",
-			throw: undefined,
+			throw: true,
 		});
 	});
 
@@ -223,7 +300,7 @@ describe("desktop auth client", () => {
 			headers: undefined,
 			method: "GET",
 			path: "/get-session",
-			throw: undefined,
+			throw: true,
 		});
 
 		initialSession.unmount();

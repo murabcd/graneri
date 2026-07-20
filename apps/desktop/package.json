@@ -34,7 +34,7 @@
     "@workspace/ai": "workspace:*",
     "archiver": "7.0.1",
     "bash-tool": "^1.3.18",
-    "convex": "^1.42.1",
+    "convex": "^1.42.3",
     "electron-updater": "^6.6.2",
     "pino": "^10.3.1",
     "ws": "^8.18.0"
