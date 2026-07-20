@@ -27,6 +27,7 @@ import {
 	buildChatInstructions,
 	buildEnhancedNotePrompt,
 	CHAT_TITLE_INSTRUCTIONS,
+	ENHANCED_NOTE_INSTRUCTIONS,
 } from "../src/prompts.mjs";
 
 describe("prompt helpers", () => {
@@ -84,12 +85,19 @@ describe("prompt helpers", () => {
 		).not.toThrow();
 	});
 
-	it("tells chat title generation to preserve proper-name capitalization", () => {
-		expect(CHAT_TITLE_INSTRUCTIONS).toContain(
-			"Preserve the original capitalization of proper nouns",
-		);
-		expect(CHAT_TITLE_INSTRUCTIONS).toContain("OpenAI");
-		expect(CHAT_TITLE_INSTRUCTIONS).toContain("Cirrus Labs");
+	it("uses sentence case while preserving proper names in generated titles", () => {
+		for (const instructions of [
+			CHAT_TITLE_INSTRUCTIONS,
+			ENHANCED_NOTE_INSTRUCTIONS,
+		]) {
+			expect(instructions).toContain("Use sentence case for the title");
+			expect(instructions).toContain("Do not use title case");
+			expect(instructions).toContain(
+				"Preserve the original capitalization of proper nouns",
+			);
+			expect(instructions).toContain("OpenAI");
+			expect(instructions).toContain("Cirrus Labs");
+		}
 	});
 
 	it("preserves organization and people name casing in fallback chat titles", () => {

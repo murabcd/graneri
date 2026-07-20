@@ -3,6 +3,12 @@ const joinPromptSections = (sections) => sections.filter(Boolean).join(" ");
 const normalizePromptText = (value) =>
 	typeof value === "string" ? value.trim() : "";
 
+const TITLE_CASING_INSTRUCTIONS = [
+	"Use sentence case for the title.",
+	"Do not use title case or capitalize every major word.",
+	"Preserve the original capitalization of proper nouns, organization names, person names, product names, acronyms, and brand styling such as `OpenAI`, `GPT-5`, or `Cirrus Labs`.",
+];
+
 const buildUserProfilePromptSection = ({
 	name = "",
 	jobTitle = "",
@@ -41,8 +47,7 @@ export const CHAT_TITLE_INSTRUCTIONS = joinPromptSections([
 	"Generate a short chat title that summarizes the user's message.",
 	"Use 2 to 5 words when possible.",
 	"Use the same primary language as the user's message.",
-	"Use sentence case for the overall title.",
-	"Preserve the original capitalization of proper nouns, organization names, person names, product names, acronyms, and brand styling such as `OpenAI`, `GPT-5`, or `Cirrus Labs`.",
+	...TITLE_CASING_INSTRUCTIONS,
 	"Prefer a concise topic label, not a full sentence or question.",
 	"Do not copy the user's message verbatim unless it already reads like a title.",
 	"If the exchange is just a greeting or a quick check-in, return exactly `Quick check-in`.",
@@ -81,6 +86,7 @@ export const ENHANCED_NOTE_INSTRUCTIONS = joinPromptSections([
 	"Preserve the source language used in the input.",
 	"Do not invent facts, decisions, owners, dates, or action items.",
 	"Return a concise, specific note title that matches the content.",
+	...TITLE_CASING_INSTRUCTIONS,
 	"If the current note title is generic or in a different language than the source, replace it with a title in the dominant source language.",
 	"Prefer a short overview only when it adds signal.",
 	"Organize the body into 3 to 6 topic-based sections with descriptive titles grounded in the actual discussion.",
