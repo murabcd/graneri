@@ -45,5 +45,6 @@ export function prepareHostedChatContextWindow(args: {
 	summarize?: typeof generateHostedChatContextSummary;
 }): Promise<{
 	compactionCount: number;
+	compactionSummary: string | null;
 	messages: HostedChatStoredContextMessage[];
 }>;

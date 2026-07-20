@@ -9,7 +9,11 @@ import { getConvexErrorData } from "./convex-error.mjs";
 import { buildHostedRoutePath } from "./hosted-route-catalog.mjs";
 import { aiLogger, serializeError } from "./logger.mjs";
 import { CHAT_TITLE_MODEL_ID } from "./models.mjs";
-import { buildChatSystemPrompt, CHAT_TITLE_SYSTEM_PROMPT } from "./prompts.mjs";
+import {
+	buildChatHistoryInstructions,
+	buildChatInstructions,
+	CHAT_TITLE_INSTRUCTIONS,
+} from "./prompts.mjs";
 import { getToolApprovalResponse } from "./tool-approval-state.mjs";
 import {
 	decodeStoredUiMessagesForModelInput,
@@ -606,9 +610,10 @@ export const getHostedChatRecipeContext = (selectedRecipe) => {
 	].join("\n\n");
 };
 
-export const buildHostedChatRuntimePrompt = ({
+export const buildHostedChatRuntimeInstructions = ({
 	automationInstruction = "",
 	attachedNoteContext = "",
+	compactionSummary = null,
 	coreToolInstruction = "",
 	localFolderContext = "",
 	notesContext = "",
@@ -617,13 +622,15 @@ export const buildHostedChatRuntimePrompt = ({
 	userProfileContext,
 	webSearchEnabled = false,
 }) =>
-	`${buildChatSystemPrompt({
+	`${buildChatInstructions({
 		notesContext,
 		attachedNoteContext,
 		recipeContext,
 		userProfileContext: userProfileContext ?? undefined,
 		webSearchEnabled,
-	})}${coreToolInstruction ? `\n\n${coreToolInstruction}` : ""}${
+	})}${compactionSummary === null ? "" : `\n\n${buildChatHistoryInstructions(compactionSummary)}`}${
+		coreToolInstruction ? `\n\n${coreToolInstruction}` : ""
+	}${
 		automationInstruction ? `\n\n${automationInstruction}` : ""
 	}${localFolderContext ? `\n\n${localFolderContext}` : ""}${
 		selectedAppSourceInstructions ? `\n\n${selectedAppSourceInstructions}` : ""
@@ -655,7 +662,7 @@ export const generateHostedChatTitle = async ({
 					safetyIdentifier,
 				},
 			},
-			system: CHAT_TITLE_SYSTEM_PROMPT,
+			instructions: CHAT_TITLE_INSTRUCTIONS,
 			prompt: buildChatTitlePrompt({
 				userText,
 				assistantText,

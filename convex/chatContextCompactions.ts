@@ -15,7 +15,7 @@ const { requireTokenIdentifier } = createResourceAccess(
 
 const contextMessageValidator = v.object({
 	id: v.string(),
-	role: v.union(v.literal("system"), v.literal("user"), v.literal("assistant")),
+	role: v.union(v.literal("user"), v.literal("assistant")),
 	partsJson: v.string(),
 	metadataJson: v.optional(v.string()),
 	createdAt: v.number(),
@@ -35,7 +35,7 @@ const compactionDisplayStateValidator = v.object({
 
 const toContextMessage = (message: {
 	messageId: string;
-	role: "system" | "user" | "assistant";
+	role: HostedChatContextMessage["role"];
 	partsJson: string;
 	metadataJson?: string;
 	createdAt: number;

@@ -16,7 +16,7 @@ type ToolApprovalDecision = Extract<
 
 type ToolApprovalMessageInput = {
 	id: string;
-	role: "system" | "user" | "assistant";
+	role: "assistant";
 	partsJson: string;
 };
 

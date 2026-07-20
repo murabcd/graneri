@@ -1606,7 +1606,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 			authorName: "Owner",
 			job: {
 				messagesJson: "[]",
-				systemPrompt: "Test",
+				instructions: "Test",
 				webSearchEnabled: false,
 				chartGenerationRequested: false,
 				imageGenerationRequested: false,

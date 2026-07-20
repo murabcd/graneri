@@ -530,7 +530,6 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		messageId: v.string(),
 		role: v.union(
-			v.literal("system"),
 			v.literal("user"),
 			v.literal("assistant"),
 		),
@@ -566,7 +565,6 @@ export default defineSchema({
 		sequence: v.number(),
 		messageId: v.string(),
 		role: v.union(
-			v.literal("system"),
 			v.literal("user"),
 			v.literal("assistant"),
 		),
@@ -809,7 +807,7 @@ export default defineSchema({
 			"createdAt",
 		])
 		.index(
-			"by_owner_workspace_unread_reason_notificationSentAt_notificationLeaseToken_archivedAt_createdAt",
+			"by_owner_workspace_unread_reason_notify_lease_archived_created",
 			[
 				"ownerTokenIdentifier",
 				"workspaceId",

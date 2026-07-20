@@ -33,10 +33,7 @@ export declare const createHostedChatRunResponseStream: <
 		generateMessageId: () => string;
 		sendReasoning: true;
 		sendSources: true;
-		onFinish: (args: {
-			isAborted: boolean;
-			responseMessage: UIMessage;
-		}) => void;
+		onEnd: (args: { isAborted: boolean; responseMessage: UIMessage }) => void;
 		onError: () => string;
 	}) => Promise<ReadableStream<Chunk>>;
 	failAssistantRun: (args: {
@@ -47,10 +44,10 @@ export declare const createHostedChatRunResponseStream: <
 		terminalization: HostedAssistantRunTerminalization,
 	) => Promise<void>;
 	finalizedToolSet: FinalizedToolSet;
+	instructions: string;
 	logLatency: (stage: string, details?: LogLatencyDetails) => void;
 	onStreamCreateError?: (error: unknown) => Promise<void> | void;
 	streamLatencyTracker: StreamLatencyTracker<Chunk>;
-	systemPrompt: string;
 }) => Promise<
 	| {
 			ok: true;

@@ -61,6 +61,7 @@ export const buildHostedChatRunContext = async ({
 	automationActions,
 	chatAttachmentsApi,
 	chatId,
+	compactionSummary,
 	convexClient,
 	defaultModel,
 	defaultReasoningEffort,
@@ -155,6 +156,7 @@ export const buildHostedChatRunContext = async ({
 		context: {
 			notesContext,
 			attachedNoteContext,
+			compactionSummary,
 			recipeContext,
 			userProfileContext,
 		},

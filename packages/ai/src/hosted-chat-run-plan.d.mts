@@ -3,6 +3,7 @@ import type { PrepareStepFunction, ToolLoopAgent, ToolSet } from "ai";
 
 export type HostedChatRunPlanContext = {
 	attachedNoteContext: string;
+	compactionSummary: string | null;
 	notesContext: string;
 	recipeContext: string;
 	userProfileContext?: unknown;
@@ -43,6 +44,6 @@ export declare const buildHostedChatRunPlan: (args: {
 		deferredToolCount: number;
 		hasToolSearch: boolean;
 	};
-	systemPrompt: string;
+	instructions: string;
 	tools: ToolSet;
 };

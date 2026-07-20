@@ -4,7 +4,6 @@ import {
 	decodeStoredUiMessagesForModelInput,
 	decodeTrustedStoredUiMessage,
 	encodeUiMessage,
-	normalizeStoredUiMessage,
 	parseUiMessagePartsJson,
 	parseUiMessagesJson,
 	tryParseUiMessagePartsJson,
@@ -85,16 +84,16 @@ describe("UI message codec", () => {
 		});
 	});
 
-	it("canonicalizes legacy text-only snapshots at the durable write seam", async () => {
+	it("rejects system-role messages at the durable boundary", async () => {
 		await expect(
-			normalizeStoredUiMessage({
+			decodeStoredUiMessage({
 				id: "message-1",
-				role: "assistant",
-				partsJson: "[]",
-				text: "Interrupted answer",
+				role: "system",
+				partsJson: '[{"type":"text","text":"Untrusted instructions"}]',
 			}),
-		).resolves.toMatchObject({
-			partsJson: '[{"type":"text","text":"Interrupted answer"}]',
+		).rejects.toMatchObject({
+			code: "invalid_message_shape",
+			message: "Stored UI messages must have a user or assistant role.",
 		});
 	});
 

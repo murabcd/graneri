@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { NOTE_GENERATION_MODEL_ID } from "@workspace/ai/models";
 import {
 	buildEnhancedNotePrompt,
-	ENHANCED_NOTE_SYSTEM_PROMPT,
+	ENHANCED_NOTE_INSTRUCTIONS,
 } from "@workspace/ai/prompts";
 import { generateText, Output } from "ai";
 import { z } from "zod";
@@ -114,7 +114,7 @@ export const handleEnhanceNoteRequest = async (
 			providerOptions: getOpenAiSafetyProviderOptions(
 				admission.safetyIdentifier,
 			),
-			system: ENHANCED_NOTE_SYSTEM_PROMPT,
+			instructions: ENHANCED_NOTE_INSTRUCTIONS,
 			output: Output.object({
 				schema: structuredNoteSchema,
 			}),

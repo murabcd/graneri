@@ -7,7 +7,7 @@ import {
 
 export const assistantRunJobValidator = v.object({
 	messagesJson: v.string(),
-	systemPrompt: v.string(),
+	instructions: v.string(),
 	webSearchEnabled: v.boolean(),
 	chartGenerationRequested: v.boolean(),
 	imageGenerationRequested: v.boolean(),

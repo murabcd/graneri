@@ -1,5 +1,5 @@
 import { prepareHostedAssistantExecution } from "./hosted-chat-execution.mjs";
-import { buildHostedChatRuntimePrompt } from "./hosted-chat-runtime.mjs";
+import { buildHostedChatRuntimeInstructions } from "./hosted-chat-runtime.mjs";
 
 export const buildHostedChatRunPlan = ({
 	additionalAgentTools,
@@ -15,9 +15,10 @@ export const buildHostedChatRunPlan = ({
 	selectedAppSourceInstructions = "",
 	webSearchEnabled = false,
 }) => {
-	const systemPrompt = buildHostedChatRuntimePrompt({
+	const instructions = buildHostedChatRuntimeInstructions({
 		notesContext: context.notesContext,
 		attachedNoteContext: context.attachedNoteContext,
+		compactionSummary: context.compactionSummary,
 		recipeContext: context.recipeContext,
 		userProfileContext: context.userProfileContext ?? undefined,
 		webSearchEnabled,
@@ -36,15 +37,15 @@ export const buildHostedChatRunPlan = ({
 		additionalAgentTools,
 		enabledTools,
 		emptyToolsWhenNone,
+		instructions,
 		model,
 		prepareStep: coreToolPolicy.prepareStep,
 		providerOptions,
-		systemPrompt,
 	});
 
 	return {
 		...agentPlan,
 		enabledTools,
-		systemPrompt,
+		instructions,
 	};
 };

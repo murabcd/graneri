@@ -115,7 +115,7 @@ const getPendingNotificationRuns = async (
 	await ctx.db
 		.query("automationRuns")
 		.withIndex(
-			"by_owner_workspace_unread_reason_notificationSentAt_notificationLeaseToken_archivedAt_createdAt",
+			"by_owner_workspace_unread_reason_notify_lease_archived_created",
 			(q) =>
 				q
 					.eq("ownerTokenIdentifier", ownerTokenIdentifier)

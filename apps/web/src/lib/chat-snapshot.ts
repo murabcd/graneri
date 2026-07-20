@@ -1,4 +1,7 @@
-import { decodeTrustedStoredUiMessage } from "@workspace/ai/ui-message-codec";
+import {
+	decodeTrustedStoredUiMessage,
+	type StoredUiMessageRole,
+} from "@workspace/ai/ui-message-codec";
 import type { UIMessage } from "ai";
 
 type TimestampedUIMessage = UIMessage & {
@@ -7,7 +10,7 @@ type TimestampedUIMessage = UIMessage & {
 
 export type StoredChatMessage = {
 	id: string;
-	role: "system" | "user" | "assistant";
+	role: StoredUiMessageRole;
 	partsJson: string;
 	metadataJson?: string;
 	createdAt?: number;

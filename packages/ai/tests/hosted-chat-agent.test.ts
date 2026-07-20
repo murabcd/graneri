@@ -93,6 +93,7 @@ describe("hosted chat run plan", () => {
 			context: {
 				notesContext: "Attached notes.",
 				attachedNoteContext: "Current note.",
+				compactionSummary: "Earlier history.",
 				recipeContext: "Selected recipe.",
 				userProfileContext: { name: "Ada" },
 			},
@@ -108,13 +109,14 @@ describe("hosted chat run plan", () => {
 			webSearchEnabled: true,
 		});
 
-		expect(runPlan.systemPrompt).toContain("Attached notes.");
-		expect(runPlan.systemPrompt).toContain("Current note.");
-		expect(runPlan.systemPrompt).toContain("Selected recipe.");
-		expect(runPlan.systemPrompt).toContain("Core tool instruction.");
-		expect(runPlan.systemPrompt).toContain("Automation instruction.");
-		expect(runPlan.systemPrompt).toContain("Local folder context.");
-		expect(runPlan.systemPrompt).toContain("Selected app source instruction.");
+		expect(runPlan.instructions).toContain("Attached notes.");
+		expect(runPlan.instructions).toContain("Current note.");
+		expect(runPlan.instructions).toContain("Earlier history.");
+		expect(runPlan.instructions).toContain("Selected recipe.");
+		expect(runPlan.instructions).toContain("Core tool instruction.");
+		expect(runPlan.instructions).toContain("Automation instruction.");
+		expect(runPlan.instructions).toContain("Local folder context.");
+		expect(runPlan.instructions).toContain("Selected app source instruction.");
 		expect(runPlan.enabledTools.web_search).toBe(immediateTool);
 		expect(runPlan.enabledTools.create_automation).toBe(immediateTool);
 		expect(runPlan.enabledTools.search_linear).toBe(immediateTool);

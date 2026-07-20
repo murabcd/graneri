@@ -92,6 +92,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	defaultTimezone,
 	emitWideEvent,
 	finalizedToolSet,
+	instructions,
 	lastUserMessage,
 	localFolderRoots,
 	logLatency,
@@ -109,7 +110,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 	selectedSourceIds,
 	steeredUserMessages,
 	supersedeActiveRun,
-	systemPrompt,
 	toolApprovalResponse,
 	trigger,
 	turnController,
@@ -129,6 +129,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	defaultTimezone: string;
 	emitWideEvent: (level: "error" | "info") => void;
 	finalizedToolSet: HostedRunContext["finalizedToolSet"];
+	instructions: string;
 	lastUserMessage?: UIMessage;
 	localFolderRoots: HostedRunContext["localFolderRoots"];
 	logLatency: ChatLatencyLogger;
@@ -146,7 +147,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 	selectedSourceIds: string[];
 	steeredUserMessages: UIMessage[];
 	supersedeActiveRun?: boolean;
-	systemPrompt: string;
 	toolApprovalResponse: ToolApprovalResponse | null;
 	trigger?: "submit-message" | "regenerate-message";
 	turnController: HostedTurnController;
@@ -236,6 +236,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 			if (
 				!continueRunId ||
 				!approvalMessage ||
+				approvalMessage.role !== "assistant" ||
 				approvalMessage.id !== toolApprovalResponse.assistantMessageId
 			) {
 				throw new Error(
@@ -390,7 +391,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 						policy: supersedeActiveRun ? "supersede" : "reject",
 						job: {
 							messagesJson: JSON.stringify(chatMessages),
-							systemPrompt,
+							instructions,
 							webSearchEnabled: coreToolPolicyState.webSearchEnabled,
 							chartGenerationRequested:
 								coreToolPolicyState.chartGenerationRequested,
@@ -615,6 +616,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 			convexClient.mutation(api.assistantRuns.failAssistantRun, args),
 		finalizeAssistantRun,
 		finalizedToolSet,
+		instructions,
 		logLatency,
 		onStreamCreateError: (error) => {
 			recordServerError({
@@ -628,7 +630,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 			emitWideEvent("error");
 		},
 		streamLatencyTracker,
-		systemPrompt,
 	});
 	if (!responseStreamResult.ok) {
 		if (pendingQueuedAcceptanceHeaders) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { deriveFallbackChatTitle } from "../src/chat-titles.mjs";
 import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
 import {
-	buildHostedChatRuntimePrompt,
+	buildHostedChatRuntimeInstructions,
 	buildHostedChatSaveMessageArgs,
 	buildHostedNotesContext,
 	fromHostedStoredMessages,
@@ -24,9 +24,9 @@ import {
 } from "../src/hosted-chat-runtime.mjs";
 import {
 	buildApplyTemplatePrompt,
-	buildChatSystemPrompt,
+	buildChatInstructions,
 	buildEnhancedNotePrompt,
-	CHAT_TITLE_SYSTEM_PROMPT,
+	CHAT_TITLE_INSTRUCTIONS,
 } from "../src/prompts.mjs";
 
 describe("prompt helpers", () => {
@@ -52,9 +52,9 @@ describe("prompt helpers", () => {
 		}
 	});
 
-	it("skips nullable user profile fields in the chat system prompt", () => {
+	it("skips nullable user profile fields in the chat instructions", () => {
 		expect(() =>
-			buildChatSystemPrompt({
+			buildChatInstructions({
 				userProfileContext: {
 					name: null,
 					jobTitle: null,
@@ -85,11 +85,11 @@ describe("prompt helpers", () => {
 	});
 
 	it("tells chat title generation to preserve proper-name capitalization", () => {
-		expect(CHAT_TITLE_SYSTEM_PROMPT).toContain(
+		expect(CHAT_TITLE_INSTRUCTIONS).toContain(
 			"Preserve the original capitalization of proper nouns",
 		);
-		expect(CHAT_TITLE_SYSTEM_PROMPT).toContain("OpenAI");
-		expect(CHAT_TITLE_SYSTEM_PROMPT).toContain("Cirrus Labs");
+		expect(CHAT_TITLE_INSTRUCTIONS).toContain("OpenAI");
+		expect(CHAT_TITLE_INSTRUCTIONS).toContain("Cirrus Labs");
 	});
 
 	it("preserves organization and people name casing in fallback chat titles", () => {
@@ -226,15 +226,26 @@ describe("prompt helpers", () => {
 		}
 	});
 
-	it("includes selected app source instructions in hosted chat runtime prompts", () => {
-		const prompt = buildHostedChatRuntimePrompt({
+	it("includes selected app source instructions in hosted chat runtime instructions", () => {
+		const instructions = buildHostedChatRuntimeInstructions({
 			selectedAppSourceInstructions:
 				"The selected app source for this chat is Linear.",
 		});
 
-		expect(prompt).toContain(
+		expect(instructions).toContain(
 			"The selected app source for this chat is Linear.",
 		);
+	});
+
+	it("includes compacted history in trusted hosted chat instructions", () => {
+		const instructions = buildHostedChatRuntimeInstructions({
+			compactionSummary: "The user chose desktop-first delivery.",
+		});
+
+		expect(instructions).toContain(
+			"Earlier conversation context was compacted into this trusted historical summary.",
+		);
+		expect(instructions).toContain("The user chose desktop-first delivery.");
 	});
 
 	it("formats attached hosted note context consistently", () => {

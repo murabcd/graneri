@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { experimental_transcribe as transcribe } from "ai";
+import { transcribe } from "ai";
 import { MAX_DICTATION_AUDIO_BYTES } from "./dictation-policy.mjs";
 import {
 	DICTATION_TRANSCRIPTION_MODEL,

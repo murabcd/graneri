@@ -1,5 +1,8 @@
 import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
-import { normalizeStoredUiMessage } from "@workspace/ai/ui-message-codec";
+import {
+	normalizeStoredUiMessage,
+	type StoredUiMessageRole,
+} from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -53,7 +56,6 @@ import {
 } from "./domain";
 
 const chatRoleValidator = v.union(
-	v.literal("system"),
 	v.literal("user"),
 	v.literal("assistant"),
 );
@@ -437,7 +439,7 @@ const toActiveStreamMessageSnapshot = (
 
 type StoredUiMessageSnapshot = {
 	id: string;
-	role: "system" | "user" | "assistant";
+	role: StoredUiMessageRole;
 	partsJson: string;
 	metadataJson?: string;
 	createdAt: number;
@@ -637,7 +639,7 @@ export const saveMessageForOwnerInternal = async (
 		forceTitle?: boolean;
 		message: {
 			id: string;
-			role: "system" | "user" | "assistant";
+			role: StoredUiMessageRole;
 			partsJson: string;
 			metadataJson?: string;
 			text: string;

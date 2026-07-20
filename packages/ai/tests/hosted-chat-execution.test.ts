@@ -148,8 +148,8 @@ describe("hosted assistant execution", () => {
 			agent: {} as never,
 			assistantMessageId: "assistant-1",
 			messages: [],
-			createUiStream: async ({ onFinish }) => {
-				onFinish({ isAborted: false, responseMessage });
+			createUiStream: async ({ onEnd }) => {
+				onEnd({ isAborted: false, responseMessage });
 				return createTextStream();
 			},
 			delivery: {
@@ -172,21 +172,21 @@ describe("hosted assistant execution", () => {
 	});
 
 	it("forwards step completion to durable execution adapters", async () => {
-		const onStepFinish = vi.fn();
+		const onStepEnd = vi.fn();
 		const step = { usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 } };
 		await startHostedAssistantExecution({
 			agent: {} as never,
 			assistantMessageId: "assistant-1",
 			messages: [],
-			onStepFinish,
+			onStepEnd,
 			createUiStream: async (options) => {
-				await options.onStepFinish?.(step as never);
+				await options.onStepEnd?.(step as never);
 				return createTextStream();
 			},
 			delivery: { mode: "consume" },
 		});
 
-		expect(onStepFinish).toHaveBeenCalledWith(step);
+		expect(onStepEnd).toHaveBeenCalledWith(step);
 	});
 
 	it("fails closed when the SDK produces no finish result or message", async () => {

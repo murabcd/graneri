@@ -35,5 +35,5 @@ export const prepareServerChatContextWindow = async ({
 		compactionCount: contextWindow.compactionCount,
 		messageCount: contextWindow.messages.length,
 	});
-	return contextWindow.messages;
+	return contextWindow;
 };

@@ -1,6 +1,7 @@
 import {
 	decodeStoredUiMessage,
 	parseUiMessagesJson,
+	type StoredUiMessageRole,
 } from "@workspace/ai/ui-message-codec";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { ConvexError } from "convex/values";
@@ -97,7 +98,7 @@ export const upsertAssistantRunJobMessage = async (
 	runId: Id<"assistantRuns">,
 	message: {
 		id: string;
-		role: "system" | "user" | "assistant";
+		role: StoredUiMessageRole;
 		partsJson: string;
 		metadataJson?: string;
 	},

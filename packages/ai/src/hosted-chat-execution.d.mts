@@ -1,9 +1,9 @@
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type {
+	GenerateTextOnStepEndCallback,
 	PrepareStepFunction,
 	StopCondition,
 	ToolLoopAgent,
-	ToolLoopAgentOnStepFinishCallback,
 	ToolSet,
 	UIMessage,
 	UIMessageChunk,
@@ -18,11 +18,11 @@ export declare const prepareHostedAssistantExecution: (settings: {
 	additionalAgentTools?: ToolSet;
 	enabledTools: ToolSet;
 	emptyToolsWhenNone?: boolean;
+	instructions: string;
 	model: string;
 	prepareStep?: PrepareStepFunction<ToolSet>;
 	providerOptions?: ProviderOptions;
 	stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
-	systemPrompt: string;
 }) => {
 	agent: ToolLoopAgent<never, ToolSet, never>;
 	agentTools: ToolSet | undefined;
@@ -54,16 +54,13 @@ type HostedAssistantExecutionStreamOptions = {
 		sendReasoning: true;
 		sendSources: true;
 		timeout?: { totalMs: number };
-		onFinish: (args: {
-			isAborted: boolean;
-			responseMessage: UIMessage;
-		}) => void;
+		onEnd: (args: { isAborted: boolean; responseMessage: UIMessage }) => void;
 		onError?: () => string;
-		onStepFinish?: ToolLoopAgentOnStepFinishCallback<ToolSet>;
+		onStepEnd?: GenerateTextOnStepEndCallback<ToolSet>;
 	}) => Promise<ReadableStream<UIMessageChunk>>;
 	messages: UIMessage[];
 	onError?: () => string;
-	onStepFinish?: ToolLoopAgentOnStepFinishCallback<ToolSet>;
+	onStepEnd?: GenerateTextOnStepEndCallback<ToolSet>;
 	timeout?: { totalMs: number };
 };
 

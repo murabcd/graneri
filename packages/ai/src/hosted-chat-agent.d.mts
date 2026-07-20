@@ -32,7 +32,7 @@ export declare const createHostedChatAgent: ({
 	prepareStep,
 	providerOptions,
 	stopWhen,
-	systemPrompt,
+	instructions,
 }: {
 	additionalAgentTools?: ToolSet | undefined;
 	enabledTools: ToolSet;
@@ -41,7 +41,7 @@ export declare const createHostedChatAgent: ({
 	prepareStep?: PrepareStepFunction<ToolSet> | undefined;
 	providerOptions?: ProviderOptions | undefined;
 	stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
-	systemPrompt: string;
+	instructions: string;
 }) => {
 	agent: ToolLoopAgent<never, ToolSet, never>;
 	agentTools: ToolSet | undefined;

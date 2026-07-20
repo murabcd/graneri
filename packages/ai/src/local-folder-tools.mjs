@@ -396,8 +396,8 @@ const inspectLocalImage = async ({
 							"Inspect this local image. Describe what is visible, extract any readable text, and mention notable UI, document, chart, or scene details.",
 					},
 					{
-						type: "image",
-						image,
+						type: "file",
+						data: image,
 						mediaType: getImageMediaType(filePath),
 						providerOptions: createImageDetailProviderOptions(detail),
 					},
@@ -458,8 +458,8 @@ const describeImageForSearch = async ({ filePath, fileStat, query }) => {
 							.join(" "),
 					},
 					{
-						type: "image",
-						image,
+						type: "file",
+						data: image,
 						mediaType: getImageMediaType(filePath),
 						providerOptions: createImageDetailProviderOptions("low"),
 					},

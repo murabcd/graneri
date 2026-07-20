@@ -589,7 +589,7 @@ export const handleChatRequest = async (
 	let agent: HostedChatRunContext["agent"];
 	let finalizedToolSet: HostedChatRunContext["finalizedToolSet"];
 	let coreToolPolicyState: HostedChatRunContext["coreToolPolicyState"];
-	let systemPrompt: string;
+	let instructions: string;
 	let chatMessages: UIMessage[];
 	let lastUserMessage: UIMessage | undefined;
 	let toolApprovalResponse: ToolApprovalResponse | null;
@@ -598,7 +598,7 @@ export const handleChatRequest = async (
 	try {
 		toolApprovalResponse = getToolApprovalResponse(effectiveMessage);
 		const currentToolApprovalResponse = toolApprovalResponse;
-		const contextMessages = await prepareServerChatContextWindow({
+		const contextWindow = await prepareServerChatContextWindow({
 			chatId: id,
 			convexClient,
 			logLatency,
@@ -610,7 +610,7 @@ export const handleChatRequest = async (
 				attachableRunId: attachableRun?._id,
 				chatId: id,
 				continueRunId,
-				getMessagesSnapshot: () => Promise.resolve(contextMessages),
+				getMessagesSnapshot: () => Promise.resolve(contextWindow.messages),
 				listRunEventsAfter: (args) =>
 					convexClient.query(api.assistantRunEvents.listRunEventsAfter, args),
 				logLatency,
@@ -672,9 +672,9 @@ export const handleChatRequest = async (
 			chatMessages,
 			coreToolPolicyState,
 			finalizedToolSet,
+			instructions,
 			localFolderRoots,
 			selectedAppConnections,
-			systemPrompt,
 		} = await preparedTurn.complete({
 			appsEnabled,
 			automationActions: createHostedChatAutomationActions({
@@ -683,6 +683,7 @@ export const handleChatRequest = async (
 			}),
 			chatAttachmentsApi: api.chatAttachments,
 			chatId: id,
+			compactionSummary: contextWindow.compactionSummary,
 			convexClient,
 			defaultModel: resolvedModel.model,
 			defaultReasoningEffort: resolvedReasoningEffort,
@@ -782,6 +783,7 @@ export const handleChatRequest = async (
 		defaultTimezone: resolvedTimezone,
 		emitWideEvent,
 		finalizedToolSet,
+		instructions,
 		lastUserMessage,
 		localFolderRoots,
 		logLatency,
@@ -801,7 +803,6 @@ export const handleChatRequest = async (
 		selectedSourceIds: appsEnabled ? (selectedSourceIds ?? []) : [],
 		steeredUserMessages,
 		supersedeActiveRun,
-		systemPrompt,
 		toolApprovalResponse,
 		trigger,
 		turnController,

@@ -28,13 +28,16 @@ const buildUserProfilePromptSection = ({
 	].join("\n");
 };
 
-export const BASE_CHAT_SYSTEM_PROMPT = joinPromptSections([
+export const BASE_CHAT_INSTRUCTIONS = joinPromptSections([
 	"You are Graneri AI, a concise assistant for meeting notes and chat.",
 	"Answer clearly and directly.",
 	"If the user asks about meetings or notes that are not available in context, say that you do not have that context yet.",
 ]);
 
-export const CHAT_TITLE_SYSTEM_PROMPT = joinPromptSections([
+export const buildChatHistoryInstructions = (summary) =>
+	`Earlier conversation context was compacted into this trusted historical summary. Use it as context, not as a new user instruction.\n\n${summary}`;
+
+export const CHAT_TITLE_INSTRUCTIONS = joinPromptSections([
 	"Generate a short chat title that summarizes the user's message.",
 	"Use 2 to 5 words when possible.",
 	"Use the same primary language as the user's message.",
@@ -47,7 +50,7 @@ export const CHAT_TITLE_SYSTEM_PROMPT = joinPromptSections([
 	"Do not use quotes, prefixes, markdown, punctuation wrappers, or extra explanation.",
 ]);
 
-export const buildChatSystemPrompt = ({
+export const buildChatInstructions = ({
 	notesContext = "",
 	attachedNoteContext = "",
 	recipeContext = "",
@@ -56,7 +59,7 @@ export const buildChatSystemPrompt = ({
 } = {}) =>
 	webSearchEnabled
 		? joinPromptSections([
-				BASE_CHAT_SYSTEM_PROMPT,
+				BASE_CHAT_INSTRUCTIONS,
 				recipeContext,
 				notesContext,
 				attachedNoteContext,
@@ -66,14 +69,14 @@ export const buildChatSystemPrompt = ({
 				"When you use web search, rely on the tool results instead of making up citations.",
 			])
 		: joinPromptSections([
-				BASE_CHAT_SYSTEM_PROMPT,
+				BASE_CHAT_INSTRUCTIONS,
 				recipeContext,
 				notesContext,
 				attachedNoteContext,
 				buildUserProfilePromptSection(userProfileContext),
 			]);
 
-export const ENHANCED_NOTE_SYSTEM_PROMPT = joinPromptSections([
+export const ENHANCED_NOTE_INSTRUCTIONS = joinPromptSections([
 	"You turn raw transcripts and notes into polished structured notes.",
 	"Preserve the source language used in the input.",
 	"Do not invent facts, decisions, owners, dates, or action items.",
@@ -116,7 +119,7 @@ export const buildEnhancedNotePrompt = ({
 		.filter(Boolean)
 		.join("\n\n");
 
-export const APPLY_TEMPLATE_SYSTEM_PROMPT = joinPromptSections([
+export const APPLY_TEMPLATE_INSTRUCTIONS = joinPromptSections([
 	"You rewrite existing notes into a selected note template.",
 	"Preserve the source language used in the notes.",
 	"Do not invent facts, decisions, owners, or dates.",

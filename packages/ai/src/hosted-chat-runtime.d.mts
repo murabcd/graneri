@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { StoredUiMessageRole } from "./ui-message-codec.mjs";
 
 export declare const hostedChatSteerAcceptedHeader: "X-Graneri-Steer-Accepted";
 export declare const hostedChatReplayAcceptedHeader: "X-Graneri-Replay-Accepted";
@@ -98,7 +99,7 @@ export declare const getHostedChatPreviewFromMessage: (
 ) => string;
 export declare const toHostedStoredMessage: (message: UIMessage) => {
 	id: string;
-	role: UIMessage["role"];
+	role: StoredUiMessageRole;
 	partsJson: string;
 	metadataJson: string | undefined;
 	text: string;
@@ -134,7 +135,7 @@ export declare const buildHostedChatSaveMessageArgs: <
 export declare const fromHostedStoredMessages: (
 	messages: Array<{
 		id: string;
-		role: UIMessage["role"];
+		role: StoredUiMessageRole;
 		partsJson: string;
 		metadataJson?: string;
 	}>,
@@ -146,7 +147,7 @@ export declare const prepareHostedChatBranch: (args: {
 	messages?: UIMessage[];
 	storedMessages?: Array<{
 		id: string;
-		role: UIMessage["role"];
+		role: StoredUiMessageRole;
 		partsJson: string;
 		metadataJson?: string;
 	}>;
@@ -185,9 +186,10 @@ export declare const getHostedChatRecipeContext: (
 		| null
 		| undefined,
 ) => string;
-export declare const buildHostedChatRuntimePrompt: (args: {
+export declare const buildHostedChatRuntimeInstructions: (args: {
 	automationInstruction?: string;
 	attachedNoteContext?: string;
+	compactionSummary?: string | null;
 	coreToolInstruction?: string;
 	localFolderContext?: string;
 	notesContext?: string;

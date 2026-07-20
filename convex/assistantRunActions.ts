@@ -24,7 +24,7 @@ import {
 import { createHostedRequestUserInputTool } from "@workspace/ai/hosted-user-question";
 import {
 	lastAssistantMessageIsCompleteWithToolCalls,
-	stepCountIs,
+	isStepCount,
 	type InferAgentUIMessage,
 	type LanguageModelUsage,
 	type ToolSet,
@@ -301,8 +301,8 @@ export const runStep = internalAction({
 					request_user_input: createHostedRequestUserInputTool(),
 				},
 				enabledTools,
+				instructions: context.job.instructions,
 				model: context.model,
-				systemPrompt: context.job.systemPrompt,
 				prepareStep: context.job.chartGenerationRequested
 					? buildChartGenerationPrepareStep()
 					: undefined,
@@ -312,7 +312,7 @@ export const runStep = internalAction({
 						context.ownerTokenIdentifier,
 					),
 				}),
-				stopWhen: stepCountIs(1),
+				stopWhen: isStepCount(1),
 			});
 			const messages = await parseMessages<InferAgentUIMessage<typeof agent>>(
 				context.job,
@@ -341,7 +341,7 @@ export const runStep = internalAction({
 				assistantMessageId: args.assistantMessageId,
 				messages,
 				timeout: { totalMs: BACKGROUND_STEP_TIMEOUT_MS },
-				onStepFinish: (step) => {
+				onStepEnd: (step) => {
 					stepUsage = step.usage;
 				},
 				delivery: {

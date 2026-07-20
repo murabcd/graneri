@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { StoredUiMessageRole } from "./ui-message-codec.mjs";
 
 type LogLatencyDetails = Record<
 	string,
@@ -7,7 +8,7 @@ type LogLatencyDetails = Record<
 
 type StoredHostedChatMessage = {
 	id: string;
-	role: UIMessage["role"];
+	role: StoredUiMessageRole;
 	partsJson: string;
 	metadataJson?: string;
 };

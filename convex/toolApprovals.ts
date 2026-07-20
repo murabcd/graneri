@@ -16,15 +16,9 @@ import {
 	requireMatchingToolApprovalResponse,
 } from "./toolApproval";
 
-const chatRoleValidator = v.union(
-	v.literal("system"),
-	v.literal("user"),
-	v.literal("assistant"),
-);
-
 const chatMessageInputValidator = v.object({
 	id: v.string(),
-	role: chatRoleValidator,
+	role: v.literal("assistant"),
 	partsJson: v.string(),
 	metadataJson: v.optional(v.string()),
 	text: v.string(),

@@ -113,8 +113,9 @@ module so HTTP parsing/context assembly stays separate from turn execution.
 Long chat context is prepared before branch handling through a durable rolling
 compaction checkpoint. Convex stores the authoritative summary boundary by
 message ID and insertion time; the AI layer summarizes fixed oldest-first
-batches and then sends the summary as historical system context followed by the
-exact uncompacted tail. Compaction never deletes or rewrites saved chat
+batches and then sends the trusted summary through top-level AI SDK instructions
+followed by the exact uncompacted user/assistant tail. Compaction never creates
+or stores synthetic system messages, and it never deletes or rewrites saved chat
 messages, so the user-visible transcript and future pagination retain complete
 history. A narrow owner-checked display query exposes only the checkpoint
 message ID, allowing the renderer to place a `Conversation compacted` marker
@@ -180,11 +181,12 @@ Completed first turns may generate a title in a separate retryable read-only
 Workflow step. The completion mutation applies it only after it terminalizes
 the matching generation, and the title mutation replaces only an untouched
 default title so a user rename always wins.
-`assistantRunJobs` retains only the sanitized model input and tool-selection
-configuration needed to resume the same Convex producer after durable user
-input. Approval pauses save the assistant approval message and checkpoint that
-message into the job. Accepting the matching response atomically updates the
-checkpoint, clears the previous temporary stream/tool rows, creates the next
+`assistantRunJobs` retains only the sanitized model input, top-level AI SDK
+instructions, and tool-selection configuration needed to resume the same
+Convex producer after durable user input. Approval pauses save the assistant
+approval message and checkpoint that message into the job. Accepting the
+matching response atomically updates the checkpoint, clears the previous
+temporary stream/tool rows, creates the next
 assistant stream, and starts the continuation Workflow from the cumulative step
 index. A previous Workflow may finish an already-running action after steering,
 approval, stop, or cancellation, because component cancellation cannot stop an
@@ -301,11 +303,10 @@ minimum replay context: they omit credentials, desktop-local folder selections,
 duplicate workspace identity, and note contents that can be reloaded by note ID.
 Rich message JSON crosses storage and runtime boundaries only through
 `@workspace/ai/ui-message-codec`. Strict consumers fail closed on malformed
-parts, metadata, or message arrays; historical model-input projection may skip
-malformed rows only through the codec's explicitly tolerant helpers. The
-durable chat-message write seam validates AI SDK message semantics and stores
-canonical parts JSON, including normalization of legacy interrupted snapshots
-that contain text but no rich parts.
+parts, metadata, message arrays, and any stored role other than `user` or
+`assistant`; historical model-input projection may skip malformed rows only
+through the codec's explicitly tolerant helpers. The durable chat-message write
+seam validates AI SDK message semantics and stores canonical rich parts JSON.
 Claimed replay is still server-owned: the client
 rebuilds request state through the queued-intent module with a fresh Convex
 token and sends `replayQueuedMessageId`; `/api/chat` must load the claimed

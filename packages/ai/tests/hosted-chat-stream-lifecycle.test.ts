@@ -72,8 +72,8 @@ describe("hosted chat stream lifecycle", () => {
 					parts: [{ type: "text", text: "Hello" }],
 				},
 			],
-			createUiStream: async ({ onFinish }) => {
-				onFinish({
+			createUiStream: async ({ onEnd }) => {
+				onEnd({
 					isAborted: false,
 					responseMessage: {
 						id: "assistant-message-1",
@@ -103,7 +103,7 @@ describe("hosted chat stream lifecycle", () => {
 			finalizedToolSet: { hasTools: true },
 			logLatency: (stage) => latencyStages.push(stage),
 			streamLatencyTracker: createStreamLatencyTracker(),
-			systemPrompt: "system",
+			instructions: "instructions",
 		});
 
 		expect(result.ok).toBe(true);
@@ -165,7 +165,7 @@ describe("hosted chat stream lifecycle", () => {
 				errors.push(error);
 			},
 			streamLatencyTracker: createStreamLatencyTracker(),
-			systemPrompt: "system",
+			instructions: "instructions",
 		});
 
 		expect(result.ok).toBe(false);
@@ -194,8 +194,8 @@ describe("hosted chat stream lifecycle", () => {
 			assistantMessageId: "assistant-message-1",
 			assistantRunId: "run-1",
 			chatMessages: [],
-			createUiStream: async ({ onFinish }) => {
-				onFinish({
+			createUiStream: async ({ onEnd }) => {
+				onEnd({
 					isAborted: false,
 					responseMessage: {
 						id: "assistant-message-1",
@@ -223,7 +223,7 @@ describe("hosted chat stream lifecycle", () => {
 			finalizedToolSet: { hasTools: false },
 			logLatency: () => undefined,
 			streamLatencyTracker: createStreamLatencyTracker(),
-			systemPrompt: "system",
+			instructions: "instructions",
 		});
 
 		if (!result.ok) {
@@ -255,8 +255,8 @@ describe("hosted chat stream lifecycle", () => {
 			assistantMessageId: "assistant-message-1",
 			assistantRunId: "run-1",
 			chatMessages: [],
-			createUiStream: async ({ onFinish }) => {
-				onFinish({
+			createUiStream: async ({ onEnd }) => {
+				onEnd({
 					isAborted: false,
 					responseMessage: {
 						id: "assistant-message-1",
@@ -283,7 +283,7 @@ describe("hosted chat stream lifecycle", () => {
 			finalizedToolSet: { hasTools: true },
 			logLatency: () => undefined,
 			streamLatencyTracker: createStreamLatencyTracker(),
-			systemPrompt: "system",
+			instructions: "instructions",
 		});
 
 		if (!result.ok) {

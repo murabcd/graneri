@@ -17,7 +17,6 @@ const MAX_CHAT_TITLE_LENGTH = 80;
 const storedUiMessageValidator = v.object({
 	id: v.string(),
 	role: v.union(
-		v.literal("system"),
 		v.literal("user"),
 		v.literal("assistant"),
 	),

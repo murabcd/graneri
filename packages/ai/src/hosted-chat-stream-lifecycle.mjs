@@ -12,14 +12,14 @@ export const createHostedChatRunResponseStream = async ({
 	failAssistantRun,
 	finalizeAssistantRun,
 	finalizedToolSet,
+	instructions,
 	logLatency,
 	onStreamCreateError,
 	streamLatencyTracker,
-	systemPrompt,
 }) => {
 	logLatency("ai.agent_created", {
 		hasEnabledTools: finalizedToolSet.hasTools,
-		systemPromptLength: systemPrompt.length,
+		instructionsLength: instructions.length,
 	});
 
 	const execution = await (async () => {

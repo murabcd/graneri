@@ -63,9 +63,9 @@ describe("hosted chat context window", () => {
 			}),
 		);
 		expect(result.compactionCount).toBe(1);
-		expect(result.messages).toHaveLength(102);
-		expect(result.messages[0]).toMatchObject({ role: "system" });
-		expect(result.messages[1]?.id).toBe("message-101");
+		expect(result.compactionSummary).toBe("Durable summary");
+		expect(result.messages).toHaveLength(101);
+		expect(result.messages[0]?.id).toBe("message-101");
 		expect(result.messages.at(-1)?.id).toBe("message-201");
 	});
 
@@ -110,7 +110,8 @@ describe("hosted chat context window", () => {
 			expect.objectContaining({ previousSummary: "Summary through 100" }),
 		);
 		expect(result.compactionCount).toBe(2);
-		expect(result.messages[1]?.id).toBe("message-201");
+		expect(result.compactionSummary).toBe("Summary through 200");
+		expect(result.messages[0]?.id).toBe("message-201");
 	});
 
 	it("preserves consequential tool input and output in the summary transcript", () => {

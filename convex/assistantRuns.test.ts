@@ -160,7 +160,7 @@ const backgroundJob = {
 			parts: [{ type: "text", text: "Answer in the background." }],
 		},
 	]),
-	systemPrompt: "Answer clearly.",
+	instructions: "Answer clearly.",
 	webSearchEnabled: false,
 	chartGenerationRequested: false,
 	imageGenerationRequested: false,

@@ -44,7 +44,6 @@ const requireStoredUserQuestion = async (
 				partsJson: storedMessage.partsJson,
 				metadataJson: storedMessage.metadataJson,
 				createdAt: storedMessage.createdAt,
-				text: storedMessage.text,
 			}),
 			decision,
 		});

@@ -85,6 +85,7 @@ describe("hosted chat run context", () => {
 			}),
 			getStoredNoteContext: async () => "stored note",
 			getUserProfileContext: async () => ({ name: "Murad" }),
+			compactionSummary: "Earlier context.",
 			localFolders: [{ id: "folder-1", path: "/tmp/project" }],
 			logLatency: (stage) => latencyStages.push(stage),
 			message: {
@@ -128,8 +129,9 @@ describe("hosted chat run context", () => {
 				"update_automation",
 			]),
 		);
-		expect(context.systemPrompt).toContain("stored note");
-		expect(context.systemPrompt).toContain("Project");
+		expect(context.instructions).toContain("stored note");
+		expect(context.instructions).toContain("Earlier context.");
+		expect(context.instructions).toContain("Project");
 		expect(localFolderArguments).toEqual([["/tmp/project"]]);
 		expect(automations).toEqual([]);
 		expect(latencyStages).toEqual([
@@ -154,6 +156,7 @@ describe("hosted chat run context", () => {
 			getSelectedRecipe: async () => null,
 			getStoredNoteContext: async () => "",
 			getUserProfileContext: async () => null,
+			compactionSummary: null,
 			localFolders: [{ id: "folder-1", name: "Project" }],
 			localFolderToolMode: "client",
 			logLatency: () => {},
@@ -173,7 +176,7 @@ describe("hosted chat run context", () => {
 		expect(context.localFolderRoots).toEqual([
 			{ id: "folder-1", name: "Project", path: "Project" },
 		]);
-		expect(context.systemPrompt).toContain("Project");
+		expect(context.instructions).toContain("Project");
 		expect(context.tools.read_local_file?.execute).toBeUndefined();
 	});
 });

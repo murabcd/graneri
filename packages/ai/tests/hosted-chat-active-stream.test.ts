@@ -352,7 +352,7 @@ describe("hosted active chat stream", () => {
 		oldSession.turnInput.deferMailboxDeliveryToNextTurn();
 		oldSession.turnInput.enqueueMailboxInput({
 			id: "mailbox-1",
-			role: "system",
+			role: "user",
 		});
 		oldSession.turnInput.extendSteerInput([
 			{ id: "queued-1", role: "user" },
@@ -378,7 +378,7 @@ describe("hosted active chat stream", () => {
 		expect(newSession.turnInput.takeForCurrentTurn()).toEqual([
 			{ id: "queued-1", role: "user" },
 			{ id: "queued-2", role: "user" },
-			{ id: "mailbox-1", role: "system" },
+			{ id: "mailbox-1", role: "user" },
 		]);
 	});
 

@@ -1,9 +1,11 @@
-export declare const BASE_CHAT_SYSTEM_PROMPT: string;
-export declare const CHAT_TITLE_SYSTEM_PROMPT: string;
-export declare const ENHANCED_NOTE_SYSTEM_PROMPT: string;
-export declare const APPLY_TEMPLATE_SYSTEM_PROMPT: string;
+export declare const BASE_CHAT_INSTRUCTIONS: string;
+export declare const CHAT_TITLE_INSTRUCTIONS: string;
+export declare const ENHANCED_NOTE_INSTRUCTIONS: string;
+export declare const APPLY_TEMPLATE_INSTRUCTIONS: string;
 
-export declare function buildChatSystemPrompt(options?: {
+export declare function buildChatHistoryInstructions(summary: string): string;
+
+export declare function buildChatInstructions(options?: {
 	notesContext?: string;
 	attachedNoteContext?: string;
 	recipeContext?: string;

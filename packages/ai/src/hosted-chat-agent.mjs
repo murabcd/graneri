@@ -32,7 +32,7 @@ export const createHostedChatAgent = ({
 	prepareStep,
 	providerOptions,
 	stopWhen,
-	systemPrompt,
+	instructions,
 }) => {
 	const { agentTools, finalizedToolSet, tools } = buildHostedChatAgentToolSet({
 		additionalAgentTools,
@@ -41,7 +41,7 @@ export const createHostedChatAgent = ({
 	const agent = new ToolLoopAgent({
 		model: openai(model),
 		providerOptions,
-		instructions: systemPrompt,
+		instructions,
 		tools: agentTools ?? (emptyToolsWhenNone ? {} : undefined),
 		prepareStep,
 		stopWhen,

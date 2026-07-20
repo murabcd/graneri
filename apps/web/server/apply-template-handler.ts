@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { openai } from "@ai-sdk/openai";
 import { NOTE_GENERATION_MODEL_ID } from "@workspace/ai/models";
 import {
-	APPLY_TEMPLATE_SYSTEM_PROMPT,
+	APPLY_TEMPLATE_INSTRUCTIONS,
 	buildApplyTemplatePrompt,
 } from "@workspace/ai/prompts";
 import { smoothStream, streamText } from "ai";
@@ -152,7 +152,7 @@ export const handleApplyTemplateRequest = async (
 	const result = streamText({
 		model: openai(NOTE_GENERATION_MODEL_ID),
 		providerOptions: getOpenAiSafetyProviderOptions(admission.safetyIdentifier),
-		system: APPLY_TEMPLATE_SYSTEM_PROMPT,
+		instructions: APPLY_TEMPLATE_INSTRUCTIONS,
 		prompt: buildApplyTemplatePrompt({
 			title,
 			templateName: template.name,

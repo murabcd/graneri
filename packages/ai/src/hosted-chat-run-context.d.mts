@@ -39,6 +39,7 @@ export declare const buildHostedChatRunContext: (args: {
 	automationActions?: AutomationActions | null;
 	chatAttachmentsApi: ChatAttachmentsApi;
 	chatId: string;
+	compactionSummary: string | null;
 	convexClient: unknown;
 	defaultModel: string;
 	defaultReasoningEffort: string;
@@ -94,6 +95,6 @@ export declare const buildHostedChatRunContext: (args: {
 	};
 	localFolderRoots: LocalFolderRoot[];
 	selectedAppConnections: AppConnection[];
-	systemPrompt: string;
+	instructions: string;
 	tools: ToolSet;
 }>;

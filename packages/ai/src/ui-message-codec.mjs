@@ -7,6 +7,18 @@ const createCodecError = (code, message, cause) => {
 	return error;
 };
 
+const isStoredMessageRole = (role) => role === "user" || role === "assistant";
+
+const requireStoredMessageRole = (role) => {
+	if (!isStoredMessageRole(role)) {
+		throw createCodecError(
+			"invalid_message_shape",
+			"Stored UI messages must have a user or assistant role.",
+		);
+	}
+	return role;
+};
+
 const parseJson = (value, code, message) => {
 	try {
 		return JSON.parse(value);
@@ -82,35 +94,46 @@ export const parseUiMessagesJson = (messagesJson) => {
 	return messages;
 };
 
-export const validateUiMessages = ({ messages, tools }) =>
-	validateUIMessages({ messages, tools });
+export const validateUiMessages = ({ messages, tools }) => {
+	if (Array.isArray(messages)) {
+		for (const message of messages) {
+			if (message && typeof message === "object" && "role" in message) {
+				requireStoredMessageRole(message.role);
+			}
+		}
+	}
+	return validateUIMessages({ messages, tools });
+};
 
 export const encodeUiMessage = ({
 	createId,
 	createdAt = Date.now(),
 	message,
-}) => ({
-	id: message.id || createId(),
-	role: message.role,
-	partsJson: stringifyJson(
-		message.parts,
-		"parts_not_serializable",
-		"UI message parts must be JSON serializable.",
-	),
-	metadataJson:
-		message.metadata === undefined
-			? undefined
-			: stringifyJson(
-					message.metadata,
-					"metadata_not_serializable",
-					"UI message metadata must be JSON serializable.",
-				),
-	createdAt,
-});
+}) => {
+	const role = requireStoredMessageRole(message.role);
+	return {
+		id: message.id || createId(),
+		role,
+		partsJson: stringifyJson(
+			message.parts,
+			"parts_not_serializable",
+			"UI message parts must be JSON serializable.",
+		),
+		metadataJson:
+			message.metadata === undefined
+				? undefined
+				: stringifyJson(
+						message.metadata,
+						"metadata_not_serializable",
+						"UI message metadata must be JSON serializable.",
+					),
+		createdAt,
+	};
+};
 
 const decodeStoredUiMessageValue = (message) => ({
 	id: message.id,
-	role: message.role,
+	role: requireStoredMessageRole(message.role),
 	parts: parseUiMessagePartsJson(message.partsJson),
 	...(message.metadataJson === undefined
 		? {}
@@ -122,15 +145,9 @@ export const decodeTrustedStoredUiMessage = decodeStoredUiMessageValue;
 
 export const decodeStoredUiMessage = async (message) => {
 	const decoded = decodeStoredUiMessageValue(message);
-	const candidate =
-		decoded.parts.length === 0 &&
-		typeof message.text === "string" &&
-		message.text.trim().length > 0
-			? { ...decoded, parts: [{ type: "text", text: message.text }] }
-			: decoded;
 	let validated;
 	try {
-		[validated] = await validateUiMessages({ messages: [candidate] });
+		[validated] = await validateUiMessages({ messages: [decoded] });
 	} catch (error) {
 		throw createCodecError(
 			"invalid_message_shape",
@@ -166,6 +183,9 @@ export const normalizeStoredUiMessage = async (message) => {
 
 export const decodeStoredUiMessagesForModelInput = (messages) =>
 	messages.flatMap((message) => {
+		if (!isStoredMessageRole(message.role)) {
+			return [];
+		}
 		const storedParts = tryParseUiMessagePartsJson(message.partsJson);
 		if (!storedParts) {
 			return [];

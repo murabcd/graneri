@@ -30,10 +30,10 @@
     "typecheck": "node scripts/check-syntax.mjs"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^1.0.42",
+    "@ai-sdk/mcp": "^2.0.15",
     "@workspace/ai": "workspace:*",
     "archiver": "7.0.1",
-    "bash-tool": "^1.3.16",
+    "bash-tool": "^1.3.18",
     "convex": "^1.42.1",
     "electron-updater": "^6.6.2",
     "pino": "^10.3.1",
