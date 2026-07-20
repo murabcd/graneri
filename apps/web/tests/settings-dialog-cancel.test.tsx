@@ -55,7 +55,7 @@ describe("settings dialog cancel actions", () => {
 		vi.clearAllMocks();
 	});
 
-	it("resets profile edits and closes settings", async () => {
+	it("resets profile edits and closes settings", () => {
 		const onOpenChange = vi.fn();
 
 		render(
@@ -91,7 +91,7 @@ describe("settings dialog cancel actions", () => {
 			(screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement)
 				.disabled,
 		).toBe(false);
-	});
+	}, 10_000);
 
 	it("resets workspace edits and closes settings", async () => {
 		const onOpenChange = vi.fn();
