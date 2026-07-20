@@ -124,7 +124,7 @@ test("application menu keeps only the intended quit actions", () => {
 		[
 			"About Graneri",
 			"separator",
-			"Check for updates...",
+			"Check for Updates...",
 			"Settings",
 			"separator",
 			"services",
@@ -133,7 +133,7 @@ test("application menu keeps only the intended quit actions", () => {
 			"hideOthers",
 			"unhide",
 			"separator",
-			"Quit completely",
+			"Quit Completely",
 			"separator",
 			"Quit",
 		],
@@ -192,11 +192,15 @@ test("custom View menu items invoke their matching commands", () => {
 	]);
 });
 
-test("Window menu omits close and auxiliary window commands", () => {
+test("Window menu exposes Command+W close without auxiliary window commands", () => {
 	const windowMenu = createTemplate({}).find((item) => item.role === "window");
 
 	assert.deepEqual(
 		windowMenu.submenu.map((item) => item.role ?? item.type),
-		["minimize", "zoom", "separator", "front"],
+		["minimize", "zoom", "separator", "close", "separator", "front"],
+	);
+	assert.equal(
+		windowMenu.submenu.find((item) => item.role === "close").accelerator,
+		"Command+W",
 	);
 });

@@ -28,7 +28,7 @@ export const createDesktopAppMenuTemplate = ({
 				},
 				{ type: "separator" },
 				{
-					label: "Check for updates...",
+					label: "Check for Updates...",
 					click: () => {
 						void handleCheckForUpdates();
 					},
@@ -52,7 +52,7 @@ export const createDesktopAppMenuTemplate = ({
 				{ role: "unhide" },
 				{ type: "separator" },
 				{
-					label: "Quit completely",
+					label: "Quit Completely",
 					accelerator: "Command+Q",
 					click: () => {
 						void confirmAndQuitCompletely();
@@ -147,6 +147,8 @@ export const createDesktopAppMenuTemplate = ({
 			submenu: [
 				{ role: "minimize" },
 				{ role: "zoom" },
+				{ type: "separator" },
+				{ role: "close", accelerator: "Command+W" },
 				{ type: "separator" },
 				{ role: "front" },
 			],

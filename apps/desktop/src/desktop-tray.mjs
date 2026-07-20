@@ -6,6 +6,7 @@ import {
 	getUpcomingTrayEventsForDay,
 	isTrayEventLive,
 } from "./desktop-tray-calendar.mjs";
+import { createDesktopTrayMenuTemplate } from "./desktop-tray-menu-template.mjs";
 import { logError } from "./logger.mjs";
 
 const trayCalendarMenuEventLimit = 5;
@@ -250,78 +251,28 @@ export const createDesktopTray = ({
 	};
 
 	const buildTrayMenu = () =>
-		Menu.buildFromTemplate([
-			...buildTrayCalendarMenuItems(),
-			{
-				label: "Open desktop",
-				click: () => {
-					void onOpenMainWindow();
+		Menu.buildFromTemplate(
+			createDesktopTrayMenuTemplate({
+				appName: app.getName(),
+				appVersion: app.getVersion(),
+				calendarMenuItems: buildTrayCalendarMenuItems(),
+				confirmAndQuitCompletely,
+				keepOpenInMenuBar: traySettings.keepOpenInMenuBar,
+				onCheckForUpdates,
+				onKeepOpenInMenuBarChange: (keepOpenInMenuBar) => {
+					traySettings = {
+						...traySettings,
+						keepOpenInMenuBar,
+					};
+					void saveSettings();
+					refreshMenu();
+					void calendar.refresh({ keepOpenInMenuBar });
 				},
-			},
-			{
-				label: "Quick note",
-				click: () => {
-					void onOpenMainWindow({
-						pathname: "/note",
-						search: "?capture=1",
-					});
-				},
-			},
-			{
-				label: "Settings",
-				click: () => {
-					void onOpenMainWindow({ pathname: "/settings/profile" });
-				},
-			},
-			{
-				label: `${app.getName()} v${app.getVersion()}`,
-				enabled: false,
-			},
-			{
-				label: trayStatusLabel,
-				enabled: false,
-			},
-			{
-				label: "Check for updates",
-				click: () => {
-					void onCheckForUpdates();
-				},
-			},
-			{ type: "separator" },
-			{
-				label: "Quit",
-				click: () => {
-					void onQuit();
-				},
-			},
-			{
-				label: "Quit options",
-				submenu: [
-					{
-						label: "Keep Graneri in the menu bar",
-						type: "checkbox",
-						checked: traySettings.keepOpenInMenuBar,
-						click: (menuItem) => {
-							traySettings = {
-								...traySettings,
-								keepOpenInMenuBar: menuItem.checked,
-							};
-							void saveSettings();
-							refreshMenu();
-							void calendar.refresh({
-								keepOpenInMenuBar: traySettings.keepOpenInMenuBar,
-							});
-						},
-					},
-					{
-						label: "Quit completely",
-						click: () => {
-							void confirmAndQuitCompletely();
-						},
-					},
-				],
-			},
-		]);
+				onOpenMainWindow,
+				onQuit,
+				statusLabel: trayStatusLabel,
+			}),
+		);
 
 	const refreshMenu = () => {
 		if (!tray) {
