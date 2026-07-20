@@ -344,6 +344,15 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 			message.id === lastMessageId,
 	);
 	const isEmpty = displayText.length === 0;
+	const hasStreamingReasoningStatus = Boolean(
+		isStreamingAssistantMessage &&
+			reasoningParts.some(
+				(part) => part.type === "reasoning" && part.state !== "done",
+			),
+	);
+	const showThinkingPlaceholder = Boolean(
+		isStreamingAssistantMessage && isEmpty && !hasStreamingReasoningStatus,
+	);
 	const timestamp = formatChatMessageTimestamp(
 		getChatMessageTimestamp(message),
 	);
@@ -393,12 +402,12 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 				/>
 				<ChatMessageText
 					displayText={displayText}
-					isEmpty={isEmpty}
 					isInterruptedAssistantMessage={isInterruptedAssistantMessage}
 					isStreamingAssistantMessage={Boolean(isStreamingAssistantMessage)}
 					mentionPositions={metadata?.mentionPositions}
 					onOpenMention={onOpenMention}
 					role={message.role}
+					showThinkingPlaceholder={showThinkingPlaceholder}
 					textContainerClassName={textContainerClassName}
 				/>
 				{isInterruptedAssistantMessage ? <InterruptedMessageStatus /> : null}
@@ -591,16 +600,15 @@ const groupAdjacentToolParts = (parts: UIMessage["parts"]) => {
 
 const ChatMessageText = React.memo(function ChatMessageText({
 	displayText,
-	isEmpty,
 	isInterruptedAssistantMessage,
 	isStreamingAssistantMessage,
 	mentionPositions,
 	onOpenMention,
 	role,
+	showThinkingPlaceholder,
 	textContainerClassName,
 }: {
 	displayText: string;
-	isEmpty: boolean;
 	isInterruptedAssistantMessage: boolean;
 	isStreamingAssistantMessage: boolean;
 	mentionPositions?: Array<{
@@ -613,9 +621,10 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	}>;
 	onOpenMention?: (noteId: string) => void;
 	role: UIMessage["role"];
+	showThinkingPlaceholder: boolean;
 	textContainerClassName?: string;
 }) {
-	if (!isStreamingAssistantMessage && !displayText) {
+	if (!displayText && !showThinkingPlaceholder) {
 		return null;
 	}
 	return (
@@ -630,10 +639,10 @@ const ChatMessageText = React.memo(function ChatMessageText({
 						role === "user"
 							? USER_CHAT_BUBBLE_CLASS
 							: ASSISTANT_CHAT_CONTENT_CLASS,
-						isStreamingAssistantMessage && isEmpty && "text-muted-foreground",
+						showThinkingPlaceholder && "text-muted-foreground",
 					)}
 				>
-					{isStreamingAssistantMessage && isEmpty ? (
+					{showThinkingPlaceholder ? (
 						<div className="text-sm text-muted-foreground">
 							<ShimmerText>Thinking</ShimmerText>
 						</div>
