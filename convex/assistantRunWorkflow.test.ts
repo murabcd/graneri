@@ -1,7 +1,10 @@
+import type { WorkflowCtx } from "@convex-dev/workflow";
 import workflowTest from "@convex-dev/workflow/test";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { runAssistantWorkflow } from "./assistantRunWorkflow";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -77,6 +80,58 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+test("completed responses become terminal before title generation", async () => {
+	const events: string[] = [];
+	let actionCallCount = 0;
+	let mutationCallCount = 0;
+	let resolveTitle: (title: string) => void = () => undefined;
+	const titlePromise = new Promise<string>((resolve) => {
+		resolveTitle = resolve;
+	});
+	const step = {
+		runAction: vi.fn(async () => {
+			actionCallCount += 1;
+			if (actionCallCount === 1) {
+				events.push("run-step");
+				return {
+					outcome: "completed",
+					titleInput: {
+						assistantText: "Done.",
+						userText: "Finish this task.",
+					},
+				};
+			}
+			events.push("generate-title");
+			return await titlePromise;
+		}),
+		runMutation: vi.fn(async () => {
+			mutationCallCount += 1;
+			if (mutationCallCount === 1) {
+				events.push("apply-outcome");
+				return "completed";
+			}
+			events.push("apply-title");
+			return true;
+		}),
+	} as unknown as WorkflowCtx;
+
+	const workflow = runAssistantWorkflow(step, {
+		runId: "assistant-run" as Id<"assistantRuns">,
+		assistantMessageId: "assistant-message",
+		startStepIndex: 0,
+	});
+	await vi.waitFor(() => expect(actionCallCount).toBe(2));
+	resolveTitle("Finished task");
+	await workflow;
+
+	expect(events).toEqual([
+		"run-step",
+		"apply-outcome",
+		"generate-title",
+		"apply-title",
+	]);
+});
+
 test("background runs start with durable workflow ownership", async () => {
 	const { run, t } = await createBackgroundRun();
 	const job = await t.run((ctx) =>
@@ -101,9 +156,7 @@ test("step checkpoints are idempotent and accumulate usage once", async () => {
 		assistantMessageId: run.assistantMessageId,
 		stepIndex: 0,
 		text: "Tool result ready.",
-		partsJson: JSON.stringify([
-			{ type: "text", text: "Tool result ready." },
-		]),
+		partsJson: JSON.stringify([{ type: "text", text: "Tool result ready." }]),
 		outcome: "continue" as const,
 		usage: { inputTokens: 12, outputTokens: 8, totalTokens: 20 },
 	};

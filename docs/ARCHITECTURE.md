@@ -177,10 +177,11 @@ Normal hosted turns use this Convex producer. The web route authenticates and
 prepares the canonical branch/context, persists the user input, starts the
 durable job, and closes its SSE response; reactive Convex message and run
 queries carry the live rich-message snapshot to workspace and note chat UIs.
-Completed first turns may generate a title in a separate retryable read-only
-Workflow step. The completion mutation applies it only after it terminalizes
-the matching generation, and the title mutation replaces only an untouched
-default title so a user rename always wins.
+Completed first turns terminalize before title generation begins, so optional
+title work never keeps the composer in its active Stop state. A bounded title
+input then flows through a separate retryable read-only Workflow step, and the
+title mutation replaces only an untouched default title so a user rename always
+wins.
 `assistantRunJobs` retains only the sanitized model input, top-level AI SDK
 instructions, and tool-selection configuration needed to resume the same
 Convex producer after durable user input. Approval pauses save the assistant

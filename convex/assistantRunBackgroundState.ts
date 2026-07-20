@@ -1,7 +1,6 @@
 import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
 import {
 	internalMutation,
 	internalQuery,
@@ -23,11 +22,11 @@ import {
 	reasoningEffortValidator,
 } from "./assistantRunModel";
 import { transitionAssistantRun } from "./assistantRunStateMachine";
-import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import {
 	getActiveStreamForRun,
 	updateAssistantRunStream,
 } from "./assistantRunStreamState";
+import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import { saveMessageForOwnerInternal } from "./chats";
 import { syncAssistantRunToolCalls } from "./chatToolCalls";
 
@@ -43,6 +42,11 @@ const backgroundRunContextValidator = v.union(
 		job: assistantRunJobValidator,
 		execution: assistantRunExecutionValidator,
 	}),
+	v.null(),
+);
+
+const completedTitleContextValidator = v.union(
+	v.object({ ownerTokenIdentifier: v.string() }),
 	v.null(),
 );
 
@@ -189,6 +193,25 @@ export const getRunnableContext = internalQuery({
 	},
 });
 
+export const getCompletedTitleContext = internalQuery({
+	args: {
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+	},
+	returns: completedTitleContextValidator,
+	handler: async (ctx, args) => {
+		const run = await ctx.db.get(args.runId);
+		if (
+			run?.producer !== "convex" ||
+			run.status !== "completed" ||
+			run.assistantMessageId !== args.assistantMessageId
+		) {
+			return null;
+		}
+		return { ownerTokenIdentifier: run.ownerTokenIdentifier };
+	},
+});
+
 export const replaceSnapshot = internalMutation({
 	args: {
 		runId: v.id("assistantRuns"),
@@ -270,14 +293,11 @@ export const checkpointStep = internalMutation({
 				completedStepCount: args.stepIndex + 1,
 				usage: {
 					inputTokens:
-						refreshedJob.execution.usage.inputTokens +
-						args.usage.inputTokens,
+						refreshedJob.execution.usage.inputTokens + args.usage.inputTokens,
 					outputTokens:
-						refreshedJob.execution.usage.outputTokens +
-						args.usage.outputTokens,
+						refreshedJob.execution.usage.outputTokens + args.usage.outputTokens,
 					totalTokens:
-						refreshedJob.execution.usage.totalTokens +
-						args.usage.totalTokens,
+						refreshedJob.execution.usage.totalTokens + args.usage.totalTokens,
 				},
 				lastCheckpoint: {
 					stepIndex: args.stepIndex,
@@ -297,7 +317,6 @@ export const applyStepOutcome = internalMutation({
 		runId: v.id("assistantRuns"),
 		assistantMessageId: v.string(),
 		stepIndex: v.number(),
-		title: v.optional(v.string()),
 	},
 	returns: assistantRunStepOutcomeValidator,
 	handler: async (ctx, args) => {
@@ -313,14 +332,7 @@ export const applyStepOutcome = internalMutation({
 			return "completed";
 		}
 		if (checkpoint.outcome === "completed") {
-			const completed = await completeRun(ctx, run);
-			if (completed && args.title) {
-				await ctx.scheduler.runAfter(
-					0,
-					internal.chats.updateTitleForCompletedRun,
-					{ runId: run._id, title: args.title },
-				);
-			}
+			await completeRun(ctx, run);
 		} else if (checkpoint.outcome === "waiting_for_user") {
 			if (!checkpoint.pendingDecision) {
 				await transitionAssistantRun(ctx, run, {

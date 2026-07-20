@@ -1,12 +1,94 @@
-import { cleanup, vResultValidator, vWorkflowId } from "@convex-dev/workflow";
+import {
+	cleanup,
+	vResultValidator,
+	vWorkflowId,
+	type WorkflowCtx,
+} from "@convex-dev/workflow";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { transitionAssistantRun } from "./assistantRunStateMachine";
 import { assistantRunWorkflow } from "./assistantRunWorkflowManager";
 import { syncAutomationRunFromAssistant } from "./automationRunStateMachine";
 
 export const MAX_ASSISTANT_RUN_STEPS = 20;
+
+type AssistantRunWorkflowArgs = {
+	runId: Id<"assistantRuns">;
+	assistantMessageId: string;
+	startStepIndex: number;
+};
+
+export const runAssistantWorkflow = async (
+	step: WorkflowCtx,
+	args: AssistantRunWorkflowArgs,
+): Promise<null> => {
+	for (
+		let stepIndex = args.startStepIndex;
+		stepIndex < MAX_ASSISTANT_RUN_STEPS;
+		stepIndex += 1
+	) {
+		const result = await step.runAction(
+			internal.assistantRunActions.runStep,
+			{
+				runId: args.runId,
+				assistantMessageId: args.assistantMessageId,
+				stepIndex,
+			},
+			{ retry: true, name: `assistant-step-${stepIndex}` },
+		);
+		if (result.outcome === "stale") {
+			return null;
+		}
+
+		const appliedOutcome = await step.runMutation(
+			internal.assistantRunBackgroundState.applyStepOutcome,
+			{
+				runId: args.runId,
+				assistantMessageId: args.assistantMessageId,
+				stepIndex,
+			},
+			{ name: `apply-assistant-step-${stepIndex}` },
+		);
+		if (appliedOutcome === "completed" && result.titleInput) {
+			try {
+				const title = await step.runAction(
+					internal.assistantRunActions.generateTitle,
+					{
+						runId: args.runId,
+						assistantMessageId: args.assistantMessageId,
+						titleInput: result.titleInput,
+					},
+					{ retry: true, name: "generate-chat-title" },
+				);
+				if (title) {
+					await step.runMutation(
+						internal.chats.updateTitleForCompletedRun,
+						{ runId: args.runId, title },
+						{ name: "apply-generated-chat-title" },
+					);
+				}
+			} catch (error) {
+				console.error("Assistant chat title generation failed", error);
+			}
+		}
+		if (appliedOutcome !== "continue") {
+			return null;
+		}
+	}
+
+	await step.runMutation(
+		internal.assistantRunBackgroundState.reachStepLimit,
+		{
+			runId: args.runId,
+			assistantMessageId: args.assistantMessageId,
+			maxSteps: MAX_ASSISTANT_RUN_STEPS,
+		},
+		{ name: "reach-assistant-step-limit" },
+	);
+	return null;
+};
 
 export const execute = assistantRunWorkflow
 	.define({
@@ -17,66 +99,7 @@ export const execute = assistantRunWorkflow
 		},
 		returns: v.null(),
 	})
-	.handler(async (step, args): Promise<null> => {
-		for (
-			let stepIndex = args.startStepIndex;
-			stepIndex < MAX_ASSISTANT_RUN_STEPS;
-			stepIndex += 1
-		) {
-			const result = await step.runAction(
-				internal.assistantRunActions.runStep,
-				{
-					runId: args.runId,
-					assistantMessageId: args.assistantMessageId,
-					stepIndex,
-				},
-				{ retry: true, name: `assistant-step-${stepIndex}` },
-			);
-			if (result.outcome === "stale") {
-				return null;
-			}
-
-			let title: string | null = null;
-			if (result.outcome === "completed") {
-				try {
-					title = await step.runAction(
-						internal.assistantRunActions.generateTitle,
-						{
-							runId: args.runId,
-							assistantMessageId: args.assistantMessageId,
-						},
-						{ retry: true, name: "generate-chat-title" },
-					);
-				} catch (error) {
-					console.error("Assistant chat title generation failed", error);
-				}
-			}
-			const appliedOutcome = await step.runMutation(
-				internal.assistantRunBackgroundState.applyStepOutcome,
-				{
-					runId: args.runId,
-					assistantMessageId: args.assistantMessageId,
-					stepIndex,
-					title: title ?? undefined,
-				},
-				{ name: `apply-assistant-step-${stepIndex}` },
-			);
-			if (appliedOutcome !== "continue") {
-				return null;
-			}
-		}
-
-		await step.runMutation(
-			internal.assistantRunBackgroundState.reachStepLimit,
-			{
-				runId: args.runId,
-				assistantMessageId: args.assistantMessageId,
-				maxSteps: MAX_ASSISTANT_RUN_STEPS,
-			},
-			{ name: "reach-assistant-step-limit" },
-		);
-		return null;
-	});
+	.handler(runAssistantWorkflow);
 
 export const onComplete = internalMutation({
 	args: {

@@ -7,13 +7,14 @@ import {
 	createChartGenerationTool,
 } from "@workspace/ai/chart-generation-tool";
 import {
-	generateHostedChatTitle,
-	getHostedChatMessageText,
-} from "@workspace/ai/hosted-chat-runtime";
-import {
 	prepareHostedAssistantExecution,
 	startHostedAssistantExecution,
 } from "@workspace/ai/hosted-assistant-execution";
+import {
+	generateHostedChatTitle,
+	getHostedChatMessageText,
+} from "@workspace/ai/hosted-chat-runtime";
+import { createHostedRequestUserInputTool } from "@workspace/ai/hosted-user-question";
 import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
 import { getChatModelProviderOptions } from "@workspace/ai/models";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
@@ -21,19 +22,19 @@ import {
 	parseUiMessagesJson,
 	validateUiMessages,
 } from "@workspace/ai/ui-message-codec";
-import { createHostedRequestUserInputTool } from "@workspace/ai/hosted-user-question";
 import {
-	lastAssistantMessageIsCompleteWithToolCalls,
-	isStepCount,
 	type InferAgentUIMessage,
+	isStepCount,
 	type LanguageModelUsage,
+	lastAssistantMessageIsCompleteWithToolCalls,
 	type ToolSet,
 	type UIMessage,
 } from "ai";
+import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction, type ActionCtx } from "./_generated/server";
+import { type ActionCtx, internalAction } from "./_generated/server";
 import { createAssistantRunAutomationActions } from "./assistantRunAutomationActions";
 import { createAssistantRunGeneratedImageUploader } from "./assistantRunGeneratedImage";
 import type {
@@ -46,6 +47,7 @@ import { buildServerWorkspaceTools } from "./serverWorkspaceTools";
 
 const SNAPSHOT_FLUSH_INTERVAL_MS = 250;
 const BACKGROUND_STEP_TIMEOUT_MS = 9 * 60 * 1000;
+const TITLE_CONTEXT_TEXT_LIMIT = 12_000;
 
 class BackgroundRunStoppedError extends Error {
 	constructor() {
@@ -171,10 +173,10 @@ const guardExecutableTools = (
 							await args.requireActiveRun();
 							return result;
 						} catch (error) {
-							await args.runMutation(
-								internal.assistantRunToolExecutions.fail,
-								{ ...identity, errorText: getErrorText(error) },
-							);
+							await args.runMutation(internal.assistantRunToolExecutions.fail, {
+								...identity,
+								errorText: getErrorText(error),
+							});
 							throw error;
 						}
 					},
@@ -192,12 +194,50 @@ const toStepUsage = (
 	totalTokens: usage?.totalTokens ?? 0,
 });
 
+const titleGenerationInputValidator = v.object({
+	assistantText: v.string(),
+	userText: v.string(),
+});
+
+type TitleGenerationInput = Infer<typeof titleGenerationInputValidator>;
+
+const clampTitleContextText = (text: string) =>
+	text.length > TITLE_CONTEXT_TEXT_LIMIT
+		? text.slice(0, TITLE_CONTEXT_TEXT_LIMIT)
+		: text;
+
+const getTitleGenerationInput = (
+	messages: UIMessage[],
+	shouldGenerateChatTitle: boolean,
+): TitleGenerationInput | undefined => {
+	if (!shouldGenerateChatTitle) {
+		return undefined;
+	}
+	const assistantMessage = [...messages]
+		.reverse()
+		.find((message) => message.role === "assistant");
+	const userMessage = [...messages]
+		.reverse()
+		.find((message) => message.role === "user");
+	if (!assistantMessage || !userMessage) {
+		return undefined;
+	}
+	return {
+		assistantText: clampTitleContextText(
+			getHostedChatMessageText(assistantMessage),
+		),
+		userText: clampTitleContextText(getHostedChatMessageText(userMessage)),
+	};
+};
+
 const actionResultValidator = v.object({
 	outcome: v.union(assistantRunStepOutcomeValidator, v.literal("stale")),
+	titleInput: v.optional(titleGenerationInputValidator),
 });
 
 type AssistantRunStepActionResult = {
 	outcome: AssistantRunStepOutcome | "stale";
+	titleInput?: TitleGenerationInput;
 };
 
 export const runStep = internalAction({
@@ -217,7 +257,16 @@ export const runStep = internalAction({
 		}
 		const existingCheckpoint = context.execution.lastCheckpoint;
 		if (existingCheckpoint?.stepIndex === args.stepIndex) {
-			return { outcome: existingCheckpoint.outcome };
+			return {
+				outcome: existingCheckpoint.outcome,
+				titleInput:
+					existingCheckpoint.outcome === "completed"
+						? getTitleGenerationInput(
+								await parseMessages(context.job),
+								context.job.shouldGenerateChatTitle === true,
+							)
+						: undefined,
+			};
 		}
 		if (context.execution.completedStepCount !== args.stepIndex) {
 			return { outcome: "stale" } as const;
@@ -388,7 +437,18 @@ export const runStep = internalAction({
 							: undefined,
 				},
 			);
-			return { outcome: checkpointed ? outcome : "stale" };
+			return checkpointed
+				? {
+						outcome,
+						titleInput:
+							outcome === "completed"
+								? getTitleGenerationInput(
+										[...messages, responseMessage],
+										context.job.shouldGenerateChatTitle === true,
+									)
+								: undefined,
+					}
+				: { outcome: "stale" };
 		} catch (error) {
 			if (error instanceof BackgroundRunStoppedError) {
 				return { outcome: "stale" } as const;
@@ -402,32 +462,34 @@ export const generateTitle = internalAction({
 	args: {
 		runId: v.id("assistantRuns"),
 		assistantMessageId: v.string(),
+		titleInput: titleGenerationInputValidator,
 	},
 	returns: v.union(v.string(), v.null()),
 	handler: async (ctx, args): Promise<string | null> => {
 		const context = await ctx.runQuery(
-			internal.assistantRunBackgroundState.getRunnableContext,
-			args,
+			internal.assistantRunBackgroundState.getCompletedTitleContext,
+			{
+				runId: args.runId,
+				assistantMessageId: args.assistantMessageId,
+			},
 		);
-		if (!context?.job.shouldGenerateChatTitle) {
-			return null;
-		}
-		const messages = await parseMessages(context.job);
-		const assistantMessage = [...messages]
-			.reverse()
-			.find((message) => message.role === "assistant");
-		const userMessage = [...messages]
-			.reverse()
-			.find((message) => message.role === "user");
-		if (!assistantMessage || !userMessage) {
+		if (!context) {
 			return null;
 		}
 		return await generateHostedChatTitle({
-			assistantMessage,
+			assistantMessage: {
+				id: `${args.assistantMessageId}:title-assistant`,
+				role: "assistant",
+				parts: [{ type: "text", text: args.titleInput.assistantText }],
+			},
 			safetyIdentifier: await createSafetyIdentifier(
 				context.ownerTokenIdentifier,
 			),
-			userMessage,
+			userMessage: {
+				id: `${args.assistantMessageId}:title-user`,
+				role: "user",
+				parts: [{ type: "text", text: args.titleInput.userText }],
+			},
 		});
 	},
 });
