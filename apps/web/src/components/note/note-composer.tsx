@@ -452,7 +452,6 @@ const useNoteComposerController = ({
 		],
 	);
 	const activeWorkspaceId = useActiveWorkspaceId();
-	const previousNoteIdRef = React.useRef(noteId);
 	const userPreferences = useQuery(api.userPreferences.get, {});
 	const {
 		activeRun,
@@ -967,38 +966,6 @@ const useNoteComposerController = ({
 			);
 		});
 	}, [closeComposerPopovers, closeRightSidebar, setPanelMode]);
-
-	const resetComposerForNoteChange = React.useCallback(() => {
-		startDraftChat();
-		setMessages([]);
-		setEditingMessageId(null);
-		setAttachedFiles([]);
-		setPanelMode(null);
-		setRecipePopoverOpen(false);
-		resetTextareaHeight();
-		closeRightSidebar();
-	}, [
-		closeRightSidebar,
-		resetTextareaHeight,
-		setMessages,
-		setPanelMode,
-		startDraftChat,
-	]);
-
-	React.useEffect(() => {
-		if (previousNoteIdRef.current === noteId) {
-			return;
-		}
-
-		previousNoteIdRef.current = noteId;
-
-		if (canStop) {
-			handleStop();
-		}
-
-		resetComposerForNoteChange();
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [canStop, handleStop, noteId, resetComposerForNoteChange]);
 
 	React.useEffect(() => {
 		if (

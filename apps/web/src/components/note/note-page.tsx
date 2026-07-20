@@ -70,6 +70,7 @@ import {
 	type PendingNoteCommentSelection,
 } from "./note-comments-sheet";
 import { NoteComposer } from "./note-composer";
+import type { NoteEditorActionsStore } from "./note-editor-actions-store";
 import { NOTE_PAGE_VIEWPORT_MIN_HEIGHT_CLASS } from "./note-layout";
 import { OPEN_NOTE_COMMENTS_EVENT } from "./note-page-events";
 import { NoteSelectionMenu } from "./note-selection-menu";
@@ -116,19 +117,6 @@ const areTableOfContentsEqual = (
 	);
 };
 
-export type NoteEditorActions = {
-	canCopyMarkdown: boolean;
-	canUndo: boolean;
-	canRedo: boolean;
-	canShowTemplateSelect: boolean;
-	copyMarkdown: () => Promise<void>;
-	undo: () => void;
-	redo: () => void;
-	exportMarkdown: () => Promise<void>;
-	applyTemplate: (template: NoteTemplate) => Promise<boolean>;
-	openComments: () => void;
-};
-
 type NotePageCurrentUser = {
 	name: string;
 	email: string;
@@ -140,7 +128,7 @@ const useNotePageController = ({
 	note,
 	externalTitle,
 	onTitleChange,
-	onEditorActionsChange,
+	editorActionsStore,
 	scrollParentRef,
 	onCommentThreadClick,
 	onOpenComments,
@@ -149,7 +137,7 @@ const useNotePageController = ({
 	note?: Doc<"notes"> | null;
 	externalTitle?: string;
 	onTitleChange?: (title: string) => void;
-	onEditorActionsChange?: (actions: NoteEditorActions | null) => void;
+	editorActionsStore?: NoteEditorActionsStore;
 	scrollParentRef?: React.RefObject<HTMLDivElement | null>;
 	onCommentThreadClick?: (threadId: string) => void;
 	onOpenComments?: () => void;
@@ -768,7 +756,7 @@ const useNotePageController = ({
 		if (!noteId || !editor) {
 			publishedEditorActionsRef.current = null;
 			publishEditorActionsRef.current = null;
-			onEditorActionsChange?.(null);
+			editorActionsStore?.set(null);
 			return;
 		}
 
@@ -799,7 +787,7 @@ const useNotePageController = ({
 			}
 
 			publishedEditorActionsRef.current = nextActions;
-			onEditorActionsChange?.({
+			editorActionsStore?.set({
 				...nextActions,
 				copyMarkdown: copyText,
 				undo,
@@ -822,10 +810,10 @@ const useNotePageController = ({
 	}, [
 		applyTemplate,
 		copyText,
+		editorActionsStore,
 		editor,
 		exportNote,
 		noteId,
-		onEditorActionsChange,
 		onOpenComments,
 		redo,
 		undo,
@@ -1690,7 +1678,7 @@ export type NotePageProps = {
 	onCommentsOpenChange?: (opener: (() => void) | null) => void;
 	isDesktopMac?: boolean;
 	onTitleChange?: (title: string) => void;
-	onEditorActionsChange?: (actions: NoteEditorActions | null) => void;
+	editorActionsStore?: NoteEditorActionsStore;
 	scrollParentRef?: React.RefObject<HTMLDivElement | null>;
 	stopTranscriptionWhenMeetingEnds?: boolean;
 };
@@ -1710,7 +1698,7 @@ export function NotePage({
 	onCommentsOpenChange,
 	isDesktopMac = false,
 	onTitleChange,
-	onEditorActionsChange,
+	editorActionsStore,
 	scrollParentRef,
 	stopTranscriptionWhenMeetingEnds = false,
 }: NotePageProps) {
@@ -1725,7 +1713,7 @@ export function NotePage({
 		note,
 		externalTitle,
 		onTitleChange,
-		onEditorActionsChange,
+		editorActionsStore,
 		scrollParentRef,
 		onCommentThreadClick: commentPanel.handleCommentThreadClick,
 		onOpenComments: commentPanel.handleOpenComments,

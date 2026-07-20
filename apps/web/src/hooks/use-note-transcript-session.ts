@@ -387,7 +387,6 @@ export const useNoteTranscriptSession = ({
 				latestServerTranscript,
 				latestSession,
 			});
-			setActiveTranscriptSessionId(null);
 			setTranscriptUtterances(hydration.utterances);
 			setPendingGenerateTranscript(hydration.pendingGenerateTranscript);
 		},

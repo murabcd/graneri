@@ -29,21 +29,23 @@ export const deliverAutomationNotifications = async ({
 	}) => Promise<boolean>;
 	onError: (error: unknown) => void;
 }) => {
-	for (const { leaseToken, ...notification } of notifications) {
-		try {
-			if (await showNotification(notification)) {
-				const acknowledged = await acknowledgeNotification({
-					runId: notification.runId,
-					leaseToken,
-				});
-				if (!acknowledged) {
-					throw new Error(
-						"Automation notification lease was not acknowledged.",
-					);
+	await Promise.all(
+		notifications.map(async ({ leaseToken, ...notification }) => {
+			try {
+				if (await showNotification(notification)) {
+					const acknowledged = await acknowledgeNotification({
+						runId: notification.runId,
+						leaseToken,
+					});
+					if (!acknowledged) {
+						throw new Error(
+							"Automation notification lease was not acknowledged.",
+						);
+					}
 				}
+			} catch (error) {
+				onError(error);
 			}
-		} catch (error) {
-			onError(error);
-		}
-	}
+		}),
+	);
 };

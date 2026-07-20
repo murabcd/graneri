@@ -66,6 +66,12 @@ const CUSTOM_FREQUENCIES = [
 	{ value: "yearly", label: "Yearly", singular: "year", plural: "years" },
 ] as const;
 
+const automationDateLabelFormatter = new Intl.DateTimeFormat(undefined, {
+	day: "numeric",
+	month: "short",
+	year: "numeric",
+});
+
 const parseLocalDate = (value: string) => {
 	const [year, month, day] = value.split("-").map(Number);
 	if (!year || !month || !day) {
@@ -83,13 +89,7 @@ const formatLocalDate = (date: Date) => {
 
 const formatDateLabel = (value: string) => {
 	const date = parseLocalDate(value);
-	return date
-		? new Intl.DateTimeFormat(undefined, {
-				day: "numeric",
-				month: "short",
-				year: "numeric",
-			}).format(date)
-		: "Choose date";
+	return date ? automationDateLabelFormatter.format(date) : "Choose date";
 };
 
 function AutomationDatePicker({
@@ -145,9 +145,13 @@ function AutomationWeekdayPicker({
 	value: number[];
 	onChange: (value: number[]) => void;
 }) {
-	const label = WEEKDAY_OPTIONS.filter((day) => value.includes(day.value))
-		.map((day) => day.label)
-		.join(", ");
+	const selectedWeekdays = new Set(value);
+	const label = WEEKDAY_OPTIONS.reduce<string[]>((labels, day) => {
+		if (selectedWeekdays.has(day.value)) {
+			labels.push(day.label);
+		}
+		return labels;
+	}, []).join(", ");
 
 	return (
 		<DropdownMenu>
@@ -167,7 +171,7 @@ function AutomationWeekdayPicker({
 			<DropdownMenuContent align="start" className="w-56">
 				<DropdownMenuGroup>
 					{WEEKDAY_OPTIONS.map((day) => {
-						const checked = value.includes(day.value);
+						const checked = selectedWeekdays.has(day.value);
 						return (
 							<DropdownMenuCheckboxItem
 								key={day.value}

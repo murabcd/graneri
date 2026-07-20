@@ -17,6 +17,40 @@ const notification = (
 });
 
 describe("automation notification delivery", () => {
+	it("starts independent deliveries concurrently", async () => {
+		let releaseFirstDelivery = () => {};
+		const firstDelivery = new Promise<void>((resolve) => {
+			releaseFirstDelivery = resolve;
+		});
+		const showNotification = vi.fn(async ({ runId }: { runId: string }) => {
+			if (runId === "run-one") {
+				await firstDelivery;
+			}
+			return true;
+		});
+		const acknowledgeNotification = vi.fn().mockResolvedValue(true);
+		const onError = vi.fn();
+
+		const delivery = deliverAutomationNotifications({
+			notifications: [
+				notification("run-one", "lease-one"),
+				notification("run-two", "lease-two"),
+			],
+			showNotification,
+			acknowledgeNotification,
+			onError,
+		});
+
+		await vi.waitFor(() => {
+			expect(showNotification).toHaveBeenCalledTimes(2);
+		});
+		releaseFirstDelivery();
+		await delivery;
+
+		expect(acknowledgeNotification).toHaveBeenCalledTimes(2);
+		expect(onError).not.toHaveBeenCalled();
+	});
+
 	it("acknowledges only notifications confirmed by the desktop adapter", async () => {
 		const showNotification = vi
 			.fn()

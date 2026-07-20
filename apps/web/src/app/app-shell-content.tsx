@@ -18,7 +18,7 @@ import { ProjectView } from "@/app/project-view";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { AutomationsPageEntry } from "@/components/automations/automations-page-entry";
 import { ChatPageEntry } from "@/components/chat/chat-page-entry";
-import type { NoteEditorActions } from "@/components/note/note-page";
+import type { NoteEditorActionsStore } from "@/components/note/note-editor-actions-store";
 import { NotePageEntry } from "@/components/note/note-page-entry";
 import type { ChatPluginPrefill } from "@/lib/chat-plugin-prefill";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -85,7 +85,7 @@ export type AppShellContentView =
 			isDesktopMac: boolean;
 			onAutoStartNoteCaptureHandled: () => void;
 			onNoteCommentsOpenChange: (opener: (() => void) | null) => void;
-			onNoteEditorActionsChange: (actions: NoteEditorActions | null) => void;
+			noteEditorActionsStore: NoteEditorActionsStore;
 			onNoteTitleChange: (title: string) => void;
 			shouldAutoStartNoteCapture: boolean;
 			shouldStopNoteCaptureWhenMeetingEnds: boolean;
@@ -233,7 +233,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 					onAutoStartTranscriptionHandled={view.onAutoStartNoteCaptureHandled}
 					onCommentsOpenChange={view.onNoteCommentsOpenChange}
 					onTitleChange={view.onNoteTitleChange}
-					onEditorActionsChange={view.onNoteEditorActionsChange}
+					editorActionsStore={view.noteEditorActionsStore}
 					scrollParentRef={noteViewScrollRef}
 					stopTranscriptionWhenMeetingEnds={
 						view.shouldStopNoteCaptureWhenMeetingEnds

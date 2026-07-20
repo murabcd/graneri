@@ -114,7 +114,10 @@ import {
 	NoteActionsMenu,
 	NoteStarButton,
 } from "@/components/note/note-actions-menu";
-import type { NoteEditorActions } from "@/components/note/note-page";
+import {
+	type NoteEditorActions,
+	NoteEditorActionsStore,
+} from "@/components/note/note-editor-actions-store";
 import { OPEN_NOTE_COMMENTS_EVENT } from "@/components/note/note-page-events";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
 import { optimisticRenameNote } from "@/components/note/optimistic-rename-note";
@@ -281,8 +284,15 @@ const useAppShellState = ({
 			noteId: Id<"notes"> | null;
 			title: string;
 		} | null>(null);
-	const [currentNoteEditorActions, setCurrentNoteEditorActions] =
-		React.useState<NoteEditorActions | null>(null);
+	const [noteEditorActionsStore] = React.useState(
+		() => new NoteEditorActionsStore(),
+	);
+	const currentNoteEditorActions = React.useSyncExternalStore(
+		noteEditorActionsStore.subscribe,
+		noteEditorActionsStore.getSnapshot,
+		noteEditorActionsStore.getSnapshot,
+	);
+	const setCurrentNoteEditorActions = noteEditorActionsStore.set;
 	const [currentNoteCommentsOpener, setCurrentNoteCommentsOpener] =
 		React.useState<(() => void) | null>(null);
 	const handleLocationSynchronized = React.useCallback(() => {
@@ -291,7 +301,7 @@ const useAppShellState = ({
 		setAutomationChatId(null);
 		setCurrentNoteEditorActions(null);
 		setCurrentNoteCommentsOpener(null);
-	}, []);
+	}, [setCurrentNoteEditorActions]);
 	const navigation = useApplicationNavigationSession({
 		onLocationSynchronized: handleLocationSynchronized,
 	});
@@ -759,7 +769,7 @@ const useAppShellState = ({
 				}
 			});
 		},
-		[navigateChat],
+		[navigateChat, setCurrentNoteEditorActions],
 	);
 
 	const openFreshChat = React.useCallback(() => {
@@ -796,7 +806,7 @@ const useAppShellState = ({
 				setCurrentNoteCommentsOpener(null);
 			});
 		},
-		[navigateProject],
+		[navigateProject, setCurrentNoteEditorActions],
 	);
 
 	const editingAutomation = React.useMemo(
@@ -920,7 +930,7 @@ const useAppShellState = ({
 			setCurrentNoteEditorActions(null);
 			setCurrentNoteCommentsOpener(null);
 		},
-		[navigateView, openDraftChat],
+		[navigateView, openDraftChat, setCurrentNoteEditorActions],
 	);
 
 	const handleInboxOpenChange = React.useCallback(
@@ -959,7 +969,7 @@ const useAppShellState = ({
 			setCurrentNoteEditorActions(null);
 			setCurrentNoteCommentsOpener(null);
 		},
-		[handlePrefetchNote, navigateNote],
+		[handlePrefetchNote, navigateNote, setCurrentNoteEditorActions],
 	);
 
 	const handleCreateNote = React.useCallback(
@@ -1052,7 +1062,7 @@ const useAppShellState = ({
 		});
 		setCurrentNoteEditorActions(null);
 		setCurrentNoteCommentsOpener(null);
-	}, [navigateNote]);
+	}, [navigateNote, setCurrentNoteEditorActions]);
 
 	const handleCreateNoteFromChatResponse = React.useCallback(
 		async (title: string, content: string) => {
@@ -1277,7 +1287,7 @@ const useAppShellState = ({
 			handleViewChange("home");
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[handleViewChange, resolvedCurrentNoteId],
+		[handleViewChange, resolvedCurrentNoteId, setCurrentNoteEditorActions],
 	);
 	const handlePrefetchChat = React.useCallback(
 		(chatId: string) => {
@@ -1467,6 +1477,7 @@ const useAppShellState = ({
 		handleAutomationDialogOpenChange,
 		setCurrentNoteCommentsOpener,
 		setCurrentNoteEditorActions,
+		noteEditorActionsStore,
 		setCurrentNoteTitle,
 		sharedNotes,
 		shouldAutoStartNoteCapture,
@@ -2486,7 +2497,7 @@ function createAppShellContentView({
 			onAutoStartNoteCaptureHandled:
 				controller.handleAutoStartNoteCaptureHandled,
 			onNoteCommentsOpenChange: handleNoteCommentsOpenChange,
-			onNoteEditorActionsChange: controller.setCurrentNoteEditorActions,
+			noteEditorActionsStore: controller.noteEditorActionsStore,
 			onNoteTitleChange: controller.setCurrentNoteTitle,
 			shouldAutoStartNoteCapture: controller.shouldAutoStartNoteCapture,
 			shouldStopNoteCaptureWhenMeetingEnds:
