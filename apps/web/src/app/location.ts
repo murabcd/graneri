@@ -1,4 +1,10 @@
-import type { AppLocationState, UpcomingCalendarEvent } from "@/app/app-types";
+import type {
+	AppCanonicalPath,
+	AppLocationState,
+	AppView,
+	NavigableAppView,
+	UpcomingCalendarEvent,
+} from "@/app/app-types";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { isSameCalendarDay } from "@/lib/calendar-day";
 
@@ -25,6 +31,38 @@ const SETTINGS_SLUG_BY_PAGE: Record<SettingsPage, string> = {
 	Calendar: "calendar",
 	Plugins: "plugins",
 	"Data controls": "data-controls",
+};
+
+const APP_VIEW_BY_PATH: Record<string, NavigableAppView> = {
+	"/": "home",
+	"/automations": "automation",
+	"/calendar": "calendar",
+	"/chat": "chat",
+	"/home": "home",
+	"/inbox": "inbox",
+	"/note": "note",
+	"/project": "project",
+	"/shared": "shared",
+};
+
+const APP_VIEW_BY_HASH: Record<string, NavigableAppView> = {
+	"#automations": "automation",
+	"#chat": "chat",
+	"#inbox": "inbox",
+	"#note": "note",
+	"#project": "project",
+	"#shared": "shared",
+};
+
+const CANONICAL_PATH_BY_VIEW: Record<NavigableAppView, AppCanonicalPath> = {
+	automation: "/automations",
+	calendar: "/calendar",
+	chat: "/chat",
+	home: "/home",
+	inbox: "/inbox",
+	note: "/note",
+	project: "/project",
+	shared: "/shared",
 };
 
 const WELCOME_FIREWORK_COLOR_VARIABLES = [
@@ -56,10 +94,17 @@ const appendCalendarEventSearchParams = ({
 	searchParams.set("calendarEventId", event.id);
 	searchParams.set("calendarId", event.calendarId);
 	searchParams.set("calendarName", event.calendarName);
+	searchParams.set("calendarProvider", event.provider);
+	searchParams.set("providerEventId", event.providerEventId);
 	searchParams.set("eventTitle", event.title);
 	searchParams.set("startAt", event.startAt);
 	searchParams.set("endAt", event.endAt);
 	searchParams.set("isAllDay", event.isAllDay ? "1" : "0");
+	searchParams.set("isRecurring", event.isRecurring ? "1" : "0");
+
+	if (event.recurrenceId) {
+		searchParams.set("recurrenceId", event.recurrenceId);
+	}
 
 	if (event.meetingUrl?.trim()) {
 		searchParams.set("meetingUrl", event.meetingUrl);
@@ -275,11 +320,22 @@ const getPendingCalendarEventFromUrl = (
 	const id = url.searchParams.get("calendarEventId")?.trim();
 	const calendarId = url.searchParams.get("calendarId")?.trim();
 	const calendarName = url.searchParams.get("calendarName")?.trim();
+	const provider = url.searchParams.get("calendarProvider")?.trim();
+	const providerEventId = url.searchParams.get("providerEventId")?.trim();
 	const title = url.searchParams.get("eventTitle")?.trim();
 	const startAt = url.searchParams.get("startAt")?.trim();
 	const endAt = url.searchParams.get("endAt")?.trim();
 
-	if (!id || !calendarId || !calendarName || !title || !startAt || !endAt) {
+	if (
+		!id ||
+		!calendarId ||
+		!calendarName ||
+		(provider !== "google" && provider !== "yandex") ||
+		!providerEventId ||
+		!title ||
+		!startAt ||
+		!endAt
+	) {
 		return null;
 	}
 
@@ -292,9 +348,13 @@ const getPendingCalendarEventFromUrl = (
 		endAt,
 		isAllDay: url.searchParams.get("isAllDay") === "1",
 		isMeeting: true,
+		isRecurring: url.searchParams.get("isRecurring") === "1",
 		htmlLink: url.searchParams.get("htmlLink")?.trim() || undefined,
 		location: url.searchParams.get("location")?.trim() || undefined,
 		meetingUrl: url.searchParams.get("meetingUrl")?.trim() || undefined,
+		provider,
+		providerEventId,
+		recurrenceId: url.searchParams.get("recurrenceId")?.trim() || undefined,
 	};
 };
 
@@ -386,39 +446,9 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 	const projectIdString = getProjectIdStringFromUrl(url);
 	const hashView =
 		pathname === "/" || pathname === "/home"
-			? url.hash === "#note"
-				? "note"
-				: url.hash === "#chat"
-					? "chat"
-					: url.hash === "#automations"
-						? "automation"
-						: url.hash === "#inbox"
-							? "inbox"
-							: url.hash === "#shared"
-								? "shared"
-								: url.hash === "#project"
-									? "project"
-									: null
-			: null;
-	const pathView =
-		pathname === "/"
-			? "home"
-			: pathname === "/home"
-				? "home"
-				: pathname === "/note"
-					? "note"
-					: pathname === "/chat"
-						? "chat"
-						: pathname === "/automations"
-							? "automation"
-							: pathname === "/inbox"
-								? "inbox"
-								: pathname === "/shared"
-									? "shared"
-									: pathname === "/project"
-										? "project"
-										: null;
-	const view = hashView ?? pathView;
+			? APP_VIEW_BY_HASH[url.hash]
+			: undefined;
+	const view = hashView ?? APP_VIEW_BY_PATH[pathname] ?? null;
 
 	if (view === null) {
 		return {
@@ -463,20 +493,7 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 		shouldStopNoteCaptureWhenMeetingEnds,
 		scheduledAutoStartNoteCaptureAt,
 		pendingCalendarEvent,
-		canonicalPath:
-			view === "home"
-				? "/home"
-				: view === "chat"
-					? "/chat"
-					: view === "automation"
-						? "/automations"
-						: view === "inbox"
-							? "/inbox"
-							: view === "shared"
-								? "/shared"
-								: view === "project"
-									? "/project"
-									: "/note",
+		canonicalPath: CANONICAL_PATH_BY_VIEW[view],
 		canonicalSearch:
 			view === "note"
 				? createNoteSearch({
@@ -493,6 +510,26 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 						? `?projectId=${encodeURIComponent(projectIdString)}`
 						: "",
 	};
+};
+
+export const getAppViewLocation = ({
+	noteIdString,
+	projectIdString,
+	view,
+}: {
+	noteIdString: string | null;
+	projectIdString: string | null;
+	view: AppView;
+}) => {
+	if (view === "note" && noteIdString) {
+		return `/note?noteId=${encodeURIComponent(noteIdString)}`;
+	}
+
+	if (view === "project" && projectIdString) {
+		return `/project?projectId=${encodeURIComponent(projectIdString)}`;
+	}
+
+	return view === "notFound" ? "/home" : CANONICAL_PATH_BY_VIEW[view];
 };
 
 export const shouldAutoStartNoteCaptureFromUrl = (url: URL) =>

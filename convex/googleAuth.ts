@@ -5,6 +5,10 @@ import { createResourceAccess } from "./domain";
 
 export const GOOGLE_CALENDAR_SCOPE =
 	"https://www.googleapis.com/auth/calendar.readonly";
+export const GOOGLE_CALENDAR_WRITE_SCOPE =
+	"https://www.googleapis.com/auth/calendar.events";
+export const GOOGLE_CALENDAR_MANAGE_SCOPE =
+	"https://www.googleapis.com/auth/calendar.app.created";
 export const GOOGLE_DRIVE_SCOPE =
 	"https://www.googleapis.com/auth/drive.readonly";
 
@@ -95,12 +99,15 @@ export const refreshGoogleAccessToken = async (
 	}
 };
 
-export const fetchGoogleJson = async <T>(
+const fetchGoogleResponse = async (
 	accessToken: string,
 	url: URL,
-): Promise<T> => {
+	init?: RequestInit,
+): Promise<Response> => {
 	const response = await fetch(url, {
+		...init,
 		headers: {
+			...init?.headers,
 			Authorization: `Bearer ${accessToken}`,
 		},
 	});
@@ -114,16 +121,26 @@ export const fetchGoogleJson = async <T>(
 		throw error;
 	}
 
+	return response;
+};
+
+export const fetchGoogleJson = async <T>(
+	accessToken: string,
+	url: URL,
+	init?: RequestInit,
+): Promise<T> => {
+	const response = await fetchGoogleResponse(accessToken, url, init);
 	return (await response.json()) as T;
 };
 
-export const fetchGoogleJsonWithRetry = async <T>(
+export const fetchGoogleResponseWithRetry = async (
 	authContext: GoogleAuthContext,
 	initialTokens: GoogleAccessTokenResult,
 	url: URL,
+	init?: RequestInit,
 ) => {
 	try {
-		return await fetchGoogleJson<T>(initialTokens.accessToken, url);
+		return await fetchGoogleResponse(initialTokens.accessToken, url, init);
 	} catch (error) {
 		if (
 			!(error instanceof Error) ||
@@ -138,6 +155,21 @@ export const fetchGoogleJsonWithRetry = async <T>(
 			throw error;
 		}
 
-		return await fetchGoogleJson<T>(refreshedTokens.accessToken, url);
+		return await fetchGoogleResponse(refreshedTokens.accessToken, url, init);
 	}
+};
+
+export const fetchGoogleJsonWithRetry = async <T>(
+	authContext: GoogleAuthContext,
+	initialTokens: GoogleAccessTokenResult,
+	url: URL,
+	init?: RequestInit,
+) => {
+	const response = await fetchGoogleResponseWithRetry(
+		authContext,
+		initialTokens,
+		url,
+		init,
+	);
+	return (await response.json()) as T;
 };

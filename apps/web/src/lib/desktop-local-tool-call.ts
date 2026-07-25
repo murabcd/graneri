@@ -92,15 +92,16 @@ const executeDesktopLocalToolCall = async ({
 			input: toolCall.input,
 		}),
 	});
-	const payload = (await response.json().catch(() => ({}))) as {
-		error?: string;
-		output?: unknown;
-	};
-
 	if (!response.ok) {
-		throw new Error(payload.error || "Local tool execution failed.");
+		const errorPayload = (await response.json().catch(() => ({}))) as {
+			error?: string;
+		};
+		throw new Error(errorPayload.error || "Local tool execution failed.");
 	}
 
+	const payload = (await response.json().catch(() => ({}))) as {
+		output?: unknown;
+	};
 	return payload.output;
 };
 

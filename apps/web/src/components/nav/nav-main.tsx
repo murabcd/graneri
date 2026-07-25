@@ -10,12 +10,13 @@ import * as React from "react";
 import { SidebarCollapsibleGroup } from "@/components/nav/sidebar-collapsible-group";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
 import { useApplicationCommand } from "@/lib/application-command";
+import type { SidebarView } from "@/lib/navigation";
 
 type NavItem = {
 	title: string;
 	icon: LucideIcon;
 	action: "search" | "view" | "inbox" | "disabled";
-	view?: "home" | "chat" | "automation" | "shared";
+	view?: SidebarView;
 	isActive?: boolean;
 	badge?: number;
 };
@@ -53,7 +54,7 @@ export function NavPlatform({
 }: {
 	className?: string;
 	items: NavItem[];
-	onViewChange: (view: "home" | "chat" | "automation" | "shared") => void;
+	onViewChange: (view: SidebarView) => void;
 	onInboxToggle: () => void;
 }) {
 	const viewItems = items.filter((item) => item.action !== "search");

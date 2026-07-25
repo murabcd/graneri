@@ -51,6 +51,8 @@ import type * as automationValidators from "../automationValidators.js";
 import type * as automations from "../automations.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarPreferences from "../calendarPreferences.js";
+import type * as calendarTypes from "../calendarTypes.js";
+import type * as calendarValidators from "../calendarValidators.js";
 import type * as chatAttachmentReferences from "../chatAttachmentReferences.js";
 import type * as chatAttachments from "../chatAttachments.js";
 import type * as chatBranches from "../chatBranches.js";
@@ -66,6 +68,7 @@ import type * as dictationStorage from "../dictationStorage.js";
 import type * as documentSize from "../documentSize.js";
 import type * as domain from "../domain.js";
 import type * as googleAuth from "../googleAuth.js";
+import type * as googleCalendar from "../googleCalendar.js";
 import type * as googleTools from "../googleTools.js";
 import type * as http from "../http.js";
 import type * as inboxItems from "../inboxItems.js";
@@ -91,6 +94,9 @@ import type * as trash from "../trash.js";
 import type * as userPreferences from "../userPreferences.js";
 import type * as workspaces from "../workspaces.js";
 import type * as yandexCalendar from "../yandexCalendar.js";
+import type * as yandexCalendarIcs from "../yandexCalendarIcs.js";
+import type * as yandexCalendarIcsWriter from "../yandexCalendarIcsWriter.js";
+import type * as yandexCalendarTypes from "../yandexCalendarTypes.js";
 import type * as zoomOAuth from "../zoomOAuth.js";
 
 import type {
@@ -143,6 +149,8 @@ declare const fullApi: ApiFromModules<{
   automations: typeof automations;
   calendar: typeof calendar;
   calendarPreferences: typeof calendarPreferences;
+  calendarTypes: typeof calendarTypes;
+  calendarValidators: typeof calendarValidators;
   chatAttachmentReferences: typeof chatAttachmentReferences;
   chatAttachments: typeof chatAttachments;
   chatBranches: typeof chatBranches;
@@ -158,6 +166,7 @@ declare const fullApi: ApiFromModules<{
   documentSize: typeof documentSize;
   domain: typeof domain;
   googleAuth: typeof googleAuth;
+  googleCalendar: typeof googleCalendar;
   googleTools: typeof googleTools;
   http: typeof http;
   inboxItems: typeof inboxItems;
@@ -183,6 +192,9 @@ declare const fullApi: ApiFromModules<{
   userPreferences: typeof userPreferences;
   workspaces: typeof workspaces;
   yandexCalendar: typeof yandexCalendar;
+  yandexCalendarIcs: typeof yandexCalendarIcs;
+  yandexCalendarIcsWriter: typeof yandexCalendarIcsWriter;
+  yandexCalendarTypes: typeof yandexCalendarTypes;
   zoomOAuth: typeof zoomOAuth;
 }>;
 

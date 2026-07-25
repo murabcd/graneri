@@ -5,126 +5,56 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action } from "./_generated/server";
+import type {
+	CalendarEventDetailsInput,
+	CalendarEventsFetchResult,
+	CalendarSource,
+	UpcomingCalendarEvent,
+	UpdateCalendarEventInput,
+} from "./calendarTypes";
 import {
-	fetchGoogleJsonWithRetry,
-	GOOGLE_CALENDAR_SCOPE,
-	type GoogleAuthContext,
-	getGoogleAccessToken,
-	getGoogleAuthContext,
-} from "./googleAuth";
-import { listYandexUpcomingEvents } from "./yandexCalendar";
+	calendarEventsResponseValidator,
+	calendarEventTimeValidator,
+	calendarProviderValidator,
+	calendarToolResponseValidator,
+	upcomingEventsResponseValidator,
+} from "./calendarValidators";
+import { getGoogleAuthContext } from "./googleAuth";
+import {
+	createGoogleCalendar,
+	createGoogleCalendarEvent,
+	deleteGoogleCalendarEvent,
+	fetchGoogleCalendarEvents,
+	updateGoogleCalendarEvent,
+} from "./googleCalendar";
+import {
+	createYandexCalendar,
+	createYandexCalendarEvent,
+	deleteYandexCalendarEvent,
+	listYandexUpcomingEvents,
+	updateYandexCalendarEvent,
+} from "./yandexCalendar";
 
 const UPCOMING_EVENTS_LIMIT = 12;
+const CALENDAR_EVENTS_LIMIT = 250;
+const CALENDAR_VIEW_MAX_WINDOW_MS = 62 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_EVENT_LIMIT = 10;
 const CALENDAR_TOOL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
-
-const upcomingCalendarEventValidator = v.object({
-	id: v.string(),
-	calendarId: v.string(),
-	calendarName: v.string(),
-	title: v.string(),
-	startAt: v.string(),
-	endAt: v.string(),
-	isAllDay: v.boolean(),
-	isMeeting: v.boolean(),
-	htmlLink: v.optional(v.string()),
-	meetingUrl: v.optional(v.string()),
-	location: v.optional(v.string()),
-});
-
-const upcomingEventsResponseValidator = v.union(
-	v.object({
-		status: v.literal("not_connected"),
-		events: v.array(upcomingCalendarEventValidator),
-	}),
-	v.object({
-		status: v.literal("ready"),
-		events: v.array(upcomingCalendarEventValidator),
-		connectedCalendarCount: v.number(),
-	}),
-);
-
-const calendarToolSourceValidator = v.object({
-	type: v.literal("url"),
-	url: v.string(),
-	title: v.string(),
-});
-
-const calendarToolResponseValidator = v.object({
-	connection: v.string(),
-	events: v.array(upcomingCalendarEventValidator),
-	sources: v.array(calendarToolSourceValidator),
-});
-
-type GoogleCalendarListResponse = {
-	items?: GoogleCalendarListEntry[];
-};
-
-type GoogleCalendarListEntry = {
-	id: string;
-	summary?: string;
-	primary?: boolean;
-	selected?: boolean;
-	hidden?: boolean;
-	accessRole?: string;
-};
-
-type GoogleCalendarEventsResponse = {
-	items?: GoogleCalendarEvent[];
-};
-
-type GoogleCalendarEvent = {
-	id: string;
-	iCalUID?: string;
-	summary?: string;
-	status?: string;
-	htmlLink?: string;
-	hangoutLink?: string;
-	location?: string;
-	eventType?: string;
-	start?: GoogleCalendarDateTime;
-	end?: GoogleCalendarDateTime;
-	attendees?: Array<{
-		self?: boolean;
-		responseStatus?: string;
-	}>;
-	conferenceData?: {
-		entryPoints?: Array<{
-			entryPointType?: string;
-			uri?: string;
-		}>;
-	};
-};
-
-type GoogleCalendarDateTime = {
-	date?: string;
-	dateTime?: string;
-};
-
-type UpcomingCalendarEvent = {
-	id: string;
-	calendarId: string;
-	calendarName: string;
-	title: string;
-	startAt: string;
-	endAt: string;
-	isAllDay: boolean;
-	isMeeting: boolean;
-	htmlLink?: string;
-	meetingUrl?: string;
-	location?: string;
-};
-
-type UpcomingEventsFetchResult = {
-	connectedCalendarCount: number;
-	events: UpcomingCalendarEvent[];
-};
 
 type CalendarVisibilityPreferences = {
 	showGoogleCalendar: boolean;
 	showGoogleDrive: boolean;
 	showYandexCalendar: boolean;
+};
+
+type YandexCalendarConnection = {
+	provider: "yandex-calendar";
+	displayName: string;
+	email: string;
+	password: string;
+	serverAddress: string;
+	calendarHomePath: string;
 };
 
 type UpcomingEventsResponse =
@@ -136,6 +66,18 @@ type UpcomingEventsResponse =
 			status: "ready";
 			events: UpcomingCalendarEvent[];
 			connectedCalendarCount: number;
+	  };
+
+type CalendarEventsResponse =
+	| {
+			status: "not_connected";
+			calendars: CalendarSource[];
+			events: UpcomingCalendarEvent[];
+	  }
+	| {
+			status: "ready";
+			calendars: CalendarSource[];
+			events: UpcomingCalendarEvent[];
 	  };
 
 type RequestedCalendarWindow = {
@@ -170,111 +112,36 @@ const getRequestedCalendarWindow = ({
 	};
 };
 
-const isVisibleCalendar = (calendar: GoogleCalendarListEntry) =>
-	Boolean(calendar.id) &&
-	calendar.hidden !== true &&
-	calendar.selected !== false &&
-	calendar.accessRole !== "freeBusyReader";
-
-const hasDeclinedEvent = (event: GoogleCalendarEvent) =>
-	event.attendees?.some(
-		(attendee) =>
-			attendee.self === true && attendee.responseStatus === "declined",
-	) ?? false;
-
-const isIgnoredEventType = (event: GoogleCalendarEvent) =>
-	event.eventType === "focusTime" ||
-	event.eventType === "outOfOffice" ||
-	event.eventType === "workingLocation";
-
-const getMeetingUrl = (event: GoogleCalendarEvent) =>
-	event.hangoutLink ??
-	event.conferenceData?.entryPoints?.find(
-		(entryPoint) =>
-			entryPoint.entryPointType === "video" && Boolean(entryPoint.uri),
-	)?.uri;
-
-const isMeetingEvent = ({
-	attendees,
-	meetingUrl,
+const getCalendarViewWindow = ({
+	timeMax,
+	timeMin,
 }: {
-	attendees?: GoogleCalendarEvent["attendees"];
-	meetingUrl?: string;
-}) =>
-	Boolean(meetingUrl) ||
-	(attendees?.some((attendee) => attendee.self !== true) ?? false);
+	timeMax: string;
+	timeMin: string;
+}) => {
+	const requestedWindow = getRequestedCalendarWindow({ timeMax, timeMin });
 
-const toDate = (value: GoogleCalendarDateTime | undefined, isEnd: boolean) => {
-	if (!value) {
-		return null;
+	if (
+		requestedWindow.timeMax - requestedWindow.timeMin >
+		CALENDAR_VIEW_MAX_WINDOW_MS
+	) {
+		throw new ConvexError({
+			code: "CALENDAR_WINDOW_TOO_LARGE",
+			message: "Calendar view window is too large.",
+		});
 	}
 
-	if (value.dateTime) {
-		return new Date(value.dateTime);
-	}
-
-	if (value.date) {
-		if (isEnd) {
-			return new Date(new Date(`${value.date}T00:00:00`).getTime() - 1);
-		}
-
-		return new Date(`${value.date}T00:00:00`);
-	}
-
-	return null;
+	return requestedWindow;
 };
 
-const normalizeUpcomingEvent = (
-	calendar: GoogleCalendarListEntry,
-	event: GoogleCalendarEvent,
-	now: number,
-): UpcomingCalendarEvent | null => {
-	if (!event.id || event.status === "cancelled") {
-		return null;
-	}
-
-	if (hasDeclinedEvent(event) || isIgnoredEventType(event)) {
-		return null;
-	}
-
-	const startAt = toDate(event.start, false);
-	const endAt = toDate(event.end, true) ?? startAt;
-
-	if (!startAt || !endAt) {
-		return null;
-	}
-
-	if (endAt.getTime() < now) {
-		return null;
-	}
-
-	const meetingUrl = getMeetingUrl(event);
-
-	return {
-		id: event.iCalUID ?? event.id,
-		calendarId: calendar.id,
-		calendarName: calendar.summary || "Calendar",
-		title: event.summary?.trim() || "Untitled event",
-		startAt: startAt.toISOString(),
-		endAt: endAt.toISOString(),
-		isAllDay: Boolean(event.start?.date && !event.start?.dateTime),
-		isMeeting: isMeetingEvent({
-			attendees: event.attendees,
-			meetingUrl,
-		}),
-		htmlLink: event.htmlLink,
-		meetingUrl,
-		location: event.location?.trim() || undefined,
-	};
-};
+const sortCalendarEvents = (events: UpcomingCalendarEvent[]) =>
+	[...events].sort(
+		(left, right) =>
+			new Date(left.startAt).getTime() - new Date(right.startAt).getTime(),
+	);
 
 const sortAndLimitUpcomingEvents = (events: UpcomingCalendarEvent[]) =>
-	events
-		.sort(
-			(left, right) =>
-				new Date(left.startAt).getTime() - new Date(right.startAt).getTime(),
-		)
-		.slice(0, UPCOMING_EVENTS_LIMIT);
+	sortCalendarEvents(events).slice(0, UPCOMING_EVENTS_LIMIT);
 
 const dedupeUpcomingEvents = (events: UpcomingCalendarEvent[]) => {
 	const dedupedEvents = new Map<string, UpcomingCalendarEvent>();
@@ -290,84 +157,19 @@ const dedupeUpcomingEvents = (events: UpcomingCalendarEvent[]) => {
 	return Array.from(dedupedEvents.values());
 };
 
-const fetchGoogleUpcomingEvents = async ({
-	authContext,
-	now,
-	timeMax,
-	timeMin,
+const getYandexCalendarConnection = async ({
+	ctx,
+	ownerTokenIdentifier,
+	workspaceId,
 }: {
-	authContext: GoogleAuthContext;
-	now: number;
-	timeMax: string;
-	timeMin: string;
-}): Promise<UpcomingEventsFetchResult> => {
-	const googleTokens = await getGoogleAccessToken(authContext);
-
-	if (
-		!googleTokens?.accessToken ||
-		!googleTokens.scopes.includes(GOOGLE_CALENDAR_SCOPE)
-	) {
-		return {
-			connectedCalendarCount: 0,
-			events: [] as UpcomingCalendarEvent[],
-		};
-	}
-
-	const calendarListUrl = new URL(
-		"https://www.googleapis.com/calendar/v3/users/me/calendarList",
-	);
-	calendarListUrl.searchParams.set("showDeleted", "false");
-	calendarListUrl.searchParams.set("minAccessRole", "reader");
-
-	const calendarList =
-		await fetchGoogleJsonWithRetry<GoogleCalendarListResponse>(
-			authContext,
-			googleTokens,
-			calendarListUrl,
-		);
-	const calendars = (calendarList.items ?? []).filter(isVisibleCalendar);
-
-	if (calendars.length === 0) {
-		return {
-			connectedCalendarCount: 0,
-			events: [] as UpcomingCalendarEvent[],
-		};
-	}
-
-	const perCalendarEvents = await Promise.all(
-		calendars.map(async (calendar) => {
-			const eventsUrl = new URL(
-				`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events`,
-			);
-			eventsUrl.searchParams.set("singleEvents", "true");
-			eventsUrl.searchParams.set("orderBy", "startTime");
-			eventsUrl.searchParams.set("showDeleted", "false");
-			eventsUrl.searchParams.set("timeMin", timeMin);
-			eventsUrl.searchParams.set("timeMax", timeMax);
-			eventsUrl.searchParams.set("maxResults", String(UPCOMING_EVENTS_LIMIT));
-
-			try {
-				const response =
-					await fetchGoogleJsonWithRetry<GoogleCalendarEventsResponse>(
-						authContext,
-						googleTokens,
-						eventsUrl,
-					);
-
-				return (response.items ?? [])
-					.map((event) => normalizeUpcomingEvent(calendar, event, now))
-					.filter((event): event is UpcomingCalendarEvent => event !== null);
-			} catch {
-				return [];
-			}
-		}),
-	);
-
-	return {
-		connectedCalendarCount: calendars.length,
-		events: perCalendarEvents.flat(),
-	};
-};
+	ctx: ActionCtx;
+	ownerTokenIdentifier: string;
+	workspaceId: Id<"workspaces">;
+}): Promise<YandexCalendarConnection | null> =>
+	await ctx.runQuery(internal.appConnections.getYandexCalendarCredentials, {
+		ownerTokenIdentifier,
+		workspaceId,
+	});
 
 const fetchYandexUpcomingEvents = async ({
 	ctx,
@@ -381,51 +183,127 @@ const fetchYandexUpcomingEvents = async ({
 	timeMax: number;
 	timeMin: number;
 	workspaceId: Id<"workspaces">;
-}): Promise<UpcomingEventsFetchResult> => {
+}): Promise<CalendarEventsFetchResult> => {
 	const identity = await ctx.auth.getUserIdentity();
 
 	if (!identity) {
 		return {
+			calendars: [],
 			connectedCalendarCount: 0,
-			events: [] as UpcomingCalendarEvent[],
+			events: [],
 		};
 	}
 
-	const connection: {
-		provider: "yandex-calendar";
-		displayName: string;
-		email: string;
-		password: string;
-		serverAddress: string;
-		calendarHomePath: string;
-	} | null = await ctx.runQuery(
-		internal.appConnections.getYandexCalendarCredentials,
-		{
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId,
-		},
-	);
+	const connection = await getYandexCalendarConnection({
+		ctx,
+		ownerTokenIdentifier: identity.tokenIdentifier,
+		workspaceId,
+	});
 
 	if (!connection) {
 		return {
+			calendars: [],
 			connectedCalendarCount: 0,
-			events: [] as UpcomingCalendarEvent[],
+			events: [],
 		};
 	}
 
-	try {
-		return await listYandexUpcomingEvents({
-			connection,
-			now,
-			timeMax,
-			timeMin,
+	return await listYandexUpcomingEvents({
+		connection,
+		now,
+		timeMax,
+		timeMin,
+	});
+};
+
+const dedupeCalendarSources = (calendars: CalendarSource[]) => {
+	const uniqueCalendars = new Map<string, CalendarSource>();
+
+	for (const calendar of calendars) {
+		if (!uniqueCalendars.has(calendar.id)) {
+			uniqueCalendars.set(calendar.id, calendar);
+		}
+	}
+
+	return Array.from(uniqueCalendars.values()).sort((left, right) =>
+		left.name.localeCompare(right.name),
+	);
+};
+
+const fetchWorkspaceCalendarEvents = async ({
+	ctx,
+	eventLimit,
+	minimumEndAt,
+	requestedWindow,
+	workspaceId,
+}: {
+	ctx: ActionCtx;
+	eventLimit: number;
+	minimumEndAt: number;
+	requestedWindow: RequestedCalendarWindow;
+	workspaceId: Id<"workspaces">;
+}): Promise<CalendarEventsFetchResult> => {
+	const calendarVisibilityPreferences: CalendarVisibilityPreferences =
+		await ctx.runQuery(api.calendarPreferences.get, {
+			workspaceId,
 		});
-	} catch {
+
+	if (
+		!calendarVisibilityPreferences.showGoogleCalendar &&
+		!calendarVisibilityPreferences.showYandexCalendar
+	) {
 		return {
+			calendars: [],
 			connectedCalendarCount: 0,
-			events: [] as UpcomingCalendarEvent[],
+			events: [],
 		};
 	}
+
+	const authContext = calendarVisibilityPreferences.showGoogleCalendar
+		? await getGoogleAuthContext(ctx)
+		: null;
+	const [googleCalendarResult, yandexCalendarResult] = await Promise.all([
+		calendarVisibilityPreferences.showGoogleCalendar && authContext
+			? fetchGoogleCalendarEvents({
+					authContext,
+					eventLimit,
+					minimumEndAt,
+					timeMin: new Date(requestedWindow.timeMin).toISOString(),
+					timeMax: new Date(requestedWindow.timeMax).toISOString(),
+				})
+			: Promise.resolve({
+					calendars: [],
+					connectedCalendarCount: 0,
+					events: [],
+				}),
+		calendarVisibilityPreferences.showYandexCalendar
+			? fetchYandexUpcomingEvents({
+					ctx,
+					now: minimumEndAt,
+					timeMin: requestedWindow.timeMin,
+					timeMax: requestedWindow.timeMax,
+					workspaceId,
+				})
+			: Promise.resolve({
+					calendars: [],
+					connectedCalendarCount: 0,
+					events: [],
+				}),
+	]);
+
+	return {
+		calendars: dedupeCalendarSources([
+			...googleCalendarResult.calendars,
+			...yandexCalendarResult.calendars,
+		]),
+		connectedCalendarCount:
+			googleCalendarResult.connectedCalendarCount +
+			yandexCalendarResult.connectedCalendarCount,
+		events: dedupeUpcomingEvents([
+			...googleCalendarResult.events,
+			...yandexCalendarResult.events,
+		]),
+	};
 };
 
 export const listUpcomingGoogleEvents = action({
@@ -441,84 +319,453 @@ export const listUpcomingGoogleEvents = action({
 		if (!identity) {
 			return {
 				status: "not_connected" as const,
-				events: [] as UpcomingCalendarEvent[],
+				events: [],
 			};
 		}
 
 		try {
-			const authContext = await getGoogleAuthContext(ctx);
-			const calendarVisibilityPreferences: CalendarVisibilityPreferences =
-				await ctx.runQuery(api.calendarPreferences.get, {
-					workspaceId: args.workspaceId,
-				});
-			if (
-				!calendarVisibilityPreferences.showGoogleCalendar &&
-				!calendarVisibilityPreferences.showYandexCalendar
-			) {
-				return {
-					status: "not_connected" as const,
-					events: [] as UpcomingCalendarEvent[],
-				};
-			}
-			const now = Date.now();
 			const requestedWindow = getRequestedCalendarWindow(args);
-			const [googleCalendarResult, yandexCalendarResult] = await Promise.all([
-				calendarVisibilityPreferences.showGoogleCalendar
-					? fetchGoogleUpcomingEvents({
-							authContext,
-							now,
-							timeMin: new Date(requestedWindow.timeMin).toISOString(),
-							timeMax: new Date(requestedWindow.timeMax).toISOString(),
-						})
-					: Promise.resolve({
-							connectedCalendarCount: 0,
-							events: [] as UpcomingCalendarEvent[],
-						}),
-				calendarVisibilityPreferences.showYandexCalendar
-					? fetchYandexUpcomingEvents({
-							ctx,
-							now,
-							timeMin: requestedWindow.timeMin,
-							timeMax: requestedWindow.timeMax,
-							workspaceId: args.workspaceId,
-						})
-					: Promise.resolve({
-							connectedCalendarCount: 0,
-							events: [] as UpcomingCalendarEvent[],
-						}),
-			]);
-			const connectedCalendarCount =
-				googleCalendarResult.connectedCalendarCount +
-				yandexCalendarResult.connectedCalendarCount;
+			const result = await fetchWorkspaceCalendarEvents({
+				ctx,
+				eventLimit: UPCOMING_EVENTS_LIMIT,
+				minimumEndAt: Date.now(),
+				requestedWindow,
+				workspaceId: args.workspaceId,
+			});
 			const events = sortAndLimitUpcomingEvents(
-				dedupeUpcomingEvents([
-					...googleCalendarResult.events,
-					...yandexCalendarResult.events,
-				]).filter((event) => event.isMeeting),
+				result.events.filter((event) => event.isMeeting),
 			);
 
-			if (connectedCalendarCount === 0) {
+			if (result.connectedCalendarCount === 0) {
 				return {
 					status: "not_connected" as const,
-					events: [] as UpcomingCalendarEvent[],
+					events: [],
 				};
 			}
 
 			return {
 				status: "ready" as const,
 				events,
-				connectedCalendarCount,
+				connectedCalendarCount: result.connectedCalendarCount,
 			};
 		} catch (error) {
 			if (error instanceof Error && "status" in error && error.status === 401) {
 				return {
 					status: "not_connected" as const,
-					events: [] as UpcomingCalendarEvent[],
+					events: [],
 				};
 			}
 
 			throw error;
 		}
+	},
+});
+
+export const listCalendarEvents = action({
+	args: {
+		workspaceId: v.id("workspaces"),
+		timeMax: v.string(),
+		timeMin: v.string(),
+	},
+	returns: calendarEventsResponseValidator,
+	handler: async (ctx, args): Promise<CalendarEventsResponse> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			return {
+				status: "not_connected",
+				calendars: [],
+				events: [],
+			};
+		}
+
+		try {
+			const requestedWindow = getCalendarViewWindow(args);
+			const result = await fetchWorkspaceCalendarEvents({
+				ctx,
+				eventLimit: CALENDAR_EVENTS_LIMIT,
+				minimumEndAt: requestedWindow.timeMin,
+				requestedWindow,
+				workspaceId: args.workspaceId,
+			});
+
+			if (result.connectedCalendarCount === 0) {
+				return {
+					status: "not_connected",
+					calendars: [],
+					events: [],
+				};
+			}
+
+			return {
+				status: "ready",
+				calendars: result.calendars,
+				events: sortCalendarEvents(result.events).slice(
+					0,
+					CALENDAR_EVENTS_LIMIT,
+				),
+			};
+		} catch (error) {
+			if (error instanceof Error && "status" in error && error.status === 401) {
+				return {
+					status: "not_connected",
+					calendars: [],
+					events: [],
+				};
+			}
+
+			throw error;
+		}
+	},
+});
+
+const normalizeCalendarEventDetails = <Input extends CalendarEventDetailsInput>(
+	input: Input,
+): Input => {
+	const title = input.title.trim();
+
+	if (!title) {
+		throw new ConvexError({
+			code: "CALENDAR_EVENT_TITLE_REQUIRED",
+			message: "Event title is required.",
+		});
+	}
+
+	const guests = Array.from(
+		new Set(input.guests.map((guest) => guest.trim().toLowerCase())),
+	).filter(Boolean);
+
+	if (guests.some((guest) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(guest))) {
+		throw new ConvexError({
+			code: "INVALID_CALENDAR_EVENT_GUEST",
+			message: "One or more guest email addresses are invalid.",
+		});
+	}
+
+	if (input.time.kind === "all_day") {
+		if (
+			!/^\d{4}-\d{2}-\d{2}$/u.test(input.time.startDate) ||
+			!/^\d{4}-\d{2}-\d{2}$/u.test(input.time.endDate) ||
+			input.time.endDate <= input.time.startDate
+		) {
+			throw new ConvexError({
+				code: "INVALID_CALENDAR_EVENT_TIME",
+				message: "Event dates are invalid.",
+			});
+		}
+	} else {
+		const startAt = new Date(input.time.startAt).getTime();
+		const endAt = new Date(input.time.endAt).getTime();
+
+		if (
+			!Number.isFinite(startAt) ||
+			!Number.isFinite(endAt) ||
+			endAt <= startAt
+		) {
+			throw new ConvexError({
+				code: "INVALID_CALENDAR_EVENT_TIME",
+				message: "Event time is invalid.",
+			});
+		}
+	}
+
+	return {
+		...input,
+		description: input.description?.trim() || undefined,
+		guests,
+		location: input.location?.trim() || undefined,
+		title,
+	};
+};
+
+const normalizeUpdateCalendarEventInput = (
+	input: UpdateCalendarEventInput,
+): UpdateCalendarEventInput => {
+	const normalized = normalizeCalendarEventDetails({
+		calendarId: input.calendarId,
+		description: input.description,
+		guests: [],
+		location: input.location,
+		time: input.time,
+		title: input.title,
+	});
+	const providerEventId = input.providerEventId.trim();
+
+	if (!providerEventId) {
+		throw new ConvexError({
+			code: "INVALID_CALENDAR_EVENT_ID",
+			message: "The calendar event identifier is invalid.",
+		});
+	}
+
+	return {
+		calendarId: normalized.calendarId,
+		description: normalized.description,
+		location: normalized.location,
+		providerEventId,
+		recurrenceId: input.recurrenceId,
+		recurrenceIsAllDay: input.recurrenceIsAllDay,
+		time: normalized.time,
+		title: normalized.title,
+	};
+};
+
+const normalizeCreateCalendarInput = ({
+	color,
+	name,
+	provider,
+}: {
+	color: string;
+	name: string;
+	provider: "google" | "yandex";
+}) => {
+	const normalizedName = name.trim();
+	const normalizedColor = color.trim().toLowerCase();
+
+	if (!normalizedName || normalizedName.length > 128) {
+		throw new ConvexError({
+			code: "INVALID_CALENDAR_NAME",
+			message: "Calendar name must contain between 1 and 128 characters.",
+		});
+	}
+
+	if (!/^#[0-9a-f]{6}$/u.test(normalizedColor)) {
+		throw new ConvexError({
+			code: "INVALID_CALENDAR_COLOR",
+			message: "Calendar color is invalid.",
+		});
+	}
+
+	return {
+		color: normalizedColor,
+		name: normalizedName,
+		provider,
+	};
+};
+
+export const createCalendar = action({
+	args: {
+		color: v.string(),
+		name: v.string(),
+		provider: calendarProviderValidator,
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.object({ id: v.string() }),
+	handler: async (ctx, args): Promise<{ id: string }> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to create calendars.",
+			});
+		}
+
+		const input = normalizeCreateCalendarInput(args);
+
+		if (input.provider === "yandex") {
+			const connection = await getYandexCalendarConnection({
+				ctx,
+				ownerTokenIdentifier: identity.tokenIdentifier,
+				workspaceId: args.workspaceId,
+			});
+
+			if (!connection) {
+				throw new ConvexError({
+					code: "YANDEX_CALENDAR_NOT_CONNECTED",
+					message: "Connect Yandex Calendar to create a calendar.",
+				});
+			}
+
+			return await createYandexCalendar({
+				color: input.color,
+				connection,
+				name: input.name,
+			});
+		}
+
+		const authContext = await getGoogleAuthContext(ctx);
+		return await createGoogleCalendar({
+			authContext,
+			color: input.color,
+			name: input.name,
+		});
+	},
+});
+
+export const createCalendarEvent = action({
+	args: {
+		calendarId: v.string(),
+		description: v.optional(v.string()),
+		guests: v.array(v.string()),
+		location: v.optional(v.string()),
+		provider: calendarProviderValidator,
+		time: calendarEventTimeValidator,
+		title: v.string(),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.object({ id: v.string() }),
+	handler: async (ctx, args): Promise<{ id: string }> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to create calendar events.",
+			});
+		}
+
+		const input = normalizeCalendarEventDetails({
+			calendarId: args.calendarId,
+			description: args.description,
+			guests: args.guests,
+			location: args.location,
+			provider: args.provider,
+			time: args.time,
+			title: args.title,
+		});
+
+		if (input.provider === "yandex") {
+			const connection: YandexCalendarConnection | null =
+				await getYandexCalendarConnection({
+					ctx,
+					ownerTokenIdentifier: identity.tokenIdentifier,
+					workspaceId: args.workspaceId,
+				});
+
+			if (!connection) {
+				throw new ConvexError({
+					code: "YANDEX_CALENDAR_NOT_CONNECTED",
+					message: "Connect Yandex Calendar to create this event.",
+				});
+			}
+
+			return await createYandexCalendarEvent({
+				connection,
+				input,
+			});
+		}
+
+		const authContext = await getGoogleAuthContext(ctx);
+		return await createGoogleCalendarEvent({ authContext, input });
+	},
+});
+
+export const updateCalendarEvent = action({
+	args: {
+		calendarId: v.string(),
+		description: v.optional(v.string()),
+		location: v.optional(v.string()),
+		provider: calendarProviderValidator,
+		providerEventId: v.string(),
+		recurrenceId: v.optional(v.string()),
+		recurrenceIsAllDay: v.optional(v.boolean()),
+		time: calendarEventTimeValidator,
+		title: v.string(),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to update calendar events.",
+			});
+		}
+
+		const input = normalizeUpdateCalendarEventInput({
+			calendarId: args.calendarId,
+			description: args.description,
+			location: args.location,
+			providerEventId: args.providerEventId,
+			recurrenceId: args.recurrenceId,
+			recurrenceIsAllDay: args.recurrenceIsAllDay,
+			time: args.time,
+			title: args.title,
+		});
+
+		if (args.provider === "yandex") {
+			const connection = await getYandexCalendarConnection({
+				ctx,
+				ownerTokenIdentifier: identity.tokenIdentifier,
+				workspaceId: args.workspaceId,
+			});
+
+			if (!connection) {
+				throw new ConvexError({
+					code: "YANDEX_CALENDAR_NOT_CONNECTED",
+					message: "Connect Yandex Calendar to update this event.",
+				});
+			}
+
+			return await updateYandexCalendarEvent({ connection, input });
+		}
+
+		const authContext = await getGoogleAuthContext(ctx);
+		return await updateGoogleCalendarEvent({ authContext, input });
+	},
+});
+
+export const deleteCalendarEvent = action({
+	args: {
+		calendarId: v.string(),
+		provider: calendarProviderValidator,
+		providerEventId: v.string(),
+		recurrenceId: v.optional(v.string()),
+		recurrenceIsAllDay: v.optional(v.boolean()),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to delete calendar events.",
+			});
+		}
+
+		const providerEventId = args.providerEventId.trim();
+
+		if (!providerEventId) {
+			throw new ConvexError({
+				code: "INVALID_CALENDAR_EVENT_ID",
+				message: "The calendar event identifier is invalid.",
+			});
+		}
+
+		if (args.provider === "yandex") {
+			const connection = await getYandexCalendarConnection({
+				ctx,
+				ownerTokenIdentifier: identity.tokenIdentifier,
+				workspaceId: args.workspaceId,
+			});
+
+			if (!connection) {
+				throw new ConvexError({
+					code: "YANDEX_CALENDAR_NOT_CONNECTED",
+					message: "Connect Yandex Calendar to delete this event.",
+				});
+			}
+
+			return await deleteYandexCalendarEvent({
+				calendarId: args.calendarId,
+				connection,
+				providerEventId,
+				recurrenceId: args.recurrenceId,
+				recurrenceIsAllDay: args.recurrenceIsAllDay,
+			});
+		}
+
+		const authContext = await getGoogleAuthContext(ctx);
+		return await deleteGoogleCalendarEvent({
+			authContext,
+			calendarId: args.calendarId,
+			providerEventId,
+		});
 	},
 });
 
@@ -531,12 +778,6 @@ const getCalendarToolWindow = () => {
 		timeMax: now + CALENDAR_TOOL_LOOKAHEAD_MS,
 	};
 };
-
-const sortCalendarToolEvents = (events: UpcomingCalendarEvent[]) =>
-	[...events].sort(
-		(left, right) =>
-			new Date(left.startAt).getTime() - new Date(right.startAt).getTime(),
-	);
 
 const buildCalendarToolSources = (events: UpcomingCalendarEvent[]) => {
 	const seen = new Set<string>();
@@ -592,7 +833,7 @@ const toCalendarToolResponse = ({
 	meetingsOnly?: boolean;
 	query?: string;
 }) => {
-	const limitedEvents = sortCalendarToolEvents(
+	const limitedEvents = sortCalendarEvents(
 		events.filter((event) => {
 			if (meetingsOnly && !event.isMeeting) {
 				return false;
@@ -623,9 +864,10 @@ const getGoogleCalendarToolResponse = async (
 ) => {
 	const authContext = await getGoogleAuthContext(ctx);
 	const { now, timeMin, timeMax } = getCalendarToolWindow();
-	const result = await fetchGoogleUpcomingEvents({
+	const result = await fetchGoogleCalendarEvents({
 		authContext,
-		now,
+		eventLimit: UPCOMING_EVENTS_LIMIT,
+		minimumEndAt: now,
 		timeMin: new Date(timeMin).toISOString(),
 		timeMax: new Date(timeMax).toISOString(),
 	});

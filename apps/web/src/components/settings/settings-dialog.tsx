@@ -120,7 +120,9 @@ import { authClient } from "@/lib/auth-client";
 import { getAvatarSrc } from "@/lib/avatar";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
 import {
+	GOOGLE_CALENDAR_MANAGE_SCOPE,
 	GOOGLE_CALENDAR_SCOPE,
+	GOOGLE_CALENDAR_WRITE_SCOPE,
 	getGoogleLinkedAccount,
 	hasGoogleScope,
 } from "@/lib/google-integrations";
@@ -145,6 +147,23 @@ function useResetStateWhenValueChanges<T>(
 	useEffect(() => {
 		resetState(value);
 	}, [resetState, value]);
+}
+
+function useObjectUrlPreview(file: File | null) {
+	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (!file) {
+			setPreviewUrl(null);
+			return;
+		}
+
+		const nextPreviewUrl = URL.createObjectURL(file);
+		setPreviewUrl(nextPreviewUrl);
+		return () => URL.revokeObjectURL(nextPreviewUrl);
+	}, [file]);
+
+	return previewUrl;
 }
 
 const settingsNav = [
@@ -172,7 +191,6 @@ const MAX_PROFILE_AVATAR_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 type WorkspaceFormState = {
 	name: string;
 	iconStorageId: Id<"_storage"> | null;
-	iconPreviewUrl: string | null;
 };
 
 type ProfileFormState = {
@@ -180,7 +198,6 @@ type ProfileFormState = {
 	jobTitle: string;
 	companyName: string;
 	avatarStorageId: Id<"_storage"> | null;
-	avatarPreviewUrl: string | null;
 };
 
 type DataControlsState = {
@@ -212,7 +229,6 @@ const getWorkspaceFormState = (
 ): WorkspaceFormState => ({
 	name: workspace?.name ?? "",
 	iconStorageId: workspace?.iconStorageId ?? null,
-	iconPreviewUrl: null,
 });
 
 const getProfileFormState = ({
@@ -226,7 +242,6 @@ const getProfileFormState = ({
 	jobTitle: userPreferences?.jobTitle ?? "",
 	companyName: userPreferences?.companyName ?? "",
 	avatarStorageId: userPreferences?.avatarStorageId ?? null,
-	avatarPreviewUrl: null,
 });
 
 const initialDataControlsState: DataControlsState = {
@@ -539,7 +554,10 @@ function useCalendarSettingsController() {
 		showYandexCalendar: calendarPreferences?.showYandexCalendar ?? false,
 	};
 	const googleAccount = getGoogleLinkedAccount(accounts);
-	const hasCalendarScope = hasGoogleScope(googleAccount, GOOGLE_CALENDAR_SCOPE);
+	const hasCalendarScope =
+		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_SCOPE) &&
+		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_WRITE_SCOPE) &&
+		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_MANAGE_SCOPE);
 	const isGoogleCalendarConnected = Boolean(googleAccount && hasCalendarScope);
 	const isYandexCalendarConnected = Boolean(yandexCalendarConnection);
 
@@ -1583,26 +1601,19 @@ function WorkspaceSettings({
 		(_current: boolean, next: boolean) => next,
 		false,
 	);
+	const [iconPreviewFile, setIconPreviewFile] = useState<File | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const { name, iconStorageId, iconPreviewUrl } = formState;
+	const { name, iconStorageId } = formState;
+	const iconPreviewUrl = useObjectUrlPreview(iconPreviewFile);
 	const resetWorkspaceFormState = useCallback(
 		(nextWorkspace: typeof workspace) => {
+			setIconPreviewFile(null);
 			setFormState(getWorkspaceFormState(nextWorkspace));
 		},
 		[],
 	);
 
 	useResetStateWhenValueChanges(workspace, resetWorkspaceFormState);
-
-	useEffect(() => {
-		if (!iconPreviewUrl?.startsWith("blob:")) {
-			return;
-		}
-
-		return () => {
-			URL.revokeObjectURL(iconPreviewUrl);
-		};
-	}, [iconPreviewUrl]);
 
 	if (!workspace) {
 		return (
@@ -1636,6 +1647,7 @@ function WorkspaceSettings({
 		}
 
 		if (hasChanges) {
+			setIconPreviewFile(null);
 			setFormState(getWorkspaceFormState(workspace));
 		}
 
@@ -1665,10 +1677,10 @@ function WorkspaceSettings({
 				throw new Error("Workspace icon upload did not return a storage id.");
 			}
 
+			setIconPreviewFile(file);
 			setFormState((currentState) => ({
 				...currentState,
 				iconStorageId: result.storageId ?? null,
-				iconPreviewUrl: URL.createObjectURL(file),
 			}));
 		} catch (error) {
 			logError({
@@ -2141,15 +2153,18 @@ function useManageAccountFormElement({
 			userPreferences: null,
 		}),
 	);
+	const [avatarPreviewFile, setAvatarPreviewFile] = useState<File | null>(null);
 	const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 	const [isSavingPreferences, setIsSavingPreferences] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const avatarPreviewUrl = useObjectUrlPreview(avatarPreviewFile);
 	const profileFormSource = useMemo(
 		() => [user, userPreferences] as const,
 		[user, userPreferences],
 	);
 	const resetProfileFormState = useCallback(
 		([nextUser, nextUserPreferences]: typeof profileFormSource) => {
+			setAvatarPreviewFile(null);
 			setFormState(
 				getProfileFormState({
 					user: nextUser,
@@ -2161,18 +2176,6 @@ function useManageAccountFormElement({
 	);
 
 	useResetStateWhenValueChanges(profileFormSource, resetProfileFormState);
-
-	useEffect(() => {
-		const avatarPreviewUrl = formState.avatarPreviewUrl;
-
-		if (!avatarPreviewUrl?.startsWith("blob:")) {
-			return;
-		}
-
-		return () => {
-			URL.revokeObjectURL(avatarPreviewUrl);
-		};
-	}, [formState.avatarPreviewUrl]);
 
 	const trimmedName = formState.name.trim();
 	const trimmedJobTitle = formState.jobTitle.trim();
@@ -2189,7 +2192,7 @@ function useManageAccountFormElement({
 
 	const initials = getInitials(formState.name, user.email);
 	const avatarSrc = getAvatarSrc({
-		avatar: formState.avatarPreviewUrl ?? user.avatar,
+		avatar: avatarPreviewUrl ?? user.avatar,
 		name: formState.name,
 		email: user.email,
 	});
@@ -2199,6 +2202,7 @@ function useManageAccountFormElement({
 		}
 
 		if (hasChanges) {
+			setAvatarPreviewFile(null);
 			setFormState(
 				getProfileFormState({
 					user,
@@ -2243,10 +2247,10 @@ function useManageAccountFormElement({
 			}
 			const avatarStorageId = result.storageId;
 
+			setAvatarPreviewFile(file);
 			setFormState((current) => ({
 				...current,
 				avatarStorageId,
-				avatarPreviewUrl: URL.createObjectURL(file),
 			}));
 		} catch (error) {
 			logError({

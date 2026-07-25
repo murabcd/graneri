@@ -2,6 +2,7 @@ export const rendererMeetingWidgetPathname = "/desktop/meeting-widget";
 
 export const rendererRoutePrefixes = [
 	"/automations",
+	"/calendar",
 	"/chat",
 	rendererMeetingWidgetPathname,
 	"/home",

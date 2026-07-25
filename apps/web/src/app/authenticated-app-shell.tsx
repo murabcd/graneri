@@ -106,6 +106,7 @@ import type {
 	AutomationListItem,
 } from "@/components/automations/automation-types";
 import { CreateAutomationDialogEntry } from "@/components/automations/create-automation-dialog-entry";
+import { OPEN_NEW_CALENDAR_EVENT } from "@/components/calendar/calendar-page-events";
 import { OPEN_CHAT_SUMMARY_EVENT } from "@/components/chat/chat-summary-events";
 import { optimisticPatchChat } from "@/components/chat/optimistic-patch-chat";
 import { optimisticRenameChat } from "@/components/chat/optimistic-rename-chat";
@@ -185,6 +186,35 @@ const getDelayUntilNextMinute = (now: Date) => {
 	nextMinute.setSeconds(60, 0);
 
 	return nextMinute.getTime() - now.getTime();
+};
+
+const getBreadcrumbSectionLabel = ({
+	currentView,
+	isSharedNote,
+}: {
+	currentView: AppView;
+	isSharedNote: boolean;
+}) => {
+	if (isSharedNote) {
+		return getSidebarViewTitle("shared");
+	}
+
+	switch (currentView) {
+		case "notFound":
+			return "Page Not Found";
+		case "chat":
+			return getSidebarViewTitle("chat");
+		case "calendar":
+			return getSidebarViewTitle("calendar");
+		case "automation":
+			return getSidebarViewTitle("automation");
+		case "project":
+			return "Projects";
+		case "shared":
+			return getSidebarViewTitle("shared");
+		default:
+			return getSidebarViewTitle("home");
+	}
 };
 
 const resolveActiveWorkspaceId = ({
@@ -995,7 +1025,9 @@ const useAppShellState = ({
 			const calendarEvent = options.calendarEvent ?? null;
 			const projectId = options.projectId;
 			const scheduledAutoStartAt =
-				!shouldStartCapture && calendarEvent ? calendarEvent.startAt : null;
+				!shouldStartCapture && calendarEvent && shouldStopCaptureWhenMeetingEnds
+					? calendarEvent.startAt
+					: null;
 
 			if (!resolvedActiveWorkspaceId) {
 				creatingNoteRef.current = false;
@@ -1370,18 +1402,10 @@ const useAppShellState = ({
 						: resolvedCurrentView === "project"
 							? (selectedProject?.name ?? null)
 							: null,
-		breadcrumbSectionLabel:
-			resolvedCurrentView === "notFound"
-				? "Page Not Found"
-				: resolvedCurrentView === "chat"
-					? getSidebarViewTitle("chat")
-					: resolvedCurrentView === "automation"
-						? getSidebarViewTitle("automation")
-						: resolvedCurrentView === "project"
-							? "Projects"
-							: resolvedCurrentView === "shared" || isSharedNote
-								? getSidebarViewTitle("shared")
-								: getSidebarViewTitle("home"),
+		breadcrumbSectionLabel: getBreadcrumbSectionLabel({
+			currentView: resolvedCurrentView,
+			isSharedNote,
+		}),
 		chats,
 		activeStreamingChatIds,
 		chatComposerId,
@@ -1416,6 +1440,11 @@ const useAppShellState = ({
 
 			if (resolvedCurrentView === "automation") {
 				handleViewChange("automation");
+				return;
+			}
+
+			if (resolvedCurrentView === "calendar") {
+				handleViewChange("calendar");
 				return;
 			}
 
@@ -1980,6 +2009,19 @@ function AppShellHeaderActions({
 		);
 	}
 
+	if (currentView === "calendar") {
+		return (
+			<Button
+				variant="outline"
+				data-app-region={isDesktopMac ? "no-drag" : undefined}
+				onClick={() => window.dispatchEvent(new Event(OPEN_NEW_CALENDAR_EVENT))}
+			>
+				<Plus data-icon="inline-start" />
+				New event
+			</Button>
+		);
+	}
+
 	if (currentView === "chat") {
 		return (
 			<ChatHeaderActions
@@ -2429,6 +2471,18 @@ function createAppShellContentView({
 			onNoteTrashed: controller.handleNoteTrashed,
 			onCreateNote: controller.handleQuickNote,
 			onOpenCalendarEventNote: controller.handleOpenCalendarEventNote,
+			onOpenCalendarSettings: controller.handleOpenCalendarSettings,
+		};
+	}
+
+	if (controller.currentView === "calendar") {
+		return {
+			kind: "calendar",
+			isDesktopMac: controller.isDesktopMac,
+			onOpenCalendarEventNote: (event) =>
+				controller.handleOpenCalendarEventNote(event, {
+					stopCaptureWhenMeetingEnds: false,
+				}),
 			onOpenCalendarSettings: controller.handleOpenCalendarSettings,
 		};
 	}

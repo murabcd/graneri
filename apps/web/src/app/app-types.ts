@@ -9,6 +9,7 @@ export type AppUser = {
 
 export type AppView =
 	| "home"
+	| "calendar"
 	| "chat"
 	| "automation"
 	| "inbox"
@@ -16,6 +17,8 @@ export type AppView =
 	| "project"
 	| "note"
 	| "notFound";
+
+export type NavigableAppView = Exclude<AppView, "notFound">;
 
 type UpcomingCalendarEventsResponse = FunctionReturnType<
 	typeof api.calendar.listUpcomingGoogleEvents
@@ -30,6 +33,16 @@ export type UpcomingCalendarState =
 	| { status: "not_connected"; events: [] }
 	| { status: "error"; events: [] };
 
+export type AppCanonicalPath =
+	| "/home"
+	| "/calendar"
+	| "/chat"
+	| "/automations"
+	| "/inbox"
+	| "/project"
+	| "/shared"
+	| "/note";
+
 export type AppLocationState = {
 	view: AppView;
 	chatId: string | null;
@@ -40,15 +53,7 @@ export type AppLocationState = {
 	shouldStopNoteCaptureWhenMeetingEnds: boolean;
 	scheduledAutoStartNoteCaptureAt: string | null;
 	pendingCalendarEvent: UpcomingCalendarEvent | null;
-	canonicalPath:
-		| "/home"
-		| "/chat"
-		| "/automations"
-		| "/inbox"
-		| "/project"
-		| "/shared"
-		| "/note"
-		| null;
+	canonicalPath: AppCanonicalPath | null;
 	canonicalSearch: string;
 };
 

@@ -43,6 +43,23 @@ readiness, and onboarding completion. It consumes the narrow platform bridge
 and treats a missing bridge as a runtime error; it must not synthesize legacy
 permission rows. Native probing, prerequisite ordering, and permission error
 classification remain in Electron main behind IPC.
+The calendar page reads and creates events and provider calendars through
+authenticated Convex actions. Provider credentials and write requests remain
+server-side: Google event creation uses the calendar write scope and secondary
+calendar creation uses the narrow app-created scope, while Yandex creates
+event-only collections with CalDAV MKCALENDAR and writes VEVENT resources with
+CalDAV PUT. Event updates and deletes target the selected occurrence: Google
+uses its instance event identifier, while Yandex writes an iCalendar
+`RECURRENCE-ID` override or cancellation back to the original resource with
+ETag protection. The renderer receives explicit provider identity, opaque
+provider event identity, provider-owned calendar color, per-calendar write
+capability, and a normalized recurring-event signal; it offers only writable
+calendars in the editor. Provider reads are complete-snapshot operations: a
+failed calendar read rejects the refresh instead of caching a partial agenda,
+so the renderer retains the last successful snapshot while provider reads and
+writes refresh. The renderer persists only the current agenda-cache schema for
+the browser session and prefetches adjacent date windows so range changes can
+swap complete snapshots atomically instead of clearing the agenda.
 
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.

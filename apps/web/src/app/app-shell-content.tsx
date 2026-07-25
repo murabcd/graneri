@@ -17,6 +17,7 @@ import { HomeView, SharedView } from "@/app/home-shared-views";
 import { ProjectView } from "@/app/project-view";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { AutomationsPageEntry } from "@/components/automations/automations-page-entry";
+import { CalendarPage } from "@/components/calendar/calendar-page";
 import { ChatPageEntry } from "@/components/chat/chat-page-entry";
 import type { NoteEditorActionsStore } from "@/components/note/note-editor-actions-store";
 import { NotePageEntry } from "@/components/note/note-page-entry";
@@ -54,6 +55,14 @@ export type AppShellContentView =
 			) => Promise<void> | void;
 			onOpenCalendarSettings: () => void;
 	  } & NoteListViewProps)
+	| {
+			kind: "calendar";
+			isDesktopMac: boolean;
+			onOpenCalendarEventNote: (
+				event: UpcomingCalendarEvent,
+			) => Promise<void> | void;
+			onOpenCalendarSettings: () => void;
+	  }
 	| ({
 			kind: "shared";
 			sharedNotes: Array<Doc<"notes">> | undefined;
@@ -164,6 +173,16 @@ export const AppShellContent = React.memo(function AppShellContent({
 					onOpenCalendarSettings={view.onOpenCalendarSettings}
 				/>
 			</ContentScrollArea>
+		);
+	}
+
+	if (view.kind === "calendar") {
+		return (
+			<CalendarPage
+				isDesktopMac={view.isDesktopMac}
+				onOpenCalendarEventNote={view.onOpenCalendarEventNote}
+				onOpenCalendarSettings={view.onOpenCalendarSettings}
+			/>
 		);
 	}
 

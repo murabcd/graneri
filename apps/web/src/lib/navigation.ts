@@ -1,4 +1,5 @@
 import {
+	CalendarDays,
 	Clock,
 	Home,
 	Inbox,
@@ -18,6 +19,12 @@ export const SIDEBAR_NAVIGATION = [
 		action: "view",
 		view: "home",
 		icon: Home,
+	},
+	{
+		title: "Calendar",
+		action: "view",
+		view: "calendar",
+		icon: CalendarDays,
 	},
 	{
 		title: "Shared",
@@ -44,9 +51,12 @@ export const SIDEBAR_NAVIGATION = [
 	},
 ] as const;
 
-export function getSidebarViewTitle(
-	view: "home" | "chat" | "automation" | "shared",
-) {
+export type SidebarView = Extract<
+	(typeof SIDEBAR_NAVIGATION)[number],
+	{ action: "view" }
+>["view"];
+
+export function getSidebarViewTitle(view: SidebarView) {
 	const item = SIDEBAR_NAVIGATION.find(
 		(item) => item.action === "view" && item.view === view,
 	);

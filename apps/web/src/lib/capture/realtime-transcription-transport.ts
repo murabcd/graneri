@@ -115,12 +115,21 @@ const createRealtimeSession = async (
 		},
 	);
 
+	if (!response.ok) {
+		const errorPayload = (await response.json().catch(() => ({}))) as {
+			error?: string;
+		};
+		throw new Error(
+			errorPayload.error || "Failed to create transcription session.",
+		);
+	}
+
 	const payload = (await response.json().catch(() => ({}))) as {
 		clientSecret?: string;
 		error?: string;
 	};
 
-	if (!response.ok || !payload.clientSecret) {
+	if (!payload.clientSecret) {
 		throw new Error(payload.error || "Failed to create transcription session.");
 	}
 

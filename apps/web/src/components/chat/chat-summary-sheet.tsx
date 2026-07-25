@@ -302,12 +302,10 @@ export function ChatSummarySheet({
 		[messages],
 	);
 	const togglePinned = React.useCallback(() => {
-		setIsPinned((current) => {
-			const nextPinned = !current;
-			writeDesktopChatSummaryPanelPinnedState(nextPinned);
-			return nextPinned;
-		});
-	}, []);
+		const nextPinned = !isPinned;
+		setIsPinned(nextPinned);
+		writeDesktopChatSummaryPanelPinnedState(nextPinned);
+	}, [isPinned]);
 	useDockedPanelInset({
 		side: "right",
 		isMobile,

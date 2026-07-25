@@ -10,6 +10,7 @@ test("renderer route manifest includes desktop and web app routes", () => {
 	assert.equal(rendererMeetingWidgetPathname, "/desktop/meeting-widget");
 	assert.deepEqual(rendererRoutePrefixes, [
 		"/automations",
+		"/calendar",
 		"/chat",
 		"/desktop/meeting-widget",
 		"/home",
@@ -25,6 +26,7 @@ test("renderer route predicate accepts app routes and rejects assets", () => {
 	for (const pathname of [
 		"/",
 		"/home",
+		"/calendar",
 		"/chat",
 		"/chat/thread",
 		"/desktop/meeting-widget",

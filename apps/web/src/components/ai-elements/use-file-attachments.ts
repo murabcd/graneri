@@ -83,9 +83,11 @@ function useConvexFileAttachmentUpload() {
 	);
 }
 
-function createPendingAttachment(file: File, idSuffix: number): ChatAttachment {
-	const localUrl = URL.createObjectURL(file);
-
+function createPendingAttachment(
+	file: File,
+	idSuffix: number,
+	localUrl: string,
+): ChatAttachment {
 	return {
 		id: [file.name, file.size, file.lastModified, Date.now(), idSuffix].join(
 			":",
@@ -153,7 +155,11 @@ export function useFileAttachmentDropzone({
 
 			const attachments = files.map((file) => {
 				attachmentIdCounterRef.current += 1;
-				return createPendingAttachment(file, attachmentIdCounterRef.current);
+				return createPendingAttachment(
+					file,
+					attachmentIdCounterRef.current,
+					URL.createObjectURL(file),
+				);
 			});
 
 			onFilesAdded(attachments);
@@ -169,6 +175,11 @@ export function useFileAttachmentDropzone({
 							message: "Failed to upload attachment",
 						});
 						onFileUploadFailed(attachment.id);
+					})
+					.finally(() => {
+						if (attachment.localUrl) {
+							URL.revokeObjectURL(attachment.localUrl);
+						}
 					});
 			}
 		},

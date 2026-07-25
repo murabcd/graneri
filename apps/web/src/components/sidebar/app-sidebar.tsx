@@ -10,6 +10,7 @@ import {
 import { useQuery } from "convex/react";
 import { FileText, MessageCircle } from "lucide-react";
 import * as React from "react";
+import type { AppView, NavigableAppView } from "@/app/app-types";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { InboxSheet } from "@/components/inbox/inbox-sheet";
 import { NavMain, NavPlatform } from "@/components/nav/nav-main";
@@ -36,16 +37,6 @@ import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 
-type AppSidebarView =
-	| "home"
-	| "chat"
-	| "automation"
-	| "inbox"
-	| "shared"
-	| "project"
-	| "note"
-	| "notFound";
-
 type NoteNavigationSource = "notes" | "projects" | "shared" | "starred";
 
 type AppSidebarUser = {
@@ -66,7 +57,7 @@ type SidebarInboxItem = NonNullable<
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 	workspaces: Array<WorkspaceRecord>;
 	activeWorkspaceId: Id<"workspaces"> | null;
-	currentView: AppSidebarView;
+	currentView: AppView;
 	inboxOpen: boolean;
 	user: AppSidebarUser;
 	chats: Array<Doc<"chats">> | undefined;
@@ -76,16 +67,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 	sharedNotes: Array<Doc<"notes">> | undefined;
 	onWorkspaceSelect: (workspaceId: Id<"workspaces">) => void;
 	onWorkspaceCreate: (input: { name: string }) => Promise<WorkspaceRecord>;
-	onViewChange: (
-		view:
-			| "home"
-			| "chat"
-			| "automation"
-			| "inbox"
-			| "shared"
-			| "project"
-			| "note",
-	) => void;
+	onViewChange: (view: NavigableAppView) => void;
 	onInboxOpenChange: (open: boolean) => void;
 	settingsOpen: boolean;
 	settingsPage?: SettingsPage;
@@ -189,16 +171,7 @@ function useMobileSidebarNavigation({
 	onInboxOpenChange: (open: boolean) => void;
 	onNoteSelect: (noteId: Id<"notes">) => void;
 	onProjectSelect: (projectId: Id<"projects">) => void;
-	onViewChange: (
-		view:
-			| "home"
-			| "chat"
-			| "automation"
-			| "inbox"
-			| "shared"
-			| "project"
-			| "note",
-	) => void;
+	onViewChange: (view: NavigableAppView) => void;
 	onWorkspaceSelect: (workspaceId: Id<"workspaces">) => void;
 	setOpenMobile: (open: boolean) => void;
 }) {
@@ -250,16 +223,7 @@ function useMobileSidebarNavigation({
 	);
 
 	const handleViewChange = React.useCallback(
-		(
-			view:
-				| "home"
-				| "chat"
-				| "automation"
-				| "inbox"
-				| "shared"
-				| "project"
-				| "note",
-		) => {
+		(view: NavigableAppView) => {
 			closeMobileSidebar();
 			onViewChange(view);
 		},
@@ -342,7 +306,7 @@ function useAppSidebarModel({
 	chats: Array<Doc<"chats">> | undefined;
 	currentNoteId: Id<"notes"> | null;
 	currentNoteTitle?: string;
-	currentView: AppSidebarView;
+	currentView: AppView;
 	inboxOpen: boolean;
 	isMobile: boolean;
 	notes: Array<Doc<"notes">> | undefined;
@@ -353,16 +317,7 @@ function useAppSidebarModel({
 	onNoteSelect: (noteId: Id<"notes">) => void;
 	onProjectSelect: (projectId: Id<"projects">) => void;
 	onSettingsOpenChange: (open: boolean, page?: SettingsPage) => void;
-	onViewChange: (
-		view:
-			| "home"
-			| "chat"
-			| "automation"
-			| "inbox"
-			| "shared"
-			| "project"
-			| "note",
-	) => void;
+	onViewChange: (view: NavigableAppView) => void;
 	onWorkspaceSelect: (workspaceId: Id<"workspaces">) => void;
 	setOpenMobile: (open: boolean) => void;
 }) {
@@ -747,7 +702,7 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 	workspaces,
 }: {
 	activeWorkspaceId: Id<"workspaces"> | null;
-	currentView: AppSidebarView;
+	currentView: AppView;
 	desktopSafeTop: boolean;
 	navItems: AppSidebarNavItem[];
 	onCreateNote: () => void;
@@ -794,7 +749,7 @@ function useSidebarNoteSelection({
 	onNoteSelect,
 }: {
 	currentNoteId: Id<"notes"> | null;
-	currentView: AppSidebarView;
+	currentView: AppView;
 	onNoteSelect: (noteId: Id<"notes">) => void;
 }) {
 	const activeNoteId = currentView === "note" ? currentNoteId : null;
@@ -876,7 +831,7 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	currentChatTitle?: string;
 	currentNoteId: Id<"notes"> | null;
 	currentNoteTitle?: string;
-	currentView: AppSidebarView;
+	currentView: AppView;
 	onChatSelect: (chatId: string) => void;
 	onAddAutomation?: (chatId: string) => void;
 	inboxOpen: boolean;
@@ -890,16 +845,7 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	onProjectSelect: (projectId: Id<"projects">) => void;
 	onNoteTitleChange?: (title: string) => void;
 	onNoteTrashed?: (noteId: Id<"notes">) => void;
-	onViewChange: (
-		view:
-			| "home"
-			| "chat"
-			| "automation"
-			| "inbox"
-			| "shared"
-			| "project"
-			| "note",
-	) => void;
+	onViewChange: (view: NavigableAppView) => void;
 	projects: Array<Doc<"projects">> | undefined;
 	recordingNoteId: Id<"notes"> | null;
 	sharedNotes: Array<Doc<"notes">> | undefined;

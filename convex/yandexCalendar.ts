@@ -1,41 +1,30 @@
-type YandexCalendarConnection = {
-	email: string;
-	password: string;
-	serverAddress: string;
-	calendarHomePath: string;
-};
-
-type YandexCalendarCollection = {
-	id: string;
-	displayName: string;
-	href: string;
-};
-
-type YandexUpcomingCalendarEvent = {
-	id: string;
-	calendarId: string;
-	calendarName: string;
-	title: string;
-	startAt: string;
-	endAt: string;
-	isAllDay: boolean;
-	isMeeting: boolean;
-	htmlLink?: string;
-	meetingUrl?: string;
-	location?: string;
-};
-
-type ParsedIcsProperty = {
-	parameters: Record<string, string>;
-	value: string;
-};
-
-type ParsedIcsEvent = Record<string, ParsedIcsProperty>;
+import type {
+	CalendarEventDetailsInput,
+	UpdateCalendarEventInput,
+} from "./calendarTypes";
+import {
+	parseIcsDateValue,
+	parseIcsEvents,
+	parseYandexCalendarData,
+	unfoldIcsLines,
+} from "./yandexCalendarIcs";
+import {
+	buildYandexCalendarEventIcs,
+	escapeIcsText,
+	foldIcsLine,
+	formatCalDavTimestamp,
+	formatIcsDate,
+	formatIcsDateTime,
+} from "./yandexCalendarIcsWriter";
+import type {
+	ParsedIcsEvent,
+	YandexCalendarCollection,
+	YandexCalendarConnection,
+} from "./yandexCalendarTypes";
 
 const XML_CONTENT_TYPE = "application/xml; charset=utf-8";
 const CALDAV_NAMESPACE = "urn:ietf:params:xml:ns:caldav";
 const WEBDAV_NAMESPACE = "DAV:";
-const URL_PATTERN = /https?:\/\/[^\s<>"]+/giu;
 
 export const YANDEX_CALENDAR_SERVER_ADDRESS = "caldav.yandex.ru";
 
@@ -73,6 +62,15 @@ const getXmlHrefValue = (xml: string) =>
 const getXmlResponseBlocks = (xml: string) =>
 	xml.match(/<(?:[\w-]+:)?response\b[\s\S]*?<\/(?:[\w-]+:)?response>/giu) ?? [];
 
+const supportsCalendarEvents = (xml: string) => {
+	const supportedComponents =
+		getXmlTagContent(xml, "supported-calendar-component-set") ?? "";
+
+	return /<(?:[\w-]+:)?comp\b[^>]*\bname\s*=\s*["']VEVENT["']/iu.test(
+		supportedComponents,
+	);
+};
+
 const normalizeHrefPath = (href: string) => {
 	try {
 		return new URL(href).pathname;
@@ -90,31 +88,37 @@ const buildBasicAuthHeader = (email: string, password: string) =>
 const fetchYandexDav = async ({
 	body,
 	connection,
+	contentType = XML_CONTENT_TYPE,
 	depth,
+	headers,
 	method,
 	path,
+	request = fetch,
 }: {
 	body?: string;
 	connection: YandexCalendarConnection;
+	contentType?: string;
 	depth?: "0" | "1";
-	method: "PROPFIND" | "REPORT";
+	headers?: Record<string, string>;
+	method: "DELETE" | "GET" | "MKCALENDAR" | "PROPFIND" | "PUT" | "REPORT";
 	path: string;
+	request?: typeof fetch;
 }) => {
-	return await fetch(
-		buildYandexCalendarUrl(connection.serverAddress, path),
-		{
-			method,
-			headers: {
-				Authorization: buildBasicAuthHeader(
-					connection.email,
-					connection.password,
-				),
-				Depth: depth ?? "0",
-				"Content-Type": XML_CONTENT_TYPE,
-			},
-			body,
+	return await request(buildYandexCalendarUrl(connection.serverAddress, path), {
+		method,
+		headers: {
+			Authorization: buildBasicAuthHeader(
+				connection.email,
+				connection.password,
+			),
+			...(method === "PROPFIND" || method === "REPORT"
+				? { Depth: depth ?? "0" }
+				: {}),
+			"Content-Type": contentType,
+			...headers,
 		},
-	);
+		body,
+	});
 };
 
 const requireSuccessfulDavResponse = async (
@@ -217,12 +221,26 @@ const parseYandexCalendarCollections = (
 			if (
 				!href ||
 				responsePath === normalizedHomePath ||
-				!/<(?:[\w-]+:)?calendar\b/iu.test(resourceType)
+				!/<(?:[\w-]+:)?calendar\b/iu.test(resourceType) ||
+				!supportsCalendarEvents(block)
 			) {
 				return null;
 			}
 
+			const color = decodeXmlText(
+				getXmlTagContent(block, "calendar-color") ?? "",
+			)
+				.trim()
+				.slice(0, 7);
+
+			if (!/^#[0-9a-f]{6}$/iu.test(color)) {
+				throw new Error(
+					`Yandex calendar "${responsePath}" did not expose a valid color.`,
+				);
+			}
+
 			return {
+				color,
 				id: `yandex:${responsePath}`,
 				displayName:
 					decodeXmlText(getXmlTagContent(block, "displayname") ?? "").trim() ||
@@ -230,633 +248,40 @@ const parseYandexCalendarCollections = (
 				href: responsePath,
 			} satisfies YandexCalendarCollection;
 		})
-		.filter((calendar): calendar is YandexCalendarCollection => calendar !== null);
+		.filter(
+			(calendar): calendar is YandexCalendarCollection => calendar !== null,
+		);
 };
 
-const formatCalDavTimestamp = (value: number) => {
-	const date = new Date(value);
-	const parts = [
-		date.getUTCFullYear().toString().padStart(4, "0"),
-		(date.getUTCMonth() + 1).toString().padStart(2, "0"),
-		date.getUTCDate().toString().padStart(2, "0"),
-		"T",
-		date.getUTCHours().toString().padStart(2, "0"),
-		date.getUTCMinutes().toString().padStart(2, "0"),
-		date.getUTCSeconds().toString().padStart(2, "0"),
-		"Z",
-	];
-
-	return parts.join("");
-};
-
-const unfoldIcsLines = (value: string) =>
-	value
-		.replaceAll("\r\n", "\n")
-		.replaceAll("\r", "\n")
-		.replaceAll(/\n[ \t]/gu, "");
-
-const decodeIcsText = (value: string) =>
-	value
-		.replaceAll("\\n", "\n")
-		.replaceAll("\\N", "\n")
-		.replaceAll("\\,", ",")
-		.replaceAll("\\;", ";")
-		.replaceAll("\\\\", "\\");
-
-const tryParseUrl = (value: string) => {
-	try {
-		return new URL(value);
-	} catch {
-		return null;
-	}
-};
-
-const extractUrls = (value?: string) =>
-	value ? Array.from(value.matchAll(URL_PATTERN), (match) => match[0]) : [];
-
-const isGenericYandexEventUrl = (value: string) => {
-	const parsedUrl = tryParseUrl(value);
-
-	if (!parsedUrl) {
-		return false;
-	}
-
-	return (
-		(parsedUrl.hostname === "calendar.yandex.com" ||
-			parsedUrl.hostname === "calendar.yandex.ru" ||
-			parsedUrl.hostname === "calendar.360.yandex.ru") &&
-		parsedUrl.pathname.startsWith("/event")
-	);
-};
-
-const isMeetingJoinUrl = (value: string) => {
-	const parsedUrl = tryParseUrl(value);
-
-	if (!parsedUrl || isGenericYandexEventUrl(value)) {
-		return false;
-	}
-
-	const hostname = parsedUrl.hostname.toLowerCase();
-
-	return (
-		hostname === "telemost.yandex.ru" ||
-		hostname === "telemost.360.yandex.ru" ||
-		hostname === "meet.google.com" ||
-		hostname === "teams.microsoft.com" ||
-		hostname === "meetings.office.com" ||
-		hostname === "zoom.us" ||
-		hostname.endsWith(".zoom.us") ||
-		hostname.endsWith(".webex.com")
-	);
-};
-
-const parseIcsPropertyLine = (line: string) => {
-	const separatorIndex = line.indexOf(":");
-
-	if (separatorIndex < 0) {
-		return null;
-	}
-
-	const rawKey = line.slice(0, separatorIndex);
-	const rawValue = line.slice(separatorIndex + 1);
-	const [name, ...parameterEntries] = rawKey.split(";");
-	const parameters: Record<string, string> = {};
-
-	for (const entry of parameterEntries) {
-		const [parameterName, ...parameterValueParts] = entry.split("=");
-
-		if (!parameterName || parameterValueParts.length === 0) {
-			continue;
-		}
-
-		parameters[parameterName.toUpperCase()] = parameterValueParts.join("=");
-	}
-
-	return {
-		name: name.toUpperCase(),
-		parameters,
-		value: rawValue,
-	};
-};
-
-const parseIcsEvents = (calendarData: string) => {
-	const lines = unfoldIcsLines(calendarData).split("\n");
-	const events: ParsedIcsEvent[] = [];
-	let currentEvent:
-		| ParsedIcsEvent
-		| null = null;
-
-	for (const rawLine of lines) {
-		const line = rawLine.trimEnd();
-
-		if (line === "BEGIN:VEVENT") {
-			currentEvent = {};
-			continue;
-		}
-
-		if (line === "END:VEVENT") {
-			if (currentEvent) {
-				events.push(currentEvent);
-			}
-			currentEvent = null;
-			continue;
-		}
-
-		if (!currentEvent) {
-			continue;
-		}
-
-		const property = parseIcsPropertyLine(line);
-
-		if (!property || property.name in currentEvent) {
-			continue;
-		}
-
-		currentEvent[property.name] = {
-			parameters: property.parameters,
-			value: property.value,
-		};
-	}
-
-	return events;
-};
-
-const addDaysToDateParts = (
-	parts: NonNullable<ReturnType<typeof parseIcsDateParts>>,
-	days: number,
-) => {
-	const shiftedDate = new Date(
-		Date.UTC(parts.year, parts.month - 1, parts.day + days),
-	);
-
-	return {
-		year: shiftedDate.getUTCFullYear(),
-		month: shiftedDate.getUTCMonth() + 1,
-		day: shiftedDate.getUTCDate(),
-		hour: parts.hour,
-		minute: parts.minute,
-		second: parts.second,
-		isUtc: parts.isUtc,
-	};
-};
-
-const getDatePartWeekday = (
-	parts: NonNullable<ReturnType<typeof parseIcsDateParts>>,
-) => new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
-
-const parseRrule = (value: string) =>
-	Object.fromEntries(
-		value
-			.split(";")
-			.map((entry) => entry.split("="))
-			.filter((entry) => entry.length === 2)
-			.map(([key, parsedValue]) => [key.toUpperCase(), parsedValue]),
-	);
-
-const ICS_WEEKDAY_INDEX_BY_CODE: Record<string, number> = {
-	SU: 0,
-	MO: 1,
-	TU: 2,
-	WE: 3,
-	TH: 4,
-	FR: 5,
-	SA: 6,
-};
-
-const parseIcsDateParts = (value: string) => {
-	const match = value.match(
-		/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?(Z)?$/u,
-	);
-
-	if (!match) {
-		return null;
-	}
-
-	return {
-		year: Number(match[1]),
-		month: Number(match[2]),
-		day: Number(match[3]),
-		hour: Number(match[4] ?? "0"),
-		minute: Number(match[5] ?? "0"),
-		second: Number(match[6] ?? "0"),
-		isUtc: match[7] === "Z",
-	};
-};
-
-const getTimeZoneOffsetMs = (date: Date, timeZone: string) => {
-	const formatter = new Intl.DateTimeFormat("en-US", {
-		timeZone,
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-		hour12: false,
+const listYandexCalendarCollections = async ({
+	connection,
+	request,
+}: {
+	connection: YandexCalendarConnection;
+	request?: typeof fetch;
+}) => {
+	const response = await fetchYandexDav({
+		connection,
+		method: "PROPFIND",
+		path: connection.calendarHomePath,
+		depth: "1",
+		request,
+		body: `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="${WEBDAV_NAMESPACE}" xmlns:c="${CALDAV_NAMESPACE}" xmlns:a="http://apple.com/ns/ical/">
+	<d:prop>
+		<d:displayname />
+		<d:resourcetype />
+		<c:supported-calendar-component-set />
+		<a:calendar-color />
+	</d:prop>
+</d:propfind>`,
 	});
-	const parts = formatter.formatToParts(date);
-	const numericPart = (type: string) =>
-		Number(parts.find((part) => part.type === type)?.value ?? "0");
-	const asUtc = Date.UTC(
-		numericPart("year"),
-		numericPart("month") - 1,
-		numericPart("day"),
-		numericPart("hour"),
-		numericPart("minute"),
-		numericPart("second"),
+	const xml = await requireSuccessfulDavResponse(
+		response,
+		"Failed to load Yandex calendars",
 	);
 
-	return asUtc - date.getTime();
-};
-
-const zonedDateTimeToUtc = (
-	parts: NonNullable<ReturnType<typeof parseIcsDateParts>>,
-	timeZone: string,
-) => {
-	const utcGuess = Date.UTC(
-		parts.year,
-		parts.month - 1,
-		parts.day,
-		parts.hour,
-		parts.minute,
-		parts.second,
-	);
-	const initialOffset = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
-	let timestamp = utcGuess - initialOffset;
-	const adjustedOffset = getTimeZoneOffsetMs(new Date(timestamp), timeZone);
-
-	if (adjustedOffset !== initialOffset) {
-		timestamp = utcGuess - adjustedOffset;
-	}
-
-	return new Date(timestamp);
-};
-
-const parseIcsDateValue = (
-	value: string,
-	parameters: Record<string, string>,
-	isEnd: boolean,
-) => {
-	const isAllDay = parameters.VALUE === "DATE" || /^\d{8}$/u.test(value);
-
-	if (isAllDay) {
-		const parts = parseIcsDateParts(value);
-
-		if (!parts) {
-			return null;
-		}
-
-		const timestamp = new Date(
-			Date.UTC(parts.year, parts.month - 1, parts.day),
-		).getTime();
-
-		return new Date(isEnd ? timestamp - 1 : timestamp);
-	}
-
-	const parts = parseIcsDateParts(value);
-
-	if (!parts) {
-		return null;
-	}
-
-	if (parts.isUtc) {
-		return new Date(
-			Date.UTC(
-				parts.year,
-				parts.month - 1,
-				parts.day,
-				parts.hour,
-				parts.minute,
-				parts.second,
-			),
-		);
-	}
-
-	const timeZone = parameters.TZID;
-
-	if (timeZone) {
-		try {
-			return zonedDateTimeToUtc(parts, timeZone);
-		} catch {
-			// Fall through to the floating-time parse below.
-		}
-	}
-
-	return new Date(
-		Date.UTC(
-			parts.year,
-			parts.month - 1,
-			parts.day,
-			parts.hour,
-			parts.minute,
-			parts.second,
-		),
-	);
-};
-
-const getMeetingUrl = ({
-	conference,
-	description,
-	location,
-	telemostConference,
-}: {
-	conference?: string;
-	description?: string;
-	location?: string;
-	telemostConference?: string;
-}) => {
-	for (const candidate of [
-		conference?.trim(),
-		telemostConference?.trim(),
-		...extractUrls(description),
-		...extractUrls(location),
-	]) {
-		if (candidate && isMeetingJoinUrl(candidate)) {
-			return candidate;
-		}
-	}
-};
-
-const normalizeYandexCalendarEvent = ({
-	calendar,
-	event,
-	href,
-	now,
-	overrideEndAt,
-	overrideStartAt,
-	overrideTitle,
-}: {
-	calendar: YandexCalendarCollection;
-	event: ParsedIcsEvent;
-	href: string;
-	now: number;
-	overrideEndAt?: Date;
-	overrideStartAt?: Date;
-	overrideTitle?: string;
-}): YandexUpcomingCalendarEvent | null => {
-	if (event.STATUS?.value?.toUpperCase() === "CANCELLED") {
-		return null;
-	}
-
-	const startProperty = event.DTSTART;
-
-	if (!startProperty) {
-		return null;
-	}
-
-	const endProperty = event.DTEND ?? event.DUE ?? startProperty;
-	const startAt =
-		overrideStartAt ??
-		parseIcsDateValue(startProperty.value, startProperty.parameters, false);
-	const endAt =
-		overrideEndAt ??
-		parseIcsDateValue(endProperty.value, endProperty.parameters, true) ??
-		startAt;
-
-	if (!startAt || !endAt || endAt.getTime() < now) {
-		return null;
-	}
-
-	const description = event.DESCRIPTION
-		? decodeIcsText(event.DESCRIPTION.value).trim()
-		: undefined;
-	const location = event.LOCATION
-		? decodeIcsText(event.LOCATION.value).trim()
-		: undefined;
-	const url = event.URL ? decodeIcsText(event.URL.value).trim() : undefined;
-	const meetingUrl = getMeetingUrl({
-		conference: event.CONFERENCE
-			? decodeIcsText(event.CONFERENCE.value).trim()
-			: undefined,
-		description,
-		location,
-		telemostConference: event["X-TELEMOST-CONFERENCE"]
-			? decodeIcsText(event["X-TELEMOST-CONFERENCE"].value).trim()
-			: undefined,
-	});
-
-	return {
-		id: `yandex:${event.UID?.value ?? href}:${startAt.toISOString()}`,
-		calendarId: calendar.id,
-		calendarName: calendar.displayName,
-		title:
-			overrideTitle ??
-			(event.SUMMARY ? decodeIcsText(event.SUMMARY.value).trim() : "Untitled event"),
-		startAt: startAt.toISOString(),
-		endAt: endAt.toISOString(),
-		isAllDay:
-			startProperty.parameters.VALUE === "DATE" ||
-			/^\d{8}$/u.test(startProperty.value),
-		isMeeting: Boolean(meetingUrl || event.ATTENDEE),
-		htmlLink: url,
-		meetingUrl,
-		location: location || undefined,
-	};
-};
-
-const getRecurringOccurrenceStart = ({
-	candidateDate,
-	startProperty,
-}: {
-	candidateDate: NonNullable<ReturnType<typeof parseIcsDateParts>>;
-	startProperty: ParsedIcsProperty;
-}) => {
-	if (startProperty.parameters.VALUE === "DATE" || /^\d{8}$/u.test(startProperty.value)) {
-		return new Date(
-			Date.UTC(candidateDate.year, candidateDate.month - 1, candidateDate.day),
-		);
-	}
-
-	if (candidateDate.isUtc) {
-		return new Date(
-			Date.UTC(
-				candidateDate.year,
-				candidateDate.month - 1,
-				candidateDate.day,
-				candidateDate.hour,
-				candidateDate.minute,
-				candidateDate.second,
-			),
-		);
-	}
-
-	const timeZone = startProperty.parameters.TZID;
-
-	if (timeZone) {
-		return zonedDateTimeToUtc(candidateDate, timeZone);
-	}
-
-	return new Date(
-		Date.UTC(
-			candidateDate.year,
-			candidateDate.month - 1,
-			candidateDate.day,
-			candidateDate.hour,
-			candidateDate.minute,
-			candidateDate.second,
-		),
-	);
-};
-
-const expandRecurringYandexCalendarEvent = ({
-	calendar,
-	event,
-	href,
-	now,
-	overrideByRecurrenceId,
-	timeMax,
-	timeMin,
-}: {
-	calendar: YandexCalendarCollection;
-	event: ParsedIcsEvent;
-	href: string;
-	now: number;
-	overrideByRecurrenceId: Map<string, ParsedIcsEvent>;
-	timeMax: number;
-	timeMin: number;
-}) => {
-	const startProperty = event.DTSTART;
-
-	if (!startProperty || !event.RRULE) {
-		return [];
-	}
-
-	const endProperty = event.DTEND ?? event.DUE ?? startProperty;
-	const seriesStart = parseIcsDateValue(
-		startProperty.value,
-		startProperty.parameters,
-		false,
-	);
-	const seriesEnd =
-		parseIcsDateValue(endProperty.value, endProperty.parameters, true) ?? seriesStart;
-	const startParts = parseIcsDateParts(startProperty.value);
-	const rule = parseRrule(event.RRULE.value);
-
-	if (!seriesStart || !seriesEnd || !startParts) {
-		return [];
-	}
-
-	const durationMs = Math.max(0, seriesEnd.getTime() - seriesStart.getTime());
-	const interval = Math.max(1, Number(rule.INTERVAL ?? "1"));
-	const until = rule.UNTIL
-		? parseIcsDateValue(rule.UNTIL, {}, false)?.getTime() ?? null
-		: null;
-	const count = rule.COUNT ? Number(rule.COUNT) : null;
-	const occurrences: YandexUpcomingCalendarEvent[] = [];
-
-	if (rule.FREQ === "DAILY") {
-		let occurrenceIndex = 0;
-		let currentParts = startParts;
-
-		while (true) {
-			const occurrenceStart = getRecurringOccurrenceStart({
-				candidateDate: currentParts,
-				startProperty,
-			});
-			const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
-
-			if (occurrenceStart.getTime() > timeMax) {
-				break;
-			}
-
-			if (until !== null && occurrenceStart.getTime() > until) {
-				break;
-			}
-
-			if (count !== null && occurrenceIndex >= count) {
-				break;
-			}
-
-			if (occurrenceEnd.getTime() >= timeMin) {
-				const recurrenceId = occurrenceStart.toISOString();
-				const overrideEvent = overrideByRecurrenceId.get(recurrenceId);
-				const normalizedEvent = normalizeYandexCalendarEvent({
-					calendar,
-					event: overrideEvent ?? event,
-					href,
-					now,
-					overrideStartAt: overrideEvent ? undefined : occurrenceStart,
-					overrideEndAt: overrideEvent
-						? undefined
-						: new Date(occurrenceStart.getTime() + durationMs),
-				});
-
-				if (normalizedEvent) {
-					occurrences.push(normalizedEvent);
-				}
-			}
-
-			currentParts = addDaysToDateParts(currentParts, interval);
-			occurrenceIndex += 1;
-		}
-
-		return occurrences;
-	}
-
-	if (rule.FREQ === "WEEKLY") {
-		const byDayCodes = (rule.BYDAY ?? "")
-			.split(",")
-			.map((value) => value.trim().toUpperCase())
-			.filter(Boolean);
-		const byDays =
-			byDayCodes.length > 0
-				? byDayCodes
-						.map((code) => ICS_WEEKDAY_INDEX_BY_CODE[code])
-						.filter((value) => value !== undefined)
-				: [getDatePartWeekday(startParts)];
-		let daysFromSeriesStart = 0;
-		let generatedCount = 0;
-
-		while (true) {
-			const candidateDate = addDaysToDateParts(startParts, daysFromSeriesStart);
-			const occurrenceStart = getRecurringOccurrenceStart({
-				candidateDate,
-				startProperty,
-			});
-			const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
-
-			if (occurrenceStart.getTime() > timeMax) {
-				break;
-			}
-
-			const weekOffset = Math.floor(daysFromSeriesStart / 7);
-			const candidateWeekday = getDatePartWeekday(candidateDate);
-			const matchesWeeklyRule =
-				weekOffset % interval === 0 && byDays.includes(candidateWeekday);
-
-			if (
-				matchesWeeklyRule &&
-				(until === null || occurrenceStart.getTime() <= until) &&
-				(count === null || generatedCount < count) &&
-				occurrenceEnd.getTime() >= timeMin
-			) {
-				const recurrenceId = occurrenceStart.toISOString();
-				const overrideEvent = overrideByRecurrenceId.get(recurrenceId);
-				const normalizedEvent = normalizeYandexCalendarEvent({
-					calendar,
-					event: overrideEvent ?? event,
-					href,
-					now,
-					overrideStartAt: overrideEvent ? undefined : occurrenceStart,
-					overrideEndAt: overrideEvent
-						? undefined
-						: new Date(occurrenceStart.getTime() + durationMs),
-				});
-
-				if (normalizedEvent) {
-					occurrences.push(normalizedEvent);
-				}
-
-				generatedCount += 1;
-			}
-
-			daysFromSeriesStart += 1;
-		}
-
-		return occurrences;
-	}
-
-	return [];
+	return parseYandexCalendarCollections(xml, connection);
 };
 
 const parseYandexCalendarReport = ({
@@ -882,92 +307,39 @@ const parseYandexCalendarReport = ({
 			return [];
 		}
 
-		const parsedEvents = parseIcsEvents(calendarData);
-		const overridesByUid = new Map<string, Map<string, ParsedIcsEvent>>();
-
-		for (const event of parsedEvents) {
-			if (!event["RECURRENCE-ID"] || !event.UID) {
-				continue;
-			}
-
-			const recurrenceId = parseIcsDateValue(
-				event["RECURRENCE-ID"].value,
-				event["RECURRENCE-ID"].parameters,
-				false,
-			)?.toISOString();
-
-			if (!recurrenceId) {
-				continue;
-			}
-
-			const uid = event.UID.value;
-			const overrides = overridesByUid.get(uid) ?? new Map<string, ParsedIcsEvent>();
-			overrides.set(recurrenceId, event);
-			overridesByUid.set(uid, overrides);
-		}
-
-		return parsedEvents.flatMap((event) => {
-			if (event["RECURRENCE-ID"]) {
-				return [];
-			}
-
-			if (event.RRULE) {
-				return expandRecurringYandexCalendarEvent({
-					calendar,
-					event,
-					href,
-					now,
-					timeMin,
-					timeMax,
-					overrideByRecurrenceId: overridesByUid.get(event.UID?.value ?? "") ?? new Map(),
-				});
-			}
-
-			const normalizedEvent = normalizeYandexCalendarEvent({
-				calendar,
-				event,
-				href,
-				now,
-			});
-
-			return normalizedEvent ? [normalizedEvent] : [];
+		return parseYandexCalendarData({
+			calendar,
+			calendarData,
+			href,
+			minimumEndAt: now,
+			timeMax,
+			timeMin,
 		});
 	});
 
 export const listYandexUpcomingEvents = async ({
 	connection,
 	now,
+	request,
 	timeMax,
 	timeMin,
 }: {
 	connection: YandexCalendarConnection;
 	now: number;
+	request?: typeof fetch;
 	timeMax: number;
 	timeMin: number;
 }) => {
-	const calendarsResponse = await fetchYandexDav({
+	const calendars = await listYandexCalendarCollections({
 		connection,
-		method: "PROPFIND",
-		path: connection.calendarHomePath,
-		depth: "1",
-		body: `<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="${WEBDAV_NAMESPACE}">
-	<d:prop>
-		<d:displayname />
-		<d:resourcetype />
-	</d:prop>
-</d:propfind>`,
+		request,
 	});
-	const calendarsXml = await requireSuccessfulDavResponse(
-		calendarsResponse,
-		"Failed to load Yandex calendars",
-	);
-	const calendars = parseYandexCalendarCollections(calendarsXml, connection);
 
 	if (calendars.length === 0) {
 		return {
+			calendars: [],
 			connectedCalendarCount: 0,
-			events: [] as YandexUpcomingCalendarEvent[],
+			events: [],
 		};
 	}
 
@@ -990,35 +362,583 @@ export const listYandexUpcomingEvents = async ({
 
 	const eventGroups = await Promise.all(
 		calendars.map(async (calendar) => {
-			try {
-				const response = await fetchYandexDav({
-					connection,
-					method: "REPORT",
-					path: calendar.href,
-					depth: "1",
-					body: reportBody,
-				});
-				const xml = await requireSuccessfulDavResponse(
-					response,
-					`Failed to load ${calendar.displayName}`,
-				);
-				const events = parseYandexCalendarReport({
-					calendar,
-					now,
-					timeMax,
-					timeMin,
-					xml,
-				});
+			const response = await fetchYandexDav({
+				connection,
+				method: "REPORT",
+				path: calendar.href,
+				depth: "1",
+				request,
+				body: reportBody,
+			});
+			const xml = await requireSuccessfulDavResponse(
+				response,
+				`Failed to load ${calendar.displayName}`,
+			);
 
-				return events;
-			} catch {
-				return [];
-			}
+			return parseYandexCalendarReport({
+				calendar,
+				now,
+				timeMax,
+				timeMin,
+				xml,
+			});
 		}),
 	);
 
 	return {
+		calendars: calendars.map((calendar) => ({
+			canCreateEvents: true,
+			color: calendar.color,
+			id: calendar.id,
+			name: calendar.displayName,
+			provider: "yandex" as const,
+		})),
 		connectedCalendarCount: calendars.length,
 		events: eventGroups.flat(),
 	};
+};
+
+export const createYandexCalendar = async ({
+	color,
+	connection,
+	name,
+	request,
+	uid = crypto.randomUUID(),
+}: {
+	color: string;
+	connection: YandexCalendarConnection;
+	name: string;
+	request?: typeof fetch;
+	uid?: string;
+}) => {
+	const calendarPath = `${connection.calendarHomePath.replace(/\/?$/u, "/")}graneri-${encodeURIComponent(uid)}/`;
+	const response = await fetchYandexDav({
+		body: `<?xml version="1.0" encoding="utf-8"?>
+<c:mkcalendar xmlns:d="${WEBDAV_NAMESPACE}" xmlns:c="${CALDAV_NAMESPACE}" xmlns:a="http://apple.com/ns/ical/">
+	<d:set>
+		<d:prop>
+			<d:displayname>${encodeXmlText(name)}</d:displayname>
+			<c:supported-calendar-component-set>
+				<c:comp name="VEVENT" />
+			</c:supported-calendar-component-set>
+			<a:calendar-color>${encodeXmlText(color.toUpperCase())}FF</a:calendar-color>
+		</d:prop>
+	</d:set>
+</c:mkcalendar>`,
+		connection,
+		method: "MKCALENDAR",
+		path: calendarPath,
+		request,
+	});
+	await requireSuccessfulDavResponse(
+		response,
+		"Failed to create Yandex calendar",
+	);
+
+	return { id: `yandex:${calendarPath}` };
+};
+
+const getIcsLinePropertyName = (line: string) =>
+	line.slice(0, line.search(/[:;]/u)).toUpperCase();
+
+const getIcsEventBlockRanges = (lines: string[]) => {
+	const ranges: Array<{ end: number; start: number }> = [];
+	let start = -1;
+
+	for (let index = 0; index < lines.length; index += 1) {
+		if (lines[index] === "BEGIN:VEVENT") {
+			start = index;
+			continue;
+		}
+
+		if (lines[index] === "END:VEVENT" && start >= 0) {
+			ranges.push({ start, end: index });
+			start = -1;
+		}
+	}
+
+	return ranges;
+};
+
+const parseIcsEventBlock = (lines: string[]) =>
+	parseIcsEvents(lines.join("\r\n"))[0] ?? null;
+
+const getRecurrenceIdIso = (event: ParsedIcsEvent) => {
+	const recurrenceId = event["RECURRENCE-ID"];
+
+	if (!recurrenceId) {
+		return undefined;
+	}
+
+	return (
+		parseIcsDateValue(
+			recurrenceId.value,
+			recurrenceId.parameters,
+			false,
+		)?.toISOString() ?? undefined
+	);
+};
+
+const getPreservedEventLines = ({
+	eventLines,
+	isOverride,
+}: {
+	eventLines: string[];
+	isOverride: boolean;
+}) => {
+	const excludedProperties = new Set([
+		"DESCRIPTION",
+		"DTEND",
+		"DTSTAMP",
+		"DTSTART",
+		"DURATION",
+		"LAST-MODIFIED",
+		"LOCATION",
+		"SEQUENCE",
+		"SUMMARY",
+		"UID",
+		...(isOverride
+			? ["CREATED", "EXDATE", "RDATE", "RECURRENCE-ID", "RRULE", "STATUS"]
+			: []),
+	]);
+	const preservedLines: string[] = [];
+	let nestedComponentDepth = 0;
+
+	for (const line of eventLines.slice(1, -1)) {
+		if (line.startsWith("BEGIN:")) {
+			nestedComponentDepth += 1;
+			preservedLines.push(line);
+			continue;
+		}
+
+		if (nestedComponentDepth > 0) {
+			preservedLines.push(line);
+			if (line.startsWith("END:")) {
+				nestedComponentDepth -= 1;
+			}
+			continue;
+		}
+
+		if (!excludedProperties.has(getIcsLinePropertyName(line))) {
+			preservedLines.push(line);
+		}
+	}
+
+	return preservedLines;
+};
+
+const getNextSequence = (event: ParsedIcsEvent) => {
+	const sequence = Number(event.SEQUENCE?.value ?? "0");
+	return Number.isFinite(sequence) ? Math.max(0, sequence) + 1 : 1;
+};
+
+const buildYandexEventTimeLines = (time: UpdateCalendarEventInput["time"]) =>
+	time.kind === "all_day"
+		? [
+				`DTSTART;VALUE=DATE:${formatIcsDate(time.startDate)}`,
+				`DTEND;VALUE=DATE:${formatIcsDate(time.endDate)}`,
+			]
+		: [
+				`DTSTART:${formatIcsDateTime(time.startAt)}`,
+				`DTEND:${formatIcsDateTime(time.endAt)}`,
+			];
+
+const formatYandexRecurrenceId = ({
+	isAllDay,
+	recurrenceId,
+}: {
+	isAllDay: boolean;
+	recurrenceId: string;
+}) =>
+	isAllDay
+		? `RECURRENCE-ID;VALUE=DATE:${formatIcsDate(
+				new Date(recurrenceId).toISOString().slice(0, 10),
+			)}`
+		: `RECURRENCE-ID:${formatIcsDateTime(recurrenceId)}`;
+
+const buildUpdatedYandexEventLines = ({
+	baseEventLines,
+	input,
+	now,
+}: {
+	baseEventLines: string[];
+	input: UpdateCalendarEventInput;
+	now: number;
+}) => {
+	const baseEvent = parseIcsEventBlock(baseEventLines);
+	const uid = baseEvent?.UID?.value;
+
+	if (!baseEvent || !uid) {
+		throw new Error("The Yandex event resource is invalid.");
+	}
+
+	const isOverride = Boolean(input.recurrenceId);
+	return [
+		"BEGIN:VEVENT",
+		`UID:${uid}`,
+		`DTSTAMP:${formatCalDavTimestamp(now)}`,
+		`SEQUENCE:${getNextSequence(baseEvent)}`,
+		...(input.recurrenceId
+			? [
+					formatYandexRecurrenceId({
+						isAllDay: input.recurrenceIsAllDay ?? false,
+						recurrenceId: input.recurrenceId,
+					}),
+				]
+			: []),
+		...buildYandexEventTimeLines(input.time),
+		`SUMMARY:${escapeIcsText(input.title)}`,
+		...(input.description
+			? [`DESCRIPTION:${escapeIcsText(input.description)}`]
+			: []),
+		...(input.location ? [`LOCATION:${escapeIcsText(input.location)}`] : []),
+		...getPreservedEventLines({
+			eventLines: baseEventLines,
+			isOverride,
+		}),
+		"END:VEVENT",
+	];
+};
+
+const buildCancelledYandexEventLines = ({
+	baseEventLines,
+	now,
+	recurrenceId,
+	recurrenceIsAllDay,
+}: {
+	baseEventLines: string[];
+	now: number;
+	recurrenceId: string;
+	recurrenceIsAllDay: boolean;
+}) => {
+	const baseEvent = parseIcsEventBlock(baseEventLines);
+	const uid = baseEvent?.UID?.value;
+
+	if (!baseEvent || !uid) {
+		throw new Error("The Yandex event resource is invalid.");
+	}
+
+	return [
+		"BEGIN:VEVENT",
+		`UID:${uid}`,
+		`DTSTAMP:${formatCalDavTimestamp(now)}`,
+		`SEQUENCE:${getNextSequence(baseEvent)}`,
+		formatYandexRecurrenceId({
+			isAllDay: recurrenceIsAllDay,
+			recurrenceId,
+		}),
+		"STATUS:CANCELLED",
+		"END:VEVENT",
+	];
+};
+
+const updateYandexCalendarResource = ({
+	calendarData,
+	input,
+	now,
+}: {
+	calendarData: string;
+	input: UpdateCalendarEventInput;
+	now: number;
+}) => {
+	const lines = unfoldIcsLines(calendarData)
+		.split("\n")
+		.map((line) => line.trimEnd());
+	const ranges = getIcsEventBlockRanges(lines);
+	const baseRange = ranges.find(({ end, start }) => {
+		const event = parseIcsEventBlock(lines.slice(start, end + 1));
+		return event && !event["RECURRENCE-ID"];
+	});
+
+	if (!baseRange) {
+		throw new Error("The Yandex event resource has no editable event.");
+	}
+
+	const baseEventLines = lines.slice(baseRange.start, baseRange.end + 1);
+	const updatedEventLines = buildUpdatedYandexEventLines({
+		baseEventLines,
+		input,
+		now,
+	});
+	const targetRange = input.recurrenceId
+		? ranges.find(({ end, start }) => {
+				const event = parseIcsEventBlock(lines.slice(start, end + 1));
+				return event && getRecurrenceIdIso(event) === input.recurrenceId;
+			})
+		: baseRange;
+
+	if (targetRange) {
+		lines.splice(
+			targetRange.start,
+			targetRange.end - targetRange.start + 1,
+			...updatedEventLines,
+		);
+	} else {
+		const calendarEnd = lines.lastIndexOf("END:VCALENDAR");
+
+		if (calendarEnd < 0) {
+			throw new Error("The Yandex event resource has no calendar boundary.");
+		}
+
+		lines.splice(calendarEnd, 0, ...updatedEventLines);
+	}
+
+	return `${lines.flatMap(foldIcsLine).join("\r\n")}\r\n`;
+};
+
+const cancelYandexCalendarOccurrence = ({
+	calendarData,
+	now,
+	recurrenceId,
+	recurrenceIsAllDay,
+}: {
+	calendarData: string;
+	now: number;
+	recurrenceId: string;
+	recurrenceIsAllDay: boolean;
+}) => {
+	const lines = unfoldIcsLines(calendarData)
+		.split("\n")
+		.map((line) => line.trimEnd());
+	const ranges = getIcsEventBlockRanges(lines);
+	const baseRange = ranges.find(({ end, start }) => {
+		const event = parseIcsEventBlock(lines.slice(start, end + 1));
+		return event && !event["RECURRENCE-ID"];
+	});
+
+	if (!baseRange) {
+		throw new Error("The Yandex event resource has no editable event.");
+	}
+
+	const cancelledEventLines = buildCancelledYandexEventLines({
+		baseEventLines: lines.slice(baseRange.start, baseRange.end + 1),
+		now,
+		recurrenceId,
+		recurrenceIsAllDay,
+	});
+	const targetRange = ranges.find(({ end, start }) => {
+		const event = parseIcsEventBlock(lines.slice(start, end + 1));
+		return event && getRecurrenceIdIso(event) === recurrenceId;
+	});
+
+	if (targetRange) {
+		lines.splice(
+			targetRange.start,
+			targetRange.end - targetRange.start + 1,
+			...cancelledEventLines,
+		);
+	} else {
+		const calendarEnd = lines.lastIndexOf("END:VCALENDAR");
+
+		if (calendarEnd < 0) {
+			throw new Error("The Yandex event resource has no calendar boundary.");
+		}
+
+		lines.splice(calendarEnd, 0, ...cancelledEventLines);
+	}
+
+	return `${lines.flatMap(foldIcsLine).join("\r\n")}\r\n`;
+};
+
+const getYandexCalendarEventTarget = async ({
+	calendarId,
+	connection,
+	providerEventId,
+	request,
+}: {
+	calendarId: string;
+	connection: YandexCalendarConnection;
+	providerEventId: string;
+	request?: typeof fetch;
+}) => {
+	const calendars = await listYandexCalendarCollections({
+		connection,
+		request,
+	});
+	const calendar = calendars.find((candidate) => candidate.id === calendarId);
+
+	if (!calendar) {
+		throw new Error("The selected Yandex calendar is not available.");
+	}
+
+	const calendarPath = `${normalizeHrefPath(calendar.href).replace(/\/?$/u, "/")}`;
+	const eventPath = normalizeHrefPath(providerEventId);
+
+	if (!eventPath.startsWith(calendarPath) || eventPath === calendarPath) {
+		throw new Error("The selected Yandex event is not in this calendar.");
+	}
+
+	return eventPath;
+};
+
+const loadYandexCalendarEventResource = async ({
+	connection,
+	path,
+	request,
+}: {
+	connection: YandexCalendarConnection;
+	path: string;
+	request?: typeof fetch;
+}) => {
+	const response = await fetchYandexDav({
+		connection,
+		method: "GET",
+		path,
+		request,
+	});
+	const calendarData = await requireSuccessfulDavResponse(
+		response,
+		"Failed to load Yandex event",
+	);
+
+	return {
+		calendarData,
+		etag: response.headers.get("etag") ?? undefined,
+	};
+};
+
+export const updateYandexCalendarEvent = async ({
+	connection,
+	input,
+	now = Date.now(),
+	request,
+}: {
+	connection: YandexCalendarConnection;
+	input: UpdateCalendarEventInput;
+	now?: number;
+	request?: typeof fetch;
+}) => {
+	const path = await getYandexCalendarEventTarget({
+		calendarId: input.calendarId,
+		connection,
+		providerEventId: input.providerEventId,
+		request,
+	});
+	const { calendarData, etag } = await loadYandexCalendarEventResource({
+		connection,
+		path,
+		request,
+	});
+	const response = await fetchYandexDav({
+		body: updateYandexCalendarResource({ calendarData, input, now }),
+		connection,
+		contentType: "text/calendar; charset=utf-8",
+		headers: etag ? { "If-Match": etag } : undefined,
+		method: "PUT",
+		path,
+		request,
+	});
+
+	await requireSuccessfulDavResponse(response, "Failed to update Yandex event");
+	return null;
+};
+
+export const deleteYandexCalendarEvent = async ({
+	calendarId,
+	connection,
+	providerEventId,
+	recurrenceId,
+	recurrenceIsAllDay = false,
+	now = Date.now(),
+	request,
+}: {
+	calendarId: string;
+	connection: YandexCalendarConnection;
+	providerEventId: string;
+	recurrenceId?: string;
+	recurrenceIsAllDay?: boolean;
+	now?: number;
+	request?: typeof fetch;
+}) => {
+	const path = await getYandexCalendarEventTarget({
+		calendarId,
+		connection,
+		providerEventId,
+		request,
+	});
+
+	if (!recurrenceId) {
+		const response = await fetchYandexDav({
+			connection,
+			method: "DELETE",
+			path,
+			request,
+		});
+		await requireSuccessfulDavResponse(
+			response,
+			"Failed to delete Yandex event",
+		);
+		return null;
+	}
+
+	const { calendarData, etag } = await loadYandexCalendarEventResource({
+		connection,
+		path,
+		request,
+	});
+	const response = await fetchYandexDav({
+		body: cancelYandexCalendarOccurrence({
+			calendarData,
+			now,
+			recurrenceId,
+			recurrenceIsAllDay,
+		}),
+		connection,
+		contentType: "text/calendar; charset=utf-8",
+		headers: etag ? { "If-Match": etag } : undefined,
+		method: "PUT",
+		path,
+		request,
+	});
+	await requireSuccessfulDavResponse(
+		response,
+		"Failed to delete Yandex event occurrence",
+	);
+	return null;
+};
+
+export const createYandexCalendarEvent = async ({
+	connection,
+	input,
+	now = Date.now(),
+	request,
+	uid = crypto.randomUUID(),
+}: {
+	connection: YandexCalendarConnection;
+	input: CalendarEventDetailsInput;
+	now?: number;
+	request?: typeof fetch;
+	uid?: string;
+}) => {
+	const calendars = await listYandexCalendarCollections({
+		connection,
+		request,
+	});
+	const calendar = calendars.find(
+		(candidate) => candidate.id === input.calendarId,
+	);
+
+	if (!calendar) {
+		throw new Error("The selected Yandex calendar is not available.");
+	}
+
+	const eventPath = `${calendar.href.replace(/\/?$/u, "/")}${encodeURIComponent(uid)}.ics`;
+	const response = await fetchYandexDav({
+		body: buildYandexCalendarEventIcs({ input, now, uid }),
+		connection,
+		contentType: "text/calendar; charset=utf-8",
+		headers: { "If-None-Match": "*" },
+		method: "PUT",
+		path: eventPath,
+		request,
+	});
+
+	if (!response.ok) {
+		await requireSuccessfulDavResponse(
+			response,
+			"Failed to create Yandex event",
+		);
+	}
+
+	return { id: `yandex:${uid}` };
 };

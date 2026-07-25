@@ -1,6 +1,7 @@
 export const rendererMeetingWidgetPathname: "/desktop/meeting-widget";
 export const rendererRoutePrefixes: readonly [
 	"/automations",
+	"/calendar",
 	"/chat",
 	"/desktop/meeting-widget",
 	"/home",

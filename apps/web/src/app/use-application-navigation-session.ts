@@ -4,6 +4,7 @@ import type { AppLocationState, AppView } from "@/app/app-types";
 import {
 	createNoteSearch,
 	getAppLocationState,
+	getAppViewLocation,
 	getInitialNonSettingsLocation,
 	getSettingsPageFromPath,
 	getSettingsPath,
@@ -230,20 +231,11 @@ export const useApplicationNavigationSession = ({
 				return;
 			}
 
-			const location =
-				view === "chat"
-					? "/chat"
-					: view === "note" && route.noteIdString
-						? `/note?noteId=${encodeURIComponent(route.noteIdString)}`
-						: view === "note"
-							? "/note"
-							: view === "automation"
-								? "/automations"
-								: view === "shared"
-									? "/shared"
-									: view === "project" && route.projectIdString
-										? `/project?projectId=${encodeURIComponent(route.projectIdString)}`
-										: "/home";
+			const location = getAppViewLocation({
+				noteIdString: route.noteIdString,
+				projectIdString: route.projectIdString,
+				view,
+			});
 			navigate(location, { noteId: currentNoteId });
 		},
 		[currentNoteId, navigate, route.noteIdString, route.projectIdString],

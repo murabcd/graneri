@@ -9,12 +9,18 @@ const GOOGLE_BASE_SCOPES = ["openid", "email", "profile"] as const;
 
 export const GOOGLE_CALENDAR_SCOPE =
 	"https://www.googleapis.com/auth/calendar.readonly";
+export const GOOGLE_CALENDAR_WRITE_SCOPE =
+	"https://www.googleapis.com/auth/calendar.events";
+export const GOOGLE_CALENDAR_MANAGE_SCOPE =
+	"https://www.googleapis.com/auth/calendar.app.created";
 export const GOOGLE_DRIVE_SCOPE =
 	"https://www.googleapis.com/auth/drive.readonly";
 
 export const GOOGLE_CALENDAR_SCOPES = [
 	...GOOGLE_BASE_SCOPES,
 	GOOGLE_CALENDAR_SCOPE,
+	GOOGLE_CALENDAR_WRITE_SCOPE,
+	GOOGLE_CALENDAR_MANAGE_SCOPE,
 ] as const;
 export const GOOGLE_DRIVE_SCOPES = [
 	...GOOGLE_BASE_SCOPES,
