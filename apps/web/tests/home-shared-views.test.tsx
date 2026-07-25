@@ -65,7 +65,7 @@ describe("HomeView", () => {
 		});
 
 		expect(screen.getByText("Example meeting")).not.toBeNull();
-		expect(screen.getByText("Updating…")).not.toBeNull();
+		expect(screen.queryByText("Updating…")).toBeNull();
 		expect(
 			screen.getByRole("status", { name: "Calendar status: Updating" }),
 		).not.toBeNull();

@@ -21,7 +21,7 @@ export type AppView =
 export type NavigableAppView = Exclude<AppView, "notFound">;
 
 type UpcomingCalendarEventsResponse = FunctionReturnType<
-	typeof api.calendar.listUpcomingGoogleEvents
+	typeof api.calendar.listUpcomingCalendarEvents
 >;
 
 export type UpcomingCalendarEvent =

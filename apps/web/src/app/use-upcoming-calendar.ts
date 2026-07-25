@@ -41,7 +41,7 @@ export const useUpcomingCalendar = ({
 		api.appConnections.getYandexCalendar,
 		queryArgs,
 	);
-	const listUpcomingEvents = useAction(api.calendar.listUpcomingGoogleEvents);
+	const listUpcomingEvents = useAction(api.calendar.listUpcomingCalendarEvents);
 	const [session, setSession] = React.useState<UpcomingCalendarSession | null>(
 		null,
 	);

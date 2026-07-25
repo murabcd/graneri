@@ -45,7 +45,10 @@ permission rows. Native probing, prerequisite ordering, and permission error
 classification remain in Electron main behind IPC.
 The calendar page reads and creates events and provider calendars through
 authenticated Convex actions. Provider credentials and write requests remain
-server-side: Google event creation uses the calendar write scope and secondary
+server-side. `calendarProviderModule` owns provider selection, parallel
+complete-snapshot aggregation, deduplication, and write dispatch; Google and
+Yandex implementations are adapters that own their credentials and wire
+protocols. Google event creation uses the calendar write scope and secondary
 calendar creation uses the narrow app-created scope, while Yandex creates
 event-only collections with CalDAV MKCALENDAR and writes VEVENT resources with
 CalDAV PUT. Event updates and deletes target the selected occurrence: Google

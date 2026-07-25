@@ -1,13 +1,20 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action } from "./_generated/server";
+import {
+	type CalendarToolProviderInput,
+	createCalendarToolProviderAdapter,
+	createWorkspaceCalendarProviderAdapters,
+} from "./calendarProviderAdapters";
+import { createCalendarProviderModule } from "./calendarProviderModule";
 import type {
 	CalendarEventDetailsInput,
 	CalendarEventsFetchResult,
+	CalendarProvider,
 	CalendarSource,
 	UpcomingCalendarEvent,
 	UpdateCalendarEventInput,
@@ -19,21 +26,6 @@ import {
 	calendarToolResponseValidator,
 	upcomingEventsResponseValidator,
 } from "./calendarValidators";
-import { getGoogleAuthContext } from "./googleAuth";
-import {
-	createGoogleCalendar,
-	createGoogleCalendarEvent,
-	deleteGoogleCalendarEvent,
-	fetchGoogleCalendarEvents,
-	updateGoogleCalendarEvent,
-} from "./googleCalendar";
-import {
-	createYandexCalendar,
-	createYandexCalendarEvent,
-	deleteYandexCalendarEvent,
-	listYandexUpcomingEvents,
-	updateYandexCalendarEvent,
-} from "./yandexCalendar";
 
 const UPCOMING_EVENTS_LIMIT = 12;
 const CALENDAR_EVENTS_LIMIT = 250;
@@ -41,21 +33,6 @@ const CALENDAR_VIEW_MAX_WINDOW_MS = 62 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_EVENT_LIMIT = 10;
 const CALENDAR_TOOL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
-
-type CalendarVisibilityPreferences = {
-	showGoogleCalendar: boolean;
-	showGoogleDrive: boolean;
-	showYandexCalendar: boolean;
-};
-
-type YandexCalendarConnection = {
-	provider: "yandex-calendar";
-	displayName: string;
-	email: string;
-	password: string;
-	serverAddress: string;
-	calendarHomePath: string;
-};
 
 type UpcomingEventsResponse =
 	| {
@@ -143,21 +120,7 @@ const sortCalendarEvents = (events: UpcomingCalendarEvent[]) =>
 const sortAndLimitUpcomingEvents = (events: UpcomingCalendarEvent[]) =>
 	sortCalendarEvents(events).slice(0, UPCOMING_EVENTS_LIMIT);
 
-const dedupeUpcomingEvents = (events: UpcomingCalendarEvent[]) => {
-	const dedupedEvents = new Map<string, UpcomingCalendarEvent>();
-
-	for (const event of events) {
-		const key = `${event.id}:${event.startAt}`;
-
-		if (!dedupedEvents.has(key)) {
-			dedupedEvents.set(key, event);
-		}
-	}
-
-	return Array.from(dedupedEvents.values());
-};
-
-const getYandexCalendarConnection = async ({
+const createWorkspaceCalendarProviderModule = ({
 	ctx,
 	ownerTokenIdentifier,
 	workspaceId,
@@ -165,148 +128,55 @@ const getYandexCalendarConnection = async ({
 	ctx: ActionCtx;
 	ownerTokenIdentifier: string;
 	workspaceId: Id<"workspaces">;
-}): Promise<YandexCalendarConnection | null> =>
-	await ctx.runQuery(internal.appConnections.getYandexCalendarCredentials, {
-		ownerTokenIdentifier,
-		workspaceId,
+}) =>
+	createCalendarProviderModule({
+		adapters: createWorkspaceCalendarProviderAdapters({
+			ctx,
+			ownerTokenIdentifier,
+			workspaceId,
+		}),
 	});
-
-const fetchYandexUpcomingEvents = async ({
-	ctx,
-	now,
-	timeMax,
-	timeMin,
-	workspaceId,
-}: {
-	ctx: ActionCtx;
-	now: number;
-	timeMax: number;
-	timeMin: number;
-	workspaceId: Id<"workspaces">;
-}): Promise<CalendarEventsFetchResult> => {
-	const identity = await ctx.auth.getUserIdentity();
-
-	if (!identity) {
-		return {
-			calendars: [],
-			connectedCalendarCount: 0,
-			events: [],
-		};
-	}
-
-	const connection = await getYandexCalendarConnection({
-		ctx,
-		ownerTokenIdentifier: identity.tokenIdentifier,
-		workspaceId,
-	});
-
-	if (!connection) {
-		return {
-			calendars: [],
-			connectedCalendarCount: 0,
-			events: [],
-		};
-	}
-
-	return await listYandexUpcomingEvents({
-		connection,
-		now,
-		timeMax,
-		timeMin,
-	});
-};
-
-const dedupeCalendarSources = (calendars: CalendarSource[]) => {
-	const uniqueCalendars = new Map<string, CalendarSource>();
-
-	for (const calendar of calendars) {
-		if (!uniqueCalendars.has(calendar.id)) {
-			uniqueCalendars.set(calendar.id, calendar);
-		}
-	}
-
-	return Array.from(uniqueCalendars.values()).sort((left, right) =>
-		left.name.localeCompare(right.name),
-	);
-};
 
 const fetchWorkspaceCalendarEvents = async ({
 	ctx,
 	eventLimit,
 	minimumEndAt,
+	ownerTokenIdentifier,
 	requestedWindow,
 	workspaceId,
 }: {
 	ctx: ActionCtx;
 	eventLimit: number;
 	minimumEndAt: number;
+	ownerTokenIdentifier: string;
 	requestedWindow: RequestedCalendarWindow;
 	workspaceId: Id<"workspaces">;
 }): Promise<CalendarEventsFetchResult> => {
-	const calendarVisibilityPreferences: CalendarVisibilityPreferences =
-		await ctx.runQuery(api.calendarPreferences.get, {
+	const calendarVisibilityPreferences = await ctx.runQuery(
+		api.calendarPreferences.get,
+		{
 			workspaceId,
-		});
+		},
+	);
+	const providerModule = createWorkspaceCalendarProviderModule({
+		ctx,
+		ownerTokenIdentifier,
+		workspaceId,
+	});
 
-	if (
-		!calendarVisibilityPreferences.showGoogleCalendar &&
-		!calendarVisibilityPreferences.showYandexCalendar
-	) {
-		return {
-			calendars: [],
-			connectedCalendarCount: 0,
-			events: [],
-		};
-	}
-
-	const authContext = calendarVisibilityPreferences.showGoogleCalendar
-		? await getGoogleAuthContext(ctx)
-		: null;
-	const [googleCalendarResult, yandexCalendarResult] = await Promise.all([
-		calendarVisibilityPreferences.showGoogleCalendar && authContext
-			? fetchGoogleCalendarEvents({
-					authContext,
-					eventLimit,
-					minimumEndAt,
-					timeMin: new Date(requestedWindow.timeMin).toISOString(),
-					timeMax: new Date(requestedWindow.timeMax).toISOString(),
-				})
-			: Promise.resolve({
-					calendars: [],
-					connectedCalendarCount: 0,
-					events: [],
-				}),
-		calendarVisibilityPreferences.showYandexCalendar
-			? fetchYandexUpcomingEvents({
-					ctx,
-					now: minimumEndAt,
-					timeMin: requestedWindow.timeMin,
-					timeMax: requestedWindow.timeMax,
-					workspaceId,
-				})
-			: Promise.resolve({
-					calendars: [],
-					connectedCalendarCount: 0,
-					events: [],
-				}),
-	]);
-
-	return {
-		calendars: dedupeCalendarSources([
-			...googleCalendarResult.calendars,
-			...yandexCalendarResult.calendars,
-		]),
-		connectedCalendarCount:
-			googleCalendarResult.connectedCalendarCount +
-			yandexCalendarResult.connectedCalendarCount,
-		events: dedupeUpcomingEvents([
-			...googleCalendarResult.events,
-			...yandexCalendarResult.events,
-		]),
-	};
+	return await providerModule.listWorkspaceEvents({
+		eventLimit,
+		minimumEndAt,
+		timeMax: requestedWindow.timeMax,
+		timeMin: requestedWindow.timeMin,
+		visibility: {
+			google: calendarVisibilityPreferences.showGoogleCalendar,
+			yandex: calendarVisibilityPreferences.showYandexCalendar,
+		},
+	});
 };
 
-export const listUpcomingGoogleEvents = action({
+export const listUpcomingCalendarEvents = action({
 	args: {
 		workspaceId: v.id("workspaces"),
 		timeMax: v.string(),
@@ -329,6 +199,7 @@ export const listUpcomingGoogleEvents = action({
 				ctx,
 				eventLimit: UPCOMING_EVENTS_LIMIT,
 				minimumEndAt: Date.now(),
+				ownerTokenIdentifier: identity.tokenIdentifier,
 				requestedWindow,
 				workspaceId: args.workspaceId,
 			});
@@ -385,6 +256,7 @@ export const listCalendarEvents = action({
 				ctx,
 				eventLimit: CALENDAR_EVENTS_LIMIT,
 				minimumEndAt: requestedWindow.timeMin,
+				ownerTokenIdentifier: identity.tokenIdentifier,
 				requestedWindow,
 				workspaceId: args.workspaceId,
 			});
@@ -562,31 +434,13 @@ export const createCalendar = action({
 		}
 
 		const input = normalizeCreateCalendarInput(args);
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
 
-		if (input.provider === "yandex") {
-			const connection = await getYandexCalendarConnection({
-				ctx,
-				ownerTokenIdentifier: identity.tokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
-
-			if (!connection) {
-				throw new ConvexError({
-					code: "YANDEX_CALENDAR_NOT_CONNECTED",
-					message: "Connect Yandex Calendar to create a calendar.",
-				});
-			}
-
-			return await createYandexCalendar({
-				color: input.color,
-				connection,
-				name: input.name,
-			});
-		}
-
-		const authContext = await getGoogleAuthContext(ctx);
-		return await createGoogleCalendar({
-			authContext,
+		return await providerModule.createCalendar(input.provider, {
 			color: input.color,
 			name: input.name,
 		});
@@ -624,30 +478,14 @@ export const createCalendarEvent = action({
 			time: args.time,
 			title: args.title,
 		});
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
 
-		if (input.provider === "yandex") {
-			const connection: YandexCalendarConnection | null =
-				await getYandexCalendarConnection({
-					ctx,
-					ownerTokenIdentifier: identity.tokenIdentifier,
-					workspaceId: args.workspaceId,
-				});
-
-			if (!connection) {
-				throw new ConvexError({
-					code: "YANDEX_CALENDAR_NOT_CONNECTED",
-					message: "Connect Yandex Calendar to create this event.",
-				});
-			}
-
-			return await createYandexCalendarEvent({
-				connection,
-				input,
-			});
-		}
-
-		const authContext = await getGoogleAuthContext(ctx);
-		return await createGoogleCalendarEvent({ authContext, input });
+		const { provider, ...eventInput } = input;
+		return await providerModule.createEvent(provider, eventInput);
 	},
 });
 
@@ -685,26 +523,13 @@ export const updateCalendarEvent = action({
 			time: args.time,
 			title: args.title,
 		});
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
 
-		if (args.provider === "yandex") {
-			const connection = await getYandexCalendarConnection({
-				ctx,
-				ownerTokenIdentifier: identity.tokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
-
-			if (!connection) {
-				throw new ConvexError({
-					code: "YANDEX_CALENDAR_NOT_CONNECTED",
-					message: "Connect Yandex Calendar to update this event.",
-				});
-			}
-
-			return await updateYandexCalendarEvent({ connection, input });
-		}
-
-		const authContext = await getGoogleAuthContext(ctx);
-		return await updateGoogleCalendarEvent({ authContext, input });
+		return await providerModule.updateEvent(args.provider, input);
 	},
 });
 
@@ -736,35 +561,17 @@ export const deleteCalendarEvent = action({
 				message: "The calendar event identifier is invalid.",
 			});
 		}
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
 
-		if (args.provider === "yandex") {
-			const connection = await getYandexCalendarConnection({
-				ctx,
-				ownerTokenIdentifier: identity.tokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
-
-			if (!connection) {
-				throw new ConvexError({
-					code: "YANDEX_CALENDAR_NOT_CONNECTED",
-					message: "Connect Yandex Calendar to delete this event.",
-				});
-			}
-
-			return await deleteYandexCalendarEvent({
-				calendarId: args.calendarId,
-				connection,
-				providerEventId,
-				recurrenceId: args.recurrenceId,
-				recurrenceIsAllDay: args.recurrenceIsAllDay,
-			});
-		}
-
-		const authContext = await getGoogleAuthContext(ctx);
-		return await deleteGoogleCalendarEvent({
-			authContext,
+		return await providerModule.deleteEvent(args.provider, {
 			calendarId: args.calendarId,
 			providerEventId,
+			recurrenceId: args.recurrenceId,
+			recurrenceIsAllDay: args.recurrenceIsAllDay,
 		});
 	},
 });
@@ -854,57 +661,42 @@ const toCalendarToolResponse = ({
 	};
 };
 
-const getGoogleCalendarToolResponse = async (
-	ctx: ActionCtx,
-	args: {
-		limit?: number;
-		meetingsOnly?: boolean;
-		query?: string;
-	},
-) => {
-	const authContext = await getGoogleAuthContext(ctx);
-	const { now, timeMin, timeMax } = getCalendarToolWindow();
-	const result = await fetchGoogleCalendarEvents({
-		authContext,
-		eventLimit: UPCOMING_EVENTS_LIMIT,
-		minimumEndAt: now,
-		timeMin: new Date(timeMin).toISOString(),
-		timeMax: new Date(timeMax).toISOString(),
-	});
-
-	return toCalendarToolResponse({
-		connection: "Google Calendar",
-		events: dedupeUpcomingEvents(result.events),
-		limit: args.limit,
-		meetingsOnly: args.meetingsOnly,
-		query: args.query,
-	});
+const CALENDAR_PROVIDER_LABELS: Record<CalendarProvider, string> = {
+	google: "Google Calendar",
+	yandex: "Yandex Calendar",
 };
 
-const getYandexCalendarToolResponse = async (
-	ctx: ActionCtx,
-	args: {
-		workspaceId: Id<"workspaces">;
-		limit?: number;
-		meetingsOnly?: boolean;
-		query?: string;
-	},
-) => {
+const getCalendarToolResponse = async ({
+	ctx,
+	limit,
+	meetingsOnly,
+	providerInput,
+	query,
+}: {
+	ctx: ActionCtx;
+	limit?: number;
+	meetingsOnly?: boolean;
+	providerInput: CalendarToolProviderInput;
+	query?: string;
+}) => {
 	const { now, timeMin, timeMax } = getCalendarToolWindow();
-	const result = await fetchYandexUpcomingEvents({
+	const providerAdapter = createCalendarToolProviderAdapter({
 		ctx,
-		now,
-		timeMin,
+		input: providerInput,
+	});
+	const result = await providerAdapter.listEvents({
+		eventLimit: UPCOMING_EVENTS_LIMIT,
+		minimumEndAt: now,
 		timeMax,
-		workspaceId: args.workspaceId,
+		timeMin,
 	});
 
 	return toCalendarToolResponse({
-		connection: "Yandex Calendar",
-		events: dedupeUpcomingEvents(result.events),
-		limit: args.limit,
-		meetingsOnly: args.meetingsOnly,
-		query: args.query,
+		connection: CALENDAR_PROVIDER_LABELS[providerInput.provider],
+		events: result.events,
+		limit,
+		meetingsOnly,
+		query,
 	});
 };
 
@@ -914,7 +706,12 @@ export const listGoogleCalendarEventsForTool = action({
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => await getGoogleCalendarToolResponse(ctx, args),
+	handler: async (ctx, args) =>
+		await getCalendarToolResponse({
+			ctx,
+			providerInput: { provider: "google" },
+			...args,
+		}),
 });
 
 export const searchGoogleCalendarEventsForTool = action({
@@ -924,7 +721,12 @@ export const searchGoogleCalendarEventsForTool = action({
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => await getGoogleCalendarToolResponse(ctx, args),
+	handler: async (ctx, args) =>
+		await getCalendarToolResponse({
+			ctx,
+			providerInput: { provider: "google" },
+			...args,
+		}),
 });
 
 export const listYandexCalendarEventsForTool = action({
@@ -934,7 +736,16 @@ export const listYandexCalendarEventsForTool = action({
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => await getYandexCalendarToolResponse(ctx, args),
+	handler: async (ctx, args) =>
+		await getCalendarToolResponse({
+			ctx,
+			limit: args.limit,
+			meetingsOnly: args.meetingsOnly,
+			providerInput: {
+				provider: "yandex",
+				workspaceId: args.workspaceId,
+			},
+		}),
 });
 
 export const searchYandexCalendarEventsForTool = action({
@@ -945,5 +756,15 @@ export const searchYandexCalendarEventsForTool = action({
 		meetingsOnly: v.optional(v.boolean()),
 	},
 	returns: calendarToolResponseValidator,
-	handler: async (ctx, args) => await getYandexCalendarToolResponse(ctx, args),
+	handler: async (ctx, args) =>
+		await getCalendarToolResponse({
+			ctx,
+			limit: args.limit,
+			meetingsOnly: args.meetingsOnly,
+			providerInput: {
+				provider: "yandex",
+				workspaceId: args.workspaceId,
+			},
+			query: args.query,
+		}),
 });

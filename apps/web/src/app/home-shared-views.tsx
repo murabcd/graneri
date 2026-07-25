@@ -10,7 +10,6 @@ import {
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
 import { Skeleton } from "@workspace/ui/components/skeleton";
-import { Spinner } from "@workspace/ui/components/spinner";
 import { cn } from "@workspace/ui/lib/utils";
 import { CalendarClock, FileText, UsersRound } from "lucide-react";
 import * as React from "react";
@@ -116,7 +115,6 @@ export function HomeView({
 	const isResolvingUpcomingCalendar =
 		upcomingCalendar.status === "checking" &&
 		visibleUpcomingEvents.length === 0;
-	const isRefreshingUpcomingCalendar = upcomingCalendar.status === "refreshing";
 	const hasLiveUpcomingMeeting = visibleUpcomingEvents.some((event) =>
 		isUpcomingEventLive(event, currentDate),
 	);
@@ -159,28 +157,17 @@ export function HomeView({
 										</div>
 										<div className="flex min-w-0 items-center gap-2 pt-1 text-base leading-none">
 											<span>{currentMonthLabel}</span>
-											{isRefreshingUpcomingCalendar ? (
-												<output
-													aria-label={`Calendar status: ${upcomingCalendarIndicator.label}`}
-													aria-live="polite"
-													className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-												>
-													<Spinner aria-hidden="true" className="size-3" />
-													<span>Updating…</span>
-												</output>
-											) : (
-												<output
-													aria-label={`Calendar status: ${upcomingCalendarIndicator.label}`}
-													className="inline-flex"
-												>
-													<span
-														className={cn(
-															"size-2 rounded-full",
-															upcomingCalendarIndicator.dotClassName,
-														)}
-													/>
-												</output>
-											)}
+											<output
+												aria-label={`Calendar status: ${upcomingCalendarIndicator.label}`}
+												className="inline-flex"
+											>
+												<span
+													className={cn(
+														"size-2 rounded-full",
+														upcomingCalendarIndicator.dotClassName,
+													)}
+												/>
+											</output>
 										</div>
 										<p className="text-base leading-none text-muted-foreground">
 											{currentWeekdayLabel}

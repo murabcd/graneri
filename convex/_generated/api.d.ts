@@ -51,6 +51,8 @@ import type * as automationValidators from "../automationValidators.js";
 import type * as automations from "../automations.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarPreferences from "../calendarPreferences.js";
+import type * as calendarProviderAdapters from "../calendarProviderAdapters.js";
+import type * as calendarProviderModule from "../calendarProviderModule.js";
 import type * as calendarTypes from "../calendarTypes.js";
 import type * as calendarValidators from "../calendarValidators.js";
 import type * as chatAttachmentReferences from "../chatAttachmentReferences.js";
@@ -149,6 +151,8 @@ declare const fullApi: ApiFromModules<{
   automations: typeof automations;
   calendar: typeof calendar;
   calendarPreferences: typeof calendarPreferences;
+  calendarProviderAdapters: typeof calendarProviderAdapters;
+  calendarProviderModule: typeof calendarProviderModule;
   calendarTypes: typeof calendarTypes;
   calendarValidators: typeof calendarValidators;
   chatAttachmentReferences: typeof chatAttachmentReferences;
