@@ -10,6 +10,7 @@ import {
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
 import { Skeleton } from "@workspace/ui/components/skeleton";
+import { Spinner } from "@workspace/ui/components/spinner";
 import { cn } from "@workspace/ui/lib/utils";
 import { CalendarClock, FileText, UsersRound } from "lucide-react";
 import * as React from "react";
@@ -28,6 +29,41 @@ import { NotesList } from "@/app/note-list";
 import { PageTitle } from "@/components/layout/page-title";
 import { useRecordingNoteId } from "@/hooks/use-transcription-session";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+
+const homeCalendarSkeletonTitleWidths = ["w-3/5", "w-2/3", "w-1/2"] as const;
+
+function HomeCalendarEventListSkeleton() {
+	return (
+		<div
+			aria-label="Loading upcoming meetings"
+			className="w-full p-1"
+			role="status"
+		>
+			<div className="space-y-1.5">
+				{homeCalendarSkeletonTitleWidths.map((titleWidth) => (
+					<div
+						key={titleWidth}
+						aria-hidden="true"
+						className="flex items-center gap-3 rounded-lg px-3 py-2"
+					>
+						<Skeleton className="h-8 w-1 shrink-0 rounded-full bg-muted-foreground/20" />
+						<div className="min-w-0 flex-1">
+							<div className="flex items-center justify-between gap-4">
+								<div className="min-w-0 flex-1 space-y-1.5">
+									<Skeleton
+										className={cn("h-3.5 bg-muted-foreground/20", titleWidth)}
+									/>
+									<Skeleton className="h-2 w-20 bg-muted-foreground/10" />
+								</div>
+								<Skeleton className="h-7 w-20 shrink-0 rounded-lg bg-muted-foreground/15" />
+							</div>
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
 
 export function HomeView({
 	currentDate,
@@ -80,6 +116,7 @@ export function HomeView({
 	const isResolvingUpcomingCalendar =
 		upcomingCalendar.status === "checking" &&
 		visibleUpcomingEvents.length === 0;
+	const isRefreshingUpcomingCalendar = upcomingCalendar.status === "refreshing";
 	const hasLiveUpcomingMeeting = visibleUpcomingEvents.some((event) =>
 		isUpcomingEventLive(event, currentDate),
 	);
@@ -122,17 +159,28 @@ export function HomeView({
 										</div>
 										<div className="flex min-w-0 items-center gap-2 pt-1 text-base leading-none">
 											<span>{currentMonthLabel}</span>
-											<output
-												aria-label={`Calendar status: ${upcomingCalendarIndicator.label}`}
-												className="inline-flex"
-											>
-												<span
-													className={cn(
-														"size-2 rounded-full",
-														upcomingCalendarIndicator.dotClassName,
-													)}
-												/>
-											</output>
+											{isRefreshingUpcomingCalendar ? (
+												<output
+													aria-label={`Calendar status: ${upcomingCalendarIndicator.label}`}
+													aria-live="polite"
+													className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+												>
+													<Spinner aria-hidden="true" className="size-3" />
+													<span>Updating…</span>
+												</output>
+											) : (
+												<output
+													aria-label={`Calendar status: ${upcomingCalendarIndicator.label}`}
+													className="inline-flex"
+												>
+													<span
+														className={cn(
+															"size-2 rounded-full",
+															upcomingCalendarIndicator.dotClassName,
+														)}
+													/>
+												</output>
+											)}
 										</div>
 										<p className="text-base leading-none text-muted-foreground">
 											{currentWeekdayLabel}
@@ -141,16 +189,7 @@ export function HomeView({
 								</div>
 								<div className="flex min-h-[152px] w-full items-start justify-center p-3">
 									{isResolvingUpcomingCalendar ? (
-										<Empty className="h-full rounded-none border-0 p-4">
-											<EmptyHeader>
-												<Skeleton className="mb-2 size-8 rounded-lg" />
-												<Skeleton className="h-5 w-40 max-w-full" />
-												<Skeleton className="h-4 w-56 max-w-full" />
-											</EmptyHeader>
-											<EmptyContent>
-												<Skeleton className="h-9 w-36 rounded-md" />
-											</EmptyContent>
-										</Empty>
+										<HomeCalendarEventListSkeleton />
 									) : visibleUpcomingEvents.length > 0 ? (
 										<div className="w-full p-1">
 											<div className="space-y-1.5">

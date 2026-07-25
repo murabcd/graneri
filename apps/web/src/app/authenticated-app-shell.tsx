@@ -49,13 +49,7 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import {
-	useAction,
-	useConvex,
-	useConvexAuth,
-	useMutation,
-	useQuery,
-} from "convex/react";
+import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
 	ArrowDown,
 	Clock,
@@ -77,30 +71,20 @@ import {
 	AppShellContent,
 	type AppShellContentView,
 } from "@/app/app-shell-content";
-import type {
-	AppUser,
-	AppView,
-	UpcomingCalendarEvent,
-	UpcomingCalendarState,
-} from "@/app/app-types";
+import type { AppUser, AppView, UpcomingCalendarEvent } from "@/app/app-types";
 import {
 	getResolvingPersistedChatIds,
 	resolveApplicationView,
 	resolveCollectionRoute,
 } from "@/app/application-navigation-session";
 import {
-	syncDisconnectedDesktopTrayCalendar,
-	syncErrorDesktopTrayCalendar,
-	syncReadyDesktopTrayCalendar,
-} from "@/app/desktop-tray-calendar-sync";
-import {
 	buildCalendarEventNoteDocument,
 	buildCalendarEventSearchableText,
 	createCalendarEventKey,
-	getDayWindowFromDayKey,
 } from "@/app/location";
 import { createPendingPersistedChatRoutesStore } from "@/app/pending-persisted-chat-routes";
 import { useApplicationNavigationSession } from "@/app/use-application-navigation-session";
+import { useUpcomingCalendar } from "@/app/use-upcoming-calendar";
 import type {
 	AutomationDraft,
 	AutomationListItem,
@@ -377,59 +361,24 @@ const useAppShellState = ({
 	const currentMonthLabel = currentMonthFormatter.format(currentDate);
 	const currentWeekdayLabel = currentWeekdayFormatter.format(currentDate);
 	const currentDayKey = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}-${currentDate.getDate()}`;
-	const [upcomingCalendar, setUpcomingCalendar] =
-		React.useState<UpcomingCalendarState>({
-			status: "checking",
-			events: [],
-		});
-	const upcomingCalendarRequestIdRef = React.useRef(0);
-	// Calendar loading is driven by auth and account state, not by a local event handler.
-	const upcomingCalendarLoadKey = session?.user?.email
-		? `${isConvexAuthenticated ? "authenticated" : "unauthenticated"}:${session.user.email}`
-		: "anonymous";
-	const calendarPreferences = useQuery(
-		api.calendarPreferences.get,
-		isConvexAuthenticated && resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
-	);
+	const upcomingCalendar = useUpcomingCalendar({
+		accountId: session?.user?.id ?? null,
+		currentDayKey,
+		isAuthenticated: isConvexAuthenticated,
+		workspaceId: resolvedActiveWorkspaceId,
+	});
 	const notificationPreferences = useQuery(
 		api.notificationPreferences.get,
 		isConvexAuthenticated && resolvedActiveWorkspaceId
 			? { workspaceId: resolvedActiveWorkspaceId }
 			: "skip",
 	);
-	const yandexCalendarConnection = useQuery(
-		api.appConnections.getYandexCalendar,
-		isConvexAuthenticated && resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
-	);
-	const calendarVisibilityKey = !resolvedActiveWorkspaceId
-		? "no-workspace"
-		: calendarPreferences
-			? `${calendarPreferences.showGoogleCalendar}:${calendarPreferences.showGoogleDrive}:${calendarPreferences.showYandexCalendar}`
-			: "loading";
-	const yandexCalendarConnectionKey = yandexCalendarConnection
-		? [
-				yandexCalendarConnection.sourceId,
-				yandexCalendarConnection.status,
-				yandexCalendarConnection.email,
-				yandexCalendarConnection.serverAddress,
-				yandexCalendarConnection.calendarHomePath,
-			].join(":")
-		: resolvedActiveWorkspaceId
-			? "none"
-			: "no-workspace";
 	const createNote = useMutation(api.notes.create);
 	const createNoteFromCalendarEvent = useMutation(
 		api.notes.createFromCalendarEvent,
 	);
 	const saveNote = useMutation(api.notes.save);
 	const createWorkspace = useMutation(api.workspaces.create);
-	const listUpcomingGoogleEvents = useAction(
-		api.calendar.listUpcomingGoogleEvents,
-	);
 	const chats = useQuery(
 		api.chats.list,
 		resolvedActiveWorkspaceId
@@ -589,90 +538,6 @@ const useAppShellState = ({
 	const resolvedCurrentView = applicationView.view;
 	const isResolvingResourceRoute = applicationView.isResolving;
 
-	const refreshUpcomingCalendarEvents = React.useEffectEvent(
-		async (
-			dayKey: string,
-			options?: {
-				resetState?: boolean;
-			},
-		) => {
-			const shouldResetState = options?.resetState ?? true;
-			const requestId = upcomingCalendarRequestIdRef.current + 1;
-			upcomingCalendarRequestIdRef.current = requestId;
-
-			if (
-				!resolvedActiveWorkspaceId ||
-				!session?.user?.email ||
-				!isConvexAuthenticated
-			) {
-				if (upcomingCalendarRequestIdRef.current !== requestId) {
-					return;
-				}
-
-				setUpcomingCalendar({ status: "not_connected", events: [] });
-				syncDisconnectedDesktopTrayCalendar();
-				return;
-			}
-
-			if (shouldResetState) {
-				setUpcomingCalendar({ status: "checking", events: [] });
-				syncDisconnectedDesktopTrayCalendar();
-			}
-
-			try {
-				const result = await listUpcomingGoogleEvents({
-					workspaceId: resolvedActiveWorkspaceId,
-					...getDayWindowFromDayKey(dayKey),
-				});
-
-				if (upcomingCalendarRequestIdRef.current !== requestId) {
-					return;
-				}
-
-				if (result.status === "not_connected") {
-					setUpcomingCalendar({ status: "not_connected", events: [] });
-					syncDisconnectedDesktopTrayCalendar();
-					return;
-				}
-
-				setUpcomingCalendar({ status: "ready", events: result.events });
-				syncReadyDesktopTrayCalendar({
-					connectedCalendarCount: result.connectedCalendarCount,
-					events: result.events,
-				});
-			} catch (error) {
-				if (upcomingCalendarRequestIdRef.current !== requestId) {
-					return;
-				}
-
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to load upcoming calendar events",
-				});
-				setUpcomingCalendar({ status: "error", events: [] });
-				syncErrorDesktopTrayCalendar();
-			}
-		},
-	);
-
-	React.useEffect(() => {
-		void calendarVisibilityKey;
-		void yandexCalendarConnectionKey;
-
-		if (upcomingCalendarLoadKey === "anonymous") {
-			void refreshUpcomingCalendarEvents(currentDayKey);
-			return;
-		}
-
-		void refreshUpcomingCalendarEvents(currentDayKey);
-	}, [
-		calendarVisibilityKey,
-		currentDayKey,
-		upcomingCalendarLoadKey,
-		yandexCalendarConnectionKey,
-	]);
-
 	React.useEffect(() => {
 		let isCancelled = false;
 
@@ -701,29 +566,6 @@ const useAppShellState = ({
 		notificationPreferences?.notifyForAutoDetectedMeetings,
 		notificationPreferences?.notifyForScheduledMeetings,
 		resolvedActiveWorkspaceId,
-	]);
-
-	React.useEffect(() => {
-		void calendarVisibilityKey;
-		void yandexCalendarConnectionKey;
-
-		if (upcomingCalendarLoadKey === "anonymous") {
-			return;
-		}
-
-		const handleFocus = () => {
-			void refreshUpcomingCalendarEvents(currentDayKey, {
-				resetState: false,
-			});
-		};
-
-		window.addEventListener("focus", handleFocus);
-		return () => window.removeEventListener("focus", handleFocus);
-	}, [
-		calendarVisibilityKey,
-		currentDayKey,
-		upcomingCalendarLoadKey,
-		yandexCalendarConnectionKey,
 	]);
 
 	const handleWorkspaceCreate = React.useCallback(

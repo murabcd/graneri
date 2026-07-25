@@ -73,6 +73,12 @@ type TrashListItem = {
 	onDelete: () => void;
 };
 
+type TrashQuerySnapshot = {
+	workspaceId: Id<"workspaces">;
+	notes: Array<Doc<"notes">>;
+	chats: Array<Doc<"chats">>;
+};
+
 export function NavTrash({
 	open,
 	onOpenChange,
@@ -81,6 +87,34 @@ export function NavTrash({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const { isMobile } = useSidebarShell();
+	const activeWorkspaceId = useActiveWorkspaceId();
+	const queryArgs =
+		open && activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip";
+	const archivedNotes = useQuery(api.notes.listArchived, queryArgs);
+	const archivedChats = useQuery(api.chats.listArchived, queryArgs);
+	const [resolvedSnapshot, setResolvedSnapshot] =
+		React.useState<TrashQuerySnapshot | null>(null);
+
+	React.useEffect(() => {
+		if (
+			!activeWorkspaceId ||
+			archivedNotes === undefined ||
+			archivedChats === undefined
+		) {
+			return;
+		}
+
+		setResolvedSnapshot({
+			workspaceId: activeWorkspaceId,
+			notes: archivedNotes,
+			chats: archivedChats,
+		});
+	}, [activeWorkspaceId, archivedChats, archivedNotes]);
+
+	const currentSnapshot =
+		resolvedSnapshot?.workspaceId === activeWorkspaceId
+			? resolvedSnapshot
+			: null;
 
 	return (
 		<SidebarMenu>
@@ -98,7 +132,11 @@ export function NavTrash({
 						align="end"
 						alignOffset={-24}
 					>
-						<TrashPopoverContent />
+						<TrashPopoverContent
+							activeWorkspaceId={activeWorkspaceId}
+							archivedNotes={archivedNotes ?? currentSnapshot?.notes}
+							archivedChats={archivedChats ?? currentSnapshot?.chats}
+						/>
 					</PopoverContent>
 				</Popover>
 			</SidebarMenuItem>
@@ -106,21 +144,20 @@ export function NavTrash({
 	);
 }
 
-function TrashPopoverContent() {
-	const activeWorkspaceId = useActiveWorkspaceId();
+function TrashPopoverContent({
+	activeWorkspaceId,
+	archivedNotes,
+	archivedChats,
+}: {
+	activeWorkspaceId: Id<"workspaces"> | null;
+	archivedNotes: Array<Doc<"notes">> | undefined;
+	archivedChats: Array<Doc<"chats">> | undefined;
+}) {
 	const [search, setSearch] = React.useState("");
 	const [deleteNoteId, setDeleteNoteId] = React.useState<Id<"notes"> | null>(
 		null,
 	);
 	const [deleteChatId, setDeleteChatId] = React.useState<string | null>(null);
-	const archivedNotes = useQuery(
-		api.notes.listArchived,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
-	);
-	const archivedChats = useQuery(
-		api.chats.listArchived,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
-	);
 	const restore = useMutation(api.notes.restore).withOptimisticUpdate(
 		(localStore, args) => {
 			const archived = localStore.getQuery(api.notes.listArchived, {

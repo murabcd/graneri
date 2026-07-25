@@ -213,6 +213,12 @@ describe("CalendarPage loading", () => {
 				.getByRole("region", { name: "Calendar agenda" })
 				.parentElement?.getAttribute("aria-busy"),
 		).toBe("true");
+		expect(screen.getByText("Updating…")).not.toBeNull();
+		expect(
+			screen
+				.getByRole("region", { name: "Calendar agenda" })
+				.classList.contains("opacity-50"),
+		).toBe(true);
 
 		resolveNextRange?.({
 			...readyCalendar,
@@ -230,6 +236,12 @@ describe("CalendarPage loading", () => {
 
 		expect(await screen.findByText("Future planning")).not.toBeNull();
 		expect(screen.queryByText("Planning")).toBeNull();
+		expect(screen.queryByText("Updating…")).toBeNull();
+		expect(
+			screen
+				.getByRole("region", { name: "Calendar agenda" })
+				.classList.contains("opacity-50"),
+		).toBe(false);
 		expect(rangeLabel?.textContent).not.toBe(currentRange);
 	});
 

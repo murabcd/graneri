@@ -1,7 +1,9 @@
 import type { FunctionReturnType } from "convex/server";
 import { z } from "zod";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
+import { calendarEventSchema } from "@/components/calendar/calendar-event-schema";
 import type { CalendarSource } from "@/components/calendar/calendar-view-model";
+import { createSessionSnapshotCache } from "@/lib/session-snapshot-cache";
 import type { api } from "../../../../../convex/_generated/api";
 
 const CALENDAR_AGENDA_CACHE_STORAGE_KEY = "graneri:calendar-agenda-cache:v6";
@@ -13,25 +15,6 @@ const calendarSourceSchema: z.ZodType<CalendarSource> = z.object({
 	id: z.string(),
 	name: z.string(),
 	provider: z.enum(["google", "yandex"]),
-});
-
-const calendarEventSchema: z.ZodType<UpcomingCalendarEvent> = z.object({
-	id: z.string(),
-	calendarId: z.string(),
-	calendarName: z.string(),
-	description: z.string().optional(),
-	title: z.string(),
-	startAt: z.string(),
-	endAt: z.string(),
-	isAllDay: z.boolean(),
-	isMeeting: z.boolean(),
-	isRecurring: z.boolean(),
-	htmlLink: z.string().optional(),
-	meetingUrl: z.string().optional(),
-	location: z.string().optional(),
-	provider: z.enum(["google", "yandex"]),
-	providerEventId: z.string(),
-	recurrenceId: z.string().optional(),
 });
 
 const cachedAgendaSchema = z.object({
@@ -65,79 +48,30 @@ type CachedCalendarAgenda = CalendarAgendaSnapshot & {
 	key: string;
 };
 
-const memoryCache = new Map<string, CachedCalendarAgenda>();
 const inFlightRequests = new Map<string, Promise<CalendarEventsResponse>>();
-let storageHydrated = false;
 
 const getCacheKey = (
 	workspaceId: string,
 	requestWindow: CalendarRequestWindow,
 ) => `${workspaceId}:${requestWindow.timeMin}:${requestWindow.timeMax}`;
 
-const readStoredAgendas = () => {
-	if (typeof window === "undefined") {
-		return [];
-	}
-
-	try {
-		const rawValue = window.sessionStorage.getItem(
-			CALENDAR_AGENDA_CACHE_STORAGE_KEY,
-		);
-
-		if (!rawValue) {
-			return [];
-		}
-
+const agendaCache = createSessionSnapshotCache<CachedCalendarAgenda>({
+	deserialize: (rawValue) => {
 		const parsedValue = calendarAgendaCacheSchema.safeParse(
 			JSON.parse(rawValue),
 		);
-		return parsedValue.success ? parsedValue.data.agendas : [];
-	} catch {
-		return [];
-	}
-};
-
-const hydrateMemoryCache = () => {
-	if (storageHydrated) {
-		return;
-	}
-
-	storageHydrated = true;
-	for (const agenda of readStoredAgendas()) {
-		memoryCache.set(agenda.key, agenda);
-	}
-};
-
-const persistMemoryCache = () => {
-	if (typeof window === "undefined") {
-		return;
-	}
-
-	const agendas = Array.from(memoryCache.values())
-		.sort((left, right) => right.cachedAt - left.cachedAt)
-		.slice(0, MAX_CACHED_AGENDAS);
-
-	memoryCache.clear();
-	for (const agenda of agendas) {
-		memoryCache.set(agenda.key, agenda);
-	}
-
-	try {
-		window.sessionStorage.setItem(
-			CALENDAR_AGENDA_CACHE_STORAGE_KEY,
-			JSON.stringify({ version: 6, agendas }),
-		);
-	} catch {
-		// The in-memory cache still preserves fast navigation for this app session.
-	}
-};
+		return parsedValue.success ? parsedValue.data.agendas : null;
+	},
+	maxEntries: MAX_CACHED_AGENDAS,
+	serialize: (agendas) => JSON.stringify({ version: 6, agendas }),
+	storageKey: CALENDAR_AGENDA_CACHE_STORAGE_KEY,
+});
 
 export const readCalendarAgendaSnapshot = (
 	workspaceId: string,
 	requestWindow: CalendarRequestWindow,
 ): CalendarAgendaSnapshot | null => {
-	hydrateMemoryCache();
-	const agenda = memoryCache.get(getCacheKey(workspaceId, requestWindow));
+	const agenda = agendaCache.get(getCacheKey(workspaceId, requestWindow));
 
 	if (!agenda) {
 		return null;
@@ -154,23 +88,19 @@ export const writeCalendarAgendaSnapshot = (
 	requestWindow: CalendarRequestWindow,
 	snapshot: CalendarAgendaSnapshot,
 ) => {
-	hydrateMemoryCache();
 	const key = getCacheKey(workspaceId, requestWindow);
-	memoryCache.set(key, {
+	agendaCache.set({
 		...snapshot,
 		cachedAt: Date.now(),
 		key,
 	});
-	persistMemoryCache();
 };
 
 export const removeCalendarAgendaSnapshot = (
 	workspaceId: string,
 	requestWindow: CalendarRequestWindow,
 ) => {
-	hydrateMemoryCache();
-	memoryCache.delete(getCacheKey(workspaceId, requestWindow));
-	persistMemoryCache();
+	agendaCache.delete(getCacheKey(workspaceId, requestWindow));
 };
 
 export const loadCalendarAgenda = (

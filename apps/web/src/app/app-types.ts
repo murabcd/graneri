@@ -29,9 +29,10 @@ export type UpcomingCalendarEvent =
 
 export type UpcomingCalendarState =
 	| { status: "checking"; events: [] }
+	| { status: "refreshing"; events: UpcomingCalendarEvent[] }
 	| { status: "ready"; events: UpcomingCalendarEvent[] }
 	| { status: "not_connected"; events: [] }
-	| { status: "error"; events: [] };
+	| { status: "error"; events: UpcomingCalendarEvent[] };
 
 export type AppCanonicalPath =
 	| "/home"

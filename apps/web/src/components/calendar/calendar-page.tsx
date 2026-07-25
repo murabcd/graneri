@@ -116,6 +116,8 @@ export function CalendarPage({
 		() => filterCalendarEvents(state.events, selectedCalendarIds),
 		[selectedCalendarIds, state.events],
 	);
+	const deferredFilteredEvents = React.useDeferredValue(filteredEvents);
+	const isAgendaRenderPending = deferredFilteredEvents !== filteredEvents;
 	const calendarProviders = React.useMemo(() => {
 		const connectedProviders = new Set(
 			state.calendars.map((calendar) => calendar.provider),
@@ -139,6 +141,12 @@ export function CalendarPage({
 		selectedCalendarIds.size === 1
 			? (selectedCalendarIds.values().next().value ?? null)
 			: null;
+	const handleEventClick = React.useCallback((event: UpcomingCalendarEvent) => {
+		setEventPanel({ event, mode: "details" });
+	}, []);
+	const handleEditEvent = React.useCallback((event: UpcomingCalendarEvent) => {
+		setEventPanel({ event, mode: "edit" });
+	}, []);
 	const toggleCalendar = React.useCallback(
 		(calendarId: string) => {
 			setCalendarFilter((current) => {
@@ -215,19 +223,15 @@ export function CalendarPage({
 	return (
 		<CalendarPageLayout isDesktopMac={isDesktopMac}>
 			<CalendarAgenda
-				events={filteredEvents}
+				events={deferredFilteredEvents}
 				calendars={state.calendars}
-				loading={state.status === "loading"}
+				loading={state.status === "loading" || isAgendaRenderPending}
 				range={range}
 				onToday={() => setAgendaStart(new Date())}
 				onPrevious={() => shiftRange(-30)}
 				onNext={() => shiftRange(30)}
-				onEventClick={(event) => {
-					setEventPanel({ event, mode: "details" });
-				}}
-				onEditEvent={(event) => {
-					setEventPanel({ event, mode: "edit" });
-				}}
+				onEventClick={handleEventClick}
+				onEditEvent={handleEditEvent}
 				onDeleteEvent={handleDeleteEvent}
 				actions={
 					<>

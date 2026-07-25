@@ -18,6 +18,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
+import { Spinner } from "@workspace/ui/components/spinner";
 import {
 	Tooltip,
 	TooltipContent,
@@ -165,6 +166,12 @@ export function CalendarAgenda({
 	const [eventPendingDeletion, setEventPendingDeletion] =
 		React.useState<UpcomingCalendarEvent | null>(null);
 	const [isDeleting, setIsDeleting] = React.useState(false);
+	const handleRequestDelete = React.useCallback(
+		(event: UpcomingCalendarEvent) => {
+			setEventPendingDeletion(event);
+		},
+		[],
+	);
 	const handleToday = () => {
 		if (scrollViewportRef.current) {
 			scrollViewportRef.current.scrollTop = 0;
@@ -231,6 +238,15 @@ export function CalendarAgenda({
 					<p className="truncate px-2 text-sm font-medium tabular-nums">
 						{formatAgendaRange(range)}
 					</p>
+					{loading ? (
+						<output
+							aria-live="polite"
+							className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+						>
+							<Spinner aria-hidden="true" className="size-3" />
+							<span>Updating…</span>
+						</output>
+					) : null}
 				</div>
 				<div className="flex items-center gap-2">{actions}</div>
 			</div>
@@ -238,7 +254,10 @@ export function CalendarAgenda({
 			<section
 				ref={scrollViewportRef}
 				aria-label="Calendar agenda"
-				className="min-h-0 flex-1 overflow-y-auto"
+				className={cn(
+					"min-h-0 flex-1 overflow-y-auto transition-[opacity,filter] duration-150",
+					loading && "pointer-events-none opacity-50 saturate-50",
+				)}
 			>
 				<div className="flex flex-col [&>*:last-child>*:last-child]:border-b-0">
 					{groups.map((group) => (
@@ -265,9 +284,9 @@ export function CalendarAgenda({
 										color={calendar.color}
 										event={event}
 										isWritable={calendar.canCreateEvents}
-										onClick={() => onEventClick(event)}
-										onEdit={() => onEditEvent(event)}
-										onRequestDelete={() => setEventPendingDeletion(event)}
+										onClick={onEventClick}
+										onEdit={onEditEvent}
+										onRequestDelete={handleRequestDelete}
 									/>
 								);
 							})}
@@ -319,7 +338,7 @@ export function CalendarAgenda({
 	);
 }
 
-function CalendarAgendaEventRow({
+const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 	color,
 	event,
 	isWritable,
@@ -330,9 +349,9 @@ function CalendarAgendaEventRow({
 	color: string;
 	event: UpcomingCalendarEvent;
 	isWritable: boolean;
-	onClick: () => void;
-	onEdit: () => void;
-	onRequestDelete: () => void;
+	onClick: (event: UpcomingCalendarEvent) => void;
+	onEdit: (event: UpcomingCalendarEvent) => void;
+	onRequestDelete: (event: UpcomingCalendarEvent) => void;
 }) {
 	return (
 		<div className="group/event relative border-b">
@@ -345,7 +364,7 @@ function CalendarAgendaEventRow({
 							"flex w-full min-w-0 cursor-pointer items-center gap-3 px-4 py-2.5 text-start outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring/50",
 							isWritable && "pr-12",
 						)}
-						onClick={onClick}
+						onClick={() => onClick(event)}
 					>
 						<span className="w-40 shrink-0 truncate text-sm text-muted-foreground tabular-nums">
 							{formatAgendaTime(event)}
@@ -382,12 +401,15 @@ function CalendarAgendaEventRow({
 						</button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuItem onSelect={onEdit}>
+						<DropdownMenuItem onSelect={() => onEdit(event)}>
 							<Pencil className="size-4" aria-hidden />
 							Edit
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
-						<DropdownMenuItem variant="destructive" onSelect={onRequestDelete}>
+						<DropdownMenuItem
+							variant="destructive"
+							onSelect={() => onRequestDelete(event)}
+						>
 							<Trash2 className="size-4" aria-hidden />
 							Delete
 						</DropdownMenuItem>
@@ -396,4 +418,4 @@ function CalendarAgendaEventRow({
 			) : null}
 		</div>
 	);
-}
+});
