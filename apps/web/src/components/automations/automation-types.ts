@@ -3,6 +3,7 @@ import type {
 	AutomationScheduleKind,
 } from "@workspace/ai/automation-schedule";
 import type { AutomationDeliveryPolicy } from "@workspace/ai/automation-tools";
+import type { ServiceTier } from "@workspace/ai/models";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
@@ -39,6 +40,7 @@ export type AutomationDraft = {
 	prompt: string;
 	model: string;
 	reasoningEffort: "low" | "medium" | "high" | "xhigh";
+	serviceTier: ServiceTier;
 	authorName?: string;
 	appSources: AutomationAppSource[];
 	webSearchEnabled: boolean;

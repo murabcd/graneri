@@ -12,6 +12,7 @@ import {
 	assistantRunValidator,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
+	serviceTierValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
 import {
@@ -100,6 +101,7 @@ export const startAssistantRunForOwner = async (
 		producer: Doc<"assistantRuns">["producer"];
 		model: string;
 		reasoningEffort?: Doc<"assistantRuns">["reasoningEffort"];
+		serviceTier: Doc<"assistantRuns">["serviceTier"];
 		policy: "reject" | "supersede";
 	},
 ) => {
@@ -141,6 +143,7 @@ export const startAssistantRunForOwner = async (
 		producer: args.producer,
 		model: args.model,
 		reasoningEffort: args.reasoningEffort,
+		serviceTier: args.serviceTier,
 	});
 };
 
@@ -151,6 +154,7 @@ export const startAssistantRun = mutation({
 		assistantMessageId: v.string(),
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),
+		serviceTier: serviceTierValidator,
 		policy: v.union(v.literal("reject"), v.literal("supersede")),
 	},
 	returns: assistantRunValidator,
@@ -164,6 +168,7 @@ export const startAssistantRun = mutation({
 			producer: "web",
 			model: args.model,
 			reasoningEffort: args.reasoningEffort,
+			serviceTier: args.serviceTier,
 			policy: args.policy,
 		});
 	},

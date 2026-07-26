@@ -161,7 +161,8 @@ const startAutomationAssistantRun = async (
 ) => {
 	const model = args.automation.model;
 	const reasoningEffort = args.automation.reasoningEffort;
-	if (!model || !reasoningEffort) {
+	const serviceTier = args.automation.serviceTier;
+	if (!model || !reasoningEffort || !serviceTier) {
 		throw new ConvexError({
 			code: "AUTOMATION_MODEL_CONFIGURATION_MISSING",
 			message: "Automation model configuration is missing.",
@@ -201,6 +202,7 @@ const startAutomationAssistantRun = async (
 		producer: "convex",
 		model,
 		reasoningEffort,
+		serviceTier,
 		policy: "reject",
 	});
 	await createAssistantRunStream(ctx, assistantRun);
@@ -228,6 +230,7 @@ const startAutomationAssistantRun = async (
 			defaultTimezone: args.automation.schedule.timezone,
 			model,
 			reasoningEffort,
+			serviceTier,
 		},
 	});
 	await ctx.db.patch(args.automationRunId, {

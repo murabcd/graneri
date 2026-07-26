@@ -1,5 +1,5 @@
-import { convexTest } from "convex-test";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
+import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
 import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
@@ -52,7 +52,10 @@ const readChatMessages = async (
 		})
 	).page;
 
-const userQuestionDecision = (assistantMessageId: string, question: string) => ({
+const userQuestionDecision = (
+	assistantMessageId: string,
+	question: string,
+) => ({
 	type: "user_question" as const,
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
@@ -105,6 +108,7 @@ const startRunAndStream = async ({
 		chatId,
 		assistantMessageId: "stream-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await asOwner.mutation(api.chats.startActiveStream, {
@@ -374,7 +378,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 			toolName: "search",
 			inputJson: "{}",
 			status: "completed",
-			outputJson: "{\"hasValue\":true,\"value\":{}}",
+			outputJson: '{"hasValue":true,"value":{}}',
 			createdAt: 2_000,
 			updatedAt: 2_000,
 		}),
@@ -568,6 +572,7 @@ test("updateActiveStream rejects missing snapshots for detached running streams"
 		chatId: "chat-missing-stream",
 		assistantMessageId: "stream-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 
@@ -1048,6 +1053,7 @@ test("an interrupted run can continue with a new assistant message", async () =>
 			type: "run.started",
 			assistantMessageId: run.assistantMessageId,
 			model: "gpt-5",
+			serviceTier: "auto",
 		},
 		{
 			type: "assistant.message.started",
@@ -1278,9 +1284,7 @@ test("accepting a steered user message resumes a waiting run", async () => {
 			? await ctx.db
 					.query("chatMessages")
 					.withIndex("by_chatId_and_messageId", (q) =>
-						q
-							.eq("chatId", chat._id)
-							.eq("messageId", run.assistantMessageId),
+						q.eq("chatId", chat._id).eq("messageId", run.assistantMessageId),
 					)
 					.unique()
 			: null;
@@ -1616,6 +1620,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 				defaultTimezone: "UTC",
 				model: DEFAULT_CHAT_MODEL_ID,
 				reasoningEffort: "medium",
+				serviceTier: "auto",
 			},
 			execution: {
 				assistantMessageId: run.assistantMessageId,
@@ -1656,9 +1661,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 		toolCalls: await ctx.db.query("chatToolCalls").take(1),
 		jobs: await ctx.db.query("assistantRunJobs").take(1),
 		runs: await ctx.db.query("assistantRuns").take(1),
-		toolExecutions: await ctx.db
-			.query("assistantRunToolExecutions")
-			.take(1),
+		toolExecutions: await ctx.db.query("assistantRunToolExecutions").take(1),
 	}));
 
 	expect(rows.activeStreams).toHaveLength(0);

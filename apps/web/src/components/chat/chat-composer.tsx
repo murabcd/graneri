@@ -51,6 +51,7 @@ import {
 	type ChatModel,
 	ChatModelPicker,
 	type ReasoningEffort,
+	type ServiceTier,
 } from "@/components/chat/model-picker";
 import {
 	areChatComposerMentionsEqual,
@@ -180,10 +181,12 @@ type ChatComposerProps = {
 	canStop: boolean;
 	selectedModel: ChatModel | null;
 	reasoningEffort: ReasoningEffort;
+	serviceTier: ServiceTier;
 	modelPopoverOpen: boolean;
 	onModelPopoverOpenChange: (open: boolean) => void;
 	onSelectedModelChange: (model: ChatModel) => void;
 	onReasoningEffortChange: (value: ReasoningEffort) => void;
+	onServiceTierChange: (value: ServiceTier) => void;
 	noteMentions: ChatComposerMentionCatalog<ContextPage>;
 	recipeMentions: ChatComposerMentionCatalog<ChatRecipeReceipt>;
 	onMentionsChange: (mentions: ChatComposerMention[]) => void;
@@ -221,10 +224,12 @@ export function ChatComposer({
 	canStop,
 	selectedModel,
 	reasoningEffort,
+	serviceTier,
 	modelPopoverOpen,
 	onModelPopoverOpenChange,
 	onSelectedModelChange,
 	onReasoningEffortChange,
+	onServiceTierChange,
 	noteMentions,
 	recipeMentions,
 	onMentionsChange,
@@ -349,6 +354,8 @@ export function ChatComposer({
 								onSelectedModelChange={onSelectedModelChange}
 								reasoningEffort={reasoningEffort}
 								onReasoningEffortChange={onReasoningEffortChange}
+								serviceTier={serviceTier}
+								onServiceTierChange={onServiceTierChange}
 							/>
 						) : null
 					}

@@ -22,6 +22,7 @@ export const startHostedChatRun = async ({
 	finishActiveStreamToolCall,
 	model,
 	reasoningEffort,
+	serviceTier,
 	startActiveStream,
 	startActiveStreamToolCall,
 	startAssistantRun,
@@ -43,6 +44,7 @@ export const startHostedChatRun = async ({
 			assistantMessageId,
 			model,
 			reasoningEffort,
+			serviceTier,
 			policy: getHostedChatRunStartPolicy({
 				trigger,
 				supersedeActiveRun,

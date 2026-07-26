@@ -66,15 +66,33 @@ export const findReasoningEffort = (value) =>
 export const normalizeReasoningEffort = (value) =>
 	findReasoningEffort(value)?.id ?? DEFAULT_REASONING_EFFORT;
 
+export const SERVICE_TIERS = Object.freeze([
+	{ id: "auto", name: "Standard" },
+	{ id: "priority", name: "Fast" },
+]);
+
+export const DEFAULT_SERVICE_TIER = "auto";
+
+export const findServiceTier = (value) =>
+	SERVICE_TIERS.find((tier) => tier.id === value);
+
+export const normalizeServiceTier = (value) =>
+	findServiceTier(value)?.id ?? DEFAULT_SERVICE_TIER;
+
 const normalizeOpenAiReasoningEffort = (value) =>
 	value === "none" ? value : normalizeReasoningEffort(value);
 
 export const getOpenAiModelProviderOptions = (
 	model,
-	{ reasoningEffort, safetyIdentifier } = {},
+	{ reasoningEffort, safetyIdentifier, serviceTier } = {},
 ) => {
 	const isReasoningModel = model?.startsWith("gpt-5");
-	if (!isReasoningModel && !safetyIdentifier) {
+	const normalizedServiceTier = normalizeServiceTier(serviceTier);
+	if (
+		!isReasoningModel &&
+		!safetyIdentifier &&
+		normalizedServiceTier === DEFAULT_SERVICE_TIER
+	) {
 		return undefined;
 	}
 	const normalizedReasoningEffort = isReasoningModel
@@ -91,6 +109,9 @@ export const getOpenAiModelProviderOptions = (
 						reasoningEffort: normalizedReasoningEffort,
 					}
 				: {}),
+			...(normalizedServiceTier === DEFAULT_SERVICE_TIER
+				? {}
+				: { serviceTier: normalizedServiceTier }),
 			...(safetyIdentifier ? { safetyIdentifier } : {}),
 		},
 	};

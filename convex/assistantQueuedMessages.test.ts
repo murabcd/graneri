@@ -38,7 +38,10 @@ type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
 type AsOwner = WorkspaceFixture["asOwner"];
 type WorkspaceId = WorkspaceFixture["workspaceId"];
 
-const userQuestionDecision = (assistantMessageId: string, question: string) => ({
+const userQuestionDecision = (
+	assistantMessageId: string,
+	question: string,
+) => ({
 	type: "user_question" as const,
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
@@ -82,6 +85,7 @@ const startRun = async ({
 		chatId,
 		assistantMessageId: `${chatId}-assistant-1`,
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 
@@ -103,6 +107,7 @@ const insertDuplicateActiveRun = async ({
 			producer: "web",
 			status: "running",
 			model: "gpt-5",
+			serviceTier: "auto",
 			startedAt: 3_000,
 			updatedAt: 3_000,
 		});
@@ -359,6 +364,7 @@ test("queued follow-ups only attach to the current active run", async () => {
 		chatId: "chat-current-active-queue",
 		assistantMessageId: "chat-current-active-queue-assistant-2",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "supersede",
 	});
 
@@ -398,6 +404,7 @@ test("claimNextForRun only claims for the current active run", async () => {
 		chatId: "chat-current-active-claim",
 		assistantMessageId: "chat-current-active-claim-assistant-2",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "supersede",
 	});
 

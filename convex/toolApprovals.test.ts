@@ -40,6 +40,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 		chatId,
 		assistantMessageId: "stream-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await asOwner.mutation(api.chats.startActiveStream, {

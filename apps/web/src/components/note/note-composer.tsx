@@ -97,6 +97,7 @@ import {
 	type ChatModel,
 	ChatModelPicker,
 	type ReasoningEffort,
+	type ServiceTier,
 } from "@/components/chat/model-picker";
 import {
 	COMPOSER_DOCK_BOTTOM_OFFSET,
@@ -466,6 +467,7 @@ const useNoteComposerController = ({
 		currentChatId,
 		groupedNoteChats,
 		handleReasoningEffortChange,
+		handleServiceTierChange,
 		handleSelectedModelChange,
 		hasKnownNoteChat,
 		hasStoredCurrentChat,
@@ -481,11 +483,13 @@ const useNoteComposerController = ({
 		selectChat: selectNoteChat,
 		selectedModel,
 		selectedReasoningEffort,
+		selectedServiceTier,
 		storedMessages,
 	} = useNoteDiscussionSession({
 		activeWorkspaceId,
 		noteId,
 		userPreferenceReasoningEffort: userPreferences?.reasoningEffort,
+		userPreferenceServiceTier: userPreferences?.serviceTier,
 	});
 	const [sharedLocalFolders, setSharedLocalFolders] = React.useState<
 		DesktopLocalFolder[]
@@ -1243,6 +1247,7 @@ const useNoteComposerController = ({
 						text: currentNoteContext.text,
 					},
 					reasoningEffort: selectedReasoningEffort,
+					serviceTier: selectedServiceTier,
 					recipeSlug: selectedRecipe?.slug ?? null,
 					resolveConvexToken: getCachedConvexToken,
 					text: outgoingText,
@@ -1288,6 +1293,7 @@ const useNoteComposerController = ({
 							text: currentNoteContext.text,
 						},
 						reasoningEffort: selectedReasoningEffort,
+						serviceTier: selectedServiceTier,
 						recipeSlug: selectedRecipe?.slug ?? null,
 						resolveConvexToken: getCachedConvexToken,
 						text: outgoingText,
@@ -1377,6 +1383,7 @@ const useNoteComposerController = ({
 		resetTextareaHeight,
 		selectedRecipe,
 		selectedReasoningEffort,
+		selectedServiceTier,
 		editingMessageId,
 		selectedModel.model,
 		sendMessage,
@@ -1458,12 +1465,14 @@ const useNoteComposerController = ({
 				text: currentNoteContext.text,
 			},
 			reasoningEffort: selectedReasoningEffort,
+			serviceTier: selectedServiceTier,
 			recipeSlug: selectedRecipe?.slug ?? null,
 			resolveConvexToken: getCachedConvexToken,
 		});
 	}, [
 		readNoteContext,
 		selectedReasoningEffort,
+		selectedServiceTier,
 		selectedModel.model,
 		selectedRecipe?.slug,
 		sharedLocalFolders,
@@ -1813,10 +1822,12 @@ const useNoteComposerController = ({
 		canActivateInlineFromComposer: true,
 		setModelPopoverOpen,
 		setReasoningEffort: handleReasoningEffortChange,
+		setServiceTier: handleServiceTierChange,
 		setSelectedModel: handleSelectedModelChange,
 		setRecipePopoverOpen,
 		setSelectedRecipeSlug,
 		reasoningEffort: selectedReasoningEffort,
+		serviceTier: selectedServiceTier,
 		selectedModel,
 		pendingToolApproval,
 		isToolApprovalSubmitting: isPreparingRequest,
@@ -2299,12 +2310,14 @@ function ChatInlinePopoverFooter({
 	onModelPopoverOpenChange,
 	onSelectedModelChange,
 	onReasoningEffortChange,
+	onServiceTierChange,
 	suppressRecipePickerUntilUserActionRef,
 	recipePopoverOpen,
 	recipes,
 	modelPopoverOpen,
 	selectedModel,
 	reasoningEffort,
+	serviceTier,
 	speechControls,
 }: {
 	composerEditorRef: React.RefObject<HTMLDivElement | null>;
@@ -2333,12 +2346,14 @@ function ChatInlinePopoverFooter({
 	onModelPopoverOpenChange: (open: boolean) => void;
 	onSelectedModelChange: (model: ChatModel) => void;
 	onReasoningEffortChange: (value: ReasoningEffort) => void;
+	onServiceTierChange: (value: ServiceTier) => void;
 	suppressRecipePickerUntilUserActionRef: React.MutableRefObject<boolean>;
 	recipePopoverOpen: boolean;
 	recipes: RecipePrompt[];
 	modelPopoverOpen: boolean;
 	selectedModel: ChatModel;
 	reasoningEffort: ReasoningEffort;
+	serviceTier: ServiceTier;
 	speechControls: React.ReactNode;
 }) {
 	const {
@@ -2831,6 +2846,8 @@ function ChatInlinePopoverFooter({
 								onSelectedModelChange={onSelectedModelChange}
 								reasoningEffort={reasoningEffort}
 								onReasoningEffortChange={onReasoningEffortChange}
+								serviceTier={serviceTier}
+								onServiceTierChange={onServiceTierChange}
 								triggerClassName="min-w-0 max-w-full text-muted-foreground hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
 								triggerIconClassName="text-current"
 								modelNameClassName="min-w-0 max-w-[120px] truncate"
@@ -3227,6 +3244,7 @@ function ChatComposerForm({
 				onModelPopoverOpenChange={controller.setModelPopoverOpen}
 				onSelectedModelChange={controller.setSelectedModel}
 				onReasoningEffortChange={controller.setReasoningEffort}
+				onServiceTierChange={controller.setServiceTier}
 				suppressRecipePickerUntilUserActionRef={
 					controller.suppressRecipePickerUntilUserActionRef
 				}
@@ -3235,6 +3253,7 @@ function ChatComposerForm({
 				modelPopoverOpen={controller.modelPopoverOpen}
 				selectedModel={controller.selectedModel}
 				reasoningEffort={controller.reasoningEffort}
+				serviceTier={controller.serviceTier}
 				speechControls={speechControls}
 			/>
 		</form>

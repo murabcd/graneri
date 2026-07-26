@@ -37,6 +37,7 @@ import {
 	findChatModel,
 	getOpenAiModelProviderOptions,
 	normalizeReasoningEffort,
+	normalizeServiceTier,
 } from "../src/lib/ai/models.js";
 import { createHostedChatAutomationActions } from "./chat-automation-actions.js";
 import { prepareServerChatContextWindow } from "./chat-context-window.js";
@@ -281,6 +282,7 @@ export const handleChatRequest = async (
 		message,
 		model,
 		reasoningEffort,
+		serviceTier,
 		workspaceId,
 		webSearchEnabled = false,
 		appsEnabled = true,
@@ -301,6 +303,7 @@ export const handleChatRequest = async (
 	wideEvent.trigger = trigger ?? null;
 	wideEvent.model = model ?? null;
 	wideEvent.reasoning_effort = reasoningEffort ?? null;
+	wideEvent.service_tier = serviceTier ?? null;
 	wideEvent.is_steer_route = options.isSteerRoute === true;
 	wideEvent.continue_run_id = continueRunId ?? null;
 	wideEvent.replay_queued_message_id = replayQueuedMessageId ?? null;
@@ -435,6 +438,7 @@ export const handleChatRequest = async (
 	const resolvedReasoningEffort = normalizeReasoningEffort(
 		requestedReasoningEffort,
 	);
+	const resolvedServiceTier = normalizeServiceTier(serviceTier);
 	const resolvedNoteId =
 		(noteContext?.noteId as Id<"notes"> | null | undefined) ??
 		storedChat?.noteId ??
@@ -483,11 +487,13 @@ export const handleChatRequest = async (
 	const providerOptions = getOpenAiModelProviderOptions(resolvedModel.model, {
 		reasoningEffort: resolvedReasoningEffort,
 		safetyIdentifier: admission.safetyIdentifier,
+		serviceTier: resolvedServiceTier,
 	});
 	logLatency("chat.model_resolved", {
 		hasProviderOptions: Boolean(providerOptions),
 		model: resolvedModel.model,
 		reasoningEffort: resolvedReasoningEffort,
+		serviceTier: resolvedServiceTier,
 	});
 	const { queuedInput, turnController } = createHostedChatTurnInput<
 		Id<"workspaces">,
@@ -694,6 +700,7 @@ export const handleChatRequest = async (
 			convexClient,
 			defaultModel: resolvedModel.model,
 			defaultReasoningEffort: resolvedReasoningEffort,
+			defaultServiceTier: resolvedServiceTier,
 			defaultTimezone: resolvedTimezone,
 			getActiveStreamSession: () => activeStreamSession,
 			getNotesContext: () =>
@@ -798,6 +805,7 @@ export const handleChatRequest = async (
 		noteId: resolvedNoteId,
 		queuedInput,
 		reasoningEffort: resolvedReasoningEffort,
+		serviceTier: resolvedServiceTier,
 		safetyIdentifier: admission.safetyIdentifier,
 		replayQueuedMessageId,
 		response,

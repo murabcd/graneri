@@ -29,11 +29,25 @@ export declare const findReasoningEffort: (
 export declare const normalizeReasoningEffort: (
 	value?: string | null,
 ) => ReasoningEffort;
+export type ServiceTier = "auto" | "priority";
+export type ServiceTierOption = {
+	id: ServiceTier;
+	name: string;
+};
+export declare const SERVICE_TIERS: readonly ServiceTierOption[];
+export declare const DEFAULT_SERVICE_TIER: ServiceTier;
+export declare const findServiceTier: (
+	value?: string | null,
+) => ServiceTierOption | undefined;
+export declare const normalizeServiceTier: (
+	value?: string | null,
+) => ServiceTier;
 export declare const getOpenAiModelProviderOptions: (
 	model: string,
 	options?: {
 		reasoningEffort?: "none" | ReasoningEffort | null;
 		safetyIdentifier?: string;
+		serviceTier?: ServiceTier | null;
 	},
 ) =>
 	| {
@@ -41,6 +55,7 @@ export declare const getOpenAiModelProviderOptions: (
 				reasoningSummary?: "auto";
 				reasoningEffort?: "none" | ReasoningEffort;
 				safetyIdentifier?: string;
+				serviceTier?: ServiceTier;
 			};
 	  }
 	| undefined;

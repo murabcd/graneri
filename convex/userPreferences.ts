@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { serviceTierValidator } from "./assistantRunModel";
 import { createResourceAccess } from "./domain";
 
 const userPreferencesValidator = v.object({
@@ -16,6 +17,7 @@ const userPreferencesValidator = v.object({
 		v.literal("high"),
 		v.literal("xhigh"),
 	),
+	serviceTier: serviceTierValidator,
 	sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 	avatarStorageId: v.union(v.id("_storage"), v.null()),
 	avatarUrl: v.union(v.string(), v.null()),
@@ -43,6 +45,7 @@ const DEFAULT_FONT_SMOOTHING = true;
 const DEFAULT_REDUCE_MOTION = "system";
 const DEFAULT_TRANSLUCENT_SIDEBAR = false;
 const DEFAULT_REASONING_EFFORT = "medium";
+const DEFAULT_SERVICE_TIER = "auto";
 const DEFAULT_SEND_SHORTCUT = "enter";
 
 const userAiProfileContextValidator = v.object({
@@ -89,6 +92,7 @@ const toUserPreferencesResponse = async (
 		? preferences.translucentSidebar
 		: DEFAULT_TRANSLUCENT_SIDEBAR,
 	reasoningEffort: preferences?.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
+	serviceTier: preferences?.serviceTier ?? DEFAULT_SERVICE_TIER,
 	sendShortcut: preferences ? preferences.sendShortcut : DEFAULT_SEND_SHORTCUT,
 	avatarStorageId: preferences?.avatarStorageId ?? null,
 	avatarUrl: preferences?.avatarStorageId
@@ -137,6 +141,7 @@ export const update = mutation({
 		reduceMotion: v.optional(reduceMotionValidator),
 		translucentSidebar: v.optional(v.boolean()),
 		reasoningEffort: v.optional(reasoningEffortValidator),
+		serviceTier: v.optional(serviceTierValidator),
 		sendShortcut: v.optional(sendShortcutValidator),
 		avatarStorageId: v.optional(v.union(v.id("_storage"), v.null())),
 	},
@@ -183,6 +188,10 @@ export const update = mutation({
 				args.reasoningEffort !== undefined
 					? args.reasoningEffort
 					: (existing?.reasoningEffort ?? DEFAULT_REASONING_EFFORT),
+			serviceTier:
+				args.serviceTier !== undefined
+					? args.serviceTier
+					: (existing?.serviceTier ?? DEFAULT_SERVICE_TIER),
 			sendShortcut:
 				args.sendShortcut !== undefined
 					? args.sendShortcut
@@ -206,6 +215,8 @@ export const update = mutation({
 				nextPreferences.translucentSidebar === existing.translucentSidebar &&
 				nextPreferences.reasoningEffort ===
 					(existing.reasoningEffort ?? DEFAULT_REASONING_EFFORT) &&
+				nextPreferences.serviceTier ===
+					(existing.serviceTier ?? DEFAULT_SERVICE_TIER) &&
 				nextPreferences.sendShortcut === existing.sendShortcut &&
 				(nextPreferences.avatarStorageId ?? undefined) ===
 					existing.avatarStorageId
@@ -228,6 +239,7 @@ export const update = mutation({
 				reduceMotion: nextPreferences.reduceMotion,
 				translucentSidebar: nextPreferences.translucentSidebar,
 				reasoningEffort: nextPreferences.reasoningEffort,
+				serviceTier: nextPreferences.serviceTier,
 				sendShortcut: nextPreferences.sendShortcut,
 				avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 				updatedAt: now,
@@ -242,6 +254,7 @@ export const update = mutation({
 				reduceMotion: nextPreferences.reduceMotion,
 				translucentSidebar: nextPreferences.translucentSidebar,
 				reasoningEffort: nextPreferences.reasoningEffort,
+				serviceTier: nextPreferences.serviceTier,
 				sendShortcut: nextPreferences.sendShortcut,
 				avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 				updatedAt: now,
@@ -257,6 +270,7 @@ export const update = mutation({
 			reduceMotion: nextPreferences.reduceMotion,
 			translucentSidebar: nextPreferences.translucentSidebar,
 			reasoningEffort: nextPreferences.reasoningEffort,
+			serviceTier: nextPreferences.serviceTier,
 			sendShortcut: nextPreferences.sendShortcut,
 			avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 			createdAt: now,

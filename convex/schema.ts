@@ -11,6 +11,7 @@ import {
 	assistantRunStatusValidator,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
+	serviceTierValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
 import {
@@ -104,6 +105,7 @@ export default defineSchema({
 				v.literal("xhigh"),
 			),
 		),
+		serviceTier: v.optional(serviceTierValidator),
 		sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 		avatarStorageId: v.optional(v.id("_storage")),
 		createdAt: v.number(),
@@ -529,10 +531,7 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		ownerTokenIdentifier: v.string(),
 		messageId: v.string(),
-		role: v.union(
-			v.literal("user"),
-			v.literal("assistant"),
-		),
+		role: v.union(v.literal("user"), v.literal("assistant")),
 		partsJson: v.string(),
 		metadataJson: v.optional(v.string()),
 		text: v.string(),
@@ -564,10 +563,7 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		sequence: v.number(),
 		messageId: v.string(),
-		role: v.union(
-			v.literal("user"),
-			v.literal("assistant"),
-		),
+		role: v.union(v.literal("user"), v.literal("assistant")),
 		partsJson: v.string(),
 		metadataJson: v.optional(v.string()),
 		text: v.string(),
@@ -594,6 +590,7 @@ export default defineSchema({
 		status: assistantRunStatusValidator,
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),
+		serviceTier: serviceTierValidator,
 		phase: v.optional(v.string()),
 		pendingDecision: v.optional(pendingDecisionValidator),
 		stopReason: v.optional(stopReasonValidator),
@@ -716,6 +713,7 @@ export default defineSchema({
 		prompt: v.string(),
 		model: v.string(),
 		reasoningEffort: reasoningEffortValidator,
+		serviceTier: serviceTierValidator,
 		webSearchEnabled: v.optional(v.boolean()),
 		appsEnabled: v.optional(v.boolean()),
 		appSources: v.optional(
@@ -799,19 +797,16 @@ export default defineSchema({
 			"workspaceId",
 			"createdAt",
 		])
-		.index(
-			"by_owner_workspace_unread_reason_notify_lease_archived_created",
-			[
-				"ownerTokenIdentifier",
-				"workspaceId",
-				"isUnread",
-				"reason",
-				"notificationSentAt",
-				"notificationLeaseToken",
-				"archivedAt",
-				"createdAt",
-			],
-		)
+		.index("by_owner_workspace_unread_reason_notify_lease_archived_created", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"isUnread",
+			"reason",
+			"notificationSentAt",
+			"notificationLeaseToken",
+			"archivedAt",
+			"createdAt",
+		])
 		.index("by_assistantRunId", ["assistantRunId"])
 		.index("by_status_and_startedAt", ["status", "startedAt"]),
 	appConnections: defineTable({

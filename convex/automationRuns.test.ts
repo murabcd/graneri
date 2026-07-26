@@ -1,6 +1,6 @@
 import workflowTest from "@convex-dev/workflow/test";
-import { convexTest } from "convex-test";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
+import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import {
@@ -68,6 +68,7 @@ const createAutomation = async (
 		prompt: options.prompt ?? "Review the workspace.",
 		model: DEFAULT_CHAT_MODEL_ID,
 		reasoningEffort: "medium",
+		serviceTier: "auto",
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
@@ -89,6 +90,7 @@ const insertActiveAutomations = async (fixture: Fixture, count: number) =>
 				prompt: "Review the workspace.",
 				model: DEFAULT_CHAT_MODEL_ID,
 				reasoningEffort: "medium",
+				serviceTier: "auto",
 				webSearchEnabled: false,
 				appsEnabled: true,
 				appSources: [],
@@ -585,6 +587,7 @@ test("one-time automations complete after their scheduled assistant run", async 
 		prompt: "Review the workspace once.",
 		model: DEFAULT_CHAT_MODEL_ID,
 		reasoningEffort: "medium",
+		serviceTier: "auto",
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
@@ -635,6 +638,7 @@ test("a chat can own multiple automations", async () => {
 		prompt: "Review the workspace.",
 		model: DEFAULT_CHAT_MODEL_ID,
 		reasoningEffort: "medium" as const,
+		serviceTier: "auto" as const,
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],

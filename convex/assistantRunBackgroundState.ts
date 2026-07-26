@@ -20,6 +20,7 @@ import {
 import {
 	pendingDecisionValidator,
 	reasoningEffortValidator,
+	serviceTierValidator,
 } from "./assistantRunModel";
 import { transitionAssistantRun } from "./assistantRunStateMachine";
 import {
@@ -39,6 +40,7 @@ const backgroundRunContextValidator = v.union(
 		assistantMessageId: v.string(),
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),
+		serviceTier: serviceTierValidator,
 		job: assistantRunJobValidator,
 		execution: assistantRunExecutionValidator,
 	}),
@@ -166,7 +168,8 @@ export const getRunnableContext = internalQuery({
 			!runJob ||
 			runJob.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
 			runJob.job.model !== run.model ||
-			runJob.job.reasoningEffort !== run.reasoningEffort
+			runJob.job.reasoningEffort !== run.reasoningEffort ||
+			runJob.job.serviceTier !== run.serviceTier
 		) {
 			return null;
 		}
@@ -187,6 +190,7 @@ export const getRunnableContext = internalQuery({
 			assistantMessageId: run.assistantMessageId,
 			model: run.model,
 			reasoningEffort: run.reasoningEffort,
+			serviceTier: run.serviceTier,
 			job: runJob.job,
 			execution: runJob.execution,
 		};

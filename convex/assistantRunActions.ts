@@ -295,6 +295,7 @@ export const runStep = internalAction({
 				chatId: context.chatId,
 				defaultModel: context.model,
 				defaultReasoningEffort: context.reasoningEffort ?? "medium",
+				defaultServiceTier: context.serviceTier,
 				defaultTimezone: context.job.defaultTimezone,
 				webSearchEnabled: context.job.webSearchEnabled,
 			});
@@ -357,6 +358,7 @@ export const runStep = internalAction({
 					: undefined,
 				providerOptions: getOpenAiModelProviderOptions(context.model, {
 					reasoningEffort: context.reasoningEffort,
+					serviceTier: context.serviceTier,
 					safetyIdentifier: await createSafetyIdentifier(
 						context.ownerTokenIdentifier,
 					),

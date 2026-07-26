@@ -17,7 +17,7 @@ import {
 	type prepareHostedChatTurn,
 	startHostedChatRun,
 } from "@workspace/ai/hosted-chat-turn";
-import type { ReasoningEffort } from "@workspace/ai/models";
+import type { ReasoningEffort, ServiceTier } from "@workspace/ai/models";
 import type { ToolApprovalResponse } from "@workspace/ai/tool-approval-state";
 import type { UIMessage, UIMessageChunk } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
@@ -100,6 +100,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	noteId,
 	queuedInput,
 	reasoningEffort,
+	serviceTier,
 	safetyIdentifier,
 	replayQueuedMessageId,
 	response,
@@ -137,6 +138,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	noteId: Id<"notes"> | null;
 	queuedInput: HostedQueuedInput;
 	reasoningEffort: ReasoningEffort;
+	serviceTier: ServiceTier;
 	safetyIdentifier: string;
 	replayQueuedMessageId?: Id<"assistantQueuedMessages"> | null;
 	response: ServerResponse;
@@ -402,6 +404,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 							defaultTimezone,
 							model,
 							reasoningEffort,
+							serviceTier,
 						},
 					},
 				);
@@ -472,6 +475,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 		continueRunId,
 		model,
 		reasoningEffort,
+		serviceTier,
 		trigger,
 		supersedeActiveRun,
 		controllers: activeChatStreamControllers,

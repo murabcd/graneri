@@ -12,6 +12,7 @@ describe("workspace chat request preparation", () => {
 			reasoningEffort: "high",
 			resolveConvexToken: async () => "convex-token",
 			selectedSourceIds: ["app:notion"],
+			serviceTier: "priority",
 			webSearchEnabled: false,
 			workspaceId: "workspace-1",
 		});
@@ -21,6 +22,7 @@ describe("workspace chat request preparation", () => {
 			mentions: ["note-1"],
 			recipeSlug: "write-weekly-recap",
 			selectedSourceIds: ["app:notion"],
+			serviceTier: "priority",
 			workspaceId: "workspace-1",
 		});
 	});

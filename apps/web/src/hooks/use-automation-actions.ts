@@ -24,6 +24,7 @@ const toAutomationMutationInput = (automation: AutomationDraft) => ({
 	prompt: automation.prompt,
 	model: automation.model,
 	reasoningEffort: automation.reasoningEffort,
+	serviceTier: automation.serviceTier,
 	webSearchEnabled: automation.webSearchEnabled,
 	appsEnabled: automation.appsEnabled,
 	appSources: automation.appSources,

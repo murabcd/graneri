@@ -1,5 +1,9 @@
-import { DEFAULT_REASONING_EFFORT } from "@/lib/ai/models";
+import {
+	DEFAULT_REASONING_EFFORT,
+	DEFAULT_SERVICE_TIER,
+} from "@/lib/ai/models";
 import type { ReasoningEffort } from "@/lib/ai/reasoning-effort";
+import type { ServiceTier } from "@/lib/ai/service-tier";
 import { DEFAULT_SEND_SHORTCUT, type SendShortcut } from "@/lib/send-shortcut";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -17,6 +21,7 @@ export type UserPreferencesState = {
 	reduceMotion: ReduceMotionPreference;
 	translucentSidebar: boolean;
 	reasoningEffort: ReasoningEffort;
+	serviceTier: ServiceTier;
 	sendShortcut: SendShortcut;
 	avatarStorageId: Id<"_storage"> | null;
 	avatarUrl: string | null;
@@ -56,6 +61,10 @@ export function mergeUserPreferencesForOptimisticUpdate(
 			args.reasoningEffort !== undefined
 				? args.reasoningEffort
 				: (currentPreferences?.reasoningEffort ?? DEFAULT_REASONING_EFFORT),
+		serviceTier:
+			args.serviceTier !== undefined
+				? args.serviceTier
+				: (currentPreferences?.serviceTier ?? DEFAULT_SERVICE_TIER),
 		sendShortcut:
 			args.sendShortcut !== undefined
 				? args.sendShortcut

@@ -59,6 +59,7 @@ export const start = mutation({
 			producer: "convex",
 			model: args.job.model,
 			reasoningEffort: args.job.reasoningEffort,
+			serviceTier: args.job.serviceTier,
 			policy: args.policy,
 		});
 		await createAssistantRunStream(ctx, run);

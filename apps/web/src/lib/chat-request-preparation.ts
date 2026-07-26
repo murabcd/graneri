@@ -1,4 +1,5 @@
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
+import type { ServiceTier } from "@/lib/ai/models";
 import {
 	requireRehydratedSharedLocalFolders,
 	shareLocalFoldersFromText,
@@ -11,6 +12,7 @@ type ChatRequestBase = {
 	model: string;
 	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
+	serviceTier: ServiceTier;
 	timezone: string;
 };
 
@@ -55,17 +57,20 @@ const buildChatRequestBase = async ({
 	model,
 	recipeSlug,
 	reasoningEffort,
+	serviceTier,
 	resolveConvexToken,
 }: {
 	localFolders: DesktopLocalFolder[];
 	model: string;
 	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
+	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 }): Promise<ChatRequestBase> => ({
 	model,
 	recipeSlug,
 	reasoningEffort,
+	serviceTier,
 	localFolders,
 	convexToken: await resolveConvexToken(),
 	timezone: getTimezone(),
@@ -76,6 +81,7 @@ const resolveChatRequestBase = async ({
 	model,
 	recipeSlug,
 	reasoningEffort,
+	serviceTier,
 	resolveConvexToken,
 	text,
 }: {
@@ -83,6 +89,7 @@ const resolveChatRequestBase = async ({
 	model: string;
 	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
+	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 	text: string;
 }): Promise<ChatRequestBase> => {
@@ -99,6 +106,7 @@ const resolveChatRequestBase = async ({
 		model,
 		recipeSlug,
 		reasoningEffort,
+		serviceTier,
 		convexToken,
 		timezone: getTimezone(),
 	};
@@ -116,6 +124,7 @@ export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 	model: string;
 	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
+	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
 	webSearchEnabled: boolean;
@@ -140,6 +149,7 @@ export const buildWorkspaceChatRequestBody = async ({
 	model: string;
 	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
+	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
 	text: string;
@@ -161,6 +171,7 @@ export const buildNoteChatRequestBody = async ({
 	model: string;
 	noteContext: NoteChatRequestBody["noteContext"];
 	reasoningEffort: string | undefined;
+	serviceTier: ServiceTier;
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 	text: string;
@@ -177,6 +188,7 @@ export const buildNoteChatRequestBodyFromLocalFolders = async ({
 	model: string;
 	noteContext: NoteChatRequestBody["noteContext"];
 	reasoningEffort: string | undefined;
+	serviceTier: "auto" | "priority";
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 }): Promise<NoteChatRequestBody> => ({

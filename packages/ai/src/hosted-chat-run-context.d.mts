@@ -2,6 +2,7 @@ import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { ToolLoopAgent, ToolSet, UIMessage } from "ai";
 import type { AutomationActions } from "./automation-tools.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
+import type { ServiceTier } from "./models.mjs";
 
 type LogLatencyDetails = Record<
 	string,
@@ -43,6 +44,7 @@ export declare const buildHostedChatRunContext: (args: {
 	convexClient: unknown;
 	defaultModel: string;
 	defaultReasoningEffort: string;
+	defaultServiceTier: ServiceTier;
 	defaultTimezone: string;
 	getActiveStreamSession: () => HostedActiveStreamSession | null;
 	getNotesContext: () => Promise<string>;

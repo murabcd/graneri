@@ -4,6 +4,7 @@ import type {
 	AppSourceInstructionConnection,
 	AppSourceProvider,
 } from "./capability-metadata.mjs";
+import type { ServiceTier } from "./models.mjs";
 
 export type AutomationAppSource = {
 	id: string;
@@ -23,6 +24,7 @@ export type AutomationToolInput = {
 	prompt: string;
 	model: string;
 	reasoningEffort: "low" | "medium" | "high" | "xhigh";
+	serviceTier: ServiceTier;
 	webSearchEnabled: boolean;
 	appsEnabled: boolean;
 	appSources: AutomationAppSource[];
@@ -49,6 +51,7 @@ export type AutomationToolResult = {
 	prompt: string;
 	model: string;
 	reasoningEffort: "low" | "medium" | "high" | "xhigh";
+	serviceTier: ServiceTier;
 	webSearchEnabled: boolean;
 	appsEnabled: boolean;
 	appSources: AutomationAppSource[];
@@ -108,6 +111,7 @@ type AutomationUpdateMutationInput<AutomationId, NoteId> = Pick<
 	| "model"
 	| "prompt"
 	| "reasoningEffort"
+	| "serviceTier"
 	| "schedule"
 	| "stopCondition"
 	| "title"
@@ -145,6 +149,7 @@ export declare function createAutomationTool(args: {
 	createAutomation: AutomationActions["createAutomation"];
 	defaultModel: string;
 	defaultReasoningEffort: "low" | "medium" | "high" | "xhigh";
+	defaultServiceTier: ServiceTier;
 	defaultTimezone: string;
 	webSearchEnabled: boolean;
 }): ToolSet[string];
@@ -155,6 +160,7 @@ export declare function buildChatAutomationContext(args: {
 	chatId: string | null | undefined;
 	defaultModel: string;
 	defaultReasoningEffort: "low" | "medium" | "high" | "xhigh";
+	defaultServiceTier: ServiceTier;
 	defaultTimezone: string;
 	webSearchEnabled: boolean;
 }): {

@@ -21,6 +21,11 @@ import {
 	storeChatReasoningEffort,
 	storeReasoningEffort,
 } from "@/lib/ai/reasoning-effort";
+import {
+	getStoredServiceTier,
+	type ServiceTier,
+	storeServiceTier,
+} from "@/lib/ai/service-tier";
 import { isSameCalendarDay } from "@/lib/calendar-day";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../convex/_generated/api";
@@ -77,10 +82,12 @@ export const useNoteDiscussionSession = ({
 	activeWorkspaceId,
 	noteId,
 	userPreferenceReasoningEffort,
+	userPreferenceServiceTier,
 }: {
 	activeWorkspaceId: Id<"workspaces"> | null;
 	noteId: Id<"notes"> | null;
 	userPreferenceReasoningEffort?: ReasoningEffort | null;
+	userPreferenceServiceTier?: ServiceTier | null;
 }) => {
 	const convex = useConvex();
 	const [currentChatId, setCurrentChatId] =
@@ -92,6 +99,8 @@ export const useNoteDiscussionSession = ({
 	const [reasoningEffort, setReasoningEffort] = React.useState<ReasoningEffort>(
 		getStoredReasoningEffort,
 	);
+	const [serviceTier, setServiceTier] =
+		React.useState<ServiceTier>(getStoredServiceTier);
 	const noteChats = useQuery(
 		api.chats.listForNote,
 		noteId && activeWorkspaceId
@@ -148,6 +157,7 @@ export const useNoteDiscussionSession = ({
 		userPreferenceReasoningEffort,
 		fallbackReasoningEffort: reasoningEffort,
 	});
+	const selectedServiceTier = userPreferenceServiceTier ?? serviceTier;
 	const handleSelectedModelChange = React.useCallback(
 		(model: ChatModel) => {
 			setSelectedModelOverride({ chatId: currentChatId, model });
@@ -216,6 +226,22 @@ export const useNoteDiscussionSession = ({
 			updateUserPreferences,
 		],
 	);
+	const handleServiceTierChange = React.useCallback(
+		(value: ServiceTier) => {
+			setServiceTier(() => value);
+			storeServiceTier(value);
+
+			void updateUserPreferences({ serviceTier: value }).catch((error) => {
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to persist default speed",
+				});
+				toast.error("Failed to save speed");
+			});
+		},
+		[updateUserPreferences],
+	);
 	const prefetchNoteChat = React.useCallback(
 		(chatId: string) => {
 			if (!activeWorkspaceId) {
@@ -266,6 +292,7 @@ export const useNoteDiscussionSession = ({
 		currentChatId,
 		groupedNoteChats,
 		handleReasoningEffortChange,
+		handleServiceTierChange,
 		handleSelectedModelChange,
 		hasKnownNoteChat: Boolean(
 			latestNoteChat || selectedNoteChat || currentChatSession,
@@ -298,6 +325,7 @@ export const useNoteDiscussionSession = ({
 		selectChat,
 		selectedModel,
 		selectedReasoningEffort,
+		selectedServiceTier,
 		storedMessages,
 	};
 };

@@ -1,3 +1,4 @@
+import type { ServiceTier } from "@workspace/ai/models";
 import type { UIMessage } from "ai";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../../convex/_generated/api.js";
@@ -11,6 +12,7 @@ export type ChatRequestBody = {
 	message?: UIMessage;
 	model?: string;
 	reasoningEffort?: "low" | "medium" | "high" | "xhigh";
+	serviceTier?: ServiceTier;
 	webSearchEnabled?: boolean;
 	appsEnabled?: boolean;
 	mentions?: string[];

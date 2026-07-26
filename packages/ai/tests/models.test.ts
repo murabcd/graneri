@@ -8,6 +8,7 @@ import {
 	getOpenAiModelProviderOptions,
 	NOTE_GENERATION_MODEL_ID,
 	REASONING_EFFORTS,
+	SERVICE_TIERS,
 } from "../src/models.mjs";
 
 describe("model roles", () => {
@@ -42,6 +43,13 @@ describe("model roles", () => {
 			{ id: "medium", name: "Medium" },
 			{ id: "high", name: "High" },
 			{ id: "xhigh", name: "Extra High" },
+		]);
+	});
+
+	it("offers the supported OpenAI service tiers", () => {
+		expect(SERVICE_TIERS).toEqual([
+			{ id: "auto", name: "Standard" },
+			{ id: "priority", name: "Fast" },
 		]);
 	});
 });
@@ -86,5 +94,26 @@ describe("OpenAI model provider options", () => {
 				safetyIdentifier: "hashed-user-identifier",
 			},
 		});
+	});
+
+	it("uses priority service only when Fast is selected", () => {
+		expect(
+			getOpenAiModelProviderOptions("gpt-5.6-sol", {
+				reasoningEffort: "xhigh",
+				serviceTier: "priority",
+			}),
+		).toEqual({
+			openai: {
+				reasoningEffort: "xhigh",
+				reasoningSummary: "auto",
+				serviceTier: "priority",
+			},
+		});
+		expect(
+			getOpenAiModelProviderOptions("gpt-5.6-sol", {
+				reasoningEffort: "xhigh",
+				serviceTier: "auto",
+			}),
+		).not.toHaveProperty("openai.serviceTier");
 	});
 });

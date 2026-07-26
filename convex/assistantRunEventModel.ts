@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { serviceTierValidator } from "./assistantRunModel";
 
 export const assistantRunEventValidator = v.union(
 	v.object({
@@ -13,6 +14,7 @@ export const assistantRunEventValidator = v.union(
 				v.literal("xhigh"),
 			),
 		),
+		serviceTier: serviceTierValidator,
 	}),
 	v.object({
 		type: v.literal("assistant.message.started"),

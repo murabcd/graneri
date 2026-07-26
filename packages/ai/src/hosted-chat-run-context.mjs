@@ -65,6 +65,7 @@ export const buildHostedChatRunContext = async ({
 	convexClient,
 	defaultModel,
 	defaultReasoningEffort,
+	defaultServiceTier,
 	defaultTimezone,
 	getActiveStreamSession,
 	getNotesContext,
@@ -141,6 +142,7 @@ export const buildHostedChatRunContext = async ({
 		chatId,
 		defaultModel,
 		defaultReasoningEffort,
+		defaultServiceTier,
 		defaultTimezone,
 		webSearchEnabled,
 	});

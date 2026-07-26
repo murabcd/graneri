@@ -1,6 +1,6 @@
 import workflowTest from "@convex-dev/workflow/test";
-import { convexTest } from "convex-test";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
+import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -42,7 +42,10 @@ type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
 type AsOwner = WorkspaceFixture["asOwner"];
 type WorkspaceId = WorkspaceFixture["workspaceId"];
 
-const userQuestionDecision = (assistantMessageId: string, question: string) => ({
+const userQuestionDecision = (
+	assistantMessageId: string,
+	question: string,
+) => ({
 	type: "user_question" as const,
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
@@ -122,6 +125,7 @@ const startRunWithSnapshots = async ({
 		chatId,
 		assistantMessageId: `${chatId}-assistant-1`,
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await asOwner.mutation(api.chats.startActiveStream, {
@@ -170,6 +174,7 @@ const backgroundJob = {
 	defaultTimezone: "UTC",
 	model: DEFAULT_CHAT_MODEL_ID,
 	reasoningEffort: "medium" as const,
+	serviceTier: "auto" as const,
 };
 
 const listRunEventTypes = async ({
@@ -863,6 +868,7 @@ test("finishAssistantRun deletes all snapshots for runId without batch caps", as
 		chatId: "chat-complete-many",
 		assistantMessageId: "chat-complete-many-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 
@@ -1119,10 +1125,7 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 		api.assistantRuns.waitForUserDecision,
 		{
 			runId: run._id,
-			pendingDecision: userQuestionDecision(
-				run.assistantMessageId,
-				"Clarify?",
-			),
+			pendingDecision: userQuestionDecision(run.assistantMessageId, "Clarify?"),
 		},
 	);
 
@@ -1161,6 +1164,7 @@ test("supersede stops old run and deletes old snapshots before creating new run"
 		chatId: "chat-supersede",
 		assistantMessageId: "chat-supersede-assistant-2",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "supersede",
 	});
 
@@ -1209,6 +1213,7 @@ test("assistant runs reject concurrent starts instead of leaving two active runs
 			chatId: "chat-concurrent",
 			assistantMessageId: "chat-concurrent-assistant-2",
 			model: "gpt-5",
+			serviceTier: "auto",
 			policy: "reject",
 		}),
 	).rejects.toThrow("Chat already has an active assistant run.");
@@ -1261,6 +1266,7 @@ test("attachable run query fails closed when multiple active runs exist", async 
 			status: "waiting_for_user",
 			model: "gpt-5",
 			reasoningEffort: undefined,
+			serviceTier: "auto",
 			phase: undefined,
 			pendingDecision: userQuestionDecision(
 				"chat-multiple-active-assistant-2",
@@ -1301,6 +1307,7 @@ test("attachable run query returns only non-terminal runs", async () => {
 		chatId: "chat-attach",
 		assistantMessageId: "chat-attach-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 
@@ -1332,6 +1339,7 @@ test("active run queries are driven by non-terminal assistant runs", async () =>
 		chatId: "chat-active",
 		assistantMessageId: "chat-active-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 
@@ -1382,6 +1390,7 @@ test("assistant runs durably wait for user questions", async () => {
 		chatId: "chat-decision",
 		assistantMessageId: "chat-decision-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await saveUserQuestion({
@@ -1441,6 +1450,7 @@ test("assistant runs reject questions that do not match stored assistant input",
 		chatId: "chat-invalid-decision",
 		assistantMessageId: "chat-invalid-decision-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await saveUserQuestion({
@@ -1476,6 +1486,7 @@ test("appended user input resolves the question and resumes its run", async () =
 		chatId: "chat-append-decision",
 		assistantMessageId: "chat-append-decision-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await saveUserQuestion({
@@ -1520,9 +1531,7 @@ test("appended user input resolves the question and resumes its run", async () =
 			? await ctx.db
 					.query("chatMessages")
 					.withIndex("by_chatId_and_messageId", (q) =>
-						q
-							.eq("chatId", chat._id)
-							.eq("messageId", run.assistantMessageId),
+						q.eq("chatId", chat._id).eq("messageId", run.assistantMessageId),
 					)
 					.unique()
 			: null;
@@ -1549,6 +1558,7 @@ test("stopping a waiting-for-user run clears the pending decision", async () => 
 		chatId: "chat-stop-decision",
 		assistantMessageId: "chat-stop-decision-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await saveUserQuestion({
@@ -1747,6 +1757,7 @@ test("cleanupExpiredAssistantRuns preserves waiting-for-user runs", async () => 
 		chatId: "chat-waiting-expired",
 		assistantMessageId: "chat-waiting-expired-assistant-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await saveUserQuestion({

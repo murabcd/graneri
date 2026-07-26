@@ -33,6 +33,7 @@ const backgroundJob = {
 	defaultTimezone: "UTC",
 	model: DEFAULT_CHAT_MODEL_ID,
 	reasoningEffort: "medium" as const,
+	serviceTier: "auto" as const,
 };
 
 const createBackgroundRun = async () => {

@@ -10,6 +10,7 @@ export declare const startHostedChatRun: <
 	ChatId extends string,
 	RunId extends string,
 	ReasoningEffort extends string,
+	ServiceTier extends string,
 >(args: {
 	updateActiveStream: (args: {
 		workspaceId: WorkspaceId;
@@ -43,6 +44,7 @@ export declare const startHostedChatRun: <
 	}) => Promise<unknown>;
 	model: string;
 	reasoningEffort?: ReasoningEffort;
+	serviceTier: ServiceTier;
 	startActiveStream: (args: {
 		workspaceId: WorkspaceId;
 		chatId: ChatId;
@@ -63,6 +65,7 @@ export declare const startHostedChatRun: <
 		assistantMessageId: string;
 		model: string;
 		reasoningEffort?: ReasoningEffort;
+		serviceTier: ServiceTier;
 		policy: "reject" | "supersede";
 	}) => Promise<{ _id: RunId }>;
 	supersedeActiveRun?: boolean;

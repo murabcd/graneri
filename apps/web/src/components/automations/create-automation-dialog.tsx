@@ -58,6 +58,7 @@ import type {
 import {
 	ChatModelPicker,
 	type ReasoningEffort,
+	type ServiceTier,
 } from "@/components/chat/model-picker";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { type AppSource, useAppSources } from "@/hooks/use-app-sources";
@@ -67,6 +68,7 @@ import {
 	getStoredReasoningEffort,
 	storeReasoningEffort,
 } from "@/lib/ai/reasoning-effort";
+import { getStoredServiceTier, storeServiceTier } from "@/lib/ai/service-tier";
 import { getAppSourceLabel } from "@/lib/chat-source-display";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
@@ -123,6 +125,7 @@ type AutomationDialogState = {
 	promptMentions: AutomationPromptMention[];
 	selectedModel: typeof defaultChatModel;
 	reasoningEffort: ReasoningEffort;
+	serviceTier: ServiceTier;
 	schedule: AutomationScheduleDraft;
 	deliveryPolicy: AutomationDeliveryPolicy;
 	stopCondition: string;
@@ -147,6 +150,7 @@ const createEmptyAutomationDialogState = (): AutomationDialogState => {
 		promptMentions: [],
 		selectedModel: getStoredChatModel(),
 		reasoningEffort: getStoredReasoningEffort(),
+		serviceTier: getStoredServiceTier(),
 		schedule: createDefaultAutomationScheduleDraft(),
 		deliveryPolicy: "always",
 		stopCondition: "",
@@ -181,6 +185,7 @@ const createAutomationDialogState = (
 		promptMentions,
 		selectedModel: findChatModel(initialAutomation.model) ?? defaultChatModel,
 		reasoningEffort: initialAutomation.reasoningEffort,
+		serviceTier: initialAutomation.serviceTier,
 		schedule: createAutomationScheduleDraft(initialAutomation.schedule),
 		deliveryPolicy: initialAutomation.deliveryPolicy,
 		stopCondition: initialAutomation.stopCondition ?? "",
@@ -248,6 +253,7 @@ function useCreateAutomationDialogElement({
 		promptMentions,
 		selectedModel,
 		reasoningEffort,
+		serviceTier,
 		schedule,
 		deliveryPolicy,
 		stopCondition,
@@ -447,6 +453,7 @@ function useCreateAutomationDialogElement({
 				prompt: trimmedPrompt,
 				model: selectedModel.model,
 				reasoningEffort,
+				serviceTier,
 				webSearchEnabled,
 				appsEnabled,
 				appSources: effectiveSelectedConnectedAppSources,
@@ -477,6 +484,7 @@ function useCreateAutomationDialogElement({
 		selectedConnectedAppIds,
 		selectedModel.model,
 		reasoningEffort,
+		serviceTier,
 		selectedNoteIds,
 		target,
 		title,
@@ -583,6 +591,11 @@ function useCreateAutomationDialogElement({
 										onReasoningEffortChange={(value) => {
 											storeReasoningEffort(value);
 											updateDialogState({ reasoningEffort: value });
+										}}
+										serviceTier={serviceTier}
+										onServiceTierChange={(value) => {
+											storeServiceTier(value);
+											updateDialogState({ serviceTier: value });
 										}}
 										triggerClassName="text-muted-foreground hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
 										triggerIconClassName="text-current"

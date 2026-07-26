@@ -103,6 +103,7 @@ const sanitizeQueuedRequestBody = (requestBody: QueuedRequestBody) => {
 		mentions: requestBody.mentions,
 		model: requestBody.model,
 		reasoningEffort: requestBody.reasoningEffort,
+		serviceTier: requestBody.serviceTier,
 		recipeSlug: requestBody.recipeSlug,
 		selectedSourceIds: requestBody.selectedSourceIds,
 		timezone: requestBody.timezone,

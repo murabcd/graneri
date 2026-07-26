@@ -52,6 +52,7 @@ const startRunAndStream = async ({
 		chatId,
 		assistantMessageId: "stream-1",
 		model: "gpt-5",
+		serviceTier: "auto",
 		policy: "reject",
 	});
 	await asOwner.mutation(api.chats.startActiveStream, {
@@ -113,7 +114,9 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 	);
 
 	expect(completedToolCall.status).toBe("completed");
-	expect(completedToolCall.outputJson).toBe(JSON.stringify({ result: "found" }));
+	expect(completedToolCall.outputJson).toBe(
+		JSON.stringify({ result: "found" }),
+	);
 
 	const storedToolCalls = await t.run(async (ctx) =>
 		ctx.db
@@ -133,6 +136,7 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 			type: "run.started",
 			assistantMessageId: run.assistantMessageId,
 			model: "gpt-5",
+			serviceTier: "auto",
 		},
 		{
 			type: "assistant.message.started",
@@ -172,6 +176,7 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 			type: "run.started",
 			assistantMessageId: run.assistantMessageId,
 			model: "gpt-5",
+			serviceTier: "auto",
 		},
 		{
 			type: "assistant.message.started",

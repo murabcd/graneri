@@ -35,6 +35,7 @@ import { ChatUserMessageNavigationRail } from "@/components/chat/chat-user-messa
 import type {
 	ChatModel,
 	ReasoningEffort,
+	ServiceTier,
 } from "@/components/chat/model-picker";
 import { COMPOSER_DOCK_WRAPPER_CLASS } from "@/components/layout/composer-dock";
 import { PageTitle } from "@/components/layout/page-title";
@@ -61,6 +62,7 @@ import {
 	storeChatReasoningEffort,
 	storeReasoningEffort,
 } from "@/lib/ai/reasoning-effort";
+import { getStoredServiceTier, storeServiceTier } from "@/lib/ai/service-tier";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { getChatId } from "@/lib/chat";
 import {
@@ -316,6 +318,8 @@ const useChatPageController = ({
 	const [reasoningEffort, setReasoningEffort] = React.useState<ReasoningEffort>(
 		getStoredReasoningEffort,
 	);
+	const [serviceTier, setServiceTier] =
+		React.useState<ServiceTier>(getStoredServiceTier);
 	const mentions = React.useMemo(
 		() => draftMetadata?.mentions ?? [],
 		[draftMetadata],
@@ -513,6 +517,7 @@ const useChatPageController = ({
 		userPreferenceReasoningEffort: userPreferences?.reasoningEffort,
 		fallbackReasoningEffort: reasoningEffort,
 	});
+	const selectedServiceTier = userPreferences?.serviceTier ?? serviceTier;
 	// Model resolving is derived from query state and drives rendering only.
 	const isModelResolving = isChatsLoading && !currentChat;
 	const handleSelectedModelChange = React.useCallback(
@@ -577,6 +582,22 @@ const useChatPageController = ({
 			persistChatSettings,
 			updateUserPreferences,
 		],
+	);
+	const handleServiceTierChange = React.useCallback(
+		(value: ServiceTier) => {
+			setServiceTier(() => value);
+			storeServiceTier(value);
+
+			void updateUserPreferences({ serviceTier: value }).catch((error) => {
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to persist default speed",
+				});
+				toast.error("Failed to save speed");
+			});
+		},
+		[updateUserPreferences],
 	);
 
 	const contextPages = React.useMemo(
@@ -660,6 +681,7 @@ const useChatPageController = ({
 					model: selectedModel.model,
 					recipeSlug: submission.recipeSlug,
 					reasoningEffort: selectedReasoningEffort,
+					serviceTier: selectedServiceTier,
 					resolveConvexToken: getCachedConvexToken,
 					selectedSourceIds: requestSelectedSourceIds,
 					text: submission.displayText,
@@ -697,6 +719,7 @@ const useChatPageController = ({
 						model: selectedModel.model,
 						recipeSlug: submission.recipeSlug,
 						reasoningEffort: selectedReasoningEffort,
+						serviceTier: selectedServiceTier,
 						resolveConvexToken: getCachedConvexToken,
 						selectedSourceIds: requestSelectedSourceIds,
 						text: submission.displayText,
@@ -787,6 +810,7 @@ const useChatPageController = ({
 		setDraft,
 		setDraftMetadata,
 		selectedReasoningEffort,
+		selectedServiceTier,
 		selectedModel.model,
 		sendMessage,
 		setQueuedMessages,
@@ -864,6 +888,7 @@ const useChatPageController = ({
 			model: selectedModel.model,
 			recipeSlug,
 			reasoningEffort: selectedReasoningEffort,
+			serviceTier: selectedServiceTier,
 			resolveConvexToken: getCachedConvexToken,
 			selectedSourceIds: requestSelectedSourceIds,
 			webSearchEnabled,
@@ -873,6 +898,7 @@ const useChatPageController = ({
 		activeWorkspaceId,
 		mentions,
 		selectedReasoningEffort,
+		selectedServiceTier,
 		selectedModel.model,
 		sharedLocalFolders,
 		webSearchEnabled,
@@ -1077,10 +1103,12 @@ const useChatPageController = ({
 		modelPopoverOpen,
 		selectedModel: isModelResolving ? null : selectedModel,
 		reasoningEffort: selectedReasoningEffort,
+		serviceTier: selectedServiceTier,
 		setDraft,
 		setMentions: handleMentionsChange,
 		setModelPopoverOpen,
 		setReasoningEffort: handleReasoningEffortChange,
+		setServiceTier: handleServiceTierChange,
 		setSelectedModel: handleSelectedModelChange,
 		setSourcesOpen,
 		setSummaryOpen,
@@ -1425,10 +1453,12 @@ export function ChatPage({
 			canStop={controller.canStop}
 			selectedModel={controller.selectedModel}
 			reasoningEffort={controller.reasoningEffort}
+			serviceTier={controller.serviceTier}
 			modelPopoverOpen={controller.modelPopoverOpen}
 			onModelPopoverOpenChange={controller.setModelPopoverOpen}
 			onSelectedModelChange={controller.setSelectedModel}
 			onReasoningEffortChange={controller.setReasoningEffort}
+			onServiceTierChange={controller.setServiceTier}
 			noteMentions={controller.noteMentionCatalog}
 			recipeMentions={controller.recipeMentionCatalog}
 			onMentionsChange={controller.setMentions}

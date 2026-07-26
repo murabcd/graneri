@@ -13,7 +13,10 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
-import { reasoningEffortValidator } from "./assistantRunModel";
+import {
+	reasoningEffortValidator,
+	serviceTierValidator,
+} from "./assistantRunModel";
 import { requireAutomationCapacity } from "./automationLimits";
 import {
 	removeAllAutomationsForOwner,
@@ -53,6 +56,7 @@ const automationListItemValidator = v.object({
 	prompt: v.string(),
 	model: v.string(),
 	reasoningEffort: reasoningEffortValidator,
+	serviceTier: serviceTierValidator,
 	authorName: v.optional(v.string()),
 	webSearchEnabled: v.boolean(),
 	appsEnabled: v.boolean(),
@@ -146,6 +150,7 @@ const automationCreateArgs = {
 	prompt: v.string(),
 	model: v.string(),
 	reasoningEffort: reasoningEffortValidator,
+	serviceTier: serviceTierValidator,
 	webSearchEnabled: v.optional(v.boolean()),
 	appsEnabled: v.optional(v.boolean()),
 	appSources: v.optional(v.array(automationAppSourceValidator)),
@@ -163,6 +168,7 @@ const automationUpdateArgs = {
 	prompt: v.string(),
 	model: v.string(),
 	reasoningEffort: reasoningEffortValidator,
+	serviceTier: serviceTierValidator,
 	webSearchEnabled: v.optional(v.boolean()),
 	appsEnabled: v.optional(v.boolean()),
 	appSources: v.optional(v.array(automationAppSourceValidator)),
@@ -395,6 +401,7 @@ const toListItem = (automation: Doc<"automations">) => ({
 	prompt: automation.prompt,
 	model: automation.model,
 	reasoningEffort: automation.reasoningEffort,
+	serviceTier: automation.serviceTier,
 	authorName: automation.authorName,
 	webSearchEnabled: automation.webSearchEnabled ?? false,
 	appsEnabled: automation.appsEnabled ?? true,
@@ -537,6 +544,7 @@ const createAutomationForOwner = async (
 		prompt,
 		model: normalizeModel(args.model),
 		reasoningEffort: args.reasoningEffort,
+		serviceTier: args.serviceTier,
 		webSearchEnabled: args.webSearchEnabled ?? false,
 		appsEnabled: args.appsEnabled ?? true,
 		appSources,
@@ -621,6 +629,7 @@ const updateAutomationForOwner = async (
 		prompt,
 		model: normalizeModel(args.model),
 		reasoningEffort: args.reasoningEffort,
+		serviceTier: args.serviceTier,
 		webSearchEnabled: args.webSearchEnabled ?? false,
 		appsEnabled: args.appsEnabled ?? true,
 		appSources,

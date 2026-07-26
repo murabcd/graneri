@@ -7,6 +7,11 @@ export const reasoningEffortValidator = v.union(
 	v.literal("xhigh"),
 );
 
+export const serviceTierValidator = v.union(
+	v.literal("auto"),
+	v.literal("priority"),
+);
+
 export const assistantRunStatusValidator = v.union(
 	v.literal("running"),
 	v.literal("waiting_for_user"),
@@ -59,6 +64,7 @@ export const assistantRunValidator = v.object({
 	status: assistantRunStatusValidator,
 	model: v.string(),
 	reasoningEffort: v.optional(reasoningEffortValidator),
+	serviceTier: serviceTierValidator,
 	phase: v.optional(v.string()),
 	pendingDecision: v.optional(pendingDecisionValidator),
 	stopReason: v.optional(stopReasonValidator),

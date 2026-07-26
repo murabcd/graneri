@@ -3,6 +3,7 @@ import { type Infer, v } from "convex/values";
 import {
 	pendingDecisionValidator,
 	reasoningEffortValidator,
+	serviceTierValidator,
 } from "./assistantRunModel";
 
 export const assistantRunJobValidator = v.object({
@@ -16,6 +17,7 @@ export const assistantRunJobValidator = v.object({
 	defaultTimezone: v.string(),
 	model: v.string(),
 	reasoningEffort: reasoningEffortValidator,
+	serviceTier: serviceTierValidator,
 });
 
 export type AssistantRunJob = Infer<typeof assistantRunJobValidator>;
@@ -53,4 +55,6 @@ export type AssistantRunStepOutcome = Infer<
 export type AssistantRunStepUsage = Infer<
 	typeof assistantRunStepUsageValidator
 >;
-export type AssistantRunExecution = Infer<typeof assistantRunExecutionValidator>;
+export type AssistantRunExecution = Infer<
+	typeof assistantRunExecutionValidator
+>;

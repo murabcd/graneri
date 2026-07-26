@@ -13,12 +13,14 @@ import type {
 	assistantRunProducerValidator,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
+	serviceTierValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
 
 type PendingDecision = Infer<typeof pendingDecisionValidator>;
 type AssistantRunProducer = Infer<typeof assistantRunProducerValidator>;
 type ReasoningEffort = Infer<typeof reasoningEffortValidator>;
+type ServiceTier = Infer<typeof serviceTierValidator>;
 type StopReason = Infer<typeof stopReasonValidator>;
 type AssistantRunPatch = Partial<WithoutSystemFields<Doc<"assistantRuns">>>;
 
@@ -80,9 +82,7 @@ export const cleanupAssistantRunToolExecutions = async (
 	}
 
 	await Promise.all(
-		toolExecutionIds.map((toolExecutionId) =>
-			ctx.db.delete(toolExecutionId),
-		),
+		toolExecutionIds.map((toolExecutionId) => ctx.db.delete(toolExecutionId)),
 	);
 };
 
@@ -150,6 +150,7 @@ export const createAssistantRun = async (
 		producer: AssistantRunProducer;
 		model: string;
 		reasoningEffort?: ReasoningEffort;
+		serviceTier: ServiceTier;
 	},
 ) => {
 	const now = Date.now();
@@ -175,6 +176,7 @@ export const createAssistantRun = async (
 		assistantMessageId: run.assistantMessageId,
 		model: run.model,
 		reasoningEffort: run.reasoningEffort,
+		serviceTier: run.serviceTier,
 	});
 
 	return run;

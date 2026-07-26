@@ -20,13 +20,14 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { chatModels, reasoningEfforts } from "@/lib/ai/models";
+import { chatModels, reasoningEfforts, serviceTiers } from "@/lib/ai/models";
 import type { ReasoningEffort } from "@/lib/ai/reasoning-effort";
+import type { ServiceTier } from "@/lib/ai/service-tier";
 
 const OpenAILogo = Icons.codexLogo;
 
 export type ChatModel = (typeof chatModels)[number];
-export type { ReasoningEffort };
+export type { ReasoningEffort, ServiceTier };
 
 const getSelectedModelDisplayName = (name: string) => name.replace(/^GPT-/, "");
 
@@ -42,6 +43,8 @@ type ChatModelPickerProps = {
 	menuLabel?: string;
 	reasoningEffort?: ReasoningEffort;
 	onReasoningEffortChange?: (value: ReasoningEffort) => void;
+	serviceTier?: ServiceTier;
+	onServiceTierChange?: (value: ServiceTier) => void;
 };
 
 export function ChatModelPicker({
@@ -56,6 +59,8 @@ export function ChatModelPicker({
 	menuLabel = "OpenAI",
 	reasoningEffort,
 	onReasoningEffortChange,
+	serviceTier,
+	onServiceTierChange,
 }: ChatModelPickerProps) {
 	const showReasoningEffort = Boolean(
 		reasoningEffort && onReasoningEffortChange,
@@ -63,6 +68,11 @@ export function ChatModelPicker({
 	const selectedReasoningEffort = reasoningEfforts.find(
 		(effort) => effort.id === reasoningEffort,
 	);
+	const showServiceTier = Boolean(serviceTier && onServiceTierChange);
+	const selectedServiceTier = serviceTiers.find(
+		(tier) => tier.id === serviceTier,
+	);
+	const showFastServiceTier = selectedServiceTier?.id === "priority";
 	const selectedModelDisplayName = getSelectedModelDisplayName(
 		selectedModel.name,
 	);
@@ -94,6 +104,9 @@ export function ChatModelPicker({
 								<span className="text-muted-foreground">
 									{selectedReasoningEffort?.name}
 								</span>
+							) : null}
+							{showFastServiceTier ? (
+								<span className="text-muted-foreground">Fast</span>
 							) : null}
 						</InputGroupButton>
 					</DropdownMenuTrigger>
@@ -127,35 +140,65 @@ export function ChatModelPicker({
 						</DropdownMenuCheckboxItem>
 					))}
 				</DropdownMenuGroup>
-				{showReasoningEffort ? (
+				{showReasoningEffort || showServiceTier ? (
 					<>
 						<DropdownMenuSeparator />
-						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								<span>{selectedReasoningEffort?.name}</span>
-							</DropdownMenuSubTrigger>
-							<DropdownMenuSubContent className="min-w-44">
-								<DropdownMenuLabel className="text-muted-foreground text-xs">
-									Reasoning
-								</DropdownMenuLabel>
-								<DropdownMenuRadioGroup
-									value={reasoningEffort}
-									onValueChange={(value) => {
-										onReasoningEffortChange?.(value as ReasoningEffort);
-									}}
-								>
-									{reasoningEfforts.map((effort) => (
-										<DropdownMenuRadioItem
-											key={effort.id}
-											value={effort.id}
-											className="pl-2 pr-8 *:[span:first-child]:right-2 *:[span:first-child]:left-auto"
-										>
-											{effort.name}
-										</DropdownMenuRadioItem>
-									))}
-								</DropdownMenuRadioGroup>
-							</DropdownMenuSubContent>
-						</DropdownMenuSub>
+						{showReasoningEffort ? (
+							<DropdownMenuSub>
+								<DropdownMenuSubTrigger>
+									<span>{selectedReasoningEffort?.name}</span>
+								</DropdownMenuSubTrigger>
+								<DropdownMenuSubContent className="min-w-44">
+									<DropdownMenuLabel className="text-muted-foreground text-xs">
+										Effort
+									</DropdownMenuLabel>
+									<DropdownMenuRadioGroup
+										value={reasoningEffort}
+										onValueChange={(value) => {
+											onReasoningEffortChange?.(value as ReasoningEffort);
+										}}
+									>
+										{reasoningEfforts.map((effort) => (
+											<DropdownMenuRadioItem
+												key={effort.id}
+												value={effort.id}
+												className="pl-2 pr-8 *:[span:first-child]:right-2 *:[span:first-child]:left-auto"
+											>
+												{effort.name}
+											</DropdownMenuRadioItem>
+										))}
+									</DropdownMenuRadioGroup>
+								</DropdownMenuSubContent>
+							</DropdownMenuSub>
+						) : null}
+						{showServiceTier ? (
+							<DropdownMenuSub>
+								<DropdownMenuSubTrigger>
+									<span>{selectedServiceTier?.name}</span>
+								</DropdownMenuSubTrigger>
+								<DropdownMenuSubContent className="min-w-44">
+									<DropdownMenuLabel className="text-muted-foreground text-xs">
+										Speed
+									</DropdownMenuLabel>
+									<DropdownMenuRadioGroup
+										value={serviceTier}
+										onValueChange={(value) => {
+											onServiceTierChange?.(value as ServiceTier);
+										}}
+									>
+										{serviceTiers.map((tier) => (
+											<DropdownMenuRadioItem
+												key={tier.id}
+												value={tier.id}
+												className="pl-2 pr-8 *:[span:first-child]:right-2 *:[span:first-child]:left-auto"
+											>
+												{tier.name}
+											</DropdownMenuRadioItem>
+										))}
+									</DropdownMenuRadioGroup>
+								</DropdownMenuSubContent>
+							</DropdownMenuSub>
+						) : null}
 					</>
 				) : null}
 			</DropdownMenuContent>
