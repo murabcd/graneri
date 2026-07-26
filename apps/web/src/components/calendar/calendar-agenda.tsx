@@ -353,6 +353,8 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 	onEdit: (event: UpcomingCalendarEvent) => void;
 	onRequestDelete: (event: UpcomingCalendarEvent) => void;
 }) {
+	const closedByPointerOutsideRef = React.useRef(false);
+
 	return (
 		<div className="group/event relative border-b">
 			<Tooltip delayDuration={150}>
@@ -395,12 +397,25 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 						<button
 							type="button"
 							aria-label={`Open actions for ${event.title}`}
-							className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 outline-hidden transition-[color,opacity] hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/event:opacity-100 group-focus-within/event:opacity-100 data-[state=open]:opacity-100 data-[state=open]:text-foreground"
+							className="absolute top-1/2 right-2 flex aspect-square size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md p-0 text-muted-foreground opacity-0 outline-hidden transition-[color,opacity] hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/event:opacity-100 data-[state=open]:opacity-100 data-[state=open]:text-foreground"
 						>
 							<MoreHorizontal className="size-4" aria-hidden />
 						</button>
 					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
+					<DropdownMenuContent
+						align="end"
+						onPointerDownOutside={() => {
+							closedByPointerOutsideRef.current = true;
+						}}
+						onCloseAutoFocus={(closeEvent) => {
+							if (!closedByPointerOutsideRef.current) {
+								return;
+							}
+
+							closeEvent.preventDefault();
+							closedByPointerOutsideRef.current = false;
+						}}
+					>
 						<DropdownMenuItem onSelect={() => onEdit(event)}>
 							<Pencil className="size-4" aria-hidden />
 							Edit

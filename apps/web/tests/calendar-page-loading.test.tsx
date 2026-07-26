@@ -1,4 +1,11 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { getFunctionName } from "convex/server";
@@ -605,6 +612,24 @@ describe("CalendarPage loading", () => {
 				}),
 			),
 		);
+	});
+
+	it("hides row actions after dismissing the menu with a pointer", async () => {
+		const user = userEvent.setup();
+		renderCalendarPage(workspaceId);
+		await screen.findByText("Planning");
+		const actionTrigger = screen.getByRole("button", {
+			name: "Open actions for Planning",
+		});
+
+		await user.click(actionTrigger);
+		await screen.findByRole("menuitem", { name: "Edit" });
+		fireEvent.pointerDown(screen.getByText("Plan ahead"));
+
+		await waitFor(() =>
+			expect(screen.queryByRole("menuitem", { name: "Edit" })).toBeNull(),
+		);
+		expect(document.activeElement).not.toBe(actionTrigger);
 	});
 
 	it("deletes an event from its row actions after confirmation", async () => {
