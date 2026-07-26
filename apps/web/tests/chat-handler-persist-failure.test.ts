@@ -9,6 +9,7 @@ import {
 } from "@workspace/ai/hosted-chat-runtime";
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defaultChatModel } from "@/lib/ai/models";
 import {
 	handleChatRequest,
 	handleChatStopRequest,
@@ -43,6 +44,7 @@ vi.mock("convex/browser", () => ({
 
 const previousConvexUrl = process.env.CONVEX_URL;
 const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
+const defaultChatModelId = defaultChatModel.model;
 
 beforeEach(() => {
 	process.env.CONVEX_URL = "https://example.convex.cloud";
@@ -192,7 +194,7 @@ const postChatStopRequest = async (body: Record<string, unknown>) => {
 describe("chat handler persistence failures", () => {
 	it("returns structured queue errors when attachable run lookup fails closed", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockRejectedValueOnce({
@@ -208,7 +210,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",
@@ -226,7 +228,7 @@ describe("chat handler persistence failures", () => {
 
 	it("rate limits a model-producing turn before queue or stream mutations", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
@@ -242,7 +244,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				message: {
 					id: "message_1",
@@ -264,7 +266,7 @@ describe("chat handler persistence failures", () => {
 
 	it("returns structured queue errors when replay lookup fails validation", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
@@ -280,7 +282,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				replayQueuedMessageId: "queued_1",
 			}),
@@ -323,7 +325,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				message: {
 					id: "message_1",
@@ -342,7 +344,7 @@ describe("chat handler persistence failures", () => {
 
 	it("fails closed instead of starting an assistant stream", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
@@ -355,7 +357,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				message: {
 					id: "message_1",
@@ -374,7 +376,7 @@ describe("chat handler persistence failures", () => {
 	it("starts a durable background run without a web active stream or web OpenAI key", async () => {
 		delete process.env.OPENAI_API_KEY;
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
@@ -392,7 +394,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				message: {
 					id: "message_1",
@@ -410,7 +412,7 @@ describe("chat handler persistence failures", () => {
 			admissionReservationId: "admission_1",
 			chatId: "chat_1",
 			job: {
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				shouldGenerateChatTitle: false,
 			},
 			workspaceId: "workspace_1",
@@ -419,7 +421,7 @@ describe("chat handler persistence failures", () => {
 
 	it("keeps desktop-local tool turns on the web stream producer", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
@@ -441,7 +443,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				localFolders: [
 					{
@@ -475,7 +477,7 @@ describe("chat handler persistence failures", () => {
 
 	it("fails closed when edited branch preservation fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
@@ -506,7 +508,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				trigger: "submit-message",
 				messageId: "msg-2",
@@ -532,7 +534,7 @@ describe("chat handler persistence failures", () => {
 
 	it("prepares replayed queued messages from the claimed queue row before starting a run", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
@@ -552,7 +554,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				replayQueuedMessageId: "queued_1",
 			},
@@ -587,7 +589,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				replayQueuedMessageId: "queued_1",
 				message: {
@@ -611,7 +613,7 @@ describe("chat handler persistence failures", () => {
 
 	it("discards a claimed steer message when active run interrupt fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -636,7 +638,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",
@@ -658,7 +660,7 @@ describe("chat handler persistence failures", () => {
 
 	it("fails closed when claimed steer cleanup fails after active run interrupt failure", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -683,7 +685,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",
@@ -705,7 +707,7 @@ describe("chat handler persistence failures", () => {
 
 	it("discards a claimed steer message when pre-accept preparation fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -731,7 +733,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",
@@ -753,7 +755,7 @@ describe("chat handler persistence failures", () => {
 
 	it("fails closed when claimed steer cleanup fails after preparation failure", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -779,7 +781,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",
@@ -801,7 +803,7 @@ describe("chat handler persistence failures", () => {
 
 	it("does not interrupt a waiting run before accepting queued input", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -826,7 +828,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",
@@ -852,7 +854,7 @@ describe("chat handler persistence failures", () => {
 
 	it("prepares steered input from the claimed queue row without a client message body", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -878,7 +880,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",
@@ -903,7 +905,7 @@ describe("chat handler persistence failures", () => {
 
 	it("accepts a steered input batch and lets the Convex producer continue it", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -936,7 +938,7 @@ describe("chat handler persistence failures", () => {
 				id: "chat_1",
 				workspaceId: "workspace_1",
 				convexToken: "token_1",
-				model: "gpt-5.4",
+				model: defaultChatModelId,
 				appsEnabled: false,
 				continueRunId: "run_1",
 				steerQueuedMessageId: "queued_1",
@@ -981,7 +983,7 @@ describe("chat handler persistence failures", () => {
 
 	it("returns the stale steer transition error when cleanup sees an already consumed queue row", async () => {
 		convexMock.query.mockResolvedValueOnce({
-			model: "gpt-5.4",
+			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce({
@@ -1020,7 +1022,7 @@ describe("chat handler persistence failures", () => {
 					id: "chat_1",
 					workspaceId: "workspace_1",
 					convexToken: "token_1",
-					model: "gpt-5.4",
+					model: defaultChatModelId,
 					appsEnabled: false,
 					continueRunId: "run_1",
 					steerQueuedMessageId: "queued_1",

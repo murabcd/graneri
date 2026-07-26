@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultChatModel } from "@/lib/ai/models";
 import { buildWorkspaceChatRequestBodyFromLocalFolders } from "@/lib/chat-request-preparation";
 
 describe("workspace chat request preparation", () => {
@@ -6,7 +7,7 @@ describe("workspace chat request preparation", () => {
 		const request = await buildWorkspaceChatRequestBodyFromLocalFolders({
 			localFolders: [],
 			mentions: ["note-1"],
-			model: "gpt-5.4",
+			model: defaultChatModel.model,
 			recipeSlug: "write-weekly-recap",
 			reasoningEffort: "high",
 			resolveConvexToken: async () => "convex-token",

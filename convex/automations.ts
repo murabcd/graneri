@@ -2,12 +2,7 @@ import {
 	type AutomationSchedule,
 	normalizeAutomationSchedule,
 } from "@workspace/ai/automation-schedule";
-import {
-	DEFAULT_CHAT_MODEL_ID,
-	DEFAULT_REASONING_EFFORT,
-	findReasoningEffort,
-	isSupportedChatModel,
-} from "@workspace/ai/models";
+import { isSupportedChatModel } from "@workspace/ai/models";
 import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -149,8 +144,8 @@ const automationCreateArgs = {
 	workspaceId: v.id("workspaces"),
 	title: v.string(),
 	prompt: v.string(),
-	model: v.optional(v.string()),
-	reasoningEffort: v.optional(reasoningEffortValidator),
+	model: v.string(),
+	reasoningEffort: reasoningEffortValidator,
 	webSearchEnabled: v.optional(v.boolean()),
 	appsEnabled: v.optional(v.boolean()),
 	appSources: v.optional(v.array(automationAppSourceValidator)),
@@ -166,8 +161,8 @@ const automationUpdateArgs = {
 	automationId: v.id("automations"),
 	title: v.string(),
 	prompt: v.string(),
-	model: v.optional(v.string()),
-	reasoningEffort: v.optional(reasoningEffortValidator),
+	model: v.string(),
+	reasoningEffort: reasoningEffortValidator,
 	webSearchEnabled: v.optional(v.boolean()),
 	appsEnabled: v.optional(v.boolean()),
 	appSources: v.optional(v.array(automationAppSourceValidator)),
@@ -368,10 +363,10 @@ const normalizeAppSources = (appSources: AutomationAppSource[] | undefined) => {
 	return normalizedSources;
 };
 
-const normalizeModel = (model: string | undefined) => {
-	const normalized = clampWhitespace(model ?? "") || DEFAULT_CHAT_MODEL_ID;
+const normalizeModel = (model: string) => {
+	const normalized = clampWhitespace(model);
 
-	if (isSupportedChatModel(normalized)) {
+	if (normalized && isSupportedChatModel(normalized)) {
 		return normalized;
 	}
 
@@ -380,10 +375,6 @@ const normalizeModel = (model: string | undefined) => {
 		message: "Unsupported automation model.",
 	});
 };
-
-const normalizeReasoningEffort = (reasoningEffort: string | undefined) =>
-	findReasoningEffort(reasoningEffort)?.id ?? DEFAULT_REASONING_EFFORT;
-
 const normalizeSchedule = (schedule: AutomationSchedule) => {
 	try {
 		return normalizeAutomationSchedule(schedule);
@@ -402,8 +393,8 @@ const toListItem = (automation: Doc<"automations">) => ({
 	id: automation._id,
 	title: automation.title,
 	prompt: automation.prompt,
-	model: normalizeModel(automation.model),
-	reasoningEffort: normalizeReasoningEffort(automation.reasoningEffort),
+	model: automation.model,
+	reasoningEffort: automation.reasoningEffort,
 	authorName: automation.authorName,
 	webSearchEnabled: automation.webSearchEnabled ?? false,
 	appsEnabled: automation.appsEnabled ?? true,
@@ -545,7 +536,7 @@ const createAutomationForOwner = async (
 		title: normalizeTitle(args.title),
 		prompt,
 		model: normalizeModel(args.model),
-		reasoningEffort: normalizeReasoningEffort(args.reasoningEffort),
+		reasoningEffort: args.reasoningEffort,
 		webSearchEnabled: args.webSearchEnabled ?? false,
 		appsEnabled: args.appsEnabled ?? true,
 		appSources,
@@ -629,7 +620,7 @@ const updateAutomationForOwner = async (
 		title: normalizeTitle(args.title),
 		prompt,
 		model: normalizeModel(args.model),
-		reasoningEffort: normalizeReasoningEffort(args.reasoningEffort),
+		reasoningEffort: args.reasoningEffort,
 		webSearchEnabled: args.webSearchEnabled ?? false,
 		appsEnabled: args.appsEnabled ?? true,
 		appSources,

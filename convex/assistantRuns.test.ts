@@ -1,5 +1,6 @@
 import workflowTest from "@convex-dev/workflow/test";
 import { convexTest } from "convex-test";
+import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -167,7 +168,7 @@ const backgroundJob = {
 	shouldGenerateChatTitle: false,
 	selectedSourceIds: [],
 	defaultTimezone: "UTC",
-	model: "gpt-5.4",
+	model: DEFAULT_CHAT_MODEL_ID,
 	reasoningEffort: "medium" as const,
 };
 

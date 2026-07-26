@@ -1,6 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { openai } from "@ai-sdk/openai";
-import { NOTE_GENERATION_MODEL_ID } from "@workspace/ai/models";
+import {
+	getOpenAiModelProviderOptions,
+	NOTE_GENERATION_MODEL_ID,
+} from "@workspace/ai/models";
 import {
 	APPLY_TEMPLATE_INSTRUCTIONS,
 	buildApplyTemplatePrompt,
@@ -10,10 +13,7 @@ import {
 	parseTemplateStreamToStructuredNote,
 	validateTemplateStream,
 } from "../src/lib/note-template-stream.js";
-import {
-	admitHostedOpenAiRequest,
-	getOpenAiSafetyProviderOptions,
-} from "./hosted-openai-admission.js";
+import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
@@ -151,7 +151,10 @@ export const handleApplyTemplateRequest = async (
 
 	const result = streamText({
 		model: openai(NOTE_GENERATION_MODEL_ID),
-		providerOptions: getOpenAiSafetyProviderOptions(admission.safetyIdentifier),
+		providerOptions: getOpenAiModelProviderOptions(NOTE_GENERATION_MODEL_ID, {
+			reasoningEffort: "none",
+			safetyIdentifier: admission.safetyIdentifier,
+		}),
 		instructions: APPLY_TEMPLATE_INSTRUCTIONS,
 		prompt: buildApplyTemplatePrompt({
 			title,

@@ -7,7 +7,7 @@ import {
 const automation: AutomationToolInput = {
 	title: "Daily summary",
 	prompt: "Summarize the note",
-	model: "gpt-5.4-nano",
+	model: "gpt-5.6-luna",
 	reasoningEffort: "low",
 	webSearchEnabled: false,
 	appsEnabled: true,

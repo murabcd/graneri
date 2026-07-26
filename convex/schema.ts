@@ -714,15 +714,8 @@ export default defineSchema({
 		authorName: v.optional(v.string()),
 		title: v.string(),
 		prompt: v.string(),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(
-			v.union(
-				v.literal("low"),
-				v.literal("medium"),
-				v.literal("high"),
-				v.literal("xhigh"),
-			),
-		),
+		model: v.string(),
+		reasoningEffort: reasoningEffortValidator,
 		webSearchEnabled: v.optional(v.boolean()),
 		appsEnabled: v.optional(v.boolean()),
 		appSources: v.optional(

@@ -8,7 +8,10 @@ import {
 import { getConvexErrorData } from "./convex-error.mjs";
 import { buildHostedRoutePath } from "./hosted-route-catalog.mjs";
 import { aiLogger, serializeError } from "./logger.mjs";
-import { CHAT_TITLE_MODEL_ID } from "./models.mjs";
+import {
+	CHAT_TITLE_MODEL_ID,
+	getOpenAiModelProviderOptions,
+} from "./models.mjs";
 import {
 	buildChatHistoryInstructions,
 	buildChatInstructions,
@@ -657,11 +660,10 @@ export const generateHostedChatTitle = async ({
 	try {
 		const { text } = await generateText({
 			model: openai(CHAT_TITLE_MODEL_ID),
-			providerOptions: {
-				openai: {
-					safetyIdentifier,
-				},
-			},
+			providerOptions: getOpenAiModelProviderOptions(CHAT_TITLE_MODEL_ID, {
+				reasoningEffort: "none",
+				safetyIdentifier,
+			}),
 			instructions: CHAT_TITLE_INSTRUCTIONS,
 			prompt: buildChatTitlePrompt({
 				userText,

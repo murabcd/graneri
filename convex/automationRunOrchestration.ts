@@ -159,6 +159,14 @@ const startAutomationAssistantRun = async (
 		reason: Doc<"automationRuns">["reason"];
 	},
 ) => {
+	const model = args.automation.model;
+	const reasoningEffort = args.automation.reasoningEffort;
+	if (!model || !reasoningEffort) {
+		throw new ConvexError({
+			code: "AUTOMATION_MODEL_CONFIGURATION_MISSING",
+			message: "Automation model configuration is missing.",
+		});
+	}
 	const userMessageId = createMessageId();
 	const assistantMessageId = createMessageId();
 	const metadataJson = JSON.stringify({
@@ -175,8 +183,8 @@ const startAutomationAssistantRun = async (
 		chatId: args.automation.chatId,
 		title: args.automation.title,
 		preview: args.automation.prompt,
-		model: args.automation.model,
-		reasoningEffort: args.automation.reasoningEffort,
+		model,
+		reasoningEffort,
 		forceTitle: true,
 		message: createTextMessage({
 			id: userMessageId,
@@ -191,8 +199,8 @@ const startAutomationAssistantRun = async (
 		chatId: args.automation.chatId,
 		assistantMessageId,
 		producer: "convex",
-		model: args.automation.model ?? "gpt-5.4",
-		reasoningEffort: args.automation.reasoningEffort ?? "medium",
+		model,
+		reasoningEffort,
 		policy: "reject",
 	});
 	await createAssistantRunStream(ctx, assistantRun);
@@ -218,8 +226,8 @@ const startAutomationAssistantRun = async (
 				(source) => source.id,
 			),
 			defaultTimezone: args.automation.schedule.timezone,
-			model: args.automation.model ?? "gpt-5.4",
-			reasoningEffort: args.automation.reasoningEffort ?? "medium",
+			model,
+			reasoningEffort,
 		},
 	});
 	await ctx.db.patch(args.automationRunId, {

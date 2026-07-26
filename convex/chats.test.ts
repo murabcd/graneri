@@ -1,4 +1,5 @@
 import { convexTest } from "convex-test";
+import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
 import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
@@ -1613,7 +1614,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 				shouldGenerateChatTitle: false,
 				selectedSourceIds: [],
 				defaultTimezone: "UTC",
-				model: "gpt-5.4",
+				model: DEFAULT_CHAT_MODEL_ID,
 				reasoningEffort: "medium",
 			},
 			execution: {

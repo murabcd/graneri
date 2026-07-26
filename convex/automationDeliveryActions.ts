@@ -2,8 +2,8 @@
 
 import { openai } from "@ai-sdk/openai";
 import {
-	CHAT_TITLE_MODEL_ID,
-	getChatModelProviderOptions,
+	AUTOMATION_DELIVERY_MODEL_ID,
+	getOpenAiModelProviderOptions,
 } from "@workspace/ai/models";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import { generateText, Output } from "ai";
@@ -47,13 +47,16 @@ export const classify = internalAction({
 			throw new Error("Automation delivery context is no longer active.");
 		}
 		const result = await generateText({
-			model: openai(CHAT_TITLE_MODEL_ID),
-			providerOptions: getChatModelProviderOptions(CHAT_TITLE_MODEL_ID, {
-				reasoningEffort: "low",
-				safetyIdentifier: await createSafetyIdentifier(
-					context.ownerTokenIdentifier,
-				),
-			}),
+			model: openai(AUTOMATION_DELIVERY_MODEL_ID),
+			providerOptions: getOpenAiModelProviderOptions(
+				AUTOMATION_DELIVERY_MODEL_ID,
+				{
+					reasoningEffort: "low",
+					safetyIdentifier: await createSafetyIdentifier(
+						context.ownerTokenIdentifier,
+					),
+				},
+			),
 			output: Output.object({
 				schema: z.object({
 					meaningfulChange: z.boolean(),

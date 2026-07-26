@@ -166,7 +166,3 @@ export async function admitHostedOpenAiRequest({
 		safetyIdentifier: admission.safetyIdentifier,
 	};
 }
-
-export const getOpenAiSafetyProviderOptions = (safetyIdentifier: string) => ({
-	openai: { safetyIdentifier },
-});

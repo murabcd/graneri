@@ -16,7 +16,7 @@ import {
 } from "@workspace/ai/hosted-chat-runtime";
 import { createHostedRequestUserInputTool } from "@workspace/ai/hosted-user-question";
 import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
-import { getChatModelProviderOptions } from "@workspace/ai/models";
+import { getOpenAiModelProviderOptions } from "@workspace/ai/models";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import {
 	parseUiMessagesJson,
@@ -355,7 +355,7 @@ export const runStep = internalAction({
 				prepareStep: context.job.chartGenerationRequested
 					? buildChartGenerationPrepareStep()
 					: undefined,
-				providerOptions: getChatModelProviderOptions(context.model, {
+				providerOptions: getOpenAiModelProviderOptions(context.model, {
 					reasoningEffort: context.reasoningEffort,
 					safetyIdentifier: await createSafetyIdentifier(
 						context.ownerTokenIdentifier,

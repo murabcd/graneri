@@ -6,10 +6,10 @@ export type ChatModel = {
 
 export declare const CHAT_MODELS: readonly ChatModel[];
 export declare const DEFAULT_CHAT_MODEL_ID: string;
-export declare const CHAT_TITLE_MODEL_ID: string;
-export declare const NOTE_CHAT_MODEL_ID: string;
 export declare const NOTE_GENERATION_MODEL_ID: string;
-export declare const CHAT_SERVER_MODELS: readonly ChatModel[];
+export declare const CHAT_TITLE_MODEL_ID: string;
+export declare const CONTEXT_COMPACTION_MODEL_ID: string;
+export declare const AUTOMATION_DELIVERY_MODEL_ID: string;
 export declare const defaultChatModel: ChatModel;
 export declare const findChatModel: (
 	value?: string | null,
@@ -29,17 +29,17 @@ export declare const findReasoningEffort: (
 export declare const normalizeReasoningEffort: (
 	value?: string | null,
 ) => ReasoningEffort;
-export declare const getChatModelProviderOptions: (
+export declare const getOpenAiModelProviderOptions: (
 	model: string,
 	options?: {
-		reasoningEffort?: string | null;
+		reasoningEffort?: "none" | ReasoningEffort | null;
 		safetyIdentifier?: string;
 	},
 ) =>
 	| {
 			openai: {
 				reasoningSummary?: "auto";
-				reasoningEffort?: ReasoningEffort;
+				reasoningEffort?: "none" | ReasoningEffort;
 				safetyIdentifier?: string;
 			};
 	  }

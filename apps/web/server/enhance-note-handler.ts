@@ -1,16 +1,16 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { openai } from "@ai-sdk/openai";
-import { NOTE_GENERATION_MODEL_ID } from "@workspace/ai/models";
+import {
+	getOpenAiModelProviderOptions,
+	NOTE_GENERATION_MODEL_ID,
+} from "@workspace/ai/models";
 import {
 	buildEnhancedNotePrompt,
 	ENHANCED_NOTE_INSTRUCTIONS,
 } from "@workspace/ai/prompts";
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import {
-	admitHostedOpenAiRequest,
-	getOpenAiSafetyProviderOptions,
-} from "./hosted-openai-admission.js";
+import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
@@ -111,9 +111,10 @@ export const handleEnhanceNoteRequest = async (
 	try {
 		const result = await generateText({
 			model: openai(NOTE_GENERATION_MODEL_ID),
-			providerOptions: getOpenAiSafetyProviderOptions(
-				admission.safetyIdentifier,
-			),
+			providerOptions: getOpenAiModelProviderOptions(NOTE_GENERATION_MODEL_ID, {
+				reasoningEffort: "none",
+				safetyIdentifier: admission.safetyIdentifier,
+			}),
 			instructions: ENHANCED_NOTE_INSTRUCTIONS,
 			output: Output.object({
 				schema: structuredNoteSchema,

@@ -15,7 +15,10 @@ import {
 	MAX_LOCAL_FOLDER_ROOTS,
 } from "./local-folder-tool-definitions.mjs";
 import { aiLogger } from "./logger.mjs";
-import { DEFAULT_CHAT_MODEL_ID } from "./models.mjs";
+import {
+	DEFAULT_CHAT_MODEL_ID,
+	getOpenAiModelProviderOptions,
+} from "./models.mjs";
 
 export { buildLocalFolderSystemContext } from "./local-folder-tool-definitions.mjs";
 export { extractTextFromUIMessage } from "./local-path-references.mjs";
@@ -385,6 +388,9 @@ const inspectLocalImage = async ({
 	const image = await readFile(filePath);
 	const { text } = await generateText({
 		model: openai(DEFAULT_CHAT_MODEL_ID),
+		providerOptions: getOpenAiModelProviderOptions(DEFAULT_CHAT_MODEL_ID, {
+			reasoningEffort: "none",
+		}),
 		messages: [
 			{
 				role: "user",
@@ -440,6 +446,9 @@ const describeImageForSearch = async ({ filePath, fileStat, query }) => {
 	});
 	const { text } = await generateText({
 		model: openai(DEFAULT_CHAT_MODEL_ID),
+		providerOptions: getOpenAiModelProviderOptions(DEFAULT_CHAT_MODEL_ID, {
+			reasoningEffort: "none",
+		}),
 		messages: [
 			{
 				role: "user",

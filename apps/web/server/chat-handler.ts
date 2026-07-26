@@ -35,7 +35,7 @@ import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 import {
 	findChatModel,
-	getChatModelProviderOptions,
+	getOpenAiModelProviderOptions,
 	normalizeReasoningEffort,
 } from "../src/lib/ai/models.js";
 import { createHostedChatAutomationActions } from "./chat-automation-actions.js";
@@ -480,7 +480,7 @@ export const handleChatRequest = async (
 	if (!admission) {
 		return;
 	}
-	const providerOptions = getChatModelProviderOptions(resolvedModel.model, {
+	const providerOptions = getOpenAiModelProviderOptions(resolvedModel.model, {
 		reasoningEffort: resolvedReasoningEffort,
 		safetyIdentifier: admission.safetyIdentifier,
 	});
