@@ -255,7 +255,7 @@ export function CalendarAgenda({
 				ref={scrollViewportRef}
 				aria-label="Calendar agenda"
 				className={cn(
-					"min-h-0 flex-1 overflow-y-auto transition-[opacity,filter] duration-150",
+					"scroll-fade-b min-h-0 flex-1 overflow-y-auto transition-[opacity,filter] duration-150",
 					loading && "pointer-events-none opacity-50 saturate-50",
 				)}
 			>

@@ -195,6 +195,7 @@ describe("CalendarPage loading", () => {
 
 		await user.click(screen.getByRole("button", { name: "Today" }));
 
+		expect(agenda.classList.contains("scroll-fade-b")).toBe(true);
 		expect(agenda.scrollTop).toBe(0);
 	});
 
