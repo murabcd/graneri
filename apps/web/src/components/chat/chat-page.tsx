@@ -63,13 +63,24 @@ import {
 } from "@/lib/ai/reasoning-effort";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { getChatId } from "@/lib/chat";
+import {
+	type ChatComposerMention,
+	type ChatMessageMention,
+	type ChatRecipeReceipt,
+	createChatComposerEditDraft,
+	getWorkspaceChatMentionContext,
+	prepareChatComposerSubmission,
+} from "@/lib/chat-composer-mentions";
 import { getChatText } from "@/lib/chat-message";
 import { normalizeChatMessages } from "@/lib/chat-message-state";
 import {
 	type ChatPluginPrefill,
 	createChatPluginDraft,
 } from "@/lib/chat-plugin-prefill";
-import { toQueuedUserMessageInput } from "@/lib/chat-queue";
+import {
+	getQueuedChatComposerEditDraft,
+	toQueuedUserMessageInput,
+} from "@/lib/chat-queue";
 import {
 	buildWorkspaceChatRequestBody,
 	buildWorkspaceChatRequestBodyFromLocalFolders,
@@ -93,7 +104,7 @@ import {
 import { createTextMatchRanges, escapeRegExp } from "@/lib/text-search-ranges";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc } from "../../../../../convex/_generated/dataModel";
-import { ChatComposer, type ChatComposerMention } from "./chat-composer";
+import { ChatComposer, type ChatComposerMentionCatalog } from "./chat-composer";
 import { ChatHistoryList } from "./chat-history-list";
 
 export type ChatPageProps = {
@@ -167,25 +178,6 @@ const getPersistedChatReasoningEffort = (
 	reasoningEffort: string | undefined,
 ): ReasoningEffort | null =>
 	reasoningEffort ? (findReasoningEffort(reasoningEffort)?.id ?? null) : null;
-
-const getMentionRequestContext = (mentions: ChatComposerMention[]) => {
-	const noteMentionIds: string[] = [];
-	const toolMentionIds: string[] = [];
-
-	for (const mention of mentions) {
-		if (mention.type === "tool" || mention.id.startsWith("app:")) {
-			toolMentionIds.push(mention.id);
-			continue;
-		}
-
-		noteMentionIds.push(mention.id);
-	}
-
-	return {
-		mentionIds: [...new Set(noteMentionIds)],
-		requestSelectedSourceIds: [...new Set(toolMentionIds)],
-	};
-};
 
 const getChatSearchMatches = (messages: UIMessage[], query: string) => {
 	const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -344,8 +336,7 @@ const useChatPageController = ({
 		getStoredReasoningEffort,
 	);
 	const mentions = React.useMemo(
-		() =>
-			Array.isArray(draftMetadata?.mentions) ? draftMetadata.mentions : [],
+		() => draftMetadata?.mentions ?? [],
 		[draftMetadata],
 	);
 	// Model popover visibility is direct UI state controlled by popover handlers.
@@ -371,6 +362,10 @@ const useChatPageController = ({
 	const localFolderStorageScope = `chat:${chatId}`;
 	const notes = useQuery(
 		api.notes.list,
+		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+	);
+	const recipeData = useQuery(
+		api.recipes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
 	);
 	const appSources = useAppSources(activeWorkspaceId);
@@ -506,9 +501,12 @@ const useChatPageController = ({
 		contextLabel: "chat",
 		isExternallyBlocked: isAutomationRunning,
 		onEditQueuedMessage: (queuedMessage) => {
+			const editDraft = getQueuedChatComposerEditDraft(queuedMessage);
 			setEditingMessageId(queuedMessage._id);
-			setDraft(queuedMessage.text);
-			setDraftMetadata(null);
+			setDraft(editDraft.text);
+			setDraftMetadata(
+				editDraft.mentions.length > 0 ? { mentions: editDraft.mentions } : null,
+			);
 			setAttachedFiles([]);
 		},
 		persistedMessages: visiblePersistedMessages,
@@ -517,6 +515,7 @@ const useChatPageController = ({
 	});
 	const hasMessages = displayMessages.length > 0 || isAutomationRunning;
 	const isNotesLoading = notes === undefined;
+	const isRecipesLoading = recipeData === undefined;
 	const selectedModel =
 		(selectedModelOverride?.chatId === chatId
 			? selectedModelOverride.model
@@ -611,6 +610,14 @@ const useChatPageController = ({
 			})),
 		[notes],
 	);
+	const recipes = React.useMemo<ChatRecipeReceipt[]>(
+		() =>
+			(recipeData ?? []).map((recipe) => ({
+				slug: recipe.slug,
+				name: recipe.name,
+			})),
+		[recipeData],
+	);
 	const workspaceSources = React.useMemo(
 		() =>
 			contextPages.map((page) => ({
@@ -623,10 +630,10 @@ const useChatPageController = ({
 		[contextPages],
 	);
 	const handleSubmit = React.useCallback(async () => {
-		const value = getDraftSnapshot().text;
+		const draftText = getDraftSnapshot().text;
 
 		if (
-			(!value.trim() && attachedFiles.length === 0) ||
+			(!draftText.trim() && attachedFiles.length === 0) ||
 			hasUploadingAttachments(attachedFiles) ||
 			(isChatRequestPending && !displayActiveRun && !activeRun) ||
 			isAutomationRunning ||
@@ -635,27 +642,46 @@ const useChatPageController = ({
 			return;
 		}
 
-		const metadata =
-			mentions.length > 0 ? { mentionPositions: mentions } : undefined;
 		let optimisticMessageId: string | null = null;
 		const finishRequestPreparation = beginRequestPreparation();
 
 		try {
+			const submission = prepareChatComposerSubmission({
+				draft: draftText,
+				mentions,
+				recipes,
+			});
+			const metadata: UIMessage["metadata"] =
+				submission.mentionPositions.length > 0 || submission.recipe
+					? {
+							...(submission.mentionPositions.length > 0
+								? { mentionPositions: submission.mentionPositions }
+								: {}),
+							...(submission.recipe
+								? {
+										recipe: submission.recipe,
+										recipeOnly: submission.recipeOnly,
+									}
+								: {}),
+						}
+					: undefined;
+			const { mentionIds, requestSelectedSourceIds } =
+				getWorkspaceChatMentionContext(mentions);
+
 			if (queuedMessageEditDraft) {
 				if (!activeWorkspaceId) {
 					throw new Error("Cannot edit queued message without a workspace.");
 				}
 
-				const { mentionIds, requestSelectedSourceIds } =
-					getMentionRequestContext(mentions);
 				const requestBody = await buildWorkspaceChatRequestBody({
 					localFolderStorageScope,
 					mentions: mentionIds,
 					model: selectedModel.model,
+					recipeSlug: submission.recipeSlug,
 					reasoningEffort: selectedReasoningEffort,
 					resolveConvexToken: getCachedConvexToken,
 					selectedSourceIds: requestSelectedSourceIds,
-					text: value,
+					text: submission.displayText,
 					webSearchEnabled,
 					workspaceId: activeWorkspaceId,
 				});
@@ -667,7 +693,7 @@ const useChatPageController = ({
 						messageId: queuedMessageEditDraft.message.messageId,
 						metadata,
 						requestBody,
-						text: value,
+						text: submission.displayText,
 					}),
 				});
 
@@ -680,8 +706,6 @@ const useChatPageController = ({
 			}
 
 			chatPersistedCallback?.(chatId);
-			const { mentionIds, requestSelectedSourceIds } =
-				getMentionRequestContext(mentions);
 
 			const result = await submitChatTurn({
 				attachedFiles,
@@ -690,10 +714,11 @@ const useChatPageController = ({
 						localFolderStorageScope,
 						mentions: mentionIds,
 						model: selectedModel.model,
+						recipeSlug: submission.recipeSlug,
 						reasoningEffort: selectedReasoningEffort,
 						resolveConvexToken: getCachedConvexToken,
 						selectedSourceIds: requestSelectedSourceIds,
-						text: value,
+						text: submission.displayText,
 						webSearchEnabled,
 						workspaceId: activeWorkspaceId,
 					}),
@@ -725,7 +750,7 @@ const useChatPageController = ({
 				queueActiveRun:
 					displayActiveRun ?? (isAiRequestPending ? activeRun : null),
 				sendMessage,
-				text: value,
+				text: submission.displayText,
 				workspaceId: activeWorkspaceId,
 			});
 
@@ -750,7 +775,7 @@ const useChatPageController = ({
 			if (optimisticMessageId) {
 				rollbackOptimisticMessage(optimisticMessageId);
 			}
-			setDraft(value);
+			setDraft(draftText);
 			setDraftMetadata(mentions.length > 0 ? { mentions } : null);
 			setAttachedFiles(attachedFiles);
 		} finally {
@@ -777,6 +802,7 @@ const useChatPageController = ({
 		// The submit callback must capture the latest parent persistence callback.
 		chatPersistedCallback,
 		queuedMessageEditDraft,
+		recipes,
 		rollbackOptimisticMessage,
 		clearDraft,
 		setDraft,
@@ -819,16 +845,22 @@ const useChatPageController = ({
 		(
 			messageId: string,
 			text: string,
-			messageMentions: ChatComposerMention[],
+			messageMentions: ChatMessageMention[],
+			recipe: ChatRecipeReceipt | null,
 		) => {
 			if (canStop) {
 				handleStop();
 			}
 
+			const editDraft = createChatComposerEditDraft({
+				mentionPositions: messageMentions,
+				recipe,
+				text,
+			});
 			setEditingMessageId(() => messageId);
-			setDraft(text);
+			setDraft(editDraft.text);
 			setDraftMetadata(
-				messageMentions.length > 0 ? { mentions: messageMentions } : null,
+				editDraft.mentions.length > 0 ? { mentions: editDraft.mentions } : null,
 			);
 			setAttachedFiles([]);
 		},
@@ -844,13 +876,14 @@ const useChatPageController = ({
 	}, [clearDraft, restoreEditedQueuedMessage]);
 
 	const buildRequestBody = React.useCallback(async () => {
-		const { mentionIds, requestSelectedSourceIds } =
-			getMentionRequestContext(mentions);
+		const { mentionIds, recipeSlug, requestSelectedSourceIds } =
+			getWorkspaceChatMentionContext(mentions);
 
 		return await buildWorkspaceChatRequestBodyFromLocalFolders({
 			localFolders: sharedLocalFolders,
 			mentions: mentionIds,
 			model: selectedModel.model,
+			recipeSlug,
 			reasoningEffort: selectedReasoningEffort,
 			resolveConvexToken: getCachedConvexToken,
 			selectedSourceIds: requestSelectedSourceIds,
@@ -1019,9 +1052,20 @@ const useChatPageController = ({
 		// Local completion state hides finished assistant stream ids from the UI.
 		hasLocallyCompletedAssistantMessage,
 	});
+	const noteMentionCatalog: ChatComposerMentionCatalog<
+		(typeof contextPages)[number]
+	> = {
+		items: contextPages,
+		status: isNotesLoading ? "loading" : "ready",
+	};
+	const recipeMentionCatalog: ChatComposerMentionCatalog<
+		(typeof recipes)[number]
+	> = {
+		items: recipes,
+		status: isRecipesLoading ? "loading" : "ready",
+	};
 
 	return {
-		contextPages,
 		currentChatTitle: currentChat?.title ?? "",
 		draft,
 		error,
@@ -1049,7 +1093,6 @@ const useChatPageController = ({
 					},
 		isLoadingEarlierMessages,
 		loadEarlierMessages,
-		isNotesLoading,
 		messages: displayMessages,
 		streamingMessageIds,
 		modelPopoverOpen,
@@ -1073,6 +1116,8 @@ const useChatPageController = ({
 		onToolApprovalResponse: handleToolApprovalResponse,
 		editingMessageId,
 		mentions,
+		noteMentionCatalog,
+		recipeMentionCatalog,
 		handleCancelEdit,
 		queuedFollowUps,
 		onQueuedFollowUpsReorder,
@@ -1398,7 +1443,7 @@ export function ChatPage({
 			placeholder={
 				controller.hasMessages
 					? "Ask for follow-up"
-					: "Ask anything. @ to use tools or mention notes"
+					: "Ask anything. @ to use recipes, tools, or notes"
 			}
 			toolApproval={controller.pendingToolApproval}
 			isToolApprovalSubmitting={controller.isToolApprovalSubmitting}
@@ -1419,8 +1464,8 @@ export function ChatPage({
 			onModelPopoverOpenChange={controller.setModelPopoverOpen}
 			onSelectedModelChange={controller.setSelectedModel}
 			onReasoningEffortChange={controller.setReasoningEffort}
-			mentionableDocuments={controller.contextPages}
-			isNotesLoading={controller.isNotesLoading}
+			noteMentions={controller.noteMentionCatalog}
+			recipeMentions={controller.recipeMentionCatalog}
 			onMentionsChange={controller.setMentions}
 			sourcesOpen={controller.sourcesOpen}
 			onSourcesOpenChange={controller.setSourcesOpen}

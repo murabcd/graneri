@@ -23,8 +23,11 @@ import {
 	type ChatMessageActionContext,
 	ChatMessageListContent,
 } from "@/components/chat/message-list";
+import type {
+	ChatMessageMention,
+	ChatRecipeReceipt,
+} from "@/lib/chat-composer-mentions";
 import { getChatMessageMetadata } from "@/lib/chat-message";
-import type { ChatComposerMention } from "./chat-composer";
 
 type ChatMessagesActionProps = {
 	messageIdPendingDelete: string | null;
@@ -32,7 +35,8 @@ type ChatMessagesActionProps = {
 	onEditMessage?: (
 		messageId: string,
 		text: string,
-		mentions: ChatComposerMention[],
+		mentions: ChatMessageMention[],
+		recipe: ChatRecipeReceipt | null,
 	) => void;
 	onDeleteMessage?: (messageId: string) => void;
 	onForkMessage?: (messageId: string) => void;
@@ -55,7 +59,8 @@ export type ChatMessagesProps = {
 	onEditMessage?: (
 		messageId: string,
 		text: string,
-		mentions: ChatComposerMention[],
+		mentions: ChatMessageMention[],
+		recipe: ChatRecipeReceipt | null,
 	) => void;
 	onDeleteMessage?: (messageId: string) => void;
 	onForkMessage?: (messageId: string) => void;
@@ -123,19 +128,23 @@ export default function ChatMessages({
 		[onForkMessage, onPlusAction, onRegenerateMessage],
 	);
 	const renderUserActions = React.useCallback(
-		({ message, messageText, timestamp }: ChatMessageActionContext) => (
-			<UserMessageActions
-				isPendingDelete={messageIdPendingDelete === message.id}
-				messageId={message.id}
-				messageText={messageText}
-				mentions={getChatMessageMetadata(message)?.mentionPositions ?? []}
-				onDeleteClick={handleDeleteClick}
-				onDeleteMessage={onDeleteMessage}
-				onEditMessage={onEditMessage}
-				setMessageIdPendingDelete={setMessageIdPendingDelete}
-				timestamp={timestamp}
-			/>
-		),
+		({ message, messageText, timestamp }: ChatMessageActionContext) => {
+			const metadata = getChatMessageMetadata(message);
+			return (
+				<UserMessageActions
+					isPendingDelete={messageIdPendingDelete === message.id}
+					messageId={message.id}
+					messageText={messageText}
+					mentions={metadata?.mentionPositions ?? []}
+					recipe={metadata?.recipe ?? null}
+					onDeleteClick={handleDeleteClick}
+					onDeleteMessage={onDeleteMessage}
+					onEditMessage={onEditMessage}
+					setMessageIdPendingDelete={setMessageIdPendingDelete}
+					timestamp={timestamp}
+				/>
+			);
+		},
 		[handleDeleteClick, messageIdPendingDelete, onDeleteMessage, onEditMessage],
 	);
 
@@ -232,6 +241,7 @@ function UserMessageActions({
 	messageId,
 	messageText,
 	mentions,
+	recipe,
 	onDeleteClick,
 	onDeleteMessage,
 	onEditMessage,
@@ -241,13 +251,15 @@ function UserMessageActions({
 	isPendingDelete: boolean;
 	messageId: string;
 	messageText: string;
-	mentions: ChatComposerMention[];
+	mentions: ChatMessageMention[];
+	recipe: ChatRecipeReceipt | null;
 	onDeleteClick: (messageId: string) => void;
 	onDeleteMessage?: (messageId: string) => void;
 	onEditMessage?: (
 		messageId: string,
 		text: string,
-		mentions: ChatComposerMention[],
+		mentions: ChatMessageMention[],
+		recipe: ChatRecipeReceipt | null,
 	) => void;
 	setMessageIdPendingDelete: React.Dispatch<
 		React.SetStateAction<string | null>
@@ -266,7 +278,7 @@ function UserMessageActions({
 					{timestamp}
 				</span>
 			) : null}
-			{messageText ? (
+			{messageText || recipe ? (
 				<>
 					<Tooltip>
 						<TooltipTrigger asChild>
@@ -277,7 +289,7 @@ function UserMessageActions({
 								className="size-7 text-muted-foreground hover:text-foreground"
 								aria-label="Edit"
 								onClick={() =>
-									onEditMessage?.(messageId, messageText, mentions)
+									onEditMessage?.(messageId, messageText, mentions, recipe)
 								}
 							>
 								<PenLine className="size-3.5" />
@@ -285,7 +297,7 @@ function UserMessageActions({
 						</TooltipTrigger>
 						<TooltipContent>Edit</TooltipContent>
 					</Tooltip>
-					<CopyMessageButton text={messageText} />
+					<CopyMessageButton text={messageText || recipe?.name || ""} />
 				</>
 			) : null}
 			<Tooltip>

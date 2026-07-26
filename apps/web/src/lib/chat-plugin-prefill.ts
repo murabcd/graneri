@@ -1,4 +1,4 @@
-import type { ChatComposerMention } from "@/components/chat/chat-composer";
+import type { ChatComposerMention } from "@/lib/chat-composer-mentions";
 import {
 	type ChatAppSourceProvider,
 	getAppSourceLabel,

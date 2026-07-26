@@ -9,6 +9,7 @@ type ChatRequestBase = {
 	convexToken: string | null;
 	localFolders: DesktopLocalFolder[];
 	model: string;
+	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
 	timezone: string;
 };
@@ -26,7 +27,6 @@ export type NoteChatRequestBody = ChatRequestBase & {
 		title: string;
 		text: string;
 	};
-	recipeSlug: string | null;
 };
 
 export const prepareSharedLocalFoldersForChatRequest = async ({
@@ -53,15 +53,18 @@ const getTimezone = () =>
 const buildChatRequestBase = async ({
 	localFolders,
 	model,
+	recipeSlug,
 	reasoningEffort,
 	resolveConvexToken,
 }: {
 	localFolders: DesktopLocalFolder[];
 	model: string;
+	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
 	resolveConvexToken: () => Promise<string | null>;
 }): Promise<ChatRequestBase> => ({
 	model,
+	recipeSlug,
 	reasoningEffort,
 	localFolders,
 	convexToken: await resolveConvexToken(),
@@ -71,12 +74,14 @@ const buildChatRequestBase = async ({
 const resolveChatRequestBase = async ({
 	localFolderStorageScope,
 	model,
+	recipeSlug,
 	reasoningEffort,
 	resolveConvexToken,
 	text,
 }: {
 	localFolderStorageScope: string;
 	model: string;
+	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
 	resolveConvexToken: () => Promise<string | null>;
 	text: string;
@@ -92,6 +97,7 @@ const resolveChatRequestBase = async ({
 	return {
 		localFolders,
 		model,
+		recipeSlug,
 		reasoningEffort,
 		convexToken,
 		timezone: getTimezone(),
@@ -108,6 +114,7 @@ export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 	localFolders: DesktopLocalFolder[];
 	mentions: string[];
 	model: string;
+	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
@@ -131,6 +138,7 @@ export const buildWorkspaceChatRequestBody = async ({
 	localFolderStorageScope: string;
 	mentions: string[];
 	model: string;
+	recipeSlug: string | null;
 	reasoningEffort: string | undefined;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
@@ -147,7 +155,6 @@ export const buildWorkspaceChatRequestBody = async ({
 
 export const buildNoteChatRequestBody = async ({
 	noteContext,
-	recipeSlug,
 	...baseArgs
 }: {
 	localFolderStorageScope: string;
@@ -160,12 +167,10 @@ export const buildNoteChatRequestBody = async ({
 }): Promise<NoteChatRequestBody> => ({
 	...(await resolveChatRequestBase(baseArgs)),
 	noteContext,
-	recipeSlug,
 });
 
 export const buildNoteChatRequestBodyFromLocalFolders = async ({
 	noteContext,
-	recipeSlug,
 	...baseArgs
 }: {
 	localFolders: DesktopLocalFolder[];
@@ -177,5 +182,4 @@ export const buildNoteChatRequestBodyFromLocalFolders = async ({
 }): Promise<NoteChatRequestBody> => ({
 	...(await buildChatRequestBase(baseArgs)),
 	noteContext,
-	recipeSlug,
 });

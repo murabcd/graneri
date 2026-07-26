@@ -1,4 +1,4 @@
-import type { Editor, JSONContent, Range } from "@tiptap/core";
+import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
 import type { ToolApprovalRequest } from "@workspace/ai/tool-approval-state";
@@ -53,10 +53,27 @@ import {
 	type ReasoningEffort,
 } from "@/components/chat/model-picker";
 import {
+	areChatComposerMentionsEqual,
+	type ChatComposerMention,
+	type ChatRecipeReceipt,
+	createChatComposerDocument,
+	filterChatRecipeMentionOptions,
+	getChatComposerMentions,
+	hasSelectedRecipeMention,
+} from "@/lib/chat-composer-mentions";
+import {
 	type ChatAppSourceProvider,
 	getAppSourceLabel,
 } from "@/lib/chat-source-display";
+import {
+	COMPOSER_MENTION_PICKER_ICON_CLASS,
+	COMPOSER_MENTION_PICKER_ITEM_CLASS,
+	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
+	COMPOSER_MENTION_PICKER_SURFACE_CLASS,
+	COMPOSER_MENTION_PICKER_VIEWPORT_CLASS,
+} from "@/lib/composer-mention-picker-styles";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
+import { getRecipeIcon } from "@/lib/recipes";
 import {
 	getMentionAnchorRect,
 	getMentionPickerPosition,
@@ -81,9 +98,14 @@ type AppSource = {
 	provider: ChatAppSourceProvider;
 };
 
-type NoteMentionRange = {
+type MentionRange = {
 	from: number;
 	to: number;
+};
+
+export type ChatComposerMentionCatalog<Item> = {
+	items: Item[];
+	status: "loading" | "ready";
 };
 
 type MentionPickerItem =
@@ -94,137 +116,11 @@ type MentionPickerItem =
 	| {
 			type: "note";
 			document: ContextPage;
+	  }
+	| {
+			type: "recipe";
+			recipe: ChatRecipeReceipt;
 	  };
-
-export type ChatComposerMention = {
-	id: string;
-	label: string;
-	from: number;
-	to: number;
-	type?: "note" | "tool";
-	provider?: ChatAppSourceProvider;
-};
-
-const getMentionsFromComposerContent = (
-	content: JSONContent,
-): ChatComposerMention[] => {
-	const mentions: ChatComposerMention[] = [];
-	let textOffset = 0;
-	const walk = (node: JSONContent) => {
-		if (node.type === "mention" && typeof node.attrs?.id === "string") {
-			const mentionId = node.attrs.id;
-			const label =
-				typeof node.attrs.label === "string" ? node.attrs.label : mentionId;
-			const text = `@${label}`;
-			mentions.push({
-				id: mentionId,
-				label,
-				from: textOffset,
-				to: textOffset + text.length,
-				type:
-					node.attrs.type === "tool" || mentionId.startsWith("app:")
-						? "tool"
-						: "note",
-				provider:
-					typeof node.attrs.provider === "string"
-						? (node.attrs.provider as ChatAppSourceProvider)
-						: undefined,
-			});
-			textOffset += text.length;
-			return;
-		}
-
-		if (typeof node.text === "string") {
-			textOffset += node.text.length;
-			return;
-		}
-
-		for (const child of node.content ?? []) {
-			walk(child);
-		}
-	};
-
-	walk(content);
-	return mentions;
-};
-
-const areChatComposerMentionsEqual = (
-	left: ChatComposerMention[],
-	right: ChatComposerMention[],
-) =>
-	left.length === right.length &&
-	left.every((mention, index) => {
-		const otherMention = right[index];
-		return (
-			mention.id === otherMention?.id &&
-			mention.label === otherMention.label &&
-			mention.from === otherMention.from &&
-			mention.to === otherMention.to &&
-			mention.type === otherMention.type &&
-			mention.provider === otherMention.provider
-		);
-	});
-
-const getDraftDocument = (
-	draft: string,
-	mentions: ChatComposerMention[] = [],
-): JSONContent => {
-	if (!draft) {
-		return {
-			type: "doc",
-			content: [{ type: "paragraph" }],
-		};
-	}
-
-	const sortedMentions = [...mentions]
-		.filter(
-			(mention) =>
-				Number.isInteger(mention.from) &&
-				Number.isInteger(mention.to) &&
-				mention.from >= 0 &&
-				mention.to > mention.from &&
-				mention.to <= draft.length &&
-				draft.slice(mention.from, mention.to) === `@${mention.label}`,
-		)
-		.sort((a, b) => a.from - b.from);
-	const content: JSONContent[] = [];
-	let cursor = 0;
-
-	for (const mention of sortedMentions) {
-		if (mention.from < cursor) {
-			continue;
-		}
-
-		if (mention.from > cursor) {
-			content.push({ type: "text", text: draft.slice(cursor, mention.from) });
-		}
-
-		content.push({
-			type: "mention",
-			attrs: {
-				id: mention.id,
-				label: mention.label,
-				type: mention.type ?? "note",
-				provider: mention.provider,
-			},
-		});
-		cursor = mention.to;
-	}
-
-	if (cursor < draft.length) {
-		content.push({ type: "text", text: draft.slice(cursor) });
-	}
-
-	return {
-		type: "doc",
-		content: [
-			{
-				type: "paragraph",
-				content: content.length > 0 ? content : [{ type: "text", text: draft }],
-			},
-		],
-	};
-};
 
 const filterMentionableDocuments = (
 	documents: ContextPage[],
@@ -288,8 +184,8 @@ type ChatComposerProps = {
 	onModelPopoverOpenChange: (open: boolean) => void;
 	onSelectedModelChange: (model: ChatModel) => void;
 	onReasoningEffortChange: (value: ReasoningEffort) => void;
-	mentionableDocuments: ContextPage[];
-	isNotesLoading: boolean;
+	noteMentions: ChatComposerMentionCatalog<ContextPage>;
+	recipeMentions: ChatComposerMentionCatalog<ChatRecipeReceipt>;
 	onMentionsChange: (mentions: ChatComposerMention[]) => void;
 	sourcesOpen: boolean;
 	onSourcesOpenChange: (open: boolean) => void;
@@ -329,8 +225,8 @@ export function ChatComposer({
 	onModelPopoverOpenChange,
 	onSelectedModelChange,
 	onReasoningEffortChange,
-	mentionableDocuments,
-	isNotesLoading,
+	noteMentions,
+	recipeMentions,
 	onMentionsChange,
 	sourcesOpen,
 	onSourcesOpenChange,
@@ -429,8 +325,8 @@ export function ChatComposer({
 					onDraftChange={onDraftChange}
 					onDraftKeyDown={onDraftKeyDown}
 					mentions={mentions}
-					mentionableDocuments={mentionableDocuments}
-					isNotesLoading={isNotesLoading}
+					noteMentions={noteMentions}
+					recipeMentions={recipeMentions}
 					onMentionsChange={onMentionsChange}
 					appSources={appSources}
 				/>
@@ -480,8 +376,8 @@ function ChatComposerTextEditor({
 	onDraftChange,
 	onDraftKeyDown,
 	mentions,
-	mentionableDocuments,
-	isNotesLoading,
+	noteMentions,
+	recipeMentions,
 	onMentionsChange,
 	appSources,
 }: {
@@ -492,20 +388,26 @@ function ChatComposerTextEditor({
 	onDraftChange: (value: string) => void;
 	onDraftKeyDown: (event: KeyboardEvent) => void;
 	mentions: ChatComposerMention[];
-	mentionableDocuments: ContextPage[];
-	isNotesLoading: boolean;
+	noteMentions: ChatComposerMentionCatalog<ContextPage>;
+	recipeMentions: ChatComposerMentionCatalog<ChatRecipeReceipt>;
 	onMentionsChange: (mentions: ChatComposerMention[]) => void;
 	appSources: AppSource[];
 }) {
+	const mentionableDocuments = noteMentions.items;
+	const isNotesLoading = noteMentions.status === "loading";
+	const recipes = recipeMentions.items;
+	const isRecipesLoading = recipeMentions.status === "loading";
 	const promptRef = React.useRef<HTMLDivElement | null>(null);
-	const noteMentionRangeRef = React.useRef<NoteMentionRange | null>(null);
+	const mentionRangeRef = React.useRef<MentionRange | null>(null);
 	const composerEditorRef = React.useRef<Editor | null>(null);
 	const placeholderRef = React.useRef(placeholder);
 	const previousPlaceholderRef = React.useRef(placeholder);
 	const mentionPopoverOpenRef = React.useRef(false);
 	const allMentionDocumentsRef = React.useRef(mentionableDocuments);
 	const allAppSourcesRef = React.useRef(appSources);
+	const allRecipesRef = React.useRef(recipes);
 	const visibleMentionDocumentsRef = React.useRef(mentionableDocuments);
+	const visibleMentionRecipesRef = React.useRef(recipes);
 	const visibleMentionItemsRef = React.useRef<MentionPickerItem[]>([]);
 	const mentionsRef = React.useRef(mentions);
 	const selectedMentionIndexRef = React.useRef(0);
@@ -522,9 +424,20 @@ function ChatComposerTextEditor({
 		() => filterMentionableTools(appSources, documentSearchTerm),
 		[appSources, documentSearchTerm],
 	);
-	const shouldSearchDocuments = documentSearchTerm.trim().length > 0;
+	const visibleMentionRecipes = React.useMemo(
+		() =>
+			hasSelectedRecipeMention(mentions)
+				? []
+				: filterChatRecipeMentionOptions(recipes, documentSearchTerm),
+		[documentSearchTerm, mentions, recipes],
+	);
+	const shouldSearchReferences = documentSearchTerm.trim().length > 0;
 	const visibleMentionItems = React.useMemo<MentionPickerItem[]>(
 		() => [
+			...visibleMentionRecipes.map<MentionPickerItem>((recipe) => ({
+				type: "recipe",
+				recipe,
+			})),
 			...visibleMentionTools.map<MentionPickerItem>((source) => ({
 				type: "tool",
 				source,
@@ -534,17 +447,15 @@ function ChatComposerTextEditor({
 				document,
 			})),
 		],
-		[visibleMentionDocuments, visibleMentionTools],
+		[visibleMentionDocuments, visibleMentionRecipes, visibleMentionTools],
 	);
-	const emptyStateMessage = shouldSearchDocuments
-		? "No results found."
-		: "Type to search for notes";
-
 	React.useEffect(() => {
 		mentionPopoverOpenRef.current = mentionPopoverOpen;
 		allMentionDocumentsRef.current = mentionableDocuments;
 		allAppSourcesRef.current = appSources;
+		allRecipesRef.current = recipes;
 		visibleMentionDocumentsRef.current = visibleMentionDocuments;
+		visibleMentionRecipesRef.current = visibleMentionRecipes;
 		visibleMentionItemsRef.current = visibleMentionItems;
 		mentionsRef.current = mentions;
 		placeholderRef.current = placeholder;
@@ -555,9 +466,11 @@ function ChatComposerTextEditor({
 		mentionableDocuments,
 		mentions,
 		placeholder,
+		recipes,
 		selectedMentionIndex,
 		visibleMentionDocuments,
 		visibleMentionItems,
+		visibleMentionRecipes,
 	]);
 
 	const selectMentionIndex = React.useCallback((index: number) => {
@@ -565,7 +478,7 @@ function ChatComposerTextEditor({
 		setSelectedMentionIndex(() => index);
 	}, []);
 	const closeMentionPicker = React.useCallback(() => {
-		noteMentionRangeRef.current = null;
+		mentionRangeRef.current = null;
 		mentionPopoverOpenRef.current = false;
 		setMentionPopoverOpen(false);
 		setDocumentSearchTerm("");
@@ -573,24 +486,25 @@ function ChatComposerTextEditor({
 	}, []);
 	const handleAddMention = React.useCallback(
 		(pageId: string) => {
-			const noteMentionRange = noteMentionRangeRef.current;
+			const mentionRange = mentionRangeRef.current;
 			const editor = composerEditorRef.current;
 			const document = visibleMentionDocumentsRef.current.find(
 				(page) => page.id === pageId,
 			);
-			if (!editor || !document || !noteMentionRange) {
+			if (!editor || !document || !mentionRange) {
 				return;
 			}
 
 			editor
 				.chain()
 				.focus()
-				.insertContentAt(noteMentionRange, [
+				.insertContentAt(mentionRange, [
 					{
 						type: "mention",
 						attrs: {
 							id: document.id,
 							label: document.title,
+							type: "note",
 						},
 					},
 					{ type: "text", text: " " },
@@ -605,19 +519,19 @@ function ChatComposerTextEditor({
 	);
 	const handleAddTool = React.useCallback(
 		(sourceId: string) => {
-			const noteMentionRange = noteMentionRangeRef.current;
+			const mentionRange = mentionRangeRef.current;
 			const editor = composerEditorRef.current;
 			const source = allAppSourcesRef.current.find(
 				(item) => item.id === sourceId,
 			);
-			if (!editor || !source || !noteMentionRange) {
+			if (!editor || !source || !mentionRange) {
 				return;
 			}
 
 			editor
 				.chain()
 				.focus()
-				.insertContentAt(noteMentionRange, [
+				.insertContentAt(mentionRange, [
 					{
 						type: "mention",
 						attrs: {
@@ -637,16 +551,53 @@ function ChatComposerTextEditor({
 		},
 		[closeMentionPicker],
 	);
+	const handleAddRecipe = React.useCallback(
+		(recipeSlug: string) => {
+			const mentionRange = mentionRangeRef.current;
+			const editor = composerEditorRef.current;
+			const recipe = visibleMentionRecipesRef.current.find(
+				(item) => item.slug === recipeSlug,
+			);
+			if (!editor || !recipe || !mentionRange) {
+				return;
+			}
+
+			editor
+				.chain()
+				.focus()
+				.insertContentAt(mentionRange, [
+					{
+						type: "mention",
+						attrs: {
+							id: recipe.slug,
+							label: recipe.name,
+							type: "recipe",
+						},
+					},
+					{ type: "text", text: " " },
+				])
+				.run();
+			closeMentionPicker();
+			requestAnimationFrame(() => {
+				editor.commands.focus();
+			});
+		},
+		[closeMentionPicker],
+	);
 	const handleSelectMentionPickerItem = React.useCallback(
 		(item: MentionPickerItem) => {
 			if (item.type === "tool") {
 				handleAddTool(item.source.id);
 				return;
 			}
+			if (item.type === "recipe") {
+				handleAddRecipe(item.recipe.slug);
+				return;
+			}
 
 			handleAddMention(item.document.id);
 		},
-		[handleAddMention, handleAddTool],
+		[handleAddMention, handleAddRecipe, handleAddTool],
 	);
 
 	useChatComposerPromptFocus({
@@ -688,6 +639,7 @@ function ChatComposerTextEditor({
 									attrs: {
 										id: props.id,
 										label: props.label,
+										type: "note",
 									},
 								},
 								{ type: "text", text: " " },
@@ -723,7 +675,14 @@ function ChatComposerTextEditor({
 								allAppSourcesRef.current,
 								query,
 							);
+							const nextRecipes = hasSelectedRecipeMention(mentionsRef.current)
+								? []
+								: filterChatRecipeMentionOptions(allRecipesRef.current, query);
 							const nextItems = [
+								...nextRecipes.map<MentionPickerItem>((recipe) => ({
+									type: "recipe",
+									recipe,
+								})),
 								...nextTools.map<MentionPickerItem>((source) => ({
 									type: "tool",
 									source,
@@ -733,8 +692,9 @@ function ChatComposerTextEditor({
 									document,
 								})),
 							];
-							noteMentionRangeRef.current = range;
+							mentionRangeRef.current = range;
 							visibleMentionDocumentsRef.current = nextDocuments;
+							visibleMentionRecipesRef.current = nextRecipes;
 							visibleMentionItemsRef.current = nextItems;
 							setDocumentSearchTerm(() => query);
 							selectMentionIndex(0);
@@ -772,7 +732,7 @@ function ChatComposerTextEditor({
 				placeholder: () => placeholderRef.current,
 			}),
 		],
-		content: getDraftDocument(draft, mentions),
+		content: createChatComposerDocument(draft, mentions),
 		immediatelyRender: false,
 		shouldRerenderOnTransaction: false,
 		onCreate: ({ editor }) => {
@@ -811,7 +771,7 @@ function ChatComposerTextEditor({
 		},
 		onUpdate: ({ editor }) => {
 			onDraftChange(editor.getText({ blockSeparator: "\n" }));
-			const nextMentions = getMentionsFromComposerContent(editor.getJSON());
+			const nextMentions = getChatComposerMentions(editor.getJSON());
 			if (!areChatComposerMentionsEqual(mentionsRef.current, nextMentions)) {
 				mentionsRef.current = nextMentions;
 				onMentionsChange(nextMentions);
@@ -846,7 +806,7 @@ function ChatComposerTextEditor({
 		if (
 			currentText === draft &&
 			// Mention nodes are embedded in ProseMirror JSON, so this guard must read editor state.
-			getMentionsFromComposerContent(composerEditor.getJSON()).length ===
+			getChatComposerMentions(composerEditor.getJSON()).length ===
 				mentions.length
 		) {
 			return;
@@ -857,9 +817,12 @@ function ChatComposerTextEditor({
 		}
 
 		// External draft changes must be pushed through Tiptap's imperative content command.
-		composerEditor.commands.setContent(getDraftDocument(draft, mentions), {
-			emitUpdate: false,
-		});
+		composerEditor.commands.setContent(
+			createChatComposerDocument(draft, mentions),
+			{
+				emitUpdate: false,
+			},
+		);
 	}, [composerEditor, draft, editingMessageId, mentions]);
 	React.useEffect(() => {
 		if (!composerEditor) {
@@ -900,13 +863,15 @@ function ChatComposerTextEditor({
 				position={mentionPickerPosition}
 				mentionableDocuments={visibleMentionDocuments}
 				appSources={visibleMentionTools}
+				recipes={visibleMentionRecipes}
 				items={visibleMentionItems}
 				selectedIndex={selectedMentionIndex}
 				onSelectedIndexChange={selectMentionIndex}
 				isNotesLoading={isNotesLoading}
-				emptyStateMessage={emptyStateMessage}
-				shouldSearchDocuments={shouldSearchDocuments}
+				isRecipesLoading={isRecipesLoading}
+				shouldSearchReferences={shouldSearchReferences}
 				onAddMention={handleAddMention}
+				onAddRecipe={handleAddRecipe}
 				onAddTool={handleAddTool}
 			/>
 		</>
@@ -1036,26 +1001,30 @@ function MentionPicker({
 	position,
 	mentionableDocuments,
 	appSources,
+	recipes,
 	items,
 	selectedIndex,
 	onSelectedIndexChange,
 	isNotesLoading,
-	emptyStateMessage,
-	shouldSearchDocuments,
+	isRecipesLoading,
+	shouldSearchReferences,
 	onAddMention,
+	onAddRecipe,
 	onAddTool,
 }: {
 	open: boolean;
 	position: MentionPickerPosition | null;
 	mentionableDocuments: ContextPage[];
 	appSources: AppSource[];
+	recipes: ChatRecipeReceipt[];
 	items: MentionPickerItem[];
 	selectedIndex: number;
 	onSelectedIndexChange: (index: number) => void;
 	isNotesLoading: boolean;
-	emptyStateMessage: string;
-	shouldSearchDocuments: boolean;
+	isRecipesLoading: boolean;
+	shouldSearchReferences: boolean;
 	onAddMention: (pageId: string) => void;
+	onAddRecipe: (recipeSlug: string) => void;
 	onAddTool: (sourceId: string) => void;
 }) {
 	if (!open || !position) {
@@ -1066,7 +1035,7 @@ function MentionPicker({
 		<div
 			role="listbox"
 			aria-label="Mention suggestions"
-			className="fixed z-[70] flex w-56 flex-col rounded-lg bg-popover p-0 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 pointer-events-auto"
+			className={COMPOSER_MENTION_PICKER_SURFACE_CLASS}
 			style={{
 				top: position.top,
 				left: position.left,
@@ -1076,26 +1045,71 @@ function MentionPicker({
 				event.stopPropagation();
 			}}
 		>
-			<div className="max-h-72 overflow-y-auto p-1">
-				{appSources.length > 0 ? (
+			<div className={COMPOSER_MENTION_PICKER_VIEWPORT_CLASS}>
+				{recipes.length > 0 ? (
 					<div>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-							Tools
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
+							Recipes
 						</div>
 						<div>
-							{appSources.map((source, index) => {
+							{recipes.map((recipe, index) => {
 								const selected = index === selectedIndex;
+								const Icon = getRecipeIcon(recipe.slug);
 								return (
 									<button
-										key={source.id}
+										key={recipe.slug}
 										type="button"
 										onMouseEnter={() => onSelectedIndexChange(index)}
 										onPointerDown={(event) => {
 											event.preventDefault();
 											event.stopPropagation();
+											onAddRecipe(recipe.slug);
+										}}
+										className={cn(
+											COMPOSER_MENTION_PICKER_ITEM_CLASS,
+											selected
+												? "bg-accent text-accent-foreground"
+												: "text-popover-foreground",
+										)}
+									>
+										<Icon className={COMPOSER_MENTION_PICKER_ICON_CLASS} />
+										<div
+											className="min-w-0 flex-1 truncate"
+											title={recipe.name}
+										>
+											{recipe.name}
+										</div>
+									</button>
+								);
+							})}
+						</div>
+					</div>
+				) : null}
+				{appSources.length > 0 ? (
+					<div className={recipes.length > 0 ? "mt-1" : undefined}>
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
+							Tools
+						</div>
+						<div>
+							{appSources.map((source, index) => {
+								const itemIndex = recipes.length + index;
+								const selected = itemIndex === selectedIndex;
+								return (
+									<button
+										key={source.id}
+										type="button"
+										onMouseEnter={() => onSelectedIndexChange(itemIndex)}
+										onPointerDown={(event) => {
+											event.preventDefault();
+											event.stopPropagation();
 											onAddTool(source.id);
 										}}
-										className={`flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground ${selected ? "bg-accent text-accent-foreground" : "text-popover-foreground"}`}
+										className={cn(
+											COMPOSER_MENTION_PICKER_ITEM_CLASS,
+											selected
+												? "bg-accent text-accent-foreground"
+												: "text-popover-foreground",
+										)}
 									>
 										<div className="flex size-4 shrink-0 items-center justify-center">
 											<AppSourceIcon
@@ -1112,37 +1126,48 @@ function MentionPicker({
 						</div>
 					</div>
 				) : null}
-				{!shouldSearchDocuments ? (
-					<div className={appSources.length > 0 ? "mt-1" : undefined}>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-							Notes
+				{!shouldSearchReferences ? (
+					<div
+						className={
+							recipes.length > 0 || appSources.length > 0 ? "mt-1" : undefined
+						}
+					>
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
+							Notes and recipes
 						</div>
 						<div className="px-2 pt-0.5 pb-2 text-xs text-muted-foreground">
-							Type to search for notes
+							Type to search notes or recipes
 						</div>
 					</div>
 				) : null}
-				{shouldSearchDocuments && isNotesLoading ? (
+				{shouldSearchReferences && (isNotesLoading || isRecipesLoading) ? (
 					<div className="px-1">
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-							Notes
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
+							Notes and recipes
 						</div>
 						<div className="h-20" aria-hidden="true" />
 					</div>
 				) : null}
-				{!isNotesLoading && items.length === 0 && shouldSearchDocuments ? (
+				{!isNotesLoading &&
+				!isRecipesLoading &&
+				items.length === 0 &&
+				shouldSearchReferences ? (
 					<div className="py-6 text-center text-sm text-muted-foreground">
-						{emptyStateMessage}
+						No results found.
 					</div>
 				) : null}
-				{shouldSearchDocuments && mentionableDocuments.length > 0 ? (
-					<div className={appSources.length > 0 ? "mt-1" : undefined}>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+				{shouldSearchReferences && mentionableDocuments.length > 0 ? (
+					<div
+						className={
+							recipes.length > 0 || appSources.length > 0 ? "mt-1" : undefined
+						}
+					>
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
 							Notes
 						</div>
 						<div>
 							{mentionableDocuments.map((document, index) => {
-								const itemIndex = appSources.length + index;
+								const itemIndex = recipes.length + appSources.length + index;
 								const selected = itemIndex === selectedIndex;
 								return (
 									<button
@@ -1154,7 +1179,12 @@ function MentionPicker({
 											event.stopPropagation();
 											onAddMention(document.id);
 										}}
-										className={`flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground ${selected ? "bg-accent text-accent-foreground" : "text-popover-foreground"}`}
+										className={cn(
+											COMPOSER_MENTION_PICKER_ITEM_CLASS,
+											selected
+												? "bg-accent text-accent-foreground"
+												: "text-popover-foreground",
+										)}
 									>
 										<div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
 											<document.icon className="size-4" />

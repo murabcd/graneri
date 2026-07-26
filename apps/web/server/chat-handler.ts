@@ -178,8 +178,11 @@ const getSelectedRecipe = async ({
 	recipeSlug,
 	workspaceId,
 }: Pick<ChatRequestBody, "convexToken" | "recipeSlug" | "workspaceId">) => {
-	if (!convexToken || !recipeSlug || !workspaceId) {
+	if (!recipeSlug) {
 		return null;
+	}
+	if (!convexToken || !workspaceId) {
+		throw new Error("Recipe selection requires an authenticated workspace.");
 	}
 
 	const client = new ConvexHttpClient(getConvexUrl(), { auth: convexToken });
@@ -190,7 +193,11 @@ const getSelectedRecipe = async ({
 		},
 	);
 
-	return recipes.find((recipe) => recipe.slug === recipeSlug) ?? null;
+	const selectedRecipe = recipes.find((recipe) => recipe.slug === recipeSlug);
+	if (!selectedRecipe) {
+		throw new Error("The selected recipe is no longer available.");
+	}
+	return selectedRecipe;
 };
 
 const sendHostedChatConvexRouteError = (

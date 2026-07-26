@@ -42,6 +42,7 @@ import {
 } from "@/components/chat/message-layout";
 import { ChatRecipeReceipt } from "@/components/chat/recipe-receipt";
 import { extractChatChartArtifacts } from "@/lib/chat-chart-artifact";
+import type { ChatMessageMention } from "@/lib/chat-composer-mentions";
 import {
 	extractFileParts,
 	extractReasoningParts,
@@ -50,11 +51,6 @@ import {
 	getChatText,
 } from "@/lib/chat-message";
 import { normalizeChatMessages } from "@/lib/chat-message-state";
-import {
-	CHAT_APP_SOURCE_PROVIDERS,
-	type ChatAppSourceProvider,
-	getAppSourceLabel,
-} from "@/lib/chat-source-display";
 import { collectMessageSources } from "@/lib/chat-sources";
 import {
 	formatChatMessageTimestamp,
@@ -64,7 +60,6 @@ import {
 	getLastAssistantHasRenderableContent,
 	groupMessagesIntoTurns,
 } from "@/lib/chat-turns";
-import { getMentionProvider } from "@/lib/tiptap-mention";
 
 export type ChatMessageActionContext = {
 	displayText: string;
@@ -611,14 +606,7 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	displayText: string;
 	isInterruptedAssistantMessage: boolean;
 	isStreamingAssistantMessage: boolean;
-	mentionPositions?: Array<{
-		id: string;
-		label: string;
-		from: number;
-		to: number;
-		type?: "note" | "tool";
-		provider?: ChatAppSourceProvider;
-	}>;
+	mentionPositions?: ChatMessageMention[];
 	onOpenMention?: (noteId: string) => void;
 	role: UIMessage["role"];
 	showThinkingPlaceholder: boolean;
@@ -691,13 +679,7 @@ function UserMessageWithMentions({
 	onOpenMention,
 }: {
 	text: string;
-	mentionPositions: Array<{
-		id: string;
-		label: string;
-		from: number;
-		to: number;
-		type?: "note" | "tool";
-	}>;
+	mentionPositions: ChatMessageMention[];
 	onOpenMention?: (noteId: string) => void;
 }) {
 	const parts: React.ReactNode[] = [];
@@ -722,29 +704,24 @@ function UserMessageWithMentions({
 			parts.push(text.slice(cursor, mention.from));
 		}
 
-		const isToolMention =
-			mention.type === "tool" || mention.id.startsWith("app:");
-		const provider = getRenderedToolMentionProvider(mention);
 		parts.push(
-			isToolMention ? (
+			mention.type === "tool" ? (
 				<span
 					key={`${mention.id}:${mention.from}`}
 					className="inline-tool-mention"
 					data-mention-id={mention.id}
 					data-mention-type="tool"
-					data-mention-provider={provider}
+					data-mention-provider={mention.provider}
 				>
 					<span
 						aria-hidden="true"
 						className="inline-tool-mention-icon"
-						data-provider={provider}
+						data-provider={mention.provider}
 					>
-						{provider ? (
-							<AppSourceIcon
-								provider={provider}
-								className="inline-tool-mention-svg"
-							/>
-						) : null}
+						<AppSourceIcon
+							provider={mention.provider}
+							className="inline-tool-mention-svg"
+						/>
 					</span>
 					<span className="inline-tool-mention-label">{mention.label}</span>
 				</span>
@@ -781,25 +758,6 @@ function UserMessageWithMentions({
 	}
 
 	return <div className="whitespace-pre-wrap break-words">{parts}</div>;
-}
-
-function getRenderedToolMentionProvider({
-	label,
-	provider,
-}: {
-	label: string;
-	provider?: ChatAppSourceProvider;
-}) {
-	const explicitProvider = getMentionProvider(provider);
-	if (explicitProvider) {
-		return explicitProvider;
-	}
-
-	return (
-		CHAT_APP_SOURCE_PROVIDERS.find(
-			(sourceProvider) => label === getAppSourceLabel(sourceProvider),
-		) ?? null
-	);
 }
 
 function MessageSources({

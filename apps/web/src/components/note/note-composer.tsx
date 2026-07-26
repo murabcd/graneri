@@ -131,6 +131,13 @@ import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { submitChatTurn } from "@/lib/chat-submit-session";
 import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
+import {
+	COMPOSER_MENTION_PICKER_ICON_CLASS,
+	COMPOSER_MENTION_PICKER_ITEM_CLASS,
+	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
+	COMPOSER_MENTION_PICKER_SURFACE_CLASS,
+	COMPOSER_MENTION_PICKER_VIEWPORT_CLASS,
+} from "@/lib/composer-mention-picker-styles";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import {
@@ -2961,7 +2968,7 @@ function NoteRecipeMentionPicker({
 	return createPortal(
 		<div
 			{...noteRecipePickerListboxProps}
-			className="fixed z-[70] flex w-72 flex-col rounded-lg bg-popover p-0 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 pointer-events-auto"
+			className={COMPOSER_MENTION_PICKER_SURFACE_CLASS}
 			style={{
 				top: position.top,
 				left: position.left,
@@ -2971,7 +2978,7 @@ function NoteRecipeMentionPicker({
 				event.stopPropagation();
 			}}
 		>
-			<div className="max-h-72 overflow-y-auto p-1">
+			<div className={COMPOSER_MENTION_PICKER_VIEWPORT_CLASS}>
 				{isRecipeLoading ? <div className="py-6" aria-hidden="true" /> : null}
 				{!isRecipeLoading && recipes.length === 0 ? (
 					<div className="py-6 text-center text-sm text-muted-foreground">
@@ -2980,10 +2987,10 @@ function NoteRecipeMentionPicker({
 				) : null}
 				{recipes.length > 0 ? (
 					<div>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
 							Recipes
 						</div>
-						<div className="space-y-0.5">
+						<div>
 							{recipes.map((recipe, index) => {
 								const Icon = getRecipeIcon(recipe.slug);
 								const selected = index === selectedIndex;
@@ -2998,15 +3005,13 @@ function NoteRecipeMentionPicker({
 											onSelectRecipe(recipe.slug);
 										}}
 										className={cn(
-											"flex h-9 w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-md px-1.5 text-left",
+											COMPOSER_MENTION_PICKER_ITEM_CLASS,
 											selected
 												? "bg-accent text-accent-foreground"
 												: "text-popover-foreground",
 										)}
 									>
-										<div className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
-											<Icon className="size-4" />
-										</div>
+										<Icon className={COMPOSER_MENTION_PICKER_ICON_CLASS} />
 										<div
 											className="min-w-0 flex-1 truncate"
 											title={recipe.name}

@@ -4,6 +4,8 @@ import {
 } from "@workspace/ai/hosted-chat-runtime";
 import { parseUiMessageMetadataJson } from "@workspace/ai/ui-message-codec";
 import type { UIMessage } from "ai";
+import { createChatComposerEditDraft } from "@/lib/chat-composer-mentions";
+import { parseChatMessageMetadata } from "@/lib/chat-message";
 
 type QueuedRequestBody = Record<string, unknown>;
 
@@ -52,6 +54,25 @@ const parseQueuedMessageMetadata = (
 	}
 
 	return parsed as UIMessage["metadata"];
+};
+
+export const getQueuedChatComposerEditDraft = (
+	queuedMessage: Pick<QueuedMessage, "metadataJson" | "text">,
+) => {
+	const parsedMetadata = parseQueuedMessageMetadata(queuedMessage.metadataJson);
+	const metadata =
+		parsedMetadata === undefined
+			? null
+			: parseChatMessageMetadata(parsedMetadata);
+	if (parsedMetadata !== undefined && !metadata) {
+		throw new Error("Queued chat message metadata is invalid.");
+	}
+
+	return createChatComposerEditDraft({
+		mentionPositions: metadata?.mentionPositions ?? [],
+		recipe: metadata?.recipe ?? null,
+		text: metadata?.recipeOnly ? "" : queuedMessage.text,
+	});
 };
 
 const sanitizeQueuedNoteContext = (value: unknown) => {

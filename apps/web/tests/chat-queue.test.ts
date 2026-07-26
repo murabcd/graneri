@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	createQueuedUserMessageId,
 	fromQueuedUserMessage,
+	getQueuedChatComposerEditDraft,
 	toQueuedUserMessageInput,
 } from "@/lib/chat-queue";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -99,6 +100,47 @@ describe("chat queue serialization", () => {
 		});
 
 		expect(queuedMessage.text).toBe("Follow this up");
+	});
+
+	it("reconstructs a recipe-only queued draft from exact typed metadata", () => {
+		expect(
+			getQueuedChatComposerEditDraft({
+				metadataJson: JSON.stringify({
+					recipe: { slug: "write-prd", name: "Write PRD" },
+					recipeOnly: true,
+				}),
+				text: "Write PRD",
+			}),
+		).toEqual({
+			text: "@Write PRD",
+			mentions: [
+				{
+					id: "write-prd",
+					label: "Write PRD",
+					from: 0,
+					to: 10,
+					type: "recipe",
+				},
+			],
+		});
+	});
+
+	it("rejects queued mention metadata without an exact mention kind", () => {
+		expect(() =>
+			getQueuedChatComposerEditDraft({
+				metadataJson: JSON.stringify({
+					mentionPositions: [
+						{
+							id: "app:notion",
+							label: "Notion",
+							from: 0,
+							to: 7,
+						},
+					],
+				}),
+				text: "@Notion",
+			}),
+		).toThrow("Queued chat message metadata is invalid.");
 	});
 
 	it("rejects empty queued message text", () => {

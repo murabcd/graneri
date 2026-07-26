@@ -205,7 +205,7 @@ const collectChatSources = (messages: UIMessage[]): SummarySource[] => {
 		const mentionSources = (
 			getChatMessageMetadata(message)?.mentionPositions ?? []
 		).flatMap((mention) =>
-			mention.type === "tool" || mention.id.startsWith("app:")
+			mention.type === "tool"
 				? [
 						{
 							id: mention.id,

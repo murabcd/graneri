@@ -599,9 +599,9 @@ export const getHostedChatRecipeContext = (selectedRecipe) => {
 	}
 
 	return [
-		"A recipe is selected for this note chat.",
+		"A recipe is selected for this chat.",
 		"Treat the selected recipe as the active task framing for the conversation.",
-		"Treat the attached note and any other provided note context as the source material to work from.",
+		"Treat available notes and any other provided context as the source material to work from.",
 		"If the user's request is ambiguous, interpret it through the selected recipe first.",
 		"If the user explicitly asks for something else, follow the user's latest instruction instead.",
 		"If there is not enough source material to complete the recipe well, ask a focused follow-up question.",
