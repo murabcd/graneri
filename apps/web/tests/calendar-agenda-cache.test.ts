@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { UpcomingCalendarEvent } from "../src/app/app-types";
 import {
+	loadCalendarAgenda,
 	readCalendarAgendaSnapshot,
 	writeCalendarAgendaSnapshot,
 } from "../src/components/calendar/calendar-agenda-cache";
@@ -100,5 +101,31 @@ describe("calendar agenda cache", () => {
 				timeMax: "2026-09-23T00:00:00.000Z",
 			}),
 		).toBeNull();
+	});
+
+	it("starts a fresh request when the agenda revision changes", () => {
+		const firstLoad = () => new Promise<never>(() => undefined);
+		const refreshedLoad = () => new Promise<never>(() => undefined);
+		const firstRequest = loadCalendarAgenda(
+			"workspace-request-revision",
+			requestWindow,
+			0,
+			firstLoad,
+		);
+		const duplicateRequest = loadCalendarAgenda(
+			"workspace-request-revision",
+			requestWindow,
+			0,
+			firstLoad,
+		);
+		const refreshedRequest = loadCalendarAgenda(
+			"workspace-request-revision",
+			requestWindow,
+			1,
+			refreshedLoad,
+		);
+
+		expect(duplicateRequest).toBe(firstRequest);
+		expect(refreshedRequest).not.toBe(firstRequest);
 	});
 });

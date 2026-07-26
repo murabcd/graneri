@@ -106,9 +106,10 @@ export const removeCalendarAgendaSnapshot = (
 export const loadCalendarAgenda = (
 	workspaceId: string,
 	requestWindow: CalendarRequestWindow,
+	requestRevision: number,
 	load: () => Promise<CalendarEventsResponse>,
 ) => {
-	const key = getCacheKey(workspaceId, requestWindow);
+	const key = `${getCacheKey(workspaceId, requestWindow)}:${requestRevision}`;
 	const activeRequest = inFlightRequests.get(key);
 
 	if (activeRequest) {

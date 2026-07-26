@@ -10,6 +10,10 @@ import {
 } from "@/components/calendar/calendar-agenda-cache";
 import type { CalendarEventCreation } from "@/components/calendar/calendar-event-draft";
 import {
+	requestCalendarRefresh,
+	useCalendarRefreshRevision,
+} from "@/components/calendar/calendar-refresh-signal";
+import {
 	type CalendarCreation,
 	type CalendarSource,
 	getCalendarAgendaRange,
@@ -152,6 +156,7 @@ export function useCalendarAgendaSession() {
 		toCalendarRequestWindow(getCalendarAgendaRange(new Date())),
 	);
 	const [agendaRevision, setAgendaRevision] = React.useState(0);
+	const calendarRefreshRevision = useCalendarRefreshRevision(activeWorkspaceId);
 	const [state, setState] = React.useState<CalendarAgendaSessionState>(() =>
 		createInitialState(activeWorkspaceId, requestWindow),
 	);
@@ -168,7 +173,7 @@ export function useCalendarAgendaSession() {
 				workspaceId: activeWorkspaceId,
 				...event,
 			});
-			setAgendaRevision((current) => current + 1);
+			requestCalendarRefresh(activeWorkspaceId);
 		},
 		[activeWorkspaceId, createCalendarEventAction],
 	);
@@ -182,7 +187,7 @@ export function useCalendarAgendaSession() {
 				workspaceId: activeWorkspaceId,
 				...calendar,
 			});
-			setAgendaRevision((current) => current + 1);
+			requestCalendarRefresh(activeWorkspaceId);
 		},
 		[activeWorkspaceId, createCalendarAction],
 	);
@@ -223,7 +228,7 @@ export function useCalendarAgendaSession() {
 							events: transformEvents(current.events),
 						},
 			);
-			setAgendaRevision((current) => current + 1);
+			requestCalendarRefresh(activeWorkspaceId);
 		},
 		[activeWorkspaceId, state.visibleWindow, updateCalendarEventAction],
 	);
@@ -256,7 +261,7 @@ export function useCalendarAgendaSession() {
 							events: transformEvents(current.events),
 						},
 			);
-			setAgendaRevision((current) => current + 1);
+			requestCalendarRefresh(activeWorkspaceId);
 		},
 		[activeWorkspaceId, deleteCalendarEventAction, state.visibleWindow],
 	);
@@ -269,10 +274,10 @@ export function useCalendarAgendaSession() {
 	);
 	const agendaRequest = React.useMemo(
 		() => ({
-			revision: agendaRevision,
+			revision: agendaRevision + calendarRefreshRevision,
 			window: requestWindow,
 		}),
-		[agendaRevision, requestWindow],
+		[agendaRevision, calendarRefreshRevision, requestWindow],
 	);
 
 	React.useEffect(() => {
@@ -290,11 +295,15 @@ export function useCalendarAgendaSession() {
 		}
 
 		const loadAgenda = (window: CalendarRequestWindow) =>
-			loadCalendarAgenda(activeWorkspaceId, window, () =>
-				listCalendarEvents({
-					workspaceId: activeWorkspaceId,
-					...window,
-				}),
+			loadCalendarAgenda(
+				activeWorkspaceId,
+				window,
+				agendaRequest.revision,
+				() =>
+					listCalendarEvents({
+						workspaceId: activeWorkspaceId,
+						...window,
+					}),
 			);
 		const prefetchAdjacentAgendas = () => {
 			for (const adjacentWindow of getAdjacentRequestWindows(targetWindow)) {

@@ -14,6 +14,7 @@ import {
 	removeUpcomingCalendarSnapshot,
 	writeUpcomingCalendarSnapshot,
 } from "@/app/upcoming-calendar-cache";
+import { useCalendarRefreshRevision } from "@/components/calendar/calendar-refresh-signal";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -42,6 +43,7 @@ export const useUpcomingCalendar = ({
 		queryArgs,
 	);
 	const listUpcomingEvents = useAction(api.calendar.listUpcomingCalendarEvents);
+	const calendarRefreshRevision = useCalendarRefreshRevision(workspaceId);
 	const [session, setSession] = React.useState<UpcomingCalendarSession | null>(
 		null,
 	);
@@ -62,6 +64,16 @@ export const useUpcomingCalendar = ({
 					yandexConnectionStatus: yandexCalendarConnection?.status ?? null,
 				})
 			: null;
+	const refreshRequest = React.useMemo(
+		() =>
+			scopeKey
+				? {
+						revision: calendarRefreshRevision,
+						scopeKey,
+					}
+				: null,
+		[calendarRefreshRevision, scopeKey],
+	);
 	const cachedSnapshot = React.useMemo(() => {
 		if (scopeKey) {
 			return readUpcomingCalendarSnapshot(scopeKey);
@@ -179,13 +191,13 @@ export const useUpcomingCalendar = ({
 			return;
 		}
 
-		if (!scopeKey) {
+		if (!refreshRequest) {
 			requestIdRef.current += 1;
 			return;
 		}
 
-		void refresh(scopeKey);
-	}, [accountId, scopeKey, workspaceId]);
+		void refresh(refreshRequest.scopeKey);
+	}, [accountId, refreshRequest, workspaceId]);
 
 	React.useEffect(() => {
 		if (!scopeKey) {
