@@ -1,4 +1,4 @@
-import { useAction, useQuery } from "convex/react";
+import { useAction } from "convex/react";
 import * as React from "react";
 import type { UpcomingCalendarState } from "@/app/app-types";
 import {
@@ -8,19 +8,20 @@ import {
 } from "@/app/desktop-tray-calendar-sync";
 import { getDayWindowFromDayKey } from "@/app/location";
 import {
-	createUpcomingCalendarScopeKey,
+	loadUpcomingCalendarSnapshot,
 	readRecentUpcomingCalendarSnapshot,
 	readUpcomingCalendarSnapshot,
-	removeUpcomingCalendarSnapshot,
-	writeUpcomingCalendarSnapshot,
-} from "@/app/upcoming-calendar-cache";
-import { useCalendarRefreshRevision } from "@/components/calendar/calendar-refresh-signal";
+	type UpcomingCalendarScope,
+	type UpcomingCalendarSnapshot,
+} from "@/components/calendar/calendar-snapshot-module";
+import { useCalendarSnapshotSource } from "@/components/calendar/use-calendar-snapshot-source";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 type UpcomingCalendarSession = {
-	scopeKey: string;
+	scope: UpcomingCalendarScope;
+	snapshot: UpcomingCalendarSnapshot | null;
 	state: UpcomingCalendarState;
 };
 
@@ -35,48 +36,31 @@ export const useUpcomingCalendar = ({
 	isAuthenticated: boolean;
 	workspaceId: Id<"workspaces"> | null;
 }) => {
-	const queryArgs =
-		accountId && isAuthenticated && workspaceId ? { workspaceId } : "skip";
-	const calendarPreferences = useQuery(api.calendarPreferences.get, queryArgs);
-	const yandexCalendarConnection = useQuery(
-		api.appConnections.getYandexCalendar,
-		queryArgs,
-	);
 	const listUpcomingEvents = useAction(api.calendar.listUpcomingCalendarEvents);
-	const calendarRefreshRevision = useCalendarRefreshRevision(workspaceId);
 	const [session, setSession] = React.useState<UpcomingCalendarSession | null>(
 		null,
 	);
 	const requestIdRef = React.useRef(0);
-	const scopeKey =
-		accountId &&
-		isAuthenticated &&
-		workspaceId &&
-		calendarPreferences !== undefined &&
-		yandexCalendarConnection !== undefined
-			? createUpcomingCalendarScopeKey({
-					accountId,
-					dayKey: currentDayKey,
-					showGoogleCalendar: calendarPreferences.showGoogleCalendar,
-					showYandexCalendar: calendarPreferences.showYandexCalendar,
-					workspaceId,
-					yandexConnectionSourceId: yandexCalendarConnection?.sourceId ?? null,
-					yandexConnectionStatus: yandexCalendarConnection?.status ?? null,
-				})
-			: null;
-	const refreshRequest = React.useMemo(
+	const { generation: calendarSnapshotGeneration, sourceKey } =
+		useCalendarSnapshotSource({
+			enabled: Boolean(accountId && isAuthenticated),
+			workspaceId,
+		});
+	const scope = React.useMemo<UpcomingCalendarScope | null>(
 		() =>
-			scopeKey
+			accountId && isAuthenticated && workspaceId && sourceKey
 				? {
-						revision: calendarRefreshRevision,
-						scopeKey,
+						accountId,
+						dayKey: currentDayKey,
+						sourceKey,
+						workspaceId,
 					}
 				: null,
-		[calendarRefreshRevision, scopeKey],
+		[accountId, currentDayKey, isAuthenticated, sourceKey, workspaceId],
 	);
 	const cachedSnapshot = React.useMemo(() => {
-		if (scopeKey) {
-			return readUpcomingCalendarSnapshot(scopeKey);
+		if (scope) {
+			return readUpcomingCalendarSnapshot(scope);
 		}
 
 		if (accountId && workspaceId) {
@@ -88,9 +72,9 @@ export const useUpcomingCalendar = ({
 		}
 
 		return null;
-	}, [accountId, currentDayKey, scopeKey, workspaceId]);
+	}, [accountId, currentDayKey, scope, workspaceId]);
 	const state = React.useMemo<UpcomingCalendarState>(() => {
-		if (scopeKey && session?.scopeKey === scopeKey) {
+		if (scope && session?.scope === scope) {
 			return session.state;
 		}
 
@@ -104,85 +88,111 @@ export const useUpcomingCalendar = ({
 		return accountId && workspaceId
 			? { status: "checking", events: [] }
 			: { status: "not_connected", events: [] };
-	}, [accountId, cachedSnapshot, scopeKey, session, workspaceId]);
+	}, [accountId, cachedSnapshot, scope, session, workspaceId]);
 
-	const refresh = React.useEffectEvent(async (activeScopeKey: string) => {
-		if (!workspaceId) {
-			return;
-		}
+	const refresh = React.useEffectEvent(
+		async (
+			activeScope: UpcomingCalendarScope,
+			activeWorkspaceId: Id<"workspaces">,
+			generation: number,
+		) => {
+			const requestId = requestIdRef.current + 1;
+			requestIdRef.current = requestId;
+			const cached = readUpcomingCalendarSnapshot(activeScope);
+			const previousSnapshot =
+				session?.scope.accountId === activeScope.accountId &&
+				session.scope.dayKey === activeScope.dayKey &&
+				session.scope.workspaceId === activeScope.workspaceId
+					? session.snapshot
+					: null;
+			const retainedSnapshot =
+				cached ??
+				previousSnapshot ??
+				readRecentUpcomingCalendarSnapshot({
+					accountId: activeScope.accountId,
+					dayKey: activeScope.dayKey,
+					workspaceId: activeScope.workspaceId,
+				});
 
-		const requestId = requestIdRef.current + 1;
-		requestIdRef.current = requestId;
-		const cached = readUpcomingCalendarSnapshot(activeScopeKey);
-
-		if (cached) {
-			setSession({
-				scopeKey: activeScopeKey,
-				state: {
-					status: "refreshing",
-					events: cached.events,
-				},
-			});
-			syncReadyDesktopTrayCalendar(cached);
-		} else {
-			setSession({
-				scopeKey: activeScopeKey,
-				state: { status: "checking", events: [] },
-			});
-			syncDisconnectedDesktopTrayCalendar();
-		}
-
-		try {
-			const result = await listUpcomingEvents({
-				workspaceId,
-				...getDayWindowFromDayKey(currentDayKey),
-			});
-
-			if (requestIdRef.current !== requestId) {
-				return;
-			}
-
-			if (result.status === "not_connected") {
-				removeUpcomingCalendarSnapshot(activeScopeKey);
+			if (retainedSnapshot) {
 				setSession({
-					scopeKey: activeScopeKey,
-					state: { status: "not_connected", events: [] },
+					scope: activeScope,
+					snapshot: retainedSnapshot,
+					state: {
+						status: "refreshing",
+						events: retainedSnapshot.events,
+					},
+				});
+				syncReadyDesktopTrayCalendar(retainedSnapshot);
+			} else {
+				setSession({
+					scope: activeScope,
+					snapshot: null,
+					state: { status: "checking", events: [] },
 				});
 				syncDisconnectedDesktopTrayCalendar();
-				return;
 			}
 
-			const nextSnapshot = {
-				connectedCalendarCount: result.connectedCalendarCount,
-				events: result.events,
-			};
-			writeUpcomingCalendarSnapshot(activeScopeKey, nextSnapshot);
-			setSession({
-				scopeKey: activeScopeKey,
-				state: { status: "ready", events: result.events },
-			});
-			syncReadyDesktopTrayCalendar(nextSnapshot);
-		} catch (error) {
-			if (requestIdRef.current !== requestId) {
-				return;
-			}
+			try {
+				const result = await loadUpcomingCalendarSnapshot({
+					generation,
+					load: () =>
+						listUpcomingEvents({
+							workspaceId: activeWorkspaceId,
+							...getDayWindowFromDayKey(activeScope.dayKey),
+						}),
+					scope: activeScope,
+				});
 
-			logError({
-				event: "client.error",
-				error,
-				message: "Failed to load upcoming calendar events",
-			});
-			setSession((current) => ({
-				scopeKey: activeScopeKey,
-				state: {
-					status: "error",
-					events:
-						current?.scopeKey === activeScopeKey ? current.state.events : [],
-				},
-			}));
-			syncErrorDesktopTrayCalendar();
-		}
-	});
+				if (
+					requestIdRef.current !== requestId ||
+					result.status === "obsolete"
+				) {
+					return;
+				}
+
+				if (result.status === "not_connected") {
+					setSession({
+						scope: activeScope,
+						snapshot: null,
+						state: { status: "not_connected", events: [] },
+					});
+					syncDisconnectedDesktopTrayCalendar();
+					return;
+				}
+
+				setSession({
+					scope: activeScope,
+					snapshot: result.snapshot,
+					state: { status: "ready", events: result.snapshot.events },
+				});
+				syncReadyDesktopTrayCalendar(result.snapshot);
+			} catch (error) {
+				if (requestIdRef.current !== requestId) {
+					return;
+				}
+
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to load upcoming calendar events",
+				});
+				setSession({
+					scope: activeScope,
+					snapshot: retainedSnapshot,
+					state: {
+						status: "error",
+						events: retainedSnapshot?.events ?? [],
+					},
+				});
+				if (retainedSnapshot) {
+					syncReadyDesktopTrayCalendar(retainedSnapshot);
+				} else {
+					syncErrorDesktopTrayCalendar();
+				}
+			}
+		},
+	);
 
 	React.useEffect(() => {
 		if (!accountId || !workspaceId) {
@@ -191,26 +201,26 @@ export const useUpcomingCalendar = ({
 			return;
 		}
 
-		if (!refreshRequest) {
+		if (!scope) {
 			requestIdRef.current += 1;
 			return;
 		}
 
-		void refresh(refreshRequest.scopeKey);
-	}, [accountId, refreshRequest, workspaceId]);
+		void refresh(scope, workspaceId, calendarSnapshotGeneration);
+	}, [accountId, calendarSnapshotGeneration, scope, workspaceId]);
 
 	React.useEffect(() => {
-		if (!scopeKey) {
+		if (!scope || !workspaceId) {
 			return;
 		}
 
 		const handleFocus = () => {
-			void refresh(scopeKey);
+			void refresh(scope, workspaceId, calendarSnapshotGeneration);
 		};
 
 		window.addEventListener("focus", handleFocus);
 		return () => window.removeEventListener("focus", handleFocus);
-	}, [scopeKey]);
+	}, [calendarSnapshotGeneration, scope, workspaceId]);
 
 	return state;
 };

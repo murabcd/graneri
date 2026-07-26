@@ -1233,6 +1233,7 @@ const useAppShellState = ({
 			sharedNotes?.some((note) => note._id === resolvedCurrentNoteId) === true);
 
 	return {
+		accountId: session?.user?.id ?? null,
 		activeWorkspaceId: resolvedActiveWorkspaceId,
 		breadcrumbDetailLabel:
 			isResolvingResourceRoute || resolvedCurrentView === "notFound"
@@ -1542,7 +1543,7 @@ function AppShellHeader({
 	return (
 		<header
 			className={cn(
-				"sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between bg-background/95 px-4 backdrop-blur transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-6 relative",
+				"sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between bg-background/95 px-4 backdrop-blur transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-6",
 				isDesktopMac && DESKTOP_MAIN_HEADER_CLASS,
 			)}
 		>
@@ -1762,7 +1763,7 @@ function AppShellBreadcrumbs({
 											align="start"
 											side="bottom"
 											sideOffset={6}
-											className="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
+											className="w-85 rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
 										>
 											<div className="flex items-center gap-2">
 												<NoteTitleEditInput
@@ -2320,6 +2321,7 @@ function createAppShellContentView({
 	if (controller.currentView === "calendar") {
 		return {
 			kind: "calendar",
+			accountId: controller.accountId,
 			isDesktopMac: controller.isDesktopMac,
 			onOpenCalendarEventNote: (event) =>
 				controller.handleOpenCalendarEventNote(event, {

@@ -57,6 +57,7 @@ export type AppShellContentView =
 	  } & NoteListViewProps)
 	| {
 			kind: "calendar";
+			accountId: string | null;
 			isDesktopMac: boolean;
 			onOpenCalendarEventNote: (
 				event: UpcomingCalendarEvent,
@@ -179,6 +180,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 	if (view.kind === "calendar") {
 		return (
 			<CalendarPage
+				accountId={view.accountId}
 				isDesktopMac={view.isDesktopMac}
 				onOpenCalendarEventNote={view.onOpenCalendarEventNote}
 				onOpenCalendarSettings={view.onOpenCalendarSettings}

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { getFunctionName } from "convex/server";
@@ -42,6 +42,14 @@ vi.mock("convex/react", () => ({
 			? deleteCalendarEvent
 			: listCalendarEvents;
 	},
+	useQuery: (reference: never) =>
+		getFunctionName(reference) === "calendarPreferences:get"
+			? {
+					showGoogleCalendar: true,
+					showGoogleDrive: false,
+					showYandexCalendar: false,
+				}
+			: null,
 }));
 
 const readyCalendar = {
@@ -77,6 +85,7 @@ const renderCalendarPage = (workspaceId: Id<"workspaces">) =>
 		<TooltipProvider>
 			<ActiveWorkspaceProvider workspaceId={workspaceId}>
 				<CalendarPage
+					accountId="calendar-page-test-account"
 					isDesktopMac={false}
 					onOpenCalendarEventNote={vi.fn()}
 					onOpenCalendarSettings={vi.fn()}
@@ -96,6 +105,7 @@ const renderCalendarPageWithNewEventTrigger = (workspaceId: Id<"workspaces">) =>
 			</button>
 			<ActiveWorkspaceProvider workspaceId={workspaceId}>
 				<CalendarPage
+					accountId="calendar-page-test-account"
 					isDesktopMac={false}
 					onOpenCalendarEventNote={vi.fn()}
 					onOpenCalendarSettings={vi.fn()}
@@ -395,7 +405,7 @@ describe("CalendarPage loading", () => {
 			),
 		);
 		await waitFor(() =>
-			expect(listCalendarEvents).toHaveBeenCalledTimes(requestCount + 1),
+			expect(listCalendarEvents).toHaveBeenCalledTimes(requestCount + 3),
 		);
 		expect(screen.queryByRole("heading", { name: "New event" })).toBeNull();
 	});
@@ -442,7 +452,7 @@ describe("CalendarPage loading", () => {
 			}),
 		);
 		await waitFor(() =>
-			expect(listCalendarEvents).toHaveBeenCalledTimes(requestCount + 1),
+			expect(listCalendarEvents).toHaveBeenCalledTimes(requestCount + 3),
 		);
 		expect(screen.queryByRole("heading", { name: "New calendar" })).toBeNull();
 	});
@@ -601,8 +611,12 @@ describe("CalendarPage loading", () => {
 		const user = userEvent.setup();
 		renderCalendarPage(workspaceId);
 		await screen.findByText("Planning");
+		let resolveRefresh: ((value: typeof readyCalendar) => void) | null = null;
 		listCalendarEvents.mockImplementationOnce(
-			() => new Promise<never>(() => undefined),
+			() =>
+				new Promise<typeof readyCalendar>((resolve) => {
+					resolveRefresh = resolve;
+				}),
 		);
 
 		await user.click(
@@ -626,6 +640,13 @@ describe("CalendarPage loading", () => {
 				workspaceId,
 			}),
 		);
+		expect(screen.queryByText("Planning")).not.toBeNull();
+		act(() => {
+			resolveRefresh?.({
+				...readyCalendar,
+				events: [],
+			});
+		});
 		await waitFor(() => expect(screen.queryByText("Planning")).toBeNull());
 	});
 });

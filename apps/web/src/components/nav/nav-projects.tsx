@@ -1245,7 +1245,7 @@ function ProjectSidebarRow({
 				align="start"
 				side="bottom"
 				sideOffset={8}
-				className="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
+				className="w-85 rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					requestAnimationFrame(() => {

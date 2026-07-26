@@ -41,10 +41,12 @@ import { useCalendarAgendaSession } from "@/components/calendar/use-calendar-age
 import { PageTitle } from "@/components/layout/page-title";
 
 export function CalendarPage({
+	accountId,
 	isDesktopMac,
 	onOpenCalendarEventNote,
 	onOpenCalendarSettings,
 }: {
+	accountId: string | null;
 	isDesktopMac: boolean;
 	onOpenCalendarEventNote: (
 		event: UpcomingCalendarEvent,
@@ -62,7 +64,7 @@ export function CalendarPage({
 		shiftRange,
 		state,
 		updateEvent,
-	} = useCalendarAgendaSession();
+	} = useCalendarAgendaSession(accountId);
 	const [calendarFilter, setCalendarFilter] = React.useState<{
 		excludedCalendarIds: Set<string>;
 		workspaceId: string | null;

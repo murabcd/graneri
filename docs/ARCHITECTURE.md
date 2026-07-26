@@ -60,9 +60,15 @@ capability, and a normalized recurring-event signal; it offers only writable
 calendars in the editor. Provider reads are complete-snapshot operations: a
 failed calendar read rejects the refresh instead of caching a partial agenda,
 so the renderer retains the last successful snapshot while provider reads and
-writes refresh. The renderer persists only the current agenda-cache schema for
-the browser session and prefetches adjacent date windows so range changes can
-swap complete snapshots atomically instead of clearing the agenda.
+writes refresh. `calendarSnapshotModule` is the renderer authority for
+workspace-scoped Calendar Snapshot persistence, request coalescing, provider
+source changes, and generation-fenced invalidation. Agenda windows and Home-day
+windows remain distinct Calendar Scopes inside that module; Agenda, Home, and
+the desktop tray consume projections of those snapshots instead of maintaining
+parallel caches or optimistic event copies. Successful writes invalidate every
+persisted snapshot for the workspace, retain the currently rendered complete
+snapshot during refresh, and discard responses from older generations.
+Adjacent Agenda windows are prefetched through the same lifecycle.
 
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.

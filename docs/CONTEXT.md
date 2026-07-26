@@ -23,3 +23,13 @@ _Avoid_: Pending message, buffered prompt, queued run
 **Stored UI Message**:
 The canonical durable form of a rich chat message, including its role, message parts, and optional metadata.
 _Avoid_: Chat payload, message JSON, transcript row
+
+## Calendar language
+
+**Calendar Snapshot**:
+The last complete, trustworthy set of calendar sources and events for a defined scope. It remains authoritative through transient refresh failures and is cleared only when that scope is explicitly left or disconnected.
+_Avoid_: Partial agenda, temporary calendar result
+
+**Calendar Scope**:
+The workspace, account identity, provider visibility and connection state, and time interval for which a Calendar Snapshot is valid. Home-day and Agenda-window scopes are distinct.
+_Avoid_: Global calendar state, unscoped calendar cache

@@ -4,7 +4,6 @@ import {
 	filterCalendarEvents,
 	getCalendarAgendaRange,
 	toCalendarRequestWindow,
-	toCalendarSources,
 } from "../src/components/calendar/calendar-view-model";
 
 const createEvent = (
@@ -76,26 +75,5 @@ describe("calendar view model", () => {
 		expect(filterCalendarEvents([workEvent, personalEvent], new Set())).toEqual(
 			[],
 		);
-	});
-
-	it("preserves provider-owned calendar colors", () => {
-		const calendars = [
-			{
-				canCreateEvents: true,
-				color: "#3b82f6",
-				id: "work",
-				name: "Work",
-				provider: "google" as const,
-			},
-			{
-				canCreateEvents: true,
-				color: "#10b981",
-				id: "personal",
-				name: "Personal",
-				provider: "yandex" as const,
-			},
-		];
-
-		expect(toCalendarSources(calendars)).toEqual(calendars);
 	});
 });

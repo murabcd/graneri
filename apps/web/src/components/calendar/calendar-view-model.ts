@@ -60,14 +60,6 @@ export const CALENDAR_COLOR_OPTIONS = [
 
 export type CalendarProvider = "google" | "yandex";
 
-type ProviderCalendarSource = {
-	canCreateEvents: boolean;
-	color: string;
-	id: string;
-	name: string;
-	provider: CalendarProvider;
-};
-
 export type CalendarSource = {
 	canCreateEvents: boolean;
 	color: string;
@@ -95,10 +87,6 @@ export type CalendarAgendaRange = {
 	end: Date;
 	start: Date;
 };
-
-export const toCalendarSources = (
-	calendars: ProviderCalendarSource[],
-): CalendarSource[] => calendars;
 
 export const filterCalendarEvents = (
 	events: UpcomingCalendarEvent[],

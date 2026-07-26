@@ -2,57 +2,32 @@ import { useAction } from "convex/react";
 import * as React from "react";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
 import {
+	type CalendarAgendaScope,
+	type CalendarAgendaSnapshot,
 	type CalendarRequestWindow,
-	loadCalendarAgenda,
+	invalidateCalendarSnapshots,
+	loadCalendarAgendaSnapshot,
 	readCalendarAgendaSnapshot,
-	removeCalendarAgendaSnapshot,
-	writeCalendarAgendaSnapshot,
-} from "@/components/calendar/calendar-agenda-cache";
-import type { CalendarEventCreation } from "@/components/calendar/calendar-event-draft";
+} from "@/components/calendar/calendar-snapshot-module";
 import {
-	requestCalendarRefresh,
-	useCalendarRefreshRevision,
-} from "@/components/calendar/calendar-refresh-signal";
-import {
-	type CalendarCreation,
 	type CalendarSource,
 	getCalendarAgendaRange,
 	toCalendarRequestWindow,
-	toCalendarSources,
 } from "@/components/calendar/calendar-view-model";
+import { useCalendarMutations } from "@/components/calendar/use-calendar-mutations";
+import { useCalendarSnapshotSource } from "@/components/calendar/use-calendar-snapshot-source";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
-export type CalendarAgendaSessionState =
-	| {
-			status: "loading";
-			calendars: CalendarSource[];
-			events: UpcomingCalendarEvent[];
-			visibleWindow: CalendarRequestWindow;
-			workspaceId: string | null;
-	  }
-	| {
-			status: "ready";
-			calendars: CalendarSource[];
-			events: UpcomingCalendarEvent[];
-			visibleWindow: CalendarRequestWindow;
-			workspaceId: string;
-	  }
-	| {
-			status: "not_connected";
-			calendars: [];
-			events: [];
-			visibleWindow: CalendarRequestWindow;
-			workspaceId: string | null;
-	  }
-	| {
-			status: "error";
-			calendars: CalendarSource[];
-			events: UpcomingCalendarEvent[];
-			visibleWindow: CalendarRequestWindow;
-			workspaceId: string;
-	  };
+export type CalendarAgendaSessionState = {
+	calendars: CalendarSource[];
+	events: UpcomingCalendarEvent[];
+	status: "error" | "loading" | "not_connected" | "ready";
+	visibleWindow: CalendarRequestWindow;
+	workspaceId: Id<"workspaces"> | null;
+};
 
 const getAdjacentRequestWindows = (
 	requestWindow: CalendarRequestWindow,
@@ -63,75 +38,18 @@ const getAdjacentRequestWindows = (
 		return toCalendarRequestWindow(getCalendarAgendaRange(start));
 	});
 
-const applyCalendarEventUpdate = (
-	event: UpcomingCalendarEvent,
-	update: CalendarEventCreation,
-): UpcomingCalendarEvent => {
-	if (update.time.kind === "timed") {
-		return {
-			...event,
-			description: update.description,
-			endAt: update.time.endAt,
-			isAllDay: false,
-			location: update.location,
-			startAt: update.time.startAt,
-			title: update.title,
-		};
-	}
-
-	return {
-		...event,
-		description: update.description,
-		endAt: new Date(
-			new Date(`${update.time.endDate}T00:00:00`).getTime() - 1,
-		).toISOString(),
-		isAllDay: true,
-		location: update.location,
-		startAt: new Date(`${update.time.startDate}T00:00:00`).toISOString(),
-		title: update.title,
-	};
-};
-
-const isSameCalendarEvent = (
-	left: UpcomingCalendarEvent,
-	right: UpcomingCalendarEvent,
-) =>
-	left.provider === right.provider &&
-	left.calendarId === right.calendarId &&
-	left.providerEventId === right.providerEventId &&
-	left.recurrenceId === right.recurrenceId;
-
-const updateCachedCalendarEvents = ({
-	requestWindow,
-	transform,
-	workspaceId,
-}: {
-	requestWindow: CalendarRequestWindow;
-	transform: (events: UpcomingCalendarEvent[]) => UpcomingCalendarEvent[];
-	workspaceId: string;
-}) => {
-	const snapshot = readCalendarAgendaSnapshot(workspaceId, requestWindow);
-
-	if (snapshot) {
-		writeCalendarAgendaSnapshot(workspaceId, requestWindow, {
-			...snapshot,
-			events: transform(snapshot.events),
-		});
-	}
-};
-
 const createInitialState = (
-	workspaceId: string | null,
+	scope: CalendarAgendaScope | null,
 	requestWindow: CalendarRequestWindow,
 ): CalendarAgendaSessionState => {
-	if (workspaceId) {
-		const snapshot = readCalendarAgendaSnapshot(workspaceId, requestWindow);
+	if (scope) {
+		const snapshot = readCalendarAgendaSnapshot(scope);
 		if (snapshot) {
 			return {
 				status: "ready",
 				...snapshot,
 				visibleWindow: requestWindow,
-				workspaceId,
+				workspaceId: scope.workspaceId,
 			};
 		}
 	}
@@ -141,130 +59,75 @@ const createInitialState = (
 		calendars: [],
 		events: [],
 		visibleWindow: requestWindow,
-		workspaceId,
+		workspaceId: scope?.workspaceId ?? null,
 	};
 };
 
-export function useCalendarAgendaSession() {
+const createReadyState = (
+	scope: CalendarAgendaScope,
+	snapshot: CalendarAgendaSnapshot,
+): CalendarAgendaSessionState => ({
+	...snapshot,
+	status: "ready",
+	visibleWindow: scope.requestWindow,
+	workspaceId: scope.workspaceId,
+});
+
+const retainAgendaState = (
+	current: CalendarAgendaSessionState,
+	{
+		status,
+		visibleWindow,
+		workspaceId,
+	}: {
+		status: "error" | "loading";
+		visibleWindow: CalendarRequestWindow;
+		workspaceId: Id<"workspaces">;
+	},
+): CalendarAgendaSessionState =>
+	current.workspaceId === workspaceId
+		? { ...current, status }
+		: {
+				calendars: [],
+				events: [],
+				status,
+				visibleWindow,
+				workspaceId,
+			};
+
+export function useCalendarAgendaSession(accountId: string | null) {
 	const activeWorkspaceId = useActiveWorkspaceId();
-	const createCalendarAction = useAction(api.calendar.createCalendar);
-	const createCalendarEventAction = useAction(api.calendar.createCalendarEvent);
-	const deleteCalendarEventAction = useAction(api.calendar.deleteCalendarEvent);
 	const listCalendarEvents = useAction(api.calendar.listCalendarEvents);
-	const updateCalendarEventAction = useAction(api.calendar.updateCalendarEvent);
+	const { createCalendar, createEvent, deleteEvent, updateEvent } =
+		useCalendarMutations(activeWorkspaceId);
 	const [requestWindow, setRequestWindow] = React.useState(() =>
 		toCalendarRequestWindow(getCalendarAgendaRange(new Date())),
 	);
-	const [agendaRevision, setAgendaRevision] = React.useState(0);
-	const calendarRefreshRevision = useCalendarRefreshRevision(activeWorkspaceId);
+	const { generation: calendarSnapshotGeneration, sourceKey } =
+		useCalendarSnapshotSource({
+			enabled: Boolean(accountId),
+			workspaceId: activeWorkspaceId,
+		});
+	const agendaScope = React.useMemo<CalendarAgendaScope | null>(
+		() =>
+			accountId && activeWorkspaceId && sourceKey
+				? {
+						accountId,
+						requestWindow,
+						sourceKey,
+						workspaceId: activeWorkspaceId,
+					}
+				: null,
+		[accountId, activeWorkspaceId, requestWindow, sourceKey],
+	);
 	const [state, setState] = React.useState<CalendarAgendaSessionState>(() =>
-		createInitialState(activeWorkspaceId, requestWindow),
+		createInitialState(agendaScope, requestWindow),
 	);
 	const retry = React.useCallback(() => {
-		setAgendaRevision((current) => current + 1);
-	}, []);
-	const createEvent = React.useCallback(
-		async (event: CalendarEventCreation) => {
-			if (!activeWorkspaceId) {
-				throw new Error("Select a workspace before creating an event.");
-			}
-
-			await createCalendarEventAction({
-				workspaceId: activeWorkspaceId,
-				...event,
-			});
-			requestCalendarRefresh(activeWorkspaceId);
-		},
-		[activeWorkspaceId, createCalendarEventAction],
-	);
-	const createCalendar = React.useCallback(
-		async (calendar: CalendarCreation) => {
-			if (!activeWorkspaceId) {
-				throw new Error("Select a workspace before creating a calendar.");
-			}
-
-			await createCalendarAction({
-				workspaceId: activeWorkspaceId,
-				...calendar,
-			});
-			requestCalendarRefresh(activeWorkspaceId);
-		},
-		[activeWorkspaceId, createCalendarAction],
-	);
-	const updateEvent = React.useCallback(
-		async (event: UpcomingCalendarEvent, update: CalendarEventCreation) => {
-			if (!activeWorkspaceId) {
-				throw new Error("Select a workspace before updating an event.");
-			}
-
-			await updateCalendarEventAction({
-				workspaceId: activeWorkspaceId,
-				calendarId: event.calendarId,
-				description: update.description,
-				location: update.location,
-				provider: event.provider,
-				providerEventId: event.providerEventId,
-				recurrenceId: event.recurrenceId,
-				recurrenceIsAllDay: event.recurrenceId ? event.isAllDay : undefined,
-				time: update.time,
-				title: update.title,
-			});
-			const transformEvents = (events: UpcomingCalendarEvent[]) =>
-				events.map((candidate) =>
-					isSameCalendarEvent(candidate, event)
-						? applyCalendarEventUpdate(candidate, update)
-						: candidate,
-				);
-			updateCachedCalendarEvents({
-				requestWindow: state.visibleWindow,
-				transform: transformEvents,
-				workspaceId: activeWorkspaceId,
-			});
-			setState((current) =>
-				current.status === "not_connected"
-					? current
-					: {
-							...current,
-							events: transformEvents(current.events),
-						},
-			);
-			requestCalendarRefresh(activeWorkspaceId);
-		},
-		[activeWorkspaceId, state.visibleWindow, updateCalendarEventAction],
-	);
-	const deleteEvent = React.useCallback(
-		async (event: UpcomingCalendarEvent) => {
-			if (!activeWorkspaceId) {
-				throw new Error("Select a workspace before deleting an event.");
-			}
-
-			await deleteCalendarEventAction({
-				workspaceId: activeWorkspaceId,
-				calendarId: event.calendarId,
-				provider: event.provider,
-				providerEventId: event.providerEventId,
-				recurrenceId: event.recurrenceId,
-				recurrenceIsAllDay: event.recurrenceId ? event.isAllDay : undefined,
-			});
-			const transformEvents = (events: UpcomingCalendarEvent[]) =>
-				events.filter((candidate) => !isSameCalendarEvent(candidate, event));
-			updateCachedCalendarEvents({
-				requestWindow: state.visibleWindow,
-				transform: transformEvents,
-				workspaceId: activeWorkspaceId,
-			});
-			setState((current) =>
-				current.status === "not_connected"
-					? current
-					: {
-							...current,
-							events: transformEvents(current.events),
-						},
-			);
-			requestCalendarRefresh(activeWorkspaceId);
-		},
-		[activeWorkspaceId, deleteCalendarEventAction, state.visibleWindow],
-	);
+		if (activeWorkspaceId) {
+			invalidateCalendarSnapshots(activeWorkspaceId);
+		}
+	}, [activeWorkspaceId]);
 	const range = React.useMemo(
 		() => ({
 			start: new Date(state.visibleWindow.timeMin),
@@ -272,101 +135,81 @@ export function useCalendarAgendaSession() {
 		}),
 		[state.visibleWindow],
 	);
-	const agendaRequest = React.useMemo(
-		() => ({
-			revision: agendaRevision + calendarRefreshRevision,
-			window: requestWindow,
-		}),
-		[agendaRevision, calendarRefreshRevision, requestWindow],
-	);
-
 	React.useEffect(() => {
 		let cancelled = false;
-		const targetWindow = agendaRequest.window;
-		if (!activeWorkspaceId) {
+		if (!accountId || !activeWorkspaceId) {
 			setState({
 				status: "not_connected",
 				calendars: [],
 				events: [],
-				visibleWindow: targetWindow,
+				visibleWindow: requestWindow,
 				workspaceId: null,
 			});
 			return;
 		}
+		if (!agendaScope) {
+			setState((current) =>
+				retainAgendaState(current, {
+					status: "loading",
+					visibleWindow: requestWindow,
+					workspaceId: activeWorkspaceId,
+				}),
+			);
+			return;
+		}
 
-		const loadAgenda = (window: CalendarRequestWindow) =>
-			loadCalendarAgenda(
-				activeWorkspaceId,
-				window,
-				agendaRequest.revision,
-				() =>
+		const targetScope = agendaScope;
+		const targetWindow = targetScope.requestWindow;
+		const loadAgenda = (scope: CalendarAgendaScope) =>
+			loadCalendarAgendaSnapshot({
+				generation: calendarSnapshotGeneration,
+				load: () =>
 					listCalendarEvents({
 						workspaceId: activeWorkspaceId,
-						...window,
+						...scope.requestWindow,
 					}),
-			);
+				scope,
+			});
 		const prefetchAdjacentAgendas = () => {
 			for (const adjacentWindow of getAdjacentRequestWindows(targetWindow)) {
-				if (
-					readCalendarAgendaSnapshot(activeWorkspaceId, adjacentWindow) !== null
-				) {
+				const adjacentScope = {
+					...targetScope,
+					requestWindow: adjacentWindow,
+				};
+				if (readCalendarAgendaSnapshot(adjacentScope)) {
 					continue;
 				}
 
-				void loadAgenda(adjacentWindow)
-					.then((result) => {
-						if (result.status === "not_connected") {
-							return;
-						}
-
-						writeCalendarAgendaSnapshot(activeWorkspaceId, adjacentWindow, {
-							calendars: toCalendarSources(result.calendars),
-							events: result.events,
-						});
-					})
-					.catch((error: unknown) => {
-						logError({
-							event: "client.error",
-							error,
-							message: "Failed to prefetch adjacent calendar view",
-						});
+				void loadAgenda(adjacentScope).catch((error: unknown) => {
+					logError({
+						event: "client.error",
+						error,
+						message: "Failed to prefetch adjacent calendar view",
 					});
+				});
 			}
 		};
-		const snapshot = readCalendarAgendaSnapshot(
-			activeWorkspaceId,
-			targetWindow,
-		);
+		const snapshot = readCalendarAgendaSnapshot(targetScope);
 		if (snapshot) {
-			setState({
-				status: "ready",
-				...snapshot,
-				visibleWindow: targetWindow,
-				workspaceId: activeWorkspaceId,
-			});
+			setState(createReadyState(targetScope, snapshot));
 			prefetchAdjacentAgendas();
 		} else {
 			setState((current) =>
-				current.workspaceId === activeWorkspaceId
-					? { ...current, status: "loading" }
-					: {
-							status: "loading",
-							calendars: [],
-							events: [],
-							visibleWindow: targetWindow,
-							workspaceId: activeWorkspaceId,
-						},
+				retainAgendaState(current, {
+					status: "loading",
+					visibleWindow: targetWindow,
+					workspaceId: activeWorkspaceId,
+				}),
 			);
 		}
 
-		void loadAgenda(targetWindow)
+		void loadAgenda(targetScope)
 			.then((result) => {
-				if (cancelled) {
+				if (cancelled || result.status === "obsolete") {
 					return;
 				}
 
 				if (result.status === "not_connected") {
-					removeCalendarAgendaSnapshot(activeWorkspaceId, targetWindow);
 					setState({
 						status: "not_connected",
 						calendars: [],
@@ -377,21 +220,7 @@ export function useCalendarAgendaSession() {
 					return;
 				}
 
-				const nextSnapshot = {
-					calendars: toCalendarSources(result.calendars),
-					events: result.events,
-				};
-				writeCalendarAgendaSnapshot(
-					activeWorkspaceId,
-					targetWindow,
-					nextSnapshot,
-				);
-				setState({
-					status: "ready",
-					...nextSnapshot,
-					visibleWindow: targetWindow,
-					workspaceId: activeWorkspaceId,
-				});
+				setState(createReadyState(targetScope, result.snapshot));
 				if (!snapshot) {
 					prefetchAdjacentAgendas();
 				}
@@ -407,26 +236,25 @@ export function useCalendarAgendaSession() {
 					message: "Failed to load calendar view",
 				});
 				setState((current) =>
-					current.workspaceId === activeWorkspaceId
-						? {
-								...current,
-								status: "error",
-								workspaceId: activeWorkspaceId,
-							}
-						: {
-								status: "error",
-								calendars: [],
-								events: [],
-								visibleWindow: targetWindow,
-								workspaceId: activeWorkspaceId,
-							},
+					retainAgendaState(current, {
+						status: "error",
+						visibleWindow: targetWindow,
+						workspaceId: activeWorkspaceId,
+					}),
 				);
 			});
 
 		return () => {
 			cancelled = true;
 		};
-	}, [activeWorkspaceId, agendaRequest, listCalendarEvents]);
+	}, [
+		accountId,
+		activeWorkspaceId,
+		agendaScope,
+		calendarSnapshotGeneration,
+		listCalendarEvents,
+		requestWindow,
+	]);
 
 	const setAgendaStart = React.useCallback(
 		(date: Date) => {
@@ -441,32 +269,38 @@ export function useCalendarAgendaSession() {
 				return;
 			}
 
-			const snapshot = activeWorkspaceId
-				? readCalendarAgendaSnapshot(activeWorkspaceId, nextRequestWindow)
-				: null;
-			if (snapshot && activeWorkspaceId) {
-				setState({
-					status: "ready",
-					...snapshot,
-					visibleWindow: nextRequestWindow,
-					workspaceId: activeWorkspaceId,
-				});
+			const nextScope =
+				accountId && activeWorkspaceId && sourceKey
+					? {
+							accountId,
+							requestWindow: nextRequestWindow,
+							sourceKey,
+							workspaceId: activeWorkspaceId,
+						}
+					: null;
+			const snapshot = nextScope ? readCalendarAgendaSnapshot(nextScope) : null;
+			if (snapshot && nextScope) {
+				setState(createReadyState(nextScope, snapshot));
 			} else {
 				setState((current) =>
-					current.workspaceId === activeWorkspaceId
-						? { ...current, status: "loading" }
-						: {
+					activeWorkspaceId
+						? retainAgendaState(current, {
 								status: "loading",
-								calendars: [],
-								events: [],
 								visibleWindow: nextRequestWindow,
 								workspaceId: activeWorkspaceId,
+							})
+						: {
+								calendars: [],
+								events: [],
+								status: "loading",
+								visibleWindow: nextRequestWindow,
+								workspaceId: null,
 							},
 				);
 			}
 			setRequestWindow(nextRequestWindow);
 		},
-		[activeWorkspaceId, requestWindow],
+		[accountId, activeWorkspaceId, requestWindow, sourceKey],
 	);
 	const shiftRange = React.useCallback(
 		(dayCount: number) => {
