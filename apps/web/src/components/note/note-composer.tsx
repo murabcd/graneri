@@ -1276,9 +1276,6 @@ const useNoteComposerController = ({
 			}
 
 			const currentNoteContext = readNoteContext();
-			clearDraft();
-			setAttachedFiles([]);
-			resetTextareaHeight();
 			const result = await submitChatTurn({
 				attachedFiles,
 				buildRequestBody: () =>
@@ -1303,17 +1300,17 @@ const useNoteComposerController = ({
 				onOptimisticMessage: (message) => {
 					optimisticMessageId = message.id;
 					flushSync(() => {
-						setEditingMessageId(null);
-						clearDraft();
-						setAttachedFiles([]);
-						resetTextareaHeight();
 						commitOptimisticMessage({ message });
 					});
-					requestComposerFocus();
 				},
 				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(() => localFolders);
 					latestRequestBodyRef.current = requestBody;
+					setEditingMessageId(null);
+					clearDraft();
+					setAttachedFiles([]);
+					resetTextareaHeight();
+					setSharedLocalFolders(() => localFolders);
+					requestComposerFocus();
 				},
 				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
 					setQueuedMessages((messages) =>
@@ -1330,15 +1327,9 @@ const useNoteComposerController = ({
 			});
 
 			if (result.status === "queued") {
-				setEditingMessageId(null);
-				clearDraft();
-				setAttachedFiles([]);
-				resetTextareaHeight();
 				await waitForBrowserPaint();
-				requestComposerFocus();
 				return;
 			}
-			requestComposerFocus();
 		} catch (error) {
 			logError({
 				event: "client.error",
@@ -1353,6 +1344,7 @@ const useNoteComposerController = ({
 			if (optimisticMessageId) {
 				rollbackOptimisticMessage(optimisticMessageId);
 			}
+			setEditingMessageId(editingMessageId);
 			setMessage(submittedDraftText);
 			setAttachedFiles(attachedFiles);
 			resetTextareaHeight();

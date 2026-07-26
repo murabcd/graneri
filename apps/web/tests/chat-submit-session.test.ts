@@ -105,6 +105,46 @@ describe("chat submit session", () => {
 		);
 	});
 
+	it("prepares an edited submission before sending without an optimistic message", async () => {
+		const events: string[] = [];
+		let editingMessageId: string | null = "message-1";
+		const onOptimisticMessage = vi.fn();
+		const sendMessage = vi.fn(async () => {
+			events.push("sent");
+		});
+
+		await submitChatTurn({
+			attachedFiles: [],
+			buildRequestBody: async () => ({
+				localFolders: [],
+				model: "gpt-5",
+			}),
+			chatId: "chat-1",
+			displayActiveRun: null,
+			editingMessageId,
+			enqueueQueuedMessage: vi.fn(),
+			onOptimisticMessage,
+			onRequestPrepared: () => {
+				editingMessageId = null;
+				events.push("prepared");
+			},
+			sendMessage,
+			text: "Edited message",
+			workspaceId,
+		});
+
+		expect(editingMessageId).toBeNull();
+		expect(events).toEqual(["prepared", "sent"]);
+		expect(onOptimisticMessage).not.toHaveBeenCalled();
+		expect(sendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				messageId: "message-1",
+				text: "Edited message",
+			}),
+			expect.anything(),
+		);
+	});
+
 	it("queues follow-ups against the visible active run", async () => {
 		const enqueueQueuedMessage = vi.fn(async ({ message }) =>
 			createQueuedFollowUpMessage(message.text),

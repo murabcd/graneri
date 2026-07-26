@@ -730,15 +730,15 @@ const useChatPageController = ({
 				onOptimisticMessage: (message) => {
 					optimisticMessageId = message.id;
 					flushSync(() => {
-						setEditingMessageId(null);
-						clearDraft();
-						setAttachedFiles([]);
 						commitOptimisticMessage({ message });
 					});
 				},
 				onRequestPrepared: ({ localFolders, requestBody }) => {
-					setSharedLocalFolders(() => localFolders);
 					latestRequestBodyRef.current = requestBody;
+					setEditingMessageId(null);
+					clearDraft();
+					setAttachedFiles([]);
+					setSharedLocalFolders(() => localFolders);
 				},
 				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
 					setQueuedMessages((messages) =>
@@ -755,9 +755,6 @@ const useChatPageController = ({
 			});
 
 			if (result.status === "queued") {
-				setEditingMessageId(null);
-				clearDraft();
-				setAttachedFiles([]);
 				await waitForBrowserPaint();
 				return;
 			}
@@ -775,6 +772,7 @@ const useChatPageController = ({
 			if (optimisticMessageId) {
 				rollbackOptimisticMessage(optimisticMessageId);
 			}
+			setEditingMessageId(editingMessageId);
 			setDraft(draftText);
 			setDraftMetadata(mentions.length > 0 ? { mentions } : null);
 			setAttachedFiles(attachedFiles);
