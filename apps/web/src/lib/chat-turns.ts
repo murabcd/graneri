@@ -1,9 +1,6 @@
 import type { UIMessage } from "ai";
 
-type ChatTurn = {
-	userMessage?: UIMessage;
-	assistantMessages: UIMessage[];
-};
+type ChatTurn = [UIMessage, ...UIMessage[]];
 
 export const groupMessagesIntoTurns = (messages: UIMessage[]) => {
 	const turns: ChatTurn[] = [];
@@ -14,15 +11,16 @@ export const groupMessagesIntoTurns = (messages: UIMessage[]) => {
 			if (currentTurn) {
 				turns.push(currentTurn);
 			}
-			currentTurn = { userMessage: message, assistantMessages: [] };
+			currentTurn = [message];
 			continue;
 		}
 
 		if (message.role === "assistant") {
 			if (!currentTurn) {
-				currentTurn = { assistantMessages: [] };
+				currentTurn = [message];
+				continue;
 			}
-			currentTurn.assistantMessages.push(message);
+			currentTurn.push(message);
 		}
 	}
 

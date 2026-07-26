@@ -12,7 +12,14 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import { Copy, GitFork, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
+import {
+	Copy,
+	GitBranch,
+	PenLine,
+	Plus,
+	RotateCcw,
+	Trash2,
+} from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
@@ -194,7 +201,7 @@ function NoteAssistantMessageActions({
 						disabled={!onForkMessage || isStreaming}
 						onClick={() => onForkMessage?.(messageId)}
 					>
-						<GitFork className="size-3.5" />
+						<GitBranch className="size-3.5" />
 					</Button>
 				</TooltipTrigger>
 				<TooltipContent>Fork chat</TooltipContent>

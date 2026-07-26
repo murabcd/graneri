@@ -22,9 +22,9 @@ import { hasUploadingAttachments } from "@/components/ai-elements/file-attachmen
 import { useRevokeAttachmentObjectUrls } from "@/components/ai-elements/use-file-attachments";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import {
-	escapeChatMessageSelectorValue,
-	getChatMessageElement,
-} from "@/components/chat/chat-message-dom";
+	ChatMessageSearchNavigator,
+	getChatSearchMatches,
+} from "@/components/chat/chat-message-search";
 import { ChatMessagesEntry } from "@/components/chat/chat-messages-entry";
 import {
 	type ChatSummaryOpenSourceRequest,
@@ -101,7 +101,7 @@ import {
 	DEFAULT_SEND_SHORTCUT,
 	shouldSendFromKeyboardEvent,
 } from "@/lib/send-shortcut";
-import { createTextMatchRanges, escapeRegExp } from "@/lib/text-search-ranges";
+import { createTextMatchRanges } from "@/lib/text-search-ranges";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc } from "../../../../../convex/_generated/dataModel";
 import { ChatComposer, type ChatComposerMentionCatalog } from "./chat-composer";
@@ -178,25 +178,6 @@ const getPersistedChatReasoningEffort = (
 	reasoningEffort: string | undefined,
 ): ReasoningEffort | null =>
 	reasoningEffort ? (findReasoningEffort(reasoningEffort)?.id ?? null) : null;
-
-const getChatSearchMatches = (messages: UIMessage[], query: string) => {
-	const normalizedQuery = query.trim().toLocaleLowerCase();
-
-	if (!normalizedQuery) {
-		return [];
-	}
-
-	const matches: Array<{ messageId: string; text: string }> = [];
-	const matcher = new RegExp(escapeRegExp(normalizedQuery), "u");
-	for (const message of messages) {
-		const text = getChatText(message);
-		if (matcher.test(text.toLocaleLowerCase())) {
-			matches.push({ messageId: message.id, text });
-		}
-	}
-
-	return matches;
-};
 
 type CssHighlightRegistry = {
 	set: (name: string, highlight: Highlight) => void;
@@ -1281,20 +1262,6 @@ export function ChatPage({
 		});
 	}, [messageSearch.open]);
 	React.useEffect(() => {
-		if (!activeMessageSearchMatch || !messageSearch.open) {
-			return;
-		}
-
-		const messageElement = getChatMessageElement(
-			activeMessageSearchMatch.messageId,
-		);
-
-		messageElement?.scrollIntoView?.({
-			block: "center",
-			behavior: "smooth",
-		});
-	}, [activeMessageSearchMatch, messageSearch.open]);
-	React.useEffect(() => {
 		const highlightRegistry =
 			typeof CSS === "undefined"
 				? undefined
@@ -1318,7 +1285,7 @@ export function ChatPage({
 
 		for (const match of messageSearchMatches) {
 			const messageElement = document.querySelector<HTMLElement>(
-				`[data-chat-message-id="${escapeChatMessageSelectorValue(match.messageId)}"]`,
+				`[data-chat-message-id="${CSS.escape(match.messageId)}"]`,
 			);
 
 			if (!messageElement) {
@@ -1479,6 +1446,13 @@ export function ChatPage({
 	return (
 		<>
 			<MessageScrollerProvider autoScroll>
+				<ChatMessageSearchNavigator
+					scrollerId={
+						messageSearch.open
+							? (activeMessageSearchMatch?.scrollerId ?? null)
+							: null
+					}
+				/>
 				<MessageScroller className="min-h-0 flex-1">
 					<MessageScrollerViewport
 						ref={viewportRef}

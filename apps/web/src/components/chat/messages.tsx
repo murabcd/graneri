@@ -9,7 +9,7 @@ import type { UIMessage } from "ai";
 import {
 	Check,
 	Copy,
-	GitFork,
+	GitBranch,
 	PenLine,
 	Plus,
 	RotateCcw,
@@ -105,7 +105,7 @@ export default function ChatMessages({
 		[messageIdPendingDelete, onDeleteMessage],
 	);
 	const getTurnClassName = React.useCallback(
-		(isLastTurn: boolean) => cn("space-y-3", isLastTurn && "pb-9"),
+		(isLastTurn: boolean) => cn("flex flex-col gap-3", isLastTurn && "pb-9"),
 		[],
 	);
 	const renderAssistantActions = React.useCallback(
@@ -150,7 +150,7 @@ export default function ChatMessages({
 
 	return (
 		<ChatMessageListContent
-			className="space-y-4"
+			className="gap-4"
 			error={error}
 			errorClassName="px-4"
 			hasEarlierMessages={hasEarlierMessages}
@@ -220,7 +220,7 @@ function AssistantMessageActions({
 						disabled={!onForkMessage || isStreaming}
 						onClick={() => onForkMessage?.(messageId)}
 					>
-						<GitFork className="size-3.5" />
+						<GitBranch className="size-3.5" />
 					</Button>
 				</TooltipTrigger>
 				<TooltipContent>Fork chat</TooltipContent>

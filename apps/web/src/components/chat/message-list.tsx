@@ -15,7 +15,7 @@ import type { UIMessage } from "ai";
 import {
 	CornerDownRight,
 	FileText,
-	GitFork,
+	GitBranch,
 	LoaderCircle,
 	Paperclip,
 } from "lucide-react";
@@ -173,7 +173,7 @@ export function ChatMessageListContent({
 				<MessageScrollerItem messageId="chat-fork-marker">
 					<Marker className="py-2">
 						<MarkerIcon>
-							<GitFork className="size-4" />
+							<GitBranch className="size-4" />
 						</MarkerIcon>
 						<MarkerContent>Forked from another chat</MarkerContent>
 					</Marker>
@@ -211,20 +211,15 @@ export function ChatMessageListContent({
 					</Button>
 				</MessageScrollerItem>
 			) : null}
-			{turns.map((turn, turnIndex) => {
+			{turns.map((turnMessages, turnIndex) => {
 				const isLastTurn = turnIndex === turns.length - 1;
-				const turnKey = turn.userMessage?.id ?? `assistant-turn-${turnIndex}`;
-				const turnMessages = [
-					...(turn.userMessage ? [turn.userMessage] : []),
-					...turn.assistantMessages,
-				];
 				const scrollAnchor =
-					scrollAnchorUserMessages && turn.userMessage !== undefined;
+					scrollAnchorUserMessages && turnMessages[0].role === "user";
 
 				return (
 					<MessageScrollerItem
-						key={turnKey}
-						messageId={turnKey}
+						key={turnMessages[0].id}
+						messageId={turnMessages[0].id}
 						scrollAnchor={scrollAnchor}
 						className={turnClassName?.(isLastTurn)}
 					>
