@@ -8,6 +8,7 @@ import {
 	MessageScrollerProvider,
 	MessageScrollerViewport,
 } from "@workspace/ui/components/message-scroller";
+import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
 import { useMutation, useQuery } from "convex/react";
@@ -21,10 +22,8 @@ import type { ChatAttachment } from "@/components/ai-elements/file-attachment-ut
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
 import { useRevokeAttachmentObjectUrls } from "@/components/ai-elements/use-file-attachments";
 import type { AutomationListItem } from "@/components/automations/automation-types";
-import {
-	ChatMessageSearchNavigator,
-	getChatSearchMatches,
-} from "@/components/chat/chat-message-search";
+import { ChatMessageSearchNavigator } from "@/components/chat/chat-message-search";
+import { getChatSearchMatches } from "@/components/chat/chat-message-search-matches";
 import { ChatMessagesEntry } from "@/components/chat/chat-messages-entry";
 import {
 	type ChatSummaryOpenSourceRequest,
@@ -1472,141 +1471,148 @@ export function ChatPage({
 			onCancelEdit={controller.handleCancelEdit}
 		/>
 	);
+	const scrollContent = (
+		<div className="box-border flex w-full max-w-full min-w-0 flex-1 justify-center px-4 md:px-6">
+			<div
+				className={cn(
+					"relative flex min-h-0 w-full min-w-0 max-w-5xl flex-1 flex-col",
+					isDesktopMac ? "pt-2 md:pt-4" : "pt-0",
+				)}
+			>
+				{shouldShowActiveChatSurface ? (
+					<div
+						className={cn(
+							"relative mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl",
+							chatSurfaceMinHeightClass,
+						)}
+					>
+						{messageSearch.open ? (
+							<ChatMessageSearchBar
+								inputRef={searchInputRef}
+								query={messageSearch.query}
+								onQueryChange={(value) => {
+									dispatchMessageSearch({
+										type: "setQuery",
+										query: value,
+									});
+								}}
+								matchCount={messageSearchMatches.length}
+								matchIndex={
+									messageSearchMatches.length > 0 ? messageSearchIndex : -1
+								}
+								onPrevious={handleMessageSearchPrevious}
+								onNext={handleMessageSearchNext}
+								onClose={() => dispatchMessageSearch({ type: "close" })}
+								onKeyDown={handleMessageSearchKeyDown}
+							/>
+						) : null}
+						<div className="flex-1 pt-8 pb-28 md:pb-32">
+							<ChatMessagesEntry
+								messages={controller.messages}
+								error={controller.error}
+								isLoading={controller.isLoading}
+								hasEarlierMessages={controller.hasEarlierMessages}
+								historyMarkerState={controller.historyMarkerState}
+								isLoadingEarlierMessages={controller.isLoadingEarlierMessages}
+								onDeleteMessage={controller.onDeleteMessage}
+								onEditMessage={controller.onEditMessage}
+								onForkMessage={controller.onForkMessage}
+								onOpenMention={controller.onOpenMention}
+								onPlusAction={handleCreateNoteFromResponse}
+								onRegenerateMessage={controller.onRegenerateMessage}
+								onLoadEarlierMessages={controller.loadEarlierMessages}
+								streamingMessageIds={controller.streamingMessageIds}
+							/>
+						</div>
+
+						<div className="sticky bottom-0 z-10 mt-auto h-0">
+							<div className={COMPOSER_DOCK_WRAPPER_CLASS}>
+								<div className="pointer-events-auto relative mx-auto w-[calc(100%-2rem)] min-w-0 max-w-full md:max-w-xl">
+									<div
+										aria-hidden="true"
+										className="pointer-events-none absolute inset-x-0 bottom-full h-16 bg-gradient-to-t from-background to-transparent"
+									/>
+									{controller.hasMessages ? (
+										<MessageScrollerButton
+											aria-label="Scroll to latest messages"
+											className="!bottom-[calc(100%+0.75rem)] size-8 rounded-full"
+										/>
+									) : null}
+									{composer}
+								</div>
+							</div>
+						</div>
+					</div>
+				) : (
+					<div
+						className={cn(
+							"mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl",
+							chatSurfaceMinHeightClass,
+						)}
+					>
+						<div className="flex flex-1 flex-col gap-6 pb-8">
+							<PageTitle isDesktopMac={isDesktopMac} className="w-full">
+								Ask anything
+							</PageTitle>
+
+							{composer}
+
+							<div className="min-h-0 flex-1">
+								<ChatHistoryList
+									chats={chats}
+									isChatsLoading={isChatsLoading}
+									activeChatId={activeChatId}
+									onOpenChat={onOpenChat}
+									onPrefetchChat={onPrefetchChat}
+									onMoveToTrash={onChatRemoved}
+									automationChatIds={automationChatIds}
+									activeStreamingChatIds={chatHistoryStreamingChatIds}
+									onAddAutomation={onAddAutomation}
+								/>
+							</div>
+						</div>
+					</div>
+				)}
+				{shouldShowActiveChatSurface ? (
+					<div className="pointer-events-none absolute top-0 right-0 hidden h-full lg:block">
+						<div className="pointer-events-auto sticky top-1/2 -translate-y-1/2">
+							<ChatUserMessageNavigationRail messages={controller.messages} />
+						</div>
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
 
 	return (
 		<>
-			<MessageScrollerProvider autoScroll>
-				<ChatMessageSearchNavigator
-					scrollerId={
-						messageSearch.open
-							? (activeMessageSearchMatch?.scrollerId ?? null)
-							: null
-					}
-				/>
-				<MessageScroller className="min-h-0 flex-1">
-					<MessageScrollerViewport
-						ref={viewportRef}
-						className="overscroll-contain [overflow-anchor:none]"
-					>
-						<div className="box-border flex w-full max-w-full min-w-0 flex-1 justify-center px-4 md:px-6">
-							<div
-								className={cn(
-									"relative flex min-h-0 w-full min-w-0 max-w-5xl flex-1 flex-col",
-									isDesktopMac ? "pt-2 md:pt-4" : "pt-0",
-								)}
-							>
-								{shouldShowActiveChatSurface ? (
-									<div
-										className={cn(
-											"relative mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl",
-											chatSurfaceMinHeightClass,
-										)}
-									>
-										{messageSearch.open ? (
-											<ChatMessageSearchBar
-												inputRef={searchInputRef}
-												query={messageSearch.query}
-												onQueryChange={(value) => {
-													dispatchMessageSearch({
-														type: "setQuery",
-														query: value,
-													});
-												}}
-												matchCount={messageSearchMatches.length}
-												matchIndex={
-													messageSearchMatches.length > 0
-														? messageSearchIndex
-														: -1
-												}
-												onPrevious={handleMessageSearchPrevious}
-												onNext={handleMessageSearchNext}
-												onClose={() => dispatchMessageSearch({ type: "close" })}
-												onKeyDown={handleMessageSearchKeyDown}
-											/>
-										) : null}
-										<div className="flex-1 pt-8 pb-28 md:pb-32">
-											<ChatMessagesEntry
-												messages={controller.messages}
-												error={controller.error}
-												isLoading={controller.isLoading}
-												hasEarlierMessages={controller.hasEarlierMessages}
-												historyMarkerState={controller.historyMarkerState}
-												isLoadingEarlierMessages={
-													controller.isLoadingEarlierMessages
-												}
-												onDeleteMessage={controller.onDeleteMessage}
-												onEditMessage={controller.onEditMessage}
-												onForkMessage={controller.onForkMessage}
-												onOpenMention={controller.onOpenMention}
-												onPlusAction={handleCreateNoteFromResponse}
-												onRegenerateMessage={controller.onRegenerateMessage}
-												onLoadEarlierMessages={controller.loadEarlierMessages}
-												streamingMessageIds={controller.streamingMessageIds}
-											/>
-										</div>
-
-										<div className="sticky bottom-0 z-10 mt-auto h-0">
-											<div className={COMPOSER_DOCK_WRAPPER_CLASS}>
-												<div className="pointer-events-auto relative mx-auto w-[calc(100%-2rem)] min-w-0 max-w-full md:max-w-xl">
-													<div
-														aria-hidden="true"
-														className="pointer-events-none absolute inset-x-0 bottom-full h-16 bg-gradient-to-t from-background to-transparent"
-													/>
-													{controller.hasMessages ? (
-														<MessageScrollerButton
-															aria-label="Scroll to latest messages"
-															className="!bottom-[calc(100%+0.75rem)] size-8 rounded-full"
-														/>
-													) : null}
-													{composer}
-												</div>
-											</div>
-										</div>
-									</div>
-								) : (
-									<div
-										className={cn(
-											"mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl",
-											chatSurfaceMinHeightClass,
-										)}
-									>
-										<div className="flex flex-1 flex-col gap-6 pb-8">
-											<PageTitle isDesktopMac={isDesktopMac} className="w-full">
-												Ask anything
-											</PageTitle>
-
-											{composer}
-
-											<div className="min-h-0 flex-1">
-												<ChatHistoryList
-													chats={chats}
-													isChatsLoading={isChatsLoading}
-													activeChatId={activeChatId}
-													onOpenChat={onOpenChat}
-													onPrefetchChat={onPrefetchChat}
-													onMoveToTrash={onChatRemoved}
-													automationChatIds={automationChatIds}
-													activeStreamingChatIds={chatHistoryStreamingChatIds}
-													onAddAutomation={onAddAutomation}
-												/>
-											</div>
-										</div>
-									</div>
-								)}
-								{shouldShowActiveChatSurface ? (
-									<div className="pointer-events-none absolute top-0 right-0 hidden h-full lg:block">
-										<div className="pointer-events-auto sticky top-1/2 -translate-y-1/2">
-											<ChatUserMessageNavigationRail
-												messages={controller.messages}
-											/>
-										</div>
-									</div>
-								) : null}
-							</div>
-						</div>
-					</MessageScrollerViewport>
-				</MessageScroller>
-			</MessageScrollerProvider>
+			{shouldShowActiveChatSurface ? (
+				<MessageScrollerProvider autoScroll>
+					<ChatMessageSearchNavigator
+						scrollerId={
+							messageSearch.open
+								? (activeMessageSearchMatch?.scrollerId ?? null)
+								: null
+						}
+					/>
+					<MessageScroller className="min-h-0 flex-1">
+						<MessageScrollerViewport
+							ref={viewportRef}
+							className="overscroll-contain [overflow-anchor:none]"
+						>
+							{scrollContent}
+						</MessageScrollerViewport>
+					</MessageScroller>
+				</MessageScrollerProvider>
+			) : (
+				<ScrollArea
+					className="min-h-0 flex-1"
+					viewportClassName="overscroll-contain [overflow-anchor:none]"
+					viewportRef={viewportRef}
+				>
+					{scrollContent}
+				</ScrollArea>
+			)}
 			{canShowChatSummary ? (
 				<ChatSummarySheetEntry
 					open={controller.summaryOpen}

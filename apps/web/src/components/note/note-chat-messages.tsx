@@ -122,7 +122,6 @@ export default function NoteChatMessages({
 					)}
 				>
 					<ChatMessageListContent
-						breathingSpaceClassName="min-h-16 w-full shrink-0"
 						error={chatError}
 						hasEarlierMessages={hasEarlierMessages}
 						historyMarkerState={historyMarkerState}

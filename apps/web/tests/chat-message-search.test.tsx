@@ -17,10 +17,8 @@ import {
 	it,
 	vi,
 } from "vitest";
-import {
-	ChatMessageSearchNavigator,
-	getChatSearchMatches,
-} from "../src/components/chat/chat-message-search";
+import { ChatMessageSearchNavigator } from "../src/components/chat/chat-message-search";
+import { getChatSearchMatches } from "../src/components/chat/chat-message-search-matches";
 
 const originalScrollToDescriptor = Object.getOwnPropertyDescriptor(
 	HTMLElement.prototype,

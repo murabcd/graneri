@@ -158,9 +158,22 @@ export function InboxSheet({
 	});
 	const [view, setView] = React.useState<InboxView>("all");
 	const inboxPanelKey = `${activeWorkspaceId ?? "no-workspace"}:${view}`;
-	const [markAllReadRequestId, setMarkAllReadRequestId] = React.useState(0);
-	const [archiveReadRequestId, setArchiveReadRequestId] = React.useState(0);
-	const [clearArchivedRequestId, setClearArchivedRequestId] = React.useState(0);
+	const inboxPane = (
+		<InboxPane
+			key={inboxPanelKey}
+			currentUser={currentUser}
+			desktopSafeTop={desktopSafeTop}
+			initialAllItems={initialAllItems}
+			isMobile={isMobile}
+			isPinned={isPinned}
+			onMarkAllRead={onMarkAllRead}
+			onMarkItemsRead={onMarkItemsRead}
+			onTogglePinned={togglePinned}
+			onViewChange={setView}
+			open={open}
+			view={view}
+		/>
+	);
 
 	useDockedPanelInset({
 		side: "left",
@@ -193,39 +206,7 @@ export function InboxSheet({
 				onResizeStart={handleResizeStart}
 				onResizeKeyDown={handleResizeKeyDown}
 			>
-				<div className="px-2">
-					<InboxPaneHeader
-						isMobile={false}
-						open={open}
-						desktopSafeTop={desktopSafeTop}
-						view={view}
-						onViewChange={setView}
-						onMarkAllRead={() => {
-							setMarkAllReadRequestId((current) => current + 1);
-							onMarkAllRead?.();
-						}}
-						onArchiveRead={() => {
-							setArchiveReadRequestId((current) => current + 1);
-						}}
-						onClearArchived={() => {
-							setClearArchivedRequestId((current) => current + 1);
-						}}
-						isPinned={isPinned}
-						onTogglePinned={togglePinned}
-					/>
-				</div>
-				<div className="flex min-h-0 flex-1 flex-col">
-					<InboxPanel
-						key={inboxPanelKey}
-						view={view}
-						initialAllItems={initialAllItems}
-						currentUser={currentUser}
-						markAllReadRequestId={markAllReadRequestId}
-						archiveReadRequestId={archiveReadRequestId}
-						clearArchivedRequestId={clearArchivedRequestId}
-						onMarkItemsRead={onMarkItemsRead}
-					/>
-				</div>
+				{inboxPane}
 			</DesktopDockedSidePanel>
 		);
 	}
@@ -253,34 +234,7 @@ export function InboxSheet({
 					onPointerDown={handleResizeStart}
 					onKeyDown={handleResizeKeyDown}
 				/>
-				<InboxPaneHeader
-					isMobile
-					open={open}
-					view={view}
-					onViewChange={setView}
-					onMarkAllRead={() => {
-						setMarkAllReadRequestId((current) => current + 1);
-						onMarkAllRead?.();
-					}}
-					onArchiveRead={() => {
-						setArchiveReadRequestId((current) => current + 1);
-					}}
-					onClearArchived={() => {
-						setClearArchivedRequestId((current) => current + 1);
-					}}
-					isPinned={false}
-					onTogglePinned={() => {}}
-				/>
-				<InboxPanel
-					key={inboxPanelKey}
-					view={view}
-					initialAllItems={initialAllItems}
-					currentUser={currentUser}
-					markAllReadRequestId={markAllReadRequestId}
-					archiveReadRequestId={archiveReadRequestId}
-					clearArchivedRequestId={clearArchivedRequestId}
-					onMarkItemsRead={onMarkItemsRead}
-				/>
+				{inboxPane}
 			</SheetContent>
 		</Sheet>
 	);
@@ -556,26 +510,30 @@ function InboxPaneHeader({
 	);
 }
 
-const InboxPanel = React.memo(function InboxPanel({
-	view,
-	initialAllItems,
+function InboxPane({
 	currentUser,
-	markAllReadRequestId,
-	archiveReadRequestId,
-	clearArchivedRequestId,
+	desktopSafeTop,
+	initialAllItems,
+	isMobile,
+	isPinned,
+	onMarkAllRead,
 	onMarkItemsRead,
+	onTogglePinned,
+	onViewChange,
+	open,
+	view,
 }: {
-	view: InboxView;
+	currentUser: InboxCurrentUser;
+	desktopSafeTop: boolean;
 	initialAllItems?: InboxItem[];
-	currentUser: {
-		name: string;
-		email: string;
-		avatar: string;
-	};
-	markAllReadRequestId: number;
-	archiveReadRequestId: number;
-	clearArchivedRequestId: number;
+	isMobile: boolean;
+	isPinned: boolean;
+	onMarkAllRead?: () => void;
 	onMarkItemsRead?: (itemIds: string[]) => void;
+	onTogglePinned: () => void;
+	onViewChange: (view: InboxView) => void;
+	open: boolean;
+	view: InboxView;
 }) {
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const queriedItems = useQuery(
@@ -601,11 +559,7 @@ const InboxPanel = React.memo(function InboxPanel({
 	const [optimisticRemovedItemIds, setOptimisticRemovedItemIds] =
 		React.useState(() => new Set<string>());
 
-	React.useEffect(() => {
-		if (markAllReadRequestId === 0) {
-			return;
-		}
-
+	const handleMarkAllReadComplete = React.useCallback(() => {
 		setOptimisticReadItemIds((current) => {
 			const next = new Set(current);
 			for (const item of items) {
@@ -613,11 +567,11 @@ const InboxPanel = React.memo(function InboxPanel({
 			}
 			return next;
 		});
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [items, markAllReadRequestId]);
+		onMarkAllRead?.();
+	}, [items, onMarkAllRead]);
 
-	React.useEffect(() => {
-		if (archiveReadRequestId === 0 || view === "archived") {
+	const handleArchiveReadComplete = React.useCallback(() => {
+		if (view === "archived") {
 			return;
 		}
 
@@ -625,7 +579,6 @@ const InboxPanel = React.memo(function InboxPanel({
 			const next = new Set(current);
 			for (const item of items) {
 				const itemId = String(item._id);
-				// The list owns optimistic item state; archive-read requests arrive from the header command.
 				const isRead = item.isRead || optimisticReadItemIds.has(itemId);
 				if (isRead) {
 					next.add(itemId);
@@ -633,11 +586,10 @@ const InboxPanel = React.memo(function InboxPanel({
 			}
 			return next;
 		});
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [archiveReadRequestId, items, optimisticReadItemIds, view]);
+	}, [items, optimisticReadItemIds, view]);
 
-	React.useEffect(() => {
-		if (clearArchivedRequestId === 0 || view !== "archived") {
+	const handleClearArchivedComplete = React.useCallback(() => {
+		if (view !== "archived") {
 			return;
 		}
 
@@ -648,54 +600,116 @@ const InboxPanel = React.memo(function InboxPanel({
 			}
 			return next;
 		});
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [clearArchivedRequestId, items, view]);
+	}, [items, view]);
 
-	const handleMarkItemRead = async (item: InboxItem) => {
-		const optimisticItemId = String(item._id);
+	const handleMarkItemRead = React.useCallback(
+		async (item: InboxItem) => {
+			const optimisticItemId = String(item._id);
 
-		if (item.isRead || optimisticReadItemIds.has(optimisticItemId)) {
-			return;
-		}
+			if (item.isRead || optimisticReadItemIds.has(optimisticItemId)) {
+				return;
+			}
 
-		setOptimisticReadItemIds((current) => {
-			const next = new Set(current);
-			next.add(optimisticItemId);
-			return next;
-		});
-		onMarkItemsRead?.([optimisticItemId]);
-
-		try {
-			await markRead({ itemId: item._id });
-		} catch (error) {
 			setOptimisticReadItemIds((current) => {
 				const next = new Set(current);
-				next.delete(optimisticItemId);
+				next.add(optimisticItemId);
 				return next;
 			});
-			throw error;
-		}
-	};
+			onMarkItemsRead?.([optimisticItemId]);
 
-	const handleOpenItem = async (item: InboxItem) => {
-		const openedItem = item;
-		// Opening any inbox item should mark it read before navigation or external handoff.
-		await handleMarkItemRead(openedItem);
+			try {
+				await markRead({ itemId: item._id });
+			} catch (error) {
+				setOptimisticReadItemIds((current) => {
+					const next = new Set(current);
+					next.delete(optimisticItemId);
+					return next;
+				});
+				throw error;
+			}
+		},
+		[markRead, onMarkItemsRead, optimisticReadItemIds],
+	);
 
-		if (openedItem.provider === "notes" && openedItem.kind === "note-comment") {
-			window.history.pushState(null, "", openedItem.url);
-			window.dispatchEvent(new PopStateEvent("popstate"));
-			return;
-		}
+	const handleOpenItem = React.useCallback(
+		async (item: InboxItem) => {
+			// Opening any inbox item should mark it read before navigation or external handoff.
+			await handleMarkItemRead(item);
 
-		if (await openDesktopExternalUrl(openedItem.url)) {
-			return;
-		}
+			if (item.provider === "notes" && item.kind === "note-comment") {
+				window.history.pushState(null, "", item.url);
+				window.dispatchEvent(new PopStateEvent("popstate"));
+				return;
+			}
 
-		window.open(openedItem.url, "_blank", "noopener,noreferrer");
-	};
+			if (await openDesktopExternalUrl(item.url)) {
+				return;
+			}
 
-	if (!activeWorkspaceId) {
+			window.open(item.url, "_blank", "noopener,noreferrer");
+		},
+		[handleMarkItemRead],
+	);
+
+	const header = (
+		<InboxPaneHeader
+			desktopSafeTop={isMobile ? false : desktopSafeTop}
+			isMobile={isMobile}
+			isPinned={isPinned}
+			onArchiveRead={handleArchiveReadComplete}
+			onClearArchived={handleClearArchivedComplete}
+			onMarkAllRead={handleMarkAllReadComplete}
+			onTogglePinned={onTogglePinned}
+			onViewChange={onViewChange}
+			open={open}
+			view={view}
+		/>
+	);
+	const panel = (
+		<InboxPanel
+			currentUser={currentUser}
+			hasActiveWorkspace={Boolean(activeWorkspaceId)}
+			items={items}
+			onMarkRead={handleMarkItemRead}
+			onOpen={handleOpenItem}
+			optimisticReadItemIds={optimisticReadItemIds}
+			optimisticRemovedItemIds={optimisticRemovedItemIds}
+			view={view}
+		/>
+	);
+
+	return (
+		<>
+			{isMobile ? header : <div className="px-2">{header}</div>}
+			{isMobile ? (
+				panel
+			) : (
+				<div className="flex min-h-0 flex-1 flex-col">{panel}</div>
+			)}
+		</>
+	);
+}
+
+const InboxPanel = React.memo(function InboxPanel({
+	currentUser,
+	hasActiveWorkspace,
+	items,
+	onMarkRead,
+	onOpen,
+	optimisticReadItemIds,
+	optimisticRemovedItemIds,
+	view,
+}: {
+	currentUser: InboxCurrentUser;
+	hasActiveWorkspace: boolean;
+	items: InboxItem[];
+	onMarkRead: (item: InboxItem) => Promise<void>;
+	onOpen: (item: InboxItem) => Promise<void>;
+	optimisticReadItemIds: Set<string>;
+	optimisticRemovedItemIds: Set<string>;
+	view: InboxView;
+}) {
+	if (!hasActiveWorkspace) {
 		return (
 			<ScrollArea className="min-h-0 flex-1">
 				<Empty className="min-h-[24rem] border-none">
@@ -765,8 +779,8 @@ const InboxPanel = React.memo(function InboxPanel({
 							item={item}
 							currentUser={currentUser}
 							isRead={isRead}
-							onMarkRead={handleMarkItemRead}
-							onOpen={handleOpenItem}
+							onMarkRead={onMarkRead}
+							onOpen={onOpen}
 						/>
 					);
 				})}

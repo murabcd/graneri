@@ -3782,7 +3782,7 @@ function NoteTranscriptPanel({
 		<div className="relative flex min-h-0 w-full flex-1 flex-col">
 			<MessageScroller className="min-h-0 w-full flex-1">
 				<MessageScrollerViewport className="pr-4">
-					<MessageScrollerContent className="gap-4">
+					<MessageScrollerContent className="gap-4 pb-12">
 						{isDeferringTranscriptEntries &&
 						deferredDisplayTranscriptEntries.length === 0 ? (
 							<MessageScrollerItem

@@ -92,7 +92,6 @@ export function ChatMessageListContent({
 	turnClassName,
 	messageStackClassName,
 	textContainerClassName,
-	breathingSpaceClassName = "min-h-[max(140px,24vh)] w-full",
 	errorClassName,
 	includeSources = true,
 	hasEarlierMessages = false,
@@ -112,7 +111,6 @@ export function ChatMessageListContent({
 	turnClassName?: (isLastTurn: boolean) => string;
 	messageStackClassName?: string;
 	textContainerClassName?: string;
-	breathingSpaceClassName?: string;
 	errorClassName?: string;
 	includeSources?: boolean;
 	hasEarlierMessages?: boolean;
@@ -261,7 +259,10 @@ export function ChatMessageListContent({
 			{showAssistantBreathingSpace ? (
 				<MessageScrollerItem
 					aria-hidden="true"
-					className={breathingSpaceClassName}
+					className={cn(
+						"w-full",
+						isLoading ? "min-h-[max(140px,24vh)]" : "min-h-8",
+					)}
 					messageId="assistant-breathing-space"
 				/>
 			) : null}

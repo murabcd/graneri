@@ -1461,30 +1461,6 @@ function useNoteCommentsSheetController({
 	const toggleMuteReplies = useMutation(api.noteComments.toggleMuteReplies);
 	const deleteThread = useMutation(api.noteComments.deleteThread);
 
-	React.useEffect(() => {
-		if (!threads) {
-			return;
-		}
-
-		// Server thread updates confirm optimistic read state; this reconciles external query data.
-		setOptimisticReadThreadIds((current) => {
-			if (current.size === 0) {
-				return current;
-			}
-
-			let changed = false;
-			const next = new Set(current);
-
-			for (const thread of threads) {
-				if (thread.isRead && next.delete(String(thread._id))) {
-					changed = true;
-				}
-			}
-
-			return changed ? next : current;
-		});
-	}, [threads]);
-
 	const visibleThreads = React.useMemo(() => {
 		if (!threads) {
 			return threads;
@@ -1858,16 +1834,19 @@ function useNoteCommentsSheetController({
 				workspaceId,
 				noteId,
 				threadId: thread._id,
-			}).catch((error) => {
-				setOptimisticReadThreadIds((current) => {
-					const next = new Set(current);
-					next.delete(optimisticThreadId);
-					return next;
+			})
+				.catch((error) => {
+					toast.error(
+						getErrorMessage(error, "Failed to mark discussion as read"),
+					);
+				})
+				.finally(() => {
+					setOptimisticReadThreadIds((current) => {
+						const next = new Set(current);
+						next.delete(optimisticThreadId);
+						return next;
+					});
 				});
-				toast.error(
-					getErrorMessage(error, "Failed to mark discussion as read"),
-				);
-			});
 		},
 		[markRead, noteId, optimisticReadThreadIds, workspaceId],
 	);
