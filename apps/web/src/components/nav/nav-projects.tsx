@@ -1035,6 +1035,7 @@ function ProjectSidebarItemView({
 						onMenuOpenChange={(nextOpen) =>
 							dispatch({ type: "setMenuOpen", value: nextOpen })
 						}
+						onOpen={() => onOpenChange(true)}
 						onToggleOpen={() => onOpenChange(!open)}
 						onSelectProject={() => onProjectSelect(project._id)}
 						onRenameOpenChange={onRenameOpenChange}
@@ -1151,6 +1152,7 @@ function ProjectSidebarRow({
 	ignoreInitialRenameInteractOutsideRef,
 	sortableButtonProps,
 	onMenuOpenChange,
+	onOpen,
 	onToggleOpen,
 	onSelectProject,
 	onRenameOpenChange,
@@ -1176,6 +1178,7 @@ function ProjectSidebarRow({
 	ignoreInitialRenameInteractOutsideRef: React.MutableRefObject<boolean>;
 	sortableButtonProps?: React.HTMLAttributes<HTMLButtonElement>;
 	onMenuOpenChange: (open: boolean) => void;
+	onOpen: () => void;
 	onToggleOpen: () => void;
 	onSelectProject: () => void;
 	onRenameOpenChange: (open: boolean) => void;
@@ -1200,6 +1203,7 @@ function ProjectSidebarRow({
 								return;
 							}
 
+							onOpen();
 							onSelectProject();
 						}}
 						{...sortableButtonProps}

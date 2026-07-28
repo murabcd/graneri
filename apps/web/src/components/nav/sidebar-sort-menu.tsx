@@ -4,11 +4,6 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import { Check, MoreHorizontal } from "lucide-react";
 import type { SidebarSortOption } from "./sidebar-sort-options";
@@ -31,30 +26,18 @@ export function SidebarSortMenu<TValue extends string>({
 }) {
 	return (
 		<DropdownMenu open={open} onOpenChange={onOpenChange}>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<DropdownMenuTrigger asChild>
-						<button
-							type="button"
-							aria-label={label}
-							className={cn(
-								"text-sidebar-foreground/55 hover:text-sidebar-accent-foreground focus-visible:text-sidebar-accent-foreground",
-								open && "!bg-sidebar-accent !text-sidebar-accent-foreground",
-							)}
-						>
-							<MoreHorizontal />
-						</button>
-					</DropdownMenuTrigger>
-				</TooltipTrigger>
-				<TooltipContent
-					side="bottom"
-					align="center"
-					sideOffset={8}
-					className="pointer-events-none select-none"
+			<DropdownMenuTrigger asChild>
+				<button
+					type="button"
+					aria-label={label}
+					className={cn(
+						"text-sidebar-foreground/55 hover:text-sidebar-accent-foreground focus-visible:text-sidebar-accent-foreground",
+						open && "!bg-sidebar-accent !text-sidebar-accent-foreground",
+					)}
 				>
-					{label}
-				</TooltipContent>
-			</Tooltip>
+					<MoreHorizontal />
+				</button>
+			</DropdownMenuTrigger>
 			<DropdownMenuContent
 				align="start"
 				side="right"
