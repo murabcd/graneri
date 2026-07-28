@@ -281,7 +281,7 @@ function SidebarNotesList({
 				);
 
 				return (
-					<SidebarMenuItem key={note._id}>
+					<SidebarMenuItem key={note._id} data-sidebar-title-row>
 						<NoteActionsMenu
 							noteId={note._id}
 							onMoveToTrash={onNoteTrashed}

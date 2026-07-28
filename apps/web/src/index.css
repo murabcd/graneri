@@ -102,3 +102,66 @@ body {
 	pointer-events: none;
 	width: 100%;
 }
+
+.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+	-webkit-mask-image: linear-gradient(
+		to right,
+		#000 calc(100% - 1rem),
+		transparent
+	);
+	mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
+}
+
+[data-sidebar-title-row]:hover
+	.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+	-webkit-mask-image: none;
+	mask-image: none;
+}
+
+[data-sidebar-title-row]:hover
+	.sidebar-hover-scroll-title-viewport[data-overflowing="true"]
+	.sidebar-hover-scroll-title-track {
+	transform: translateX(calc(-1 * var(--sidebar-title-scroll-distance)));
+	transition: transform var(--sidebar-title-scroll-duration) ease-in-out
+		var(--sidebar-title-scroll-delay);
+}
+
+html[data-reduce-motion="on"]
+	[data-sidebar-title-row]:hover
+	.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+	-webkit-mask-image: linear-gradient(
+		to right,
+		#000 calc(100% - 1rem),
+		transparent
+	);
+	mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
+}
+
+html[data-reduce-motion="on"]
+	[data-sidebar-title-row]:hover
+	.sidebar-hover-scroll-title-viewport[data-overflowing="true"]
+	.sidebar-hover-scroll-title-track {
+	transform: none;
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html[data-reduce-motion="system"]
+		[data-sidebar-title-row]:hover
+		.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+		-webkit-mask-image: linear-gradient(
+			to right,
+			#000 calc(100% - 1rem),
+			transparent
+		);
+		mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
+	}
+
+	html[data-reduce-motion="system"]
+		[data-sidebar-title-row]:hover
+		.sidebar-hover-scroll-title-viewport[data-overflowing="true"]
+		.sidebar-hover-scroll-title-track {
+		transform: none;
+		transition: none;
+	}
+}

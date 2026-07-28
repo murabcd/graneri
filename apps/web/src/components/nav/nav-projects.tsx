@@ -96,6 +96,7 @@ import {
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME,
 	SidebarCollapsibleGroup,
 } from "./sidebar-collapsible-group";
+import { SidebarHoverScrollTitle } from "./sidebar-hover-scroll-title";
 import { SidebarSortMenu } from "./sidebar-sort-menu";
 import {
 	SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME,
@@ -1190,7 +1191,7 @@ function ProjectSidebarRow({
 	return (
 		<Popover open={renameOpen} onOpenChange={onRenameOpenChange}>
 			<PopoverAnchor asChild>
-				<div className="group/project-row relative">
+				<div className="group/project-row relative" data-sidebar-title-row>
 					<SidebarMenuButton
 						className="pr-14"
 						aria-expanded={isOpen}
@@ -1223,7 +1224,7 @@ function ProjectSidebarRow({
 								}
 							/>
 						</span>
-						<span className="truncate">{projectName}</span>
+						<SidebarHoverScrollTitle>{projectName}</SidebarHoverScrollTitle>
 					</SidebarMenuButton>
 					<ProjectActionsMenu
 						projectName={projectName}
@@ -1581,7 +1582,7 @@ function ProjectNoteItem({
 				onClick={() => onNoteSelect(note._id)}
 			>
 				{isRecording ? <SidebarRecordingSpinner /> : <FileText />}
-				<span>{displayTitle}</span>
+				<SidebarHoverScrollTitle>{displayTitle}</SidebarHoverScrollTitle>
 			</SidebarMenuButton>
 		),
 		[
@@ -1595,7 +1596,10 @@ function ProjectNoteItem({
 	);
 
 	return (
-		<SidebarMenuItem className="group/project-note-item list-none">
+		<SidebarMenuItem
+			className="group/project-note-item list-none"
+			data-sidebar-title-row
+		>
 			<NoteActionsMenu
 				noteId={note._id}
 				onMoveToTrash={onNoteTrashed}

@@ -2,6 +2,7 @@ import { Icons } from "@workspace/ui/components/icons";
 import { SidebarMenuButton } from "@workspace/ui/components/sidebar";
 import { FileText } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { SidebarHoverScrollTitle } from "./sidebar-hover-scroll-title";
 
 const SidebarRecordingSpinner = Icons.sidebarRecordingSpinner;
 
@@ -29,7 +30,7 @@ export function NoteRenameAnchor({
 			onClick={() => onNoteSelect(noteId)}
 		>
 			{isRecording ? <SidebarRecordingSpinner /> : <FileText />}
-			<span>{displayTitle}</span>
+			<SidebarHoverScrollTitle>{displayTitle}</SidebarHoverScrollTitle>
 		</SidebarMenuButton>
 	);
 }
