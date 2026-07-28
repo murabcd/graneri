@@ -123,6 +123,10 @@
       "types": "./src/openai-admission.d.mts",
       "import": "./src/openai-admission.mjs"
     },
+    "./project-description-contract": {
+      "types": "./src/project-description-contract.d.mts",
+      "import": "./src/project-description-contract.mjs"
+    },
     "./pcm16-resampler": {
       "types": "./src/pcm16-resampler.d.mts",
       "import": "./src/pcm16-resampler.mjs"

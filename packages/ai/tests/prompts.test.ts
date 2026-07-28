@@ -26,6 +26,7 @@ import {
 	buildApplyTemplatePrompt,
 	buildChatInstructions,
 	buildEnhancedNotePrompt,
+	buildProjectDescriptionPrompt,
 	CHAT_TITLE_INSTRUCTIONS,
 	ENHANCED_NOTE_INSTRUCTIONS,
 } from "../src/prompts.mjs";
@@ -83,6 +84,24 @@ describe("prompt helpers", () => {
 				noteText: null,
 			}),
 		).not.toThrow();
+	});
+
+	it("builds project description context for a fresh replacement", () => {
+		const prompt = buildProjectDescriptionPrompt({
+			projectName: "Research activities",
+			currentDescription: "Old description",
+			notes: [
+				{
+					title: "Parallel YouTube",
+					text: "Research for small teams and trading labs.",
+				},
+			],
+		});
+
+		expect(prompt).toContain("Project name: Research activities");
+		expect(prompt).toContain("Current description to replace:");
+		expect(prompt).toContain("Parallel YouTube");
+		expect(prompt).toContain("fresh replacement description");
 	});
 
 	it("uses sentence case while preserving proper names in generated titles", () => {

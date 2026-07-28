@@ -4,6 +4,7 @@ export type HostedRouteId =
 	| "chatStop"
 	| "chatStream"
 	| "enhanceNote"
+	| "generateProjectDescription"
 	| "applyTemplate"
 	| "realtimeTranscriptionSession";
 

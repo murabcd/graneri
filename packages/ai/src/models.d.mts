@@ -7,6 +7,7 @@ export type ChatModel = {
 export declare const CHAT_MODELS: readonly ChatModel[];
 export declare const DEFAULT_CHAT_MODEL_ID: string;
 export declare const NOTE_GENERATION_MODEL_ID: string;
+export declare const PROJECT_DESCRIPTION_MODEL_ID: string;
 export declare const CHAT_TITLE_MODEL_ID: string;
 export declare const CONTEXT_COMPACTION_MODEL_ID: string;
 export declare const AUTOMATION_DELIVERY_MODEL_ID: string;

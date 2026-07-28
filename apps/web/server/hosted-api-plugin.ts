@@ -11,6 +11,7 @@ import {
 	handleChatStopRequest,
 } from "./chat-handler.js";
 import { handleEnhanceNoteRequest } from "./enhance-note-handler.js";
+import { handleGenerateProjectDescriptionRequest } from "./generate-project-description-handler.js";
 import {
 	sendHostedRouteError,
 	sendHostedRouteMethodNotAllowed,
@@ -29,6 +30,7 @@ const hostedRouteHandlers = {
 	chatStop: handleChatStopRequest,
 	chatStream: handleChatReconnectRequest,
 	enhanceNote: handleEnhanceNoteRequest,
+	generateProjectDescription: handleGenerateProjectDescriptionRequest,
 	realtimeTranscriptionSession: handleRealtimeTranscriptionSessionRequest,
 } satisfies Record<HostedRouteId, HostedApiHandler>;
 

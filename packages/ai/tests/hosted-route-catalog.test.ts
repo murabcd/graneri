@@ -15,6 +15,7 @@ describe("hosted route catalog", () => {
 			"chatStop",
 			"chatStream",
 			"enhanceNote",
+			"generateProjectDescription",
 			"applyTemplate",
 			"realtimeTranscriptionSession",
 		]);
@@ -26,10 +27,19 @@ describe("hosted route catalog", () => {
 			method: "POST",
 			proxyBodyMode: "bufferedJson",
 		});
+		expect(
+			getHostedRouteDefinition("generateProjectDescription"),
+		).toMatchObject({
+			method: "POST",
+			proxyBodyMode: "bufferedJson",
+		});
 	});
 
 	it("builds and matches static and parameterized paths", () => {
 		expect(buildHostedRoutePath("chatSteer")).toBe("/api/chat/steer");
+		expect(buildHostedRoutePath("generateProjectDescription")).toBe(
+			"/api/generate-project-description",
+		);
 		expect(buildHostedChatStreamPath("chat / one")).toBe(
 			"/api/chat/chat%20%2F%20one/stream",
 		);

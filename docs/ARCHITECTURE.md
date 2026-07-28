@@ -610,6 +610,7 @@ fetches and native capture:
 - `/api/chat/:chatId/stream`
 - `/api/apply-template`
 - `/api/enhance-note`
+- `/api/generate-project-description`
 - `/api/realtime-transcription-session`
 - `/api/dictation-transcription`
 
@@ -620,8 +621,9 @@ renderer clients, and the desktop loopback proxy consume that catalog instead
 of maintaining private endpoint lists. Handler wiring remains in the runtime
 that owns the handler; the shared catalog contains transport metadata only.
 
-Chat, note generation, template application, and realtime session creation are
-transport-only proxies to the web server in every environment. Dictation
+Chat, note generation, project description generation, template application,
+and realtime session creation are transport-only proxies to the web server in
+every environment. Dictation
 transcription crosses the authenticated Convex HTTP boundary directly. Local
 folder tool execution remains inside the desktop process because it operates on
 folders the user explicitly shared with the installed app.
@@ -646,19 +648,26 @@ short-lived, identity-bound reservation
 that exactly one Convex producer start or continuation mutation must consume
 before scheduling paid background work. Used and expired reservations cannot be
 replayed. Reconnect and stop-only requests do not consume chat admission.
-Hosted note enhancement and template application follow the same boundary:
-their renderer requests carry the current Convex bearer token, both routes
-consume one shared per-identity `note-generation` admission bucket, and the web
-handler sends only the hashed stable identity to OpenAI as its safety
-identifier. Anonymous requests and unavailable admission fail closed before a
-model request begins; there is no unauthenticated or client-key fallback.
+Hosted note enhancement, project description generation, and template
+application follow the same boundary: their renderer requests carry the current
+Convex bearer token, all three routes consume one shared per-identity
+`note-generation` admission bucket, and the web handler sends only the hashed
+stable identity to OpenAI as its safety identifier. Anonymous requests and
+unavailable admission fail closed before a model request begins; there is no
+unauthenticated or client-key fallback.
+Project description generation reads its note context through the
+project-scoped `projectDescriptions.getContext` query. The query uses the
+project note index to return at most 20 non-archived notes ordered by most recent
+update, so context selection is independent of the workspace note-list limit.
 `apps/web/server/hosted-openai-admission.ts` is the single web-server envelope
-for chat, note generation, template application, and realtime session
-admission. It owns operation-to-Convex authorization, rate-limit responses and
-retry headers, conditional web-server API-key enforcement, and the hashed
-safety identity handoff. Normal Convex-produced chat turns do not require an
-OpenAI key in Vercel; desktop-local web producers, note generation, templates,
-and realtime session creation still do. Route handlers report rejected
+for chat, note generation, project description generation, template
+application, and realtime session admission. It owns operation-to-Convex
+authorization, rate-limit responses and retry headers, conditional web-server
+API-key enforcement, and the hashed safety identity handoff. Normal
+Convex-produced chat turns do not require an OpenAI key in Vercel;
+desktop-local web producers, note generation, project description generation,
+templates, and realtime session creation still do.
+Route handlers report rejected
 admission to their wide event and own their request validation plus
 response-specific handoff, stream, or payload behavior.
 The OpenAI key and normal hosted streaming/tool loop run in the Convex internal

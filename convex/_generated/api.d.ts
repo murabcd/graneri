@@ -81,6 +81,7 @@ import type * as notes from "../notes.js";
 import type * as notificationPreferences from "../notificationPreferences.js";
 import type * as oauthCallbackHtml from "../oauthCallbackHtml.js";
 import type * as onboarding from "../onboarding.js";
+import type * as projectDescriptions from "../projectDescriptions.js";
 import type * as projects from "../projects.js";
 import type * as recipes from "../recipes.js";
 import type * as reorderLimits from "../reorderLimits.js";
@@ -181,6 +182,7 @@ declare const fullApi: ApiFromModules<{
   notificationPreferences: typeof notificationPreferences;
   oauthCallbackHtml: typeof oauthCallbackHtml;
   onboarding: typeof onboarding;
+  projectDescriptions: typeof projectDescriptions;
   projects: typeof projects;
   recipes: typeof recipes;
   reorderLimits: typeof reorderLimits;

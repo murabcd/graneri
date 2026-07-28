@@ -47,6 +47,12 @@ const routeDefinitions = Object.freeze([
 		proxyBodyMode: "bufferedJson",
 	}),
 	staticRoute({
+		id: "generateProjectDescription",
+		method: "POST",
+		path: "/api/generate-project-description",
+		proxyBodyMode: "bufferedJson",
+	}),
+	staticRoute({
 		id: "applyTemplate",
 		method: "POST",
 		path: "/api/apply-template",
