@@ -5,22 +5,40 @@ const TITLE_SCROLL_DELAY_MS = 150;
 const TITLE_SCROLL_MIN_DURATION_SECONDS = 2;
 const TITLE_SCROLL_SPEED_PX_PER_SECOND = 40;
 
-type SidebarHoverScrollTitleStyle = React.CSSProperties & {
-	"--sidebar-title-scroll-delay": string;
-	"--sidebar-title-scroll-distance": string;
-	"--sidebar-title-scroll-duration": string;
+type HoverScrollTitleStyle = React.CSSProperties & {
+	"--hover-title-scroll-delay": string;
+	"--hover-title-scroll-distance": string;
+	"--hover-title-scroll-duration": string;
 };
 
-type SidebarTitleScrollMetrics = {
+type HoverTitleScrollMetrics = {
 	delayMs: number;
 	distance: number;
 	durationSeconds: number;
 };
 
-export function getSidebarTitleScrollMetrics(
+const resizeListeners = new WeakMap<Element, () => void>();
+let sharedResizeObserver: ResizeObserver | null = null;
+
+const observeResize = (element: Element, listener: () => void) => {
+	resizeListeners.set(element, listener);
+	sharedResizeObserver ??= new ResizeObserver((entries) => {
+		for (const entry of entries) {
+			resizeListeners.get(entry.target)?.();
+		}
+	});
+	sharedResizeObserver.observe(element);
+
+	return () => {
+		resizeListeners.delete(element);
+		sharedResizeObserver?.unobserve(element);
+	};
+};
+
+export function getHoverTitleScrollMetrics(
 	contentWidth: number,
 	viewportWidth: number,
-): SidebarTitleScrollMetrics | null {
+): HoverTitleScrollMetrics | null {
 	const distance = Math.max(0, Math.ceil(contentWidth - viewportWidth));
 	if (distance === 0) {
 		return null;
@@ -36,7 +54,7 @@ export function getSidebarTitleScrollMetrics(
 	};
 }
 
-export function SidebarHoverScrollTitle({
+export function HoverScrollTitle({
 	children,
 	className,
 }: {
@@ -46,7 +64,7 @@ export function SidebarHoverScrollTitle({
 	const viewportRef = React.useRef<HTMLSpanElement>(null);
 	const trackRef = React.useRef<HTMLSpanElement>(null);
 	const [scrollMetrics, setScrollMetrics] =
-		React.useState<SidebarTitleScrollMetrics | null>(null);
+		React.useState<HoverTitleScrollMetrics | null>(null);
 
 	const measureOverflow = React.useCallback(() => {
 		const viewport = viewportRef.current;
@@ -55,7 +73,7 @@ export function SidebarHoverScrollTitle({
 			return;
 		}
 
-		const nextMetrics = getSidebarTitleScrollMetrics(
+		const nextMetrics = getHoverTitleScrollMetrics(
 			track.scrollWidth,
 			viewport.clientWidth,
 		);
@@ -69,33 +87,34 @@ export function SidebarHoverScrollTitle({
 	React.useLayoutEffect(() => {
 		measureOverflow();
 
-		const observer = new ResizeObserver(measureOverflow);
 		const viewport = viewportRef.current;
 		const track = trackRef.current;
-		if (viewport) {
-			observer.observe(viewport);
+		if (!viewport || !track) {
+			return;
 		}
-		if (track) {
-			observer.observe(track);
-		}
+		const stopObservingViewport = observeResize(viewport, measureOverflow);
+		const stopObservingTrack = observeResize(track, measureOverflow);
 
-		return () => observer.disconnect();
+		return () => {
+			stopObservingViewport();
+			stopObservingTrack();
+		};
 	}, [measureOverflow]);
 
-	const style: SidebarHoverScrollTitleStyle | undefined =
+	const style: HoverScrollTitleStyle | undefined =
 		scrollMetrics === null
 			? undefined
 			: ({
-					"--sidebar-title-scroll-delay": `${scrollMetrics.delayMs}ms`,
-					"--sidebar-title-scroll-distance": `${scrollMetrics.distance}px`,
-					"--sidebar-title-scroll-duration": `${scrollMetrics.durationSeconds.toFixed(2)}s`,
-				} satisfies SidebarHoverScrollTitleStyle);
+					"--hover-title-scroll-delay": `${scrollMetrics.delayMs}ms`,
+					"--hover-title-scroll-distance": `${scrollMetrics.distance}px`,
+					"--hover-title-scroll-duration": `${scrollMetrics.durationSeconds.toFixed(2)}s`,
+				} satisfies HoverScrollTitleStyle);
 
 	return (
 		<span
 			ref={viewportRef}
 			className={cn(
-				"sidebar-hover-scroll-title-viewport block min-w-0 flex-1 overflow-hidden whitespace-nowrap",
+				"hover-scroll-title-viewport block min-w-0 flex-1 overflow-hidden whitespace-nowrap",
 				className,
 			)}
 			data-overflowing={scrollMetrics !== null || undefined}
@@ -103,7 +122,7 @@ export function SidebarHoverScrollTitle({
 		>
 			<span
 				ref={trackRef}
-				className="sidebar-hover-scroll-title-track inline-block min-w-max"
+				className="hover-scroll-title-track inline-block min-w-max"
 				style={style}
 			>
 				{children}

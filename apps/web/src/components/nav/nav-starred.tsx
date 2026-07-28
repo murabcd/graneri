@@ -12,9 +12,9 @@ import { Clock, FileText, MessageCircle, MoreHorizontal } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { ChatActionsMenu } from "@/components/chat/chat-actions-menu";
+import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { ProjectSidebarItem } from "@/components/nav/nav-projects";
 import { SidebarCollapsibleGroup } from "@/components/nav/sidebar-collapsible-group";
-import { SidebarHoverScrollTitle } from "@/components/nav/sidebar-hover-scroll-title";
 import { SidebarSortableList } from "@/components/nav/sidebar-sortable-list";
 import { resolveSidebarSortableItems } from "@/components/nav/sidebar-sortable-utils";
 import {
@@ -508,7 +508,7 @@ function StarredChatItem({
 			ref={sortable?.ref}
 			style={sortable?.style}
 			className={sortable?.isDragging ? "relative z-10 opacity-80" : undefined}
-			data-sidebar-title-row
+			data-hover-scroll-title-row
 		>
 			<ChatActionsMenu
 				chat={chat}
@@ -535,7 +535,7 @@ function StarredChatItem({
 				) : (
 					<MessageCircle />
 				)}
-				<SidebarHoverScrollTitle>{displayTitle}</SidebarHoverScrollTitle>
+				<HoverScrollTitle>{displayTitle}</HoverScrollTitle>
 				{hasAutomation ? (
 					<Clock
 						className="ml-auto size-4 shrink-0 text-muted-foreground"
@@ -650,7 +650,7 @@ function StarredNoteItem({
 			ref={sortable?.ref}
 			style={sortable?.style}
 			className={sortable?.isDragging ? "relative z-10 opacity-80" : undefined}
-			data-sidebar-title-row
+			data-hover-scroll-title-row
 		>
 			<NoteActionsMenu
 				noteId={note._id}
@@ -711,7 +711,7 @@ function StarredNoteButton({
 			{...sortableButtonProps}
 		>
 			{isRecording ? <SidebarRecordingSpinner /> : <FileText />}
-			<SidebarHoverScrollTitle>{displayTitle}</SidebarHoverScrollTitle>
+			<HoverScrollTitle>{displayTitle}</HoverScrollTitle>
 		</SidebarMenuButton>
 	);
 }

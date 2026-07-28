@@ -72,6 +72,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { NoteActionsMenu } from "@/components/note/note-actions-menu";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
 import { ProjectComposer } from "@/components/projects/project-composer";
@@ -96,7 +97,6 @@ import {
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME,
 	SidebarCollapsibleGroup,
 } from "./sidebar-collapsible-group";
-import { SidebarHoverScrollTitle } from "./sidebar-hover-scroll-title";
 import { SidebarSortMenu } from "./sidebar-sort-menu";
 import {
 	SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME,
@@ -1194,7 +1194,7 @@ function ProjectSidebarRow({
 	return (
 		<Popover open={renameOpen} onOpenChange={onRenameOpenChange}>
 			<PopoverAnchor asChild>
-				<div className="group/project-row relative" data-sidebar-title-row>
+				<div className="group/project-row relative" data-hover-scroll-title-row>
 					<SidebarMenuButton
 						className="pr-14"
 						aria-expanded={isOpen}
@@ -1228,7 +1228,7 @@ function ProjectSidebarRow({
 								}
 							/>
 						</span>
-						<SidebarHoverScrollTitle>{projectName}</SidebarHoverScrollTitle>
+						<HoverScrollTitle>{projectName}</HoverScrollTitle>
 					</SidebarMenuButton>
 					<ProjectActionsMenu
 						projectName={projectName}
@@ -1586,7 +1586,7 @@ function ProjectNoteItem({
 				onClick={() => onNoteSelect(note._id)}
 			>
 				{isRecording ? <SidebarRecordingSpinner /> : <FileText />}
-				<SidebarHoverScrollTitle>{displayTitle}</SidebarHoverScrollTitle>
+				<HoverScrollTitle>{displayTitle}</HoverScrollTitle>
 			</SidebarMenuButton>
 		),
 		[
@@ -1602,7 +1602,7 @@ function ProjectNoteItem({
 	return (
 		<SidebarMenuItem
 			className="group/project-note-item list-none"
-			data-sidebar-title-row
+			data-hover-scroll-title-row
 		>
 			<NoteActionsMenu
 				noteId={note._id}

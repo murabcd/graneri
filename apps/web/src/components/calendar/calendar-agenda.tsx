@@ -19,11 +19,6 @@ import {
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
 import { Spinner } from "@workspace/ui/components/spinner";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import {
 	ChevronLeft,
@@ -40,6 +35,7 @@ import type {
 	CalendarAgendaRange,
 	CalendarSource,
 } from "@/components/calendar/calendar-view-model";
+import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { getConnectionErrorMessage } from "@/components/settings/connection-error-message";
 
 const agendaDayFormatter = new Intl.DateTimeFormat(undefined, {
@@ -203,7 +199,7 @@ export function CalendarAgenda({
 		<div
 			aria-busy={loading}
 			className={cn(
-				"flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-background",
+				"flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-background shadow-sm",
 				className,
 			)}
 		>
@@ -357,40 +353,34 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 
 	return (
 		<div className="group/event relative border-b">
-			<Tooltip delayDuration={150}>
-				<TooltipTrigger asChild>
-					<button
-						type="button"
-						aria-label={`${event.title}, ${formatAgendaTime(event)}${event.isRecurring ? ", recurring" : ""}`}
-						className={cn(
-							"flex w-full min-w-0 cursor-pointer items-center gap-3 px-4 py-2.5 text-start outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring/50",
-							isWritable && "pr-12",
-						)}
-						onClick={() => onClick(event)}
-					>
-						<span className="w-40 shrink-0 truncate text-sm text-muted-foreground tabular-nums">
-							{formatAgendaTime(event)}
-						</span>
-						<span
+			<button
+				type="button"
+				aria-label={`${event.title}, ${formatAgendaTime(event)}${event.isRecurring ? ", recurring" : ""}`}
+				className={cn(
+					"flex w-full min-w-0 cursor-pointer items-center gap-3 px-4 py-2.5 text-start outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring/50",
+					isWritable && "pr-12",
+				)}
+				data-hover-scroll-title-row
+				onClick={() => onClick(event)}
+			>
+				<span className="w-40 shrink-0 truncate text-sm text-muted-foreground tabular-nums">
+					{formatAgendaTime(event)}
+				</span>
+				<span
+					aria-hidden
+					className="size-2 shrink-0 rounded-full"
+					style={{ backgroundColor: color }}
+				/>
+				<span className="flex min-w-0 flex-1 items-center gap-2">
+					<HoverScrollTitle className="text-sm">{event.title}</HoverScrollTitle>
+					{event.isRecurring ? (
+						<Repeat2
 							aria-hidden
-							className="size-2 shrink-0 rounded-full"
-							style={{ backgroundColor: color }}
+							className="size-3.5 shrink-0 text-muted-foreground"
 						/>
-						<span className="flex min-w-0 flex-1 items-center gap-2">
-							<span className="truncate text-sm">{event.title}</span>
-							{event.isRecurring ? (
-								<Repeat2
-									aria-hidden
-									className="size-3.5 shrink-0 text-muted-foreground"
-								/>
-							) : null}
-						</span>
-					</button>
-				</TooltipTrigger>
-				<TooltipContent side="top" align="center">
-					{event.title}
-				</TooltipContent>
-			</Tooltip>
+					) : null}
+				</span>
+			</button>
 			{isWritable ? (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>

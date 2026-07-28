@@ -199,6 +199,34 @@ describe("CalendarPage loading", () => {
 		expect(agenda.scrollTop).toBe(0);
 	});
 
+	it("gives the agenda the same light shadow as other cards", async () => {
+		renderCalendarPage(workspaceId);
+		await screen.findByText("Planning");
+
+		const agenda = screen.getByRole("region", { name: "Calendar agenda" });
+
+		expect(agenda.parentElement?.classList.contains("shadow-sm")).toBe(true);
+	});
+
+	it("scrolls long event titles on hover without showing a tooltip", async () => {
+		const user = userEvent.setup();
+		renderCalendarPage(workspaceId);
+		const title = await screen.findByText("Planning");
+		const eventButton = screen.getByRole("button", {
+			name: /Planning,/u,
+		});
+
+		expect(eventButton.hasAttribute("data-hover-scroll-title-row")).toBe(true);
+		expect(
+			title.parentElement?.classList.contains("hover-scroll-title-viewport"),
+		).toBe(true);
+
+		await user.hover(eventButton);
+		await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+
+		expect(screen.queryByRole("tooltip")).toBeNull();
+	});
+
 	it("keeps the current agenda visible until an uncached range is ready", async () => {
 		const user = userEvent.setup();
 		let resolveNextRange:

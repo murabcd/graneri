@@ -103,7 +103,7 @@ body {
 	width: 100%;
 }
 
-.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+.hover-scroll-title-viewport[data-overflowing="true"] {
 	-webkit-mask-image: linear-gradient(
 		to right,
 		#000 calc(100% - 1rem),
@@ -112,23 +112,23 @@ body {
 	mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
 }
 
-[data-sidebar-title-row]:hover
-	.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+[data-hover-scroll-title-row]:hover
+	.hover-scroll-title-viewport[data-overflowing="true"] {
 	-webkit-mask-image: none;
 	mask-image: none;
 }
 
-[data-sidebar-title-row]:hover
-	.sidebar-hover-scroll-title-viewport[data-overflowing="true"]
-	.sidebar-hover-scroll-title-track {
-	transform: translateX(calc(-1 * var(--sidebar-title-scroll-distance)));
-	transition: transform var(--sidebar-title-scroll-duration) ease-in-out
-		var(--sidebar-title-scroll-delay);
+[data-hover-scroll-title-row]:hover
+	.hover-scroll-title-viewport[data-overflowing="true"]
+	.hover-scroll-title-track {
+	transform: translateX(calc(-1 * var(--hover-title-scroll-distance)));
+	transition: transform var(--hover-title-scroll-duration) ease-in-out
+		var(--hover-title-scroll-delay);
 }
 
 html[data-reduce-motion="on"]
-	[data-sidebar-title-row]:hover
-	.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+	[data-hover-scroll-title-row]:hover
+	.hover-scroll-title-viewport[data-overflowing="true"] {
 	-webkit-mask-image: linear-gradient(
 		to right,
 		#000 calc(100% - 1rem),
@@ -138,17 +138,17 @@ html[data-reduce-motion="on"]
 }
 
 html[data-reduce-motion="on"]
-	[data-sidebar-title-row]:hover
-	.sidebar-hover-scroll-title-viewport[data-overflowing="true"]
-	.sidebar-hover-scroll-title-track {
+	[data-hover-scroll-title-row]:hover
+	.hover-scroll-title-viewport[data-overflowing="true"]
+	.hover-scroll-title-track {
 	transform: none;
 	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	html[data-reduce-motion="system"]
-		[data-sidebar-title-row]:hover
-		.sidebar-hover-scroll-title-viewport[data-overflowing="true"] {
+		[data-hover-scroll-title-row]:hover
+		.hover-scroll-title-viewport[data-overflowing="true"] {
 		-webkit-mask-image: linear-gradient(
 			to right,
 			#000 calc(100% - 1rem),
@@ -158,9 +158,9 @@ html[data-reduce-motion="on"]
 	}
 
 	html[data-reduce-motion="system"]
-		[data-sidebar-title-row]:hover
-		.sidebar-hover-scroll-title-viewport[data-overflowing="true"]
-		.sidebar-hover-scroll-title-track {
+		[data-hover-scroll-title-row]:hover
+		.hover-scroll-title-viewport[data-overflowing="true"]
+		.hover-scroll-title-track {
 		transform: none;
 		transition: none;
 	}
