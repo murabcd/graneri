@@ -1,20 +1,14 @@
 import { cn } from "@workspace/ui/lib/utils";
 import * as React from "react";
-
-const TITLE_SCROLL_DELAY_MS = 150;
-const TITLE_SCROLL_MIN_DURATION_SECONDS = 2;
-const TITLE_SCROLL_SPEED_PX_PER_SECOND = 40;
+import {
+	getHoverTitleScrollMetrics,
+	type HoverTitleScrollMetrics,
+} from "./hover-scroll-title-metrics";
 
 type HoverScrollTitleStyle = React.CSSProperties & {
 	"--hover-title-scroll-delay": string;
 	"--hover-title-scroll-distance": string;
 	"--hover-title-scroll-duration": string;
-};
-
-type HoverTitleScrollMetrics = {
-	delayMs: number;
-	distance: number;
-	durationSeconds: number;
 };
 
 const resizeListeners = new WeakMap<Element, () => void>();
@@ -34,25 +28,6 @@ const observeResize = (element: Element, listener: () => void) => {
 		sharedResizeObserver?.unobserve(element);
 	};
 };
-
-export function getHoverTitleScrollMetrics(
-	contentWidth: number,
-	viewportWidth: number,
-): HoverTitleScrollMetrics | null {
-	const distance = Math.max(0, Math.ceil(contentWidth - viewportWidth));
-	if (distance === 0) {
-		return null;
-	}
-
-	return {
-		delayMs: TITLE_SCROLL_DELAY_MS,
-		distance,
-		durationSeconds: Math.max(
-			TITLE_SCROLL_MIN_DURATION_SECONDS,
-			distance / TITLE_SCROLL_SPEED_PX_PER_SECOND,
-		),
-	};
-}
 
 export function HoverScrollTitle({
 	children,

@@ -99,9 +99,22 @@ describe("prompt helpers", () => {
 		});
 
 		expect(prompt).toContain("Project name: Research activities");
-		expect(prompt).toContain("Current description to replace:");
+		expect(prompt).not.toContain("Current description to replace:");
+		expect(prompt).not.toContain("Old description");
 		expect(prompt).toContain("Parallel YouTube");
 		expect(prompt).toContain("fresh replacement description");
+	});
+
+	it("uses the current project description only when notes are unavailable", () => {
+		const prompt = buildProjectDescriptionPrompt({
+			projectName: "Research activities",
+			currentDescription: "Old description",
+			notes: [],
+		});
+
+		expect(prompt).toContain("Current description to replace:");
+		expect(prompt).toContain("Old description");
+		expect(prompt).toContain("No project notes are available yet.");
 	});
 
 	it("uses sentence case while preserving proper names in generated titles", () => {

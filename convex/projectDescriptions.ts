@@ -5,7 +5,7 @@ import {
 } from "@workspace/ai/project-description-contract";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireOwnedProject } from "./projects";
+import { getOwnedProjectIfExists } from "./projects";
 
 const projectDescriptionContextNoteValidator = v.object({
 	title: v.string(),
@@ -19,11 +19,15 @@ export const getContext = query({
 	},
 	returns: v.array(projectDescriptionContextNoteValidator),
 	handler: async (ctx, args) => {
-		const project = await requireOwnedProject(
+		const project = await getOwnedProjectIfExists(
 			ctx,
 			args.projectId,
 			args.workspaceId,
 		);
+		if (!project) {
+			return [];
+		}
+
 		const notes = await ctx.db
 			.query("notes")
 			.withIndex("by_owner_ws_project_arch_upd", (q) =>

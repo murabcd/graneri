@@ -109,4 +109,13 @@ test("project description context is bounded to the latest notes in its project"
 	});
 	expect(context.some((note) => note.title.startsWith("Other"))).toBe(false);
 	expect(context.some((note) => note.title === "Archived target")).toBe(false);
+
+	await t.run(async (ctx) => ctx.db.delete(project._id));
+
+	await expect(
+		asOwner.query(api.projectDescriptions.getContext, {
+			workspaceId,
+			projectId: project._id,
+		}),
+	).resolves.toEqual([]);
 });

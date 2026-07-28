@@ -44,22 +44,15 @@ const withProjectDefaults = (project: Doc<"projects">) => ({
 	isStarred: project.isStarred ?? false,
 });
 
-export const ensureOwnedProject = ({
+const ensureProjectOwnership = ({
 	project,
 	ownerTokenIdentifier,
 	workspaceId,
 }: {
-	project: Doc<"projects"> | null;
+	project: Doc<"projects">;
 	ownerTokenIdentifier: string;
 	workspaceId: Id<"workspaces">;
 }) => {
-	if (!project) {
-		throw new ConvexError({
-			code: "PROJECT_NOT_FOUND",
-			message: "Project not found.",
-		});
-	}
-
 	if (
 		project.ownerTokenIdentifier !== ownerTokenIdentifier ||
 		project.workspaceId !== workspaceId
@@ -73,19 +66,39 @@ export const ensureOwnedProject = ({
 	return project;
 };
 
-export const requireOwnedProject = async (
+export const getOwnedProjectIfExists = async (
 	ctx: QueryCtx | MutationCtx,
 	id: Id<"projects">,
 	workspaceId: Id<"workspaces">,
 ) => {
 	const identity = await requireIdentity(ctx);
 	await requireOwnedWorkspace(ctx, identity.tokenIdentifier, workspaceId);
+	const project = await ctx.db.get(id);
 
-	return ensureOwnedProject({
-		project: await ctx.db.get(id),
-		ownerTokenIdentifier: identity.tokenIdentifier,
-		workspaceId,
-	});
+	return project
+		? ensureProjectOwnership({
+				project,
+				ownerTokenIdentifier: identity.tokenIdentifier,
+				workspaceId,
+			})
+		: null;
+};
+
+export const requireOwnedProject = async (
+	ctx: QueryCtx | MutationCtx,
+	id: Id<"projects">,
+	workspaceId: Id<"workspaces">,
+) => {
+	const project = await getOwnedProjectIfExists(ctx, id, workspaceId);
+
+	if (!project) {
+		throw new ConvexError({
+			code: "PROJECT_NOT_FOUND",
+			message: "Project not found.",
+		});
+	}
+
+	return project;
 };
 
 const deleteProjectBatchForOwner = async (

@@ -7,6 +7,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
+import { cn } from "@workspace/ui/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { LoaderCircle, Zap } from "lucide-react";
 import * as React from "react";
@@ -31,6 +32,10 @@ export function ProjectDescriptionEditor({
 		workspaceId: project.workspaceId,
 		projectId: project._id,
 	});
+	const hasDescription = description.trim().length > 0;
+	const canGenerate =
+		descriptionContext !== undefined &&
+		(hasDescription || descriptionContext.length > 0);
 	const updateDescription = useMutation(
 		api.projects.updateDescription,
 	).withOptimisticUpdate((localStore, args) => {
@@ -74,7 +79,7 @@ export function ProjectDescriptionEditor({
 	}, [description, project, updateDescription]);
 
 	const handleGenerateDescription = React.useCallback(async () => {
-		if (isGenerating || descriptionContext === undefined) {
+		if (isGenerating || descriptionContext === undefined || !canGenerate) {
 			return;
 		}
 
@@ -108,6 +113,7 @@ export function ProjectDescriptionEditor({
 			setIsGenerating(false);
 		}
 	}, [
+		canGenerate,
 		description,
 		descriptionContext,
 		isGenerating,
@@ -115,15 +121,14 @@ export function ProjectDescriptionEditor({
 		updateDescription,
 	]);
 
-	const hasDescription = description.length > 0;
 	const descriptionActionLabel = hasDescription
 		? "Regenerate project description"
 		: "Generate project description";
 
 	return (
 		<Card className="max-w-full overflow-hidden rounded-lg border-border py-0 shadow-sm">
-			<CardContent className="grid min-h-[84px] p-3">
-				<div className="relative">
+			<CardContent className="grid min-h-[84px] min-w-0 p-3">
+				<div className="relative min-w-0">
 					<Textarea
 						name="project-description"
 						value={description}
@@ -133,28 +138,35 @@ export function ProjectDescriptionEditor({
 						aria-busy={isGenerating}
 						readOnly={isGenerating}
 						rows={1}
-						className="min-h-0 resize-none rounded-none border-0 bg-transparent p-0 pr-8 shadow-none ring-0 focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
+						className="min-h-0 max-w-full resize-none wrap-anywhere rounded-none border-0 bg-transparent p-0 pr-8 shadow-none ring-0 focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
 						onBlur={handleDescriptionBlur}
 						onChange={handleDescriptionChange}
 					/>
 					<Tooltip>
 						<TooltipTrigger asChild>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								className="absolute right-0 bottom-0 text-muted-foreground hover:text-foreground"
-								aria-label={descriptionActionLabel}
-								disabled={isGenerating || descriptionContext === undefined}
-								onPointerDown={(event) => event.preventDefault()}
-								onClick={handleGenerateDescription}
-							>
-								{isGenerating ? (
-									<LoaderCircle className="animate-spin" />
-								) : (
-									<Zap />
+							<span
+								className={cn(
+									"absolute right-0 bottom-0 inline-flex",
+									canGenerate ? "cursor-pointer" : "cursor-not-allowed",
 								)}
-							</Button>
+							>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									className="text-muted-foreground hover:text-foreground"
+									aria-label={descriptionActionLabel}
+									disabled={isGenerating || !canGenerate}
+									onPointerDown={(event) => event.preventDefault()}
+									onClick={handleGenerateDescription}
+								>
+									{isGenerating ? (
+										<LoaderCircle className="animate-spin" />
+									) : (
+										<Zap />
+									)}
+								</Button>
+							</span>
 						</TooltipTrigger>
 						<TooltipContent side="bottom" align="center" sideOffset={8}>
 							Generate

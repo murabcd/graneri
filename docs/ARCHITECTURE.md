@@ -659,6 +659,14 @@ Project description generation reads its note context through the
 project-scoped `projectDescriptions.getContext` query. The query uses the
 project note index to return at most 20 non-archived notes ordered by most recent
 update, so context selection is independent of the workspace note-list limit.
+If a project disappears while that reactive query is being invalidated, it
+returns empty context after workspace authorization instead of surfacing an
+expected teardown error; project mutations continue to fail closed when the
+project is missing.
+When note context exists, it is the authoritative description source and the
+previous description is omitted; without notes, the previous description is
+used as the rewrite source. Requests without either source are rejected before
+model generation.
 `apps/web/server/hosted-openai-admission.ts` is the single web-server envelope
 for chat, note generation, project description generation, template
 application, and realtime session admission. It owns operation-to-Convex

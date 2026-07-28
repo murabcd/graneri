@@ -1,9 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-	getHoverTitleScrollMetrics,
-	HoverScrollTitle,
-} from "../src/components/hover-scroll-title";
+import { HoverScrollTitle } from "../src/components/hover-scroll-title";
+import { getHoverTitleScrollMetrics } from "../src/components/hover-scroll-title-metrics";
 
 describe("HoverScrollTitle", () => {
 	afterEach(() => {

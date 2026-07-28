@@ -129,7 +129,8 @@ describe("generate project description handler", () => {
 				safetyIdentifier: await createSafetyIdentifier(tokenIdentifier),
 			},
 		});
-		expect(options.prompt).toContain("Current description to replace:");
+		expect(options.prompt).not.toContain("Current description to replace:");
+		expect(options.prompt).not.toContain("Old description");
 		expect(options.prompt).toContain("Parallel YouTube");
 	});
 
@@ -145,6 +146,33 @@ describe("generate project description handler", () => {
 			createRequest({
 				authorization: "Bearer valid-token",
 				body: { projectName: "" },
+			}),
+			response,
+		);
+
+		expect(response.statusCode).toBe(400);
+		expect(end).toHaveBeenCalledWith(
+			JSON.stringify({ error: "Valid project context is required." }),
+		);
+		expect(aiMocks.generateText).not.toHaveBeenCalled();
+	});
+
+	it("rejects generation without notes or an existing description", async () => {
+		process.env.CONVEX_URL = "https://example.convex.cloud";
+		process.env.OPENAI_API_KEY = "server-api-key";
+		convexMocks.mutation.mockResolvedValue({
+			tokenIdentifier: "https://issuer.example|private-user-id",
+		});
+		const { end, response } = createResponse();
+
+		await handleGenerateProjectDescriptionRequest(
+			createRequest({
+				authorization: "Bearer valid-token",
+				body: {
+					projectName: "Test",
+					currentDescription: "",
+					notes: [],
+				},
 			}),
 			response,
 		);

@@ -25,33 +25,38 @@ import {
 	recordServerError,
 } from "./server-logger.js";
 
-const projectDescriptionRequestSchema = z.object({
-	projectName: z
-		.string()
-		.trim()
-		.min(1)
-		.max(PROJECT_DESCRIPTION_PROJECT_NAME_MAX_LENGTH),
-	currentDescription: z
-		.string()
-		.max(PROJECT_DESCRIPTION_MAX_LENGTH)
-		.default(""),
-	notes: z
-		.array(
-			z.object({
-				title: z
-					.string()
-					.trim()
-					.min(1)
-					.max(PROJECT_DESCRIPTION_CONTEXT_NOTE_TITLE_MAX_LENGTH),
-				text: z
-					.string()
-					.trim()
-					.max(PROJECT_DESCRIPTION_CONTEXT_NOTE_TEXT_MAX_LENGTH),
-			}),
-		)
-		.max(PROJECT_DESCRIPTION_CONTEXT_MAX_NOTES)
-		.default([]),
-});
+const projectDescriptionRequestSchema = z
+	.object({
+		projectName: z
+			.string()
+			.trim()
+			.min(1)
+			.max(PROJECT_DESCRIPTION_PROJECT_NAME_MAX_LENGTH),
+		currentDescription: z
+			.string()
+			.max(PROJECT_DESCRIPTION_MAX_LENGTH)
+			.default(""),
+		notes: z
+			.array(
+				z.object({
+					title: z
+						.string()
+						.trim()
+						.min(1)
+						.max(PROJECT_DESCRIPTION_CONTEXT_NOTE_TITLE_MAX_LENGTH),
+					text: z
+						.string()
+						.trim()
+						.max(PROJECT_DESCRIPTION_CONTEXT_NOTE_TEXT_MAX_LENGTH),
+				}),
+			)
+			.max(PROJECT_DESCRIPTION_CONTEXT_MAX_NOTES)
+			.default([]),
+	})
+	.refine(
+		({ currentDescription, notes }) =>
+			currentDescription.trim().length > 0 || notes.length > 0,
+	);
 
 const projectDescriptionOutputSchema = z.object({
 	description: z.string().trim().min(1).max(PROJECT_DESCRIPTION_MAX_LENGTH),

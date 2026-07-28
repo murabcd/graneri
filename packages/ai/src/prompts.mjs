@@ -141,13 +141,16 @@ export const buildProjectDescriptionPrompt = ({
 	projectName,
 	currentDescription,
 	notes,
-}) =>
-	[
+}) => {
+	const hasNotes = notes.length > 0;
+	const normalizedCurrentDescription = normalizePromptText(currentDescription);
+
+	return [
 		`Project name: ${normalizePromptText(projectName)}`,
-		normalizePromptText(currentDescription)
-			? `Current description to replace:\n${normalizePromptText(currentDescription)}`
+		!hasNotes && normalizedCurrentDescription
+			? `Current description to replace:\n${normalizedCurrentDescription}`
 			: "",
-		notes.length > 0
+		hasNotes
 			? [
 					"Project note context:",
 					...notes.map(
@@ -164,6 +167,7 @@ export const buildProjectDescriptionPrompt = ({
 	]
 		.filter(Boolean)
 		.join("\n\n");
+};
 
 export const APPLY_TEMPLATE_INSTRUCTIONS = joinPromptSections([
 	"You rewrite existing notes into a selected note template.",
