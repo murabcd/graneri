@@ -4,8 +4,8 @@ import {
 	initialNavProjectsState,
 	navProjectsReducer,
 	sortProjectEntries,
-	toNormalizedProjectKey,
 } from "@/components/nav/nav-projects-state";
+import { toNormalizedProjectKey } from "@/lib/project-name";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 const projectId = (id: string) => id as Id<"projects">;
@@ -237,9 +237,5 @@ describe("nav projects state", () => {
 		expect(
 			sortProjectEntries(entries, "name").map(({ project }) => project._id),
 		).toEqual([alpha._id, beta._id, gamma._id]);
-	});
-
-	it("normalizes project names for duplicate checks", () => {
-		expect(toNormalizedProjectKey("  Launch   Plan  ")).toBe("launch plan");
 	});
 });

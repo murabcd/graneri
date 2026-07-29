@@ -93,8 +93,11 @@ import { CreateAutomationDialogEntry } from "@/components/automations/create-aut
 import { OPEN_NEW_CALENDAR_EVENT } from "@/components/calendar/calendar-page-events";
 import { OPEN_CHAT_SUMMARY_EVENT } from "@/components/chat/chat-summary-events";
 import { optimisticPatchChat } from "@/components/chat/optimistic-patch-chat";
-import { optimisticRenameChat } from "@/components/chat/optimistic-rename-chat";
 import { AppShellInset } from "@/components/layout/app-shell-inset";
+import {
+	type BreadcrumbTitleEditorController,
+	useBreadcrumbTitleEditor,
+} from "@/components/navigation/use-breadcrumb-title-editor";
 import {
 	NoteActionsMenu,
 	NoteStarButton,
@@ -105,7 +108,6 @@ import {
 } from "@/components/note/note-editor-actions-store";
 import { OPEN_NOTE_COMMENTS_EVENT } from "@/components/note/note-page-events";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
-import { optimisticRenameNote } from "@/components/note/optimistic-rename-note";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { NoteTemplateSelect } from "@/components/templates/note-template-select";
@@ -1383,6 +1385,7 @@ type AppShellHeaderProps = {
 	currentChatHasAutomation: boolean;
 	currentNoteId: Id<"notes"> | null;
 	currentNoteTitle: string;
+	currentProject: Doc<"projects"> | null;
 	currentNoteTemplateSlug: string | null;
 	currentNoteEditorActions: NoteEditorActions | null;
 	currentNoteCommentsOpener: (() => void) | null;
@@ -1409,6 +1412,7 @@ function AppShellHeader({
 	currentChatHasAutomation,
 	currentNoteId,
 	currentNoteTitle,
+	currentProject,
 	currentNoteTemplateSlug,
 	currentNoteEditorActions,
 	currentNoteCommentsOpener,
@@ -1427,128 +1431,19 @@ function AppShellHeader({
 	);
 	const { isMobile, state: sidebarState } = useSidebarShell();
 	const { leftInsetPanelWidth, leftOverlayPanelWidth } = useDockedPanelWidths();
-	const currentEditableTitle =
-		currentView === "note"
-			? currentNoteTitle
-			: currentView === "chat"
-				? currentChatTitle
-				: "";
-	const breadcrumbRenameInitialTitleRef = React.useRef(currentEditableTitle);
-	const breadcrumbRenameSavedTitleRef = React.useRef(currentEditableTitle);
-	const [titleEditOpen, setTitleEditOpen] = React.useState(false);
-	const [titleValue, setTitleValue] = React.useState("");
-	const [isRenamingTitle, setIsRenamingTitle] = React.useReducer(
-		(_current: boolean, next: boolean) => next,
-		false,
-	);
-	const renameNote = useMutation(api.notes.rename).withOptimisticUpdate(
-		(localStore, args) => {
-			optimisticRenameNote(localStore, args.workspaceId, args.id, args.title);
-		},
-	);
-	const renameChat = useMutation(api.chats.updateTitle).withOptimisticUpdate(
-		(localStore, args) => {
-			optimisticRenameChat(
-				localStore,
-				args.workspaceId,
-				args.chatId,
-				args.title,
-				currentChatNoteId ?? undefined,
-			);
-		},
-	);
-	const canRenameCurrentItem =
-		(currentView === "note" && currentNoteId !== null) ||
-		(currentView === "chat" && currentChatId !== null);
-	const renameItemLabel = currentView === "chat" ? "chat" : "note";
-	const titleEditPlaceholder = currentView === "chat" ? "New chat" : "New note";
-
-	const commitBreadcrumbRename = React.useCallback(async () => {
-		if (!activeWorkspaceId || !canRenameCurrentItem || isRenamingTitle) {
-			return;
-		}
-
-		const nextTitle = titleValue.trim();
-		const currentTitle = breadcrumbRenameSavedTitleRef.current.trim();
-
-		if (nextTitle === currentTitle) {
-			setTitleEditOpen(false);
-			setTitleValue(nextTitle);
-			return;
-		}
-
-		setIsRenamingTitle(true);
-
-		try {
-			if (currentView === "note" && currentNoteId) {
-				await renameNote({
-					workspaceId: activeWorkspaceId,
-					id: currentNoteId,
-					title: nextTitle,
-				});
-			} else if (currentView === "chat" && currentChatId) {
-				await renameChat({
-					workspaceId: activeWorkspaceId,
-					chatId: currentChatId,
-					title: nextTitle,
-				});
-			} else {
-				return;
-			}
-
-			breadcrumbRenameInitialTitleRef.current = nextTitle;
-			breadcrumbRenameSavedTitleRef.current = nextTitle;
-			setTitleEditOpen(false);
-			setTitleValue(nextTitle);
-			toast.success(currentView === "chat" ? "Chat renamed" : "Note renamed");
-		} catch (error) {
-			logError({
-				event: "client.error",
-				error: error,
-				message: `Failed to rename ${renameItemLabel}`,
-			});
-			toast.error(
-				currentView === "chat"
-					? "Failed to rename chat"
-					: "Failed to rename note",
-			);
-		} finally {
-			setIsRenamingTitle(false);
-		}
-	}, [
-		activeWorkspaceId,
-		canRenameCurrentItem,
+	const {
+		editor: breadcrumbTitleEditor,
+		openEditor: openBreadcrumbTitleEditor,
+	} = useBreadcrumbTitleEditor({
 		currentChatId,
+		currentChatNoteId,
+		currentChatTitle,
 		currentNoteId,
+		currentNoteTitle,
+		currentProject,
 		currentView,
-		isRenamingTitle,
-		renameChat,
-		renameNote,
-		renameItemLabel,
-		titleValue,
-	]);
-
-	const handleBreadcrumbTitleEditOpenChange = React.useCallback(
-		(open: boolean) => {
-			if (open) {
-				breadcrumbRenameInitialTitleRef.current = currentEditableTitle;
-				breadcrumbRenameSavedTitleRef.current = currentEditableTitle;
-				setTitleValue(currentEditableTitle);
-				setTitleEditOpen(true);
-				return;
-			}
-
-			void commitBreadcrumbRename();
-		},
-		[commitBreadcrumbRename, currentEditableTitle],
-	);
-
-	const openBreadcrumbTitleEditor = React.useCallback(() => {
-		breadcrumbRenameInitialTitleRef.current = currentEditableTitle;
-		breadcrumbRenameSavedTitleRef.current = currentEditableTitle;
-		setTitleValue(currentEditableTitle);
-		setTitleEditOpen(true);
-	}, [currentEditableTitle]);
+		onNoteTitleChange,
+	});
 
 	return (
 		<header
@@ -1606,29 +1501,7 @@ function AppShellHeader({
 					breadcrumbDetailLabel={breadcrumbDetailLabel}
 					isDesktopMac={isDesktopMac}
 					onBreadcrumbSectionClick={onBreadcrumbSectionClick}
-					canRenameCurrentItem={canRenameCurrentItem}
-					renameItemLabel={renameItemLabel}
-					titleEditOpen={titleEditOpen}
-					onTitleEditOpenChange={handleBreadcrumbTitleEditOpenChange}
-					onOpenTitleEditor={openBreadcrumbTitleEditor}
-					titleEditPlaceholder={titleEditPlaceholder}
-					titleValue={titleValue}
-					onTitleValueChange={(value) => {
-						setTitleValue(() => value);
-						if (currentView === "note") {
-							onNoteTitleChange(value);
-						}
-					}}
-					onCommitTitleRename={() => {
-						void commitBreadcrumbRename();
-					}}
-					onCancelTitleRename={() => {
-						setTitleEditOpen(false);
-						if (currentView === "note") {
-							onNoteTitleChange(breadcrumbRenameInitialTitleRef.current);
-						}
-						setTitleValue(breadcrumbRenameInitialTitleRef.current);
-					}}
+					titleEditor={breadcrumbTitleEditor}
 					showAutomationIcon={
 						currentView === "chat" && currentChatHasAutomation
 					}
@@ -1676,16 +1549,7 @@ function AppShellBreadcrumbs({
 	breadcrumbDetailLabel,
 	isDesktopMac,
 	onBreadcrumbSectionClick,
-	canRenameCurrentItem,
-	renameItemLabel,
-	titleEditOpen,
-	onTitleEditOpenChange,
-	onOpenTitleEditor,
-	titleEditPlaceholder,
-	titleValue,
-	onTitleValueChange,
-	onCommitTitleRename,
-	onCancelTitleRename,
+	titleEditor,
 	showAutomationIcon,
 	onAutomationIconClick,
 }: {
@@ -1693,16 +1557,7 @@ function AppShellBreadcrumbs({
 	breadcrumbDetailLabel: string | null;
 	isDesktopMac: boolean;
 	onBreadcrumbSectionClick: () => void;
-	canRenameCurrentItem: boolean;
-	renameItemLabel: "chat" | "note";
-	titleEditOpen: boolean;
-	onTitleEditOpenChange: (open: boolean) => void;
-	onOpenTitleEditor: () => void;
-	titleEditPlaceholder: string;
-	titleValue: string;
-	onTitleValueChange: (value: string) => void;
-	onCommitTitleRename: () => void;
-	onCancelTitleRename: () => void;
+	titleEditor: BreadcrumbTitleEditorController | null;
 	showAutomationIcon?: boolean;
 	onAutomationIconClick?: () => void;
 }) {
@@ -1742,11 +1597,11 @@ function AppShellBreadcrumbs({
 						</BreadcrumbItem>
 						<BreadcrumbSeparator className="hidden shrink-0 md:block" />
 						<BreadcrumbItem className="min-w-0 flex-1 overflow-hidden">
-							{canRenameCurrentItem ? (
+							{titleEditor ? (
 								<div className="flex min-w-0 items-center gap-2">
 									<Popover
-										open={titleEditOpen}
-										onOpenChange={onTitleEditOpenChange}
+										open={titleEditor.open}
+										onOpenChange={titleEditor.onOpenChange}
 									>
 										<Tooltip>
 											<TooltipTrigger asChild>
@@ -1758,7 +1613,7 @@ function AppShellBreadcrumbs({
 															isDesktopMac ? "no-drag" : undefined
 														}
 														className="line-clamp-1 -mx-1 -my-0.5 min-w-0 cursor-pointer rounded px-1 py-0.5 text-left"
-														onClick={onOpenTitleEditor}
+														onClick={titleEditor.onOpen}
 													>
 														<BreadcrumbPage className="block truncate">
 															{breadcrumbDetailLabel}
@@ -1767,7 +1622,7 @@ function AppShellBreadcrumbs({
 												</PopoverAnchor>
 											</TooltipTrigger>
 											<TooltipContent>
-												{`Rename ${renameItemLabel}`}
+												{`Rename ${titleEditor.itemLabel}`}
 											</TooltipContent>
 										</Tooltip>
 										<PopoverContent
@@ -1780,11 +1635,12 @@ function AppShellBreadcrumbs({
 												<NoteTitleEditInput
 													focusOnMount
 													commitOnBlur={false}
-													placeholder={titleEditPlaceholder}
-													value={titleValue}
-													onValueChange={onTitleValueChange}
-													onCommit={onCommitTitleRename}
-													onCancel={onCancelTitleRename}
+													placeholder={titleEditor.placeholder}
+													maxLength={titleEditor.maxLength}
+													value={titleEditor.value}
+													onValueChange={titleEditor.onValueChange}
+													onCommit={titleEditor.onCommit}
+													onCancel={titleEditor.onCancel}
 												/>
 											</div>
 										</PopoverContent>
@@ -2526,6 +2382,7 @@ export function AuthenticatedAppShell({
 						currentChatHasAutomation={controller.currentChatHasAutomation}
 						currentNoteId={controller.currentNoteId}
 						currentNoteTitle={controller.currentNoteTitle}
+						currentProject={controller.selectedProject}
 						currentNoteTemplateSlug={controller.currentNoteTemplateSlug}
 						currentNoteEditorActions={controller.currentNoteEditorActions}
 						currentNoteCommentsOpener={controller.currentNoteCommentsOpener}

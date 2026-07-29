@@ -20,17 +20,43 @@ type PendingTemplateSelection = {
 	status: "applying" | "awaiting-persistence";
 };
 
-export function NoteTemplateSelect({
-	disabled = false,
-	selectedSlug = null,
-	templates,
-	onTemplateSelect,
-}: {
+type NoteTemplateSelectProps = {
 	disabled?: boolean;
 	selectedSlug?: string | null;
 	templates: NoteTemplate[] | undefined;
 	onTemplateSelect: (template: NoteTemplate) => Promise<boolean>;
-}) {
+};
+
+type NoteTemplateSelectContentProps = Omit<
+	NoteTemplateSelectProps,
+	"selectedSlug"
+> & {
+	selectedSlug: string | null;
+};
+
+export function NoteTemplateSelect({
+	selectedSlug = null,
+	...props
+}: NoteTemplateSelectProps) {
+	return (
+		<NoteTemplateSelectContent
+			key={
+				selectedSlug === null
+					? "no-selected-template"
+					: `selected-template:${selectedSlug}`
+			}
+			selectedSlug={selectedSlug}
+			{...props}
+		/>
+	);
+}
+
+function NoteTemplateSelectContent({
+	disabled = false,
+	selectedSlug,
+	templates,
+	onTemplateSelect,
+}: NoteTemplateSelectContentProps) {
 	const [pendingSelection, setPendingSelection] =
 		React.useState<PendingTemplateSelection | null>(null);
 	const selectableTemplates = React.useMemo(
@@ -41,15 +67,6 @@ export function NoteTemplateSelect({
 	const currentTemplate = selectableTemplates.find(
 		(template) => currentSlug !== null && template.slug === currentSlug,
 	);
-
-	React.useEffect(() => {
-		if (
-			pendingSelection?.status === "awaiting-persistence" &&
-			pendingSelection.slug === selectedSlug
-		) {
-			setPendingSelection(null);
-		}
-	}, [pendingSelection, selectedSlug]);
 
 	if (currentSlug !== null && !currentTemplate) {
 		return null;

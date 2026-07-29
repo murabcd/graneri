@@ -64,6 +64,7 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
+import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
 import { logError } from "@/lib/logger";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
 import { api } from "../../../../../convex/_generated/api";
@@ -275,13 +276,20 @@ function useNoteActionsMenu({
 	"noteId" | "onMoveToTrash" | "onRenamePreviewChange"
 >) {
 	const activeWorkspaceId = useActiveWorkspaceId();
-	const preventMenuCloseAutoFocusRef = React.useRef(false);
-	const ignoreInitialRenameInteractOutsideRef = React.useRef(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 	const [menuOpen, setMenuOpen] = React.useState(false);
 	const [versionHistoryOpen, setVersionHistoryOpen] = React.useState(false);
 	const [renameOpen, setRenameOpen] = React.useState(false);
 	const [renameValue, setRenameValue] = React.useState("");
+	const openRenamePopover = React.useCallback((value: string) => {
+		setRenameValue(value);
+		setRenameOpen(true);
+	}, []);
+	const {
+		completePopoverOpen: handleMenuCloseAutoFocus,
+		preparePopoverOpen,
+		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
+	} = useDropdownPopoverHandoff(openRenamePopover);
 	const renameInputRef = React.useRef<HTMLInputElement>(null);
 	const [isMovingToTrash, setIsMovingToTrash] = React.useState(false);
 	const [isRenaming, setIsRenaming] = React.useState(false);
@@ -583,12 +591,9 @@ function useNoteActionsMenu({
 	}, []);
 
 	const handleStartRename = React.useCallback(() => {
+		preparePopoverOpen(note?.title ?? "");
 		setMenuOpen(false);
-		preventMenuCloseAutoFocusRef.current = true;
-		ignoreInitialRenameInteractOutsideRef.current = true;
-		setRenameValue(note?.title ?? "");
-		setRenameOpen(true);
-	}, [note?.title]);
+	}, [note?.title, preparePopoverOpen]);
 
 	const handleRenameCancel = React.useCallback(() => {
 		setRenameOpen(false);
@@ -614,7 +619,6 @@ function useNoteActionsMenu({
 		note,
 		projects,
 		preventMenuCloseAutoFocusRef,
-		ignoreInitialRenameInteractOutsideRef,
 		handleToggleStar,
 		handleRenameOpenChange,
 		handleSetVisibility,
@@ -624,6 +628,7 @@ function useNoteActionsMenu({
 		handleConfirmTrashOpen,
 		handleVersionHistoryOpen,
 		handleStartRename,
+		handleMenuCloseAutoFocus,
 		handleRenameCancel,
 		handleRename,
 	};
@@ -667,7 +672,6 @@ export function NoteActionsMenu({
 		note,
 		projects,
 		preventMenuCloseAutoFocusRef,
-		ignoreInitialRenameInteractOutsideRef,
 		handleToggleStar,
 		handleRenameOpenChange,
 		handleSetVisibility,
@@ -677,6 +681,7 @@ export function NoteActionsMenu({
 		handleConfirmTrashOpen,
 		handleVersionHistoryOpen,
 		handleStartRename,
+		handleMenuCloseAutoFocus,
 		handleRenameCancel,
 		handleRename,
 	} = useNoteActionsMenu({
@@ -703,6 +708,7 @@ export function NoteActionsMenu({
 				itemsBeforeDefaults={itemsBeforeDefaults}
 				itemsAfterDefaults={itemsAfterDefaults}
 				preventMenuCloseAutoFocusRef={preventMenuCloseAutoFocusRef}
+				onMenuCloseAutoFocus={handleMenuCloseAutoFocus}
 				note={note}
 				projects={projects}
 				status={{
@@ -741,9 +747,6 @@ export function NoteActionsMenu({
 				handleRenameCancel();
 				onRenamePreviewReset?.();
 			}}
-			ignoreInitialRenameInteractOutsideRef={
-				ignoreInitialRenameInteractOutsideRef
-			}
 			isRenaming={isRenaming}
 		/>
 	) : null;
@@ -822,7 +825,6 @@ function NoteRenameEditor({
 	onRenameValueChange,
 	onRename,
 	onRenameCancel,
-	ignoreInitialRenameInteractOutsideRef,
 	isRenaming,
 }: {
 	usePopover: boolean;
@@ -837,7 +839,6 @@ function NoteRenameEditor({
 	onRenameValueChange: (value: string) => void;
 	onRename: () => void;
 	onRenameCancel: () => void;
-	ignoreInitialRenameInteractOutsideRef: React.MutableRefObject<boolean>;
 	isRenaming: boolean;
 }) {
 	if (usePopover) {
@@ -858,12 +859,6 @@ function NoteRenameEditor({
 						input.focus();
 						input.setSelectionRange(0, input.value.length);
 					});
-				}}
-				onInteractOutside={(event) => {
-					if (ignoreInitialRenameInteractOutsideRef.current) {
-						event.preventDefault();
-						ignoreInitialRenameInteractOutsideRef.current = false;
-					}
 				}}
 			>
 				<div className="flex items-center gap-2">
@@ -1033,6 +1028,7 @@ function NoteActionsDropdownContent({
 	itemsBeforeDefaults,
 	itemsAfterDefaults,
 	preventMenuCloseAutoFocusRef,
+	onMenuCloseAutoFocus,
 	note,
 	projects,
 	status,
@@ -1049,6 +1045,7 @@ function NoteActionsDropdownContent({
 	itemsBeforeDefaults?: React.ReactNode;
 	itemsAfterDefaults?: React.ReactNode;
 	preventMenuCloseAutoFocusRef: React.MutableRefObject<boolean>;
+	onMenuCloseAutoFocus: () => void;
 	note: Doc<"notes"> | null | undefined;
 	projects: Array<Doc<"projects">> | undefined;
 	status: {
@@ -1084,6 +1081,7 @@ function NoteActionsDropdownContent({
 					event.preventDefault();
 					preventMenuCloseAutoFocusRef.current = false;
 				}
+				onMenuCloseAutoFocus();
 			}}
 		>
 			{itemsBeforeDefaults}

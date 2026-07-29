@@ -166,12 +166,6 @@ export function buildProjectEntries(
 	});
 }
 
-export const normalizeProjectName = (value: string) =>
-	value.replace(/\s+/g, " ").trim();
-
-export const toNormalizedProjectKey = (value: string) =>
-	normalizeProjectName(value).toLowerCase();
-
 export function sortProjectEntries(
 	entries: Array<ProjectWithNotes>,
 	sortBy: ProjectListSort,

@@ -76,21 +76,28 @@ import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { NoteActionsMenu } from "@/components/note/note-actions-menu";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
 import { ProjectComposer } from "@/components/projects/project-composer";
+import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
-import { optimisticUpdateProjectList } from "@/lib/optimistic-projects";
+import {
+	optimisticRenameProject,
+	optimisticUpdateProjectList,
+} from "@/lib/optimistic-projects";
+import {
+	getProjectNameValidationError,
+	MAX_PROJECT_NAME_LENGTH,
+	normalizeProjectName,
+} from "@/lib/project-name";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import {
 	buildProjectEntries,
 	initialNavProjectsState,
 	navProjectsReducer,
-	normalizeProjectName,
 	type ProjectListSort,
 	type ProjectWithNotes,
 	sortProjectEntries,
-	toNormalizedProjectKey,
 } from "./nav-projects-state";
 import {
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME,
@@ -114,7 +121,6 @@ const SIDEBAR_PROJECT_SKELETON_IDS = [
 	"sidebar-project-skeleton-2",
 ] as const;
 const MAX_VISIBLE_PROJECT_NOTES = 5;
-const MAX_PROJECT_NAME_LENGTH = 48;
 const SidebarRecordingSpinner = Icons.sidebarRecordingSpinner;
 
 const getProjectSortOptions = (
@@ -704,8 +710,14 @@ export function ProjectSidebarItem({
 		createProjectItemState,
 	);
 	const renameInputRef = React.useRef<HTMLInputElement>(null);
-	const preventMenuCloseAutoFocusRef = React.useRef(false);
-	const ignoreInitialRenameInteractOutsideRef = React.useRef(false);
+	const openRenamePopover = React.useCallback((value: string) => {
+		dispatch({ type: "openRename", value });
+	}, []);
+	const {
+		completePopoverOpen: handleMenuCloseAutoFocus,
+		preparePopoverOpen,
+		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
+	} = useDropdownPopoverHandoff(openRenamePopover);
 	const [isRenaming, setIsRenaming] = React.useReducer(
 		(_current: boolean, next: boolean) => next,
 		false,
@@ -716,17 +728,7 @@ export function ProjectSidebarItem({
 	const renameValue = state.renameOpen ? state.renameValue : project.name;
 	const renameProject = useMutation(api.projects.rename).withOptimisticUpdate(
 		(localStore, args) => {
-			optimisticUpdateProjectList(localStore, args.workspaceId, (projects) =>
-				projects.map((entry) =>
-					entry._id === args.id
-						? {
-								...entry,
-								name: normalizeProjectName(args.name),
-								normalizedName: toNormalizedProjectKey(args.name),
-							}
-						: entry,
-				),
-			);
+			optimisticRenameProject(localStore, args.workspaceId, args.id, args.name);
 		},
 	);
 	const removeProject = useMutation(api.projects.remove).withOptimisticUpdate(
@@ -766,15 +768,9 @@ export function ProjectSidebarItem({
 		const nextName = normalizeProjectName(
 			state.renameOpen ? state.renameValue : project.name,
 		);
-		if (nextName.length < 1) {
-			toast.error("Project name is required");
-			return;
-		}
-
-		if (nextName.length > MAX_PROJECT_NAME_LENGTH) {
-			toast.error(
-				`Project name must be ${MAX_PROJECT_NAME_LENGTH} characters or fewer`,
-			);
+		const validationError = getProjectNameValidationError(nextName);
+		if (validationError) {
+			toast.error(validationError);
 			return;
 		}
 
@@ -830,10 +826,9 @@ export function ProjectSidebarItem({
 	}, [project.name]);
 
 	const handleStartRename = React.useCallback(() => {
-		preventMenuCloseAutoFocusRef.current = true;
-		ignoreInitialRenameInteractOutsideRef.current = true;
-		dispatch({ type: "openRename", value: project.name });
-	}, [project.name]);
+		preparePopoverOpen(project.name);
+		dispatch({ type: "setMenuOpen", value: false });
+	}, [preparePopoverOpen, project.name]);
 
 	const handleToggleStar = React.useCallback(async () => {
 		if (!workspaceId || isUpdatingStarRef.current) {
@@ -922,9 +917,6 @@ export function ProjectSidebarItem({
 			currentNoteTitle={currentNoteTitle}
 			dispatch={dispatch}
 			hasNotes={hasNotes}
-			ignoreInitialRenameInteractOutsideRef={
-				ignoreInitialRenameInteractOutsideRef
-			}
 			isMovingNotesToTrash={isMovingNotesToTrash}
 			isRemoving={isRemoving}
 			notes={notes}
@@ -936,6 +928,7 @@ export function ProjectSidebarItem({
 			onOpenChange={onOpenChange}
 			onPrefetchNote={onPrefetchNote}
 			onProjectSelect={onProjectSelect}
+			onMenuCloseAutoFocus={handleMenuCloseAutoFocus}
 			onRename={handleRename}
 			onRenameCancel={handleRenameCancel}
 			onRenameOpenChange={handleRenameOpenChange}
@@ -960,7 +953,6 @@ function ProjectSidebarItemView({
 	currentNoteTitle,
 	dispatch,
 	hasNotes,
-	ignoreInitialRenameInteractOutsideRef,
 	isMovingNotesToTrash,
 	isRemoving,
 	notes,
@@ -972,6 +964,7 @@ function ProjectSidebarItemView({
 	onOpenChange,
 	onPrefetchNote,
 	onProjectSelect,
+	onMenuCloseAutoFocus,
 	onRename,
 	onRenameCancel,
 	onRenameOpenChange,
@@ -990,9 +983,9 @@ function ProjectSidebarItemView({
 }: ProjectSidebarItemProps & {
 	dispatch: React.Dispatch<ProjectItemAction>;
 	hasNotes: boolean;
-	ignoreInitialRenameInteractOutsideRef: React.RefObject<boolean>;
 	isMovingNotesToTrash: boolean;
 	isRemoving: boolean;
+	onMenuCloseAutoFocus: () => void;
 	onDeleteProject: () => Promise<void>;
 	onMoveNotesToTrash: () => Promise<void>;
 	onRename: () => Promise<void>;
@@ -1028,9 +1021,6 @@ function ProjectSidebarItemView({
 						renameValue={renameValue}
 						renameInputRef={renameInputRef}
 						preventMenuCloseAutoFocusRef={preventMenuCloseAutoFocusRef}
-						ignoreInitialRenameInteractOutsideRef={
-							ignoreInitialRenameInteractOutsideRef
-						}
 						sortableButtonProps={sortable?.buttonProps}
 						onMenuOpenChange={(nextOpen) =>
 							dispatch({ type: "setMenuOpen", value: nextOpen })
@@ -1038,6 +1028,7 @@ function ProjectSidebarItemView({
 						onOpen={() => onOpenChange(true)}
 						onToggleOpen={() => onOpenChange(!open)}
 						onSelectProject={() => onProjectSelect(project._id)}
+						onMenuCloseAutoFocus={onMenuCloseAutoFocus}
 						onRenameOpenChange={onRenameOpenChange}
 						onStartRename={onStartRename}
 						onToggleStar={onToggleStar}
@@ -1149,12 +1140,12 @@ function ProjectSidebarRow({
 	renameValue,
 	renameInputRef,
 	preventMenuCloseAutoFocusRef,
-	ignoreInitialRenameInteractOutsideRef,
 	sortableButtonProps,
 	onMenuOpenChange,
 	onOpen,
 	onToggleOpen,
 	onSelectProject,
+	onMenuCloseAutoFocus,
 	onRenameOpenChange,
 	onStartRename,
 	onToggleStar,
@@ -1175,12 +1166,12 @@ function ProjectSidebarRow({
 	renameValue: string;
 	renameInputRef: React.RefObject<HTMLInputElement | null>;
 	preventMenuCloseAutoFocusRef: React.MutableRefObject<boolean>;
-	ignoreInitialRenameInteractOutsideRef: React.MutableRefObject<boolean>;
 	sortableButtonProps?: React.HTMLAttributes<HTMLButtonElement>;
 	onMenuOpenChange: (open: boolean) => void;
 	onOpen: () => void;
 	onToggleOpen: () => void;
 	onSelectProject: () => void;
+	onMenuCloseAutoFocus: () => void;
 	onRenameOpenChange: (open: boolean) => void;
 	onStartRename: () => void;
 	onToggleStar: () => void;
@@ -1237,6 +1228,7 @@ function ProjectSidebarRow({
 						workspaceId={workspaceId}
 						menuOpen={menuOpen}
 						preventMenuCloseAutoFocusRef={preventMenuCloseAutoFocusRef}
+						onMenuCloseAutoFocus={onMenuCloseAutoFocus}
 						onMenuOpenChange={onMenuOpenChange}
 						onStartRename={onStartRename}
 						onToggleStar={onToggleStar}
@@ -1262,12 +1254,6 @@ function ProjectSidebarRow({
 						input.focus();
 						input.setSelectionRange(0, input.value.length);
 					});
-				}}
-				onInteractOutside={(event) => {
-					if (ignoreInitialRenameInteractOutsideRef.current) {
-						event.preventDefault();
-						ignoreInitialRenameInteractOutsideRef.current = false;
-					}
 				}}
 			>
 				<div className="flex items-center gap-2">
@@ -1328,6 +1314,7 @@ function ProjectActionsMenu({
 	workspaceId,
 	menuOpen,
 	preventMenuCloseAutoFocusRef,
+	onMenuCloseAutoFocus,
 	onMenuOpenChange,
 	onStartRename,
 	onToggleStar,
@@ -1340,6 +1327,7 @@ function ProjectActionsMenu({
 	workspaceId: Id<"workspaces"> | null;
 	menuOpen: boolean;
 	preventMenuCloseAutoFocusRef: React.MutableRefObject<boolean>;
+	onMenuCloseAutoFocus: () => void;
 	onMenuOpenChange: (open: boolean) => void;
 	onStartRename: () => void;
 	onToggleStar: () => void;
@@ -1372,6 +1360,7 @@ function ProjectActionsMenu({
 						event.preventDefault();
 						preventMenuCloseAutoFocusRef.current = false;
 					}
+					onMenuCloseAutoFocus();
 				}}
 			>
 				<DropdownMenuItem disabled={!workspaceId} onClick={onStartRename}>

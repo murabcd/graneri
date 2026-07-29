@@ -1,4 +1,8 @@
 import type { OptimisticLocalStore } from "convex/browser";
+import {
+	normalizeProjectName,
+	toNormalizedProjectKey,
+} from "@/lib/project-name";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
@@ -35,5 +39,26 @@ export const optimisticUpdateProjectList = (
 		api.projects.list,
 		{ workspaceId },
 		sortProjectsBySortOrder(updateProjects(projects)),
+	);
+};
+
+export const optimisticRenameProject = (
+	localStore: OptimisticLocalStore,
+	workspaceId: WorkspaceId,
+	projectId: Id<"projects">,
+	name: string,
+) => {
+	const normalizedName = normalizeProjectName(name);
+
+	optimisticUpdateProjectList(localStore, workspaceId, (projects) =>
+		projects.map((project) =>
+			project._id === projectId
+				? {
+						...project,
+						name: normalizedName,
+						normalizedName: toNormalizedProjectKey(normalizedName),
+					}
+				: project,
+		),
 	);
 };
