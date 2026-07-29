@@ -214,7 +214,7 @@ const NOTE_CHAT_FLOATING_WIDTH = "min(28rem, calc(100vw - 2rem))";
 const NOTE_CHAT_PANEL_DOCK_OFFSET =
 	COMPOSER_DOCK_BOTTOM_OFFSET - COMPOSER_OVERLAY_FOOTER_PADDING;
 const NOTE_CHAT_INLINE_PANEL_DOCK_OFFSET = COMPOSER_OVERLAY_FOOTER_PADDING;
-const INLINE_POPOVER_FOOTER_CONTAINER_CLASS = "px-6 pt-2 pb-4";
+const INLINE_POPOVER_FOOTER_CONTAINER_CLASS = "px-6 pb-4";
 const NOTE_COMPOSER_FOOTER_SURFACE_CLASS =
 	"min-h-[132px] max-w-full overflow-hidden rounded-lg border-input/30 bg-background bg-clip-padding shadow-sm has-disabled:bg-background has-disabled:opacity-100 data-[drag-over=true]:border-ring data-[drag-over=true]:ring-3 data-[drag-over=true]:ring-ring/50 dark:bg-input/30 dark:has-disabled:bg-input/30";
 const NOTE_COMPOSER_FOOTER_TOP_ROW_CLASS =
@@ -2277,7 +2277,7 @@ function useInlineFooterHeight() {
 			measureFooterHeight();
 		});
 
-		resizeObserver.observe(footerElement);
+		resizeObserver.observe(footerElement, { box: "border-box" });
 
 		return () => {
 			resizeObserver.disconnect();
@@ -3869,7 +3869,7 @@ function NoteComposerDock({
 	}
 
 	return (
-		<div className="flex items-center gap-3 pt-2">
+		<div className="flex items-center gap-3">
 			<ChatComposerForm
 				activateInlineOnFocus={controller.canActivateInlineFromComposer}
 				controller={controller}

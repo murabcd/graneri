@@ -9,4 +9,4 @@ export const COMPOSER_DOCK_FADE_CLASS =
 	"pointer-events-none absolute inset-x-0 bottom-full h-16 bg-gradient-to-t from-background to-transparent";
 
 export const COMPOSER_DOCK_WRAPPER_CLASS =
-	"pointer-events-none absolute inset-x-0 bottom-0 -mx-4 bg-background pt-2 pb-[26px] md:-mx-6";
+	"pointer-events-none absolute inset-x-0 bottom-0 -mx-4 bg-background pb-[26px] md:-mx-6";
