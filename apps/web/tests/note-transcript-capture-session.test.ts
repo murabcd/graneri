@@ -23,6 +23,7 @@ const createStartArgs = (repository: ReturnType<typeof createRepository>) => ({
 	noteId,
 	repository,
 	resetStartingStopRequest: vi.fn(),
+	transcriptionLanguage: "en",
 	terminalizeIfStopWonStartRace: vi.fn(async () => false),
 });
 
@@ -42,6 +43,11 @@ it("deduplicates concurrent starts and flushes utterances recorded while startin
 
 	captureSession.recordUtterance(utterance);
 	expect(repository.startSession).toHaveBeenCalledTimes(1);
+	expect(repository.startSession).toHaveBeenCalledWith({
+		noteId,
+		systemAudioSourceMode: undefined,
+		transcriptionLanguage: "en",
+	});
 	expect(captureSession.hasPendingStart).toBe(true);
 
 	resolveStart?.(sessionId);

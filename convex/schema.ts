@@ -955,6 +955,7 @@ export default defineSchema({
 	transcriptSessions: defineTable({
 		ownerTokenIdentifier: v.string(),
 		noteId: v.id("notes"),
+		transcriptionLanguage: v.union(v.string(), v.null()),
 		startedAt: v.number(),
 		finalTranscript: v.optional(v.string()),
 		createdAt: v.number(),

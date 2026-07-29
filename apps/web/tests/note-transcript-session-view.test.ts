@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	mergeTranscriptUtterances,
+	resolveTranscriptSessionLanguage,
 	resolveTranscriptSessionReady,
 } from "../src/lib/note-transcript-session-view";
 
@@ -61,6 +62,26 @@ describe("note transcript session view", () => {
 				isViewingCaptureScope: true,
 			}),
 		).toBe(true);
+	});
+
+	it("preserves a session's auto-detect language instead of using a newer fallback", () => {
+		expect(
+			resolveTranscriptSessionLanguage({
+				fallbackLanguage: "en",
+				session: { transcriptionLanguage: null },
+				summary: null,
+			}),
+		).toBeNull();
+	});
+
+	it("uses the active capture language until its session summary is available", () => {
+		expect(
+			resolveTranscriptSessionLanguage({
+				fallbackLanguage: "en",
+				session: null,
+				summary: null,
+			}),
+		).toBe("en");
 	});
 
 	it("waits for capture draft hydration when no local transcript exists", () => {

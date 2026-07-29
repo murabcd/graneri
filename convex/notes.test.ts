@@ -123,6 +123,31 @@ test("notes.save updates content without dropping existing metadata", async () =
 	expect(note?.updatedAt).toBe(Date.now());
 });
 
+test("notes.save commits generated content and its template together", async () => {
+	const { asOwner, noteId, workspaceId } = await createWorkspaceAndNote();
+
+	await asOwner.mutation(api.notes.save, {
+		workspaceId,
+		id: noteId,
+		title: "Weekly sync",
+		content: "weekly-content",
+		searchableText: "weekly text",
+		templateSlug: "weekly-team-meeting",
+	});
+
+	const note = await asOwner.query(api.notes.get, {
+		id: noteId,
+		workspaceId,
+	});
+
+	expect(note).toMatchObject({
+		content: "weekly-content",
+		searchableText: "weekly text",
+		templateSlug: "weekly-team-meeting",
+		title: "Weekly sync",
+	});
+});
+
 test("notes.save records version history for changed payloads", async () => {
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date("2026-04-10T18:00:00.000Z"));

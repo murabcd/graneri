@@ -27,6 +27,7 @@ export type EnhancedStructuredNoteRequest = {
 	rawNotes?: string;
 	transcript?: string;
 	noteText?: string;
+	transcriptionLanguage: string | null;
 };
 
 export const requestEnhancedStructuredNote = async (
@@ -94,6 +95,8 @@ type TemplateRewriteEvent =
 export const requestTemplateStructuredNote = async ({
 	title,
 	noteText,
+	transcriptionLanguage,
+	transcript,
 	template,
 	onMarkdown,
 	fetcher = fetch,
@@ -101,6 +104,8 @@ export const requestTemplateStructuredNote = async ({
 }: {
 	title: string;
 	noteText: string;
+	transcriptionLanguage: string | null;
+	transcript?: string;
 	template: NoteTemplate;
 	onMarkdown: (markdown: string) => void;
 	fetcher?: NoteTemplateFetch;
@@ -117,6 +122,8 @@ export const requestTemplateStructuredNote = async ({
 		body: JSON.stringify({
 			title,
 			noteText,
+			transcriptionLanguage,
+			transcript,
 			template,
 		}),
 	});

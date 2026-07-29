@@ -2,8 +2,8 @@ type ResolveCanGenerateNotesArgs = {
 	hasGeneratedLatestTranscript: boolean;
 	hasPendingGenerateTranscript: boolean;
 	isChatOpen: boolean;
-	isGeneratingTemplateNote: boolean;
 	isSpeechListening: boolean;
+	templateSlug: string | null;
 	isTranscriptOpen: boolean;
 	isTranscriptSessionReady: boolean;
 };
@@ -25,8 +25,8 @@ export const getNoteGenerateAvailability = ({
 	hasGeneratedLatestTranscript,
 	hasPendingGenerateTranscript,
 	isChatOpen,
-	isGeneratingTemplateNote,
 	isSpeechListening,
+	templateSlug,
 	isTranscriptOpen,
 	isTranscriptSessionReady,
 }: ResolveCanGenerateNotesArgs): NoteGenerateAvailability => {
@@ -42,7 +42,7 @@ export const getNoteGenerateAvailability = ({
 		return { status: "blocked", reason: "already_generated" };
 	}
 
-	if (isGeneratingTemplateNote) {
+	if (templateSlug !== null) {
 		return { status: "blocked", reason: "template_note" };
 	}
 

@@ -8,8 +8,8 @@ const createReadyGenerateState = () => ({
 	hasGeneratedLatestTranscript: false,
 	hasPendingGenerateTranscript: true,
 	isChatOpen: false,
-	isGeneratingTemplateNote: false,
 	isSpeechListening: false,
+	templateSlug: null,
 	isTranscriptOpen: false,
 	isTranscriptSessionReady: true,
 });
@@ -41,5 +41,14 @@ describe("resolveCanGenerateNotes", () => {
 				isTranscriptOpen: true,
 			}),
 		).toEqual({ status: "blocked", reason: "transcript_open" });
+	});
+
+	test("blocks generation after any note template has been applied", () => {
+		expect(
+			getNoteGenerateAvailability({
+				...createReadyGenerateState(),
+				templateSlug: "one-to-one",
+			}),
+		).toEqual({ status: "blocked", reason: "template_note" });
 	});
 });

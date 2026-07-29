@@ -62,7 +62,6 @@ import {
 	Check,
 	ChevronUp,
 	Copy,
-	LoaderCircle,
 	Minus,
 	PanelBottom,
 	PanelRight,
@@ -70,7 +69,6 @@ import {
 	Plus,
 	SlidersHorizontal,
 	Square,
-	WandSparkles,
 } from "lucide-react";
 import * as React from "react";
 // Composer focus and optimistic message paths need committed DOM before the next imperative line.
@@ -111,6 +109,7 @@ import {
 	useResizableSidePanel,
 	useResizeHandle,
 } from "@/components/layout/resizable-side-panel";
+import { NoteGenerateButton } from "@/components/note/note-generate-button";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
@@ -147,7 +146,6 @@ import {
 } from "@/lib/local-folder-sharing";
 import { logError } from "@/lib/logger";
 import { resolveCanGenerateNotes } from "@/lib/note-generate-action";
-import { ENHANCED_NOTE_TEMPLATE_SLUG } from "@/lib/note-templates";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
 import {
 	getRecipeIcon,
@@ -249,7 +247,10 @@ type NoteComposerProps = {
 	noteCaptureRequestId?: string | null;
 	onAutoStartTranscriptionHandled?: () => void;
 	onAddMessageToNote?: (text: string) => Promise<void> | void;
-	onEnhanceTranscript?: (transcript: string) => Promise<void>;
+	onEnhanceTranscript?: (
+		transcript: string,
+		transcriptionLanguage: string | null,
+	) => Promise<void>;
 	stopTranscriptionWhenMeetingEnds?: boolean;
 };
 
@@ -884,9 +885,8 @@ const useNoteComposerController = ({
 		hasPendingGenerateTranscript:
 			transcriptSession.hasPendingGenerateTranscript,
 		isChatOpen,
-		isGeneratingTemplateNote:
-			noteContext.templateSlug === ENHANCED_NOTE_TEMPLATE_SLUG,
 		isSpeechListening: isCurrentNoteSpeechListening,
+		templateSlug: noteContext.templateSlug ?? null,
 		isTranscriptOpen,
 		isTranscriptSessionReady: transcriptSession.isTranscriptSessionReady,
 	});
@@ -3118,21 +3118,10 @@ export const NoteComposer = React.memo(function NoteComposer(
 		<div ref={controller.rootRef} className="relative w-full">
 			{controller.canGenerateNotes ? (
 				<div className="pointer-events-none absolute inset-x-0 bottom-full z-30 mb-3 flex justify-center">
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						className="pointer-events-auto px-4"
+					<NoteGenerateButton
+						isGenerating={controller.isGeneratingNotes}
 						onClick={controller.handleGenerateNotes}
-						disabled={controller.isGeneratingNotes}
-					>
-						{controller.isGeneratingNotes ? (
-							<LoaderCircle className="size-4 animate-spin" />
-						) : (
-							<WandSparkles className="size-4" />
-						)}
-						{controller.isGeneratingNotes ? "Generating…" : "Generate notes"}
-					</Button>
+					/>
 				</div>
 			) : null}
 			<NoteComposerPanels

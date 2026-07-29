@@ -25,6 +25,7 @@ type TranscriptSessionSnapshot = {
 	refinementStatus: TranscriptRefinementStatus;
 	sessionId: Id<"transcriptSessions">;
 	status: TranscriptSessionStatus;
+	transcriptionLanguage: string | null;
 	updatedAt: number;
 	utterances: TranscriptUtterance[];
 };
@@ -127,6 +128,8 @@ export const useTranscriptSessionRepository = (
 							refinementStatus:
 								latestTranscriptSessionSummaryQuery.refinementStatus,
 							status: latestTranscriptSessionSummaryQuery.status,
+							transcriptionLanguage:
+								latestTranscriptSessionSummaryQuery.transcriptionLanguage,
 							updatedAt: latestTranscriptSessionSummaryQuery.updatedAt,
 						}
 					: null,
@@ -170,6 +173,7 @@ export const useTranscriptSessionRepository = (
 						refinementError: result.session.refinementError ?? null,
 						refinementStatus: result.session.refinementStatus,
 						status: result.session.status,
+						transcriptionLanguage: result.session.transcriptionLanguage,
 						updatedAt: result.session.updatedAt,
 						utterances: result.utterances.map((utterance) => ({
 							id: utterance.utteranceId,
@@ -279,13 +283,16 @@ export const useTranscriptSessionRepository = (
 		async ({
 			noteId,
 			systemAudioSourceMode,
+			transcriptionLanguage,
 		}: {
 			noteId: Id<"notes">;
 			systemAudioSourceMode?: SystemAudioCaptureSourceMode;
+			transcriptionLanguage: string | null;
 		}) =>
 			await startTranscriptSessionMutation({
 				noteId,
 				systemAudioSourceMode,
+				transcriptionLanguage,
 			}),
 		[startTranscriptSessionMutation],
 	);

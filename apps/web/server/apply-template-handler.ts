@@ -8,11 +8,12 @@ import {
 	APPLY_TEMPLATE_INSTRUCTIONS,
 	buildApplyTemplatePrompt,
 } from "@workspace/ai/prompts";
-import { smoothStream, streamText } from "ai";
+import { generateText } from "ai";
 import {
 	parseTemplateStreamToStructuredNote,
 	validateTemplateStream,
 } from "../src/lib/note-template-stream.js";
+import { parseTranscriptionLanguageInput } from "../src/lib/transcription-languages.js";
 import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
@@ -24,6 +25,8 @@ import {
 type ApplyTemplateRequestBody = {
 	title?: string;
 	noteText?: string;
+	transcriptionLanguage?: unknown;
+	transcript?: string;
 	template?: {
 		slug?: string;
 		name?: string;
@@ -49,6 +52,8 @@ const getApplyTemplatePayload = async (request: IncomingMessage) => {
 	const {
 		title = "",
 		noteText = "",
+		transcriptionLanguage: rawTranscriptionLanguage,
+		transcript = "",
 		template,
 	} = await readJsonBody<ApplyTemplateRequestBody>(request);
 
@@ -78,8 +83,28 @@ const getApplyTemplatePayload = async (request: IncomingMessage) => {
 			400,
 		);
 	}
+	let transcriptionLanguage: string | null;
+	try {
+		transcriptionLanguage = parseTranscriptionLanguageInput(
+			rawTranscriptionLanguage,
+		);
+	} catch (error) {
+		throw new ApplyTemplateRequestError(
+			error instanceof Error
+				? error.message
+				: "Invalid transcription language.",
+			400,
+		);
+	}
 
-	return { noteText, template, templateSections, title };
+	return {
+		noteText,
+		template,
+		templateSections,
+		title,
+		transcript: transcript.trim(),
+		transcriptionLanguage,
+	};
 };
 
 export const handleApplyTemplateRequest = async (
@@ -137,54 +162,53 @@ export const handleApplyTemplateRequest = async (
 		throw error;
 	}
 
-	const { title, noteText, template, templateSections } = payload;
+	const {
+		title,
+		noteText,
+		template,
+		templateSections,
+		transcript,
+		transcriptionLanguage,
+	} = payload;
 	wideEvent.template_slug = template.slug ?? null;
 	wideEvent.template_name = template.name ?? null;
 	wideEvent.template_section_count = templateSections.length;
 	wideEvent.note_text_length = noteText.length;
+	wideEvent.transcript_length = transcript.length;
 	wideEvent.has_title = Boolean(title.trim());
+	wideEvent.transcription_language = transcriptionLanguage;
 
 	response.statusCode = 200;
 	response.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
 	response.setHeader("Cache-Control", "no-cache, no-transform");
 	response.flushHeaders?.();
 
-	const result = streamText({
-		model: openai(NOTE_GENERATION_MODEL_ID),
-		providerOptions: getOpenAiModelProviderOptions(NOTE_GENERATION_MODEL_ID, {
-			reasoningEffort: "none",
-			safetyIdentifier: admission.safetyIdentifier,
-		}),
-		instructions: APPLY_TEMPLATE_INSTRUCTIONS,
-		prompt: buildApplyTemplatePrompt({
-			title,
-			templateName: template.name,
-			meetingContext: template.meetingContext,
-			templateSections,
-			noteText,
-		}),
-		experimental_transform: smoothStream({
-			chunking: "line",
-		}),
-	});
-
 	const writeEvent = (payload: Record<string, unknown>) => {
 		response.write(`${JSON.stringify(payload)}\n`);
 	};
 
 	try {
-		let streamedText = "";
-
-		for await (const delta of result.textStream) {
-			streamedText += delta;
-			writeEvent({
-				type: "text-delta",
-				delta,
-			});
-		}
+		const result = await generateText({
+			model: openai(NOTE_GENERATION_MODEL_ID),
+			providerOptions: getOpenAiModelProviderOptions(NOTE_GENERATION_MODEL_ID, {
+				reasoningEffort: "none",
+				safetyIdentifier: admission.safetyIdentifier,
+			}),
+			instructions: APPLY_TEMPLATE_INSTRUCTIONS,
+			prompt: buildApplyTemplatePrompt({
+				title,
+				templateName: template.name,
+				meetingContext: template.meetingContext,
+				templateSections,
+				noteText,
+				transcript,
+				transcriptionLanguage,
+			}),
+		});
+		const rewrittenText = result.text;
 
 		const parsed = parseTemplateStreamToStructuredNote({
-			text: streamedText,
+			text: rewrittenText,
 			template: {
 				sections: templateSections,
 			},
@@ -210,6 +234,10 @@ export const handleApplyTemplateRequest = async (
 			return;
 		}
 
+		writeEvent({
+			type: "text-delta",
+			delta: rewrittenText,
+		});
 		writeEvent({
 			type: "final-note",
 			note: parsed.note,

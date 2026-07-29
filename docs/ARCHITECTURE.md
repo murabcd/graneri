@@ -655,6 +655,15 @@ Convex bearer token, all three routes consume one shared per-identity
 stable identity to OpenAI as its safety identifier. Anonymous requests and
 unavailable admission fail closed before a model request begins; there is no
 unauthenticated or client-key fallback.
+Each transcript session stores the live transcription language selected when
+capture starts. Explicit languages are reused for initial note generation and
+every later template rewrite; Auto-detect remains unpinned and lets the model
+follow the stored transcript. Template application also treats that transcript
+as the authoritative source for language and facts, so template changes do not
+compound a previous generated rewrite. The complete rewrite is structurally
+validated before note content is emitted. Generated content and its template
+slug are then committed in one `notes.save` mutation, so a failed generation or
+save leaves the existing note and template selection intact.
 Project description generation reads its note context through the
 project-scoped `projectDescriptions.getContext` query. The query uses the
 project note index to return at most 20 non-archived notes ordered by most recent

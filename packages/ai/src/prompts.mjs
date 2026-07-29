@@ -112,8 +112,15 @@ export const buildEnhancedNotePrompt = ({
 	rawNotes = "",
 	transcript = "",
 	noteText = "",
+	transcriptionLanguage = null,
 } = {}) =>
 	[
+		normalizePromptText(transcriptionLanguage)
+			? [
+					`Required output language: ${normalizePromptText(transcriptionLanguage)}`,
+					"This is the language selected for live transcription. Write the complete note in this language.",
+				].join("\n")
+			: "",
 		normalizePromptText(title)
 			? `Current note title: ${normalizePromptText(title)}`
 			: "",
@@ -171,7 +178,9 @@ export const buildProjectDescriptionPrompt = ({
 
 export const APPLY_TEMPLATE_INSTRUCTIONS = joinPromptSections([
 	"You rewrite existing notes into a selected note template.",
-	"Preserve the source language used in the notes.",
+	"When an original transcript is supplied, use its primary language for every heading and bullet.",
+	"Otherwise, preserve the primary language used in the source note.",
+	"Template names, template instructions, section labels, and a previous generated rewrite are never evidence of the requested output language.",
 	"Do not invent facts, decisions, owners, or dates.",
 	"Keep the note title unchanged and do not output it.",
 	"Output only the rewritten note body as plain text.",
@@ -189,10 +198,25 @@ export const buildApplyTemplatePrompt = ({
 	meetingContext = "",
 	templateSections = [],
 	noteText = "",
+	transcript = "",
+	transcriptionLanguage = null,
 } = {}) =>
 	[
 		normalizePromptText(title)
 			? `Current note title: ${normalizePromptText(title)}`
+			: "",
+		normalizePromptText(transcriptionLanguage)
+			? [
+					`Required output language: ${normalizePromptText(transcriptionLanguage)}`,
+					"This is the language selected for the original live transcription. Write every heading and bullet in this language.",
+				].join("\n")
+			: "",
+		normalizePromptText(transcript)
+			? [
+					"Original transcript (authoritative for output language and source facts):",
+					normalizePromptText(transcript),
+					"Determine the output language only from this transcript. Do not translate it because of the template or current note.",
+				].join("\n")
 			: "",
 		normalizePromptText(templateName)
 			? `Template name: ${normalizePromptText(templateName)}`
@@ -209,12 +233,12 @@ export const buildApplyTemplatePrompt = ({
 					}`,
 			),
 		].join("\n"),
-		`Source note:\n${normalizePromptText(noteText)}`,
+		`Current note:\n${normalizePromptText(noteText)}`,
 		[
 			"Return every template section in the same order.",
 			"Keep each section aligned to the matching template section.",
-			"Use section titles in the same language as the source note, translating the template titles when needed.",
-			"Each section should contain concise bullets grounded only in the source note.",
+			"Use section titles in the transcript language when a transcript is supplied; otherwise use the current note language.",
+			"Each section should contain concise bullets grounded only in the supplied transcript and current note.",
 			"Output plain text only in this format:",
 			"- optional overview bullet",
 			"## First section title",

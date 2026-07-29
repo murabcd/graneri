@@ -10,6 +10,7 @@ import {
 } from "@workspace/ai/prompts";
 import { generateText, Output } from "ai";
 import { z } from "zod";
+import { parseTranscriptionLanguageInput } from "../src/lib/transcription-languages.js";
 import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import {
@@ -23,6 +24,7 @@ type EnhanceNoteRequestBody = {
 	rawNotes?: string;
 	transcript?: string;
 	noteText?: string;
+	transcriptionLanguage?: unknown;
 };
 
 const structuredNoteSchema = z.object({
@@ -87,7 +89,26 @@ export const handleEnhanceNoteRequest = async (
 		rawNotes = "",
 		transcript = "",
 		noteText = "",
+		transcriptionLanguage: rawTranscriptionLanguage,
 	} = requestBody;
+	let transcriptionLanguage: string | null;
+	try {
+		transcriptionLanguage = parseTranscriptionLanguageInput(
+			rawTranscriptionLanguage,
+		);
+	} catch (error) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = 400;
+		wideEvent.error_code = "invalid_transcription_language";
+		emitWideEvent("error");
+		sendJson(response, 400, {
+			error:
+				error instanceof Error
+					? error.message
+					: "Invalid transcription language.",
+		});
+		return;
+	}
 
 	const trimmedTranscript = transcript.trim();
 	const trimmedNoteText = noteText.trim();
@@ -95,6 +116,7 @@ export const handleEnhanceNoteRequest = async (
 	wideEvent.transcript_length = trimmedTranscript.length;
 	wideEvent.note_text_length = trimmedNoteText.length;
 	wideEvent.has_title = Boolean(title.trim());
+	wideEvent.transcription_language = transcriptionLanguage;
 
 	if (!trimmedTranscript && !trimmedNoteText) {
 		wideEvent.outcome = "error";
@@ -124,6 +146,7 @@ export const handleEnhanceNoteRequest = async (
 				rawNotes,
 				transcript: trimmedTranscript,
 				noteText: trimmedNoteText,
+				transcriptionLanguage,
 			}),
 		});
 		output = structuredNoteSchema.parse(result.output);

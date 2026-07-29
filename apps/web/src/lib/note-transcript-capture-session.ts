@@ -17,6 +17,7 @@ type CaptureRepository = {
 	startSession: (args: {
 		noteId: Id<"notes">;
 		systemAudioSourceMode?: SystemAudioCaptureSourceMode;
+		transcriptionLanguage: string | null;
 	}) => Promise<Id<"transcriptSessions">>;
 };
 
@@ -36,6 +37,7 @@ type SessionStartArgs = {
 	repository: CaptureRepository;
 	resetStartingStopRequest: () => void;
 	systemAudioSourceMode?: SystemAudioCaptureSourceMode;
+	transcriptionLanguage: string | null;
 	terminalizeIfStopWonStartRace: (args: {
 		sessionId: Id<"transcriptSessions">;
 	}) => Promise<boolean>;
@@ -212,6 +214,7 @@ export class NoteTranscriptCaptureSession {
 		repository,
 		resetStartingStopRequest,
 		systemAudioSourceMode,
+		transcriptionLanguage,
 		terminalizeIfStopWonStartRace,
 	}: SessionStartArgs) {
 		if (!noteId) {
@@ -231,7 +234,11 @@ export class NoteTranscriptCaptureSession {
 		resetStartingStopRequest();
 		const lifecycleGeneration = this.lifecycleGeneration;
 		const startPromise = repository
-			.startSession({ noteId, systemAudioSourceMode })
+			.startSession({
+				noteId,
+				systemAudioSourceMode,
+				transcriptionLanguage,
+			})
 			.then(async (sessionId) => {
 				if (lifecycleGeneration !== this.lifecycleGeneration) {
 					await repository.completeSession({ sessionId });

@@ -127,6 +127,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 		const expiredSessionId = await ctx.db.insert("transcriptSessions", {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			noteId: expiredNoteId,
+			transcriptionLanguage: null,
 			startedAt: 5_000,
 			finalTranscript: "Expired transcript",
 			createdAt: 5_000,

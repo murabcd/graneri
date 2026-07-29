@@ -25,6 +25,7 @@ export declare function buildEnhancedNotePrompt(options?: {
 	rawNotes?: string;
 	transcript?: string;
 	noteText?: string;
+	transcriptionLanguage?: string | null;
 }): string;
 
 export declare function buildProjectDescriptionPrompt(
@@ -40,4 +41,6 @@ export declare function buildApplyTemplatePrompt(options?: {
 		prompt?: string;
 	}>;
 	noteText?: string;
+	transcript?: string;
+	transcriptionLanguage?: string | null;
 }): string;

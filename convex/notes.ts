@@ -783,6 +783,7 @@ export const save = mutation({
 		title: v.string(),
 		content: v.string(),
 		searchableText: v.string(),
+		templateSlug: v.optional(v.union(v.string(), v.null())),
 	},
 	returns: v.id("notes"),
 	handler: async (ctx, args) => {
@@ -798,11 +799,16 @@ export const save = mutation({
 				ownerTokenIdentifier,
 				workspaceId: args.workspaceId,
 			});
+			const nextTemplateSlug =
+				args.templateSlug === undefined
+					? existing.templateSlug
+					: (args.templateSlug ?? undefined);
 
 			if (
 				existing.title === args.title &&
 				existing.content === args.content &&
 				existing.searchableText === args.searchableText &&
+				existing.templateSlug === nextTemplateSlug &&
 				!existing.isArchived
 			) {
 				return args.id;
@@ -823,7 +829,7 @@ export const save = mutation({
 				content: args.content,
 				searchableText: args.searchableText,
 				visibility: existing.visibility ?? "private",
-				templateSlug: existing.templateSlug,
+				templateSlug: nextTemplateSlug,
 				shareId: existing.shareId,
 				sharedAt: existing.sharedAt,
 				isArchived: false,
@@ -868,6 +874,7 @@ export const save = mutation({
 			title: args.title,
 			content: args.content,
 			searchableText: args.searchableText,
+			templateSlug: args.templateSlug ?? undefined,
 			visibility: "private",
 			shareId: undefined,
 			sharedAt: undefined,
@@ -916,35 +923,6 @@ export const setProject = mutation({
 
 		return {
 			projectId: args.projectId,
-		};
-	},
-});
-
-export const setTemplate = mutation({
-	args: {
-		workspaceId: v.id("workspaces"),
-		id: v.id("notes"),
-		templateSlug: v.union(v.string(), v.null()),
-	},
-	returns: v.object({
-		templateSlug: v.union(v.string(), v.null()),
-	}),
-	handler: async (ctx, args) => {
-		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
-
-		if (note.isArchived) {
-			throw new ConvexError({
-				code: "NOTE_NOT_FOUND",
-				message: "Note not found.",
-			});
-		}
-
-		await ctx.db.patch(args.id, {
-			templateSlug: args.templateSlug ?? undefined,
-		});
-
-		return {
-			templateSlug: args.templateSlug,
 		};
 	},
 });

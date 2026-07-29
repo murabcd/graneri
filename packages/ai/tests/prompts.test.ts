@@ -86,6 +86,36 @@ describe("prompt helpers", () => {
 		).not.toThrow();
 	});
 
+	it("uses the original transcript as the template rewrite language authority", () => {
+		const prompt = buildApplyTemplatePrompt({
+			transcript: "We reviewed the launch plan and assigned the next steps.",
+			templateName: "Weekly team meeting",
+			templateSections: [{ title: "Updates" }],
+			noteText: "Revisamos el plan de lanzamiento.",
+			transcriptionLanguage: "en",
+		});
+
+		expect(prompt).toContain(
+			"Original transcript (authoritative for output language and source facts)",
+		);
+		expect(prompt).toContain(
+			"Determine the output language only from this transcript.",
+		);
+		expect(prompt).toContain("Required output language: en");
+	});
+
+	it("pins enhanced notes to the live transcription language", () => {
+		const prompt = buildEnhancedNotePrompt({
+			transcript: "We reviewed the launch plan.",
+			transcriptionLanguage: "en",
+		});
+
+		expect(prompt).toContain("Required output language: en");
+		expect(prompt).toContain(
+			"This is the language selected for live transcription.",
+		);
+	});
+
 	it("builds project description context for a fresh replacement", () => {
 		const prompt = buildProjectDescriptionPrompt({
 			projectName: "Research activities",

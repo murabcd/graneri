@@ -36,7 +36,10 @@ import type {
 	ReasoningEffort,
 	ServiceTier,
 } from "@/components/chat/model-picker";
-import { COMPOSER_DOCK_WRAPPER_CLASS } from "@/components/layout/composer-dock";
+import {
+	COMPOSER_DOCK_FADE_CLASS,
+	COMPOSER_DOCK_WRAPPER_CLASS,
+} from "@/components/layout/composer-dock";
 import { PageTitle } from "@/components/layout/page-title";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useAppSources } from "@/hooks/use-app-sources";
@@ -1530,7 +1533,7 @@ export function ChatPage({
 								<div className="pointer-events-auto relative mx-auto w-[calc(100%-2rem)] min-w-0 max-w-full md:max-w-xl">
 									<div
 										aria-hidden="true"
-										className="pointer-events-none absolute inset-x-0 bottom-full h-16 bg-gradient-to-t from-background to-transparent"
+										className={COMPOSER_DOCK_FADE_CLASS}
 									/>
 									{controller.hasMessages ? (
 										<MessageScrollerButton

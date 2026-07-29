@@ -37,6 +37,7 @@ describe("note template application requests", () => {
 				{
 					title: "Weekly sync",
 					noteText: "Reviewed progress",
+					transcriptionLanguage: "en",
 				},
 				{
 					fetcher,
@@ -55,6 +56,7 @@ describe("note template application requests", () => {
 				body: JSON.stringify({
 					title: "Weekly sync",
 					noteText: "Reviewed progress",
+					transcriptionLanguage: "en",
 				}),
 			}),
 		);
@@ -80,6 +82,8 @@ describe("note template application requests", () => {
 			requestTemplateStructuredNote({
 				title: "Weekly sync",
 				noteText: "Intro",
+				transcript: "Original English transcript",
+				transcriptionLanguage: "en",
 				template: {
 					slug: "weekly-team-meeting",
 					name: "Weekly",
@@ -108,6 +112,21 @@ describe("note template application requests", () => {
 				},
 			}),
 		);
+		const requestBody = JSON.parse(
+			String(fetcher.mock.calls[0]?.[1]?.body),
+		) as unknown;
+		expect(requestBody).toEqual({
+			title: "Weekly sync",
+			noteText: "Intro",
+			transcript: "Original English transcript",
+			transcriptionLanguage: "en",
+			template: {
+				slug: "weekly-team-meeting",
+				name: "Weekly",
+				meetingContext: "Team sync",
+				sections: [],
+			},
+		});
 	});
 
 	it("fails closed before note generation when authentication is unavailable", async () => {
@@ -118,6 +137,7 @@ describe("note template application requests", () => {
 				{
 					title: "Weekly sync",
 					noteText: "Reviewed progress",
+					transcriptionLanguage: null,
 				},
 				{
 					fetcher,
@@ -150,7 +170,11 @@ describe("note template application requests", () => {
 			} as Window["graneriDesktop"];
 			await loadRuntimeConfig();
 			await requestEnhancedStructuredNote(
-				{ title: "Weekly sync", transcript: "Reviewed progress" },
+				{
+					title: "Weekly sync",
+					transcript: "Reviewed progress",
+					transcriptionLanguage: null,
+				},
 				{
 					fetcher,
 					resolveConvexToken: async () => "convex-token",

@@ -11,13 +11,16 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile";
 import { isPanelLayoutActive } from "@workspace/ui/lib/panel-layout-activity";
 import { cn } from "@workspace/ui/lib/utils";
-import { useMutation } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 import { MarkdownStreamEntry } from "@/components/chat/markdown-stream-entry";
-import { COMPOSER_DOCK_WRAPPER_CLASS } from "@/components/layout/composer-dock";
+import {
+	COMPOSER_DOCK_FADE_CLASS,
+	COMPOSER_DOCK_WRAPPER_CLASS,
+} from "@/components/layout/composer-dock";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
 import { logError } from "@/lib/logger";
@@ -39,7 +42,6 @@ import {
 } from "@/lib/note-draft";
 import {
 	createNoteEditorExtensions,
-	EMPTY_DOCUMENT,
 	EMPTY_DOCUMENT_STRING,
 	handleMarkdownPaste,
 	looksLikeMarkdown,
@@ -75,7 +77,6 @@ import { NOTE_PAGE_VIEWPORT_MIN_HEIGHT_CLASS } from "./note-layout";
 import { OPEN_NOTE_COMMENTS_EVENT } from "./note-page-events";
 import { NoteSelectionMenu } from "./note-selection-menu";
 import { NoteTableOfContents } from "./note-table-of-contents";
-import { optimisticPatchNote } from "./optimistic-patch-note";
 import { writeRichTextToClipboard } from "./share-note";
 
 type CssHighlightRegistry = {
@@ -195,17 +196,8 @@ const useNotePageController = ({
 	} | null>(null);
 	const publishEditorActionsRef = React.useRef<(() => void) | null>(null);
 	const shouldPreserveStructuredNoteTitle = Boolean(note?.calendarEventKey);
+	const convex = useConvex();
 	const saveNote = useMutation(api.notes.save);
-	const setNoteTemplate = useMutation(
-		api.notes.setTemplate,
-	).withOptimisticUpdate((localStore, args) => {
-		const nextTemplateSlug = args.templateSlug ?? undefined;
-		const patchNote = <T extends Doc<"notes">>(currentNote: T): T => ({
-			...currentNote,
-			templateSlug: nextTemplateSlug,
-		});
-		optimisticPatchNote(localStore, args.workspaceId, args.id, patchNote);
-	});
 
 	const getTableOfContentsScrollParent = React.useCallback(
 		() => scrollParentRef?.current ?? window,
@@ -618,22 +610,13 @@ const useNotePageController = ({
 				return false;
 			}
 
-			const {
-				title,
-				searchableText,
-				templateSlug: previousTemplateSlug,
-				isApplyingTemplate,
-			} = latestEditorStateRef.current;
+			const { title, searchableText, isApplyingTemplate } =
+				latestEditorStateRef.current;
 			const serializedText = getPlainTextContent({
 				editor,
 				title,
 				searchableText,
 			});
-			const previousContent = content;
-			const previousSearchableText = searchableText;
-			const previousTitle = title;
-			const previousDocument = editor.getJSON();
-
 			if (isApplyingTemplate) {
 				return false;
 			}
@@ -654,83 +637,68 @@ const useNotePageController = ({
 			});
 
 			try {
-				// Persist the chosen template even when enhanced rewriting is skipped or later fails.
-				await setNoteTemplate({
-					workspaceId: activeWorkspaceId,
-					id: nextNoteIdRef.current ?? noteId,
-					templateSlug: template.slug,
-				});
+				const latestTranscriptSession = await convex.query(
+					api.transcriptSessions.getLatestSummaryForNote,
+					{ noteId },
+				);
+				const transcript =
+					latestTranscriptSession?.finalTranscript?.trim() || undefined;
+				const transcriptionLanguage =
+					latestTranscriptSession?.transcriptionLanguage ?? null;
+				let nextDocument: JSONContent;
+				let nextSearchableText: string;
+				let nextTitle = title;
 
 				if (isEnhancedNoteTemplate(template)) {
 					const enhancedNote = await requestEnhancedStructuredNote({
 						title,
 						noteText: serializedText,
+						transcript,
+						transcriptionLanguage,
 					});
-					const nextDocument = structuredNoteToDocument(enhancedNote);
-					const nextContent = JSON.stringify(nextDocument);
-					const nextSearchableText =
-						structuredNoteToSearchableText(enhancedNote);
-					const nextTitle = shouldPreserveStructuredNoteTitle
+					nextDocument = structuredNoteToDocument(enhancedNote);
+					nextSearchableText = structuredNoteToSearchableText(enhancedNote);
+					nextTitle = shouldPreserveStructuredNoteTitle
 						? title
 						: enhancedNote.title.trim() || title;
+				} else {
+					const finalNote = await requestTemplateStructuredNote({
+						title,
+						noteText: serializedText,
+						transcript,
+						transcriptionLanguage,
+						template,
+						onMarkdown: (streamedMarkdown) => {
+							setTemplateApplyState({
+								isRunning: true,
+								templateName: template.name,
+								streamedMarkdown,
+							});
+						},
+					});
 
-					setEditorDocument(nextDocument);
-					setTitle(nextTitle);
-					setContent(nextContent);
-					setSearchableText(nextSearchableText);
-					toast.success(`Rewrote note with ${template.name}`);
-
-					return true;
+					nextDocument = structuredNoteToDocument(finalNote);
+					nextSearchableText = structuredNoteToSearchableText(finalNote);
 				}
 
-				setEditorDocument(EMPTY_DOCUMENT);
-				setContent(EMPTY_DOCUMENT_STRING);
-				setSearchableText("");
-
-				const finalNote = await requestTemplateStructuredNote({
-					title,
-					noteText: serializedText,
-					template,
-					onMarkdown: (streamedMarkdown) => {
-						setTemplateApplyState({
-							isRunning: true,
-							templateName: template.name,
-							streamedMarkdown,
-						});
-					},
+				const nextContent = JSON.stringify(nextDocument);
+				await saveNote({
+					workspaceId: activeWorkspaceId,
+					id: nextNoteIdRef.current ?? noteId,
+					title: nextTitle,
+					content: nextContent,
+					searchableText: nextSearchableText,
+					templateSlug: template.slug,
 				});
 
-				const nextDocument = structuredNoteToDocument(finalNote);
-				const nextContent = JSON.stringify(nextDocument);
-				const nextSearchableText = structuredNoteToSearchableText(finalNote);
-
 				setEditorDocument(nextDocument);
+				setTitle(nextTitle);
 				setContent(nextContent);
 				setSearchableText(nextSearchableText);
 				toast.success(`Rewrote note with ${template.name}`);
 
 				return true;
 			} catch (error) {
-				try {
-					const workspaceId = activeWorkspaceId;
-					if (workspaceId) {
-						await setNoteTemplate({
-							workspaceId,
-							id: nextNoteIdRef.current ?? noteId,
-							templateSlug: previousTemplateSlug,
-						});
-					}
-				} catch (revertError) {
-					logError({
-						event: "client.error",
-						error: revertError,
-						message: "Failed to revert note template",
-					});
-				}
-				setEditorDocument(previousDocument);
-				setTitle(previousTitle);
-				setContent(previousContent);
-				setSearchableText(previousSearchableText);
 				showActionError("Failed to rewrite note with template", error);
 				return false;
 			} finally {
@@ -743,11 +711,11 @@ const useNotePageController = ({
 		},
 		[
 			activeWorkspaceId,
-			content,
+			convex,
 			editor,
 			noteId,
+			saveNote,
 			setEditorDocument,
-			setNoteTemplate,
 			shouldPreserveStructuredNoteTitle,
 		],
 	);
@@ -820,7 +788,7 @@ const useNotePageController = ({
 	]);
 
 	const handleEnhanceTranscript = React.useCallback(
-		async (transcript: string) => {
+		async (transcript: string, transcriptionLanguage: string | null) => {
 			if (!editor || !transcript.trim()) {
 				return;
 			}
@@ -834,6 +802,7 @@ const useNotePageController = ({
 					title,
 					rawNotes: searchableText,
 					transcript,
+					transcriptionLanguage,
 				});
 				const nextDocument = structuredNoteToDocument(enhancedNote);
 				const nextContent = JSON.stringify(nextDocument);
@@ -845,20 +814,18 @@ const useNotePageController = ({
 				if (!nextNoteId) {
 					return;
 				}
+				await saveNote({
+					workspaceId: activeWorkspaceId,
+					id: nextNoteId,
+					title: nextTitle,
+					content: nextContent,
+					searchableText: nextSearchableText,
+					templateSlug: "enhanced",
+				});
 				setEditorDocument(nextDocument);
 				setTitle(nextTitle);
 				setContent(nextContent);
 				setSearchableText(nextSearchableText);
-				await documentSession.saveNow({
-					title: nextTitle,
-					content: nextContent,
-					searchableText: nextSearchableText,
-				});
-				await setNoteTemplate({
-					workspaceId: activeWorkspaceId,
-					id: nextNoteId,
-					templateSlug: "enhanced",
-				});
 				toast.success("Structured notes ready");
 			} catch (error) {
 				showActionError("Failed to enhance transcript", error);
@@ -867,12 +834,11 @@ const useNotePageController = ({
 		},
 		[
 			activeWorkspaceId,
-			documentSession,
 			noteId,
 			editor,
+			saveNote,
 			searchableText,
 			setEditorDocument,
-			setNoteTemplate,
 			shouldPreserveStructuredNoteTitle,
 			title,
 		],
@@ -1282,6 +1248,10 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 						<div className="sticky bottom-0 z-10 mt-auto h-0">
 							<div className={COMPOSER_DOCK_WRAPPER_CLASS}>
 								<div className="pointer-events-auto relative mx-auto w-[calc(100%-2rem)] max-w-xl">
+									<div
+										aria-hidden="true"
+										className={COMPOSER_DOCK_FADE_CLASS}
+									/>
 									<NoteComposer
 										autoStartTranscription={autoStartTranscription}
 										desktopSafeTop={isDesktopMac}

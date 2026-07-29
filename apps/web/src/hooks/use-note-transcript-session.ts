@@ -11,6 +11,7 @@ import {
 	createStoredTranscriptText,
 	createVisibleTranscriptView,
 	mergeTranscriptUtterances,
+	resolveTranscriptSessionLanguage,
 	resolveTranscriptSessionReady,
 } from "@/lib/note-transcript-session-view";
 import {
@@ -35,7 +36,10 @@ type UseNoteTranscriptSessionArgs = {
 	autoStartTranscriptionRequestId?: string | null;
 	noteId: Id<"notes"> | null;
 	onAutoStartTranscriptionHandled?: () => void;
-	onEnhanceTranscript?: (transcript: string) => Promise<void>;
+	onEnhanceTranscript?: (
+		transcript: string,
+		transcriptionLanguage: string | null,
+	) => Promise<void>;
 	shouldLoadStoredTranscriptHistory?: boolean;
 	stopTranscriptionWhenMeetingEnds?: boolean;
 	transcriptionLanguage?: string | null;
@@ -424,6 +428,7 @@ export const useNoteTranscriptSession = ({
 					systemAudioStatus.state === "connected"
 						? systemAudioStatus.sourceMode
 						: undefined,
+				transcriptionLanguage: transcriptionLanguage ?? null,
 				terminalizeIfStopWonStartRace:
 					transcriptSessionStopController.terminalizeIfStopWonStartRace,
 			});
@@ -442,6 +447,7 @@ export const useNoteTranscriptSession = ({
 		captureScopeNoteId,
 		systemAudioStatus.sourceMode,
 		systemAudioStatus.state,
+		transcriptionLanguage,
 		captureTranscriptSessionRepository,
 		transcriptSessionStopController,
 	]);
@@ -730,11 +736,21 @@ export const useNoteTranscriptSession = ({
 			: (currentNoteLatestTranscriptSessionSummary?.sessionId ??
 				currentNoteLatestTranscriptSession?.sessionId ??
 				null);
+		const targetTranscriptionLanguage = isViewingCaptureScope
+			? resolveTranscriptSessionLanguage({
+					fallbackLanguage: transcriptionLanguage,
+					session: captureLatestTranscriptSession,
+					summary: captureLatestTranscriptSessionSummary,
+				})
+			: resolveTranscriptSessionLanguage({
+					session: currentNoteLatestTranscriptSession,
+					summary: currentNoteLatestTranscriptSessionSummary,
+				});
 
 		setIsGeneratingNotes(true);
 		void (async () => {
 			try {
-				await onEnhanceTranscript(transcript);
+				await onEnhanceTranscript(transcript, targetTranscriptionLanguage);
 
 				if (targetSessionId) {
 					await targetTranscriptSessionRepository.markGenerated({
@@ -769,6 +785,8 @@ export const useNoteTranscriptSession = ({
 		})();
 	}, [
 		captureSession,
+		captureLatestTranscriptSession,
+		captureLatestTranscriptSessionSummary,
 		captureTranscriptDraftKey,
 		captureTranscriptSessionRepository,
 		captureStoredTranscript,
@@ -781,6 +799,7 @@ export const useNoteTranscriptSession = ({
 		isGeneratingNotes,
 		onEnhanceTranscript,
 		pendingGenerateTranscript,
+		transcriptionLanguage,
 	]);
 
 	const handleTranscriptUtterance = React.useCallback(

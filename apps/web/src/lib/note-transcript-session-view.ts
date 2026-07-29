@@ -18,6 +18,10 @@ type StoredTranscriptSummary = {
 	finalTranscript: string;
 };
 
+type TranscriptSessionLanguage = {
+	transcriptionLanguage: string | null;
+};
+
 const sortTranscriptUtterances = (
 	utterances: TranscriptUtterance[],
 ): TranscriptUtterance[] =>
@@ -57,6 +61,26 @@ export const createStoredTranscriptText = ({
 	session
 		? createTranscriptText(session.utterances) || session.finalTranscript
 		: (summary?.finalTranscript ?? "");
+
+export const resolveTranscriptSessionLanguage = ({
+	fallbackLanguage = null,
+	session,
+	summary,
+}: {
+	fallbackLanguage?: string | null;
+	session: TranscriptSessionLanguage | null | undefined;
+	summary: TranscriptSessionLanguage | null | undefined;
+}) => {
+	if (session) {
+		return session.transcriptionLanguage;
+	}
+
+	if (summary) {
+		return summary.transcriptionLanguage;
+	}
+
+	return fallbackLanguage;
+};
 
 export const resolveTranscriptSessionReady = ({
 	hasLocalCaptureTranscript,

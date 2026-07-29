@@ -61,6 +61,7 @@ const transcriptSessionFields = {
 	_creationTime: v.number(),
 	ownerTokenIdentifier: v.string(),
 	noteId: v.id("notes"),
+	transcriptionLanguage: v.union(v.string(), v.null()),
 	startedAt: v.number(),
 	finalTranscript: v.optional(v.string()),
 	createdAt: v.number(),
@@ -410,6 +411,7 @@ export const getStoredTranscriptForNote = query({
 export const startSession = mutation({
 	args: {
 		noteId: v.id("notes"),
+		transcriptionLanguage: v.union(v.string(), v.null()),
 		systemAudioSourceMode: v.optional(systemAudioSourceModeValidator),
 	},
 	returns: v.id("transcriptSessions"),
@@ -420,6 +422,7 @@ export const startSession = mutation({
 		const sessionId = await ctx.db.insert("transcriptSessions", {
 			ownerTokenIdentifier,
 			noteId: args.noteId,
+			transcriptionLanguage: args.transcriptionLanguage,
 			startedAt: now,
 			finalTranscript: undefined,
 			createdAt: now,

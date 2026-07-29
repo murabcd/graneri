@@ -65,6 +65,7 @@ test("requestStopSession records durable stop intent before capture cleanup", as
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 
@@ -87,6 +88,7 @@ test("completeSession terminalizes a stopping transcript session", async () => {
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: "en",
 		},
 	);
 
@@ -104,6 +106,7 @@ test("completeSession terminalizes a stopping transcript session", async () => {
 	expect(state?.status).toBe("completed");
 	expect(state?.endedAt).toEqual(expect.any(Number));
 	expect(session?.finalTranscript).toBe("Final transcript");
+	expect(session?.transcriptionLanguage).toBe("en");
 });
 
 test("completeSession stores utterance transcript sections when no final text is provided", async () => {
@@ -112,6 +115,7 @@ test("completeSession stores utterance transcript sections when no final text is
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 
@@ -154,6 +158,7 @@ test("completeSession stores readable dynamic transcript sections", async () => 
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 	const firstExplanation =
@@ -198,6 +203,7 @@ test("completeSession preserves alternating speaker turns in persisted transcrip
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 
@@ -263,6 +269,7 @@ test("stored transcript reads utterances from the latest session only", async ()
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 	await asOwner.mutation(api.transcriptSessions.appendUtterance, {
@@ -283,6 +290,7 @@ test("stored transcript reads utterances from the latest session only", async ()
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 	await asOwner.mutation(api.transcriptSessions.appendUtterance, {
@@ -324,6 +332,7 @@ test("markGenerated terminalizes a recovered stopping transcript session", async
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 
@@ -347,6 +356,7 @@ test("completeSession rejects already terminal transcript sessions", async () =>
 		api.transcriptSessions.startSession,
 		{
 			noteId,
+			transcriptionLanguage: null,
 		},
 	);
 
@@ -368,6 +378,7 @@ test("removeOrphanedSession deletes transcript runtime after its note is gone", 
 		const sessionId = await ctx.db.insert("transcriptSessions", {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			noteId,
+			transcriptionLanguage: null,
 			startedAt: 1_000,
 			createdAt: 1_000,
 		});
@@ -430,6 +441,7 @@ test("removeOrphanedSession leaves transcript runtime for an active note", async
 		const sessionId = await ctx.db.insert("transcriptSessions", {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			noteId,
+			transcriptionLanguage: null,
 			startedAt: 1_000,
 			createdAt: 1_000,
 		});

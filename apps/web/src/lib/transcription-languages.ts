@@ -29,9 +29,38 @@ export const TRANSCRIPTION_LANGUAGE_OPTIONS = [
 	...OTHER_TRANSCRIPTION_LANGUAGE_OPTIONS,
 ] as const;
 
+const transcriptionLanguageCodes = new Set<string>(
+	TRANSCRIPTION_LANGUAGE_OPTIONS.flatMap((option) =>
+		option.value === AUTO_DETECT_TRANSCRIPTION_LANGUAGE ? [] : [option.value],
+	),
+);
+
+export const parseTranscriptionLanguageInput = (value: unknown) => {
+	if (value === undefined || value === null || value === "") {
+		return null;
+	}
+
+	if (typeof value !== "string") {
+		throw new Error(
+			"Transcription language must be a supported language code.",
+		);
+	}
+
+	const normalizedLanguage = value.trim().toLowerCase();
+	if (!transcriptionLanguageCodes.has(normalizedLanguage)) {
+		throw new Error(
+			"Transcription language must be a supported language code.",
+		);
+	}
+
+	return normalizedLanguage;
+};
+
 export const getTranscriptionLanguageSelectValue = (
 	value: string | null | undefined,
 ) => value ?? AUTO_DETECT_TRANSCRIPTION_LANGUAGE;
 
 export const parseTranscriptionLanguageSelectValue = (value: string) =>
-	value === AUTO_DETECT_TRANSCRIPTION_LANGUAGE ? null : value;
+	value === AUTO_DETECT_TRANSCRIPTION_LANGUAGE
+		? null
+		: parseTranscriptionLanguageInput(value);

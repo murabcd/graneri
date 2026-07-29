@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import type * as AiModule from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handleEnhanceNoteRequest } from "../server/enhance-note-handler";
+import { handleApplyTemplateRequest } from "../server/apply-template-handler";
 
 const previousConvexUrl = process.env.CONVEX_URL;
 const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
@@ -42,73 +42,58 @@ afterEach(() => {
 	}
 });
 
-const createRequest = ({
-	authorization,
-	body,
-}: {
-	authorization?: string;
-	body: Record<string, unknown>;
-}) =>
+const createRequest = (body: Record<string, unknown>) =>
 	({
 		async *[Symbol.asyncIterator]() {
 			yield Buffer.from(JSON.stringify(body));
 		},
-		headers: authorization ? { authorization } : {},
+		headers: { authorization: "Bearer valid-token" },
 	}) as IncomingMessage;
 
 const createResponse = () => {
-	const end = vi.fn();
+	const chunks: string[] = [];
 	const response = {
-		end,
+		end: vi.fn(),
+		flushHeaders: vi.fn(),
 		setHeader: vi.fn(),
 		statusCode: 0,
+		write: vi.fn((chunk: string) => {
+			chunks.push(chunk);
+			return true;
+		}),
 	} as unknown as ServerResponse;
-	return { end, response };
+	return { chunks, response };
 };
 
-describe("enhance note handler", () => {
-	it("rejects anonymous generation before contacting OpenAI", async () => {
-		const { end, response } = createResponse();
-
-		await handleEnhanceNoteRequest(
-			createRequest({ body: { noteText: "Reviewed progress" } }),
-			response,
-		);
-
-		expect(response.statusCode).toBe(401);
-		expect(end).toHaveBeenCalledWith(
-			JSON.stringify({ error: "Authentication is required." }),
-		);
-		expect(aiMocks.generateText).not.toHaveBeenCalled();
-	});
-
-	it("passes a hashed authenticated identity to OpenAI", async () => {
+describe("apply template handler", () => {
+	it("uses the stored transcript language and emits only validated output", async () => {
 		process.env.CONVEX_URL = "https://example.convex.cloud";
 		process.env.OPENAI_API_KEY = "server-api-key";
 		const tokenIdentifier = "https://issuer.example|private-user-id";
 		convexMocks.mutation.mockResolvedValue({ tokenIdentifier });
-		aiMocks.generateText.mockResolvedValue({
-			output: {
-				overview: ["Reviewed progress"],
-				sections: [{ items: ["Ship it"], title: "Next" }],
-				title: "Weekly sync",
-			},
-		});
-		const { response } = createResponse();
+		const rewrittenText = [
+			"- Launch plan reviewed",
+			"## Updates",
+			"- Owners confirmed the next steps",
+		].join("\n");
+		aiMocks.generateText.mockResolvedValue({ text: rewrittenText });
+		const { chunks, response } = createResponse();
 
-		await handleEnhanceNoteRequest(
+		await handleApplyTemplateRequest(
 			createRequest({
-				authorization: "Bearer valid-token",
-				body: {
-					noteText: "Reviewed progress",
-					title: "Weekly sync",
-					transcriptionLanguage: "en",
+				noteText: "Resumen anterior en español.",
+				title: "Weekly sync",
+				transcript: "We reviewed the launch plan and assigned next steps.",
+				transcriptionLanguage: "en",
+				template: {
+					slug: "weekly-team-meeting",
+					name: "Weekly team meeting",
+					sections: [{ title: "Updates", prompt: "Summarize updates" }],
 				},
 			}),
 			response,
 		);
 
-		expect(response.statusCode).toBe(200);
 		const options = aiMocks.generateText.mock.calls[0]?.[0];
 		expect(options.model.modelId).toBe("gpt-5.6-terra");
 		expect(options.providerOptions).toEqual({
@@ -118,28 +103,23 @@ describe("enhance note handler", () => {
 			},
 		});
 		expect(options.prompt).toContain("Required output language: en");
-	});
-
-	it("fails closed after admission when the server API key is missing", async () => {
-		process.env.CONVEX_URL = "https://example.convex.cloud";
-		delete process.env.OPENAI_API_KEY;
-		convexMocks.mutation.mockResolvedValue({
-			tokenIdentifier: "https://issuer.example|private-user-id",
-		});
-		const { end, response } = createResponse();
-
-		await handleEnhanceNoteRequest(
-			createRequest({
-				authorization: "Bearer valid-token",
-				body: { noteText: "Reviewed progress" },
-			}),
-			response,
+		expect(options.prompt).toContain(
+			"Original transcript (authoritative for output language and source facts)",
 		);
-
-		expect(response.statusCode).toBe(500);
-		expect(end).toHaveBeenCalledWith(
-			JSON.stringify({ error: "OPENAI_API_KEY is not configured." }),
-		);
-		expect(aiMocks.generateText).not.toHaveBeenCalled();
+		expect(chunks.map((chunk) => JSON.parse(chunk))).toEqual([
+			{ type: "text-delta", delta: rewrittenText },
+			{
+				type: "final-note",
+				note: {
+					overview: ["Launch plan reviewed"],
+					sections: [
+						{
+							title: "Updates",
+							items: ["Owners confirmed the next steps"],
+						},
+					],
+				},
+			},
+		]);
 	});
 });
