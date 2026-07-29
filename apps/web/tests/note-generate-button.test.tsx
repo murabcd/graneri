@@ -20,4 +20,13 @@ describe("NoteGenerateButton", () => {
 		}
 		expect(button.className).not.toContain("backdrop-blur");
 	});
+
+	test("shows shimmer text without a spinner while generating", () => {
+		render(<NoteGenerateButton isGenerating onClick={vi.fn()} />);
+
+		const button = screen.getByRole("button", { name: "Generating" });
+		expect(button).toHaveProperty("disabled", true);
+		expect(button.classList.contains("disabled:opacity-100")).toBe(true);
+		expect(button.querySelector("svg")).toBeNull();
+	});
 });

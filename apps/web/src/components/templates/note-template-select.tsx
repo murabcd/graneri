@@ -15,6 +15,11 @@ import {
 const getTemplateIcon = (slug: string) =>
 	NOTE_TEMPLATE_ICONS[slug as keyof typeof NOTE_TEMPLATE_ICONS] ?? null;
 
+type PendingTemplateSelection = {
+	slug: string;
+	status: "applying" | "awaiting-persistence";
+};
+
 export function NoteTemplateSelect({
 	disabled = false,
 	selectedSlug = null,
@@ -26,27 +31,33 @@ export function NoteTemplateSelect({
 	templates: NoteTemplate[] | undefined;
 	onTemplateSelect: (template: NoteTemplate) => Promise<boolean>;
 }) {
-	const [isApplyingTemplate, setIsApplyingTemplate] = React.useReducer(
-		(_current: boolean, next: boolean) => next,
-		false,
-	);
+	const [pendingSelection, setPendingSelection] =
+		React.useState<PendingTemplateSelection | null>(null);
 	const selectableTemplates = React.useMemo(
 		() => getSelectableNoteTemplates(templates),
 		[templates],
 	);
-	const currentSlug = selectedSlug;
+	const currentSlug = pendingSelection?.slug ?? selectedSlug;
 	const currentTemplate = selectableTemplates.find(
 		(template) => currentSlug !== null && template.slug === currentSlug,
 	);
+
+	React.useEffect(() => {
+		if (
+			pendingSelection?.status === "awaiting-persistence" &&
+			pendingSelection.slug === selectedSlug
+		) {
+			setPendingSelection(null);
+		}
+	}, [pendingSelection, selectedSlug]);
 
 	if (currentSlug !== null && !currentTemplate) {
 		return null;
 	}
 
+	const isApplyingTemplate = pendingSelection?.status === "applying";
 	const isDisabled = disabled || isApplyingTemplate;
-	const triggerLabel = isApplyingTemplate
-		? "Applying..."
-		: (currentTemplate?.name ?? "Enhance");
+	const triggerLabel = currentTemplate?.name ?? "Enhance";
 	const triggerIcon =
 		currentTemplate?.slug ??
 		(currentSlug === null ? ENHANCED_NOTE_TEMPLATE_SLUG : null);
@@ -64,12 +75,27 @@ export function NoteTemplateSelect({
 					return;
 				}
 
-				setIsApplyingTemplate(true);
+				setPendingSelection({
+					slug: selectedTemplate.slug,
+					status: "applying",
+				});
 
+				let applied = false;
 				try {
-					await onTemplateSelect(selectedTemplate);
+					applied = await onTemplateSelect(selectedTemplate);
 				} finally {
-					setIsApplyingTemplate(false);
+					setPendingSelection((currentSelection) => {
+						if (currentSelection?.slug !== selectedTemplate.slug) {
+							return currentSelection;
+						}
+
+						return applied
+							? {
+									slug: selectedTemplate.slug,
+									status: "awaiting-persistence",
+								}
+							: null;
+					});
 				}
 			}}
 		>

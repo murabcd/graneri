@@ -1,5 +1,6 @@
 import { Button } from "@workspace/ui/components/button";
-import { LoaderCircle, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
+import { ShimmerText } from "@/components/ai-elements/shimmer";
 
 export function NoteGenerateButton({
 	isGenerating,
@@ -13,16 +14,16 @@ export function NoteGenerateButton({
 			type="button"
 			variant="floating"
 			size="sm"
-			className="pointer-events-auto h-8 px-4"
+			className="pointer-events-auto h-8 px-4 disabled:opacity-100"
 			onClick={onClick}
 			disabled={isGenerating}
 		>
+			{isGenerating ? null : <Zap className="size-4" />}
 			{isGenerating ? (
-				<LoaderCircle className="size-4 animate-spin" />
+				<ShimmerText as="span">Generating</ShimmerText>
 			) : (
-				<Zap className="size-4" />
+				"Generate notes"
 			)}
-			{isGenerating ? "Generating…" : "Generate notes"}
 		</Button>
 	);
 }

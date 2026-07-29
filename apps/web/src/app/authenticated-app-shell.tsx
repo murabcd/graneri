@@ -1916,6 +1916,7 @@ function AppShellHeaderActions({
 		>
 			{currentNoteEditorActions?.canShowTemplateSelect ? (
 				<NoteTemplateSelect
+					key={currentNoteId}
 					disabled={!currentNoteEditorActions}
 					selectedSlug={currentNoteTemplateSlug}
 					templates={noteTemplates}
