@@ -134,6 +134,7 @@ import {
 	createNoteCaptureRequestId,
 	getNoteCaptureRequestIdForAutoStart,
 } from "@/lib/note-capture-request";
+import type { NoteTemplate } from "@/lib/note-templates";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../convex/_generated/api";
@@ -1415,6 +1416,10 @@ function AppShellHeader({
 	onNewChatAutomation,
 }: AppShellHeaderProps) {
 	const activeWorkspaceId = useActiveWorkspaceId();
+	const noteTemplates = useQuery(
+		api.templates.list,
+		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+	);
 	const { isMobile, state: sidebarState } = useSidebarShell();
 	const { leftInsetPanelWidth, leftOverlayPanelWidth } = useDockedPanelWidths();
 	const currentEditableTitle =
@@ -1641,6 +1646,7 @@ function AppShellHeader({
 					currentNoteId={currentNoteId}
 					currentNoteTitle={currentNoteTitle}
 					currentNoteTemplateSlug={currentNoteTemplateSlug}
+					noteTemplates={noteTemplates}
 					currentNoteEditorActions={currentNoteEditorActions}
 					currentNoteCommentsOpener={currentNoteCommentsOpener}
 					isDesktopMac={isDesktopMac}
@@ -1805,6 +1811,7 @@ function AppShellHeaderActions({
 	currentNoteId,
 	currentNoteTitle,
 	currentNoteTemplateSlug,
+	noteTemplates,
 	currentNoteEditorActions,
 	currentNoteCommentsOpener,
 	isDesktopMac,
@@ -1838,6 +1845,7 @@ function AppShellHeaderActions({
 	| "onNewChatAutomation"
 > & {
 	onOpenChatTitleEditor: () => void;
+	noteTemplates: NoteTemplate[] | undefined;
 }) {
 	if (currentView === "home") {
 		return (
@@ -1910,6 +1918,7 @@ function AppShellHeaderActions({
 				<NoteTemplateSelect
 					disabled={!currentNoteEditorActions}
 					selectedSlug={currentNoteTemplateSlug}
+					templates={noteTemplates}
 					onTemplateSelect={async (template) =>
 						(await currentNoteEditorActions?.applyTemplate(template)) ?? false
 					}

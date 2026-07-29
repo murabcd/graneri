@@ -4,16 +4,13 @@ import {
 	SelectItem,
 	SelectTrigger,
 } from "@workspace/ui/components/select";
-import { useQuery } from "convex/react";
 import * as React from "react";
-import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import {
 	ENHANCED_NOTE_TEMPLATE_SLUG,
 	getSelectableNoteTemplates,
 	NOTE_TEMPLATE_ICONS,
 	type NoteTemplate,
 } from "@/lib/note-templates";
-import { api } from "../../../../../convex/_generated/api";
 
 const getTemplateIcon = (slug: string) =>
 	NOTE_TEMPLATE_ICONS[slug as keyof typeof NOTE_TEMPLATE_ICONS] ?? null;
@@ -21,35 +18,35 @@ const getTemplateIcon = (slug: string) =>
 export function NoteTemplateSelect({
 	disabled = false,
 	selectedSlug = null,
+	templates,
 	onTemplateSelect,
 }: {
 	disabled?: boolean;
 	selectedSlug?: string | null;
+	templates: NoteTemplate[] | undefined;
 	onTemplateSelect: (template: NoteTemplate) => Promise<boolean>;
 }) {
-	const activeWorkspaceId = useActiveWorkspaceId();
-	const templateData = useQuery(
-		api.templates.list,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
-	);
 	const [isApplyingTemplate, setIsApplyingTemplate] = React.useReducer(
 		(_current: boolean, next: boolean) => next,
 		false,
 	);
-	const templates = React.useMemo(
-		() => getSelectableNoteTemplates(templateData),
-		[templateData],
+	const selectableTemplates = React.useMemo(
+		() => getSelectableNoteTemplates(templates),
+		[templates],
 	);
 	const currentSlug = selectedSlug;
-	const currentTemplate = templates.find(
+	const currentTemplate = selectableTemplates.find(
 		(template) => currentSlug !== null && template.slug === currentSlug,
 	);
-	const isDisabled = disabled || isApplyingTemplate || templates.length === 0;
+
+	if (currentSlug !== null && !currentTemplate) {
+		return null;
+	}
+
+	const isDisabled = disabled || isApplyingTemplate;
 	const triggerLabel = isApplyingTemplate
 		? "Applying..."
-		: templates.length === 0
-			? "No templates"
-			: (currentTemplate?.name ?? "Enhance");
+		: (currentTemplate?.name ?? "Enhance");
 	const triggerIcon =
 		currentTemplate?.slug ??
 		(currentSlug === null ? ENHANCED_NOTE_TEMPLATE_SLUG : null);
@@ -59,7 +56,7 @@ export function NoteTemplateSelect({
 			disabled={isDisabled}
 			value={currentSlug ?? undefined}
 			onValueChange={async (value) => {
-				const selectedTemplate = templates.find(
+				const selectedTemplate = selectableTemplates.find(
 					(template) => template.slug === value,
 				);
 
@@ -103,7 +100,7 @@ export function NoteTemplateSelect({
 				</span>
 			</SelectTrigger>
 			<SelectContent align="end">
-				{templates.map((template) => {
+				{selectableTemplates.map((template) => {
 					const Icon = getTemplateIcon(template.slug);
 
 					return (
