@@ -1,6 +1,11 @@
 import { Readable } from "node:stream";
 
 const getHostedApiBaseUrl = () => process.env.SITE_URL?.trim() || "";
+const RECOMPUTED_RESPONSE_HEADERS = new Set([
+	"content-encoding",
+	"content-length",
+	"transfer-encoding",
+]);
 
 export const proxyHostedAiRequest = async ({
 	path,
@@ -66,6 +71,10 @@ export const proxyHostedAiRequest = async ({
 	}
 
 	for (const [key, value] of proxyResponse.headers.entries()) {
+		if (RECOMPUTED_RESPONSE_HEADERS.has(key.toLowerCase())) {
+			continue;
+		}
+
 		response.setHeader(key, value);
 	}
 
