@@ -1,12 +1,36 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
-import { House, MessageCircle } from "lucide-react";
+import { House, MessageCircle, UsersRound } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NavPlatform } from "@/components/nav/nav-main";
 
 afterEach(cleanup);
 
 describe("NavPlatform", () => {
+	it("renders the Shared count with the platform badge treatment", () => {
+		render(
+			<SidebarProvider>
+				<NavPlatform
+					items={[
+						{
+							action: "view",
+							badge: 3,
+							icon: UsersRound,
+							title: "Shared",
+							view: "shared",
+						},
+					]}
+					onInboxToggle={vi.fn()}
+					onViewChange={vi.fn()}
+				/>
+			</SidebarProvider>,
+		);
+
+		const badge = screen.getByText("3");
+		expect(badge.className).toContain("rounded-full");
+		expect(badge.className).toContain("tabular-nums");
+	});
+
 	it("opens Ask AI with Command-Option-N and shows its shortcut hint", () => {
 		const onViewChange = vi.fn();
 

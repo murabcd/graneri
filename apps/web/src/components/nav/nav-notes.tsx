@@ -39,10 +39,6 @@ const SIDEBAR_NOTE_SKELETON_IDS = [
 type NoteListSort = SidebarSortValue;
 export function NavNotes({
 	notes,
-	title = "Notes",
-	emptyMessage = "No notes yet",
-	showStarred = true,
-	filterProjectNotes = true,
 	currentNoteId,
 	currentNoteTitle,
 	recordingNoteId = null,
@@ -53,10 +49,6 @@ export function NavNotes({
 	onCreateNote,
 }: {
 	notes: Array<Doc<"notes">> | undefined;
-	title?: string;
-	emptyMessage?: string;
-	showStarred?: boolean;
-	filterProjectNotes?: boolean;
 	currentNoteId: Id<"notes"> | null;
 	currentNoteTitle?: string;
 	recordingNoteId?: Id<"notes"> | null;
@@ -64,41 +56,74 @@ export function NavNotes({
 	onNoteSelect: (noteId: Id<"notes">) => void;
 	onNoteTitleChange?: (title: string) => void;
 	onNoteTrashed?: (noteId: Id<"notes">) => void;
-	onCreateNote?: () => void;
+	onCreateNote: () => void;
 }) {
 	const [filtersOpen, setFiltersOpen] = React.useState(false);
 	const [sortBy, setSortBy] = React.useState<NoteListSort>("updated");
-	const noteSectionCreateNote = title === "Notes" ? onCreateNote : undefined;
-	const canSortNotes = noteSectionCreateNote !== undefined;
-	const starredNotes = React.useMemo(
-		() => (notes ?? []).filter((note) => note.isStarred),
-		[notes],
+	const visibleNoteSource = React.useMemo(
+		() =>
+			sortNotes(
+				(notes ?? []).filter((note) => !note.projectId),
+				sortBy,
+			),
+		[notes, sortBy],
 	);
-	const visibleNoteSource = React.useMemo(() => {
-		const source = filterProjectNotes
-			? (notes ?? []).filter((note) => !note.projectId)
-			: (notes ?? []);
-
-		return canSortNotes ? sortNotes(source, sortBy) : source;
-	}, [canSortNotes, filterProjectNotes, notes, sortBy]);
 	const sortOptions = getSidebarSortOptions(sortBy);
 	const [showAllNotes, setShowAllNotes] = React.useState(false);
-	const isNotesPending = notes === undefined;
 	const hasMoreNotes = visibleNoteSource.length > MAX_VISIBLE_NOTES;
 	const visibleNotes = showAllNotes
 		? visibleNoteSource
 		: visibleNoteSource.slice(0, MAX_VISIBLE_NOTES);
 
 	return (
-		<>
-			{showStarred && starredNotes.length > 0 ? (
-				<SidebarCollapsibleGroup
-					title="Starred"
-					className="group-data-[collapsible=icon]:hidden"
-					storageKey="starred-notes"
-				>
+		<SidebarCollapsibleGroup
+			title="Notes"
+			className="group-data-[collapsible=icon]:hidden"
+			storageKey="notes"
+			actionClassName={`${SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME} ${SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME} ${filtersOpen ? SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME : ""}`}
+			actions={
+				<div className="flex items-center gap-0.5">
+					<SidebarSortMenu
+						label="Sort notes"
+						open={filtersOpen}
+						options={sortOptions}
+						onOpenChange={setFiltersOpen}
+						onSortChange={setSortBy}
+					/>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								aria-label="Add note"
+								className="cursor-pointer"
+								onClick={onCreateNote}
+							>
+								<Plus />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent
+							side="bottom"
+							align="center"
+							sideOffset={8}
+							className="pointer-events-none select-none"
+						>
+							Add note
+						</TooltipContent>
+					</Tooltip>
+				</div>
+			}
+		>
+			{notes === undefined ? (
+				<NavNotesSkeleton />
+			) : (
+				<>
+					{visibleNoteSource.length === 0 ? (
+						<div className="px-2 text-xs text-muted-foreground/50">
+							{notes.length > 0 ? "All notes are in projects" : "No notes yet"}
+						</div>
+					) : null}
 					<SidebarNotesList
-						notes={starredNotes}
+						notes={visibleNotes}
 						currentNoteId={currentNoteId}
 						currentNoteTitle={currentNoteTitle}
 						recordingNoteId={recordingNoteId}
@@ -107,90 +132,24 @@ export function NavNotes({
 						onNoteTitleChange={onNoteTitleChange}
 						onNoteTrashed={onNoteTrashed}
 					/>
-				</SidebarCollapsibleGroup>
-			) : null}
-			<SidebarCollapsibleGroup
-				title={title}
-				className="group-data-[collapsible=icon]:hidden"
-				storageKey={title === "Notes" ? "notes" : "shared"}
-				actionClassName={
-					canSortNotes
-						? `${SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME} ${SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME} ${filtersOpen ? SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME : ""}`
-						: undefined
-				}
-				actions={
-					noteSectionCreateNote ? (
-						<div className="flex items-center gap-0.5">
-							<SidebarSortMenu
-								label="Sort notes"
-								open={filtersOpen}
-								options={sortOptions}
-								onOpenChange={setFiltersOpen}
-								onSortChange={setSortBy}
-							/>
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<button
-										type="button"
-										aria-label="Add note"
-										className="cursor-pointer"
-										onClick={noteSectionCreateNote}
-									>
-										<Plus />
-									</button>
-								</TooltipTrigger>
-								<TooltipContent
-									side="bottom"
-									align="center"
-									sideOffset={8}
-									className="pointer-events-none select-none"
+					{hasMoreNotes ? (
+						<SidebarMenu>
+							<SidebarMenuItem>
+								<SidebarMenuButton
+									className="text-sidebar-foreground/70 hover:bg-transparent hover:text-inherit"
+									onClick={() => setShowAllNotes((prev) => !prev)}
 								>
-									Add note
-								</TooltipContent>
-							</Tooltip>
-						</div>
-					) : undefined
-				}
-			>
-				{isNotesPending ? <NavNotesSkeleton /> : null}
-				{notes && visibleNoteSource.length === 0 ? (
-					<div className="px-2 text-xs text-muted-foreground/50">
-						{filterProjectNotes && notes.length > 0
-							? "All notes are in projects"
-							: emptyMessage}
-					</div>
-				) : null}
-				{isNotesPending ? null : (
-					<>
-						<SidebarNotesList
-							notes={visibleNotes}
-							currentNoteId={currentNoteId}
-							currentNoteTitle={currentNoteTitle}
-							recordingNoteId={recordingNoteId}
-							onPrefetchNote={onPrefetchNote}
-							onNoteSelect={onNoteSelect}
-							onNoteTitleChange={onNoteTitleChange}
-							onNoteTrashed={onNoteTrashed}
-						/>
-						{hasMoreNotes ? (
-							<SidebarMenu>
-								<SidebarMenuItem>
-									<SidebarMenuButton
-										className="text-sidebar-foreground/70 hover:bg-transparent hover:text-inherit"
-										onClick={() => setShowAllNotes((prev) => !prev)}
-									>
-										<MoreHorizontal />
-										<span className="text-xs">
-											{showAllNotes ? "Show less" : "Show more"}
-										</span>
-									</SidebarMenuButton>
-								</SidebarMenuItem>
-							</SidebarMenu>
-						) : null}
-					</>
-				)}
-			</SidebarCollapsibleGroup>
-		</>
+									<MoreHorizontal />
+									<span className="text-xs">
+										{showAllNotes ? "Show less" : "Show more"}
+									</span>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+						</SidebarMenu>
+					) : null}
+				</>
+			)}
+		</SidebarCollapsibleGroup>
 	);
 }
 

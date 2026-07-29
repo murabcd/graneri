@@ -31,23 +31,21 @@ import { useRecordingNoteId } from "@/hooks/use-transcription-session";
 import { useApplicationCommand } from "@/lib/application-command";
 import { getChatId } from "@/lib/chat";
 import type { ChatPluginSelection } from "@/lib/chat-plugin-prefill";
-import { SIDEBAR_NAVIGATION } from "@/lib/navigation";
+import {
+	createSidebarNavigationItems,
+	type SidebarNavigationItem,
+} from "@/lib/navigation";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 
-type NoteNavigationSource = "notes" | "projects" | "shared" | "starred";
+type NoteNavigationSource = "notes" | "projects" | "starred";
 
 type AppSidebarUser = {
 	name: string;
 	email: string;
 	avatar: string;
-};
-
-type AppSidebarNavItem = (typeof SIDEBAR_NAVIGATION)[number] & {
-	isActive: boolean;
-	badge?: number;
 };
 
 type SidebarInboxItem = NonNullable<
@@ -291,6 +289,7 @@ function useAppSidebarModel({
 	isMobile,
 	notes,
 	projects,
+	sharedNotes,
 	onChatSelect,
 	onCreateNote,
 	onInboxOpenChange,
@@ -311,6 +310,7 @@ function useAppSidebarModel({
 	isMobile: boolean;
 	notes: Array<Doc<"notes">> | undefined;
 	projects: Array<Doc<"projects">> | undefined;
+	sharedNotes: Array<Doc<"notes">> | undefined;
 	onChatSelect: (chatId: string) => void;
 	onCreateNote: () => void;
 	onInboxOpenChange: (open: boolean) => void;
@@ -375,6 +375,7 @@ function useAppSidebarModel({
 		).length ?? 0;
 	const activeAutomationCount =
 		automations?.filter((automation) => !automation.isPaused).length ?? 0;
+	const sharedNoteCount = sharedNotes?.length ?? 0;
 	const recordingNoteId = useRecordingNoteId();
 
 	React.useEffect(() => {
@@ -387,26 +388,24 @@ function useAppSidebarModel({
 		dispatchUi({ type: "resetReadInboxItems" });
 	}, [activeWorkspaceId]);
 
-	const navItems = React.useMemo<AppSidebarNavItem[]>(
+	const navItems = React.useMemo(
 		() =>
-			SIDEBAR_NAVIGATION.map((item) => {
-				const badge =
-					item.action === "inbox"
-						? unreadInboxCount
-						: item.action === "view" && item.view === "automation"
-							? activeAutomationCount
-							: 0;
-
-				return {
-					...item,
-					isActive:
-						item.action === "inbox"
-							? inboxOpen
-							: item.action === "view" && item.view === currentView,
-					badge: badge > 0 ? badge : undefined,
-				};
+			createSidebarNavigationItems({
+				counts: {
+					activeAutomations: activeAutomationCount,
+					sharedNotes: sharedNoteCount,
+					unreadInboxItems: unreadInboxCount,
+				},
+				currentView,
+				inboxOpen,
 			}),
-		[activeAutomationCount, currentView, inboxOpen, unreadInboxCount],
+		[
+			activeAutomationCount,
+			currentView,
+			inboxOpen,
+			sharedNoteCount,
+			unreadInboxCount,
+		],
 	);
 	const projectNamesById = React.useMemo(
 		() =>
@@ -559,6 +558,7 @@ export function AppSidebar({
 		isMobile,
 		notes,
 		projects,
+		sharedNotes,
 		onChatSelect,
 		onCreateNote,
 		onInboxOpenChange,
@@ -611,7 +611,6 @@ export function AppSidebar({
 					onViewChange={model.handleViewChange}
 					projects={projects}
 					recordingNoteId={model.recordingNoteId}
-					sharedNotes={sharedNotes}
 				/>
 				<AppSidebarFooterSection
 					onRecipesOpen={model.handleRecipesOpen}
@@ -704,7 +703,7 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 	activeWorkspaceId: Id<"workspaces"> | null;
 	currentView: AppView;
 	desktopSafeTop: boolean;
-	navItems: AppSidebarNavItem[];
+	navItems: SidebarNavigationItem[];
 	onCreateNote: () => void;
 	onSearchOpen: () => void;
 	onWorkspaceCreate: (input: { name: string }) => Promise<WorkspaceRecord>;
@@ -772,10 +771,6 @@ function useSidebarNoteSelection({
 		(noteId: Id<"notes">) => selectNoteFromSource(noteId, "starred"),
 		[selectNoteFromSource],
 	);
-	const handleSharedNoteSelect = React.useCallback(
-		(noteId: Id<"notes">) => selectNoteFromSource(noteId, "shared"),
-		[selectNoteFromSource],
-	);
 	const handleNotesNoteSelect = React.useCallback(
 		(noteId: Id<"notes">) => selectNoteFromSource(noteId, "notes"),
 		[selectNoteFromSource],
@@ -790,7 +785,6 @@ function useSidebarNoteSelection({
 		autoRevealActiveNoteProject: activeNoteNavigationSource !== "starred",
 		handleNotesNoteSelect,
 		handleProjectNoteSelect,
-		handleSharedNoteSelect,
 		handleStarredNoteSelect,
 	};
 }
@@ -821,7 +815,6 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	onViewChange,
 	projects,
 	recordingNoteId,
-	sharedNotes,
 }: {
 	activeWorkspaceId: Id<"workspaces"> | null;
 	chats: Array<Doc<"chats">> | undefined;
@@ -835,7 +828,7 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	onChatSelect: (chatId: string) => void;
 	onAddAutomation?: (chatId: string) => void;
 	inboxOpen: boolean;
-	navItems: AppSidebarNavItem[];
+	navItems: SidebarNavigationItem[];
 	notes: Array<Doc<"notes">> | undefined;
 	onCreateNote: () => void;
 	onCreateNoteInsideProject: (projectId: Id<"projects">) => void;
@@ -848,7 +841,6 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	onViewChange: (view: NavigableAppView) => void;
 	projects: Array<Doc<"projects">> | undefined;
 	recordingNoteId: Id<"notes"> | null;
-	sharedNotes: Array<Doc<"notes">> | undefined;
 }) {
 	const automationChatIds = React.useMemo(
 		() => new Set((automations ?? []).map((automation) => automation.chatId)),
@@ -859,7 +851,6 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 		autoRevealActiveNoteProject,
 		handleNotesNoteSelect,
 		handleProjectNoteSelect,
-		handleSharedNoteSelect,
 		handleStarredNoteSelect,
 	} = useSidebarNoteSelection({
 		currentNoteId,
@@ -894,25 +885,8 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 				onNoteTitleChange={onNoteTitleChange}
 				onNoteTrashed={onNoteTrashed}
 			/>
-			{(sharedNotes?.length ?? 0) > 0 ? (
-				<NavNotes
-					notes={sharedNotes}
-					title="Shared"
-					emptyMessage="No shared notes yet"
-					showStarred={false}
-					filterProjectNotes={false}
-					currentNoteId={activeNoteId}
-					currentNoteTitle={currentNoteTitle}
-					recordingNoteId={recordingNoteId}
-					onPrefetchNote={onNotePrefetch}
-					onNoteSelect={handleSharedNoteSelect}
-					onNoteTitleChange={onNoteTitleChange}
-					onNoteTrashed={onNoteTrashed}
-				/>
-			) : null}
 			<NavNotes
 				notes={notes}
-				showStarred={false}
 				currentNoteId={activeNoteId}
 				currentNoteTitle={currentNoteTitle}
 				recordingNoteId={recordingNoteId}
