@@ -1,4 +1,5 @@
 import { BrowserWindow, screen, shell } from "electron";
+import { createAutoStartNoteSearch } from "../../../packages/platform/src/note-capture-navigation.mjs";
 import { createBrowserMeetingWindowMonitor } from "./browser-meeting-window-monitor.mjs";
 import { createRendererWebPreferences } from "./desktop-renderer-window.mjs";
 import { resolveDesktopRuntimeExecutablePath } from "./desktop-runtime-paths.mjs";
@@ -470,7 +471,9 @@ export const createMeetingDetection = ({
 
 		await showMainWindow({
 			pathname: "/note",
-			search: "?capture=1&meeting=1",
+			search: createAutoStartNoteSearch({
+				stopCaptureWhenMeetingEnds: true,
+			}),
 		});
 	};
 

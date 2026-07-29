@@ -1,3 +1,5 @@
+import { createAutoStartNoteSearch } from "../../../packages/platform/src/note-capture-navigation.mjs";
+
 export const createDesktopTrayMenuTemplate = ({
 	appName,
 	appVersion,
@@ -23,7 +25,7 @@ export const createDesktopTrayMenuTemplate = ({
 		click: () => {
 			void onOpenMainWindow({
 				pathname: "/note",
-				search: "?capture=1",
+				search: createAutoStartNoteSearch(),
 			});
 		},
 	},

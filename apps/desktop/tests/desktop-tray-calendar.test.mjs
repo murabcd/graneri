@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createAutoStartNoteSearch } from "../../../packages/platform/src/note-capture-navigation.mjs";
 import { createDesktopTrayCalendar } from "../src/desktop-tray-calendar.mjs";
 import {
 	createLoadingTrayCalendarState,
@@ -57,6 +58,43 @@ const createCalendarReminderHarness = ({ events, preferences }) => {
 		shownScheduledMeetingReminders,
 	};
 };
+
+test("creates one-shot auto-start navigation for detected meeting widgets", () => {
+	const searchParams = new URLSearchParams(
+		createAutoStartNoteSearch({
+			stopCaptureWhenMeetingEnds: true,
+		}).slice(1),
+	);
+
+	assert.equal(searchParams.get("capture"), "1");
+	assert.match(searchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
+	assert.equal(searchParams.get("meeting"), "1");
+});
+
+test("opens live tray meetings with a one-shot capture request", async () => {
+	const event = createMeetingEvent({
+		endAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+		startAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+	});
+	const harness = createCalendarReminderHarness({
+		events: [event],
+		preferences: {
+			notifyForAutoDetectedMeetings: false,
+			notifyForScheduledMeetings: false,
+		},
+	});
+
+	await harness.calendar.openCalendarEventNote(event);
+
+	assert.equal(harness.openedMainWindows.length, 1);
+	const searchParams = new URLSearchParams(
+		harness.openedMainWindows[0].search.slice(1),
+	);
+	assert.equal(searchParams.get("capture"), "1");
+	assert.match(searchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
+	assert.equal(searchParams.get("meeting"), "1");
+	assert.deepEqual(harness.openedExternalUrls, [event.meetingUrl]);
+});
 
 test("detects live calendar meetings", () => {
 	const event = createMeetingEvent();

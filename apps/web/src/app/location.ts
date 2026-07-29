@@ -1,3 +1,4 @@
+import { appendNoteCaptureSearchParams } from "@workspace/platform/note-capture-navigation";
 import type {
 	AppCanonicalPath,
 	AppLocationState,
@@ -379,16 +380,11 @@ export const createNoteSearch = ({
 		searchParams.set("noteId", noteId);
 	}
 
-	const normalizedCaptureRequestId = captureRequestId?.trim() ?? null;
-
-	if (autoStartCapture && normalizedCaptureRequestId) {
-		searchParams.set("capture", "1");
-		searchParams.set("captureRequestId", normalizedCaptureRequestId);
-	}
-
-	if (stopCaptureWhenMeetingEnds) {
-		searchParams.set("meeting", "1");
-	}
+	appendNoteCaptureSearchParams({
+		captureRequestId: autoStartCapture ? captureRequestId : null,
+		searchParams,
+		stopCaptureWhenMeetingEnds,
+	});
 
 	if (scheduledAutoStartAt?.trim()) {
 		searchParams.set("captureAt", scheduledAutoStartAt);

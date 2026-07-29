@@ -85,9 +85,13 @@ test("tray menu actions preserve their navigation and quit contracts", () => {
 	quitOptions.submenu[0].click({ checked: false });
 	quitOptions.submenu[1].click();
 
-	assert.deepEqual(calls, [
-		["open-main-window", undefined],
-		["open-main-window", { pathname: "/note", search: "?capture=1" }],
+	assert.deepEqual(calls[0], ["open-main-window", undefined]);
+	assert.equal(calls[1][0], "open-main-window");
+	assert.equal(calls[1][1].pathname, "/note");
+	const quickNoteSearchParams = new URLSearchParams(calls[1][1].search.slice(1));
+	assert.equal(quickNoteSearchParams.get("capture"), "1");
+	assert.match(quickNoteSearchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
+	assert.deepEqual(calls.slice(2), [
 		["open-main-window", { pathname: "/settings/profile" }],
 		["check-for-updates"],
 		["quit"],

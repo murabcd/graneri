@@ -1,5 +1,9 @@
 import electron from "electron";
 import {
+	appendNoteCaptureSearchParams,
+	createNoteCaptureRequestId,
+} from "../../../packages/platform/src/note-capture-navigation.mjs";
+import {
 	createInitialTrayCalendarState,
 	createLoadingTrayCalendarState,
 	createUnavailableTrayCalendarState,
@@ -41,13 +45,11 @@ const createCalendarEventNoteSearch = (event, options = {}) => {
 	const stopCaptureWhenMeetingEnds =
 		options.stopCaptureWhenMeetingEnds === true;
 
-	if (autoStartCapture) {
-		searchParams.set("capture", "1");
-	}
-
-	if (stopCaptureWhenMeetingEnds) {
-		searchParams.set("meeting", "1");
-	}
+	appendNoteCaptureSearchParams({
+		captureRequestId: autoStartCapture ? createNoteCaptureRequestId() : null,
+		searchParams,
+		stopCaptureWhenMeetingEnds,
+	});
 
 	searchParams.set("calendarEventId", event.id);
 	searchParams.set("calendarId", event.calendarId);

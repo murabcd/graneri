@@ -3,6 +3,7 @@ import {
 	requestEnhancedStructuredNote,
 	requestTemplateStructuredNote,
 } from "../src/lib/note-template-application";
+import { loadRuntimeConfig } from "../src/lib/runtime-config";
 
 const createNdjsonResponse = (lines: string[]) =>
 	new Response(
@@ -125,5 +126,44 @@ describe("note template application requests", () => {
 			),
 		).rejects.toThrow("Authentication is required.");
 		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it("routes note generation through the desktop local API origin", async () => {
+		const originalDesktopBridge = window.graneriDesktop;
+		const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			Response.json({
+				note: {
+					title: "Weekly sync",
+					overview: ["Reviewed progress"],
+					sections: [],
+				},
+			}),
+		);
+
+		try {
+			window.graneriDesktop = {
+				getRuntimeConfig: async () => ({
+					convexUrl: "https://convex.example",
+					convexSiteUrl: "https://convex-site.example",
+					localApiOrigin: "http://127.0.0.1:43210",
+				}),
+			} as Window["graneriDesktop"];
+			await loadRuntimeConfig();
+			await requestEnhancedStructuredNote(
+				{ title: "Weekly sync", transcript: "Reviewed progress" },
+				{
+					fetcher,
+					resolveConvexToken: async () => "convex-token",
+				},
+			);
+		} finally {
+			window.graneriDesktop = originalDesktopBridge;
+			await loadRuntimeConfig();
+		}
+
+		expect(fetcher).toHaveBeenCalledWith(
+			"http://127.0.0.1:43210/api/enhance-note",
+			expect.objectContaining({ method: "POST" }),
+		);
 	});
 });

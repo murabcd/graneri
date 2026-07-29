@@ -1,6 +1,6 @@
-import { buildHostedRoutePath } from "@workspace/ai/hosted-route-catalog";
 import { normalizeTranscriptionLanguage } from "@workspace/ai/transcription";
 import { getCachedConvexToken } from "@/lib/convex-token";
+import { getHostedApiUrl } from "@/lib/runtime-config";
 import type { TranscriptSpeaker } from "@/lib/transcript";
 import type { TranscriptionLogger } from "@/lib/transcription-logger";
 
@@ -100,7 +100,7 @@ const createRealtimeSession = async (
 	}
 
 	const response = await fetch(
-		buildHostedRoutePath("realtimeTranscriptionSession"),
+		getHostedApiUrl("realtimeTranscriptionSession"),
 		{
 			method: "POST",
 			headers: {

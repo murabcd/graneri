@@ -1,5 +1,6 @@
-export const createNoteCaptureRequestId = (value?: string | null) =>
-	value?.trim() || crypto.randomUUID();
+import { createNoteCaptureRequestId } from "@workspace/platform/note-capture-navigation";
+
+export { createNoteCaptureRequestId };
 
 export const getNoteCaptureRequestIdForAutoStart = ({
 	autoStartCapture,
