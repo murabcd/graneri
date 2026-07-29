@@ -1271,7 +1271,7 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 											{templateApplyState.streamedMarkdown}
 										</MarkdownStreamEntry>
 									) : (
-										<div className="min-h-[320px] text-base text-muted-foreground">
+										<div className="min-h-80 text-sm text-muted-foreground">
 											<ShimmerText>Thinking</ShimmerText>
 										</div>
 									)
