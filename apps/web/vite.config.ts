@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import type { HtmlTagDescriptor, Plugin } from "vite";
+import type { HtmlTagDescriptor, Plugin, Rolldown } from "vite";
 import { defineConfig } from "vite";
 import { graneriHostedApiPlugin } from "./server/hosted-api-plugin";
 
@@ -199,15 +199,8 @@ const vendorChunkPolicies: VendorChunkPolicy[] = [
 	},
 ];
 
-const getVendorChunkName = (id: string) => {
+const getVendorChunkName: Rolldown.CodeSplittingNameFunction = (id) => {
 	const normalizedId = id.replaceAll("\\", "/");
-
-	if (
-		normalizedId.includes("\0vite/") ||
-		normalizedId.includes("vite/preload-helper")
-	) {
-		return "vite-runtime";
-	}
 
 	if (!normalizedId.includes("/node_modules/")) {
 		return undefined;
@@ -235,9 +228,15 @@ export default defineConfig(() => {
 		],
 		build: {
 			modulePreload: false,
-			rollupOptions: {
+			rolldownOptions: {
 				output: {
-					manualChunks: getVendorChunkName,
+					codeSplitting: {
+						groups: [
+							{
+								name: getVendorChunkName,
+							},
+						],
+					},
 				},
 			},
 		},
