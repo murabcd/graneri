@@ -116,6 +116,7 @@ import { useComposerDraft } from "@/hooks/use-composer-draft";
 import {
 	type NoteChatGroups,
 	type NoteChatSummary,
+	resolveNoteComposerPlaceholder,
 	useNoteDiscussionSession,
 } from "@/hooks/use-note-discussion-session";
 import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
@@ -470,12 +471,10 @@ const useNoteComposerController = ({
 		handleReasoningEffortChange,
 		handleServiceTierChange,
 		handleSelectedModelChange,
-		hasKnownNoteChat,
 		hasStoredCurrentChat,
 		hasEarlierMessages,
 		historyMarkerState,
 		isLoadingEarlierMessages,
-		isNoteChatsLoading,
 		latestNoteChat,
 		loadEarlierMessages,
 		noteChats,
@@ -890,11 +889,7 @@ const useNoteComposerController = ({
 		isTranscriptOpen,
 		isTranscriptSessionReady: transcriptSession.isTranscriptSessionReady,
 	});
-	const composerPlaceholder = isNoteChatsLoading
-		? "Ask for follow-up"
-		: hasKnownNoteChat
-			? "Ask for follow-up"
-			: "Ask anything. @ to mention recipes";
+	const composerPlaceholder = resolveNoteComposerPlaceholder(noteChats);
 	const recipes = React.useMemo(
 		() =>
 			(recipeData ?? []).map((recipe) => ({

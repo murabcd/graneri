@@ -78,6 +78,18 @@ export const groupNoteChatsForSelector = (chats: NoteChatSummary[]) => {
 
 export type NoteChatGroups = ReturnType<typeof groupNoteChatsForSelector>;
 
+export const resolveNoteComposerPlaceholder = (
+	noteChats: NoteChatSummary[] | undefined,
+) => {
+	if (noteChats === undefined) {
+		return "";
+	}
+
+	return noteChats.length > 0
+		? "Ask for follow-up"
+		: "Ask anything. @ to mention recipes";
+};
+
 export const useNoteDiscussionSession = ({
 	activeWorkspaceId,
 	noteId,
@@ -294,9 +306,6 @@ export const useNoteDiscussionSession = ({
 		handleReasoningEffortChange,
 		handleServiceTierChange,
 		handleSelectedModelChange,
-		hasKnownNoteChat: Boolean(
-			latestNoteChat || selectedNoteChat || currentChatSession,
-		),
 		hasStoredCurrentChat,
 		hasEarlierMessages,
 		historyMarkerState:
@@ -314,9 +323,6 @@ export const useNoteDiscussionSession = ({
 						compactionThroughMessageId,
 					},
 		isLoadingEarlierMessages,
-		isNoteChatsLoading: Boolean(
-			noteId && activeWorkspaceId && noteChats === undefined,
-		),
 		latestNoteChat,
 		loadEarlierMessages,
 		noteChats,

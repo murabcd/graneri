@@ -114,6 +114,7 @@ import { ActiveWorkspaceProvider } from "@/hooks/active-workspace-provider";
 import { useAutomationActions } from "@/hooks/use-automation-actions";
 import { useAutomationNotifications } from "@/hooks/use-automation-notifications";
 import { prefetchChatMessagesSnapshot } from "@/hooks/use-chat-messages-snapshot";
+import { useNoteNavigationPreparation } from "@/hooks/use-note-navigation-preparation";
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
 import { type AuthSession, authClient } from "@/lib/auth-client";
 import { getChatId } from "@/lib/chat";
@@ -302,6 +303,13 @@ const useAppShellState = ({
 	const [noteEditorActionsStore] = React.useState(
 		() => new NoteEditorActionsStore(),
 	);
+	const {
+		cancelPendingNoteNavigation,
+		prefetchNote: handlePrefetchNote,
+		prepareNoteNavigation,
+	} = useNoteNavigationPreparation({
+		workspaceId: resolvedActiveWorkspaceId,
+	});
 	const currentNoteEditorActions = React.useSyncExternalStore(
 		noteEditorActionsStore.subscribe,
 		noteEditorActionsStore.getSnapshot,
@@ -311,12 +319,13 @@ const useAppShellState = ({
 	const [currentNoteCommentsOpener, setCurrentNoteCommentsOpener] =
 		React.useState<(() => void) | null>(null);
 	const handleLocationSynchronized = React.useCallback(() => {
+		cancelPendingNoteNavigation();
 		setAutomationDialogOpen(false);
 		setEditingAutomationId(null);
 		setAutomationChatId(null);
 		setCurrentNoteEditorActions(null);
 		setCurrentNoteCommentsOpener(null);
-	}, [setCurrentNoteEditorActions]);
+	}, [cancelPendingNoteNavigation, setCurrentNoteEditorActions]);
 	const navigation = useApplicationNavigationSession({
 		onLocationSynchronized: handleLocationSynchronized,
 	});
@@ -813,11 +822,6 @@ const useAppShellState = ({
 		[setNavigationInboxOpen],
 	);
 
-	const handlePrefetchNote = React.useCallback(
-		(_noteId: Id<"notes">) => {},
-		[],
-	);
-
 	const openNote = React.useCallback(
 		(
 			noteId: Id<"notes">,
@@ -832,17 +836,18 @@ const useAppShellState = ({
 				autoStartCapture: options?.autoStartCapture,
 				captureRequestId: options?.captureRequestId,
 			});
-			handlePrefetchNote(noteId);
-			navigateNote(noteId, {
-				autoStartCapture: options?.autoStartCapture,
-				captureRequestId,
-				scheduledAutoStartAt: options?.scheduledAutoStartAt,
-				stopCaptureWhenMeetingEnds: options?.stopCaptureWhenMeetingEnds,
+			prepareNoteNavigation(noteId, () => {
+				navigateNote(noteId, {
+					autoStartCapture: options?.autoStartCapture,
+					captureRequestId,
+					scheduledAutoStartAt: options?.scheduledAutoStartAt,
+					stopCaptureWhenMeetingEnds: options?.stopCaptureWhenMeetingEnds,
+				});
+				setCurrentNoteEditorActions(null);
+				setCurrentNoteCommentsOpener(null);
 			});
-			setCurrentNoteEditorActions(null);
-			setCurrentNoteCommentsOpener(null);
 		},
-		[handlePrefetchNote, navigateNote, setCurrentNoteEditorActions],
+		[navigateNote, prepareNoteNavigation, setCurrentNoteEditorActions],
 	);
 
 	const handleCreateNote = React.useCallback(

@@ -3,6 +3,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import {
 	groupNoteChatsForSelector,
 	type NoteChatSummary,
+	resolveNoteComposerPlaceholder,
 } from "../src/hooks/use-note-discussion-session";
 
 const createChat = ({
@@ -40,4 +41,22 @@ it("groups note discussions by the current local calendar day", () => {
 		today: [today],
 		previous: [previous],
 	});
+});
+
+it("does not speculate about note discussion state while it is unresolved", () => {
+	expect(resolveNoteComposerPlaceholder(undefined)).toBe("");
+});
+
+it("resolves the composer placeholder from the destination note discussions", () => {
+	expect(resolveNoteComposerPlaceholder([])).toBe(
+		"Ask anything. @ to mention recipes",
+	);
+	expect(
+		resolveNoteComposerPlaceholder([
+			createChat({
+				chatId: "existing-discussion",
+				updatedAt: Date.now(),
+			}),
+		]),
+	).toBe("Ask for follow-up");
 });
