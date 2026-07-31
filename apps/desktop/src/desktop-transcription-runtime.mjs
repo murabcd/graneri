@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
-	isLowConfidenceTranscriptLogprobs,
 	isTranscriptPlaceholderText,
 	shouldKeepInterruptedTranscriptTurn,
-	summarizeTranscriptConfidence,
 } from "@workspace/ai/transcription";
 
 export function createTranscriptRecoveryStatus(overrides = {}) {
@@ -92,16 +90,7 @@ export function createDesktopTranscriptionRuntime({
 			}
 
 			const text = nextTurn.text.trim();
-			const source = speaker === "them" ? "systemAudio" : "microphone";
 			const isPlaceholder = text ? isTranscriptPlaceholderText(text) : false;
-			const isLowConfidence =
-				!nextTurn.failed && text
-					? isLowConfidenceTranscriptLogprobs({
-							logprobs: nextTurn.logprobs ?? null,
-							source,
-							text,
-						})
-					: false;
 			const shouldEmit = !nextTurn.failed && text && !isPlaceholder;
 
 			if (shouldEmit) {
@@ -116,7 +105,6 @@ export function createDesktopTranscriptionRuntime({
 
 			if (text || nextTurn.failed) {
 				logTurnDebug("turn.ordered", {
-					isLowConfidence,
 					itemId: nextTurn.itemId,
 					outcome: shouldEmit
 						? "emitted"
@@ -126,7 +114,6 @@ export function createDesktopTranscriptionRuntime({
 								? "failed"
 								: "empty",
 					previousItemId: nextTurn.previousItemId,
-					shouldDropForConfidence: false,
 					speaker,
 					...summarizeTranscriptText(text),
 				});
@@ -157,7 +144,6 @@ export function createDesktopTranscriptionRuntime({
 			endedAt: currentValue?.endedAt ?? null,
 			failed: currentValue?.failed ?? false,
 			itemId,
-			logprobs: currentValue?.logprobs ?? null,
 			previousItemId: currentValue?.previousItemId ?? null,
 			startedAt: currentValue?.startedAt ?? null,
 			text: currentValue?.text ?? "",
@@ -203,7 +189,6 @@ export function createDesktopTranscriptionRuntime({
 			const existingTurn = runtime.turns.get(event.itemId);
 			const nextTurn = upsertTurn(event.speaker, event.itemId, {
 				failed: false,
-				logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
 				startedAt: existingTurn?.startedAt ?? Date.now(),
 				text: `${existingTurn?.text ?? ""}${event.textDelta}`,
 			});
@@ -246,7 +231,6 @@ export function createDesktopTranscriptionRuntime({
 				committed: true,
 				completed: shouldKeep,
 				failed: !shouldKeep,
-				logprobs: shouldKeep ? (existingTurn?.logprobs ?? null) : null,
 				startedAt:
 					existingTurn?.startedAt ?? liveTranscript.startedAt ?? Date.now(),
 				text: shouldKeep ? interruptedText : "",
@@ -270,18 +254,12 @@ export function createDesktopTranscriptionRuntime({
 					itemId: event.itemId,
 					liveItemId: runtime.liveItemId,
 					speaker: event.speaker,
-					...summarizeTranscriptConfidenceForLog({
-						logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
-						source: event.speaker === "them" ? "systemAudio" : "microphone",
-						text: finalText,
-					}),
 					...summarizeTranscriptText(finalText),
 				});
 			}
 			upsertTurn(event.speaker, event.itemId, {
 				completed: true,
 				failed: false,
-				logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
 				startedAt:
 					existingTurn?.startedAt ?? liveTranscript.startedAt ?? Date.now(),
 				text: finalText,
@@ -372,28 +350,4 @@ function summarizeTranscriptText(value) {
 							: "empty",
 		wordCount,
 	};
-}
-
-function summarizeTranscriptConfidenceForLog({ logprobs, source, text }) {
-	const summary = summarizeTranscriptConfidence({
-		logprobs,
-		source,
-		text,
-	});
-
-	return summary
-		? {
-				confidenceAverage: summary.average,
-				confidenceLowTokenRatio: summary.lowTokenRatio,
-				confidenceMinProbability: summary.minProbability,
-				confidenceTokenCount: summary.tokenCount,
-				confidenceVeryLowTokenRatio: summary.veryLowTokenRatio,
-			}
-		: {
-				confidenceAverage: null,
-				confidenceLowTokenRatio: null,
-				confidenceMinProbability: null,
-				confidenceTokenCount: 0,
-				confidenceVeryLowTokenRatio: null,
-			};
 }

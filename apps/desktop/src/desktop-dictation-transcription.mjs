@@ -22,6 +22,9 @@ export const createDesktopDictationTranscription =
 		if (
 			!response.ok ||
 			typeof payload.text !== "string" ||
+			(payload.durationInSeconds !== null &&
+				(typeof payload.durationInSeconds !== "number" ||
+					!Number.isFinite(payload.durationInSeconds))) ||
 			!Array.isArray(payload.languages) ||
 			payload.languages.some((language) => typeof language !== "string")
 		) {
@@ -29,7 +32,7 @@ export const createDesktopDictationTranscription =
 		}
 
 		return {
-			durationInSeconds: payload.durationInSeconds ?? null,
+			durationInSeconds: payload.durationInSeconds,
 			languages: payload.languages,
 			text: payload.text,
 		};

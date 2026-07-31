@@ -120,6 +120,7 @@ describe("connectRealtimeTranscriptionTransport", () => {
 			lang: "en",
 			source: "systemAudio",
 			speaker: "them",
+			transport: "webrtc",
 		});
 
 		await transport.close();

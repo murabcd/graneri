@@ -736,7 +736,7 @@ packaged desktop bridge is missing or stale.
 
 Global dictation is a desktop-native capability, not a renderer textarea
 feature. The desktop runtime owns the global hotkey monitor, microphone capture,
-buffered AI SDK transcription, and system paste into the focused app. Renderer
+buffered OpenAI transcription, and system paste into the focused app. Renderer
 code must not duplicate dictation capture or expose route-level fallbacks for
 this path. The renderer may select the persisted global dictation hotkey mode
 through the desktop bridge; Electron applies hold, toggle, or disabled mode by
@@ -749,16 +749,27 @@ attempts immediate deletion when the request finishes. The scheduled cleanup is
 the durable guarantee when a request or action is interrupted. There is no
 client-visible generated-upload or registration lifecycle. The OpenAI request
 uses the same SHA-256 safety identifier policy as realtime transcription.
+Voice transcription does not use the Vercel AI SDK or the official OpenAI SDK:
+dictation calls `gpt-transcribe` through direct OpenAI REST, realtime session
+creation uses direct OpenAI REST, and live audio uses OpenAI WebRTC or
+WebSocket. The Vercel AI SDK remains the shared orchestration layer for
+non-transcription AI workflows.
 
 Desktop realtime transcription obtains its short-lived OpenAI client secret
 from the authenticated hosted Vercel route through the desktop local server.
 The hosted route rate-limits the authenticated identity and sends OpenAI a
 SHA-256 hash of the stable Convex token identifier as
 `OpenAI-Safety-Identifier`; the raw identity never leaves Graneri's server
-boundary. Realtime recovery is bounded to three reconnect attempts with 750 ms,
-1.5 s, and 3 s backoff, and each attempt must request a fresh short-lived
-secret. Electron must never call OpenAI with a long-lived API key or embed that
-key in a build.
+boundary. Realtime sessions use `gpt-live-transcribe` with 24 kHz PCM input,
+`high` transcription delay, and plural language hints. Browser WebRTC sessions
+use OpenAI server VAD; native WebSocket sessions disable turn detection because
+Electron commits audio buffers explicitly. Because the model does not expose
+transcription logprobs, turn acceptance must depend on transcript state and
+placeholder guards rather than a client-side confidence layer. Realtime
+recovery is bounded to three reconnect attempts with 750 ms, 1.5 s, and 3 s
+backoff. Each attempt must request a fresh short-lived secret. Electron must
+never call OpenAI with a long-lived API
+key or embed that key in a build.
 While a dictation capture is active, Electron owns a temporary global Escape
 shortcut that cancels capture and discards buffered audio without transcribing
 or pasting it. The idle dictation bar is suppressed when dictation hotkeys are

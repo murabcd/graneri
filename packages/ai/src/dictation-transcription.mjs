@@ -5,9 +5,11 @@ const OPENAI_TRANSCRIPTIONS_URL =
 	"https://api.openai.com/v1/audio/transcriptions";
 
 const getDurationInSeconds = (usage) =>
-	usage?.type === "duration" && typeof usage.seconds === "number"
+	usage?.type === "duration" &&
+	typeof usage.seconds === "number" &&
+	Number.isFinite(usage.seconds)
 		? usage.seconds
-		: undefined;
+		: null;
 
 const getDetectedLanguages = (languages) => {
 	if (

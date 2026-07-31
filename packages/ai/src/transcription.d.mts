@@ -1,20 +1,7 @@
-export declare const REALTIME_TRANSCRIPTION_MODEL: "gpt-realtime-whisper";
+export declare const REALTIME_TRANSCRIPTION_MODEL: "gpt-live-transcribe";
 export declare const DICTATION_TRANSCRIPTION_MODEL: "gpt-transcribe";
 export declare const AUDIO_TRANSCRIPTION_SAMPLE_RATE: 24000;
 export declare const REALTIME_TRANSCRIPTION_DELAY: "high";
-export declare const DESKTOP_REALTIME_PROFILE: "default";
-
-export declare const REALTIME_TRANSCRIPTION_INCLUDE_FIELDS: readonly [
-	"item.input_audio_transcription.logprobs",
-];
-
-export declare function createRealtimeTranscriptionSessionOptions(args?: {
-	language?: string | null;
-}): {
-	delay: "high";
-	language: string | null;
-	noiseReductionType: null;
-};
 
 export declare function normalizeTranscriptionLanguage(
 	value?: string | null,
@@ -76,61 +63,27 @@ export declare function isTranscriptPlaceholderText(
 	value?: string | null,
 ): boolean;
 
-export declare function createRealtimeTranscriptionSession(options?: {
-	delay?: "minimal" | "low" | "medium" | "high" | "xhigh";
+export declare function createRealtimeTranscriptionSession(options: {
 	language?: string | null;
-	noiseReductionType?: null;
+	transport: "webrtc" | "websocket";
 }): {
 	type: "transcription";
-	include: readonly ["item.input_audio_transcription.logprobs"];
 	audio: {
 		input: {
+			format: {
+				type: "audio/pcm";
+				rate: 24000;
+			};
 			noise_reduction: null;
 			transcription: {
-				delay: "minimal" | "low" | "medium" | "high" | "xhigh";
+				delay: "high";
 				model: typeof REALTIME_TRANSCRIPTION_MODEL;
-				language?: string;
+				languages?: string[];
 			};
+			turn_detection: null | { type: "server_vad" };
 		};
 	};
 };
-
-export declare function summarizeTranscriptConfidence(args: {
-	logprobs?: Array<{
-		bytes?: number[];
-		logprob?: number;
-		token?: string;
-	}> | null;
-	source?: string | null;
-	text?: string | null;
-}): {
-	average: number;
-	lowTokenRatio: number;
-	minProbability: number;
-	tokenCount: number;
-	veryLowTokenRatio: number;
-	wordCount: number;
-} | null;
-
-export declare function isLowConfidenceTranscriptLogprobs(args: {
-	logprobs?: Array<{
-		bytes?: number[];
-		logprob?: number;
-		token?: string;
-	}> | null;
-	source?: string | null;
-	text?: string | null;
-}): boolean;
-
-export declare function shouldDropTranscriptForConfidence(args: {
-	logprobs?: Array<{
-		bytes?: number[];
-		logprob?: number;
-		token?: string;
-	}> | null;
-	source?: string | null;
-	text?: string | null;
-}): boolean;
 
 export declare function shouldKeepInterruptedTranscriptTurn(
 	text?: string | null,

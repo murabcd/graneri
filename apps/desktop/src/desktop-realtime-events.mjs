@@ -18,7 +18,6 @@ export const parseDesktopRealtimeTransportEvent = ({ event, speaker }) => {
 		typeof event.delta === "string"
 	) {
 		return {
-			logprobs: event.logprobs ?? null,
 			speaker,
 			type: "partial",
 			itemId: event.item_id,
@@ -31,11 +30,10 @@ export const parseDesktopRealtimeTransportEvent = ({ event, speaker }) => {
 		event.item_id
 	) {
 		return {
-			logprobs: event.logprobs ?? null,
 			speaker,
 			type: "final",
 			itemId: event.item_id,
-			text: event.transcript ?? event.text ?? "",
+			text: event.transcript ?? "",
 		};
 	}
 

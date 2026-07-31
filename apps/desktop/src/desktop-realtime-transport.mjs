@@ -1,6 +1,6 @@
 import { createPcm16Resampler } from "@workspace/ai/pcm16-resampler";
 import {
-	DESKTOP_REALTIME_PROFILE,
+	AUDIO_TRANSCRIPTION_SAMPLE_RATE,
 	normalizeTranscriptionLanguage,
 } from "@workspace/ai/transcription";
 import WebSocket from "ws";
@@ -181,7 +181,6 @@ export const createDesktopRealtimeTransport = ({
 		logInfo({
 			message: "[desktop-realtime] flushing transport before stop",
 			details: {
-				profile: session.profile,
 				source: session.source,
 				speaker: session.speaker,
 				targetItemId,
@@ -215,7 +214,6 @@ export const createDesktopRealtimeTransport = ({
 				logError({
 					error: {
 						message: error instanceof Error ? error.message : String(error),
-						profile: session.profile,
 						source: session.source,
 						speaker: session.speaker,
 					},
@@ -307,11 +305,12 @@ export const createDesktopRealtimeTransport = ({
 			source,
 			speaker,
 		});
-		const profile = DESKTOP_REALTIME_PROFILE;
-
 		return await new Promise((resolvePromise, rejectPromise) => {
 			let didResolve = false;
-			const resampleChunk = createPcm16Resampler(captureSampleRate, 24_000);
+			const resampleChunk = createPcm16Resampler(
+				captureSampleRate,
+				AUDIO_TRANSCRIPTION_SAMPLE_RATE,
+			);
 			const socket = new WebSocketImpl(
 				"wss://api.openai.com/v1/realtime?intent=transcription",
 				{
@@ -327,7 +326,6 @@ export const createDesktopRealtimeTransport = ({
 							message: "[desktop-realtime] audio batch stats",
 							details: {
 								...details,
-								profile,
 								source,
 								speaker,
 							},
@@ -360,7 +358,6 @@ export const createDesktopRealtimeTransport = ({
 					socket.terminate();
 				}, desktopRealtimeConnectTimeoutMs),
 				pendingAudio: [],
-				profile,
 				socket,
 				source,
 				speaker,
@@ -371,7 +368,6 @@ export const createDesktopRealtimeTransport = ({
 
 			logDesktopTurnDebug("transport.session_started", {
 				language,
-				profile,
 				source,
 				speaker,
 			});
@@ -380,7 +376,6 @@ export const createDesktopRealtimeTransport = ({
 				message: "[desktop-realtime] starting transport",
 				details: {
 					language,
-					profile,
 					source,
 					speaker,
 				},
@@ -404,7 +399,6 @@ export const createDesktopRealtimeTransport = ({
 					error: {
 						didResolve,
 						message: error instanceof Error ? error.message : String(error),
-						profile,
 						source,
 						speaker,
 					},
@@ -465,7 +459,6 @@ export const createDesktopRealtimeTransport = ({
 					if (sentChunks > 0 && !session.audioDiagnostics.firstAcceptedLogged) {
 						session.audioDiagnostics.firstAcceptedLogged = true;
 						logDesktopTurnDebug("transport.audio_accepted", {
-							profile,
 							rms,
 							source,
 							speaker,
@@ -490,7 +483,6 @@ export const createDesktopRealtimeTransport = ({
 			socket.on("open", () => {
 				logDesktopTurnDebug("transport.session_open", {
 					language,
-					profile,
 					source,
 					speaker,
 				});
@@ -498,7 +490,6 @@ export const createDesktopRealtimeTransport = ({
 					message: "[desktop-realtime] transport open",
 					details: {
 						language,
-						profile,
 						source,
 						speaker,
 					},
@@ -560,7 +551,6 @@ export const createDesktopRealtimeTransport = ({
 						didResolve,
 						isClosing: session.isClosing,
 						message: error instanceof Error ? error.message : String(error),
-						profile,
 						socketState: socket.readyState,
 						source,
 						speaker,
@@ -585,7 +575,6 @@ export const createDesktopRealtimeTransport = ({
 					code,
 					didResolve,
 					isClosing: session.isClosing,
-					profile,
 					reason,
 					socketState: socket.readyState,
 					source,

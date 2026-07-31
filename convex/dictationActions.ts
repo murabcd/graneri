@@ -44,7 +44,7 @@ export const transcribeStoredAudio = internalAction({
 		});
 
 		return {
-			durationInSeconds: result.durationInSeconds ?? null,
+			durationInSeconds: result.durationInSeconds,
 			languages: result.languages,
 			text: result.text,
 		};

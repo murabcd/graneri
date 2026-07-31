@@ -38,6 +38,7 @@ test("desktop realtime requests an authenticated hosted client secret", async ()
 		lang: "en-US",
 		source: "systemAudio",
 		speaker: "them",
+		transport: "websocket",
 	});
 });
 

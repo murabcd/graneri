@@ -42,11 +42,6 @@ type TranscriptTurnState = {
 	itemId: string;
 	endedAt: number | null;
 	failed: boolean;
-	logprobs?: Array<{
-		bytes?: number[];
-		logprob?: number;
-		token?: string;
-	}> | null;
 	previousItemId: string | null;
 	startedAt: number | null;
 	text: string;
@@ -735,7 +730,6 @@ export class TranscriptionController {
 			const existingTurn = state.turns.get(event.itemId);
 			const nextTurn = this.upsertTurn(event.speaker, event.itemId, {
 				failed: false,
-				logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
 				startedAt: existingTurn?.startedAt ?? Date.now(),
 				text: `${existingTurn?.text ?? ""}${event.textDelta}`,
 			});
@@ -760,9 +754,6 @@ export class TranscriptionController {
 				committed: true,
 				completed: shouldKeepInterruptedText,
 				failed: !shouldKeepInterruptedText,
-				logprobs: shouldKeepInterruptedText
-					? (existingTurn?.logprobs ?? null)
-					: null,
 				startedAt:
 					existingTurn?.startedAt ??
 					this.getState().liveTranscript[event.speaker].startedAt ??
@@ -783,7 +774,6 @@ export class TranscriptionController {
 		this.upsertTurn(event.speaker, event.itemId, {
 			completed: true,
 			failed: false,
-			logprobs: event.logprobs ?? existingTurn?.logprobs ?? null,
 			startedAt:
 				existingTurn?.startedAt ??
 				this.getState().liveTranscript[event.speaker].startedAt ??
@@ -809,7 +799,6 @@ export class TranscriptionController {
 			endedAt: currentValue?.endedAt ?? null,
 			failed: currentValue?.failed ?? false,
 			itemId,
-			logprobs: currentValue?.logprobs ?? null,
 			previousItemId: currentValue?.previousItemId ?? null,
 			startedAt: currentValue?.startedAt ?? null,
 			text: currentValue?.text ?? "",

@@ -59,3 +59,24 @@ test("desktop dictation surfaces server errors", async () => {
 		/Authentication is required\./u,
 	);
 });
+
+test("desktop dictation rejects malformed transcription metadata", async () => {
+	const transcribe = createDesktopDictationTranscription({
+		fetchImpl: async () =>
+			new Response(
+				JSON.stringify({
+					durationInSeconds: "1.25",
+					languages: ["en"],
+					text: "Hello",
+				}),
+				{ headers: { "Content-Type": "application/json" }, status: 200 },
+			),
+		getConvexToken: () => "test-convex-token",
+		getLocalApiOrigin: () => "http://127.0.0.1:1234",
+	});
+
+	await assert.rejects(
+		async () => await transcribe({ audio: new Uint8Array([1]) }),
+		/Unable to transcribe audio\./u,
+	);
+});

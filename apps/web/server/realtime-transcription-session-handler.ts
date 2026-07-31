@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
 	createRealtimeTranscriptionSession,
-	createRealtimeTranscriptionSessionOptions,
 	normalizeTranscriptionLanguage,
 } from "@workspace/ai/transcription";
 import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
@@ -11,12 +10,13 @@ import { requestOpenAiRealtimeClientSecret } from "./openai-realtime-session-cli
 import { createServerWideEvent, emitServerWideEvent } from "./server-logger.js";
 
 type RealtimeSessionRequestBody = {
-	lang?: string;
-	speaker?: string;
-	source?: string;
+	lang?: unknown;
+	speaker?: unknown;
+	source?: unknown;
+	transport?: unknown;
 };
 
-const trim = (value: unknown) =>
+const trimString = (value: unknown) =>
 	typeof value === "string" ? value.trim() : undefined;
 
 export const handleRealtimeTranscriptionSessionRequest = async (
@@ -64,11 +64,21 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		lang,
 		source,
 		speaker: rawSpeaker,
+		transport: rawTransport,
 	} = await readJsonBody<RealtimeSessionRequestBody>(request);
-	const language = normalizeTranscriptionLanguage(lang);
+	const language = normalizeTranscriptionLanguage(trimString(lang));
 	const requestId = randomUUID();
-	const speaker = trim(rawSpeaker);
-	const normalizedSource = trim(source);
+	const speaker = trimString(rawSpeaker);
+	const normalizedSource = trimString(source);
+	const transport = rawTransport;
+	if (transport !== "webrtc" && transport !== "websocket") {
+		sendError({
+			error: "A supported realtime transcription transport is required.",
+			errorCode: "invalid_transport",
+			statusCode: 400,
+		});
+		return;
+	}
 	wideEvent.request_id = requestId;
 	wideEvent.language = language;
 	wideEvent.has_speaker = Boolean(speaker);
@@ -78,9 +88,7 @@ export const handleRealtimeTranscriptionSessionRequest = async (
 		apiKey: admission.apiKey,
 		requestId,
 		safetyIdentifier: admission.safetyIdentifier,
-		session: createRealtimeTranscriptionSession(
-			createRealtimeTranscriptionSessionOptions({ language }),
-		),
+		session: createRealtimeTranscriptionSession({ language, transport }),
 	});
 
 	wideEvent.openai_request_id = sessionResponse.headers.get("x-request-id");

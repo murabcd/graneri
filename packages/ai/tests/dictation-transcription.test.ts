@@ -92,7 +92,7 @@ describe("dictation transcription", () => {
 				safetyIdentifier: "user-hash",
 			}),
 		).resolves.toEqual({
-			durationInSeconds: undefined,
+			durationInSeconds: null,
 			languages: [],
 			text: "Hello",
 		});

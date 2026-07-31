@@ -693,57 +693,7 @@ describe("TranscriptionController", () => {
 		);
 	});
 
-	it("keeps a committed turn even when the transcription logprobs are very low", async () => {
-		const { stream } = createMockStream();
-		const transportEvents: Array<
-			(event: RealtimeTranscriptionTransportEvent) => void
-		> = [];
-		const createMicrophoneInputStream = vi.fn(async () => stream);
-		const connectTransport = vi.fn(
-			async (args: {
-				onEvent: (event: RealtimeTranscriptionTransportEvent) => void;
-			}) => {
-				transportEvents.push(args.onEvent);
-				return {
-					close: vi.fn(async () => {}),
-				} satisfies RealtimeTranscriptionTransport;
-			},
-		);
-		const controller = createController({
-			connectTransport,
-			createMicrophoneInputStream,
-		});
-		const utterances: TranscriptionControllerState["utterances"] = [];
-		controller.subscribeToEvents((event) => {
-			if (event.type === "session.utterance_committed") {
-				utterances.push(event.utterance);
-			}
-		});
-
-		await controller.start();
-		transportEvents[0]?.({
-			itemId: "turn-1",
-			speaker: "you",
-			text: "hello hello hello hello hello hello",
-			logprobs: Array.from({ length: 6 }, () => ({
-				logprob: -3,
-				token: "hello",
-			})),
-			type: "final",
-		});
-		transportEvents[0]?.({
-			itemId: "turn-1",
-			previousItemId: null,
-			speaker: "you",
-			type: "committed",
-		});
-
-		expect(utterances).toHaveLength(1);
-		expect(utterances[0]?.text).toBe("hello hello hello hello hello hello");
-		expect(controller.getSnapshot().liveTranscript.you.text).toBe("");
-	});
-
-	it("keeps a low-confidence committed system-audio turn in the draft lane", async () => {
+	it("keeps a committed system-audio turn in the draft lane", async () => {
 		const { stream } = createMockStream();
 		const transportEvents: Array<
 			(event: RealtimeTranscriptionTransportEvent) => void
@@ -789,10 +739,6 @@ describe("TranscriptionController", () => {
 			itemId: "turn-1",
 			speaker: "them",
 			text: "hello hello hello",
-			logprobs: Array.from({ length: 3 }, () => ({
-				logprob: -3,
-				token: "hello",
-			})),
 			type: "final",
 		});
 		transportEvents[1]?.({

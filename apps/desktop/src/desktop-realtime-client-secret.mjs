@@ -21,7 +21,12 @@ export const createDesktopRealtimeClientSecret = async ({
 				"Content-Type": "application/json",
 				Origin: new URL(baseUrl).origin,
 			},
-			body: JSON.stringify({ lang, source, speaker }),
+			body: JSON.stringify({
+				lang,
+				source,
+				speaker,
+				transport: "websocket",
+			}),
 		},
 	);
 	const payload = await response.json().catch(() => ({}));

@@ -125,6 +125,31 @@ describe("realtime transcription session handler", () => {
 		);
 	});
 
+	it("rejects requests without an explicit supported transport", async () => {
+		process.env.CONVEX_URL = "https://example.convex.cloud";
+		process.env.OPENAI_API_KEY = "server-api-key";
+		convexMocks.mutation.mockResolvedValue({
+			tokenIdentifier: "https://issuer.example|private-user-id",
+		});
+		const request = {
+			async *[Symbol.asyncIterator]() {
+				yield Buffer.from("{}");
+			},
+			headers: { authorization: "Bearer valid-token" },
+		} as IncomingMessage;
+		const { end, response } = createResponse();
+
+		await handleRealtimeTranscriptionSessionRequest(request, response);
+
+		expect(response.statusCode).toBe(400);
+		expect(end).toHaveBeenCalledWith(
+			JSON.stringify({
+				error: "A supported realtime transcription transport is required.",
+			}),
+		);
+		expect(openAiMocks.requestClientSecret).not.toHaveBeenCalled();
+	});
+
 	it("uses a hashed authenticated identity as the OpenAI safety identifier", async () => {
 		process.env.CONVEX_URL = "https://example.convex.cloud";
 		process.env.OPENAI_API_KEY = "server-api-key";
@@ -138,7 +163,7 @@ describe("realtime transcription session handler", () => {
 		);
 		const request = {
 			async *[Symbol.asyncIterator]() {
-				yield Buffer.from("{}");
+				yield Buffer.from(JSON.stringify({ transport: "websocket" }));
 			},
 			headers: { authorization: "Bearer valid-token" },
 		} as IncomingMessage;
@@ -153,5 +178,9 @@ describe("realtime transcription session handler", () => {
 			await createSafetyIdentifier(tokenIdentifier),
 		);
 		expect(requestOptions.safetyIdentifier).not.toContain("private-user-id");
+		expect(requestOptions.session.audio.input.turn_detection).toBeNull();
+		expect(requestOptions.session.audio.input.transcription.model).toBe(
+			"gpt-live-transcribe",
+		);
 	});
 });

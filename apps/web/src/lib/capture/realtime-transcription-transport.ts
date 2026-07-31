@@ -4,12 +4,6 @@ import { getHostedApiUrl } from "@/lib/runtime-config";
 import type { TranscriptSpeaker } from "@/lib/transcript";
 import type { TranscriptionLogger } from "@/lib/transcription-logger";
 
-type RealtimeTranscriptionLogprob = {
-	bytes?: number[];
-	logprob?: number;
-	token?: string;
-};
-
 type RealtimeSessionPayload = {
 	clientSecret: string;
 };
@@ -18,15 +12,12 @@ type OpenAIRealtimeTranscriptionEvent =
 	| {
 			type: "conversation.item.input_audio_transcription.completed";
 			item_id?: string;
-			logprobs?: RealtimeTranscriptionLogprob[];
 			transcript?: string;
-			text?: string;
 	  }
 	| {
 			type: "conversation.item.input_audio_transcription.delta";
 			item_id?: string;
 			delta?: string;
-			logprobs?: RealtimeTranscriptionLogprob[];
 	  }
 	| {
 			type: "conversation.item.input_audio_transcription.failed";
@@ -59,14 +50,12 @@ export type RealtimeTranscriptionTransportEvent =
 	| {
 			type: "partial";
 			itemId: string;
-			logprobs?: RealtimeTranscriptionLogprob[];
 			textDelta: string;
 			speaker: TranscriptSpeaker;
 	  }
 	| {
 			type: "final";
 			itemId: string;
-			logprobs?: RealtimeTranscriptionLogprob[];
 			text: string;
 			speaker: TranscriptSpeaker;
 	  }
@@ -111,6 +100,7 @@ const createRealtimeSession = async (
 				...(language ? { lang: language } : {}),
 				...(source ? { source } : {}),
 				...(speaker ? { speaker } : {}),
+				transport: "webrtc",
 			}),
 		},
 	);
@@ -258,7 +248,6 @@ export const connectRealtimeTranscriptionTransport = async ({
 					onEvent({
 						type: "partial",
 						itemId: realtimeEvent.item_id,
-						logprobs: realtimeEvent.logprobs,
 						textDelta: realtimeEvent.delta,
 						speaker,
 					});
@@ -277,8 +266,7 @@ export const connectRealtimeTranscriptionTransport = async ({
 				onEvent({
 					type: "final",
 					itemId: realtimeEvent.item_id,
-					logprobs: realtimeEvent.logprobs,
-					text: realtimeEvent.transcript ?? realtimeEvent.text ?? "",
+					text: realtimeEvent.transcript ?? "",
 					speaker,
 				});
 				return;

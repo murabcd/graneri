@@ -1,5 +1,5 @@
 export type DictationTranscriptionResult = {
-	durationInSeconds?: number;
+	durationInSeconds: number | null;
 	languages: string[];
 	text: string;
 };
