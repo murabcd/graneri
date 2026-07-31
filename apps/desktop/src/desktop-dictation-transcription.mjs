@@ -19,13 +19,18 @@ export const createDesktopDictationTranscription =
 		);
 		const payload = await response.json().catch(() => ({}));
 
-		if (!response.ok || typeof payload.text !== "string") {
+		if (
+			!response.ok ||
+			typeof payload.text !== "string" ||
+			!Array.isArray(payload.languages) ||
+			payload.languages.some((language) => typeof language !== "string")
+		) {
 			throw new Error(payload.error || "Unable to transcribe audio.");
 		}
 
 		return {
 			durationInSeconds: payload.durationInSeconds ?? null,
-			language: payload.language ?? null,
+			languages: payload.languages,
 			text: payload.text,
 		};
 	};

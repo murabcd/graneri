@@ -1,66 +1,108 @@
-import { openai } from "@ai-sdk/openai";
-import { transcribe } from "ai";
 import { MAX_DICTATION_AUDIO_BYTES } from "./dictation-policy.mjs";
-import {
-	DICTATION_TRANSCRIPTION_MODEL,
-	normalizeTranscriptionLanguage,
-} from "./transcription.mjs";
+import { DICTATION_TRANSCRIPTION_MODEL } from "./transcription.mjs";
 
-const MAX_DICTATION_PROMPT_LENGTH = 1_000;
+const OPENAI_TRANSCRIPTIONS_URL =
+	"https://api.openai.com/v1/audio/transcriptions";
 
-const trim = (value) => (typeof value === "string" ? value.trim() : "");
+const getDurationInSeconds = (usage) =>
+	usage?.type === "duration" && typeof usage.seconds === "number"
+		? usage.seconds
+		: undefined;
 
-const buildOpenAIOptions = ({ language, prompt }) => {
-	const options = {};
-	const normalizedLanguage = normalizeTranscriptionLanguage(language);
-	const normalizedPrompt = trim(prompt).slice(0, MAX_DICTATION_PROMPT_LENGTH);
-
-	if (normalizedLanguage) {
-		options.language = normalizedLanguage;
+const getDetectedLanguages = (languages) => {
+	if (
+		!Array.isArray(languages) ||
+		languages.some(
+			(language) =>
+				typeof language !== "object" ||
+				language === null ||
+				typeof language.code !== "string",
+		)
+	) {
+		throw new Error("Transcription response is missing detected languages.");
 	}
 
-	if (normalizedPrompt) {
-		options.prompt = normalizedPrompt;
-	}
-
-	return options;
+	return languages.map(({ code }) => code);
 };
 
-export const transcribeDictationAudio = async ({
-	audio,
-	language = null,
-	prompt = null,
-	safetyIdentifier,
+const getApiKey = (value) => {
+	const apiKey = value?.trim();
+	if (!apiKey) {
+		throw new Error("OPENAI_API_KEY is not configured.");
+	}
+
+	return apiKey;
+};
+
+const getTranscriptionResult = async (response) => {
+	if (!response.ok) {
+		throw new Error(
+			`OpenAI transcription request failed with status ${response.status}.`,
+		);
+	}
+
+	const result = await response.json();
+	if (
+		typeof result !== "object" ||
+		result === null ||
+		typeof result.text !== "string"
+	) {
+		throw new Error("Transcription response is missing text.");
+	}
+
+	return result;
+};
+
+export const createDictationAudioTranscriber = ({
+	apiKey,
+	fetch: fetchImpl,
 }) => {
-	if (!(audio instanceof Uint8Array) || audio.byteLength === 0) {
-		throw new Error("Audio is required.");
+	const authorization = `Bearer ${getApiKey(apiKey)}`;
+	if (typeof fetchImpl !== "function") {
+		throw new Error("A fetch implementation is required.");
 	}
 
-	if (audio.byteLength > MAX_DICTATION_AUDIO_BYTES) {
-		throw new Error("Audio is too large.");
-	}
-	if (typeof safetyIdentifier !== "string" || safetyIdentifier.length === 0) {
-		throw new Error("A safety identifier is required.");
-	}
+	return async ({ audio, safetyIdentifier }) => {
+		if (!(audio instanceof Uint8Array) || audio.byteLength === 0) {
+			throw new Error("Audio is required.");
+		}
 
-	const openaiOptions = buildOpenAIOptions({ language, prompt });
-	const result = await transcribe({
-		model: openai.transcription(DICTATION_TRANSCRIPTION_MODEL),
-		audio,
-		headers: {
-			"OpenAI-Safety-Identifier": safetyIdentifier,
-		},
-		providerOptions:
-			Object.keys(openaiOptions).length > 0
-				? {
-						openai: openaiOptions,
-					}
-				: undefined,
-	});
+		if (audio.byteLength > MAX_DICTATION_AUDIO_BYTES) {
+			throw new Error("Audio is too large.");
+		}
+		if (typeof safetyIdentifier !== "string" || safetyIdentifier.length === 0) {
+			throw new Error("A safety identifier is required.");
+		}
 
-	return {
-		durationInSeconds: result.durationInSeconds,
-		language: result.language,
-		text: result.text.trim(),
+		const formData = new FormData();
+		formData.append(
+			"file",
+			new Blob([audio], { type: "audio/wav" }),
+			"dictation.wav",
+		);
+		formData.append("model", DICTATION_TRANSCRIPTION_MODEL);
+		formData.append("response_format", "json");
+
+		const response = await fetchImpl(OPENAI_TRANSCRIPTIONS_URL, {
+			method: "POST",
+			headers: {
+				Authorization: authorization,
+				"OpenAI-Safety-Identifier": safetyIdentifier,
+			},
+			body: formData,
+		});
+		const result = await getTranscriptionResult(response);
+
+		return {
+			durationInSeconds: getDurationInSeconds(result.usage),
+			languages: getDetectedLanguages(result.languages),
+			text: result.text.trim(),
+		};
 	};
 };
+
+export const transcribeDictationAudio = (options) =>
+	createDictationAudioTranscriber({
+		apiKey: process.env.OPENAI_API_KEY,
+		fetch: globalThis.fetch,
+	})(options);

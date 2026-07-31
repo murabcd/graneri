@@ -6,7 +6,7 @@ import { internalAction } from "./_generated/server";
 
 const transcriptionResultValidator = v.object({
 	durationInSeconds: v.union(v.number(), v.null()),
-	language: v.union(v.string(), v.null()),
+	languages: v.array(v.string()),
 	text: v.string(),
 });
 
@@ -45,7 +45,7 @@ export const transcribeStoredAudio = internalAction({
 
 		return {
 			durationInSeconds: result.durationInSeconds ?? null,
-			language: result.language ?? null,
+			languages: result.languages,
 			text: result.text,
 		};
 	},

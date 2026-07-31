@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 
 describe("transcription config", () => {
 	it("keeps dictation and realtime transcription models separate", () => {
-		expect(DICTATION_TRANSCRIPTION_MODEL).toBe("gpt-4o-mini-transcribe");
+		expect(DICTATION_TRANSCRIPTION_MODEL).toBe("gpt-transcribe");
 		expect(REALTIME_TRANSCRIPTION_MODEL).toBe("gpt-realtime-whisper");
 		expect(REALTIME_TRANSCRIPTION_DELAY).toBe("high");
 	});

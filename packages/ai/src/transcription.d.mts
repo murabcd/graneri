@@ -1,5 +1,5 @@
 export declare const REALTIME_TRANSCRIPTION_MODEL: "gpt-realtime-whisper";
-export declare const DICTATION_TRANSCRIPTION_MODEL: "gpt-4o-mini-transcribe";
+export declare const DICTATION_TRANSCRIPTION_MODEL: "gpt-transcribe";
 export declare const AUDIO_TRANSCRIPTION_SAMPLE_RATE: 24000;
 export declare const REALTIME_TRANSCRIPTION_DELAY: "high";
 export declare const DESKTOP_REALTIME_PROFILE: "default";

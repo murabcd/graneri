@@ -1,12 +1,21 @@
 export type DictationTranscriptionResult = {
 	durationInSeconds?: number;
-	language?: string;
+	languages: string[];
 	text: string;
 };
 
-export function transcribeDictationAudio(options: {
+export type DictationTranscriptionOptions = {
 	audio: Uint8Array;
-	language?: string | null;
-	prompt?: string | null;
 	safetyIdentifier: string;
-}): Promise<DictationTranscriptionResult>;
+};
+
+export type DictationAudioTranscriber = (
+	options: DictationTranscriptionOptions,
+) => Promise<DictationTranscriptionResult>;
+
+export function createDictationAudioTranscriber(dependencies: {
+	apiKey: string | undefined;
+	fetch: typeof globalThis.fetch;
+}): DictationAudioTranscriber;
+
+export const transcribeDictationAudio: DictationAudioTranscriber;

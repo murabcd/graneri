@@ -669,7 +669,7 @@ export const createGlobalDictation = ({
 		logInfo({
 			details: {
 				durationInSeconds: result.durationInSeconds ?? null,
-				language: result.language ?? null,
+				languages: result.languages,
 				textLength: result.text.length,
 				transcriptionDurationMs: Date.now() - startedAt,
 				wavBytes: wav.byteLength,

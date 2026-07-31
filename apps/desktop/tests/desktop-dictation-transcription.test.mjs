@@ -10,7 +10,7 @@ test("desktop dictation sends authenticated WAV audio to the local server", asyn
 			return new Response(
 				JSON.stringify({
 					durationInSeconds: 1.25,
-					language: "en",
+					languages: ["en"],
 					text: "Hello",
 				}),
 				{ headers: { "Content-Type": "application/json" }, status: 200 },
@@ -25,7 +25,7 @@ test("desktop dictation sends authenticated WAV audio to the local server", asyn
 
 	assert.deepEqual(result, {
 		durationInSeconds: 1.25,
-		language: "en",
+		languages: ["en"],
 		text: "Hello",
 	});
 	assert.equal(
