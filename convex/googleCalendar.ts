@@ -5,6 +5,7 @@ import {
 	createCalendarAttendee,
 	normalizeCalendarAttendees,
 } from "./calendarAttendees";
+import { requireCalendarEventEtag } from "./calendarProviderConcurrency";
 import type {
 	CalendarAttendee,
 	CalendarEventDetailsInput,
@@ -32,6 +33,7 @@ type GoogleCalendarListEntry = {
 	backgroundColor?: string;
 	hidden?: boolean;
 	id: string;
+	primary?: boolean;
 	selected?: boolean;
 	summary?: string;
 };
@@ -48,11 +50,15 @@ type GoogleCalendarEvent = {
 		responseStatus?: string;
 		self?: boolean;
 	}>;
+	etag?: string;
 	conferenceData?: {
 		entryPoints?: Array<{
 			entryPointType?: string;
 			uri?: string;
 		}>;
+	};
+	creator?: {
+		self?: boolean;
 	};
 	description?: string;
 	end?: GoogleCalendarDateTime;
@@ -68,6 +74,7 @@ type GoogleCalendarEvent = {
 		email?: string;
 		self?: boolean;
 	};
+	guestsCanModify?: boolean;
 	recurrence?: string[];
 	recurringEventId?: string;
 	start?: GoogleCalendarDateTime;
@@ -88,6 +95,27 @@ const isVisibleCalendar = (calendar: GoogleCalendarListEntry) =>
 
 const canCreateEvents = (calendar: GoogleCalendarListEntry) =>
 	calendar.accessRole === "owner" || calendar.accessRole === "writer";
+
+const canManageAllCalendarEvents = (calendar: GoogleCalendarListEntry) =>
+	calendar.accessRole === "writer" ||
+	(calendar.accessRole === "owner" && calendar.primary !== true);
+
+const getGoogleEventCapabilities = (
+	calendar: GoogleCalendarListEntry,
+	event: GoogleCalendarEvent,
+) => {
+	const hasDelegatedCalendarWrite = canManageAllCalendarEvents(calendar);
+	const isOrganizerOrCreator =
+		event.organizer?.self === true || event.creator?.self === true;
+
+	return {
+		canDelete: hasDelegatedCalendarWrite || isOrganizerOrCreator,
+		canEdit:
+			hasDelegatedCalendarWrite ||
+			isOrganizerOrCreator ||
+			event.guestsCanModify === true,
+	};
+};
 
 const requireCalendarColor = (calendar: GoogleCalendarListEntry) => {
 	const color = calendar.backgroundColor?.trim();
@@ -189,6 +217,7 @@ const normalizeEvent = (
 	calendar: GoogleCalendarListEntry,
 	event: GoogleCalendarEvent,
 	minimumEndAt: number,
+	canWrite: boolean,
 ): UpcomingCalendarEvent | null => {
 	if (!event.id || event.status === "cancelled") {
 		return null;
@@ -207,9 +236,12 @@ const normalizeEvent = (
 
 	const meetingUrl = getMeetingUrl(event);
 	const attendees = normalizeGoogleAttendees(event);
+	const capabilities = getGoogleEventCapabilities(calendar, event);
 
 	return {
 		attendees,
+		canDelete: canWrite && capabilities.canDelete,
+		canEdit: canWrite && capabilities.canEdit,
 		calendarId: calendar.id,
 		calendarName: calendar.summary || "Calendar",
 		description: event.description?.trim() || undefined,
@@ -289,6 +321,9 @@ export const fetchGoogleCalendarEvents = async ({
 				provider: "google",
 			}) satisfies CalendarSource,
 	);
+	const hasWriteScope = googleTokens.scopes.includes(
+		GOOGLE_CALENDAR_WRITE_SCOPE,
+	);
 
 	const perCalendarEvents = await Promise.all(
 		providerCalendars.map(async (calendar) => {
@@ -310,7 +345,9 @@ export const fetchGoogleCalendarEvents = async ({
 				);
 
 			return (response.items ?? [])
-				.map((event) => normalizeEvent(calendar, event, minimumEndAt))
+				.map((event) =>
+					normalizeEvent(calendar, event, minimumEndAt, hasWriteScope),
+				)
 				.filter((event): event is UpcomingCalendarEvent => event !== null);
 		}),
 	);
@@ -421,9 +458,44 @@ export const createGoogleCalendarEvent = async ({
 	return { id: createdEvent.id };
 };
 
-const getEventBody = (input: UpdateCalendarEventInput) =>
+const normalizeGoogleCalendarEmail = (value: string) =>
+	value.trim().toLowerCase();
+
+const getUpdatedGoogleAttendees = (
+	input: UpdateCalendarEventInput,
+	event: GoogleCalendarEvent,
+) => {
+	const existingAttendees = new Map(
+		(event.attendees ?? []).flatMap((attendee) => {
+			if (!attendee.email || attendee.organizer || attendee.self) {
+				return [];
+			}
+
+			return [
+				[normalizeGoogleCalendarEmail(attendee.email), attendee] as const,
+			];
+		}),
+	);
+
+	return input.guests.map((email) => {
+		const existing = existingAttendees.get(normalizeGoogleCalendarEmail(email));
+
+		return {
+			email,
+			...(existing?.responseStatus
+				? { responseStatus: existing.responseStatus }
+				: {}),
+		};
+	});
+};
+
+const getEventBody = (
+	input: UpdateCalendarEventInput,
+	event: GoogleCalendarEvent,
+) =>
 	input.time.kind === "all_day"
 		? {
+				attendees: getUpdatedGoogleAttendees(input, event),
 				description: input.description ?? "",
 				end: { date: input.time.endDate },
 				location: input.location ?? "",
@@ -431,6 +503,7 @@ const getEventBody = (input: UpdateCalendarEventInput) =>
 				summary: input.title,
 			}
 		: {
+				attendees: getUpdatedGoogleAttendees(input, event),
 				description: input.description ?? "",
 				end: { dateTime: input.time.endAt },
 				location: input.location ?? "",
@@ -452,14 +525,31 @@ export const updateGoogleCalendarEvent = async ({
 	const eventUrl = new URL(
 		`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(input.providerEventId)}`,
 	);
+	const event = await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
+		authContext,
+		googleTokens,
+		eventUrl,
+	);
+
+	if (!getGoogleEventCapabilities(calendar, event).canEdit) {
+		throw new ConvexError({
+			code: "CALENDAR_EVENT_EDIT_FORBIDDEN",
+			message: "You do not have permission to edit this event.",
+		});
+	}
+
+	const concurrencyEtag = requireCalendarEventEtag(event.etag);
 	eventUrl.searchParams.set("sendUpdates", "all");
 	await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
 		authContext,
 		googleTokens,
 		eventUrl,
 		{
-			body: JSON.stringify(getEventBody(input)),
-			headers: { "Content-Type": "application/json; charset=utf-8" },
+			body: JSON.stringify(getEventBody(input, event)),
+			headers: {
+				"Content-Type": "application/json; charset=utf-8",
+				"If-Match": concurrencyEtag,
+			},
 			method: "PATCH",
 		},
 	);
@@ -482,8 +572,23 @@ export const deleteGoogleCalendarEvent = async ({
 	const eventUrl = new URL(
 		`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(providerEventId)}`,
 	);
+	const event = await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
+		authContext,
+		googleTokens,
+		eventUrl,
+	);
+
+	if (!getGoogleEventCapabilities(calendar, event).canDelete) {
+		throw new ConvexError({
+			code: "CALENDAR_EVENT_DELETE_FORBIDDEN",
+			message: "You do not have permission to delete this event.",
+		});
+	}
+
+	const concurrencyEtag = requireCalendarEventEtag(event.etag);
 	eventUrl.searchParams.set("sendUpdates", "all");
 	await fetchGoogleResponseWithRetry(authContext, googleTokens, eventUrl, {
+		headers: { "If-Match": concurrencyEtag },
 		method: "DELETE",
 	});
 	return null;

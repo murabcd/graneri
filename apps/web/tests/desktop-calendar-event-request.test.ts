@@ -7,6 +7,8 @@ import {
 const requestId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 const event = {
 	attendees: [],
+	canDelete: true,
+	canEdit: true,
 	calendarId: "calendar-1",
 	calendarName: "Work",
 	endAt: "2026-08-10T11:00:00.000Z",

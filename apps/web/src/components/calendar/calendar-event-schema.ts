@@ -17,6 +17,8 @@ export const calendarEventSchema: z.ZodType<UpcomingCalendarEvent> = z.object({
 			]),
 		}),
 	),
+	canDelete: z.boolean(),
+	canEdit: z.boolean(),
 	id: z.string(),
 	calendarId: z.string(),
 	calendarName: z.string(),

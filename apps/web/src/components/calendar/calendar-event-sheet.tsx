@@ -31,6 +31,7 @@ import {
 	useDockedPanelInset,
 	useDockedPanelOverlayWidth,
 } from "@/components/layout/use-docked-panel-widths";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export type CalendarEventPanelState =
 	| {
@@ -53,6 +54,7 @@ type CalendarEventSheetProps = {
 		update: CalendarEventCreation,
 	) => Promise<void>;
 	panel: CalendarEventPanelState | null;
+	workspaceId: Id<"workspaces"> | null;
 };
 
 const PANEL_STORAGE_KEY_DESKTOP = "graneri.calendar-event-panel-width.desktop";
@@ -68,6 +70,7 @@ export function CalendarEventSheet({
 	onTakeNote,
 	onUpdateEvent,
 	panel,
+	workspaceId,
 }: CalendarEventSheetProps) {
 	const open = panel !== null;
 	const event = panel && panel.mode !== "new" ? panel.event : null;
@@ -122,7 +125,7 @@ export function CalendarEventSheet({
 				onTakeNote={onTakeNote}
 				onTogglePinned={togglePinned}
 			/>
-		) : (
+		) : workspaceId ? (
 			<CalendarEventEditorPanel
 				key={`${open ? "open" : "closed"}:${eventKey ?? "new"}`}
 				calendars={calendars}
@@ -136,8 +139,9 @@ export function CalendarEventSheet({
 					event ? onUpdateEvent(event, creation) : onCreateEvent(creation)
 				}
 				onTogglePinned={togglePinned}
+				workspaceId={workspaceId}
 			/>
-		);
+		) : null;
 	const panelName = event
 		? panel?.mode === "edit"
 			? "event editor"

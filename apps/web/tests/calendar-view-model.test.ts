@@ -9,6 +9,9 @@ import {
 const createEvent = (
 	overrides: Partial<UpcomingCalendarEvent> = {},
 ): UpcomingCalendarEvent => ({
+	attendees: [],
+	canDelete: true,
+	canEdit: true,
 	id: "event-1",
 	calendarId: "work",
 	calendarName: "Work",

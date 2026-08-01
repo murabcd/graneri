@@ -2,12 +2,12 @@ import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalQuery, query } from "./_generated/server";
-import { normalizeEmail } from "./calendarAttendees";
 import {
 	createResourceAccess,
 	requireOwnedWorkspace,
 	truncate,
 } from "./domain";
+import { searchWorkspacePeople } from "./peopleDomain";
 
 const MAX_ENTITY_MATCHES = 5;
 const MAX_MEETING_RESULTS = 25;
@@ -101,41 +101,6 @@ const mergeEntityMatches = <T extends { _id: string }>(
 	};
 };
 
-const findPeople = async (
-	ctx: QueryCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	searchTerm: string,
-) => {
-	const exactEmail = normalizeEmail(searchTerm);
-	const [exactMatch, searchMatches] = await Promise.all([
-		exactEmail
-			? ctx.db
-					.query("people")
-					.withIndex(
-						"by_ownerTokenIdentifier_and_workspaceId_and_email",
-						(q) =>
-							q
-								.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-								.eq("workspaceId", workspaceId)
-								.eq("email", exactEmail),
-					)
-					.unique()
-			: null,
-		ctx.db
-		.query("people")
-		.withSearchIndex("search_people", (q) =>
-			q
-				.search("searchText", searchTerm)
-				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-				.eq("workspaceId", workspaceId),
-		)
-		.take(MAX_ENTITY_MATCHES + 1),
-	]);
-
-	return mergeEntityMatches(exactMatch, searchMatches);
-};
-
 const normalizeDomainSearch = (value: string) => {
 	const candidate = value.replace(/^@/u, "").toLowerCase();
 	return /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/u.test(candidate)
@@ -165,14 +130,14 @@ const findCompanies = async (
 					.unique()
 			: null,
 		ctx.db
-		.query("companies")
-		.withSearchIndex("search_companies", (q) =>
-			q
-				.search("searchText", searchTerm.replaceAll(".", " "))
-				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-				.eq("workspaceId", workspaceId),
-		)
-		.take(MAX_ENTITY_MATCHES + 1),
+			.query("companies")
+			.withSearchIndex("search_companies", (q) =>
+				q
+					.search("searchText", searchTerm.replaceAll(".", " "))
+					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+					.eq("workspaceId", workspaceId),
+			)
+			.take(MAX_ENTITY_MATCHES + 1),
 	]);
 
 	return mergeEntityMatches(exactMatch, searchMatches);
@@ -345,7 +310,13 @@ const searchMeetingNotesForOwner = async ({
 
 	const limit = getMeetingResultLimit(args.limit);
 	const [peopleResult, companiesResult] = await Promise.all([
-		findPeople(ctx, ownerTokenIdentifier, args.workspaceId, searchTerm),
+		searchWorkspacePeople(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			searchTerm,
+			MAX_ENTITY_MATCHES,
+		),
 		findCompanies(ctx, ownerTokenIdentifier, args.workspaceId, searchTerm),
 	]);
 	const people = peopleResult.matches;
@@ -450,12 +421,8 @@ const searchMeetingNotesForOwner = async ({
 					meetingUrl: note.calendarEvent.meetingUrl,
 					noteId: note._id,
 					provider: note.calendarEvent.provider,
-					searchableText: truncate(
-						note.searchableText,
-						noteTextLimit,
-					),
-					searchableTextTruncated:
-						note.searchableText.length > noteTextLimit,
+					searchableText: truncate(note.searchableText, noteTextLimit),
+					searchableTextTruncated: note.searchableText.length > noteTextLimit,
 					startAt: note.calendarEvent.startAt,
 					title: note.title.trim() || note.calendarEvent.title,
 				},

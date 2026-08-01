@@ -1,23 +1,23 @@
+import { ConvexError } from "convex/values";
 import type {
 	CalendarEventDetailsInput,
 	UpdateCalendarEventInput,
 } from "./calendarTypes";
+import { requireCalendarEventEtag } from "./calendarProviderConcurrency";
 import {
-	parseIcsDateValue,
 	parseIcsEvents,
 	parseYandexCalendarData,
-	unfoldIcsLines,
 } from "./yandexCalendarIcs";
 import {
+	cancelYandexCalendarOccurrence,
+	normalizeYandexAttendeeEmail,
+	updateYandexCalendarResource,
+} from "./yandexCalendarEventMutation";
+import {
 	buildYandexCalendarEventIcs,
-	escapeIcsText,
-	foldIcsLine,
 	formatCalDavTimestamp,
-	formatIcsDate,
-	formatIcsDateTime,
 } from "./yandexCalendarIcsWriter";
 import type {
-	ParsedIcsEvent,
 	YandexCalendarCollection,
 	YandexCalendarConnection,
 } from "./yandexCalendarTypes";
@@ -68,6 +68,14 @@ const supportsCalendarEvents = (xml: string) => {
 
 	return /<(?:[\w-]+:)?comp\b[^>]*\bname\s*=\s*["']VEVENT["']/iu.test(
 		supportedComponents,
+	);
+};
+
+const hasCalendarWritePrivilege = (xml: string) => {
+	const privileges = getXmlTagContent(xml, "current-user-privilege-set") ?? "";
+
+	return /<(?:[\w-]+:)?(?:all|write|write-content)(?:\s|\/|>)/iu.test(
+		privileges,
 	);
 };
 
@@ -240,6 +248,7 @@ const parseYandexCalendarCollections = (
 			}
 
 			return {
+				canWrite: hasCalendarWritePrivilege(block),
 				color,
 				id: `yandex:${responsePath}`,
 				displayName:
@@ -271,6 +280,7 @@ const listYandexCalendarCollections = async ({
 	<d:prop>
 		<d:displayname />
 		<d:resourcetype />
+		<d:current-user-privilege-set />
 		<c:supported-calendar-component-set />
 		<a:calendar-color />
 	</d:prop>
@@ -391,7 +401,7 @@ export const listYandexUpcomingEvents = async ({
 
 	return {
 		calendars: calendars.map((calendar) => ({
-			canCreateEvents: true,
+			canCreateEvents: calendar.canWrite,
 			color: calendar.color,
 			id: calendar.id,
 			name: calendar.displayName,
@@ -442,308 +452,6 @@ export const createYandexCalendar = async ({
 	return { id: `yandex:${calendarPath}` };
 };
 
-const getIcsLinePropertyName = (line: string) =>
-	line.slice(0, line.search(/[:;]/u)).toUpperCase();
-
-const getIcsEventBlockRanges = (lines: string[]) => {
-	const ranges: Array<{ end: number; start: number }> = [];
-	let start = -1;
-
-	for (let index = 0; index < lines.length; index += 1) {
-		if (lines[index] === "BEGIN:VEVENT") {
-			start = index;
-			continue;
-		}
-
-		if (lines[index] === "END:VEVENT" && start >= 0) {
-			ranges.push({ start, end: index });
-			start = -1;
-		}
-	}
-
-	return ranges;
-};
-
-const parseIcsEventBlock = (lines: string[]) =>
-	parseIcsEvents(lines.join("\r\n"))[0] ?? null;
-
-const getRecurrenceIdIso = (event: ParsedIcsEvent) => {
-	const recurrenceId = event.properties["RECURRENCE-ID"];
-
-	if (!recurrenceId) {
-		return undefined;
-	}
-
-	return (
-		parseIcsDateValue(
-			recurrenceId.value,
-			recurrenceId.parameters,
-			false,
-		)?.toISOString() ?? undefined
-	);
-};
-
-const getPreservedEventLines = ({
-	eventLines,
-	isOverride,
-}: {
-	eventLines: string[];
-	isOverride: boolean;
-}) => {
-	const excludedProperties = new Set([
-		"DESCRIPTION",
-		"DTEND",
-		"DTSTAMP",
-		"DTSTART",
-		"DURATION",
-		"LAST-MODIFIED",
-		"LOCATION",
-		"SEQUENCE",
-		"SUMMARY",
-		"UID",
-		...(isOverride
-			? ["CREATED", "EXDATE", "RDATE", "RECURRENCE-ID", "RRULE", "STATUS"]
-			: []),
-	]);
-	const preservedLines: string[] = [];
-	let nestedComponentDepth = 0;
-
-	for (const line of eventLines.slice(1, -1)) {
-		if (line.startsWith("BEGIN:")) {
-			nestedComponentDepth += 1;
-			preservedLines.push(line);
-			continue;
-		}
-
-		if (nestedComponentDepth > 0) {
-			preservedLines.push(line);
-			if (line.startsWith("END:")) {
-				nestedComponentDepth -= 1;
-			}
-			continue;
-		}
-
-		if (!excludedProperties.has(getIcsLinePropertyName(line))) {
-			preservedLines.push(line);
-		}
-	}
-
-	return preservedLines;
-};
-
-const getNextSequence = (event: ParsedIcsEvent) => {
-	const sequence = Number(event.properties.SEQUENCE?.value ?? "0");
-	return Number.isFinite(sequence) ? Math.max(0, sequence) + 1 : 1;
-};
-
-const buildYandexEventTimeLines = (time: UpdateCalendarEventInput["time"]) =>
-	time.kind === "all_day"
-		? [
-				`DTSTART;VALUE=DATE:${formatIcsDate(time.startDate)}`,
-				`DTEND;VALUE=DATE:${formatIcsDate(time.endDate)}`,
-			]
-		: [
-				`DTSTART:${formatIcsDateTime(time.startAt)}`,
-				`DTEND:${formatIcsDateTime(time.endAt)}`,
-			];
-
-const formatYandexRecurrenceId = ({
-	isAllDay,
-	recurrenceId,
-}: {
-	isAllDay: boolean;
-	recurrenceId: string;
-}) =>
-	isAllDay
-		? `RECURRENCE-ID;VALUE=DATE:${formatIcsDate(
-				new Date(recurrenceId).toISOString().slice(0, 10),
-			)}`
-		: `RECURRENCE-ID:${formatIcsDateTime(recurrenceId)}`;
-
-const buildUpdatedYandexEventLines = ({
-	baseEventLines,
-	input,
-	now,
-}: {
-	baseEventLines: string[];
-	input: UpdateCalendarEventInput;
-	now: number;
-}) => {
-	const baseEvent = parseIcsEventBlock(baseEventLines);
-	const uid = baseEvent?.properties.UID?.value;
-
-	if (!baseEvent || !uid) {
-		throw new Error("The Yandex event resource is invalid.");
-	}
-
-	const isOverride = Boolean(input.recurrenceId);
-	return [
-		"BEGIN:VEVENT",
-		`UID:${uid}`,
-		`DTSTAMP:${formatCalDavTimestamp(now)}`,
-		`SEQUENCE:${getNextSequence(baseEvent)}`,
-		...(input.recurrenceId
-			? [
-					formatYandexRecurrenceId({
-						isAllDay: input.recurrenceIsAllDay ?? false,
-						recurrenceId: input.recurrenceId,
-					}),
-				]
-			: []),
-		...buildYandexEventTimeLines(input.time),
-		`SUMMARY:${escapeIcsText(input.title)}`,
-		...(input.description
-			? [`DESCRIPTION:${escapeIcsText(input.description)}`]
-			: []),
-		...(input.location ? [`LOCATION:${escapeIcsText(input.location)}`] : []),
-		...getPreservedEventLines({
-			eventLines: baseEventLines,
-			isOverride,
-		}),
-		"END:VEVENT",
-	];
-};
-
-const buildCancelledYandexEventLines = ({
-	baseEventLines,
-	now,
-	recurrenceId,
-	recurrenceIsAllDay,
-}: {
-	baseEventLines: string[];
-	now: number;
-	recurrenceId: string;
-	recurrenceIsAllDay: boolean;
-}) => {
-	const baseEvent = parseIcsEventBlock(baseEventLines);
-	const uid = baseEvent?.properties.UID?.value;
-
-	if (!baseEvent || !uid) {
-		throw new Error("The Yandex event resource is invalid.");
-	}
-
-	return [
-		"BEGIN:VEVENT",
-		`UID:${uid}`,
-		`DTSTAMP:${formatCalDavTimestamp(now)}`,
-		`SEQUENCE:${getNextSequence(baseEvent)}`,
-		formatYandexRecurrenceId({
-			isAllDay: recurrenceIsAllDay,
-			recurrenceId,
-		}),
-		"STATUS:CANCELLED",
-		"END:VEVENT",
-	];
-};
-
-const updateYandexCalendarResource = ({
-	calendarData,
-	input,
-	now,
-}: {
-	calendarData: string;
-	input: UpdateCalendarEventInput;
-	now: number;
-}) => {
-	const lines = unfoldIcsLines(calendarData)
-		.split("\n")
-		.map((line) => line.trimEnd());
-	const ranges = getIcsEventBlockRanges(lines);
-	const baseRange = ranges.find(({ end, start }) => {
-		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && !event.properties["RECURRENCE-ID"];
-	});
-
-	if (!baseRange) {
-		throw new Error("The Yandex event resource has no editable event.");
-	}
-
-	const baseEventLines = lines.slice(baseRange.start, baseRange.end + 1);
-	const updatedEventLines = buildUpdatedYandexEventLines({
-		baseEventLines,
-		input,
-		now,
-	});
-	const targetRange = input.recurrenceId
-		? ranges.find(({ end, start }) => {
-				const event = parseIcsEventBlock(lines.slice(start, end + 1));
-				return event && getRecurrenceIdIso(event) === input.recurrenceId;
-			})
-		: baseRange;
-
-	if (targetRange) {
-		lines.splice(
-			targetRange.start,
-			targetRange.end - targetRange.start + 1,
-			...updatedEventLines,
-		);
-	} else {
-		const calendarEnd = lines.lastIndexOf("END:VCALENDAR");
-
-		if (calendarEnd < 0) {
-			throw new Error("The Yandex event resource has no calendar boundary.");
-		}
-
-		lines.splice(calendarEnd, 0, ...updatedEventLines);
-	}
-
-	return `${lines.flatMap(foldIcsLine).join("\r\n")}\r\n`;
-};
-
-const cancelYandexCalendarOccurrence = ({
-	calendarData,
-	now,
-	recurrenceId,
-	recurrenceIsAllDay,
-}: {
-	calendarData: string;
-	now: number;
-	recurrenceId: string;
-	recurrenceIsAllDay: boolean;
-}) => {
-	const lines = unfoldIcsLines(calendarData)
-		.split("\n")
-		.map((line) => line.trimEnd());
-	const ranges = getIcsEventBlockRanges(lines);
-	const baseRange = ranges.find(({ end, start }) => {
-		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && !event.properties["RECURRENCE-ID"];
-	});
-
-	if (!baseRange) {
-		throw new Error("The Yandex event resource has no editable event.");
-	}
-
-	const cancelledEventLines = buildCancelledYandexEventLines({
-		baseEventLines: lines.slice(baseRange.start, baseRange.end + 1),
-		now,
-		recurrenceId,
-		recurrenceIsAllDay,
-	});
-	const targetRange = ranges.find(({ end, start }) => {
-		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && getRecurrenceIdIso(event) === recurrenceId;
-	});
-
-	if (targetRange) {
-		lines.splice(
-			targetRange.start,
-			targetRange.end - targetRange.start + 1,
-			...cancelledEventLines,
-		);
-	} else {
-		const calendarEnd = lines.lastIndexOf("END:VCALENDAR");
-
-		if (calendarEnd < 0) {
-			throw new Error("The Yandex event resource has no calendar boundary.");
-		}
-
-		lines.splice(calendarEnd, 0, ...cancelledEventLines);
-	}
-
-	return `${lines.flatMap(foldIcsLine).join("\r\n")}\r\n`;
-};
-
 const getYandexCalendarEventTarget = async ({
 	calendarId,
 	connection,
@@ -763,6 +471,13 @@ const getYandexCalendarEventTarget = async ({
 
 	if (!calendar) {
 		throw new Error("The selected Yandex calendar is not available.");
+	}
+
+	if (!calendar.canWrite) {
+		throw new ConvexError({
+			code: "CALENDAR_NOT_WRITABLE",
+			message: "The selected calendar does not allow event changes.",
+		});
 	}
 
 	const calendarPath = `${normalizeHrefPath(calendar.href).replace(/\/?$/u, "/")}`;
@@ -801,6 +516,39 @@ const loadYandexCalendarEventResource = async ({
 	};
 };
 
+const assertYandexCalendarEventCanBeManaged = ({
+	calendarData,
+	connection,
+	operation,
+}: {
+	calendarData: string;
+	connection: YandexCalendarConnection;
+	operation: "delete" | "edit";
+}) => {
+	const baseEvent = parseIcsEvents(calendarData).find(
+		(event) => !event.properties["RECURRENCE-ID"],
+	);
+	const organizer = baseEvent?.properties.ORGANIZER;
+
+	if (!baseEvent) {
+		throw new Error("The Yandex event resource has no editable event.");
+	}
+
+	if (
+		organizer &&
+		normalizeYandexAttendeeEmail(organizer.value) !==
+			normalizeYandexCalendarEmail(connection.email)
+	) {
+		throw new ConvexError({
+			code:
+				operation === "edit"
+					? "CALENDAR_EVENT_EDIT_FORBIDDEN"
+					: "CALENDAR_EVENT_DELETE_FORBIDDEN",
+			message: `Only the organizer can ${operation} this event.`,
+		});
+	}
+};
+
 export const updateYandexCalendarEvent = async ({
 	connection,
 	input,
@@ -823,11 +571,17 @@ export const updateYandexCalendarEvent = async ({
 		path,
 		request,
 	});
+	assertYandexCalendarEventCanBeManaged({
+		calendarData,
+		connection,
+		operation: "edit",
+	});
+	const concurrencyEtag = requireCalendarEventEtag(etag);
 	const response = await fetchYandexDav({
 		body: updateYandexCalendarResource({ calendarData, input, now }),
 		connection,
 		contentType: "text/calendar; charset=utf-8",
-		headers: etag ? { "If-Match": etag } : undefined,
+		headers: { "If-Match": concurrencyEtag },
 		method: "PUT",
 		path,
 		request,
@@ -861,9 +615,22 @@ export const deleteYandexCalendarEvent = async ({
 		request,
 	});
 
+	const { calendarData, etag } = await loadYandexCalendarEventResource({
+		connection,
+		path,
+		request,
+	});
+	assertYandexCalendarEventCanBeManaged({
+		calendarData,
+		connection,
+		operation: "delete",
+	});
+	const concurrencyEtag = requireCalendarEventEtag(etag);
+
 	if (!recurrenceId) {
 		const response = await fetchYandexDav({
 			connection,
+			headers: { "If-Match": concurrencyEtag },
 			method: "DELETE",
 			path,
 			request,
@@ -875,11 +642,6 @@ export const deleteYandexCalendarEvent = async ({
 		return null;
 	}
 
-	const { calendarData, etag } = await loadYandexCalendarEventResource({
-		connection,
-		path,
-		request,
-	});
 	const response = await fetchYandexDav({
 		body: cancelYandexCalendarOccurrence({
 			calendarData,
@@ -889,7 +651,7 @@ export const deleteYandexCalendarEvent = async ({
 		}),
 		connection,
 		contentType: "text/calendar; charset=utf-8",
-		headers: etag ? { "If-Match": etag } : undefined,
+		headers: { "If-Match": concurrencyEtag },
 		method: "PUT",
 		path,
 		request,
@@ -919,7 +681,7 @@ export const createYandexCalendarEvent = async ({
 		request,
 	});
 	const calendar = calendars.find(
-		(candidate) => candidate.id === input.calendarId,
+		(candidate) => candidate.id === input.calendarId && candidate.canWrite,
 	);
 
 	if (!calendar) {

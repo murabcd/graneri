@@ -1,4 +1,5 @@
 import type { UpcomingCalendarEvent } from "@/app/app-types";
+import { getAllDayDisplayDate } from "@/components/calendar/calendar-all-day-date";
 import type {
 	CalendarProvider,
 	CalendarSource,
@@ -10,7 +11,7 @@ export type CalendarEventDraft = {
 	description: string;
 	endDate: string;
 	endTime: string;
-	guests: string;
+	guests: string[];
 	location: string;
 	startDate: string;
 	startTime: string;
@@ -91,7 +92,7 @@ export const createInitialCalendarEventDraft = (
 		description: "",
 		endDate: toDateInputValue(end),
 		endTime: toTimeInputValue(end),
-		guests: "",
+		guests: [],
 		location: "",
 		startDate: toDateInputValue(start),
 		startTime: toTimeInputValue(start),
@@ -104,17 +105,21 @@ export const createCalendarEventDraftFromEvent = (
 ): CalendarEventDraft => {
 	const start = new Date(event.startAt);
 	const end = new Date(event.endAt);
+	const draftStart = event.isAllDay ? getAllDayDisplayDate(start) : start;
+	const draftEnd = event.isAllDay ? getAllDayDisplayDate(end) : end;
 
 	return {
 		allDay: event.isAllDay,
 		calendarId: event.calendarId,
 		description: event.description ?? "",
-		endDate: toDateInputValue(end),
-		endTime: toTimeInputValue(end),
-		guests: "",
+		endDate: toDateInputValue(draftEnd),
+		endTime: toTimeInputValue(draftEnd),
+		guests: event.attendees
+			.filter((attendee) => !attendee.isOrganizer && !attendee.isSelf)
+			.map((attendee) => attendee.email),
 		location: event.location ?? "",
-		startDate: toDateInputValue(start),
-		startTime: toTimeInputValue(start),
+		startDate: toDateInputValue(draftStart),
+		startTime: toTimeInputValue(draftStart),
 		title: event.title,
 	};
 };
@@ -144,14 +149,10 @@ export const toCalendarEventCreation = (
 		throw new Error("Select a calendar.");
 	}
 
-	const guests = draft.guests
-		.split(",")
-		.map((guest) => guest.trim())
-		.filter(Boolean);
 	const common = {
 		calendarId: draft.calendarId,
 		description: draft.description.trim() || undefined,
-		guests,
+		guests: draft.guests,
 		location: draft.location.trim() || undefined,
 		provider,
 		title,

@@ -15,6 +15,8 @@ export type CalendarEventAttendee = {
 
 export type CalendarEventPayload = {
 	attendees: CalendarEventAttendee[];
+	canDelete: boolean;
+	canEdit: boolean;
 	id: string;
 	calendarId: string;
 	calendarName: string;

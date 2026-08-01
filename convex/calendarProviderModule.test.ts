@@ -28,6 +28,8 @@ const createEvent = ({
 	startAt: string;
 }): UpcomingCalendarEvent => ({
 	attendees: [],
+	canDelete: true,
+	canEdit: true,
 	calendarId: `${provider}-calendar`,
 	calendarName: `${provider} calendar`,
 	endAt: "2026-07-27T11:00:00.000Z",
@@ -86,6 +88,7 @@ const eventDetails: CalendarEventDetailsInput = {
 
 const updateDetails: UpdateCalendarEventInput = {
 	calendarId: "calendar-id",
+	guests: [],
 	providerEventId: "event-id",
 	time: eventDetails.time,
 	title: "Updated planning",

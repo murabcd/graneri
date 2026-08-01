@@ -11,6 +11,7 @@ export type ParsedIcsEvent = {
 };
 
 export type YandexCalendarCollection = {
+	canWrite: boolean;
 	color: string;
 	displayName: string;
 	href: string;

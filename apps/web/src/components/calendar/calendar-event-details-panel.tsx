@@ -1,7 +1,10 @@
 import { Button } from "@workspace/ui/components/button";
-import { CalendarDays, Clock3, MapPin, Video } from "lucide-react";
+import { cn } from "@workspace/ui/lib/utils";
+import { CalendarDays, Clock3, MapPin, UsersRound, Video } from "lucide-react";
 import type * as React from "react";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
+import { getAllDayDisplayDate } from "@/components/calendar/calendar-all-day-date";
+import { CalendarEventGuestList } from "@/components/calendar/calendar-event-guest-list";
 import { formatCalendarEventLocation } from "@/components/calendar/calendar-event-location";
 import { CalendarEventPanelHeader } from "@/components/calendar/calendar-event-panel-header";
 import { CalendarSourceDot } from "@/components/calendar/calendar-source-dot";
@@ -27,12 +30,10 @@ const toLocalDateKey = (date: Date) =>
 const formatEventSchedule = (event: UpcomingCalendarEvent) => {
 	const start = new Date(event.startAt);
 	const end = new Date(event.endAt);
-	const displayEnd =
-		event.isAllDay && end.getTime() > start.getTime()
-			? new Date(end.getTime() - 1)
-			: end;
-	const sameDay = toLocalDateKey(start) === toLocalDateKey(displayEnd);
-	const startDay = eventDayFormatter.format(start);
+	const displayStart = event.isAllDay ? getAllDayDisplayDate(start) : start;
+	const displayEnd = event.isAllDay ? getAllDayDisplayDate(end) : end;
+	const sameDay = toLocalDateKey(displayStart) === toLocalDateKey(displayEnd);
+	const startDay = eventDayFormatter.format(displayStart);
 	const endDay = eventDayFormatter.format(displayEnd);
 
 	if (event.isAllDay) {
@@ -118,6 +119,10 @@ export function CalendarEventDetailsPanel({
 						</CalendarEventDetailRow>
 					) : null}
 
+					<CalendarEventDetailRow className="-mt-2" icon={UsersRound}>
+						<CalendarEventGuestList guests={event.attendees} />
+					</CalendarEventDetailRow>
+
 					<div className="flex items-center justify-end gap-2">
 						<Button type="button" onClick={() => onTakeNote(event)}>
 							Take note
@@ -131,15 +136,17 @@ export function CalendarEventDetailsPanel({
 
 function CalendarEventDetailRow({
 	children,
+	className,
 	icon: Icon,
 }: {
 	children: React.ReactNode;
+	className?: string;
 	icon: React.ComponentType<{ className?: string }>;
 }) {
 	return (
-		<div className="flex items-start gap-3">
+		<div className={cn("flex items-center gap-3", className)}>
 			<Icon className="size-4 shrink-0 text-muted-foreground" />
-			<div className="min-w-0 flex-1 text-xs">{children}</div>
+			<div className="min-w-0 flex-1 text-sm">{children}</div>
 		</div>
 	);
 }

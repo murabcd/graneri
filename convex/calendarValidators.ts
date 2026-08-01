@@ -18,6 +18,8 @@ export const calendarAttendeeValidator = v.object({
 
 export const upcomingCalendarEventValidator = v.object({
 	attendees: v.array(calendarAttendeeValidator),
+	canDelete: v.boolean(),
+	canEdit: v.boolean(),
 	calendarId: v.string(),
 	calendarName: v.string(),
 	description: v.optional(v.string()),
@@ -38,6 +40,8 @@ export const upcomingCalendarEventValidator = v.object({
 
 export const calendarEventSnapshotValidator = upcomingCalendarEventValidator
 	.omit("attendees")
+	.omit("canDelete")
+	.omit("canEdit")
 	.extend({ key: v.string() });
 
 const calendarSourceValidator = v.object({

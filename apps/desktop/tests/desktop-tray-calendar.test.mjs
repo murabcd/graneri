@@ -18,6 +18,8 @@ const createMeetingEvent = (overrides = {}) => ({
 			responseStatus: "accepted",
 		},
 	],
+	canDelete: true,
+	canEdit: true,
 	calendarId: "calendar-1",
 	calendarName: "Work",
 	description: "Review the product plan",
@@ -107,12 +109,12 @@ test("opens live tray meetings with a one-shot capture request", async () => {
 	assert.equal(searchParams.get("capture"), "1");
 	assert.match(searchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
 	assert.equal(searchParams.get("meeting"), "1");
-	assert.match(
-		searchParams.get("calendarEventRequestId"),
-		/^[0-9a-f-]{36}$/u,
-	);
+	assert.match(searchParams.get("calendarEventRequestId"), /^[0-9a-f-]{36}$/u);
 	const requestId = searchParams.get("calendarEventRequestId");
-	assert.deepEqual(harness.calendar.consumeCalendarEventRequest(requestId), event);
+	assert.deepEqual(
+		harness.calendar.consumeCalendarEventRequest(requestId),
+		event,
+	);
 	assert.equal(harness.calendar.consumeCalendarEventRequest(requestId), null);
 	assert.deepEqual(harness.openedExternalUrls, [event.meetingUrl]);
 });

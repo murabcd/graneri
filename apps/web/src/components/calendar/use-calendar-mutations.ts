@@ -45,6 +45,7 @@ export const useCalendarMutations = (workspaceId: Id<"workspaces"> | null) => {
 				workspaceId,
 				calendarId: event.calendarId,
 				description: update.description,
+				guests: update.guests,
 				location: update.location,
 				provider: event.provider,
 				providerEventId: event.providerEventId,

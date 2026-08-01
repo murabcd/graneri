@@ -31,6 +31,7 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
+import { getAllDayDisplayDate } from "@/components/calendar/calendar-all-day-date";
 import type {
 	CalendarAgendaRange,
 	CalendarSource,
@@ -98,7 +99,8 @@ const groupAgendaEvents = (
 	);
 
 	for (const event of sortedEvents) {
-		const date = new Date(event.startAt);
+		const start = new Date(event.startAt);
+		const date = event.isAllDay ? getAllDayDisplayDate(start) : start;
 		const key = toLocalDateKey(date);
 		const existing = groups.get(key);
 
@@ -279,7 +281,6 @@ export function CalendarAgenda({
 										key={`${event.calendarId}:${event.id}:${event.startAt}`}
 										color={calendar.color}
 										event={event}
-										isWritable={calendar.canCreateEvents}
 										onClick={onEventClick}
 										onEdit={onEditEvent}
 										onRequestDelete={handleRequestDelete}
@@ -308,8 +309,8 @@ export function CalendarAgenda({
 							</AlertDialogTitle>
 							<AlertDialogDescription>
 								{eventPendingDeletion.isRecurring
-									? "Only this occurrence will be deleted. The rest of the series will stay on your calendar."
-									: "This event will be permanently deleted from your calendar."}
+									? "This will cancel this occurrence for every guest and remove it from the connected calendar. The rest of the series will stay."
+									: "This will cancel the event for every guest and remove it from the connected calendar."}
 							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<AlertDialogFooter>
@@ -337,14 +338,12 @@ export function CalendarAgenda({
 const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 	color,
 	event,
-	isWritable,
 	onClick,
 	onEdit,
 	onRequestDelete,
 }: {
 	color: string;
 	event: UpcomingCalendarEvent;
-	isWritable: boolean;
 	onClick: (event: UpcomingCalendarEvent) => void;
 	onEdit: (event: UpcomingCalendarEvent) => void;
 	onRequestDelete: (event: UpcomingCalendarEvent) => void;
@@ -358,7 +357,7 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 				aria-label={`${event.title}, ${formatAgendaTime(event)}${event.isRecurring ? ", recurring" : ""}`}
 				className={cn(
 					"flex w-full min-w-0 cursor-pointer items-center gap-3 px-4 py-2.5 text-start outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring/50",
-					isWritable && "pr-12",
+					(event.canEdit || event.canDelete) && "pr-12",
 				)}
 				data-hover-scroll-title-row
 				onClick={() => onClick(event)}
@@ -371,17 +370,25 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 					className="size-2 shrink-0 rounded-full"
 					style={{ backgroundColor: color }}
 				/>
-				<span className="flex min-w-0 flex-1 items-center gap-2">
-					<HoverScrollTitle className="text-sm">{event.title}</HoverScrollTitle>
-					{event.isRecurring ? (
-						<Repeat2
-							aria-hidden
-							className="size-3.5 shrink-0 text-muted-foreground"
-						/>
-					) : null}
+				<span className="flex min-w-0 flex-1 items-center">
+					<span
+						className="inline-flex min-w-0 max-w-full items-center gap-2"
+						data-calendar-event-title
+					>
+						<HoverScrollTitle className="text-sm">
+							{event.title}
+						</HoverScrollTitle>
+						{event.isRecurring ? (
+							<Repeat2
+								aria-hidden
+								className="size-3.5 shrink-0 text-muted-foreground"
+								data-recurring-indicator
+							/>
+						) : null}
+					</span>
 				</span>
 			</button>
-			{isWritable ? (
+			{event.canEdit || event.canDelete ? (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<button
@@ -406,18 +413,24 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 							closedByPointerOutsideRef.current = false;
 						}}
 					>
-						<DropdownMenuItem onSelect={() => onEdit(event)}>
-							<Pencil className="size-4" aria-hidden />
-							Edit
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem
-							variant="destructive"
-							onSelect={() => onRequestDelete(event)}
-						>
-							<Trash2 className="size-4" aria-hidden />
-							Delete
-						</DropdownMenuItem>
+						{event.canEdit ? (
+							<DropdownMenuItem onSelect={() => onEdit(event)}>
+								<Pencil className="size-4" aria-hidden />
+								Edit
+							</DropdownMenuItem>
+						) : null}
+						{event.canEdit && event.canDelete ? (
+							<DropdownMenuSeparator />
+						) : null}
+						{event.canDelete ? (
+							<DropdownMenuItem
+								variant="destructive"
+								onSelect={() => onRequestDelete(event)}
+							>
+								<Trash2 className="size-4" aria-hidden />
+								Delete
+							</DropdownMenuItem>
+						) : null}
 					</DropdownMenuContent>
 				</DropdownMenu>
 			) : null}

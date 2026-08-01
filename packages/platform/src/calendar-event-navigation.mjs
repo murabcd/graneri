@@ -85,6 +85,8 @@ export const normalizeCalendarEventPayload = (value) => {
 		!endAt ||
 		endAt < startAt ||
 		(value.provider !== "google" && value.provider !== "yandex") ||
+		typeof value.canDelete !== "boolean" ||
+		typeof value.canEdit !== "boolean" ||
 		typeof value.isAllDay !== "boolean" ||
 		typeof value.isMeeting !== "boolean" ||
 		typeof value.isRecurring !== "boolean"
@@ -94,6 +96,8 @@ export const normalizeCalendarEventPayload = (value) => {
 
 	const event = {
 		attendees,
+		canDelete: value.canDelete,
+		canEdit: value.canEdit,
 		calendarId,
 		calendarName,
 		description: normalizeOptionalString(value.description),

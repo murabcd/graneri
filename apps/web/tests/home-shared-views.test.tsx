@@ -49,6 +49,9 @@ describe("HomeView", () => {
 			status: "refreshing",
 			events: [
 				{
+					attendees: [],
+					canDelete: true,
+					canEdit: true,
 					id: "event-1",
 					calendarId: "work",
 					calendarName: "Work",

@@ -8,6 +8,7 @@ import {
 	normalizeCalendarAttendees,
 } from "./calendarAttendees";
 import type { UpcomingCalendarEvent } from "./calendarTypes";
+import { getOrCreatePerson } from "./peopleDomain";
 
 const MAX_CALENDAR_DESCRIPTION_LENGTH = 100_000;
 const MAX_CALENDAR_ID_LENGTH = 4_096;
@@ -160,60 +161,6 @@ const requireValidCalendarEvent = (event: UpcomingCalendarEvent) => {
 		attendees: normalizeCalendarAttendees(event.attendees),
 		snapshot,
 	};
-};
-
-const getOrCreatePerson = async ({
-	attendee,
-	ctx,
-	now,
-	ownerTokenIdentifier,
-	workspaceId,
-}: {
-	attendee: ReturnType<typeof normalizeCalendarAttendees>[number];
-	ctx: MutationCtx;
-	now: number;
-	ownerTokenIdentifier: string;
-	workspaceId: Id<"workspaces">;
-}) => {
-	const existing = await ctx.db
-		.query("people")
-		.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_email", (q) =>
-			q
-				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-				.eq("workspaceId", workspaceId)
-				.eq("email", attendee.email),
-		)
-		.unique();
-	const searchText = [attendee.displayName, attendee.email]
-		.filter(Boolean)
-		.join(" ")
-		.toLowerCase();
-
-	if (existing) {
-		if (
-			attendee.displayName &&
-			(existing.displayName !== attendee.displayName ||
-				existing.searchText !== searchText)
-		) {
-			await ctx.db.patch(existing._id, {
-				displayName: attendee.displayName,
-				searchText,
-				updatedAt: now,
-			});
-		}
-
-		return existing._id;
-	}
-
-	return await ctx.db.insert("people", {
-		ownerTokenIdentifier,
-		workspaceId,
-		email: attendee.email,
-		displayName: attendee.displayName,
-		searchText,
-		createdAt: now,
-		updatedAt: now,
-	});
 };
 
 const getOrCreateCompany = async ({

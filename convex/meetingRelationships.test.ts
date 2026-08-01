@@ -67,6 +67,8 @@ const createEvent = ({
 			responseStatus: "tentative" as const,
 		},
 	],
+	canDelete: true,
+	canEdit: true,
 	calendarId: "work",
 	calendarName: "Work",
 	endAt: new Date(new Date(startAt).getTime() + 60 * 60 * 1000).toISOString(),
@@ -292,9 +294,9 @@ test("calendar event keys are collision-safe and time-canonical", () => {
 		title: "Second",
 	});
 
-	expect(
-		getCalendarEventKey({ ...first, calendarId: "a::b" }),
-	).not.toBe(getCalendarEventKey({ ...second, calendarId: "a" }));
+	expect(getCalendarEventKey({ ...first, calendarId: "a::b" })).not.toBe(
+		getCalendarEventKey({ ...second, calendarId: "a" }),
+	);
 	expect(getCalendarEventKey(first)).toBe(
 		getCalendarEventKey({ ...first, startAt: "2026-01-14T10:00:00.000Z" }),
 	);
@@ -315,9 +317,9 @@ test("invalid calendar event metadata rolls back the whole note transaction", as
 		}),
 	).rejects.toThrow(/title is missing/u);
 
-	expect(await t.run(async (ctx) => await ctx.db.query("notes").take(1))).toEqual(
-		[],
-	);
+	expect(
+		await t.run(async (ctx) => await ctx.db.query("notes").take(1)),
+	).toEqual([]);
 });
 
 test("ambiguous person searches report omitted canonical identities", async () => {

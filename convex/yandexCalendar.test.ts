@@ -30,6 +30,9 @@ const calendarsResponse = `<?xml version="1.0" encoding="utf-8"?>
 		<d:propstat>
 			<d:prop>
 				<d:displayname>Personal</d:displayname>
+				<d:current-user-privilege-set>
+					<d:privilege><d:write-content /></d:privilege>
+				</d:current-user-privilege-set>
 				<a:calendar-color>#10B981FF</a:calendar-color>
 				<d:resourcetype><d:collection /><c:calendar /></d:resourcetype>
 				<c:supported-calendar-component-set>
@@ -68,7 +71,7 @@ DTSTART:20260727T100000Z
 DTEND:20260727T110000Z
 RRULE:FREQ=WEEKLY;COUNT=2
 SUMMARY:Weekly planning
-ATTENDEE;ROLE=REQ-PARTICIPANT:mailto:guest@example.com
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED:mailto:guest@example.com
 END:VEVENT
 END:VCALENDAR</c:calendar-data>
 			</d:prop>
@@ -163,6 +166,32 @@ describe("Yandex Calendar collections", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
+	it("keeps a read-only CalDAV collection out of event creation", async () => {
+		const readOnlyCalendarsResponse = calendarsResponse.replace(
+			"<d:write-content />",
+			"<d:read />",
+		);
+		const fetchMock = vi.fn(
+			async (_input: string | URL | Request, init?: RequestInit) =>
+				new Response(
+					init?.method === "PROPFIND"
+						? readOnlyCalendarsResponse
+						: emptyReportResponse,
+					{ status: 207 },
+				),
+		);
+
+		const result = await listYandexUpcomingEvents({
+			connection,
+			now: 0,
+			request: fetchMock,
+			timeMin: Date.UTC(2026, 6, 25),
+			timeMax: Date.UTC(2026, 7, 24),
+		});
+
+		expect(result.calendars[0]?.canCreateEvents).toBe(false);
+	});
+
 	it("marks expanded recurrence instances as recurring", async () => {
 		const fetchMock = vi.fn(
 			async (_input: string | URL | Request, init?: RequestInit) =>
@@ -197,7 +226,7 @@ describe("Yandex Calendar collections", () => {
 				email: "guest@example.com",
 				isOrganizer: false,
 				isSelf: false,
-				responseStatus: "unknown",
+				responseStatus: "accepted",
 			},
 		]);
 	});
@@ -257,7 +286,11 @@ describe("Yandex Calendar collections", () => {
 		);
 	});
 
-	it("updates one recurring occurrence without replacing the series", async () => {
+	it("rejects updates to events organized by someone else", async () => {
+		const otherOrganizerResource = recurringCalendarResource.replace(
+			"SUMMARY:Weekly planning\r\n",
+			"SUMMARY:Weekly planning\r\nORGANIZER:mailto:other@example.com\r\n",
+		);
 		const fetchMock = vi.fn(
 			async (_input: string | URL | Request, init?: RequestInit) => {
 				if (init?.method === "PROPFIND") {
@@ -265,7 +298,84 @@ describe("Yandex Calendar collections", () => {
 				}
 
 				if (init?.method === "GET") {
-					return new Response(recurringCalendarResource, {
+					return new Response(otherOrganizerResource, { status: 200 });
+				}
+
+				return new Response(null, { status: 204 });
+			},
+		);
+
+		await expect(
+			updateYandexCalendarEvent({
+				connection,
+				input: {
+					calendarId: "yandex:/calendars/owner%40example.com/events-1/",
+					guests: ["guest@example.com"],
+					providerEventId: "/calendars/owner%40example.com/events-1/weekly.ics",
+					time: {
+						kind: "timed",
+						startAt: "2026-07-27T10:00:00.000Z",
+						endAt: "2026-07-27T11:00:00.000Z",
+					},
+					title: "Unauthorized edit",
+				},
+				request: fetchMock,
+			}),
+		).rejects.toMatchObject({
+			data: { code: "CALENDAR_EVENT_EDIT_FORBIDDEN" },
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("refuses to update when CalDAV omits concurrency metadata", async () => {
+		const fetchMock = vi.fn(
+			async (_input: string | URL | Request, init?: RequestInit) => {
+				if (init?.method === "PROPFIND") {
+					return new Response(calendarsResponse, { status: 207 });
+				}
+
+				if (init?.method === "GET") {
+					return new Response(recurringCalendarResource, { status: 200 });
+				}
+
+				return new Response(null, { status: 204 });
+			},
+		);
+
+		await expect(
+			updateYandexCalendarEvent({
+				connection,
+				input: {
+					calendarId: "yandex:/calendars/owner%40example.com/events-1/",
+					guests: ["guest@example.com"],
+					providerEventId:
+						"/calendars/owner%40example.com/events-1/weekly.ics",
+					time: {
+						kind: "timed",
+						startAt: "2026-07-27T10:00:00.000Z",
+						endAt: "2026-07-27T11:00:00.000Z",
+					},
+					title: "Unsafe update",
+				},
+				request: fetchMock,
+			}),
+		).rejects.toThrow("did not return an ETag");
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("updates one recurring occurrence without replacing the series", async () => {
+		const resourceWithAcceptedGuest = recurringCalendarResource.replace(
+			"ATTENDEE;ROLE=REQ-PARTICIPANT:",
+			"ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED:",
+		);
+		const fetchMock = vi.fn(
+			async (_input: string | URL | Request, init?: RequestInit) => {
+				if (init?.method === "PROPFIND") {
+					return new Response(calendarsResponse, { status: 207 });
+				}
+
+				if (init?.method === "GET") {
+					return new Response(resourceWithAcceptedGuest, {
 						status: 200,
 						headers: { etag: '"event-1"' },
 					});
@@ -280,6 +390,7 @@ describe("Yandex Calendar collections", () => {
 				connection,
 				input: {
 					calendarId: "yandex:/calendars/owner%40example.com/events-1/",
+					guests: ["guest@example.com"],
 					location: "Room 2",
 					providerEventId: "/calendars/owner%40example.com/events-1/weekly.ics",
 					recurrenceId: "2026-07-27T10:00:00.000Z",
@@ -309,7 +420,7 @@ describe("Yandex Calendar collections", () => {
 		expect(putInit?.body).toContain("RECURRENCE-ID:20260727T100000Z\r\n");
 		expect(putInit?.body).toContain("SUMMARY:Updated weekly planning\r\n");
 		expect(putInit?.body).toContain(
-			"ATTENDEE;ROLE=REQ-PARTICIPANT:mailto:guest@example.com\r\n",
+			"ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED:mailto:guest@example.com\r\n",
 		);
 		expect(putInit?.body).toContain("RRULE:FREQ=WEEKLY;COUNT=2\r\n");
 	});
@@ -346,5 +457,39 @@ describe("Yandex Calendar collections", () => {
 		expect(putInit?.body).toContain("RECURRENCE-ID:20260727T100000Z\r\n");
 		expect(putInit?.body).toContain("STATUS:CANCELLED\r\n");
 		expect(putInit?.body).toContain("RRULE:FREQ=WEEKLY;COUNT=2\r\n");
+	});
+
+	it("deletes an organizer-owned event resource with ETag protection", async () => {
+		const fetchMock = vi.fn(
+			async (_input: string | URL | Request, init?: RequestInit) => {
+				if (init?.method === "PROPFIND") {
+					return new Response(calendarsResponse, { status: 207 });
+				}
+
+				if (init?.method === "GET") {
+					return new Response(recurringCalendarResource, {
+						status: 200,
+						headers: { etag: '"event-1"' },
+					});
+				}
+
+				return new Response(null, { status: 204 });
+			},
+		);
+
+		await expect(
+			deleteYandexCalendarEvent({
+				calendarId: "yandex:/calendars/owner%40example.com/events-1/",
+				connection,
+				providerEventId: "/calendars/owner%40example.com/events-1/weekly.ics",
+				request: fetchMock,
+			}),
+		).resolves.toBeNull();
+
+		const [, deleteInit] = fetchMock.mock.calls[2] ?? [];
+		expect(deleteInit).toMatchObject({
+			headers: { "If-Match": '"event-1"' },
+			method: "DELETE",
+		});
 	});
 });

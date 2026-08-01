@@ -14,6 +14,8 @@ const errorDesktopTrayCalendarState = {
 
 const toDesktopTrayCalendarEvent = (event: UpcomingCalendarEvent) => ({
 	attendees: event.attendees,
+	canDelete: event.canDelete,
+	canEdit: event.canEdit,
 	calendarId: event.calendarId,
 	calendarName: event.calendarName,
 	description: event.description,

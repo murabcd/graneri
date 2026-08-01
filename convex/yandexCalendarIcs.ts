@@ -1,13 +1,13 @@
+import {
+	createCalendarAttendee,
+	normalizeCalendarAttendees,
+} from "./calendarAttendees";
 import type {
 	ParsedIcsEvent,
 	ParsedIcsProperty,
 	YandexCalendarCollection,
 	YandexUpcomingCalendarEvent,
 } from "./yandexCalendarTypes";
-import {
-	createCalendarAttendee,
-	normalizeCalendarAttendees,
-} from "./calendarAttendees";
 
 const URL_PATTERN = /https?:\/\/[^\s<>"]+/giu;
 const ICS_WEEKDAY_INDEX_BY_CODE: Record<string, number> = {
@@ -409,9 +409,14 @@ const normalizeEvent = ({
 				: null,
 		].filter((attendee) => attendee !== null),
 	);
+	const organizerAttendee = attendees.find((attendee) => attendee.isOrganizer);
+	const canManageEvent =
+		calendar.canWrite && (organizerAttendee ? organizerAttendee.isSelf : true);
 
 	return {
 		attendees,
+		canDelete: canManageEvent,
+		canEdit: canManageEvent,
 		calendarId: calendar.id,
 		calendarName: calendar.displayName,
 		description: description || undefined,

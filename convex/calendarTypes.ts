@@ -25,6 +25,8 @@ export type CalendarSource = {
 
 export type UpcomingCalendarEvent = {
 	attendees: CalendarAttendee[];
+	canDelete: boolean;
+	canEdit: boolean;
 	calendarId: string;
 	calendarName: string;
 	description?: string;
@@ -77,6 +79,7 @@ export type CreateCalendarEventInput = CalendarEventDetailsInput & {
 export type UpdateCalendarEventInput = {
 	calendarId: string;
 	description?: string;
+	guests: string[];
 	location?: string;
 	providerEventId: string;
 	recurrenceId?: string;

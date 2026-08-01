@@ -49,14 +49,27 @@ vi.mock("convex/react", () => ({
 			? deleteCalendarEvent
 			: listCalendarEvents;
 	},
-	useQuery: (reference: never) =>
-		getFunctionName(reference) === "calendarPreferences:get"
+	useQuery: (reference: never) => {
+		const functionName = getFunctionName(reference);
+
+		if (functionName === "calendarPreferences:get") {
+			return {
+				showGoogleCalendar: true,
+				showGoogleDrive: false,
+				showYandexCalendar: false,
+			};
+		}
+
+		return functionName === "people:listForPicker"
 			? {
-					showGoogleCalendar: true,
-					showGoogleDrive: false,
-					showYandexCalendar: false,
+					hasMore: false,
+					people: [
+						{ displayName: "Alina Petrova", email: "alina@acme.com" },
+						{ displayName: "Mark Stone", email: "mark@acme.com" },
+					],
 				}
-			: null,
+			: null;
+	},
 }));
 
 const readyCalendar = {
@@ -72,6 +85,37 @@ const readyCalendar = {
 	],
 	events: [
 		{
+			attendees: [
+				{
+					displayName: "Murad Abdulkadyrov",
+					email: "murad@example.com",
+					isOrganizer: true,
+					isSelf: true,
+					responseStatus: "accepted" as const,
+				},
+				{
+					displayName: "Alina Petrova",
+					email: "alina@acme.com",
+					isOrganizer: false,
+					isSelf: false,
+					responseStatus: "tentative" as const,
+				},
+				{
+					email: "mark@acme.com",
+					isOrganizer: false,
+					isSelf: false,
+					responseStatus: "needs_action" as const,
+				},
+				{
+					displayName: "Priya Shah",
+					email: "priya@example.com",
+					isOrganizer: false,
+					isSelf: false,
+					responseStatus: "declined" as const,
+				},
+			],
+			canDelete: true,
+			canEdit: true,
 			id: "event-1",
 			calendarId: "work",
 			calendarName: "Work",
@@ -356,7 +400,12 @@ describe("CalendarPage loading", () => {
 		const recurringEvent = await screen.findByRole("button", {
 			name: /Planning,.*recurring$/u,
 		});
-		expect(recurringEvent.querySelector("svg")).not.toBeNull();
+		const title = recurringEvent.querySelector("[data-calendar-event-title]");
+		const recurringIndicator = recurringEvent.querySelector(
+			"[data-recurring-indicator]",
+		);
+		expect(recurringIndicator).not.toBeNull();
+		expect(title?.lastElementChild).toBe(recurringIndicator);
 	});
 
 	it("keeps focus on the trigger while the new event panel opens", async () => {
@@ -427,6 +476,19 @@ describe("CalendarPage loading", () => {
 			await screen.findByRole("textbox", { name: "Title" }),
 			"Product sync",
 		);
+		const guests = screen.getByRole("combobox", { name: "Guests" });
+		await user.click(guests);
+		await user.click(
+			await screen.findByRole("option", { name: /Alina Petrova/u }),
+		);
+		await user.click(guests);
+		await user.click(
+			await screen.findByRole("option", { name: /Mark Stone/u }),
+		);
+		await user.click(guests);
+		await user.type(guests, "New.Person@Example.COM");
+		await user.keyboard("{Enter}");
+		await user.keyboard("{Tab}");
 		await user.click(screen.getByRole("button", { name: "Create" }));
 
 		await waitFor(() =>
@@ -434,6 +496,7 @@ describe("CalendarPage loading", () => {
 				expect.objectContaining({
 					workspaceId,
 					calendarId: "work",
+					guests: ["alina@acme.com", "mark@acme.com", "new.person@example.com"],
 					provider: "google",
 					title: "Product sync",
 					time: expect.objectContaining({ kind: "timed" }),
@@ -444,6 +507,28 @@ describe("CalendarPage loading", () => {
 			expect(listCalendarEvents).toHaveBeenCalledTimes(requestCount + 3),
 		);
 		expect(screen.queryByRole("heading", { name: "New event" })).toBeNull();
+	});
+
+	it("blocks event creation while guest search text is unresolved", async () => {
+		const user = userEvent.setup();
+		renderCalendarPageWithNewEventTrigger(workspaceId);
+		await screen.findByText("Planning");
+
+		await user.click(screen.getByRole("button", { name: "New event" }));
+		await user.type(
+			await screen.findByRole("textbox", { name: "Title" }),
+			"Product sync",
+		);
+		const guests = screen.getByRole("combobox", { name: "Guests" });
+		await user.type(guests, "not-an-email");
+		await user.keyboard("{Tab}");
+		expect((guests as HTMLInputElement).validationMessage).toBe(
+			"Enter a valid email address.",
+		);
+		await user.click(screen.getByRole("button", { name: "Create" }));
+
+		expect(createCalendarEvent).not.toHaveBeenCalled();
+		expect(screen.getByText("Enter a valid email address.")).not.toBeNull();
 	});
 
 	it("creates a provider calendar and reloads the agenda", async () => {
@@ -615,6 +700,57 @@ describe("CalendarPage loading", () => {
 		expect(screen.queryByRole("button", { name: "Delete event" })).toBeNull();
 	});
 
+	it("shows every guest with only their name and email", async () => {
+		const user = userEvent.setup();
+		renderCalendarPage(workspaceId);
+		const planningEvent = await screen.findByRole(
+			"button",
+			{ name: /^Planning,/ },
+			{ timeout: 5_000 },
+		);
+
+		await user.click(planningEvent);
+
+		expect(
+			await screen.findByRole("button", { name: "View 4 guests" }),
+		).not.toBeNull();
+		expect(screen.getByText("+1")).not.toBeNull();
+		expect(screen.queryByText("4 guests")).toBeNull();
+		await user.click(screen.getByRole("button", { name: "View 4 guests" }));
+		expect(screen.queryByText("Guests")).toBeNull();
+		expect(await screen.findByRole("list", { name: "Guests" })).not.toBeNull();
+		expect(screen.getByText("Murad Abdulkadyrov")).not.toBeNull();
+		expect(screen.getByText("murad@example.com")).not.toBeNull();
+		expect(screen.getByText("Alina Petrova")).not.toBeNull();
+		expect(screen.getByText("alina@acme.com")).not.toBeNull();
+		expect(screen.getByText("mark@acme.com")).not.toBeNull();
+		expect(screen.getByText("Priya Shah")).not.toBeNull();
+		expect(screen.getByText("priya@example.com")).not.toBeNull();
+		expect(screen.queryByText("You · Organizer · Accepted")).toBeNull();
+		expect(screen.queryByText("Tentative")).toBeNull();
+		expect(screen.queryByText("Awaiting response")).toBeNull();
+		expect(screen.queryByText("Declined")).toBeNull();
+	});
+
+	it("shows when a calendar event has no listed guests", async () => {
+		const user = userEvent.setup();
+		listCalendarEvents.mockResolvedValue({
+			...readyCalendar,
+			events: [{ ...readyCalendar.events[0], attendees: [] }],
+		});
+		renderCalendarPage(workspaceId);
+		const planningEvent = await screen.findByRole(
+			"button",
+			{ name: /^Planning,/ },
+			{ timeout: 5_000 },
+		);
+
+		await user.click(planningEvent);
+
+		expect(await screen.findByText("No guests")).not.toBeNull();
+		expect(screen.queryByRole("list", { name: "Guests" })).toBeNull();
+	});
+
 	it("edits an event from its row actions", async () => {
 		const user = userEvent.setup();
 		renderCalendarPage(workspaceId);
@@ -634,6 +770,7 @@ describe("CalendarPage loading", () => {
 			expect(updateCalendarEvent).toHaveBeenCalledWith(
 				expect.objectContaining({
 					calendarId: "work",
+					guests: ["alina@acme.com", "mark@acme.com", "priya@example.com"],
 					provider: "google",
 					providerEventId: "provider-event-1",
 					title: "Updated planning",
@@ -641,6 +778,26 @@ describe("CalendarPage loading", () => {
 				}),
 			),
 		);
+	});
+
+	it("does not expose provider mutations for an event the user cannot manage", async () => {
+		listCalendarEvents.mockResolvedValue({
+			...readyCalendar,
+			events: [
+				{
+					...readyCalendar.events[0],
+					canDelete: false,
+					canEdit: false,
+				},
+			],
+		});
+
+		renderCalendarPage(workspaceId);
+		await screen.findByText("Planning");
+
+		expect(
+			screen.queryByRole("button", { name: "Open actions for Planning" }),
+		).toBeNull();
 	});
 
 	it("hides row actions after dismissing the menu with a pointer", async () => {

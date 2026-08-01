@@ -32,6 +32,7 @@ import {
 	createInitialCalendarEventDraft,
 	toCalendarEventCreation,
 } from "@/components/calendar/calendar-event-draft";
+import { CalendarEventGuestPicker } from "@/components/calendar/calendar-event-guest-picker";
 import { CalendarEventPanelHeader } from "@/components/calendar/calendar-event-panel-header";
 import {
 	CalendarSourceDot,
@@ -39,6 +40,7 @@ import {
 } from "@/components/calendar/calendar-source-dot";
 import type { CalendarSource } from "@/components/calendar/calendar-view-model";
 import { getConnectionErrorMessage } from "@/components/settings/connection-error-message";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const FIELD_LABEL_CLASS_NAME = "text-xs font-medium text-muted-foreground";
 
@@ -52,6 +54,7 @@ export function CalendarEventEditorPanel({
 	onClose,
 	onSaveEvent,
 	onTogglePinned,
+	workspaceId,
 }: {
 	calendars: CalendarSource[];
 	defaultCalendarId: string | null;
@@ -62,6 +65,7 @@ export function CalendarEventEditorPanel({
 	onClose: () => void;
 	onSaveEvent: (creation: CalendarEventCreation) => Promise<void>;
 	onTogglePinned: () => void;
+	workspaceId: Id<"workspaces">;
 }) {
 	const writableCalendars = React.useMemo(
 		() => calendars.filter((calendar) => calendar.canCreateEvents),
@@ -208,7 +212,11 @@ export function CalendarEventEditorPanel({
 										</SelectGroup>
 									</SelectContent>
 								</Select>
-								{writableCalendars.length === 0 ? (
+								{event ? (
+									<FieldDescription className="text-xs">
+										Events stay in their original calendar.
+									</FieldDescription>
+								) : writableCalendars.length === 0 ? (
 									<FieldDescription className="text-xs">
 										No writable calendars are connected.
 									</FieldDescription>
@@ -262,26 +270,20 @@ export function CalendarEventEditorPanel({
 								/>
 							</Field>
 
-							{event ? null : (
-								<Field>
-									<FieldLabel
-										htmlFor="calendar-event-guests"
-										className={FIELD_LABEL_CLASS_NAME}
-									>
-										Guests
-									</FieldLabel>
-									<Input
-										id="calendar-event-guests"
-										type="email"
-										multiple
-										placeholder="Add guest emails"
-										value={draft.guests}
-										onChange={(event) =>
-											patchDraft({ guests: event.target.value })
-										}
-									/>
-								</Field>
-							)}
+							<Field>
+								<FieldLabel
+									htmlFor="calendar-event-guests"
+									className={FIELD_LABEL_CLASS_NAME}
+								>
+									Guests
+								</FieldLabel>
+								<CalendarEventGuestPicker
+									id="calendar-event-guests"
+									value={draft.guests}
+									workspaceId={workspaceId}
+									onValueChange={(guests) => patchDraft({ guests })}
+								/>
+							</Field>
 
 							<Field>
 								<FieldLabel

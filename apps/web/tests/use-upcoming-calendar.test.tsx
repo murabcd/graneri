@@ -36,6 +36,9 @@ vi.mock("../src/app/desktop-tray-calendar-sync", () => ({
 }));
 
 const calendarEvent = {
+	attendees: [],
+	canDelete: true,
+	canEdit: true,
 	calendarId: "work",
 	calendarName: "Work",
 	endAt: "2026-07-26T11:00:00.000Z",

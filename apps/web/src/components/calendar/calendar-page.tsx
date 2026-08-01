@@ -188,6 +188,7 @@ export function CalendarPage({
 				void onOpenCalendarEventNote(event);
 			}}
 			onUpdateEvent={handleUpdateEvent}
+			workspaceId={activeWorkspaceId}
 		/>
 	);
 	const newCalendarDialog = (

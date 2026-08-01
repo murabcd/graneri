@@ -54,10 +54,23 @@ event-only collections with CalDAV MKCALENDAR and writes VEVENT resources with
 CalDAV PUT. Event updates and deletes target the selected occurrence: Google
 uses its instance event identifier, while Yandex writes an iCalendar
 `RECURRENCE-ID` override or cancellation back to the original resource with
-ETag protection. The renderer receives explicit provider identity, opaque
-provider event identity, provider-owned calendar color, per-calendar write
-capability, and a normalized recurring-event signal; it offers only writable
-calendars in the editor. Provider reads are complete-snapshot operations: a
+ETag protection. Event snapshots expose separate provider-derived edit and
+delete capabilities. Google permits editing for the organizer, creator,
+delegated non-primary calendar writer, or an attendee explicitly allowed to
+modify the event; delete-for-everyone is limited to the organizer, creator, or
+delegated calendar writer. Yandex permits event changes for organizer-owned or
+organizerless personal events in a collection whose CalDAV ACL includes write
+access. Every mutation reloads the provider event and rechecks that authorization
+server-side; renderer capability flags are presentation data, not trusted
+authorization.
+Guest edits preserve retained provider attendee metadata such as response state,
+and provider writes notify guests. Events remain in their original calendar:
+Google calendar moves change organizer semantics and Yandex has no equivalent
+provider-neutral operation. The renderer receives explicit provider identity,
+opaque provider event identity, provider-owned calendar color, per-calendar
+write capability, per-event mutation capabilities, and a normalized
+recurring-event signal; it offers only writable calendars in the editor.
+Provider reads are complete-snapshot operations: a
 failed calendar read rejects the refresh instead of caching a partial agenda,
 so the renderer retains the last successful snapshot while provider reads and
 writes refresh. `calendarSnapshotModule` is the renderer authority for

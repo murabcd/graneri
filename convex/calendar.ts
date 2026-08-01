@@ -5,6 +5,8 @@ import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action } from "./_generated/server";
+import { normalizeEmail } from "./calendarAttendees";
+import { scheduleCalendarPeopleSync } from "./calendarPeopleSync";
 import {
 	type CalendarToolProviderInput,
 	createCalendarToolProviderAdapter,
@@ -213,6 +215,12 @@ export const listUpcomingCalendarEvents = action({
 					events: [],
 				};
 			}
+			await scheduleCalendarPeopleSync({
+				ctx,
+				events,
+				ownerTokenIdentifier: identity.tokenIdentifier,
+				workspaceId: args.workspaceId,
+			});
 
 			return {
 				status: "ready" as const,
@@ -268,6 +276,12 @@ export const listCalendarEvents = action({
 					events: [],
 				};
 			}
+			await scheduleCalendarPeopleSync({
+				ctx,
+				events: result.events,
+				ownerTokenIdentifier: identity.tokenIdentifier,
+				workspaceId: args.workspaceId,
+			});
 
 			return {
 				status: "ready",
@@ -303,16 +317,18 @@ const normalizeCalendarEventDetails = <Input extends CalendarEventDetailsInput>(
 		});
 	}
 
-	const guests = Array.from(
-		new Set(input.guests.map((guest) => guest.trim().toLowerCase())),
-	).filter(Boolean);
+	const normalizedGuests = input.guests.map(normalizeEmail);
 
-	if (guests.some((guest) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(guest))) {
+	if (normalizedGuests.some((guest) => guest === null)) {
 		throw new ConvexError({
 			code: "INVALID_CALENDAR_EVENT_GUEST",
 			message: "One or more guest email addresses are invalid.",
 		});
 	}
+
+	const guests = Array.from(
+		new Set(normalizedGuests.filter((guest) => guest !== null)),
+	);
 
 	if (input.time.kind === "all_day") {
 		if (
@@ -356,7 +372,7 @@ const normalizeUpdateCalendarEventInput = (
 	const normalized = normalizeCalendarEventDetails({
 		calendarId: input.calendarId,
 		description: input.description,
-		guests: [],
+		guests: input.guests,
 		location: input.location,
 		time: input.time,
 		title: input.title,
@@ -373,6 +389,7 @@ const normalizeUpdateCalendarEventInput = (
 	return {
 		calendarId: normalized.calendarId,
 		description: normalized.description,
+		guests: normalized.guests,
 		location: normalized.location,
 		providerEventId,
 		recurrenceId: input.recurrenceId,
@@ -493,6 +510,7 @@ export const updateCalendarEvent = action({
 	args: {
 		calendarId: v.string(),
 		description: v.optional(v.string()),
+		guests: v.array(v.string()),
 		location: v.optional(v.string()),
 		provider: calendarProviderValidator,
 		providerEventId: v.string(),
@@ -516,6 +534,7 @@ export const updateCalendarEvent = action({
 		const input = normalizeUpdateCalendarEventInput({
 			calendarId: args.calendarId,
 			description: args.description,
+			guests: args.guests,
 			location: args.location,
 			providerEventId: args.providerEventId,
 			recurrenceId: args.recurrenceId,

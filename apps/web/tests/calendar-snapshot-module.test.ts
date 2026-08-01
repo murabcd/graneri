@@ -26,6 +26,9 @@ const calendar: CalendarSource = {
 };
 
 const createEvent = (id: string): UpcomingCalendarEvent => ({
+	attendees: [],
+	canDelete: true,
+	canEdit: true,
 	calendarId: calendar.id,
 	calendarName: calendar.name,
 	endAt: "2026-07-27T11:00:00.000Z",
