@@ -53,7 +53,7 @@ export type AppLocationState = {
 	shouldAutoStartNoteCapture: boolean;
 	shouldStopNoteCaptureWhenMeetingEnds: boolean;
 	scheduledAutoStartNoteCaptureAt: string | null;
-	pendingCalendarEvent: UpcomingCalendarEvent | null;
+	pendingCalendarEventRequestId: string | null;
 	canonicalPath: AppCanonicalPath | null;
 	canonicalSearch: string;
 };

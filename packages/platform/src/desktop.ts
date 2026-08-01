@@ -211,6 +211,17 @@ export const refreshDesktopTrayCalendar = async () => {
 	return true;
 };
 
+export const consumeDesktopTrayCalendarEvent = async (requestId: string) => {
+	const bridge = getDesktopBridge();
+
+	if (!bridge?.consumeTrayCalendarEvent) {
+		return null;
+	}
+
+	const result = await bridge.consumeTrayCalendarEvent(requestId);
+	return result.event;
+};
+
 export const setDesktopTrayCalendarState = async (
 	payload: DesktopTrayCalendarState,
 ) => {

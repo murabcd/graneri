@@ -287,12 +287,14 @@ const listYandexCalendarCollections = async ({
 const parseYandexCalendarReport = ({
 	calendar,
 	now,
+	selfEmail,
 	timeMax,
 	timeMin,
 	xml,
 }: {
 	calendar: YandexCalendarCollection;
 	now: number;
+	selfEmail: string;
 	timeMax: number;
 	timeMin: number;
 	xml: string;
@@ -312,6 +314,7 @@ const parseYandexCalendarReport = ({
 			calendarData,
 			href,
 			minimumEndAt: now,
+			selfEmail,
 			timeMax,
 			timeMin,
 		});
@@ -378,6 +381,7 @@ export const listYandexUpcomingEvents = async ({
 			return parseYandexCalendarReport({
 				calendar,
 				now,
+				selfEmail: connection.email,
 				timeMax,
 				timeMin,
 				xml,
@@ -464,7 +468,7 @@ const parseIcsEventBlock = (lines: string[]) =>
 	parseIcsEvents(lines.join("\r\n"))[0] ?? null;
 
 const getRecurrenceIdIso = (event: ParsedIcsEvent) => {
-	const recurrenceId = event["RECURRENCE-ID"];
+	const recurrenceId = event.properties["RECURRENCE-ID"];
 
 	if (!recurrenceId) {
 		return undefined;
@@ -528,7 +532,7 @@ const getPreservedEventLines = ({
 };
 
 const getNextSequence = (event: ParsedIcsEvent) => {
-	const sequence = Number(event.SEQUENCE?.value ?? "0");
+	const sequence = Number(event.properties.SEQUENCE?.value ?? "0");
 	return Number.isFinite(sequence) ? Math.max(0, sequence) + 1 : 1;
 };
 
@@ -566,7 +570,7 @@ const buildUpdatedYandexEventLines = ({
 	now: number;
 }) => {
 	const baseEvent = parseIcsEventBlock(baseEventLines);
-	const uid = baseEvent?.UID?.value;
+	const uid = baseEvent?.properties.UID?.value;
 
 	if (!baseEvent || !uid) {
 		throw new Error("The Yandex event resource is invalid.");
@@ -612,7 +616,7 @@ const buildCancelledYandexEventLines = ({
 	recurrenceIsAllDay: boolean;
 }) => {
 	const baseEvent = parseIcsEventBlock(baseEventLines);
-	const uid = baseEvent?.UID?.value;
+	const uid = baseEvent?.properties.UID?.value;
 
 	if (!baseEvent || !uid) {
 		throw new Error("The Yandex event resource is invalid.");
@@ -647,7 +651,7 @@ const updateYandexCalendarResource = ({
 	const ranges = getIcsEventBlockRanges(lines);
 	const baseRange = ranges.find(({ end, start }) => {
 		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && !event["RECURRENCE-ID"];
+		return event && !event.properties["RECURRENCE-ID"];
 	});
 
 	if (!baseRange) {
@@ -703,7 +707,7 @@ const cancelYandexCalendarOccurrence = ({
 	const ranges = getIcsEventBlockRanges(lines);
 	const baseRange = ranges.find(({ end, start }) => {
 		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && !event["RECURRENCE-ID"];
+		return event && !event.properties["RECURRENCE-ID"];
 	});
 
 	if (!baseRange) {

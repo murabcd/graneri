@@ -1,3 +1,7 @@
+import {
+	appendCalendarEventRequestSearchParam,
+	getCalendarEventRequestIdFromSearchParams,
+} from "@workspace/platform/calendar-event-navigation";
 import { appendNoteCaptureSearchParams } from "@workspace/platform/note-capture-navigation";
 import type {
 	AppCanonicalPath,
@@ -85,39 +89,14 @@ const upcomingEventTimeFormatter = new Intl.DateTimeFormat(undefined, {
 	minute: "2-digit",
 });
 
-const appendCalendarEventSearchParams = ({
-	event,
+const appendCalendarEventRequestSearchParams = ({
+	requestId,
 	searchParams,
 }: {
-	event: UpcomingCalendarEvent;
+	requestId: string;
 	searchParams: URLSearchParams;
 }) => {
-	searchParams.set("calendarEventId", event.id);
-	searchParams.set("calendarId", event.calendarId);
-	searchParams.set("calendarName", event.calendarName);
-	searchParams.set("calendarProvider", event.provider);
-	searchParams.set("providerEventId", event.providerEventId);
-	searchParams.set("eventTitle", event.title);
-	searchParams.set("startAt", event.startAt);
-	searchParams.set("endAt", event.endAt);
-	searchParams.set("isAllDay", event.isAllDay ? "1" : "0");
-	searchParams.set("isRecurring", event.isRecurring ? "1" : "0");
-
-	if (event.recurrenceId) {
-		searchParams.set("recurrenceId", event.recurrenceId);
-	}
-
-	if (event.meetingUrl?.trim()) {
-		searchParams.set("meetingUrl", event.meetingUrl);
-	}
-
-	if (event.location?.trim()) {
-		searchParams.set("location", event.location);
-	}
-
-	if (event.htmlLink?.trim()) {
-		searchParams.set("htmlLink", event.htmlLink);
-	}
+	appendCalendarEventRequestSearchParam({ requestId, searchParams });
 };
 
 const getScheduledAutoStartNoteCaptureAt = (url: URL): string | null => {
@@ -164,9 +143,6 @@ export function getThemeFireworkColors() {
 		return value ? [value] : [];
 	});
 }
-
-export const createCalendarEventKey = (event: UpcomingCalendarEvent) =>
-	[event.calendarId, event.id, event.startAt].join("::");
 
 const getCurrentDayWindow = (currentDate: Date) => {
 	const timeMin = new Date(currentDate);
@@ -315,60 +291,16 @@ export const buildCalendarEventSearchableText = ({
 		.filter((value): value is string => Boolean(value))
 		.join("\n");
 
-const getPendingCalendarEventFromUrl = (
-	url: URL,
-): UpcomingCalendarEvent | null => {
-	const id = url.searchParams.get("calendarEventId")?.trim();
-	const calendarId = url.searchParams.get("calendarId")?.trim();
-	const calendarName = url.searchParams.get("calendarName")?.trim();
-	const provider = url.searchParams.get("calendarProvider")?.trim();
-	const providerEventId = url.searchParams.get("providerEventId")?.trim();
-	const title = url.searchParams.get("eventTitle")?.trim();
-	const startAt = url.searchParams.get("startAt")?.trim();
-	const endAt = url.searchParams.get("endAt")?.trim();
-
-	if (
-		!id ||
-		!calendarId ||
-		!calendarName ||
-		(provider !== "google" && provider !== "yandex") ||
-		!providerEventId ||
-		!title ||
-		!startAt ||
-		!endAt
-	) {
-		return null;
-	}
-
-	return {
-		id,
-		calendarId,
-		calendarName,
-		title,
-		startAt,
-		endAt,
-		isAllDay: url.searchParams.get("isAllDay") === "1",
-		isMeeting: true,
-		isRecurring: url.searchParams.get("isRecurring") === "1",
-		htmlLink: url.searchParams.get("htmlLink")?.trim() || undefined,
-		location: url.searchParams.get("location")?.trim() || undefined,
-		meetingUrl: url.searchParams.get("meetingUrl")?.trim() || undefined,
-		provider,
-		providerEventId,
-		recurrenceId: url.searchParams.get("recurrenceId")?.trim() || undefined,
-	};
-};
-
 export const createNoteSearch = ({
 	autoStartCapture = false,
-	calendarEvent,
+	calendarEventRequestId,
 	captureRequestId,
 	noteId,
 	scheduledAutoStartAt,
 	stopCaptureWhenMeetingEnds = false,
 }: {
 	autoStartCapture?: boolean;
-	calendarEvent?: UpcomingCalendarEvent | null;
+	calendarEventRequestId?: string | null;
 	captureRequestId?: string | null;
 	noteId?: string | null;
 	scheduledAutoStartAt?: string | null;
@@ -390,9 +322,9 @@ export const createNoteSearch = ({
 		searchParams.set("captureAt", scheduledAutoStartAt);
 	}
 
-	if (calendarEvent && !noteId) {
-		appendCalendarEventSearchParams({
-			event: calendarEvent,
+	if (calendarEventRequestId && !noteId) {
+		appendCalendarEventRequestSearchParams({
+			requestId: calendarEventRequestId,
 			searchParams,
 		});
 	}
@@ -456,7 +388,7 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 			shouldAutoStartNoteCapture: false,
 			shouldStopNoteCaptureWhenMeetingEnds: false,
 			scheduledAutoStartNoteCaptureAt: null,
-			pendingCalendarEvent: null,
+			pendingCalendarEventRequestId: null,
 			canonicalPath: null,
 			canonicalSearch: "",
 		};
@@ -474,9 +406,9 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 		view === "note" && url.searchParams.get("meeting") === "1";
 	const scheduledAutoStartNoteCaptureAt =
 		view === "note" ? getScheduledAutoStartNoteCaptureAt(url) : null;
-	const pendingCalendarEvent =
+	const pendingCalendarEventRequestId =
 		view === "note" && noteIdString === null
-			? getPendingCalendarEventFromUrl(url)
+			? getCalendarEventRequestIdFromSearchParams(url.searchParams)
 			: null;
 
 	return {
@@ -488,13 +420,13 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 		shouldAutoStartNoteCapture,
 		shouldStopNoteCaptureWhenMeetingEnds,
 		scheduledAutoStartNoteCaptureAt,
-		pendingCalendarEvent,
+		pendingCalendarEventRequestId,
 		canonicalPath: CANONICAL_PATH_BY_VIEW[view],
 		canonicalSearch:
 			view === "note"
 				? createNoteSearch({
 						autoStartCapture: shouldAutoStartNoteCapture,
-						calendarEvent: pendingCalendarEvent,
+						calendarEventRequestId: pendingCalendarEventRequestId,
 						captureRequestId: noteCaptureRequestId,
 						noteId: noteIdString,
 						scheduledAutoStartAt: scheduledAutoStartNoteCaptureAt,

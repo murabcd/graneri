@@ -621,6 +621,10 @@ const matchesCalendarSearchQuery = (
 		event.calendarName,
 		event.location ?? "",
 		event.meetingUrl ?? "",
+		...event.attendees.flatMap((attendee) => [
+			attendee.displayName ?? "",
+			attendee.email,
+		]),
 	]
 		.join(" ")
 		.toLowerCase()

@@ -13,15 +13,21 @@ const errorDesktopTrayCalendarState = {
 } satisfies DesktopTrayCalendarState;
 
 const toDesktopTrayCalendarEvent = (event: UpcomingCalendarEvent) => ({
+	attendees: event.attendees,
 	calendarId: event.calendarId,
 	calendarName: event.calendarName,
+	description: event.description,
 	endAt: event.endAt,
-	htmlLink: event.htmlLink ?? null,
+	htmlLink: event.htmlLink,
 	id: event.id,
 	isAllDay: event.isAllDay,
 	isMeeting: event.isMeeting,
-	location: event.location ?? null,
-	meetingUrl: event.meetingUrl ?? null,
+	isRecurring: event.isRecurring,
+	location: event.location,
+	meetingUrl: event.meetingUrl,
+	provider: event.provider,
+	providerEventId: event.providerEventId,
+	recurrenceId: event.recurrenceId,
 	startAt: event.startAt,
 	title: event.title,
 });

@@ -68,6 +68,7 @@ DTSTART:20260727T100000Z
 DTEND:20260727T110000Z
 RRULE:FREQ=WEEKLY;COUNT=2
 SUMMARY:Weekly planning
+ATTENDEE;ROLE=REQ-PARTICIPANT:mailto:guest@example.com
 END:VEVENT
 END:VCALENDAR</c:calendar-data>
 			</d:prop>
@@ -190,6 +191,15 @@ describe("Yandex Calendar collections", () => {
 				}),
 			]),
 		);
+		expect(result.events[0]?.attendees).toEqual([
+			{
+				displayName: undefined,
+				email: "guest@example.com",
+				isOrganizer: false,
+				isSelf: false,
+				responseStatus: "unknown",
+			},
+		]);
 	});
 
 	it("creates an event with a conditional CalDAV PUT", async () => {

@@ -4,11 +4,21 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
+	calendarEventSnapshotValidator,
+	upcomingCalendarEventValidator,
+} from "./calendarValidators";
+import {
 	createResourceAccess,
 	getAuthorName,
 	requireOwnedWorkspace,
 } from "./domain";
 import { requireOwnedProject } from "./projects";
+import {
+	createCalendarNoteRelationships,
+	getCalendarEventKey,
+	removeCalendarNoteRelationships,
+	setCalendarNoteRelationshipsArchived,
+} from "./calendarNoteRelationships";
 
 const noteVisibilityValidator = v.union(
 	v.literal("private"),
@@ -21,7 +31,7 @@ const noteFields = {
 	ownerTokenIdentifier: v.string(),
 	workspaceId: v.id("workspaces"),
 	projectId: v.optional(v.id("projects")),
-	calendarEventKey: v.optional(v.string()),
+	calendarEvent: v.optional(calendarEventSnapshotValidator),
 	authorName: v.optional(v.string()),
 	isStarred: v.optional(v.boolean()),
 	starredSortOrder: v.number(),
@@ -339,6 +349,7 @@ const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
 		ownerTokenIdentifier: note.ownerTokenIdentifier,
 		noteId: note._id,
 	});
+	await removeCalendarNoteRelationships(ctx, note);
 	await ctx.db.delete(note._id);
 };
 
@@ -718,8 +729,7 @@ export const create = mutation({
 export const createFromCalendarEvent = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
-		calendarEventKey: v.string(),
-		title: v.string(),
+		calendarEvent: upcomingCalendarEventValidator,
 		content: v.string(),
 		searchableText: v.string(),
 	},
@@ -730,22 +740,16 @@ export const createFromCalendarEvent = mutation({
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
 		const authorName = getAuthorName(identity);
 		const now = Date.now();
-		const calendarEventKey = args.calendarEventKey.trim();
-
-		if (!calendarEventKey) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_EVENT",
-				message: "Calendar event key is required.",
-			});
-		}
+		const calendarEvent = args.calendarEvent;
+		const calendarEventKey = getCalendarEventKey(calendarEvent);
 
 		const existingNote = await ctx.db
 			.query("notes")
-			.withIndex("by_owner_ws_event_arch", (q) =>
+			.withIndex("by_owner_ws_calendarEventKey_archived", (q) =>
 				q
 					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
 					.eq("workspaceId", args.workspaceId)
-					.eq("calendarEventKey", calendarEventKey)
+					.eq("calendarEvent.key", calendarEventKey)
 					.eq("isArchived", false),
 			)
 			.unique();
@@ -754,15 +758,14 @@ export const createFromCalendarEvent = mutation({
 			return existingNote._id;
 		}
 
-		return await ctx.db.insert("notes", {
+		const noteId = await ctx.db.insert("notes", {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			projectId: undefined,
-			calendarEventKey,
 			authorName,
 			isStarred: false,
 			starredSortOrder: now,
-			title: args.title,
+			title: calendarEvent.title.trim(),
 			content: args.content,
 			searchableText: args.searchableText,
 			visibility: "private",
@@ -773,6 +776,17 @@ export const createFromCalendarEvent = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
+		const calendarEventSnapshot = await createCalendarNoteRelationships({
+			ctx,
+			event: calendarEvent,
+			noteId,
+			now,
+			ownerTokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
+		await ctx.db.patch(noteId, { calendarEvent: calendarEventSnapshot });
+
+		return noteId;
 	},
 });
 
@@ -1074,6 +1088,11 @@ export const moveToTrash = mutation({
 			archivedAt: Date.now(),
 			updatedAt: Date.now(),
 		});
+		await setCalendarNoteRelationshipsArchived({
+			ctx,
+			isArchived: true,
+			note,
+		});
 		await ctx.runMutation(internal.chats.archiveForNote, {
 			ownerTokenIdentifier: note.ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
@@ -1097,6 +1116,11 @@ export const restore = mutation({
 			isArchived: false,
 			archivedAt: undefined,
 			updatedAt: Date.now(),
+		});
+		await setCalendarNoteRelationshipsArchived({
+			ctx,
+			isArchived: false,
+			note,
 		});
 		await ctx.runMutation(internal.chats.restoreForNote, {
 			ownerTokenIdentifier: note.ownerTokenIdentifier,

@@ -5,6 +5,7 @@ import {
 	buildCapabilityToolSet,
 	type WorkspaceToolConnection,
 } from "@workspace/ai/capability-registry";
+import { buildMeetingTools } from "@workspace/ai/meeting-tools";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
@@ -43,11 +44,25 @@ export const buildServerWorkspaceTools = async (
 		selectedSourceIds: string[];
 	},
 ) => {
+	const meetingTools = buildMeetingTools({
+		searchMeetings: async ({ query, from, to, limit }) =>
+			await ctx.runQuery(
+				internal.meetingRelationships.searchMeetingNotesInternal,
+				{
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+					query,
+					...(from ? { from } : {}),
+					...(to ? { to } : {}),
+					...(typeof limit === "number" ? { limit } : {}),
+				},
+			),
+	});
 	const sourceIds = getSelectedAppSourceIds(args.selectedSourceIds);
 	if (sourceIds.length === 0) {
 		return {
 			connections: [] as WorkspaceToolConnection[],
-			tools: {},
+			tools: meetingTools,
 		};
 	}
 
@@ -63,5 +78,5 @@ export const buildServerWorkspaceTools = async (
 		yandexCalendar: buildYandexCalendarAdapter(),
 	});
 
-	return { connections, tools };
+	return { connections, tools: { ...meetingTools, ...tools } };
 };

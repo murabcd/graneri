@@ -1,5 +1,6 @@
 import { api } from "../../../convex/_generated/api.js";
 import { buildCapabilityToolSet } from "./capability-registry.mjs";
+import { buildMeetingTools } from "./meeting-tools.mjs";
 
 const hasConnection = (connections, provider) =>
 	connections.some((connection) => connection.provider === provider);
@@ -11,7 +12,22 @@ export const buildConvexWorkspaceToolSet = async ({
 }) => {
 	const canUseWorkspaceTools = Boolean(convexClient && workspaceId);
 
-	return await buildCapabilityToolSet(connections, {
+	const meetingTools = canUseWorkspaceTools
+		? buildMeetingTools({
+				searchMeetings: async ({ query, from, to, limit }) =>
+					await convexClient.query(
+						api.meetingRelationships.searchMeetingNotes,
+						{
+							workspaceId,
+							query,
+							...(from ? { from } : {}),
+							...(to ? { to } : {}),
+							...(typeof limit === "number" ? { limit } : {}),
+						},
+					),
+			})
+		: {};
+	const capabilityTools = await buildCapabilityToolSet(connections, {
 		...(hasConnection(connections, "google-calendar") &&
 		convexClient &&
 		canUseWorkspaceTools
@@ -85,4 +101,6 @@ export const buildConvexWorkspaceToolSet = async ({
 				}
 			: {}),
 	});
+
+	return { ...meetingTools, ...capabilityTools };
 };

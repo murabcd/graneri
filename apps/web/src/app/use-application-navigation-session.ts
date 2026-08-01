@@ -313,7 +313,7 @@ export const useApplicationNavigationSession = ({
 		openNote,
 		openProject,
 		openView,
-		pendingCalendarEvent: route.pendingCalendarEvent,
+		pendingCalendarEventRequestId: route.pendingCalendarEventRequestId,
 		scheduledAutoStartNoteCaptureAt: route.scheduledAutoStartNoteCaptureAt,
 		setInboxOpen,
 		setSettingsOpen,

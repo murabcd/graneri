@@ -37,6 +37,10 @@ const normalizeYandexCalendarEvents = (
 				event.location,
 				event.meetingUrl,
 				event.description,
+				...event.attendees.flatMap((attendee) => [
+					attendee.displayName,
+					attendee.email,
+				]),
 			]
 				.filter(Boolean)
 				.join(" ")

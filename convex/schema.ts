@@ -23,6 +23,10 @@ import {
 	automationRunStatusValidator,
 	automationScheduleValidator,
 } from "./automationValidators";
+import {
+	calendarAttendeeResponseStatusValidator,
+	calendarEventSnapshotValidator,
+} from "./calendarValidators";
 
 const workspaceRoleValidator = v.union(
 	v.literal("startup-generalist"),
@@ -259,7 +263,7 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
 		projectId: v.optional(v.id("projects")),
-		calendarEventKey: v.optional(v.string()),
+		calendarEvent: v.optional(calendarEventSnapshotValidator),
 		authorName: v.optional(v.string()),
 		isStarred: v.optional(v.boolean()),
 		starredSortOrder: v.number(),
@@ -303,10 +307,10 @@ export default defineSchema({
 			"ownerTokenIdentifier",
 			"updatedAt",
 		])
-		.index("by_owner_ws_event_arch", [
+		.index("by_owner_ws_calendarEventKey_archived", [
 			"ownerTokenIdentifier",
 			"workspaceId",
-			"calendarEventKey",
+			"calendarEvent.key",
 			"isArchived",
 		])
 		.index("by_owner_ws_project_arch_upd", [
@@ -343,6 +347,90 @@ export default defineSchema({
 			"updatedAt",
 		])
 		.index("by_shareId", ["shareId"]),
+	people: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		email: v.string(),
+		displayName: v.optional(v.string()),
+		searchText: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_ownerTokenIdentifier_and_workspaceId_and_email", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"email",
+		])
+		.searchIndex("search_people", {
+			searchField: "searchText",
+			filterFields: ["ownerTokenIdentifier", "workspaceId"],
+		}),
+	companies: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		domain: v.string(),
+		displayName: v.string(),
+		searchText: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_ownerTokenIdentifier_and_workspaceId_and_domain", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"domain",
+		])
+		.searchIndex("search_companies", {
+			searchField: "searchText",
+			filterFields: ["ownerTokenIdentifier", "workspaceId"],
+		}),
+	noteAttendees: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		noteId: v.id("notes"),
+		personId: v.optional(v.id("people")),
+		companyId: v.optional(v.id("companies")),
+		email: v.string(),
+		displayName: v.optional(v.string()),
+		responseStatus: calendarAttendeeResponseStatusValidator,
+		isOrganizer: v.boolean(),
+		isSelf: v.boolean(),
+		eventStartAt: v.string(),
+		noteIsArchived: v.boolean(),
+		createdAt: v.number(),
+	})
+		.index("by_owner_ws_note", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"noteId",
+		])
+		.index("by_owner_ws_person_arch_start", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"personId",
+			"noteIsArchived",
+			"eventStartAt",
+		]),
+	noteCompanies: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		noteId: v.id("notes"),
+		companyId: v.id("companies"),
+		eventStartAt: v.string(),
+		noteIsArchived: v.boolean(),
+		createdAt: v.number(),
+	})
+		.index("by_owner_ws_note", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"noteId",
+		])
+		.index("by_owner_ws_company_arch_start", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"companyId",
+			"noteIsArchived",
+			"eventStartAt",
+		]),
 	noteRevisions: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

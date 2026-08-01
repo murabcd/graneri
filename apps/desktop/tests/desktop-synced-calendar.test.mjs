@@ -2,26 +2,41 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDesktopSyncedCalendar } from "../src/desktop-synced-calendar.mjs";
 
+const createCalendarEvent = (overrides = {}) => ({
+	attendees: [
+		{
+			displayName: "Mark Johnson",
+			email: "MARK@example.com",
+			isOrganizer: false,
+			isSelf: false,
+			responseStatus: "accepted",
+		},
+	],
+	calendarId: "calendar-1",
+	calendarName: "Work",
+	description: undefined,
+	endAt: "2026-06-16T17:00:00Z",
+	htmlLink: "https://calendar.example/event",
+	id: "event-1",
+	isAllDay: false,
+	isMeeting: true,
+	isRecurring: false,
+	location: undefined,
+	meetingUrl: "https://meet.google.com/abc-defg-hij",
+	provider: "google",
+	providerEventId: "provider-event-1",
+	recurrenceId: undefined,
+	startAt: "2026-06-16T16:00:00Z",
+	title: "Planning",
+	...overrides,
+});
+
 test("stores normalized renderer-synced tray calendar events", async () => {
 	const calendar = createDesktopSyncedCalendar();
 
 	calendar.setState({
 		connectedCalendarCount: 1,
-		events: [
-			{
-				calendarId: "calendar-1",
-				calendarName: "Work",
-				endAt: "2026-06-16T17:00:00Z",
-				htmlLink: "https://calendar.example/event",
-				id: "event-1",
-				isAllDay: false,
-				isMeeting: true,
-				location: null,
-				meetingUrl: "https://meet.google.com/abc-defg-hij",
-				startAt: "2026-06-16T16:00:00Z",
-				title: "Planning",
-			},
-		],
+		events: [createCalendarEvent()],
 		status: "ready",
 	});
 
@@ -29,15 +44,29 @@ test("stores normalized renderer-synced tray calendar events", async () => {
 		connectedCalendarCount: 1,
 		events: [
 			{
+				attendees: [
+					{
+						displayName: "Mark Johnson",
+						email: "mark@example.com",
+						isOrganizer: false,
+						isSelf: false,
+						responseStatus: "accepted",
+					},
+				],
 				calendarId: "calendar-1",
 				calendarName: "Work",
+				description: undefined,
 				endAt: "2026-06-16T17:00:00.000Z",
 				htmlLink: "https://calendar.example/event",
 				id: "event-1",
 				isAllDay: false,
 				isMeeting: true,
-				location: null,
+				isRecurring: false,
+				location: undefined,
 				meetingUrl: "https://meet.google.com/abc-defg-hij",
+				provider: "google",
+				providerEventId: "provider-event-1",
+				recurrenceId: undefined,
 				startAt: "2026-06-16T16:00:00.000Z",
 				title: "Planning",
 			},
@@ -61,19 +90,11 @@ test("clears synced tray calendar events when disconnected", async () => {
 	calendar.setState({
 		connectedCalendarCount: 1,
 		events: [
-			{
-				calendarId: "calendar-1",
-				calendarName: "Work",
-				endAt: "2026-06-16T17:00:00Z",
-				htmlLink: null,
-				id: "event-1",
-				isAllDay: false,
+			createCalendarEvent({
+				htmlLink: undefined,
 				isMeeting: false,
-				location: null,
-				meetingUrl: null,
-				startAt: "2026-06-16T16:00:00Z",
-				title: "Planning",
-			},
+				meetingUrl: undefined,
+			}),
 		],
 		status: "ready",
 	});
@@ -91,21 +112,7 @@ test("does not expose mutable synced calendar state", async () => {
 
 	calendar.setState({
 		connectedCalendarCount: 1,
-		events: [
-			{
-				calendarId: "calendar-1",
-				calendarName: "Work",
-				endAt: "2026-06-16T17:00:00Z",
-				htmlLink: null,
-				id: "event-1",
-				isAllDay: false,
-				isMeeting: true,
-				location: null,
-				meetingUrl: "https://meet.google.com/abc-defg-hij",
-				startAt: "2026-06-16T16:00:00Z",
-				title: "Planning",
-			},
-		],
+		events: [createCalendarEvent({ htmlLink: undefined })],
 		status: "ready",
 	});
 

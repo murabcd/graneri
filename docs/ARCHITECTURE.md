@@ -69,6 +69,17 @@ parallel caches or optimistic event copies. Successful writes invalidate every
 persisted snapshot for the workspace, retain the currently rendered complete
 snapshot during refresh, and discard responses from older generations.
 Adjacent Agenda windows are prefetched through the same lifecycle.
+Calendar provider adapters also return a normalized attendee snapshot for every
+event: canonical lowercase email, display name, organizer/self flags, and
+response status. Repeated iCalendar `ATTENDEE` properties must remain distinct
+through parsing before normalization. Creating a calendar-linked note is one
+Convex transaction that stores the immutable event/attendee snapshot, resolves
+workspace-scoped people by email, resolves companies by non-personal business
+email domain, and creates the note-to-person and note-to-company associations.
+Archiving mirrors state onto those associations for indexed reads; permanent
+deletion removes the associations and any now-orphaned canonical identities.
+An invalid attendee or an event above the supported attendee bound rejects the
+whole note creation instead of persisting a partial relationship snapshot.
 
 `packages/platform`
 : The only renderer-safe package that may read `window.graneriDesktop`.
@@ -98,6 +109,13 @@ prompt construction, active-turn input preparation, branch preparation,
 tool-loop setup, message persistence payloads, and active-stream persistence
 behavior; the hosted web route provides Convex reads and writes, request
 transport, and desktop-local tool declarations through small adapter callbacks.
+The read-only `search_meetings` tool is part of every authenticated workspace
+tool set, independent of connected-app selection. Both web and durable Convex
+producers call the same owner/workspace-checked relationship query, which reads
+only non-archived calendar-linked notes through person/company association
+indexes and returns bounded note text plus event schedule details. This is
+stored meeting knowledge; live events that do not yet have a linked note remain
+the responsibility of the selected Google or Yandex Calendar capability.
 The route-facing hosted-turn interface exposes intention-level preparation:
 `createHostedChatTurnInput` couples the durable Follow-up adapter to its turn
 controller, while `prepareHostedChatTurn` owns branch-first preparation and
@@ -874,6 +892,10 @@ query result and are pushed into Electron through the desktop bridge. Electron
 must own tray state, menu rendering, notifications, and meeting-signal
 selection from that synced data. The tray must not fetch Convex directly or
 depend on a separate desktop auth-token refresh path to show upcoming meetings.
+Electron keeps tray-note events in a bounded, expiring request registry and puts
+only an opaque request UUID in navigation. The renderer consumes the complete
+validated event once through the desktop bridge; invalid, expired, or oversized
+requests fail closed and never synthesize an empty attendee snapshot.
 
 Desktop app lifecycle sequencing is owned by
 `apps/desktop/src/desktop-boot-orchestrator.mjs`. The Electron main module may

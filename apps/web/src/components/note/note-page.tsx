@@ -195,7 +195,7 @@ const useNotePageController = ({
 		canShowTemplateSelect: boolean;
 	} | null>(null);
 	const publishEditorActionsRef = React.useRef<(() => void) | null>(null);
-	const shouldPreserveStructuredNoteTitle = Boolean(note?.calendarEventKey);
+	const shouldPreserveStructuredNoteTitle = Boolean(note?.calendarEvent);
 	const convex = useConvex();
 	const saveNote = useMutation(api.notes.save);
 

@@ -27,6 +27,7 @@ const createEvent = ({
 	provider: CalendarProvider;
 	startAt: string;
 }): UpcomingCalendarEvent => ({
+	attendees: [],
 	calendarId: `${provider}-calendar`,
 	calendarName: `${provider} calendar`,
 	endAt: "2026-07-27T11:00:00.000Z",

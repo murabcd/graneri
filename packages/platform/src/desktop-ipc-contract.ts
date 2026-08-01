@@ -10,6 +10,7 @@ export const desktopIpcContract = Object.freeze({
 		clearNoteDraft: "app:clear-note-draft",
 		clearTranscriptDraft: "app:clear-transcript-draft",
 		configureTranscriptionSession: "app:configure-transcription-session",
+		consumeTrayCalendarEvent: "app:consume-tray-calendar-event",
 		detachTranscriptionSystemAudio: "app:detach-transcription-system-audio",
 		dismissDetectedMeetingWidget: "app:dismiss-detected-meeting-widget",
 		getAuthCallbackUrl: "app:get-auth-callback-url",

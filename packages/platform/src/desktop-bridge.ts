@@ -1,3 +1,5 @@
+import type { CalendarEventPayload } from "./calendar-event-navigation.mjs";
+
 export type DesktopPermissionId = "microphone" | "systemAudio";
 export type DesktopPermissionState =
 	| "granted"
@@ -98,19 +100,7 @@ export type DesktopMeetingDetectionState = {
 	status: "idle" | "monitoring" | "prompting";
 };
 
-export type DesktopTrayCalendarEvent = {
-	calendarId: string;
-	calendarName: string;
-	endAt: string;
-	htmlLink: string | null;
-	id: string;
-	isAllDay: boolean;
-	isMeeting: boolean;
-	location: string | null;
-	meetingUrl: string | null;
-	startAt: string;
-	title: string;
-};
+export type DesktopTrayCalendarEvent = CalendarEventPayload;
 
 export type DesktopTrayCalendarState =
 	| {
@@ -270,6 +260,9 @@ export interface GraneriDesktopBridge {
 		chatId: string;
 	}) => Promise<{ ok: boolean }>;
 	refreshTrayCalendar: () => Promise<{ ok: boolean }>;
+	consumeTrayCalendarEvent: (
+		requestId: string,
+	) => Promise<{ event: DesktopTrayCalendarEvent | null }>;
 	setTrayCalendarState: (
 		payload: DesktopTrayCalendarState,
 	) => Promise<{ ok: boolean }>;

@@ -1,5 +1,20 @@
 export type CalendarProvider = "google" | "yandex";
 
+export type CalendarAttendeeResponseStatus =
+	| "accepted"
+	| "declined"
+	| "needs_action"
+	| "tentative"
+	| "unknown";
+
+export type CalendarAttendee = {
+	displayName?: string;
+	email: string;
+	isOrganizer: boolean;
+	isSelf: boolean;
+	responseStatus: CalendarAttendeeResponseStatus;
+};
+
 export type CalendarSource = {
 	canCreateEvents: boolean;
 	color: string;
@@ -9,6 +24,7 @@ export type CalendarSource = {
 };
 
 export type UpcomingCalendarEvent = {
+	attendees: CalendarAttendee[];
 	calendarId: string;
 	calendarName: string;
 	description?: string;

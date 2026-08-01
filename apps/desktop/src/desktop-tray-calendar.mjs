@@ -1,5 +1,9 @@
 import electron from "electron";
 import {
+	appendCalendarEventRequestSearchParam,
+	normalizeCalendarEventPayload,
+} from "../../../packages/platform/src/calendar-event-navigation.mjs";
+import {
 	appendNoteCaptureSearchParams,
 	createNoteCaptureRequestId,
 } from "../../../packages/platform/src/note-capture-navigation.mjs";
@@ -27,6 +31,8 @@ const trayCalendarActiveRefreshMs = 60 * 1000;
 const trayCalendarIdleRefreshMs = 5 * 60 * 1000;
 const trayCalendarUnavailableRefreshMs = 15 * 60 * 1000;
 const trayCalendarUpcomingRefreshWindowMs = 30 * 60 * 1000;
+const calendarEventRequestTtlMs = 5 * 60 * 1000;
+const maxPendingCalendarEventRequests = 32;
 
 export const isTrayEventLive = (event, currentDate) => {
 	const startAt = new Date(event.startAt).getTime();
@@ -39,7 +45,12 @@ export const isTrayEventLive = (event, currentDate) => {
 const createScheduledMeetingReminderKey = (event) =>
 	`${event.id}:${event.startAt}`;
 
-const createCalendarEventNoteSearch = (event, options = {}) => {
+const cloneCalendarEvent = (event) => ({
+	...event,
+	attendees: event.attendees.map((attendee) => ({ ...attendee })),
+});
+
+const createCalendarEventNoteSearch = (requestId, options = {}) => {
 	const searchParams = new URLSearchParams();
 	const autoStartCapture = options.autoStartCapture === true;
 	const stopCaptureWhenMeetingEnds =
@@ -51,25 +62,7 @@ const createCalendarEventNoteSearch = (event, options = {}) => {
 		stopCaptureWhenMeetingEnds,
 	});
 
-	searchParams.set("calendarEventId", event.id);
-	searchParams.set("calendarId", event.calendarId);
-	searchParams.set("calendarName", event.calendarName);
-	searchParams.set("eventTitle", event.title);
-	searchParams.set("startAt", event.startAt);
-	searchParams.set("endAt", event.endAt);
-	searchParams.set("isAllDay", event.isAllDay ? "1" : "0");
-
-	if (event.meetingUrl) {
-		searchParams.set("meetingUrl", event.meetingUrl);
-	}
-
-	if (event.location) {
-		searchParams.set("location", event.location);
-	}
-
-	if (event.htmlLink) {
-		searchParams.set("htmlLink", event.htmlLink);
-	}
+	appendCalendarEventRequestSearchParam({ requestId, searchParams });
 
 	return `?${searchParams.toString()}`;
 };
@@ -88,6 +81,44 @@ export const createDesktopTrayCalendar = ({
 	let refreshPromise = null;
 	let queuedRefreshOptions = null;
 	const shownScheduledMeetingReminderKeys = new Set();
+	const pendingCalendarEventRequests = new Map();
+	const deleteCalendarEventRequest = (requestId) => {
+		const request = pendingCalendarEventRequests.get(requestId);
+		if (request) {
+			clearTimeout(request.timeoutId);
+		}
+		pendingCalendarEventRequests.delete(requestId);
+	};
+
+	const pruneCalendarEventRequests = (now = Date.now()) => {
+		for (const [requestId, request] of pendingCalendarEventRequests) {
+			if (request.expiresAt <= now) {
+				deleteCalendarEventRequest(requestId);
+			}
+		}
+		while (
+			pendingCalendarEventRequests.size > maxPendingCalendarEventRequests
+		) {
+			const oldestRequestId = pendingCalendarEventRequests.keys().next().value;
+			if (!oldestRequestId) {
+				break;
+			}
+			deleteCalendarEventRequest(oldestRequestId);
+		}
+	};
+
+	const consumeCalendarEventRequest = (requestId) => {
+		pruneCalendarEventRequests();
+		if (typeof requestId !== "string") {
+			return null;
+		}
+		const request = pendingCalendarEventRequests.get(requestId);
+		if (!request) {
+			return null;
+		}
+		deleteCalendarEventRequest(requestId);
+		return cloneCalendarEvent(request.event);
+	};
 
 	const notifyStateChange = () => {
 		try {
@@ -109,22 +140,43 @@ export const createDesktopTrayCalendar = ({
 	};
 
 	const openCalendarEventNote = async (event, options = {}) => {
-		const hasStarted = new Date(event.startAt).getTime() <= Date.now();
-
-		await onOpenMainWindow({
-			pathname: "/note",
-			search: createCalendarEventNoteSearch(event, {
-				autoStartCapture:
-					options.autoStartCapture === true ||
-					(options.autoStartCapture == null && hasStarted),
-				stopCaptureWhenMeetingEnds:
-					options.stopCaptureWhenMeetingEnds === true ||
-					(options.stopCaptureWhenMeetingEnds == null && event.isMeeting),
-			}),
+		const normalizedEvent = normalizeCalendarEventPayload(event);
+		if (!normalizedEvent) {
+			throw new TypeError("Tray calendar event is invalid or too large.");
+		}
+		const hasStarted =
+			new Date(normalizedEvent.startAt).getTime() <= Date.now();
+		const requestId = crypto.randomUUID();
+		const timeoutId = setTimeout(() => {
+			pendingCalendarEventRequests.delete(requestId);
+		}, calendarEventRequestTtlMs);
+		pendingCalendarEventRequests.set(requestId, {
+			event: cloneCalendarEvent(normalizedEvent),
+			expiresAt: Date.now() + calendarEventRequestTtlMs,
+			timeoutId,
 		});
+		pruneCalendarEventRequests();
 
-		if (options.openMeetingLink !== false && event.meetingUrl) {
-			await openTrayMeetingLink(event);
+		try {
+			await onOpenMainWindow({
+				pathname: "/note",
+				search: createCalendarEventNoteSearch(requestId, {
+					autoStartCapture:
+						options.autoStartCapture === true ||
+						(options.autoStartCapture == null && hasStarted),
+					stopCaptureWhenMeetingEnds:
+						options.stopCaptureWhenMeetingEnds === true ||
+						(options.stopCaptureWhenMeetingEnds == null &&
+							normalizedEvent.isMeeting),
+				}),
+			});
+		} catch (error) {
+			deleteCalendarEventRequest(requestId);
+			throw error;
+		}
+
+		if (options.openMeetingLink !== false && normalizedEvent.meetingUrl) {
+			await openTrayMeetingLink(normalizedEvent);
 		}
 	};
 
@@ -339,10 +391,14 @@ export const createDesktopTrayCalendar = ({
 
 	return {
 		clearRefresh,
+		consumeCalendarEventRequest,
 		getDetectedMeetingCalendarEvent,
 		getState: () => ({
 			...state,
-			events: state.events.map((event) => ({ ...event })),
+			events: state.events.map((event) => ({
+				...event,
+				attendees: event.attendees.map((attendee) => ({ ...attendee })),
+			})),
 			hasRefreshPromise: Boolean(refreshPromise),
 			hasRefreshTimeout: refreshTimeoutId != null,
 		}),

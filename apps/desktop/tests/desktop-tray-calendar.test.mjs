@@ -9,15 +9,29 @@ import {
 } from "../src/desktop-tray-calendar-detection.mjs";
 
 const createMeetingEvent = (overrides = {}) => ({
+	attendees: [
+		{
+			displayName: "Mark Johnson",
+			email: "mark@example.com",
+			isOrganizer: false,
+			isSelf: false,
+			responseStatus: "accepted",
+		},
+	],
 	calendarId: "calendar-1",
 	calendarName: "Work",
+	description: "Review the product plan",
 	endAt: "2026-06-08T10:30:00.000Z",
-	htmlLink: null,
+	htmlLink: undefined,
 	id: "event-1",
 	isAllDay: false,
 	isMeeting: true,
-	location: null,
+	isRecurring: false,
+	location: undefined,
 	meetingUrl: "https://meet.google.com/abc-defg-hij",
+	provider: "google",
+	providerEventId: "provider-event-1",
+	recurrenceId: undefined,
 	startAt: "2026-06-08T10:00:00.000Z",
 	title: "Product review",
 	...overrides,
@@ -93,7 +107,53 @@ test("opens live tray meetings with a one-shot capture request", async () => {
 	assert.equal(searchParams.get("capture"), "1");
 	assert.match(searchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
 	assert.equal(searchParams.get("meeting"), "1");
+	assert.match(
+		searchParams.get("calendarEventRequestId"),
+		/^[0-9a-f-]{36}$/u,
+	);
+	const requestId = searchParams.get("calendarEventRequestId");
+	assert.deepEqual(harness.calendar.consumeCalendarEventRequest(requestId), event);
+	assert.equal(harness.calendar.consumeCalendarEventRequest(requestId), null);
 	assert.deepEqual(harness.openedExternalUrls, [event.meetingUrl]);
+});
+
+test("does not expose mutable nested tray calendar state", async () => {
+	const event = createMeetingEvent();
+	const harness = createCalendarReminderHarness({
+		events: [event],
+		preferences: {
+			notifyForAutoDetectedMeetings: false,
+			notifyForScheduledMeetings: false,
+		},
+	});
+
+	await harness.calendar.refresh();
+	harness.calendar.clearRefresh();
+	const firstState = harness.calendar.getState();
+	firstState.events[0].attendees[0].email = "mutated@example.com";
+
+	assert.equal(
+		harness.calendar.getState().events[0].attendees[0].email,
+		"mark@example.com",
+	);
+});
+
+test("rejects invalid tray events before navigation", async () => {
+	const harness = createCalendarReminderHarness({
+		events: [],
+		preferences: {
+			notifyForAutoDetectedMeetings: false,
+			notifyForScheduledMeetings: false,
+		},
+	});
+
+	await assert.rejects(
+		harness.calendar.openCalendarEventNote(
+			createMeetingEvent({ attendees: undefined }),
+		),
+		/invalid or too large/u,
+	);
+	assert.deepEqual(harness.openedMainWindows, []);
 });
 
 test("detects live calendar meetings", () => {

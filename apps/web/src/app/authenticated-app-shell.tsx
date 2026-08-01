@@ -77,10 +77,10 @@ import {
 	resolveApplicationView,
 	resolveCollectionRoute,
 } from "@/app/application-navigation-session";
+import { useDesktopCalendarEventRequest } from "@/app/desktop-calendar-event-request";
 import {
 	buildCalendarEventNoteDocument,
 	buildCalendarEventSearchableText,
-	createCalendarEventKey,
 } from "@/app/location";
 import { createPendingPersistedChatRoutesStore } from "@/app/pending-persisted-chat-routes";
 import { useApplicationNavigationSession } from "@/app/use-application-navigation-session";
@@ -345,7 +345,7 @@ const useAppShellState = ({
 		openNote: navigateNote,
 		openProject: navigateProject,
 		openView: navigateView,
-		pendingCalendarEvent,
+		pendingCalendarEventRequestId,
 		scheduledAutoStartNoteCaptureAt,
 		settingsOpen,
 		settingsPage,
@@ -378,6 +378,21 @@ const useAppShellState = ({
 		currentDayKey,
 		isAuthenticated: isConvexAuthenticated,
 		workspaceId: resolvedActiveWorkspaceId,
+	});
+	const handleDesktopCalendarEventUnavailable = React.useCallback(
+		(error?: unknown) => {
+			logError({
+				event: "client.error",
+				error,
+				message: "Desktop calendar event request is unavailable",
+			});
+			navigateView("home");
+		},
+		[navigateView],
+	);
+	const pendingDesktopCalendarEvent = useDesktopCalendarEventRequest({
+		onUnavailable: handleDesktopCalendarEventUnavailable,
+		requestId: pendingCalendarEventRequestId,
 	});
 	const notificationPreferences = useQuery(
 		api.notificationPreferences.get,
@@ -887,8 +902,7 @@ const useAppShellState = ({
 			const createNotePromise = calendarEvent
 				? createNoteFromCalendarEvent({
 						workspaceId: resolvedActiveWorkspaceId,
-						calendarEventKey: createCalendarEventKey(calendarEvent),
-						title: calendarEvent.title.trim(),
+						calendarEvent,
 						content: buildCalendarEventNoteDocument({
 							currentDate,
 							event: calendarEvent,
@@ -991,22 +1005,24 @@ const useAppShellState = ({
 		if (
 			resolvedCurrentView === "note" &&
 			!resolvedCurrentNoteId &&
-			currentRouteNoteId === null
+			currentRouteNoteId === null &&
+			!pendingDesktopCalendarEvent.isResolving
 		) {
 			handleCreateNote({
 				autoStartCapture: shouldAutoStartNoteCapture,
-				calendarEvent: pendingCalendarEvent,
+				calendarEvent: pendingDesktopCalendarEvent.event,
 				captureRequestId: noteCaptureRequestId,
 				projectId: null,
 				stopCaptureWhenMeetingEnds: shouldStopNoteCaptureWhenMeetingEnds,
 			});
+			pendingDesktopCalendarEvent.release();
 		}
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		currentRouteNoteId,
 		handleCreateNote,
 		noteCaptureRequestId,
-		pendingCalendarEvent,
+		pendingDesktopCalendarEvent,
 		resolvedCurrentNoteId,
 		resolvedCurrentView,
 		shouldAutoStartNoteCapture,

@@ -1,42 +1,8 @@
+import { normalizeCalendarEventPayload } from "../../../packages/platform/src/calendar-event-navigation.mjs";
 import { isRecord } from "./object-record.mjs";
 
-const trimString = (value) => (typeof value === "string" ? value.trim() : "");
-
-const parseTimestamp = (value) => {
-	const timestamp = Date.parse(trimString(value));
-	return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
-};
-
-const normalizeSyncedCalendarEvent = (event) => {
-	if (!isRecord(event)) {
-		return null;
-	}
-
-	const id = trimString(event.id);
-	const calendarId = trimString(event.calendarId);
-	const calendarName = trimString(event.calendarName);
-	const title = trimString(event.title);
-	const startAt = parseTimestamp(event.startAt);
-	const endAt = parseTimestamp(event.endAt);
-
-	if (!id || !calendarId || !calendarName || !title || !startAt || !endAt) {
-		return null;
-	}
-
-	return {
-		calendarId,
-		calendarName,
-		endAt,
-		htmlLink: trimString(event.htmlLink) || null,
-		id,
-		isAllDay: event.isAllDay === true,
-		isMeeting: event.isMeeting === true,
-		location: trimString(event.location) || null,
-		meetingUrl: trimString(event.meetingUrl) || null,
-		startAt,
-		title,
-	};
-};
+const normalizeSyncedCalendarEvent = (event) =>
+	normalizeCalendarEventPayload(event);
 
 const createUnavailableCalendarResult = (status) => ({
 	connectedCalendarCount: 0,
@@ -46,7 +12,10 @@ const createUnavailableCalendarResult = (status) => ({
 
 const cloneCalendarState = (value) => ({
 	...value,
-	events: value.events.map((event) => ({ ...event })),
+	events: value.events.map((event) => ({
+		...event,
+		attendees: event.attendees.map((attendee) => ({ ...attendee })),
+	})),
 });
 
 const normalizeSyncedCalendarState = (payload) => {

@@ -1,7 +1,12 @@
 "use node";
 
 import { ConvexError } from "convex/values";
+import {
+	createCalendarAttendee,
+	normalizeCalendarAttendees,
+} from "./calendarAttendees";
 import type {
+	CalendarAttendee,
 	CalendarEventDetailsInput,
 	CalendarEventsFetchResult,
 	CalendarSource,
@@ -37,7 +42,9 @@ type GoogleCalendarEventsResponse = {
 
 type GoogleCalendarEvent = {
 	attendees?: Array<{
+		displayName?: string;
 		email?: string;
+		organizer?: boolean;
 		responseStatus?: string;
 		self?: boolean;
 	}>;
@@ -56,6 +63,11 @@ type GoogleCalendarEvent = {
 	id: string;
 	location?: string;
 	originalStartTime?: GoogleCalendarDateTime;
+	organizer?: {
+		displayName?: string;
+		email?: string;
+		self?: boolean;
+	};
 	recurrence?: string[];
 	recurringEventId?: string;
 	start?: GoogleCalendarDateTime;
@@ -111,11 +123,49 @@ const isMeetingEvent = ({
 	attendees,
 	meetingUrl,
 }: {
-	attendees?: GoogleCalendarEvent["attendees"];
+	attendees: CalendarAttendee[];
 	meetingUrl?: string;
 }) =>
 	Boolean(meetingUrl) ||
-	(attendees?.some((attendee) => attendee.self !== true) ?? false);
+	(attendees?.some(
+		(attendee) =>
+			attendee.isSelf !== true && attendee.responseStatus !== "declined",
+	) ??
+		false);
+
+const normalizeGoogleAttendees = (event: GoogleCalendarEvent) => {
+	const attendees = (event.attendees ?? []).flatMap((attendee) => {
+		if (!attendee.email) {
+			return [];
+		}
+
+		const normalized = createCalendarAttendee({
+			displayName: attendee.displayName,
+			email: attendee.email,
+			isOrganizer: attendee.organizer,
+			isSelf: attendee.self,
+			responseStatus: attendee.responseStatus,
+		});
+
+		return normalized ? [normalized] : [];
+	});
+
+	if (event.organizer?.email) {
+		const organizer = createCalendarAttendee({
+			displayName: event.organizer.displayName,
+			email: event.organizer.email,
+			isOrganizer: true,
+			isSelf: event.organizer.self,
+			responseStatus: "accepted",
+		});
+
+		if (organizer) {
+			attendees.push(organizer);
+		}
+	}
+
+	return normalizeCalendarAttendees(attendees);
+};
 
 const toDate = (value: GoogleCalendarDateTime | undefined, isEnd: boolean) => {
 	if (!value) {
@@ -156,8 +206,10 @@ const normalizeEvent = (
 	}
 
 	const meetingUrl = getMeetingUrl(event);
+	const attendees = normalizeGoogleAttendees(event);
 
 	return {
+		attendees,
 		calendarId: calendar.id,
 		calendarName: calendar.summary || "Calendar",
 		description: event.description?.trim() || undefined,
@@ -166,7 +218,7 @@ const normalizeEvent = (
 		id: event.iCalUID ?? event.id,
 		isAllDay: Boolean(event.start?.date && !event.start?.dateTime),
 		isMeeting: isMeetingEvent({
-			attendees: event.attendees,
+			attendees,
 			meetingUrl,
 		}),
 		isRecurring: Boolean(

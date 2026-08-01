@@ -77,6 +77,71 @@ describe("Google Calendar provider", () => {
 		]);
 	});
 
+	it("normalizes attendee identity, roles, and response state", async () => {
+		fetchGoogleJsonWithRetry
+			.mockResolvedValueOnce({
+				items: [
+					{
+						accessRole: "owner",
+						backgroundColor: "#3b82f6",
+						id: "work",
+						summary: "Work",
+					},
+				],
+			})
+			.mockResolvedValueOnce({
+				items: [
+					{
+						attendees: [
+							{
+								displayName: "Mark Stone",
+								email: "MARK@ACME.COM",
+								responseStatus: "accepted",
+							},
+							{
+								email: "owner@example.com",
+								responseStatus: "accepted",
+								self: true,
+							},
+						],
+						end: { dateTime: "2026-07-27T11:00:00.000Z" },
+						id: "meeting-1",
+						organizer: {
+							email: "owner@example.com",
+							self: true,
+						},
+						start: { dateTime: "2026-07-27T10:00:00.000Z" },
+						summary: "Customer review",
+					},
+				],
+			});
+
+		const result = await fetchGoogleCalendarEvents({
+			authContext,
+			eventLimit: 25,
+			minimumEndAt: 0,
+			timeMax: "2026-08-01T00:00:00.000Z",
+			timeMin: "2026-07-01T00:00:00.000Z",
+		});
+
+		expect(result.events[0]?.attendees).toEqual([
+			{
+				displayName: "Mark Stone",
+				email: "mark@acme.com",
+				isOrganizer: false,
+				isSelf: false,
+				responseStatus: "accepted",
+			},
+			{
+				displayName: undefined,
+				email: "owner@example.com",
+				isOrganizer: true,
+				isSelf: true,
+				responseStatus: "accepted",
+			},
+		]);
+	});
+
 	it("rejects incomplete calendar reads instead of returning a partial agenda", async () => {
 		const providerError = new Error("Calendar events unavailable");
 		fetchGoogleJsonWithRetry

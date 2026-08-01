@@ -308,6 +308,7 @@ export const createDesktopTray = ({
 
 	return {
 		clearCalendarRefresh: calendar.clearRefresh,
+		consumeCalendarEventRequest: calendar.consumeCalendarEventRequest,
 		create,
 		getDetectedMeetingCalendarEvent: calendar.getDetectedMeetingCalendarEvent,
 		getTrayCalendarStateForTest: calendar.getState,

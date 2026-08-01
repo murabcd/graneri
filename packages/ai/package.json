@@ -115,6 +115,10 @@
       "types": "./src/models.d.mts",
       "import": "./src/models.mjs"
     },
+    "./meeting-tools": {
+      "types": "./src/meeting-tools.d.mts",
+      "import": "./src/meeting-tools.mjs"
+    },
     "./note-template-stream": {
       "types": "./src/note-template-stream.d.mts",
       "import": "./src/note-template-stream.mjs"

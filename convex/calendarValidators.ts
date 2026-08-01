@@ -1,6 +1,23 @@
 import { v } from "convex/values";
 
+export const calendarAttendeeResponseStatusValidator = v.union(
+	v.literal("accepted"),
+	v.literal("declined"),
+	v.literal("needs_action"),
+	v.literal("tentative"),
+	v.literal("unknown"),
+);
+
+export const calendarAttendeeValidator = v.object({
+	displayName: v.optional(v.string()),
+	email: v.string(),
+	isOrganizer: v.boolean(),
+	isSelf: v.boolean(),
+	responseStatus: calendarAttendeeResponseStatusValidator,
+});
+
 export const upcomingCalendarEventValidator = v.object({
+	attendees: v.array(calendarAttendeeValidator),
 	calendarId: v.string(),
 	calendarName: v.string(),
 	description: v.optional(v.string()),
@@ -18,6 +35,10 @@ export const upcomingCalendarEventValidator = v.object({
 	startAt: v.string(),
 	title: v.string(),
 });
+
+export const calendarEventSnapshotValidator = upcomingCalendarEventValidator
+	.omit("attendees")
+	.extend({ key: v.string() });
 
 const calendarSourceValidator = v.object({
 	canCreateEvents: v.boolean(),

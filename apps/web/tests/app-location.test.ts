@@ -6,6 +6,8 @@ import {
 	shouldAutoStartNoteCaptureFromUrl,
 } from "../src/app/location";
 
+const calendarEventRequestId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+
 describe("app location", () => {
 	it("routes the calendar view to its canonical path", () => {
 		const locationState = getAppLocationState(
@@ -82,6 +84,26 @@ describe("app location", () => {
 				captureRequestId: " req-2 ",
 			}),
 		).toBe("?capture=1&captureRequestId=req-2");
+	});
+
+	it("round-trips only an opaque calendar event request through navigation", () => {
+		const search = createNoteSearch({ calendarEventRequestId });
+		expect(search).toBe(`?calendarEventRequestId=${calendarEventRequestId}`);
+		const locationState = getAppLocationState(
+			new URL(`https://graneri.local/note${search}`),
+		);
+
+		expect(locationState.pendingCalendarEventRequestId).toBe(
+			calendarEventRequestId,
+		);
+		expect(locationState.canonicalSearch).toBe(search);
+	});
+
+	it("rejects malformed calendar event request ids", () => {
+		const url = new URL("https://graneri.local/note");
+		url.searchParams.set("calendarEventRequestId", "not-a-request-id");
+
+		expect(getAppLocationState(url).pendingCalendarEventRequestId).toBe(null);
 	});
 
 	it("does not preserve legacy plugin handoff query parameters", () => {

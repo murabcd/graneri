@@ -4,6 +4,10 @@ import type {
 	YandexCalendarCollection,
 	YandexUpcomingCalendarEvent,
 } from "./yandexCalendarTypes";
+import {
+	createCalendarAttendee,
+	normalizeCalendarAttendees,
+} from "./calendarAttendees";
 
 const URL_PATTERN = /https?:\/\/[^\s<>"]+/giu;
 const ICS_WEEKDAY_INDEX_BY_CODE: Record<string, number> = {
@@ -110,7 +114,7 @@ export const parseIcsEvents = (calendarData: string) => {
 		const line = rawLine.trimEnd();
 
 		if (line === "BEGIN:VEVENT") {
-			currentEvent = {};
+			currentEvent = { attendees: [], properties: {} };
 			continue;
 		}
 
@@ -128,8 +132,13 @@ export const parseIcsEvents = (calendarData: string) => {
 
 		const property = parseIcsPropertyLine(line);
 
-		if (property && !(property.name in currentEvent)) {
-			currentEvent[property.name] = {
+		if (property?.name === "ATTENDEE") {
+			currentEvent.attendees.push({
+				parameters: property.parameters,
+				value: property.value,
+			});
+		} else if (property && !(property.name in currentEvent.properties)) {
+			currentEvent.properties[property.name] = {
 				parameters: property.parameters,
 				value: property.value,
 			};
@@ -317,6 +326,7 @@ const normalizeEvent = ({
 	overrideEndAt,
 	overrideStartAt,
 	recurrenceId,
+	selfEmail,
 }: {
 	calendar: YandexCalendarCollection;
 	event: ParsedIcsEvent;
@@ -325,18 +335,21 @@ const normalizeEvent = ({
 	overrideEndAt?: Date;
 	overrideStartAt?: Date;
 	recurrenceId?: string;
+	selfEmail: string;
 }): YandexUpcomingCalendarEvent | null => {
-	if (event.STATUS?.value?.toUpperCase() === "CANCELLED") {
+	const properties = event.properties;
+
+	if (properties.STATUS?.value?.toUpperCase() === "CANCELLED") {
 		return null;
 	}
 
-	const startProperty = event.DTSTART;
+	const startProperty = properties.DTSTART;
 
 	if (!startProperty) {
 		return null;
 	}
 
-	const endProperty = event.DTEND ?? event.DUE ?? startProperty;
+	const endProperty = properties.DTEND ?? properties.DUE ?? startProperty;
 	const startAt =
 		overrideStartAt ??
 		parseIcsDateValue(startProperty.value, startProperty.parameters, false);
@@ -349,43 +362,83 @@ const normalizeEvent = ({
 		return null;
 	}
 
-	const description = event.DESCRIPTION
-		? decodeIcsText(event.DESCRIPTION.value).trim()
+	const description = properties.DESCRIPTION
+		? decodeIcsText(properties.DESCRIPTION.value).trim()
 		: undefined;
-	const location = event.LOCATION
-		? decodeIcsText(event.LOCATION.value).trim()
+	const location = properties.LOCATION
+		? decodeIcsText(properties.LOCATION.value).trim()
 		: undefined;
 	const meetingUrl = getMeetingUrl({
-		conference: event.CONFERENCE
-			? decodeIcsText(event.CONFERENCE.value).trim()
+		conference: properties.CONFERENCE
+			? decodeIcsText(properties.CONFERENCE.value).trim()
 			: undefined,
 		description,
 		location,
-		telemostConference: event["X-TELEMOST-CONFERENCE"]
-			? decodeIcsText(event["X-TELEMOST-CONFERENCE"].value).trim()
+		telemostConference: properties["X-TELEMOST-CONFERENCE"]
+			? decodeIcsText(properties["X-TELEMOST-CONFERENCE"].value).trim()
 			: undefined,
 	});
+	const organizer = properties.ORGANIZER;
+	const attendees = normalizeCalendarAttendees(
+		[
+			...event.attendees.map((attendee) =>
+				createCalendarAttendee({
+					displayName: attendee.parameters.CN,
+					email: decodeIcsText(attendee.value),
+					isOrganizer: false,
+					isSelf:
+						decodeIcsText(attendee.value)
+							.replace(/^mailto:/iu, "")
+							.trim()
+							.toLowerCase() === selfEmail,
+					responseStatus: attendee.parameters.PARTSTAT,
+				}),
+			),
+			organizer
+				? createCalendarAttendee({
+						displayName: organizer.parameters.CN,
+						email: decodeIcsText(organizer.value),
+						isOrganizer: true,
+						isSelf:
+							decodeIcsText(organizer.value)
+								.replace(/^mailto:/iu, "")
+								.trim()
+								.toLowerCase() === selfEmail,
+						responseStatus: "accepted",
+					})
+				: null,
+		].filter((attendee) => attendee !== null),
+	);
 
 	return {
+		attendees,
 		calendarId: calendar.id,
 		calendarName: calendar.displayName,
 		description: description || undefined,
 		endAt: endAt.toISOString(),
-		htmlLink: event.URL ? decodeIcsText(event.URL.value).trim() : undefined,
-		id: `yandex:${event.UID?.value ?? href}:${startAt.toISOString()}`,
+		htmlLink: properties.URL
+			? decodeIcsText(properties.URL.value).trim()
+			: undefined,
+		id: `yandex:${properties.UID?.value ?? href}:${startAt.toISOString()}`,
 		isAllDay:
 			startProperty.parameters.VALUE === "DATE" ||
 			/^\d{8}$/u.test(startProperty.value),
-		isMeeting: Boolean(meetingUrl || event.ATTENDEE),
-		isRecurring: Boolean(event.RRULE || event["RECURRENCE-ID"]),
+		isMeeting: Boolean(
+			meetingUrl ||
+				attendees.some(
+					(attendee) =>
+						!attendee.isSelf && attendee.responseStatus !== "declined",
+				),
+		),
+		isRecurring: Boolean(properties.RRULE || properties["RECURRENCE-ID"]),
 		location: location || undefined,
 		meetingUrl,
 		provider: "yandex",
 		providerEventId: href,
 		recurrenceId,
 		startAt: startAt.toISOString(),
-		title: event.SUMMARY
-			? decodeIcsText(event.SUMMARY.value).trim()
+		title: properties.SUMMARY
+			? decodeIcsText(properties.SUMMARY.value).trim()
 			: "Untitled event",
 	};
 };
@@ -439,6 +492,7 @@ const expandRecurringEvent = ({
 	href,
 	minimumEndAt,
 	overrideByRecurrenceId,
+	selfEmail,
 	timeMax,
 	timeMin,
 }: {
@@ -449,14 +503,16 @@ const expandRecurringEvent = ({
 	overrideByRecurrenceId: Map<string, ParsedIcsEvent>;
 	timeMax: number;
 	timeMin: number;
+	selfEmail: string;
 }) => {
-	const startProperty = event.DTSTART;
+	const properties = event.properties;
+	const startProperty = properties.DTSTART;
 
-	if (!startProperty || !event.RRULE) {
+	if (!startProperty || !properties.RRULE) {
 		return [];
 	}
 
-	const endProperty = event.DTEND ?? event.DUE ?? startProperty;
+	const endProperty = properties.DTEND ?? properties.DUE ?? startProperty;
 	const seriesStart = parseIcsDateValue(
 		startProperty.value,
 		startProperty.parameters,
@@ -466,7 +522,7 @@ const expandRecurringEvent = ({
 		parseIcsDateValue(endProperty.value, endProperty.parameters, true) ??
 		seriesStart;
 	const startParts = parseIcsDateParts(startProperty.value);
-	const rule = parseRrule(event.RRULE.value);
+	const rule = parseRrule(properties.RRULE.value);
 
 	if (!seriesStart || !seriesEnd || !startParts) {
 		return [];
@@ -492,6 +548,7 @@ const expandRecurringEvent = ({
 				: new Date(occurrenceStart.getTime() + durationMs),
 			overrideStartAt: overrideEvent ? undefined : occurrenceStart,
 			recurrenceId,
+			selfEmail,
 		});
 
 		if (normalizedEvent) {
@@ -585,6 +642,7 @@ export const parseYandexCalendarData = ({
 	calendarData,
 	href,
 	minimumEndAt,
+	selfEmail,
 	timeMax,
 	timeMin,
 }: {
@@ -594,18 +652,21 @@ export const parseYandexCalendarData = ({
 	minimumEndAt: number;
 	timeMax: number;
 	timeMin: number;
+	selfEmail: string;
 }) => {
 	const parsedEvents = parseIcsEvents(calendarData);
 	const overridesByUid = new Map<string, Map<string, ParsedIcsEvent>>();
 
 	for (const event of parsedEvents) {
-		if (!event["RECURRENCE-ID"] || !event.UID) {
+		const properties = event.properties;
+
+		if (!properties["RECURRENCE-ID"] || !properties.UID) {
 			continue;
 		}
 
 		const recurrenceId = parseIcsDateValue(
-			event["RECURRENCE-ID"].value,
-			event["RECURRENCE-ID"].parameters,
+			properties["RECURRENCE-ID"].value,
+			properties["RECURRENCE-ID"].parameters,
 			false,
 		)?.toISOString();
 
@@ -614,24 +675,28 @@ export const parseYandexCalendarData = ({
 		}
 
 		const overrides =
-			overridesByUid.get(event.UID.value) ?? new Map<string, ParsedIcsEvent>();
+			overridesByUid.get(properties.UID.value) ??
+			new Map<string, ParsedIcsEvent>();
 		overrides.set(recurrenceId, event);
-		overridesByUid.set(event.UID.value, overrides);
+		overridesByUid.set(properties.UID.value, overrides);
 	}
 
 	return parsedEvents.flatMap((event) => {
-		if (event["RECURRENCE-ID"]) {
+		const properties = event.properties;
+
+		if (properties["RECURRENCE-ID"]) {
 			return [];
 		}
 
-		if (event.RRULE) {
+		if (properties.RRULE) {
 			return expandRecurringEvent({
 				calendar,
 				event,
 				href,
 				minimumEndAt,
 				overrideByRecurrenceId:
-					overridesByUid.get(event.UID?.value ?? "") ?? new Map(),
+					overridesByUid.get(properties.UID?.value ?? "") ?? new Map(),
+				selfEmail,
 				timeMax,
 				timeMin,
 			});
@@ -642,6 +707,7 @@ export const parseYandexCalendarData = ({
 			event,
 			href,
 			minimumEndAt,
+			selfEmail,
 		});
 		return normalizedEvent ? [normalizedEvent] : [];
 	});

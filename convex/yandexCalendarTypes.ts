@@ -5,7 +5,10 @@ export type ParsedIcsProperty = {
 	value: string;
 };
 
-export type ParsedIcsEvent = Record<string, ParsedIcsProperty>;
+export type ParsedIcsEvent = {
+	attendees: ParsedIcsProperty[];
+	properties: Record<string, ParsedIcsProperty>;
+};
 
 export type YandexCalendarCollection = {
 	color: string;

@@ -126,6 +126,7 @@ describe("hosted chat run context", () => {
 				"pause_automation",
 				"resume_automation",
 				"run_automation_now",
+				"search_meetings",
 				"update_automation",
 			]),
 		);

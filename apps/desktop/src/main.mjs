@@ -2537,6 +2537,16 @@ registerDesktopInvokeHandler("refreshTrayCalendar", async () => {
 });
 
 registerDesktopInvokeHandler(
+	"consumeTrayCalendarEvent",
+	async (_event, requestId) => ({
+		event: requireDesktopService(
+			desktopTray,
+			"desktopTray",
+		).consumeCalendarEventRequest(requestId),
+	}),
+);
+
+registerDesktopInvokeHandler(
 	"setTrayCalendarState",
 	async (_event, payload) => {
 		requireDesktopService(desktopTray, "desktopTray").setCalendarState(payload);

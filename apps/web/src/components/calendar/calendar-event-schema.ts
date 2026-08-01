@@ -2,6 +2,21 @@ import { z } from "zod";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
 
 export const calendarEventSchema: z.ZodType<UpcomingCalendarEvent> = z.object({
+	attendees: z.array(
+		z.object({
+			displayName: z.string().optional(),
+			email: z.string(),
+			isOrganizer: z.boolean(),
+			isSelf: z.boolean(),
+			responseStatus: z.enum([
+				"accepted",
+				"declined",
+				"needs_action",
+				"tentative",
+				"unknown",
+			]),
+		}),
+	),
 	id: z.string(),
 	calendarId: z.string(),
 	calendarName: z.string(),
