@@ -2,187 +2,37 @@ import {
 	act,
 	cleanup,
 	fireEvent,
-	render,
 	screen,
 	waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { TooltipProvider } from "@workspace/ui/components/tooltip";
-import { getFunctionName } from "convex/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { CalendarPage } from "../src/components/calendar/calendar-page";
-import { OPEN_NEW_CALENDAR_EVENT } from "../src/components/calendar/calendar-page-events";
-import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
+import {
+	getCalendarPageTestMocks,
+	readyCalendar,
+	renderCalendarPage,
+	renderCalendarPageWithNewEventTrigger,
+	resetCalendarPageTestMocks,
+} from "./calendar-page-test-fixture";
 
 const {
 	createCalendar,
 	createCalendarEvent,
-	deleteCalendarEvent,
+	deleteCalendar,
 	listCalendarEvents,
-	updateCalendarEvent,
-} = vi.hoisted(() => ({
-	createCalendar: vi.fn(),
-	createCalendarEvent: vi.fn(),
-	deleteCalendarEvent: vi.fn(),
-	listCalendarEvents: vi.fn(),
-	updateCalendarEvent: vi.fn(),
-}));
-
-vi.mock("convex/react", () => ({
-	useAction: (reference: never) => {
-		const functionName = getFunctionName(reference);
-
-		if (functionName === "calendar:createCalendar") {
-			return createCalendar;
-		}
-
-		if (functionName === "calendar:createCalendarEvent") {
-			return createCalendarEvent;
-		}
-
-		if (functionName === "calendar:updateCalendarEvent") {
-			return updateCalendarEvent;
-		}
-
-		return functionName === "calendar:deleteCalendarEvent"
-			? deleteCalendarEvent
-			: listCalendarEvents;
-	},
-	useQuery: (reference: never) => {
-		const functionName = getFunctionName(reference);
-
-		if (functionName === "calendarPreferences:get") {
-			return {
-				showGoogleCalendar: true,
-				showGoogleDrive: false,
-				showYandexCalendar: false,
-			};
-		}
-
-		return functionName === "people:listForPicker"
-			? {
-					hasMore: false,
-					people: [
-						{ displayName: "Alina Petrova", email: "alina@acme.com" },
-						{ displayName: "Mark Stone", email: "mark@acme.com" },
-					],
-				}
-			: null;
-	},
-}));
-
-const readyCalendar = {
-	status: "ready" as const,
-	calendars: [
-		{
-			canCreateEvents: true,
-			color: "#3b82f6",
-			id: "work",
-			name: "Work",
-			provider: "google" as const,
-		},
-	],
-	events: [
-		{
-			attendees: [
-				{
-					displayName: "Murad Abdulkadyrov",
-					email: "murad@example.com",
-					isOrganizer: true,
-					isSelf: true,
-					responseStatus: "accepted" as const,
-				},
-				{
-					displayName: "Alina Petrova",
-					email: "alina@acme.com",
-					isOrganizer: false,
-					isSelf: false,
-					responseStatus: "tentative" as const,
-				},
-				{
-					email: "mark@acme.com",
-					isOrganizer: false,
-					isSelf: false,
-					responseStatus: "needs_action" as const,
-				},
-				{
-					displayName: "Priya Shah",
-					email: "priya@example.com",
-					isOrganizer: false,
-					isSelf: false,
-					responseStatus: "declined" as const,
-				},
-			],
-			canDelete: true,
-			canEdit: true,
-			id: "event-1",
-			calendarId: "work",
-			calendarName: "Work",
-			title: "Planning",
-			startAt: "2026-07-27T10:00:00.000Z",
-			endAt: "2026-07-27T11:00:00.000Z",
-			isAllDay: false,
-			isMeeting: true,
-			isRecurring: false,
-			provider: "google" as const,
-			providerEventId: "provider-event-1",
-		},
-	],
-};
-
-const renderCalendarPage = (workspaceId: Id<"workspaces">) =>
-	render(
-		<TooltipProvider>
-			<ActiveWorkspaceProvider workspaceId={workspaceId}>
-				<CalendarPage
-					accountId="calendar-page-test-account"
-					isDesktopMac={false}
-					onOpenCalendarEventNote={vi.fn()}
-					onOpenCalendarSettings={vi.fn()}
-				/>
-			</ActiveWorkspaceProvider>
-		</TooltipProvider>,
-	);
-
-const renderCalendarPageWithNewEventTrigger = (workspaceId: Id<"workspaces">) =>
-	render(
-		<TooltipProvider>
-			<button
-				type="button"
-				onClick={() => window.dispatchEvent(new Event(OPEN_NEW_CALENDAR_EVENT))}
-			>
-				New event
-			</button>
-			<ActiveWorkspaceProvider workspaceId={workspaceId}>
-				<CalendarPage
-					accountId="calendar-page-test-account"
-					isDesktopMac={false}
-					onOpenCalendarEventNote={vi.fn()}
-					onOpenCalendarSettings={vi.fn()}
-				/>
-			</ActiveWorkspaceProvider>
-		</TooltipProvider>,
-	);
+	setDefaultCalendar,
+	updateCalendar,
+} = getCalendarPageTestMocks();
 
 describe("CalendarPage loading", () => {
 	let workspaceSequence = 0;
 	let workspaceId: Id<"workspaces">;
 
 	beforeEach(() => {
-		window.sessionStorage.clear();
 		workspaceSequence += 1;
 		workspaceId = `workspace-${workspaceSequence}` as Id<"workspaces">;
-		listCalendarEvents.mockReset();
-		listCalendarEvents.mockResolvedValue(readyCalendar);
-		createCalendar.mockReset();
-		createCalendar.mockResolvedValue({ id: "created-calendar" });
-		createCalendarEvent.mockReset();
-		createCalendarEvent.mockResolvedValue({ id: "created-event" });
-		deleteCalendarEvent.mockReset();
-		deleteCalendarEvent.mockResolvedValue(null);
-		updateCalendarEvent.mockReset();
-		updateCalendarEvent.mockResolvedValue(null);
+		resetCalendarPageTestMocks();
 	});
 
 	afterEach(() => {
@@ -342,17 +192,25 @@ describe("CalendarPage loading", () => {
 			calendars: [
 				{
 					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: false,
 					color: "#3b82f6",
 					id: "work",
 					name: "Work",
 					provider: "google",
+					removalMode: "delete",
+					requiresEventMove: true,
 				},
 				{
 					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: false,
 					color: "#10b981",
 					id: "personal",
 					name: "Personal",
 					provider: "google",
+					removalMode: "delete",
+					requiresEventMove: true,
 				},
 			],
 			events: [
@@ -390,10 +248,177 @@ describe("CalendarPage loading", () => {
 		expect(personalCalendar.getAttribute("aria-checked")).toBe("true");
 	});
 
-	it("marks recurring events in the agenda", async () => {
+	it("edits a provider calendar from its hover actions", async () => {
+		const user = userEvent.setup();
+		renderCalendarPage(workspaceId);
+		await screen.findByText("Planning");
+
+		await user.click(screen.getByRole("button", { name: "Calendars" }));
+		const actions = screen.getByRole("menuitem", {
+			name: "Actions for Work",
+		});
+		await user.hover(actions);
+		await act(
+			async () =>
+				await new Promise((resolve) => window.setTimeout(resolve, 150)),
+		);
+		expect(screen.queryByRole("menuitem", { name: "Edit" })).toBeNull();
+		fireEvent.click(actions);
+		fireEvent.pointerMove(screen.getByText("Plan ahead"));
+		expect(
+			await screen.findByRole("menuitem", { name: "Edit" }),
+		).not.toBeNull();
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+
+		await screen.findByRole("heading", { name: "Edit calendar" });
+		const nameInput = screen.getByRole("textbox", { name: "Name" });
+		await user.clear(nameInput);
+		await user.type(nameInput, "Roadmap");
+		await user.click(screen.getByRole("radio", { name: "Green" }));
+		await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+		await waitFor(() =>
+			expect(updateCalendar).toHaveBeenCalledWith({
+				calendarId: "work",
+				color: "#10b981",
+				name: "Roadmap",
+				provider: "google",
+				workspaceId,
+			}),
+		);
+	});
+
+	it("sets an eligible Yandex calendar as default from its click actions", async () => {
+		const user = userEvent.setup();
 		listCalendarEvents.mockResolvedValue({
 			...readyCalendar,
-			events: [{ ...readyCalendar.events[0], isRecurring: true }],
+			calendars: [
+				{
+					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: false,
+					color: "#3b82f6",
+					id: "yandex-default",
+					name: "Internal",
+					provider: "yandex" as const,
+					removalMode: "none" as const,
+					requiresEventMove: false,
+				},
+				{
+					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: true,
+					color: "#10b981",
+					id: "yandex-work",
+					name: "Work",
+					provider: "yandex" as const,
+					removalMode: "delete" as const,
+					requiresEventMove: true,
+				},
+			],
+			events: [
+				{
+					...readyCalendar.events[0],
+					calendarId: "yandex-default",
+					calendarName: "Internal",
+					provider: "yandex" as const,
+				},
+			],
+		});
+		renderCalendarPage(workspaceId);
+		await screen.findByText("Planning");
+
+		await user.click(screen.getByRole("button", { name: "Calendars" }));
+		fireEvent.click(screen.getByRole("menuitem", { name: "Actions for Work" }));
+		const setDefaultItem = await screen.findByRole("menuitem", {
+			name: "Set as default",
+		});
+		const editItem = screen.getByRole("menuitem", { name: "Edit" });
+		expect(
+			editItem.compareDocumentPosition(setDefaultItem) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		expect(
+			setDefaultItem.querySelector(".lucide-calendar-heart"),
+		).not.toBeNull();
+		fireEvent.click(setDefaultItem);
+
+		await waitFor(() =>
+			expect(setDefaultCalendar).toHaveBeenCalledWith({
+				calendarId: "yandex-work",
+				provider: "yandex",
+				workspaceId,
+			}),
+		);
+	});
+
+	it("asks where to move events before deleting an owned calendar", async () => {
+		const user = userEvent.setup();
+		listCalendarEvents.mockResolvedValue({
+			...readyCalendar,
+			calendars: [
+				readyCalendar.calendars[0],
+				{
+					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: false,
+					color: "#10b981",
+					id: "archive",
+					name: "Archive",
+					provider: "google" as const,
+					removalMode: "delete" as const,
+					requiresEventMove: true,
+				},
+			],
+		});
+		renderCalendarPage(workspaceId);
+		await screen.findByText("Planning");
+
+		await user.click(screen.getByRole("button", { name: "Calendars" }));
+		const actions = screen.getByRole("menuitem", {
+			name: "Actions for Work",
+		});
+		await user.hover(actions);
+		fireEvent.click(actions);
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+
+		await screen.findByRole("alertdialog");
+		expect(
+			screen.getByRole("heading", { name: "Are you absolutely sure?" }),
+		).not.toBeNull();
+		expect(
+			screen.getByText(
+				"This will delete your calendar and move its events to the calendar you choose.",
+			),
+		).not.toBeNull();
+		expect(screen.getAllByText("Archive").length).toBeGreaterThan(0);
+		await user.click(screen.getByRole("button", { name: "Delete" }));
+
+		await waitFor(() =>
+			expect(deleteCalendar).toHaveBeenCalledWith({
+				calendarId: "work",
+				destinationCalendarId: "archive",
+				provider: "google",
+				workspaceId,
+			}),
+		);
+	});
+
+	it("marks recurring events in the agenda", async () => {
+		const user = userEvent.setup();
+		listCalendarEvents.mockResolvedValue({
+			...readyCalendar,
+			events: [
+				{
+					...readyCalendar.events[0],
+					isRecurring: true,
+					recurrence: {
+						frequency: "weekly" as const,
+						interval: 2,
+						weekdays: ["mon" as const, "wed" as const],
+					},
+				},
+			],
 		});
 		renderCalendarPage(workspaceId);
 
@@ -406,6 +431,15 @@ describe("CalendarPage loading", () => {
 		);
 		expect(recurringIndicator).not.toBeNull();
 		expect(title?.lastElementChild).toBe(recurringIndicator);
+		if (!recurringIndicator) {
+			throw new Error("Expected a recurring event indicator.");
+		}
+		await user.hover(recurringIndicator);
+		expect(
+			await screen.findByRole("tooltip", {
+				name: "Repeats every 2 weeks on Mon, Wed",
+			}),
+		).not.toBeNull();
 	});
 
 	it("keeps focus on the trigger while the new event panel opens", async () => {
@@ -538,10 +572,14 @@ describe("CalendarPage loading", () => {
 			calendars: [
 				{
 					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: false,
 					color: "#8b5cf6",
 					id: "yandex:/calendars/owner/events/",
 					name: "Work",
 					provider: "yandex",
+					removalMode: "delete",
+					requiresEventMove: true,
 				},
 			],
 			events: [
@@ -586,10 +624,14 @@ describe("CalendarPage loading", () => {
 				...readyCalendar.calendars,
 				{
 					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: false,
 					color: "#10b981",
 					id: "yandex:/calendars/owner/events/",
 					name: "Personal",
 					provider: "yandex",
+					removalMode: "delete",
+					requiresEventMove: true,
 				},
 			],
 		});
@@ -661,10 +703,14 @@ describe("CalendarPage loading", () => {
 			calendars: [
 				{
 					canCreateEvents: false,
+					canEdit: true,
+					canSetDefault: false,
 					color: "#3b82f6",
 					id: "work",
 					name: "Work",
 					provider: "google",
+					removalMode: "unsubscribe",
+					requiresEventMove: false,
 				},
 			],
 		});
@@ -683,181 +729,5 @@ describe("CalendarPage loading", () => {
 				}) as HTMLButtonElement
 			).disabled,
 		).toBe(true);
-	});
-
-	it("keeps only the note action in event details", async () => {
-		const user = userEvent.setup();
-		renderCalendarPage(workspaceId);
-		await screen.findByText("Planning");
-
-		await user.click(screen.getByRole("button", { name: /^Planning,/ }));
-
-		const takeNoteButton = await screen.findByRole("button", {
-			name: "Take note",
-		});
-		expect(takeNoteButton.closest(".overflow-y-auto")).not.toBeNull();
-		expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
-		expect(screen.queryByRole("button", { name: "Delete event" })).toBeNull();
-	});
-
-	it("shows every guest with only their name and email", async () => {
-		const user = userEvent.setup();
-		renderCalendarPage(workspaceId);
-		const planningEvent = await screen.findByRole(
-			"button",
-			{ name: /^Planning,/ },
-			{ timeout: 5_000 },
-		);
-
-		await user.click(planningEvent);
-
-		expect(
-			await screen.findByRole("button", { name: "View 4 guests" }),
-		).not.toBeNull();
-		expect(screen.getByText("+1")).not.toBeNull();
-		expect(screen.queryByText("4 guests")).toBeNull();
-		await user.click(screen.getByRole("button", { name: "View 4 guests" }));
-		expect(screen.queryByText("Guests")).toBeNull();
-		expect(await screen.findByRole("list", { name: "Guests" })).not.toBeNull();
-		expect(screen.getByText("Murad Abdulkadyrov")).not.toBeNull();
-		expect(screen.getByText("murad@example.com")).not.toBeNull();
-		expect(screen.getByText("Alina Petrova")).not.toBeNull();
-		expect(screen.getByText("alina@acme.com")).not.toBeNull();
-		expect(screen.getByText("mark@acme.com")).not.toBeNull();
-		expect(screen.getByText("Priya Shah")).not.toBeNull();
-		expect(screen.getByText("priya@example.com")).not.toBeNull();
-		expect(screen.queryByText("You · Organizer · Accepted")).toBeNull();
-		expect(screen.queryByText("Tentative")).toBeNull();
-		expect(screen.queryByText("Awaiting response")).toBeNull();
-		expect(screen.queryByText("Declined")).toBeNull();
-	});
-
-	it("shows when a calendar event has no listed guests", async () => {
-		const user = userEvent.setup();
-		listCalendarEvents.mockResolvedValue({
-			...readyCalendar,
-			events: [{ ...readyCalendar.events[0], attendees: [] }],
-		});
-		renderCalendarPage(workspaceId);
-		const planningEvent = await screen.findByRole(
-			"button",
-			{ name: /^Planning,/ },
-			{ timeout: 5_000 },
-		);
-
-		await user.click(planningEvent);
-
-		expect(await screen.findByText("No guests")).not.toBeNull();
-		expect(screen.queryByRole("list", { name: "Guests" })).toBeNull();
-	});
-
-	it("edits an event from its row actions", async () => {
-		const user = userEvent.setup();
-		renderCalendarPage(workspaceId);
-		await screen.findByText("Planning");
-
-		await user.click(
-			screen.getByRole("button", { name: "Open actions for Planning" }),
-		);
-		await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
-
-		const title = await screen.findByRole("textbox", { name: "Title" });
-		await user.clear(title);
-		await user.type(title, "Updated planning");
-		await user.click(screen.getByRole("button", { name: "Save changes" }));
-
-		await waitFor(() =>
-			expect(updateCalendarEvent).toHaveBeenCalledWith(
-				expect.objectContaining({
-					calendarId: "work",
-					guests: ["alina@acme.com", "mark@acme.com", "priya@example.com"],
-					provider: "google",
-					providerEventId: "provider-event-1",
-					title: "Updated planning",
-					workspaceId,
-				}),
-			),
-		);
-	});
-
-	it("does not expose provider mutations for an event the user cannot manage", async () => {
-		listCalendarEvents.mockResolvedValue({
-			...readyCalendar,
-			events: [
-				{
-					...readyCalendar.events[0],
-					canDelete: false,
-					canEdit: false,
-				},
-			],
-		});
-
-		renderCalendarPage(workspaceId);
-		await screen.findByText("Planning");
-
-		expect(
-			screen.queryByRole("button", { name: "Open actions for Planning" }),
-		).toBeNull();
-	});
-
-	it("hides row actions after dismissing the menu with a pointer", async () => {
-		const user = userEvent.setup();
-		renderCalendarPage(workspaceId);
-		await screen.findByText("Planning");
-		const actionTrigger = screen.getByRole("button", {
-			name: "Open actions for Planning",
-		});
-
-		await user.click(actionTrigger);
-		await screen.findByRole("menuitem", { name: "Edit" });
-		fireEvent.pointerDown(screen.getByText("Plan ahead"));
-
-		await waitFor(() =>
-			expect(screen.queryByRole("menuitem", { name: "Edit" })).toBeNull(),
-		);
-		expect(document.activeElement).not.toBe(actionTrigger);
-	});
-
-	it("deletes an event from its row actions after confirmation", async () => {
-		const user = userEvent.setup();
-		renderCalendarPage(workspaceId);
-		await screen.findByText("Planning");
-		let resolveRefresh: ((value: typeof readyCalendar) => void) | null = null;
-		listCalendarEvents.mockImplementationOnce(
-			() =>
-				new Promise<typeof readyCalendar>((resolve) => {
-					resolveRefresh = resolve;
-				}),
-		);
-
-		await user.click(
-			screen.getByRole("button", { name: "Open actions for Planning" }),
-		);
-		await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
-		expect(
-			await screen.findByRole("heading", { name: "Delete event?" }),
-		).not.toBeNull();
-		await user.click(
-			screen.getByRole("button", { name: "Delete", hidden: false }),
-		);
-
-		await waitFor(() =>
-			expect(deleteCalendarEvent).toHaveBeenCalledWith({
-				calendarId: "work",
-				provider: "google",
-				providerEventId: "provider-event-1",
-				recurrenceId: undefined,
-				recurrenceIsAllDay: undefined,
-				workspaceId,
-			}),
-		);
-		expect(screen.queryByText("Planning")).not.toBeNull();
-		act(() => {
-			resolveRefresh?.({
-				...readyCalendar,
-				events: [],
-			});
-		});
-		await waitFor(() => expect(screen.queryByText("Planning")).toBeNull());
 	});
 });

@@ -1,22 +1,6 @@
 import { ConvexError } from "convex/values";
-import type {
-	CalendarEventDetailsInput,
-	UpdateCalendarEventInput,
-} from "./calendarTypes";
-import { requireCalendarEventEtag } from "./calendarProviderConcurrency";
-import {
-	parseIcsEvents,
-	parseYandexCalendarData,
-} from "./yandexCalendarIcs";
-import {
-	cancelYandexCalendarOccurrence,
-	normalizeYandexAttendeeEmail,
-	updateYandexCalendarResource,
-} from "./yandexCalendarEventMutation";
-import {
-	buildYandexCalendarEventIcs,
-	formatCalDavTimestamp,
-} from "./yandexCalendarIcsWriter";
+import { parseYandexCalendarData } from "./yandexCalendarIcs";
+import { formatCalDavTimestamp } from "./yandexCalendarIcsWriter";
 import type {
 	YandexCalendarCollection,
 	YandexCalendarConnection,
@@ -79,7 +63,15 @@ const hasCalendarWritePrivilege = (xml: string) => {
 	);
 };
 
-const normalizeHrefPath = (href: string) => {
+const hasCalendarPropertyWritePrivilege = (xml: string) => {
+	const privileges = getXmlTagContent(xml, "current-user-privilege-set") ?? "";
+
+	return /<(?:[\w-]+:)?(?:all|write|write-properties)(?:\s|\/|>)/iu.test(
+		privileges,
+	);
+};
+
+export const normalizeHrefPath = (href: string) => {
 	try {
 		return new URL(href).pathname;
 	} catch {
@@ -87,13 +79,26 @@ const normalizeHrefPath = (href: string) => {
 	}
 };
 
-const buildYandexCalendarUrl = (serverAddress: string, path: string) =>
+const normalizeComparableHrefPath = (href: string) =>
+	normalizeHrefPath(href)
+		.split("/")
+		.map((segment) => {
+			try {
+				return decodeURIComponent(segment);
+			} catch {
+				return segment;
+			}
+		})
+		.join("/")
+		.replace(/\/+$/u, "");
+
+export const buildYandexCalendarUrl = (serverAddress: string, path: string) =>
 	new URL(path, `https://${serverAddress}`);
 
 const buildBasicAuthHeader = (email: string, password: string) =>
 	`Basic ${Buffer.from(`${email}:${password}`, "utf8").toString("base64")}`;
 
-const fetchYandexDav = async ({
+export const fetchYandexDav = async ({
 	body,
 	connection,
 	contentType = XML_CONTENT_TYPE,
@@ -108,7 +113,15 @@ const fetchYandexDav = async ({
 	contentType?: string;
 	depth?: "0" | "1";
 	headers?: Record<string, string>;
-	method: "DELETE" | "GET" | "MKCALENDAR" | "PROPFIND" | "PUT" | "REPORT";
+	method:
+		| "DELETE"
+		| "GET"
+		| "MKCALENDAR"
+		| "MOVE"
+		| "PROPFIND"
+		| "PROPPATCH"
+		| "PUT"
+		| "REPORT";
 	path: string;
 	request?: typeof fetch;
 }) => {
@@ -129,7 +142,7 @@ const fetchYandexDav = async ({
 	});
 };
 
-const requireSuccessfulDavResponse = async (
+export const requireSuccessfulDavResponse = async (
 	response: Response,
 	errorContext: string,
 ) => {
@@ -140,6 +153,25 @@ const requireSuccessfulDavResponse = async (
 	const responseText = await response.text().catch(() => "");
 	const suffix = responseText.trim() ? ` ${responseText.trim()}` : "";
 	throw new Error(`${errorContext} (${response.status}).${suffix}`.trim());
+};
+
+const requireSuccessfulDavPropertyUpdate = async (
+	response: Response,
+	errorContext: string,
+) => {
+	const xml = await requireSuccessfulDavResponse(response, errorContext);
+	const statusCodes = Array.from(
+		xml.matchAll(/<(?:[\w-]+:)?status\b[^>]*>[^<]*\s(\d{3})(?:\s|<)/giu),
+	).map((match) => Number(match[1]));
+	const failedStatus = statusCodes.find(
+		(status) => status < 200 || status >= 300,
+	);
+
+	if (failedStatus !== undefined) {
+		throw new Error(`${errorContext} (${failedStatus}).`);
+	}
+
+	return xml;
 };
 
 export const normalizeYandexCalendarEmail = (value: string) =>
@@ -191,6 +223,79 @@ const resolveCalendarHomePathFromPrincipal = async ({
 	return getYandexCalendarHomePath(email);
 };
 
+const resolveYandexSchedulingInboxPath = async ({
+	connection,
+	request,
+}: {
+	connection: YandexCalendarConnection;
+	request?: typeof fetch;
+}) => {
+	const principalPath = getYandexCalendarPrincipalPath(connection.email);
+	const response = await fetchYandexDav({
+		body: `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="${WEBDAV_NAMESPACE}" xmlns:c="${CALDAV_NAMESPACE}">
+	<d:prop><c:schedule-inbox-URL /></d:prop>
+</d:propfind>`,
+		connection,
+		depth: "0",
+		method: "PROPFIND",
+		path: principalPath,
+		request,
+	});
+	const xml = await requireSuccessfulDavResponse(
+		response,
+		"Failed to load Yandex scheduling settings",
+	);
+	const scheduleInboxXml = getXmlTagContent(xml, "schedule-inbox-URL") ?? "";
+	const scheduleInboxPath = getXmlHrefValue(scheduleInboxXml);
+
+	if (!scheduleInboxPath) {
+		throw new Error("Yandex Calendar did not expose a scheduling inbox.");
+	}
+
+	return normalizeHrefPath(scheduleInboxPath);
+};
+
+const loadYandexDefaultCalendarState = async ({
+	connection,
+	request,
+}: {
+	connection: YandexCalendarConnection;
+	request?: typeof fetch;
+}) => {
+	const scheduleInboxPath = await resolveYandexSchedulingInboxPath({
+		connection,
+		request,
+	});
+	const response = await fetchYandexDav({
+		body: `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="${WEBDAV_NAMESPACE}" xmlns:c="${CALDAV_NAMESPACE}">
+	<d:prop><c:schedule-default-calendar-URL /></d:prop>
+</d:propfind>`,
+		connection,
+		depth: "0",
+		method: "PROPFIND",
+		path: scheduleInboxPath,
+		request,
+	});
+	const xml = await requireSuccessfulDavResponse(
+		response,
+		"Failed to load the default Yandex calendar",
+	);
+	const defaultCalendarXml =
+		getXmlTagContent(xml, "schedule-default-calendar-URL") ?? "";
+	const defaultCalendarPath = getXmlHrefValue(defaultCalendarXml);
+
+	if (!defaultCalendarPath) {
+		throw new Error("Yandex Calendar did not expose a default calendar.");
+	}
+
+	return {
+		defaultCalendarPath: normalizeHrefPath(defaultCalendarPath),
+		scheduleInboxPath,
+	};
+};
+
 export const verifyYandexCalendarConnection = async ({
 	email,
 	password,
@@ -218,9 +323,12 @@ const parseYandexCalendarCollections = (
 	xml: string,
 	connection: YandexCalendarConnection,
 ) => {
-	const normalizedHomePath = normalizeHrefPath(connection.calendarHomePath);
+	const normalizedHomePath = normalizeComparableHrefPath(
+		connection.calendarHomePath,
+	);
+	const responseBlocks = getXmlResponseBlocks(xml);
 
-	return getXmlResponseBlocks(xml)
+	return responseBlocks
 		.map((block) => {
 			const href = decodeXmlText(getXmlTagContent(block, "href") ?? "").trim();
 			const responsePath = normalizeHrefPath(href);
@@ -228,7 +336,7 @@ const parseYandexCalendarCollections = (
 
 			if (
 				!href ||
-				responsePath === normalizedHomePath ||
+				normalizeComparableHrefPath(responsePath) === normalizedHomePath ||
 				!/<(?:[\w-]+:)?calendar\b/iu.test(resourceType) ||
 				!supportsCalendarEvents(block)
 			) {
@@ -248,6 +356,7 @@ const parseYandexCalendarCollections = (
 			}
 
 			return {
+				canEdit: hasCalendarPropertyWritePrivilege(block),
 				canWrite: hasCalendarWritePrivilege(block),
 				color,
 				id: `yandex:${responsePath}`,
@@ -262,7 +371,7 @@ const parseYandexCalendarCollections = (
 		);
 };
 
-const listYandexCalendarCollections = async ({
+export const listYandexCalendarCollections = async ({
 	connection,
 	request,
 }: {
@@ -290,7 +399,6 @@ const listYandexCalendarCollections = async ({
 		response,
 		"Failed to load Yandex calendars",
 	);
-
 	return parseYandexCalendarCollections(xml, connection);
 };
 
@@ -343,10 +451,13 @@ export const listYandexUpcomingEvents = async ({
 	timeMax: number;
 	timeMin: number;
 }) => {
-	const calendars = await listYandexCalendarCollections({
-		connection,
-		request,
-	});
+	const [calendars, defaultCalendarState] = await Promise.all([
+		listYandexCalendarCollections({
+			connection,
+			request,
+		}),
+		loadYandexDefaultCalendarState({ connection, request }),
+	]);
 
 	if (calendars.length === 0) {
 		return {
@@ -400,16 +511,92 @@ export const listYandexUpcomingEvents = async ({
 	);
 
 	return {
-		calendars: calendars.map((calendar) => ({
-			canCreateEvents: calendar.canWrite,
-			color: calendar.color,
-			id: calendar.id,
-			name: calendar.displayName,
-			provider: "yandex" as const,
-		})),
+		calendars: calendars.map((calendar) => {
+			const isDefault =
+				normalizeComparableHrefPath(calendar.href) ===
+				normalizeComparableHrefPath(defaultCalendarState.defaultCalendarPath);
+			const canDelete = calendar.canEdit && calendar.canWrite && !isDefault;
+
+			return {
+				canCreateEvents: calendar.canWrite,
+				canEdit: calendar.canEdit,
+				canSetDefault: canDelete,
+				color: calendar.color,
+				id: calendar.id,
+				name: calendar.displayName,
+				provider: "yandex" as const,
+				removalMode: canDelete ? ("delete" as const) : ("none" as const),
+				requiresEventMove: canDelete,
+			};
+		}),
 		connectedCalendarCount: calendars.length,
 		events: eventGroups.flat(),
 	};
+};
+
+export const setDefaultYandexCalendar = async ({
+	calendarId,
+	connection,
+	request,
+}: {
+	calendarId: string;
+	connection: YandexCalendarConnection;
+	request?: typeof fetch;
+}) => {
+	const [calendars, defaultCalendarState] = await Promise.all([
+		listYandexCalendarCollections({ connection, request }),
+		loadYandexDefaultCalendarState({ connection, request }),
+	]);
+	const calendar = calendars.find((candidate) => candidate.id === calendarId);
+
+	if (!calendar) {
+		throw new Error("The selected Yandex calendar is not available.");
+	}
+	if (!calendar.canEdit || !calendar.canWrite) {
+		throw new ConvexError({
+			code: "CALENDAR_NOT_WRITABLE",
+			message: "The selected calendar cannot be set as default.",
+		});
+	}
+	if (
+		normalizeComparableHrefPath(calendar.href) ===
+		normalizeComparableHrefPath(defaultCalendarState.defaultCalendarPath)
+	) {
+		return null;
+	}
+
+	const response = await fetchYandexDav({
+		body: `<?xml version="1.0" encoding="utf-8"?>
+<d:propertyupdate xmlns:d="${WEBDAV_NAMESPACE}" xmlns:c="${CALDAV_NAMESPACE}">
+	<d:set>
+		<d:prop>
+			<c:schedule-default-calendar-URL>
+				<d:href>${encodeXmlText(calendar.href)}</d:href>
+			</c:schedule-default-calendar-URL>
+		</d:prop>
+	</d:set>
+</d:propertyupdate>`,
+		connection,
+		method: "PROPPATCH",
+		path: defaultCalendarState.scheduleInboxPath,
+		request,
+	});
+	await requireSuccessfulDavPropertyUpdate(
+		response,
+		"Failed to set the default Yandex calendar",
+	);
+	const verifiedState = await loadYandexDefaultCalendarState({
+		connection,
+		request,
+	});
+	if (
+		normalizeComparableHrefPath(verifiedState.defaultCalendarPath) !==
+		normalizeComparableHrefPath(calendar.href)
+	) {
+		throw new Error("Yandex Calendar did not apply the default calendar.");
+	}
+
+	return null;
 };
 
 export const createYandexCalendar = async ({
@@ -452,15 +639,13 @@ export const createYandexCalendar = async ({
 	return { id: `yandex:${calendarPath}` };
 };
 
-const getYandexCalendarEventTarget = async ({
+const requireYandexCalendarCollection = async ({
 	calendarId,
 	connection,
-	providerEventId,
 	request,
 }: {
 	calendarId: string;
 	connection: YandexCalendarConnection;
-	providerEventId: string;
 	request?: typeof fetch;
 }) => {
 	const calendars = await listYandexCalendarCollections({
@@ -472,239 +657,201 @@ const getYandexCalendarEventTarget = async ({
 	if (!calendar) {
 		throw new Error("The selected Yandex calendar is not available.");
 	}
+	return calendar;
+};
 
-	if (!calendar.canWrite) {
+export const updateYandexCalendar = async ({
+	calendarId,
+	color,
+	connection,
+	name,
+	request,
+}: {
+	calendarId: string;
+	color: string;
+	connection: YandexCalendarConnection;
+	name: string;
+	request?: typeof fetch;
+}) => {
+	const calendar = await requireYandexCalendarCollection({
+		calendarId,
+		connection,
+		request,
+	});
+
+	if (!calendar.canEdit) {
 		throw new ConvexError({
 			code: "CALENDAR_NOT_WRITABLE",
-			message: "The selected calendar does not allow event changes.",
+			message: "The selected calendar does not allow changes.",
 		});
 	}
 
-	const calendarPath = `${normalizeHrefPath(calendar.href).replace(/\/?$/u, "/")}`;
-	const eventPath = normalizeHrefPath(providerEventId);
-
-	if (!eventPath.startsWith(calendarPath) || eventPath === calendarPath) {
-		throw new Error("The selected Yandex event is not in this calendar.");
-	}
-
-	return eventPath;
-};
-
-const loadYandexCalendarEventResource = async ({
-	connection,
-	path,
-	request,
-}: {
-	connection: YandexCalendarConnection;
-	path: string;
-	request?: typeof fetch;
-}) => {
 	const response = await fetchYandexDav({
+		body: `<?xml version="1.0" encoding="utf-8"?>
+<d:propertyupdate xmlns:d="${WEBDAV_NAMESPACE}" xmlns:a="http://apple.com/ns/ical/">
+	<d:set>
+		<d:prop>
+			<d:displayname>${encodeXmlText(name)}</d:displayname>
+			<a:calendar-color>${encodeXmlText(color.toUpperCase())}FF</a:calendar-color>
+		</d:prop>
+	</d:set>
+</d:propertyupdate>`,
 		connection,
-		method: "GET",
-		path,
+		method: "PROPPATCH",
+		path: calendar.href,
 		request,
 	});
-	const calendarData = await requireSuccessfulDavResponse(
+	await requireSuccessfulDavPropertyUpdate(
 		response,
-		"Failed to load Yandex event",
+		"Failed to update Yandex calendar",
 	);
-
-	return {
-		calendarData,
-		etag: response.headers.get("etag") ?? undefined,
-	};
-};
-
-const assertYandexCalendarEventCanBeManaged = ({
-	calendarData,
-	connection,
-	operation,
-}: {
-	calendarData: string;
-	connection: YandexCalendarConnection;
-	operation: "delete" | "edit";
-}) => {
-	const baseEvent = parseIcsEvents(calendarData).find(
-		(event) => !event.properties["RECURRENCE-ID"],
-	);
-	const organizer = baseEvent?.properties.ORGANIZER;
-
-	if (!baseEvent) {
-		throw new Error("The Yandex event resource has no editable event.");
-	}
-
-	if (
-		organizer &&
-		normalizeYandexAttendeeEmail(organizer.value) !==
-			normalizeYandexCalendarEmail(connection.email)
-	) {
-		throw new ConvexError({
-			code:
-				operation === "edit"
-					? "CALENDAR_EVENT_EDIT_FORBIDDEN"
-					: "CALENDAR_EVENT_DELETE_FORBIDDEN",
-			message: `Only the organizer can ${operation} this event.`,
-		});
-	}
-};
-
-export const updateYandexCalendarEvent = async ({
-	connection,
-	input,
-	now = Date.now(),
-	request,
-}: {
-	connection: YandexCalendarConnection;
-	input: UpdateCalendarEventInput;
-	now?: number;
-	request?: typeof fetch;
-}) => {
-	const path = await getYandexCalendarEventTarget({
-		calendarId: input.calendarId,
-		connection,
-		providerEventId: input.providerEventId,
-		request,
-	});
-	const { calendarData, etag } = await loadYandexCalendarEventResource({
-		connection,
-		path,
-		request,
-	});
-	assertYandexCalendarEventCanBeManaged({
-		calendarData,
-		connection,
-		operation: "edit",
-	});
-	const concurrencyEtag = requireCalendarEventEtag(etag);
-	const response = await fetchYandexDav({
-		body: updateYandexCalendarResource({ calendarData, input, now }),
-		connection,
-		contentType: "text/calendar; charset=utf-8",
-		headers: { "If-Match": concurrencyEtag },
-		method: "PUT",
-		path,
-		request,
-	});
-
-	await requireSuccessfulDavResponse(response, "Failed to update Yandex event");
 	return null;
 };
 
-export const deleteYandexCalendarEvent = async ({
+const listYandexCalendarResourcePaths = async ({
+	calendar,
+	connection,
+	request,
+}: {
+	calendar: YandexCalendarCollection;
+	connection: YandexCalendarConnection;
+	request?: typeof fetch;
+}) => {
+	const response = await fetchYandexDav({
+		body: `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="${WEBDAV_NAMESPACE}">
+	<d:prop><d:resourcetype /></d:prop>
+</d:propfind>`,
+		connection,
+		depth: "1",
+		method: "PROPFIND",
+		path: calendar.href,
+		request,
+	});
+	const xml = await requireSuccessfulDavResponse(
+		response,
+		"Failed to load Yandex calendar events",
+	);
+	const calendarPath = `${normalizeHrefPath(calendar.href).replace(/\/?$/u, "/")}`;
+
+	return getXmlResponseBlocks(xml).flatMap((block) => {
+		const href = normalizeHrefPath(getXmlHrefValue(block));
+		const resourceType = getXmlTagContent(block, "resourcetype") ?? "";
+
+		return href.startsWith(calendarPath) &&
+			href !== calendarPath &&
+			!/<(?:[\w-]+:)?collection(?:\s|\/|>)/iu.test(resourceType)
+			? [href]
+			: [];
+	});
+};
+
+export const removeYandexCalendar = async ({
 	calendarId,
 	connection,
-	providerEventId,
-	recurrenceId,
-	recurrenceIsAllDay = false,
-	now = Date.now(),
+	destinationCalendarId,
 	request,
 }: {
 	calendarId: string;
 	connection: YandexCalendarConnection;
-	providerEventId: string;
-	recurrenceId?: string;
-	recurrenceIsAllDay?: boolean;
-	now?: number;
+	destinationCalendarId?: string;
 	request?: typeof fetch;
 }) => {
-	const path = await getYandexCalendarEventTarget({
-		calendarId,
-		connection,
-		providerEventId,
-		request,
-	});
+	if (!destinationCalendarId || destinationCalendarId === calendarId) {
+		throw new ConvexError({
+			code: "CALENDAR_MOVE_DESTINATION_REQUIRED",
+			message: "Choose another calendar for the existing events.",
+		});
+	}
 
-	const { calendarData, etag } = await loadYandexCalendarEventResource({
-		connection,
-		path,
-		request,
-	});
-	assertYandexCalendarEventCanBeManaged({
-		calendarData,
-		connection,
-		operation: "delete",
-	});
-	const concurrencyEtag = requireCalendarEventEtag(etag);
+	const [calendars, defaultCalendarState] = await Promise.all([
+		listYandexCalendarCollections({ connection, request }),
+		loadYandexDefaultCalendarState({ connection, request }),
+	]);
+	const calendar = calendars.find((candidate) => candidate.id === calendarId);
+	const destinationCalendar = calendars.find(
+		(candidate) => candidate.id === destinationCalendarId,
+	);
+	if (!calendar || !destinationCalendar) {
+		throw new Error("The selected Yandex calendars are not available.");
+	}
+	if (
+		!calendar.canEdit ||
+		!calendar.canWrite ||
+		!destinationCalendar.canWrite
+	) {
+		throw new ConvexError({
+			code: "CALENDAR_NOT_WRITABLE",
+			message: "The selected calendars do not allow event changes.",
+		});
+	}
+	if (
+		normalizeComparableHrefPath(calendar.href) ===
+		normalizeComparableHrefPath(defaultCalendarState.defaultCalendarPath)
+	) {
+		throw new ConvexError({
+			code: "PRIMARY_CALENDAR_CANNOT_BE_DELETED",
+			message: "The default Yandex calendar cannot be deleted.",
+		});
+	}
 
-	if (!recurrenceId) {
-		const response = await fetchYandexDav({
+	const [sourcePaths, destinationPaths] = await Promise.all([
+		listYandexCalendarResourcePaths({ calendar, connection, request }),
+		listYandexCalendarResourcePaths({
+			calendar: destinationCalendar,
 			connection,
-			headers: { "If-Match": concurrencyEtag },
-			method: "DELETE",
-			path,
+			request,
+		}),
+	]);
+	const destinationPath = `${normalizeHrefPath(destinationCalendar.href).replace(/\/?$/u, "/")}`;
+	const destinationNames = new Set(
+		destinationPaths.map((path) => path.split("/").filter(Boolean).at(-1)),
+	);
+
+	for (const sourcePath of sourcePaths) {
+		const filename = sourcePath.split("/").filter(Boolean).at(-1);
+		if (!filename || destinationNames.has(filename)) {
+			throw new ConvexError({
+				code: "CALENDAR_EVENT_MOVE_CONFLICT",
+				message:
+					"An event with the same provider identifier already exists in the destination calendar.",
+			});
+		}
+	}
+
+	for (const sourcePath of sourcePaths) {
+		const filename = sourcePath.split("/").filter(Boolean).at(-1);
+		if (!filename) {
+			throw new Error("A Yandex calendar resource path is invalid.");
+		}
+		const moveResponse = await fetchYandexDav({
+			connection,
+			headers: {
+				Destination: buildYandexCalendarUrl(
+					connection.serverAddress,
+					`${destinationPath}${filename}`,
+				).toString(),
+				Overwrite: "F",
+			},
+			method: "MOVE",
+			path: sourcePath,
 			request,
 		});
 		await requireSuccessfulDavResponse(
-			response,
-			"Failed to delete Yandex event",
+			moveResponse,
+			"Failed to move a Yandex calendar event",
 		);
-		return null;
 	}
 
-	const response = await fetchYandexDav({
-		body: cancelYandexCalendarOccurrence({
-			calendarData,
-			now,
-			recurrenceId,
-			recurrenceIsAllDay,
-		}),
+	const deleteResponse = await fetchYandexDav({
 		connection,
-		contentType: "text/calendar; charset=utf-8",
-		headers: { "If-Match": concurrencyEtag },
-		method: "PUT",
-		path,
+		method: "DELETE",
+		path: calendar.href,
 		request,
 	});
 	await requireSuccessfulDavResponse(
-		response,
-		"Failed to delete Yandex event occurrence",
+		deleteResponse,
+		"Failed to delete Yandex calendar",
 	);
 	return null;
-};
-
-export const createYandexCalendarEvent = async ({
-	connection,
-	input,
-	now = Date.now(),
-	request,
-	uid = crypto.randomUUID(),
-}: {
-	connection: YandexCalendarConnection;
-	input: CalendarEventDetailsInput;
-	now?: number;
-	request?: typeof fetch;
-	uid?: string;
-}) => {
-	const calendars = await listYandexCalendarCollections({
-		connection,
-		request,
-	});
-	const calendar = calendars.find(
-		(candidate) => candidate.id === input.calendarId && candidate.canWrite,
-	);
-
-	if (!calendar) {
-		throw new Error("The selected Yandex calendar is not available.");
-	}
-
-	const eventPath = `${calendar.href.replace(/\/?$/u, "/")}${encodeURIComponent(uid)}.ics`;
-	const response = await fetchYandexDav({
-		body: buildYandexCalendarEventIcs({ input, now, uid }),
-		connection,
-		contentType: "text/calendar; charset=utf-8",
-		headers: { "If-None-Match": "*" },
-		method: "PUT",
-		path: eventPath,
-		request,
-	});
-
-	if (!response.ok) {
-		await requireSuccessfulDavResponse(
-			response,
-			"Failed to create Yandex event",
-		);
-	}
-
-	return { id: `yandex:${uid}` };
 };

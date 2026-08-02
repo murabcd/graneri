@@ -9,6 +9,7 @@ const event = {
 	attendees: [],
 	canDelete: true,
 	canEdit: true,
+	guestPermissions: "manage",
 	calendarId: "calendar-1",
 	calendarName: "Work",
 	endAt: "2026-08-10T11:00:00.000Z",

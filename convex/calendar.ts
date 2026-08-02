@@ -378,22 +378,27 @@ const normalizeUpdateCalendarEventInput = (
 		title: input.title,
 	});
 	const providerEventId = input.providerEventId.trim();
+	const destinationCalendarId = input.destinationCalendarId.trim();
+	const seriesProviderEventId =
+		input.seriesProviderEventId?.trim() || undefined;
 
-	if (!providerEventId) {
+	if (!providerEventId || !destinationCalendarId) {
 		throw new ConvexError({
 			code: "INVALID_CALENDAR_EVENT_ID",
-			message: "The calendar event identifier is invalid.",
+			message: "The calendar event or destination identifier is invalid.",
 		});
 	}
 
 	return {
 		calendarId: normalized.calendarId,
+		destinationCalendarId,
 		description: normalized.description,
 		guests: normalized.guests,
 		location: normalized.location,
 		providerEventId,
 		recurrenceId: input.recurrenceId,
 		recurrenceIsAllDay: input.recurrenceIsAllDay,
+		seriesProviderEventId,
 		time: normalized.time,
 		title: normalized.title,
 	};
@@ -464,6 +469,125 @@ export const createCalendar = action({
 	},
 });
 
+export const updateCalendar = action({
+	args: {
+		calendarId: v.string(),
+		color: v.string(),
+		name: v.string(),
+		provider: calendarProviderValidator,
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to update calendars.",
+			});
+		}
+
+		const calendarId = args.calendarId.trim();
+		if (!calendarId) {
+			throw new ConvexError({
+				code: "INVALID_CALENDAR_ID",
+				message: "Calendar identifier is invalid.",
+			});
+		}
+		const input = normalizeCreateCalendarInput(args);
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
+
+		return await providerModule.updateCalendar(args.provider, {
+			calendarId,
+			color: input.color,
+			name: input.name,
+		});
+	},
+});
+
+export const setDefaultCalendar = action({
+	args: {
+		calendarId: v.string(),
+		provider: calendarProviderValidator,
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to set a default calendar.",
+			});
+		}
+
+		const calendarId = args.calendarId.trim();
+		if (!calendarId) {
+			throw new ConvexError({
+				code: "INVALID_CALENDAR_ID",
+				message: "Calendar identifier is invalid.",
+			});
+		}
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
+
+		return await providerModule.setDefaultCalendar(args.provider, {
+			calendarId,
+		});
+	},
+});
+
+export const deleteCalendar = action({
+	args: {
+		calendarId: v.string(),
+		destinationCalendarId: v.optional(v.string()),
+		provider: calendarProviderValidator,
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to delete calendars.",
+			});
+		}
+
+		const calendarId = args.calendarId.trim();
+		const destinationCalendarId = args.destinationCalendarId?.trim();
+		if (
+			!calendarId ||
+			(args.destinationCalendarId !== undefined && !destinationCalendarId)
+		) {
+			throw new ConvexError({
+				code: "INVALID_CALENDAR_ID",
+				message: "Calendar identifier is invalid.",
+			});
+		}
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
+
+		return await providerModule.removeCalendar(args.provider, {
+			calendarId,
+			destinationCalendarId,
+		});
+	},
+});
+
 export const createCalendarEvent = action({
 	args: {
 		calendarId: v.string(),
@@ -509,6 +633,7 @@ export const createCalendarEvent = action({
 export const updateCalendarEvent = action({
 	args: {
 		calendarId: v.string(),
+		destinationCalendarId: v.string(),
 		description: v.optional(v.string()),
 		guests: v.array(v.string()),
 		location: v.optional(v.string()),
@@ -516,6 +641,7 @@ export const updateCalendarEvent = action({
 		providerEventId: v.string(),
 		recurrenceId: v.optional(v.string()),
 		recurrenceIsAllDay: v.optional(v.boolean()),
+		seriesProviderEventId: v.optional(v.string()),
 		time: calendarEventTimeValidator,
 		title: v.string(),
 		workspaceId: v.id("workspaces"),
@@ -533,12 +659,14 @@ export const updateCalendarEvent = action({
 
 		const input = normalizeUpdateCalendarEventInput({
 			calendarId: args.calendarId,
+			destinationCalendarId: args.destinationCalendarId,
 			description: args.description,
 			guests: args.guests,
 			location: args.location,
 			providerEventId: args.providerEventId,
 			recurrenceId: args.recurrenceId,
 			recurrenceIsAllDay: args.recurrenceIsAllDay,
+			seriesProviderEventId: args.seriesProviderEventId,
 			time: args.time,
 			title: args.title,
 		});
@@ -587,6 +715,48 @@ export const deleteCalendarEvent = action({
 		});
 
 		return await providerModule.deleteEvent(args.provider, {
+			calendarId: args.calendarId,
+			providerEventId,
+			recurrenceId: args.recurrenceId,
+			recurrenceIsAllDay: args.recurrenceIsAllDay,
+		});
+	},
+});
+
+export const removeCalendarEvent = action({
+	args: {
+		calendarId: v.string(),
+		provider: calendarProviderValidator,
+		providerEventId: v.string(),
+		recurrenceId: v.optional(v.string()),
+		recurrenceIsAllDay: v.optional(v.boolean()),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const identity = await ctx.auth.getUserIdentity();
+
+		if (!identity) {
+			throw new ConvexError({
+				code: "UNAUTHENTICATED",
+				message: "Sign in to remove calendar events.",
+			});
+		}
+
+		const providerEventId = args.providerEventId.trim();
+		if (!providerEventId) {
+			throw new ConvexError({
+				code: "INVALID_CALENDAR_EVENT_ID",
+				message: "The calendar event identifier is invalid.",
+			});
+		}
+		const providerModule = createWorkspaceCalendarProviderModule({
+			ctx,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
+
+		return await providerModule.removeEvent(args.provider, {
 			calendarId: args.calendarId,
 			providerEventId,
 			recurrenceId: args.recurrenceId,

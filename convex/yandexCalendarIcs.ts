@@ -2,6 +2,11 @@ import {
 	createCalendarAttendee,
 	normalizeCalendarAttendees,
 } from "./calendarAttendees";
+import {
+	getCalendarWeekdayByIndex,
+	parseCalendarRecurrence,
+} from "./calendarRecurrence";
+import type { CalendarRecurrence } from "./calendarTypes";
 import type {
 	ParsedIcsEvent,
 	ParsedIcsProperty,
@@ -325,6 +330,7 @@ const normalizeEvent = ({
 	minimumEndAt,
 	overrideEndAt,
 	overrideStartAt,
+	recurrence,
 	recurrenceId,
 	selfEmail,
 }: {
@@ -334,6 +340,7 @@ const normalizeEvent = ({
 	minimumEndAt: number;
 	overrideEndAt?: Date;
 	overrideStartAt?: Date;
+	recurrence?: CalendarRecurrence;
 	recurrenceId?: string;
 	selfEmail: string;
 }): YandexUpcomingCalendarEvent | null => {
@@ -412,11 +419,30 @@ const normalizeEvent = ({
 	const organizerAttendee = attendees.find((attendee) => attendee.isOrganizer);
 	const canManageEvent =
 		calendar.canWrite && (organizerAttendee ? organizerAttendee.isSelf : true);
+	const isSelfAttendee = attendees.some((attendee) => attendee.isSelf);
+	const canInviteGuests = calendar.canWrite && isSelfAttendee;
+	const startParts = parseIcsDateParts(startProperty.value);
+	const normalizedRecurrence =
+		recurrence ??
+		(properties.RRULE
+			? parseCalendarRecurrence({
+					defaultWeekday: getCalendarWeekdayByIndex(
+						startParts ? getDatePartWeekday(startParts) : startAt.getUTCDay(),
+					),
+					recurrenceLines: [properties.RRULE.value],
+				})
+			: undefined);
 
 	return {
 		attendees,
 		canDelete: canManageEvent,
 		canEdit: canManageEvent,
+		guestPermissions: canManageEvent || canInviteGuests ? "manage" : "none",
+		canMove: canManageEvent,
+		canRemove:
+			calendar.canWrite &&
+			isSelfAttendee &&
+			Boolean(organizerAttendee && !organizerAttendee.isSelf),
 		calendarId: calendar.id,
 		calendarName: calendar.displayName,
 		description: description || undefined,
@@ -440,6 +466,7 @@ const normalizeEvent = ({
 		meetingUrl,
 		provider: "yandex",
 		providerEventId: href,
+		recurrence: normalizedRecurrence,
 		recurrenceId,
 		startAt: startAt.toISOString(),
 		title: properties.SUMMARY
@@ -533,6 +560,11 @@ const expandRecurringEvent = ({
 		return [];
 	}
 
+	const recurrence = parseCalendarRecurrence({
+		defaultWeekday: getCalendarWeekdayByIndex(getDatePartWeekday(startParts)),
+		recurrenceLines: [properties.RRULE.value],
+	});
+
 	const durationMs = Math.max(0, seriesEnd.getTime() - seriesStart.getTime());
 	const interval = Math.max(1, Number(rule.INTERVAL ?? "1"));
 	const until = rule.UNTIL
@@ -552,6 +584,7 @@ const expandRecurringEvent = ({
 				? undefined
 				: new Date(occurrenceStart.getTime() + durationMs),
 			overrideStartAt: overrideEvent ? undefined : occurrenceStart,
+			recurrence,
 			recurrenceId,
 			selfEmail,
 		});

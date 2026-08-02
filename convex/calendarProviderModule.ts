@@ -19,6 +19,19 @@ export type CreateCalendarInput = {
 	name: string;
 };
 
+export type UpdateCalendarInput = CreateCalendarInput & {
+	calendarId: string;
+};
+
+export type RemoveCalendarInput = {
+	calendarId: string;
+	destinationCalendarId?: string;
+};
+
+export type SetDefaultCalendarInput = {
+	calendarId: string;
+};
+
 export type DeleteCalendarEventInput = {
 	calendarId: string;
 	providerEventId: string;
@@ -26,13 +39,19 @@ export type DeleteCalendarEventInput = {
 	recurrenceIsAllDay?: boolean;
 };
 
+export type RemoveCalendarEventInput = DeleteCalendarEventInput;
+
 export type CalendarProviderAdapter = {
 	createCalendar: (input: CreateCalendarInput) => Promise<{ id: string }>;
 	createEvent: (input: CalendarEventDetailsInput) => Promise<{ id: string }>;
+	removeCalendar: (input: RemoveCalendarInput) => Promise<null>;
 	deleteEvent: (input: DeleteCalendarEventInput) => Promise<null>;
 	listEvents: (
 		input: CalendarProviderReadInput,
 	) => Promise<CalendarEventsFetchResult>;
+	removeEvent: (input: RemoveCalendarEventInput) => Promise<null>;
+	setDefaultCalendar: (input: SetDefaultCalendarInput) => Promise<null>;
+	updateCalendar: (input: UpdateCalendarInput) => Promise<null>;
 	updateEvent: (input: UpdateCalendarEventInput) => Promise<null>;
 };
 
@@ -102,6 +121,10 @@ export const createCalendarProviderModule = ({
 			provider: CalendarProvider,
 			input: CalendarEventDetailsInput,
 		) => await adapters[provider].createEvent(input),
+		removeCalendar: async (
+			provider: CalendarProvider,
+			input: RemoveCalendarInput,
+		) => await adapters[provider].removeCalendar(input),
 		deleteEvent: async (
 			provider: CalendarProvider,
 			input: DeleteCalendarEventInput,
@@ -128,6 +151,18 @@ export const createCalendarProviderModule = ({
 
 			return mergeCalendarEventResults(results);
 		},
+		removeEvent: async (
+			provider: CalendarProvider,
+			input: RemoveCalendarEventInput,
+		) => await adapters[provider].removeEvent(input),
+		setDefaultCalendar: async (
+			provider: CalendarProvider,
+			input: SetDefaultCalendarInput,
+		) => await adapters[provider].setDefaultCalendar(input),
+		updateCalendar: async (
+			provider: CalendarProvider,
+			input: UpdateCalendarInput,
+		) => await adapters[provider].updateCalendar(input),
 		updateEvent: async (
 			provider: CalendarProvider,
 			input: UpdateCalendarEventInput,

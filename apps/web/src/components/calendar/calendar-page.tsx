@@ -2,15 +2,6 @@
 
 import { Button } from "@workspace/ui/components/button";
 import {
-	DropdownMenu,
-	DropdownMenuCheckboxItem,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu";
-import {
 	Empty,
 	EmptyContent,
 	EmptyDescription,
@@ -19,10 +10,13 @@ import {
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
 import { cn } from "@workspace/ui/lib/utils";
-import { CalendarDays, ChevronDown, Plus, RefreshCw } from "lucide-react";
+import { CalendarDays, RefreshCw } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
 import { CalendarAgenda } from "@/components/calendar/calendar-agenda";
+import { CalendarDeleteDialog } from "@/components/calendar/calendar-delete-dialog";
+import { CalendarEditDialog } from "@/components/calendar/calendar-edit-dialog";
 import type { CalendarEventCreation } from "@/components/calendar/calendar-event-draft";
 import {
 	type CalendarEventPanelState,
@@ -30,7 +24,7 @@ import {
 } from "@/components/calendar/calendar-event-sheet";
 import { CalendarNewCalendarDialog } from "@/components/calendar/calendar-new-calendar-dialog";
 import { OPEN_NEW_CALENDAR_EVENT } from "@/components/calendar/calendar-page-events";
-import { CalendarSourceLabel } from "@/components/calendar/calendar-source-dot";
+import { CalendarSourceSelect } from "@/components/calendar/calendar-source-select";
 import {
 	type CalendarProvider,
 	type CalendarProviderOption,
@@ -39,6 +33,7 @@ import {
 } from "@/components/calendar/calendar-view-model";
 import { useCalendarAgendaSession } from "@/components/calendar/use-calendar-agenda-session";
 import { PageTitle } from "@/components/layout/page-title";
+import { getConnectionErrorMessage } from "@/components/settings/connection-error-message";
 
 export function CalendarPage({
 	accountId,
@@ -57,12 +52,16 @@ export function CalendarPage({
 		activeWorkspaceId,
 		createCalendar,
 		createEvent,
+		deleteCalendar,
 		deleteEvent,
+		removeEvent,
 		range,
 		retry,
+		setDefaultCalendar,
 		setAgendaStart,
 		shiftRange,
 		state,
+		updateCalendar,
 		updateEvent,
 	} = useCalendarAgendaSession(accountId);
 	const [calendarFilter, setCalendarFilter] = React.useState<{
@@ -73,6 +72,10 @@ export function CalendarPage({
 		workspaceId: activeWorkspaceId,
 	}));
 	const [newCalendarOpen, setNewCalendarOpen] = React.useState(false);
+	const [calendarToEdit, setCalendarToEdit] =
+		React.useState<CalendarSource | null>(null);
+	const [calendarToDelete, setCalendarToDelete] =
+		React.useState<CalendarSource | null>(null);
 	const [eventPanel, setEventPanel] =
 		React.useState<CalendarEventPanelState | null>(null);
 	const handleUpdateEvent = React.useCallback(
@@ -88,6 +91,13 @@ export function CalendarPage({
 			setEventPanel(null);
 		},
 		[deleteEvent],
+	);
+	const handleRemoveEvent = React.useCallback(
+		async (event: UpcomingCalendarEvent) => {
+			await removeEvent(event);
+			setEventPanel(null);
+		},
+		[removeEvent],
 	);
 
 	React.useEffect(() => {
@@ -149,6 +159,25 @@ export function CalendarPage({
 	const handleEditEvent = React.useCallback((event: UpcomingCalendarEvent) => {
 		setEventPanel({ event, mode: "edit" });
 	}, []);
+	const handleEditCalendar = React.useCallback((calendar: CalendarSource) => {
+		setCalendarToEdit(calendar);
+	}, []);
+	const handleDeleteCalendar = React.useCallback((calendar: CalendarSource) => {
+		setCalendarToDelete(calendar);
+	}, []);
+	const handleSetDefaultCalendar = React.useCallback(
+		async (calendar: CalendarSource) => {
+			try {
+				await setDefaultCalendar(calendar);
+				toast.success(`${calendar.name} is now the default calendar.`);
+			} catch (error) {
+				toast.error(
+					getConnectionErrorMessage(error, "Failed to set default calendar"),
+				);
+			}
+		},
+		[setDefaultCalendar],
+	);
 	const toggleCalendar = React.useCallback(
 		(calendarId: string) => {
 			setCalendarFilter((current) => {
@@ -199,6 +228,31 @@ export function CalendarPage({
 			providers={calendarProviders}
 		/>
 	);
+	const calendarManagementDialogs = (
+		<>
+			<CalendarEditDialog
+				calendar={calendarToEdit}
+				open={calendarToEdit !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setCalendarToEdit(null);
+					}
+				}}
+				onUpdateCalendar={updateCalendar}
+			/>
+			<CalendarDeleteDialog
+				calendar={calendarToDelete}
+				calendars={state.calendars}
+				open={calendarToDelete !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setCalendarToDelete(null);
+					}
+				}}
+				onDeleteCalendar={deleteCalendar}
+			/>
+		</>
+	);
 
 	if (state.status === "not_connected") {
 		return (
@@ -207,6 +261,7 @@ export function CalendarPage({
 					onOpenCalendarSettings={onOpenCalendarSettings}
 				/>
 				{eventSheet}
+				{calendarManagementDialogs}
 			</CalendarPageLayout>
 		);
 	}
@@ -219,6 +274,7 @@ export function CalendarPage({
 					onRetry={retry}
 				/>
 				{eventSheet}
+				{calendarManagementDialogs}
 			</CalendarPageLayout>
 		);
 	}
@@ -236,6 +292,7 @@ export function CalendarPage({
 				onEventClick={handleEventClick}
 				onEditEvent={handleEditEvent}
 				onDeleteEvent={handleDeleteEvent}
+				onRemoveEvent={handleRemoveEvent}
 				actions={
 					<>
 						{state.status === "error" ? (
@@ -253,12 +310,18 @@ export function CalendarPage({
 									? () => setNewCalendarOpen(true)
 									: null
 							}
+							onEditCalendar={handleEditCalendar}
+							onDeleteCalendar={handleDeleteCalendar}
+							onSetDefaultCalendar={(calendar) => {
+								void handleSetDefaultCalendar(calendar);
+							}}
 						/>
 					</>
 				}
 			/>
 			{eventSheet}
 			{newCalendarDialog}
+			{calendarManagementDialogs}
 		</CalendarPageLayout>
 	);
 }
@@ -286,62 +349,6 @@ function CalendarPageLayout({
 				</section>
 			</div>
 		</div>
-	);
-}
-
-function CalendarSourceSelect({
-	calendars,
-	selectedCalendarIds,
-	onToggleCalendar,
-	onCreateCalendar,
-}: {
-	calendars: CalendarSource[];
-	selectedCalendarIds: ReadonlySet<string>;
-	onToggleCalendar: (calendarId: string) => void;
-	onCreateCalendar: (() => void) | null;
-}) {
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					type="button"
-					variant="ghost"
-					size="sm"
-					className="w-auto min-w-0 cursor-pointer justify-start gap-2 font-normal"
-					aria-label="Calendars"
-				>
-					<CalendarDays data-icon="inline-start" />
-					<span>Calendars</span>
-					<ChevronDown data-icon="inline-end" />
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="w-52">
-				<DropdownMenuGroup>
-					{calendars.map((calendar) => (
-						<DropdownMenuCheckboxItem
-							key={calendar.id}
-							checked={selectedCalendarIds.has(calendar.id)}
-							className="pr-8 pl-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:right-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:left-auto"
-							onSelect={(event) => event.preventDefault()}
-							onCheckedChange={() => onToggleCalendar(calendar.id)}
-						>
-							<CalendarSourceLabel calendar={calendar} />
-						</DropdownMenuCheckboxItem>
-					))}
-				</DropdownMenuGroup>
-				{onCreateCalendar ? (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuGroup>
-							<DropdownMenuItem onSelect={onCreateCalendar}>
-								<Plus />
-								New calendar
-							</DropdownMenuItem>
-						</DropdownMenuGroup>
-					</>
-				) : null}
-			</DropdownMenuContent>
-		</DropdownMenu>
 	);
 }
 

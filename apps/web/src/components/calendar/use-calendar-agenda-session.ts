@@ -98,8 +98,16 @@ const retainAgendaState = (
 export function useCalendarAgendaSession(accountId: string | null) {
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const listCalendarEvents = useAction(api.calendar.listCalendarEvents);
-	const { createCalendar, createEvent, deleteEvent, updateEvent } =
-		useCalendarMutations(activeWorkspaceId);
+	const {
+		createCalendar,
+		createEvent,
+		deleteCalendar,
+		deleteEvent,
+		removeEvent,
+		setDefaultCalendar,
+		updateCalendar,
+		updateEvent,
+	} = useCalendarMutations(activeWorkspaceId);
 	const [requestWindow, setRequestWindow] = React.useState(() =>
 		toCalendarRequestWindow(getCalendarAgendaRange(new Date())),
 	);
@@ -315,12 +323,16 @@ export function useCalendarAgendaSession(accountId: string | null) {
 		activeWorkspaceId,
 		createCalendar,
 		createEvent,
+		deleteCalendar,
 		deleteEvent,
+		removeEvent,
+		setDefaultCalendar,
 		range,
 		retry,
 		setAgendaStart,
 		shiftRange,
 		state,
+		updateCalendar,
 		updateEvent,
 	};
 }

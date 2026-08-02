@@ -9,6 +9,7 @@ const attendeeResponseStatuses = new Set([
 	"tentative",
 	"unknown",
 ]);
+const guestPermissions = new Set(["none", "invite", "manage"]);
 
 const isRecord = (value) =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
@@ -53,6 +54,46 @@ const normalizeAttendee = (value) => {
 	};
 };
 
+const recurrenceFrequencies = new Set([
+	"daily",
+	"weekly",
+	"monthly",
+	"yearly",
+	"custom",
+]);
+const recurrenceWeekdays = new Set([
+	"sun",
+	"mon",
+	"tue",
+	"wed",
+	"thu",
+	"fri",
+	"sat",
+]);
+
+const normalizeRecurrence = (value) => {
+	if (value === undefined) {
+		return undefined;
+	}
+
+	if (
+		!isRecord(value) ||
+		!recurrenceFrequencies.has(value.frequency) ||
+		!Number.isSafeInteger(value.interval) ||
+		value.interval < 1 ||
+		!Array.isArray(value.weekdays) ||
+		value.weekdays.some((weekday) => !recurrenceWeekdays.has(weekday))
+	) {
+		return null;
+	}
+
+	return {
+		frequency: value.frequency,
+		interval: value.interval,
+		weekdays: [...new Set(value.weekdays)],
+	};
+};
+
 export const normalizeCalendarEventPayload = (value) => {
 	if (!isRecord(value) || !Array.isArray(value.attendees)) {
 		return null;
@@ -74,6 +115,7 @@ export const normalizeCalendarEventPayload = (value) => {
 	const title = normalizeRequiredString(value.title);
 	const startAt = normalizeTimestamp(value.startAt);
 	const endAt = normalizeTimestamp(value.endAt);
+	const recurrence = normalizeRecurrence(value.recurrence);
 
 	if (
 		!id ||
@@ -83,10 +125,14 @@ export const normalizeCalendarEventPayload = (value) => {
 		!title ||
 		!startAt ||
 		!endAt ||
+		recurrence === null ||
 		endAt < startAt ||
 		(value.provider !== "google" && value.provider !== "yandex") ||
 		typeof value.canDelete !== "boolean" ||
 		typeof value.canEdit !== "boolean" ||
+		!guestPermissions.has(value.guestPermissions) ||
+		typeof value.canMove !== "boolean" ||
+		typeof value.canRemove !== "boolean" ||
 		typeof value.isAllDay !== "boolean" ||
 		typeof value.isMeeting !== "boolean" ||
 		typeof value.isRecurring !== "boolean"
@@ -98,6 +144,9 @@ export const normalizeCalendarEventPayload = (value) => {
 		attendees,
 		canDelete: value.canDelete,
 		canEdit: value.canEdit,
+		guestPermissions: value.guestPermissions,
+		canMove: value.canMove,
+		canRemove: value.canRemove,
 		calendarId,
 		calendarName,
 		description: normalizeOptionalString(value.description),
@@ -111,7 +160,9 @@ export const normalizeCalendarEventPayload = (value) => {
 		meetingUrl: normalizeOptionalString(value.meetingUrl),
 		provider: value.provider,
 		providerEventId,
+		recurrence,
 		recurrenceId: normalizeOptionalString(value.recurrenceId),
+		seriesProviderEventId: normalizeOptionalString(value.seriesProviderEventId),
 		startAt,
 		title,
 	};

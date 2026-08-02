@@ -17,7 +17,14 @@ const {
 	fetchGoogleCalendarEvents,
 	getGoogleAuthContext,
 	listYandexUpcomingEvents,
+	removeGoogleCalendar,
+	removeGoogleCalendarEvent,
+	removeYandexCalendar,
+	removeYandexCalendarEvent,
+	setDefaultYandexCalendar,
+	updateGoogleCalendar,
 	updateGoogleCalendarEvent,
+	updateYandexCalendar,
 	updateYandexCalendarEvent,
 } = vi.hoisted(() => ({
 	createGoogleCalendar: vi.fn(),
@@ -29,7 +36,14 @@ const {
 	fetchGoogleCalendarEvents: vi.fn(),
 	getGoogleAuthContext: vi.fn(),
 	listYandexUpcomingEvents: vi.fn(),
+	removeGoogleCalendar: vi.fn(),
+	removeGoogleCalendarEvent: vi.fn(),
+	removeYandexCalendar: vi.fn(),
+	removeYandexCalendarEvent: vi.fn(),
+	setDefaultYandexCalendar: vi.fn(),
+	updateGoogleCalendar: vi.fn(),
 	updateGoogleCalendarEvent: vi.fn(),
+	updateYandexCalendar: vi.fn(),
 	updateYandexCalendarEvent: vi.fn(),
 }));
 
@@ -42,14 +56,24 @@ vi.mock("./googleCalendar", () => ({
 	createGoogleCalendarEvent,
 	deleteGoogleCalendarEvent,
 	fetchGoogleCalendarEvents,
+	removeGoogleCalendar,
+	removeGoogleCalendarEvent,
+	updateGoogleCalendar,
 	updateGoogleCalendarEvent,
 }));
 
 vi.mock("./yandexCalendar", () => ({
 	createYandexCalendar,
+	listYandexUpcomingEvents,
+	removeYandexCalendar,
+	setDefaultYandexCalendar,
+	updateYandexCalendar,
+}));
+
+vi.mock("./yandexCalendarEvents", () => ({
 	createYandexCalendarEvent,
 	deleteYandexCalendarEvent,
-	listYandexUpcomingEvents,
+	removeYandexCalendarEvent,
 	updateYandexCalendarEvent,
 }));
 
@@ -96,6 +120,7 @@ beforeEach(() => {
 	listYandexUpcomingEvents.mockResolvedValue(emptyResult);
 	createGoogleCalendar.mockResolvedValue({ id: "google-calendar" });
 	createYandexCalendar.mockResolvedValue({ id: "yandex-calendar" });
+	setDefaultYandexCalendar.mockResolvedValue(null);
 });
 
 describe("calendar provider adapters", () => {
@@ -136,6 +161,7 @@ describe("calendar provider adapters", () => {
 			color: "#10b981",
 			name: "Personal",
 		});
+		await adapter.setDefaultCalendar({ calendarId: "yandex-calendar" });
 
 		expect(getUserIdentity).toHaveBeenCalledOnce();
 		expect(runQuery).toHaveBeenCalledOnce();
@@ -149,6 +175,10 @@ describe("calendar provider adapters", () => {
 			color: "#10b981",
 			connection: yandexConnection,
 			name: "Personal",
+		});
+		expect(setDefaultYandexCalendar).toHaveBeenCalledWith({
+			calendarId: "yandex-calendar",
+			connection: yandexConnection,
 		});
 	});
 

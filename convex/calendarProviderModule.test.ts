@@ -30,6 +30,9 @@ const createEvent = ({
 	attendees: [],
 	canDelete: true,
 	canEdit: true,
+	guestPermissions: "manage",
+	canMove: true,
+	canRemove: false,
 	calendarId: `${provider}-calendar`,
 	calendarName: `${provider} calendar`,
 	endAt: "2026-07-27T11:00:00.000Z",
@@ -53,10 +56,14 @@ const createResult = ({
 	calendars: [
 		{
 			canCreateEvents: true,
+			canEdit: true,
+			canSetDefault: provider === "yandex",
 			color: provider === "google" ? "#3b82f6" : "#10b981",
 			id: `${provider}-calendar`,
 			name: `${provider} calendar`,
 			provider,
+			removalMode: "delete",
+			requiresEventMove: true,
 		},
 	],
 	connectedCalendarCount: 1,
@@ -69,8 +76,12 @@ const createProviderAdapter = (
 ): CalendarProviderAdapter => ({
 	createCalendar: vi.fn(async () => ({ id: "calendar-id" })),
 	createEvent: vi.fn(async () => ({ id: "event-id" })),
+	removeCalendar: vi.fn(async () => null),
 	deleteEvent: vi.fn(async () => null),
 	listEvents: vi.fn(async () => result),
+	removeEvent: vi.fn(async () => null),
+	setDefaultCalendar: vi.fn(async () => null),
+	updateCalendar: vi.fn(async () => null),
 	updateEvent: vi.fn(async () => null),
 	...overrides,
 });
@@ -88,6 +99,7 @@ const eventDetails: CalendarEventDetailsInput = {
 
 const updateDetails: UpdateCalendarEventInput = {
 	calendarId: "calendar-id",
+	destinationCalendarId: "calendar-id",
 	guests: [],
 	providerEventId: "event-id",
 	time: eventDetails.time,
@@ -111,10 +123,14 @@ describe("calendar provider module", () => {
 			calendars: [
 				{
 					canCreateEvents: true,
+					canEdit: true,
+					canSetDefault: true,
 					color: "#10b981",
 					id: "yandex-calendar",
 					name: "yandex calendar",
 					provider: "yandex",
+					removalMode: "delete",
+					requiresEventMove: true,
 				},
 			],
 			connectedCalendarCount: 1,
@@ -219,6 +235,13 @@ describe("calendar provider module", () => {
 			calendarId: "calendar-id",
 			providerEventId: "event-id",
 		});
+		await providerModule.removeEvent("yandex", {
+			calendarId: "calendar-id",
+			providerEventId: "event-id",
+		});
+		await providerModule.setDefaultCalendar("yandex", {
+			calendarId: "calendar-id",
+		});
 
 		expect(yandex.createCalendar).toHaveBeenCalledOnce();
 		expect(yandex.createEvent).toHaveBeenCalledWith(eventDetails);
@@ -227,9 +250,18 @@ describe("calendar provider module", () => {
 			calendarId: "calendar-id",
 			providerEventId: "event-id",
 		});
+		expect(yandex.removeEvent).toHaveBeenCalledWith({
+			calendarId: "calendar-id",
+			providerEventId: "event-id",
+		});
+		expect(yandex.setDefaultCalendar).toHaveBeenCalledWith({
+			calendarId: "calendar-id",
+		});
 		expect(google.createCalendar).not.toHaveBeenCalled();
 		expect(google.createEvent).not.toHaveBeenCalled();
 		expect(google.updateEvent).not.toHaveBeenCalled();
 		expect(google.deleteEvent).not.toHaveBeenCalled();
+		expect(google.removeEvent).not.toHaveBeenCalled();
+		expect(google.setDefaultCalendar).not.toHaveBeenCalled();
 	});
 });

@@ -39,6 +39,7 @@ const calendarEvent = {
 	attendees: [],
 	canDelete: true,
 	canEdit: true,
+	guestPermissions: "manage",
 	calendarId: "work",
 	calendarName: "Work",
 	endAt: "2026-07-26T11:00:00.000Z",

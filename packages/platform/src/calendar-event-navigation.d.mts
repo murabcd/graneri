@@ -17,6 +17,9 @@ export type CalendarEventPayload = {
 	attendees: CalendarEventAttendee[];
 	canDelete: boolean;
 	canEdit: boolean;
+	guestPermissions: "none" | "invite" | "manage";
+	canMove: boolean;
+	canRemove: boolean;
 	id: string;
 	calendarId: string;
 	calendarName: string;
@@ -32,7 +35,13 @@ export type CalendarEventPayload = {
 	location?: string;
 	provider: "google" | "yandex";
 	providerEventId: string;
+	recurrence?: {
+		frequency: "daily" | "weekly" | "monthly" | "yearly" | "custom";
+		interval: number;
+		weekdays: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;
+	};
 	recurrenceId?: string;
+	seriesProviderEventId?: string;
 };
 
 export function normalizeCalendarEventPayload(

@@ -19,16 +19,21 @@ import type { CalendarSource } from "../src/components/calendar/calendar-view-mo
 
 const calendar: CalendarSource = {
 	canCreateEvents: true,
+	canEdit: true,
+	canSetDefault: false,
 	color: "#3b82f6",
 	id: "work",
 	name: "Work",
 	provider: "google",
+	removalMode: "delete",
+	requiresEventMove: true,
 };
 
 const createEvent = (id: string): UpcomingCalendarEvent => ({
 	attendees: [],
 	canDelete: true,
 	canEdit: true,
+	guestPermissions: "manage",
 	calendarId: calendar.id,
 	calendarName: calendar.name,
 	endAt: "2026-07-27T11:00:00.000Z",

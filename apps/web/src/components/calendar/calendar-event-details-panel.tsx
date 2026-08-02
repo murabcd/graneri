@@ -1,9 +1,17 @@
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
-import { CalendarDays, Clock3, MapPin, UsersRound, Video } from "lucide-react";
+import {
+	AlignLeft,
+	CalendarDays,
+	Clock3,
+	MapPin,
+	UsersRound,
+	Video,
+} from "lucide-react";
 import type * as React from "react";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
 import { getAllDayDisplayDate } from "@/components/calendar/calendar-all-day-date";
+import { CalendarEventDescription } from "@/components/calendar/calendar-event-description";
 import { CalendarEventGuestList } from "@/components/calendar/calendar-event-guest-list";
 import { formatCalendarEventLocation } from "@/components/calendar/calendar-event-location";
 import { CalendarEventPanelHeader } from "@/components/calendar/calendar-event-panel-header";
@@ -123,6 +131,16 @@ export function CalendarEventDetailsPanel({
 						<CalendarEventGuestList guests={event.attendees} />
 					</CalendarEventDetailRow>
 
+					{event.description ? (
+						<CalendarEventDetailRow
+							align="start"
+							icon={AlignLeft}
+							iconClassName="mt-0.5"
+						>
+							<CalendarEventDescription description={event.description} />
+						</CalendarEventDetailRow>
+					) : null}
+
 					<div className="flex items-center justify-end gap-2">
 						<Button type="button" onClick={() => onTakeNote(event)}>
 							Take note
@@ -135,17 +153,29 @@ export function CalendarEventDetailsPanel({
 }
 
 function CalendarEventDetailRow({
+	align = "center",
 	children,
 	className,
 	icon: Icon,
+	iconClassName,
 }: {
+	align?: "center" | "start";
 	children: React.ReactNode;
 	className?: string;
 	icon: React.ComponentType<{ className?: string }>;
+	iconClassName?: string;
 }) {
 	return (
-		<div className={cn("flex items-center gap-3", className)}>
-			<Icon className="size-4 shrink-0 text-muted-foreground" />
+		<div
+			className={cn(
+				"flex gap-3",
+				align === "start" ? "items-start" : "items-center",
+				className,
+			)}
+		>
+			<Icon
+				className={cn("size-4 shrink-0 text-muted-foreground", iconClassName)}
+			/>
 			<div className="min-w-0 flex-1 text-sm">{children}</div>
 		</div>
 	);

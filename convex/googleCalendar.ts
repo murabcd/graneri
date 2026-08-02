@@ -6,10 +6,15 @@ import {
 	normalizeCalendarAttendees,
 } from "./calendarAttendees";
 import { requireCalendarEventEtag } from "./calendarProviderConcurrency";
+import {
+	getCalendarWeekdayFromDateValue,
+	parseCalendarRecurrence,
+} from "./calendarRecurrence";
 import type {
 	CalendarAttendee,
 	CalendarEventDetailsInput,
 	CalendarEventsFetchResult,
+	CalendarRecurrence,
 	CalendarSource,
 	UpcomingCalendarEvent,
 	UpdateCalendarEventInput,
@@ -17,6 +22,7 @@ import type {
 import {
 	fetchGoogleJsonWithRetry,
 	fetchGoogleResponseWithRetry,
+	GOOGLE_CALENDAR_LIST_MANAGE_SCOPE,
 	GOOGLE_CALENDAR_MANAGE_SCOPE,
 	GOOGLE_CALENDAR_SCOPE,
 	GOOGLE_CALENDAR_WRITE_SCOPE,
@@ -36,6 +42,7 @@ type GoogleCalendarListEntry = {
 	primary?: boolean;
 	selected?: boolean;
 	summary?: string;
+	summaryOverride?: string;
 };
 
 type GoogleCalendarEventsResponse = {
@@ -74,6 +81,7 @@ type GoogleCalendarEvent = {
 		email?: string;
 		self?: boolean;
 	};
+	guestsCanInviteOthers?: boolean;
 	guestsCanModify?: boolean;
 	recurrence?: string[];
 	recurringEventId?: string;
@@ -107,13 +115,28 @@ const getGoogleEventCapabilities = (
 	const hasDelegatedCalendarWrite = canManageAllCalendarEvents(calendar);
 	const isOrganizerOrCreator =
 		event.organizer?.self === true || event.creator?.self === true;
+	const isSelfAttendee =
+		event.attendees?.some((attendee) => attendee.self === true) ?? false;
+	const canEdit =
+		hasDelegatedCalendarWrite ||
+		isOrganizerOrCreator ||
+		event.guestsCanModify === true;
+	const isDefaultEvent = !event.eventType || event.eventType === "default";
+	const isWithinMoveAttendeeLimit = (event.attendees?.length ?? 0) <= 200;
 
 	return {
 		canDelete: hasDelegatedCalendarWrite || isOrganizerOrCreator,
-		canEdit:
-			hasDelegatedCalendarWrite ||
-			isOrganizerOrCreator ||
-			event.guestsCanModify === true,
+		canEdit,
+		guestPermissions: canEdit
+			? ("manage" as const)
+			: isSelfAttendee && event.guestsCanInviteOthers !== false
+				? ("invite" as const)
+				: ("none" as const),
+		canMove:
+			isDefaultEvent &&
+			isWithinMoveAttendeeLimit &&
+			(hasDelegatedCalendarWrite || isOrganizerOrCreator),
+		canRemove: isSelfAttendee && !isOrganizerOrCreator,
 	};
 };
 
@@ -218,6 +241,7 @@ const normalizeEvent = (
 	event: GoogleCalendarEvent,
 	minimumEndAt: number,
 	canWrite: boolean,
+	recurrence?: CalendarRecurrence,
 ): UpcomingCalendarEvent | null => {
 	if (!event.id || event.status === "cancelled") {
 		return null;
@@ -242,6 +266,9 @@ const normalizeEvent = (
 		attendees,
 		canDelete: canWrite && capabilities.canDelete,
 		canEdit: canWrite && capabilities.canEdit,
+		guestPermissions: canWrite ? capabilities.guestPermissions : "none",
+		canMove: canWrite && capabilities.canMove,
+		canRemove: canWrite && capabilities.canRemove,
 		calendarId: calendar.id,
 		calendarName: calendar.summary || "Calendar",
 		description: event.description?.trim() || undefined,
@@ -260,12 +287,88 @@ const normalizeEvent = (
 		meetingUrl,
 		provider: "google",
 		providerEventId: event.id,
+		recurrence:
+			recurrence ??
+			parseCalendarRecurrence({
+				defaultWeekday: getCalendarWeekdayFromDateValue(
+					event.start?.dateTime ?? event.start?.date,
+				),
+				recurrenceLines: event.recurrence ?? [],
+			}),
 		recurrenceId: event.originalStartTime
 			? (toDate(event.originalStartTime, false)?.toISOString() ?? undefined)
 			: undefined,
+		seriesProviderEventId: event.recurringEventId,
 		startAt: startAt.toISOString(),
 		title: event.summary?.trim() || "Untitled event",
 	};
+};
+
+const GOOGLE_RECURRENCE_FETCH_BATCH_SIZE = 8;
+
+const getGoogleEventRecurrence = (event: GoogleCalendarEvent) =>
+	parseCalendarRecurrence({
+		defaultWeekday: getCalendarWeekdayFromDateValue(
+			event.start?.dateTime ?? event.start?.date,
+		),
+		recurrenceLines: event.recurrence ?? [],
+	});
+
+const fetchGoogleSeriesRecurrences = async ({
+	authContext,
+	calendarId,
+	events,
+	googleTokens,
+}: {
+	authContext: GoogleAuthContext;
+	calendarId: string;
+	events: GoogleCalendarEvent[];
+	googleTokens: NonNullable<Awaited<ReturnType<typeof getGoogleAccessToken>>>;
+}) => {
+	const seriesIds = [
+		...new Set(
+			events.flatMap((event) =>
+				event.recurringEventId ? [event.recurringEventId] : [],
+			),
+		),
+	];
+	const recurrences = new Map<string, CalendarRecurrence>();
+
+	for (
+		let offset = 0;
+		offset < seriesIds.length;
+		offset += GOOGLE_RECURRENCE_FETCH_BATCH_SIZE
+	) {
+		const batch = seriesIds.slice(
+			offset,
+			offset + GOOGLE_RECURRENCE_FETCH_BATCH_SIZE,
+		);
+		const results = await Promise.allSettled(
+			batch.map(async (seriesId) => {
+				const eventUrl = new URL(
+					`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(seriesId)}`,
+				);
+				const seriesEvent = await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
+					authContext,
+					googleTokens,
+					eventUrl,
+				);
+
+				return {
+					recurrence: getGoogleEventRecurrence(seriesEvent),
+					seriesId,
+				};
+			}),
+		);
+
+		for (const result of results) {
+			if (result.status === "fulfilled" && result.value.recurrence) {
+				recurrences.set(result.value.seriesId, result.value.recurrence);
+			}
+		}
+	}
+
+	return recurrences;
 };
 
 export const fetchGoogleCalendarEvents = async ({
@@ -309,18 +412,47 @@ export const fetchGoogleCalendarEvents = async ({
 	const providerCalendars = (calendarList.items ?? []).filter(
 		isVisibleCalendar,
 	);
-	const calendars = providerCalendars.map(
-		(calendar) =>
-			({
-				canCreateEvents:
-					googleTokens.scopes.includes(GOOGLE_CALENDAR_WRITE_SCOPE) &&
-					canCreateEvents(calendar),
-				color: requireCalendarColor(calendar),
-				id: calendar.id,
-				name: calendar.summary || "Calendar",
-				provider: "google",
-			}) satisfies CalendarSource,
-	);
+	const calendars = providerCalendars.map((calendar) => {
+		const canManageCalendarList = googleTokens.scopes.includes(
+			GOOGLE_CALENDAR_LIST_MANAGE_SCOPE,
+		);
+		const canManageCalendarMetadata = googleTokens.scopes.includes(
+			GOOGLE_CALENDAR_MANAGE_SCOPE,
+		);
+		const canManageCalendarEvents = googleTokens.scopes.includes(
+			GOOGLE_CALENDAR_WRITE_SCOPE,
+		);
+		const isOwnedCalendar = calendar.accessRole === "owner";
+		const canDeleteOwnedCalendar =
+			isOwnedCalendar &&
+			canManageCalendarList &&
+			canManageCalendarMetadata &&
+			canManageCalendarEvents;
+		const removalMode =
+			calendar.primary === true
+				? ("none" as const)
+				: canDeleteOwnedCalendar
+					? ("delete" as const)
+					: !isOwnedCalendar && canManageCalendarList
+						? ("unsubscribe" as const)
+						: ("none" as const);
+
+		return {
+			canCreateEvents:
+				googleTokens.scopes.includes(GOOGLE_CALENDAR_WRITE_SCOPE) &&
+				canCreateEvents(calendar),
+			canEdit:
+				canManageCalendarList &&
+				(!isOwnedCalendar || canManageCalendarMetadata),
+			canSetDefault: false,
+			color: requireCalendarColor(calendar),
+			id: calendar.id,
+			name: calendar.summaryOverride || calendar.summary || "Calendar",
+			provider: "google",
+			removalMode,
+			requiresEventMove: removalMode === "delete",
+		} satisfies CalendarSource;
+	});
 	const hasWriteScope = googleTokens.scopes.includes(
 		GOOGLE_CALENDAR_WRITE_SCOPE,
 	);
@@ -343,10 +475,25 @@ export const fetchGoogleCalendarEvents = async ({
 					googleTokens,
 					eventsUrl,
 				);
+			const providerEvents = response.items ?? [];
+			const recurrences = await fetchGoogleSeriesRecurrences({
+				authContext,
+				calendarId: calendar.id,
+				events: providerEvents,
+				googleTokens,
+			});
 
-			return (response.items ?? [])
+			return providerEvents
 				.map((event) =>
-					normalizeEvent(calendar, event, minimumEndAt, hasWriteScope),
+					normalizeEvent(
+						calendar,
+						event,
+						minimumEndAt,
+						hasWriteScope,
+						event.recurringEventId
+							? recurrences.get(event.recurringEventId)
+							: undefined,
+					),
 				)
 				.filter((event): event is UpcomingCalendarEvent => event !== null);
 		}),
@@ -464,10 +611,14 @@ const normalizeGoogleCalendarEmail = (value: string) =>
 const getUpdatedGoogleAttendees = (
 	input: UpdateCalendarEventInput,
 	event: GoogleCalendarEvent,
+	options: { preserveExistingGuests?: boolean } = {},
 ) => {
+	const organizerEmail = event.organizer?.email
+		? normalizeGoogleCalendarEmail(event.organizer.email)
+		: null;
 	const existingAttendees = new Map(
 		(event.attendees ?? []).flatMap((attendee) => {
-			if (!attendee.email || attendee.organizer || attendee.self) {
+			if (!attendee.email || attendee.organizer) {
 				return [];
 			}
 
@@ -476,8 +627,17 @@ const getUpdatedGoogleAttendees = (
 			];
 		}),
 	);
+	const requestedEmails = options.preserveExistingGuests
+		? [...existingAttendees.keys(), ...input.guests]
+		: input.guests;
 
-	return input.guests.map((email) => {
+	return [
+		...new Set(
+			requestedEmails
+				.map(normalizeGoogleCalendarEmail)
+				.filter((email) => email !== organizerEmail),
+		),
+	].map((email) => {
 		const existing = existingAttendees.get(normalizeGoogleCalendarEmail(email));
 
 		return {
@@ -487,6 +647,24 @@ const getUpdatedGoogleAttendees = (
 				: {}),
 		};
 	});
+};
+
+const hasNewGoogleGuests = (
+	input: UpdateCalendarEventInput,
+	event: GoogleCalendarEvent,
+) => {
+	const existingEmails = new Set(
+		[
+			event.organizer?.email,
+			...(event.attendees ?? []).map((attendee) => attendee.email),
+		]
+			.filter((email): email is string => Boolean(email))
+			.map(normalizeGoogleCalendarEmail),
+	);
+
+	return input.guests.some(
+		(email) => !existingEmails.has(normalizeGoogleCalendarEmail(email)),
+	);
 };
 
 const getEventBody = (
@@ -531,21 +709,46 @@ export const updateGoogleCalendarEvent = async ({
 		eventUrl,
 	);
 
-	if (!getGoogleEventCapabilities(calendar, event).canEdit) {
+	const capabilities = getGoogleEventCapabilities(calendar, event);
+	if (!capabilities.canEdit && capabilities.guestPermissions === "none") {
 		throw new ConvexError({
 			code: "CALENDAR_EVENT_EDIT_FORBIDDEN",
 			message: "You do not have permission to edit this event.",
 		});
 	}
+	const isMoving = input.destinationCalendarId !== input.calendarId;
+	if (isMoving && !capabilities.canMove) {
+		throw new ConvexError({
+			code: "CALENDAR_EVENT_MOVE_FORBIDDEN",
+			message: "You do not have permission to move this event.",
+		});
+	}
+	if (!capabilities.canEdit && !hasNewGoogleGuests(input, event)) {
+		return null;
+	}
+	if (isMoving) {
+		await getWritableCalendar({
+			authContext,
+			calendarId: input.destinationCalendarId,
+		});
+	}
 
 	const concurrencyEtag = requireCalendarEventEtag(event.etag);
 	eventUrl.searchParams.set("sendUpdates", "all");
-	await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
+	const updatedEvent = await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
 		authContext,
 		googleTokens,
 		eventUrl,
 		{
-			body: JSON.stringify(getEventBody(input, event)),
+			body: JSON.stringify(
+				capabilities.canEdit
+					? getEventBody(input, event)
+					: {
+							attendees: getUpdatedGoogleAttendees(input, event, {
+								preserveExistingGuests: true,
+							}),
+						},
+			),
 			headers: {
 				"Content-Type": "application/json; charset=utf-8",
 				"If-Match": concurrencyEtag,
@@ -553,6 +756,79 @@ export const updateGoogleCalendarEvent = async ({
 			method: "PATCH",
 		},
 	);
+
+	if (isMoving) {
+		const moveEventId = input.seriesProviderEventId ?? input.providerEventId;
+		let moveEtag = updatedEvent.etag;
+		if (moveEventId !== input.providerEventId) {
+			const seriesUrl = new URL(
+				`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(moveEventId)}`,
+			);
+			const seriesEvent = await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
+				authContext,
+				googleTokens,
+				seriesUrl,
+			);
+			if (!getGoogleEventCapabilities(calendar, seriesEvent).canMove) {
+				throw new ConvexError({
+					code: "CALENDAR_EVENT_MOVE_FORBIDDEN",
+					message: "You do not have permission to move this event series.",
+				});
+			}
+			moveEtag = seriesEvent.etag;
+		}
+		const moveUrl = new URL(
+			`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(moveEventId)}/move`,
+		);
+		moveUrl.searchParams.set("destination", input.destinationCalendarId);
+		moveUrl.searchParams.set("sendUpdates", "all");
+		await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
+			authContext,
+			googleTokens,
+			moveUrl,
+			{
+				headers: { "If-Match": requireCalendarEventEtag(moveEtag) },
+				method: "POST",
+			},
+		);
+	}
+	return null;
+};
+
+export const removeGoogleCalendarEvent = async ({
+	authContext,
+	calendarId,
+	providerEventId,
+}: {
+	authContext: GoogleAuthContext;
+	calendarId: string;
+	providerEventId: string;
+}) => {
+	const { calendar, googleTokens } = await getWritableCalendar({
+		authContext,
+		calendarId,
+	});
+	const eventUrl = new URL(
+		`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(providerEventId)}`,
+	);
+	const event = await fetchGoogleJsonWithRetry<GoogleCalendarEvent>(
+		authContext,
+		googleTokens,
+		eventUrl,
+	);
+
+	if (!getGoogleEventCapabilities(calendar, event).canRemove) {
+		throw new ConvexError({
+			code: "CALENDAR_EVENT_REMOVE_FORBIDDEN",
+			message: "You do not have permission to remove this invitation.",
+		});
+	}
+
+	eventUrl.searchParams.set("sendUpdates", "all");
+	await fetchGoogleResponseWithRetry(authContext, googleTokens, eventUrl, {
+		headers: { "If-Match": requireCalendarEventEtag(event.etag) },
+		method: "DELETE",
+	});
 	return null;
 };
 
@@ -594,85 +870,8 @@ export const deleteGoogleCalendarEvent = async ({
 	return null;
 };
 
-export const createGoogleCalendar = async ({
-	authContext,
-	color,
-	name,
-}: {
-	authContext: GoogleAuthContext;
-	color: string;
-	name: string;
-}) => {
-	const googleTokens = await getGoogleAccessToken(authContext);
-
-	if (
-		!googleTokens?.accessToken ||
-		!googleTokens.scopes.includes(GOOGLE_CALENDAR_SCOPE) ||
-		!googleTokens.scopes.includes(GOOGLE_CALENDAR_WRITE_SCOPE) ||
-		!googleTokens.scopes.includes(GOOGLE_CALENDAR_MANAGE_SCOPE)
-	) {
-		throw new ConvexError({
-			code: "GOOGLE_CALENDAR_MANAGE_NOT_CONNECTED",
-			message: "Reconnect Google Calendar to allow calendar creation.",
-		});
-	}
-
-	const createdCalendar = await fetchGoogleJsonWithRetry<{ id: string }>(
-		authContext,
-		googleTokens,
-		new URL("https://www.googleapis.com/calendar/v3/calendars"),
-		{
-			body: JSON.stringify({ summary: name }),
-			headers: { "Content-Type": "application/json; charset=utf-8" },
-			method: "POST",
-		},
-	);
-
-	if (!createdCalendar.id) {
-		throw new Error("Google Calendar did not return the created calendar.");
-	}
-
-	const calendarListEntryUrl = new URL(
-		`https://www.googleapis.com/calendar/v3/users/me/calendarList/${encodeURIComponent(createdCalendar.id)}`,
-	);
-	calendarListEntryUrl.searchParams.set("colorRgbFormat", "true");
-
-	try {
-		await fetchGoogleJsonWithRetry<Record<string, unknown>>(
-			authContext,
-			googleTokens,
-			calendarListEntryUrl,
-			{
-				body: JSON.stringify({
-					backgroundColor: color,
-					foregroundColor: "#ffffff",
-					selected: true,
-				}),
-				headers: { "Content-Type": "application/json; charset=utf-8" },
-				method: "PATCH",
-			},
-		);
-	} catch (colorError) {
-		const calendarUrl = new URL(
-			`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(createdCalendar.id)}`,
-		);
-
-		try {
-			await fetchGoogleResponseWithRetry(
-				authContext,
-				googleTokens,
-				calendarUrl,
-				{ method: "DELETE" },
-			);
-		} catch (rollbackError) {
-			throw new AggregateError(
-				[colorError, rollbackError],
-				"Google Calendar creation failed and its rollback also failed.",
-			);
-		}
-
-		throw colorError;
-	}
-
-	return { id: createdCalendar.id };
-};
+export {
+	createGoogleCalendar,
+	removeGoogleCalendar,
+	updateGoogleCalendar,
+} from "./googleCalendarManagement";

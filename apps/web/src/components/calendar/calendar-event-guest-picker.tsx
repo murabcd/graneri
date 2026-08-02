@@ -36,12 +36,16 @@ const getPerson = (person: KnownPerson | undefined, email: string) =>
 	person ?? { email };
 
 export function CalendarEventGuestPicker({
+	disabled = false,
 	id,
+	lockedValues = [],
 	onValueChange,
 	value,
 	workspaceId,
 }: {
+	disabled?: boolean;
 	id: string;
+	lockedValues?: string[];
 	onValueChange: (value: string[]) => void;
 	value: string[];
 	workspaceId: Id<"workspaces">;
@@ -50,6 +54,10 @@ export function CalendarEventGuestPicker({
 	const inputRef = React.useRef<HTMLInputElement | null>(null);
 	const [searchValue, setSearchValue] = React.useState("");
 	const [showInputError, setShowInputError] = React.useState(false);
+	const lockedValueSet = React.useMemo(
+		() => new Set(normalizeCalendarGuestEmails(lockedValues)),
+		[lockedValues],
+	);
 	const deferredSearchValue = React.useDeferredValue(searchValue);
 	const result = useQuery(api.people.listForPicker, {
 		query: deferredSearchValue,
@@ -113,6 +121,7 @@ export function CalendarEventGuestPicker({
 		<>
 			<Combobox
 				autoHighlight
+				disabled={disabled}
 				filter={null}
 				inputValue={searchValue}
 				items={items}
@@ -133,7 +142,9 @@ export function CalendarEventGuestPicker({
 						return;
 					}
 
-					onValueChange(normalizeCalendarGuestEmails(nextValue));
+					onValueChange(
+						normalizeCalendarGuestEmails([...lockedValueSet, ...nextValue]),
+					);
 					setSearchValue("");
 					setShowInputError(false);
 				}}
@@ -143,7 +154,10 @@ export function CalendarEventGuestPicker({
 						{(selectedEmails: string[]) => (
 							<>
 								{selectedEmails.map((email) => (
-									<ComboboxChip key={email}>
+									<ComboboxChip
+										key={email}
+										showRemove={!lockedValueSet.has(email)}
+									>
 										{getCalendarPersonLabel(
 											getPerson(peopleByEmail.get(email), email),
 										)}

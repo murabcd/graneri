@@ -120,6 +120,7 @@ import { authClient } from "@/lib/auth-client";
 import { getAvatarSrc } from "@/lib/avatar";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
 import {
+	GOOGLE_CALENDAR_LIST_MANAGE_SCOPE,
 	GOOGLE_CALENDAR_MANAGE_SCOPE,
 	GOOGLE_CALENDAR_SCOPE,
 	GOOGLE_CALENDAR_WRITE_SCOPE,
@@ -557,7 +558,8 @@ function useCalendarSettingsController() {
 	const hasCalendarScope =
 		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_SCOPE) &&
 		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_WRITE_SCOPE) &&
-		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_MANAGE_SCOPE);
+		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_MANAGE_SCOPE) &&
+		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_LIST_MANAGE_SCOPE);
 	const isGoogleCalendarConnected = Boolean(googleAccount && hasCalendarScope);
 	const isYandexCalendarConnected = Boolean(yandexCalendarConnection);
 

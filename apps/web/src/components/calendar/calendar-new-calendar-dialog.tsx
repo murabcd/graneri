@@ -9,7 +9,6 @@ import {
 	DialogTitle,
 } from "@workspace/ui/components/dialog";
 import { Field, FieldGroup, FieldLabel } from "@workspace/ui/components/field";
-import { Input } from "@workspace/ui/components/input";
 import {
 	Select,
 	SelectContent,
@@ -18,22 +17,19 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@workspace/ui/components/select";
-import {
-	ToggleGroup,
-	ToggleGroupItem,
-} from "@workspace/ui/components/toggle-group";
 import * as React from "react";
 import { toast } from "sonner";
+import { CalendarDetailsFields } from "@/components/calendar/calendar-details-fields";
 import {
 	CALENDAR_COLOR_OPTIONS,
-	type CalendarColor,
 	type CalendarCreation,
 	type CalendarProvider,
+	type CalendarProviderColor,
 	type CalendarProviderOption,
 } from "@/components/calendar/calendar-view-model";
 import { getConnectionErrorMessage } from "@/components/settings/connection-error-message";
 
-const DEFAULT_CALENDAR_COLOR = CALENDAR_COLOR_OPTIONS[0].value;
+const DEFAULT_CALENDAR_COLOR = CALENDAR_COLOR_OPTIONS[0].providerColor;
 
 export function CalendarNewCalendarDialog({
 	onOpenChange,
@@ -47,7 +43,7 @@ export function CalendarNewCalendarDialog({
 	providers: CalendarProviderOption[];
 }) {
 	const [name, setName] = React.useState("");
-	const [color, setColor] = React.useState<CalendarColor>(
+	const [color, setColor] = React.useState<CalendarProviderColor>(
 		DEFAULT_CALENDAR_COLOR,
 	);
 	const [provider, setProvider] = React.useState<CalendarProvider | null>(
@@ -78,11 +74,7 @@ export function CalendarNewCalendarDialog({
 	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
-		const selectedColor = CALENDAR_COLOR_OPTIONS.find(
-			(option) => option.value === color,
-		);
-
-		if (!name.trim() || !selectedProvider || !selectedColor) {
+		if (!name.trim() || !selectedProvider) {
 			return;
 		}
 
@@ -90,7 +82,7 @@ export function CalendarNewCalendarDialog({
 
 		try {
 			await onCreateCalendar({
-				color: selectedColor.providerColor,
+				color,
 				name: name.trim(),
 				provider: selectedProvider,
 			});
@@ -155,47 +147,22 @@ export function CalendarNewCalendarDialog({
 								</Select>
 							</Field>
 						) : null}
-						<Field>
-							<FieldLabel htmlFor="new-calendar-name">Name</FieldLabel>
-							<Input
-								id="new-calendar-name"
-								autoFocus={open}
-								autoComplete="off"
-								placeholder="e.g. Side projects"
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								disabled={isCreating}
-							/>
-						</Field>
-						<Field>
-							<FieldLabel>Color</FieldLabel>
-							<ToggleGroup
-								type="single"
-								aria-label="Calendar color"
-								spacing={1}
-								value={color}
-								disabled={isCreating}
-								onValueChange={(value) => {
-									const option = CALENDAR_COLOR_OPTIONS.find(
-										(candidate) => candidate.value === value,
-									);
-
-									if (option) {
-										setColor(option.value);
-									}
-								}}
-							>
-								{CALENDAR_COLOR_OPTIONS.map((option) => (
-									<ToggleGroupItem
-										key={option.value}
-										value={option.value}
-										aria-label={option.label}
-										className="size-6 min-w-6 cursor-pointer rounded-full border-2 border-transparent p-0 data-[state=on]:border-ring"
-										style={{ backgroundColor: option.value }}
-									/>
-								))}
-							</ToggleGroup>
-						</Field>
+						<CalendarDetailsFields
+							autoFocus={open}
+							color={color}
+							disabled={isCreating}
+							name={name}
+							nameInputId="new-calendar-name"
+							onColorChange={(nextColor) => {
+								const option = CALENDAR_COLOR_OPTIONS.find(
+									(candidate) => candidate.providerColor === nextColor,
+								);
+								if (option) {
+									setColor(option.providerColor);
+								}
+							}}
+							onNameChange={setName}
+						/>
 					</FieldGroup>
 					<div className="flex items-center justify-end gap-2">
 						<Button

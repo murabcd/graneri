@@ -59,13 +59,18 @@ export const CALENDAR_COLOR_OPTIONS = [
 ] as const;
 
 export type CalendarProvider = "google" | "yandex";
+export type CalendarRemovalMode = "delete" | "none" | "unsubscribe";
 
 export type CalendarSource = {
 	canCreateEvents: boolean;
+	canEdit: boolean;
+	canSetDefault: boolean;
 	color: string;
 	id: string;
 	name: string;
 	provider: CalendarProvider;
+	removalMode: CalendarRemovalMode;
+	requiresEventMove: boolean;
 };
 
 export type CalendarColor = (typeof CALENDAR_COLOR_OPTIONS)[number]["value"];
@@ -76,6 +81,15 @@ export type CalendarCreation = {
 	color: CalendarProviderColor;
 	name: string;
 	provider: CalendarProvider;
+};
+
+export type CalendarUpdate = {
+	color: string;
+	name: string;
+};
+
+export type CalendarRemoval = {
+	destinationCalendarId?: string;
 };
 
 export type CalendarProviderOption = {

@@ -19,6 +19,9 @@ export const calendarEventSchema: z.ZodType<UpcomingCalendarEvent> = z.object({
 	),
 	canDelete: z.boolean(),
 	canEdit: z.boolean(),
+	guestPermissions: z.enum(["none", "invite", "manage"]),
+	canMove: z.boolean(),
+	canRemove: z.boolean(),
 	id: z.string(),
 	calendarId: z.string(),
 	calendarName: z.string(),
@@ -34,5 +37,15 @@ export const calendarEventSchema: z.ZodType<UpcomingCalendarEvent> = z.object({
 	location: z.string().optional(),
 	provider: z.enum(["google", "yandex"]),
 	providerEventId: z.string(),
+	recurrence: z
+		.object({
+			frequency: z.enum(["daily", "weekly", "monthly", "yearly", "custom"]),
+			interval: z.number().int().positive(),
+			weekdays: z.array(
+				z.enum(["sun", "mon", "tue", "wed", "thu", "fri", "sat"]),
+			),
+		})
+		.optional(),
 	recurrenceId: z.string().optional(),
+	seriesProviderEventId: z.string().optional(),
 });

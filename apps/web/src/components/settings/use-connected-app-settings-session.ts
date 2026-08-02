@@ -30,6 +30,7 @@ import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useLinkedAccounts } from "@/hooks/use-linked-accounts";
 import { authClient } from "@/lib/auth-client";
 import {
+	GOOGLE_CALENDAR_LIST_MANAGE_SCOPE,
 	GOOGLE_CALENDAR_MANAGE_SCOPE,
 	GOOGLE_CALENDAR_SCOPE,
 	GOOGLE_CALENDAR_SCOPES,
@@ -178,7 +179,8 @@ export function useConnectedAppSettingsSession() {
 	const hasGoogleCalendarToolScope =
 		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_SCOPE) &&
 		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_WRITE_SCOPE) &&
-		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_MANAGE_SCOPE);
+		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_MANAGE_SCOPE) &&
+		hasGoogleScope(googleAccount, GOOGLE_CALENDAR_LIST_MANAGE_SCOPE);
 	const hasGoogleDriveToolScope = hasGoogleScope(
 		googleAccount,
 		GOOGLE_DRIVE_SCOPE,

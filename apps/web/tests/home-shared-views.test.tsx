@@ -52,6 +52,7 @@ describe("HomeView", () => {
 					attendees: [],
 					canDelete: true,
 					canEdit: true,
+					guestPermissions: "manage",
 					id: "event-1",
 					calendarId: "work",
 					calendarName: "Work",

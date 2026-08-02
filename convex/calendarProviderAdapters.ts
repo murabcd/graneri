@@ -20,27 +20,44 @@ import {
 	createGoogleCalendarEvent,
 	deleteGoogleCalendarEvent,
 	fetchGoogleCalendarEvents,
+	removeGoogleCalendar,
+	removeGoogleCalendarEvent,
+	updateGoogleCalendar,
 	updateGoogleCalendarEvent,
 } from "./googleCalendar";
 import {
 	createYandexCalendar,
+	listYandexUpcomingEvents,
+	removeYandexCalendar,
+	setDefaultYandexCalendar,
+	updateYandexCalendar,
+} from "./yandexCalendar";
+import {
 	createYandexCalendarEvent,
 	deleteYandexCalendarEvent,
-	listYandexUpcomingEvents,
+	removeYandexCalendarEvent,
 	updateYandexCalendarEvent,
-} from "./yandexCalendar";
+} from "./yandexCalendarEvents";
 import type { YandexCalendarConnection } from "./yandexCalendarTypes";
 
 type YandexWriteOperation =
 	| "create_calendar"
 	| "create_event"
 	| "delete_event"
+	| "remove_calendar"
+	| "remove_event"
+	| "set_default_calendar"
+	| "update_calendar"
 	| "update_event";
 
 const YANDEX_CONNECTION_MESSAGES: Record<YandexWriteOperation, string> = {
 	create_calendar: "Connect Yandex Calendar to create a calendar.",
 	create_event: "Connect Yandex Calendar to create this event.",
 	delete_event: "Connect Yandex Calendar to delete this event.",
+	remove_calendar: "Connect Yandex Calendar to delete this calendar.",
+	remove_event: "Connect Yandex Calendar to remove this event.",
+	set_default_calendar: "Connect Yandex Calendar to set a default calendar.",
+	update_calendar: "Connect Yandex Calendar to update this calendar.",
 	update_event: "Connect Yandex Calendar to update this event.",
 };
 
@@ -82,6 +99,11 @@ export const createGoogleCalendarProviderAdapter = ({
 				authContext: await getGoogleContext(),
 				input,
 			}),
+		removeCalendar: async (input) =>
+			await removeGoogleCalendar({
+				authContext: await getGoogleContext(),
+				...input,
+			}),
 		deleteEvent: async (input) =>
 			await deleteGoogleCalendarEvent({
 				authContext: await getGoogleContext(),
@@ -89,6 +111,24 @@ export const createGoogleCalendarProviderAdapter = ({
 				providerEventId: input.providerEventId,
 			}),
 		listEvents: listGoogleEvents,
+		removeEvent: async (input) =>
+			await removeGoogleCalendarEvent({
+				authContext: await getGoogleContext(),
+				calendarId: input.calendarId,
+				providerEventId: input.providerEventId,
+			}),
+		setDefaultCalendar: async () => {
+			throw new ConvexError({
+				code: "CALENDAR_DEFAULT_UNSUPPORTED",
+				message:
+					"Google Calendar does not allow changing the primary calendar.",
+			});
+		},
+		updateCalendar: async (input) =>
+			await updateGoogleCalendar({
+				authContext: await getGoogleContext(),
+				...input,
+			}),
 		updateEvent: async (input: UpdateCalendarEventInput) =>
 			await updateGoogleCalendarEvent({
 				authContext: await getGoogleContext(),
@@ -173,12 +213,32 @@ export const createYandexCalendarProviderAdapter = ({
 				connection: await requireYandexConnection("create_event"),
 				input,
 			}),
+		removeCalendar: async (input) =>
+			await removeYandexCalendar({
+				connection: await requireYandexConnection("remove_calendar"),
+				...input,
+			}),
 		deleteEvent: async (input) =>
 			await deleteYandexCalendarEvent({
 				connection: await requireYandexConnection("delete_event"),
 				...input,
 			}),
 		listEvents: listYandexEvents,
+		removeEvent: async (input) =>
+			await removeYandexCalendarEvent({
+				connection: await requireYandexConnection("remove_event"),
+				...input,
+			}),
+		setDefaultCalendar: async (input) =>
+			await setDefaultYandexCalendar({
+				connection: await requireYandexConnection("set_default_calendar"),
+				...input,
+			}),
+		updateCalendar: async (input) =>
+			await updateYandexCalendar({
+				connection: await requireYandexConnection("update_calendar"),
+				...input,
+			}),
 		updateEvent: async (input: UpdateCalendarEventInput) =>
 			await updateYandexCalendarEvent({
 				connection: await requireYandexConnection("update_event"),

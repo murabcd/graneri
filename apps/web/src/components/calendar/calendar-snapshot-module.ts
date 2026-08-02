@@ -7,15 +7,19 @@ import { createSessionSnapshotCache } from "@/lib/session-snapshot-cache";
 import type { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-const CALENDAR_SNAPSHOT_STORAGE_KEY = "graneri:calendar-snapshots:v1";
+const CALENDAR_SNAPSHOT_STORAGE_KEY = "graneri:calendar-snapshots:v2";
 const MAX_CALENDAR_SNAPSHOTS = 14;
 
 const calendarSourceSchema: z.ZodType<CalendarSource> = z.object({
 	canCreateEvents: z.boolean(),
+	canEdit: z.boolean(),
+	canSetDefault: z.boolean(),
 	color: z.string(),
 	id: z.string(),
 	name: z.string(),
 	provider: z.enum(["google", "yandex"]),
+	removalMode: z.enum(["delete", "none", "unsubscribe"]),
+	requiresEventMove: z.boolean(),
 });
 
 const agendaSnapshotEntrySchema = z.object({
@@ -50,7 +54,7 @@ const calendarSnapshotEntrySchema = z.discriminatedUnion("kind", [
 
 const calendarSnapshotStorageSchema = z.object({
 	snapshots: z.array(calendarSnapshotEntrySchema),
-	version: z.literal(1),
+	version: z.literal(2),
 });
 
 export type CalendarRequestWindow = {
@@ -113,7 +117,7 @@ const snapshotCache = createSessionSnapshotCache<CalendarSnapshotEntry>({
 		return parsedValue.success ? parsedValue.data.snapshots : null;
 	},
 	maxEntries: MAX_CALENDAR_SNAPSHOTS,
-	serialize: (snapshots) => JSON.stringify({ snapshots, version: 1 }),
+	serialize: (snapshots) => JSON.stringify({ snapshots, version: 2 }),
 	storageKey: CALENDAR_SNAPSHOT_STORAGE_KEY,
 });
 

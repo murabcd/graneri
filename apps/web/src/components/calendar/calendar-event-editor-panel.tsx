@@ -71,6 +71,15 @@ export function CalendarEventEditorPanel({
 		() => calendars.filter((calendar) => calendar.canCreateEvents),
 		[calendars],
 	);
+	const availableCalendars = React.useMemo(
+		() =>
+			event
+				? writableCalendars.filter(
+						(calendar) => calendar.provider === event.provider,
+					)
+				: writableCalendars,
+		[event, writableCalendars],
+	);
 	const [draft, setDraft] = React.useState(() =>
 		event
 			? createCalendarEventDraftFromEvent(event)
@@ -78,9 +87,34 @@ export function CalendarEventEditorPanel({
 	);
 	const [titleError, setTitleError] = React.useState<string | null>(null);
 	const [isSaving, setIsSaving] = React.useState(false);
-	const selectedCalendar = writableCalendars.find(
+	const selectedCalendar = availableCalendars.find(
 		(calendar) => calendar.id === draft.calendarId,
 	);
+	const isGuestOnlyEdit = Boolean(
+		event && !event.canEdit && event.guestPermissions !== "none",
+	);
+	const canEditEventDetails = !event || event.canEdit;
+	const canEditEventGuests = event?.guestPermissions !== "none";
+	const canMoveEvent = !event || event.canMove;
+	const initialGuestEmails = React.useMemo(
+		() =>
+			(event?.attendees ?? [])
+				.filter((attendee) => !attendee.isOrganizer && !attendee.isSelf)
+				.map((attendee) => attendee.email),
+		[event],
+	);
+	const lockedGuestEmails = React.useMemo(
+		() => (event?.guestPermissions === "invite" ? initialGuestEmails : []),
+		[event?.guestPermissions, initialGuestEmails],
+	);
+	const hasGuestChanges = React.useMemo(() => {
+		if (draft.guests.length !== initialGuestEmails.length) {
+			return true;
+		}
+
+		const initialGuestEmailSet = new Set(initialGuestEmails);
+		return draft.guests.some((email) => !initialGuestEmailSet.has(email));
+	}, [draft.guests, initialGuestEmails]);
 
 	const patchDraft = React.useCallback(
 		(partial: Partial<CalendarEventDraft>) => {
@@ -151,7 +185,10 @@ export function CalendarEventEditorPanel({
 					<FieldSet>
 						<FieldLegend className="sr-only">Event details</FieldLegend>
 						<FieldGroup>
-							<Field data-invalid={Boolean(titleError)}>
+							<Field
+								data-disabled={!canEditEventDetails || undefined}
+								data-invalid={Boolean(titleError)}
+							>
 								<FieldLabel
 									htmlFor="calendar-event-title"
 									className={FIELD_LABEL_CLASS_NAME}
@@ -161,6 +198,7 @@ export function CalendarEventEditorPanel({
 								<Input
 									id="calendar-event-title"
 									aria-invalid={Boolean(titleError)}
+									disabled={!canEditEventDetails}
 									placeholder="Add title"
 									value={draft.title}
 									onChange={(event) => {
@@ -173,7 +211,7 @@ export function CalendarEventEditorPanel({
 								<FieldError className="text-xs">{titleError}</FieldError>
 							</Field>
 
-							<Field>
+							<Field data-disabled={!canMoveEvent || undefined}>
 								<FieldLabel
 									htmlFor="calendar-event-calendar"
 									className={FIELD_LABEL_CLASS_NAME}
@@ -181,7 +219,7 @@ export function CalendarEventEditorPanel({
 									Calendar
 								</FieldLabel>
 								<Select
-									disabled={Boolean(event)}
+									disabled={!canMoveEvent}
 									value={draft.calendarId}
 									onValueChange={(calendarId) => patchDraft({ calendarId })}
 								>
@@ -204,7 +242,7 @@ export function CalendarEventEditorPanel({
 									</SelectTrigger>
 									<SelectContent align="end">
 										<SelectGroup>
-											{writableCalendars.map((calendar) => (
+											{availableCalendars.map((calendar) => (
 												<SelectItem key={calendar.id} value={calendar.id}>
 													<CalendarSourceLabel calendar={calendar} />
 												</SelectItem>
@@ -212,9 +250,13 @@ export function CalendarEventEditorPanel({
 										</SelectGroup>
 									</SelectContent>
 								</Select>
-								{event ? (
+								{event?.isRecurring && canMoveEvent ? (
 									<FieldDescription className="text-xs">
-										Events stay in their original calendar.
+										Moving calendars applies to the entire series.
+									</FieldDescription>
+								) : event && !canMoveEvent ? (
+									<FieldDescription className="text-xs">
+										You do not have permission to move this event.
 									</FieldDescription>
 								) : writableCalendars.length === 0 ? (
 									<FieldDescription className="text-xs">
@@ -223,7 +265,10 @@ export function CalendarEventEditorPanel({
 								) : null}
 							</Field>
 
-							<Field orientation="horizontal">
+							<Field
+								data-disabled={!canEditEventDetails || undefined}
+								orientation="horizontal"
+							>
 								<FieldLabel
 									htmlFor="calendar-event-all-day"
 									className={FIELD_LABEL_CLASS_NAME}
@@ -233,6 +278,7 @@ export function CalendarEventEditorPanel({
 								<Switch
 									id="calendar-event-all-day"
 									checked={draft.allDay}
+									disabled={!canEditEventDetails}
 									onCheckedChange={(allDay) => patchDraft({ allDay })}
 								/>
 							</Field>
@@ -241,6 +287,7 @@ export function CalendarEventEditorPanel({
 								id="calendar-event-date-range"
 								label="Date & time"
 								allDay={draft.allDay}
+								disabled={!canEditEventDetails}
 								startDateValue={draft.startDate}
 								endDateValue={draft.endDate}
 								startTimeValue={draft.startTime}
@@ -253,7 +300,7 @@ export function CalendarEventEditorPanel({
 								</FieldDescription>
 							) : null}
 
-							<Field>
+							<Field data-disabled={!canEditEventDetails || undefined}>
 								<FieldLabel
 									htmlFor="calendar-event-location"
 									className={FIELD_LABEL_CLASS_NAME}
@@ -262,6 +309,7 @@ export function CalendarEventEditorPanel({
 								</FieldLabel>
 								<Input
 									id="calendar-event-location"
+									disabled={!canEditEventDetails}
 									placeholder="Add a room or link"
 									value={draft.location}
 									onChange={(event) =>
@@ -270,7 +318,7 @@ export function CalendarEventEditorPanel({
 								/>
 							</Field>
 
-							<Field>
+							<Field data-disabled={!canEditEventGuests || undefined}>
 								<FieldLabel
 									htmlFor="calendar-event-guests"
 									className={FIELD_LABEL_CLASS_NAME}
@@ -278,14 +326,16 @@ export function CalendarEventEditorPanel({
 									Guests
 								</FieldLabel>
 								<CalendarEventGuestPicker
+									disabled={!canEditEventGuests}
 									id="calendar-event-guests"
+									lockedValues={lockedGuestEmails}
 									value={draft.guests}
 									workspaceId={workspaceId}
 									onValueChange={(guests) => patchDraft({ guests })}
 								/>
 							</Field>
 
-							<Field>
+							<Field data-disabled={!canEditEventDetails || undefined}>
 								<FieldLabel
 									htmlFor="calendar-event-description"
 									className={FIELD_LABEL_CLASS_NAME}
@@ -294,6 +344,7 @@ export function CalendarEventEditorPanel({
 								</FieldLabel>
 								<Textarea
 									id="calendar-event-description"
+									disabled={!canEditEventDetails}
 									className="min-h-28 resize-none"
 									placeholder="Add notes or an agenda"
 									value={draft.description}
@@ -306,7 +357,14 @@ export function CalendarEventEditorPanel({
 					</FieldSet>
 
 					<div className="mt-6 flex justify-end">
-						<Button type="submit" disabled={isSaving || !selectedCalendar}>
+						<Button
+							type="submit"
+							disabled={
+								isSaving ||
+								!selectedCalendar ||
+								(isGuestOnlyEdit && !hasGuestChanges)
+							}
+						>
 							{isSaving
 								? event
 									? "Saving…"

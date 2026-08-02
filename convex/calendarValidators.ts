@@ -16,10 +16,41 @@ export const calendarAttendeeValidator = v.object({
 	responseStatus: calendarAttendeeResponseStatusValidator,
 });
 
+export const calendarGuestPermissionsValidator = v.union(
+	v.literal("none"),
+	v.literal("invite"),
+	v.literal("manage"),
+);
+
+const calendarWeekdayValidator = v.union(
+	v.literal("sun"),
+	v.literal("mon"),
+	v.literal("tue"),
+	v.literal("wed"),
+	v.literal("thu"),
+	v.literal("fri"),
+	v.literal("sat"),
+);
+
+const calendarRecurrenceValidator = v.object({
+	frequency: v.union(
+		v.literal("daily"),
+		v.literal("weekly"),
+		v.literal("monthly"),
+		v.literal("yearly"),
+		v.literal("custom"),
+	),
+	interval: v.number(),
+	weekdays: v.array(calendarWeekdayValidator),
+});
+
 export const upcomingCalendarEventValidator = v.object({
 	attendees: v.array(calendarAttendeeValidator),
 	canDelete: v.boolean(),
 	canEdit: v.boolean(),
+	guestPermissions: calendarGuestPermissionsValidator,
+	canMove: v.boolean(),
+	canRemove: v.boolean(),
 	calendarId: v.string(),
 	calendarName: v.string(),
 	description: v.optional(v.string()),
@@ -33,7 +64,9 @@ export const upcomingCalendarEventValidator = v.object({
 	meetingUrl: v.optional(v.string()),
 	provider: v.union(v.literal("google"), v.literal("yandex")),
 	providerEventId: v.string(),
+	recurrence: v.optional(calendarRecurrenceValidator),
 	recurrenceId: v.optional(v.string()),
+	seriesProviderEventId: v.optional(v.string()),
 	startAt: v.string(),
 	title: v.string(),
 });
@@ -42,14 +75,25 @@ export const calendarEventSnapshotValidator = upcomingCalendarEventValidator
 	.omit("attendees")
 	.omit("canDelete")
 	.omit("canEdit")
+	.omit("guestPermissions")
+	.omit("canMove")
+	.omit("canRemove")
 	.extend({ key: v.string() });
 
 const calendarSourceValidator = v.object({
 	canCreateEvents: v.boolean(),
+	canEdit: v.boolean(),
+	canSetDefault: v.boolean(),
 	color: v.string(),
 	id: v.string(),
 	name: v.string(),
 	provider: v.union(v.literal("google"), v.literal("yandex")),
+	removalMode: v.union(
+		v.literal("delete"),
+		v.literal("none"),
+		v.literal("unsubscribe"),
+	),
+	requiresEventMove: v.boolean(),
 });
 
 export const calendarEventTimeValidator = v.union(

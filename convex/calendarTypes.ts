@@ -1,5 +1,24 @@
 export type CalendarProvider = "google" | "yandex";
 
+export type CalendarRemovalMode = "delete" | "none" | "unsubscribe";
+
+export type CalendarGuestPermissions = "none" | "invite" | "manage";
+
+export type CalendarWeekday =
+	| "sun"
+	| "mon"
+	| "tue"
+	| "wed"
+	| "thu"
+	| "fri"
+	| "sat";
+
+export type CalendarRecurrence = {
+	frequency: "daily" | "weekly" | "monthly" | "yearly" | "custom";
+	interval: number;
+	weekdays: CalendarWeekday[];
+};
+
 export type CalendarAttendeeResponseStatus =
 	| "accepted"
 	| "declined"
@@ -17,16 +36,23 @@ export type CalendarAttendee = {
 
 export type CalendarSource = {
 	canCreateEvents: boolean;
+	canEdit: boolean;
+	canSetDefault: boolean;
 	color: string;
 	id: string;
 	name: string;
 	provider: CalendarProvider;
+	removalMode: CalendarRemovalMode;
+	requiresEventMove: boolean;
 };
 
 export type UpcomingCalendarEvent = {
 	attendees: CalendarAttendee[];
 	canDelete: boolean;
 	canEdit: boolean;
+	guestPermissions: CalendarGuestPermissions;
+	canMove: boolean;
+	canRemove: boolean;
 	calendarId: string;
 	calendarName: string;
 	description?: string;
@@ -40,7 +66,9 @@ export type UpcomingCalendarEvent = {
 	meetingUrl?: string;
 	provider: CalendarProvider;
 	providerEventId: string;
+	recurrence?: CalendarRecurrence;
 	recurrenceId?: string;
+	seriesProviderEventId?: string;
 	startAt: string;
 	title: string;
 };
@@ -78,12 +106,14 @@ export type CreateCalendarEventInput = CalendarEventDetailsInput & {
 
 export type UpdateCalendarEventInput = {
 	calendarId: string;
+	destinationCalendarId: string;
 	description?: string;
 	guests: string[];
 	location?: string;
 	providerEventId: string;
 	recurrenceId?: string;
 	recurrenceIsAllDay?: boolean;
+	seriesProviderEventId?: string;
 	time: CalendarEventTime;
 	title: string;
 };

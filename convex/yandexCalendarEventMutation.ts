@@ -54,6 +54,72 @@ const getRecurrenceIdIso = (event: ParsedIcsEvent) => {
 	);
 };
 
+type IcsEventRange = { end: number; start: number };
+
+const parseEditableYandexCalendar = (calendarData: string) => {
+	const lines = unfoldIcsLines(calendarData)
+		.split("\n")
+		.map((line) => line.trimEnd());
+	const ranges = getIcsEventBlockRanges(lines);
+	const baseRange = ranges.find(({ end, start }) => {
+		const event = parseIcsEventBlock(lines.slice(start, end + 1));
+		return event && !event.properties["RECURRENCE-ID"];
+	});
+
+	if (!baseRange) {
+		throw new Error("The Yandex event resource has no editable event.");
+	}
+
+	return {
+		baseEventLines: lines.slice(baseRange.start, baseRange.end + 1),
+		baseRange,
+		lines,
+		ranges,
+	};
+};
+
+const findIcsEventRange = ({
+	lines,
+	ranges,
+	recurrenceId,
+}: {
+	lines: string[];
+	ranges: IcsEventRange[];
+	recurrenceId: string;
+}) =>
+	ranges.find(({ end, start }) => {
+		const event = parseIcsEventBlock(lines.slice(start, end + 1));
+		return event && getRecurrenceIdIso(event) === recurrenceId;
+	});
+
+const replaceOrAppendIcsEvent = ({
+	eventLines,
+	lines,
+	targetRange,
+}: {
+	eventLines: string[];
+	lines: string[];
+	targetRange?: IcsEventRange;
+}) => {
+	if (targetRange) {
+		lines.splice(
+			targetRange.start,
+			targetRange.end - targetRange.start + 1,
+			...eventLines,
+		);
+		return;
+	}
+
+	const calendarEnd = lines.lastIndexOf("END:VCALENDAR");
+	if (calendarEnd < 0) {
+		throw new Error("The Yandex event resource has no calendar boundary.");
+	}
+	lines.splice(calendarEnd, 0, ...eventLines);
+};
+
+const serializeYandexCalendarLines = (lines: string[]) =>
+	`${lines.flatMap(foldIcsLine).join("\r\n")}\r\n`;
+
 const getPreservedEventLines = ({
 	eventLines,
 	isOverride,
@@ -136,6 +202,43 @@ const getUpdatedYandexAttendeeLines = ({
 		(guest) =>
 			existingLinesByEmail.get(normalizeYandexAttendeeEmail(guest)) ??
 			`ATTENDEE;ROLE=REQ-PARTICIPANT:mailto:${guest}`,
+	);
+};
+
+const getManagedYandexAttendeeLines = ({
+	eventLines,
+	guests,
+	selfEmail,
+}: {
+	eventLines: string[];
+	guests: string[];
+	selfEmail: string;
+}) => {
+	const existingLinesByEmail = new Map(
+		eventLines.flatMap((line) => {
+			if (getIcsLinePropertyName(line) !== "ATTENDEE") {
+				return [];
+			}
+
+			const email = normalizeYandexAttendeeEmail(getIcsPropertyValue(line));
+			return email ? ([[email, line]] as const) : [];
+		}),
+	);
+	const organizerLine = eventLines.find(
+		(line) => getIcsLinePropertyName(line) === "ORGANIZER",
+	);
+	const organizerEmail = organizerLine
+		? normalizeYandexAttendeeEmail(getIcsPropertyValue(organizerLine))
+		: null;
+	const normalizedSelfEmail = normalizeYandexAttendeeEmail(selfEmail);
+	const attendeeEmails = [normalizedSelfEmail, ...guests]
+		.map(normalizeYandexAttendeeEmail)
+		.filter((email) => email && email !== organizerEmail);
+
+	return [...new Set(attendeeEmails)].map(
+		(email) =>
+			existingLinesByEmail.get(email) ??
+			`ATTENDEE;ROLE=REQ-PARTICIPANT:mailto:${email}`,
 	);
 };
 
@@ -248,6 +351,197 @@ const buildCancelledYandexEventLines = ({
 	];
 };
 
+const getGuestOverridePreservedLines = (baseEventLines: string[]) => {
+	const excludedProperties = new Set([
+		"ATTENDEE",
+		"CREATED",
+		"DTEND",
+		"DTSTAMP",
+		"DTSTART",
+		"DURATION",
+		"EXDATE",
+		"LAST-MODIFIED",
+		"RDATE",
+		"RECURRENCE-ID",
+		"RRULE",
+		"SEQUENCE",
+		"STATUS",
+		"UID",
+	]);
+
+	return baseEventLines
+		.slice(1, -1)
+		.filter((line) => !excludedProperties.has(getIcsLinePropertyName(line)));
+};
+
+const buildYandexGuestOverrideLines = ({
+	baseEventLines,
+	guests,
+	now,
+	recurrenceId,
+	selfEmail,
+}: {
+	baseEventLines: string[];
+	guests: string[];
+	now: number;
+	recurrenceId: string;
+	selfEmail: string;
+}) => {
+	const baseEvent = parseIcsEventBlock(baseEventLines);
+	const uid = baseEvent?.properties.UID?.value;
+	const startProperty = baseEvent?.properties.DTSTART;
+	const endProperty = baseEvent?.properties.DTEND ?? startProperty;
+	const baseStart = startProperty
+		? parseIcsDateValue(startProperty.value, startProperty.parameters, false)
+		: null;
+	const baseEnd = endProperty
+		? parseIcsDateValue(endProperty.value, endProperty.parameters, true)
+		: null;
+	const occurrenceStart = new Date(recurrenceId);
+
+	if (
+		!baseEvent ||
+		!uid ||
+		!startProperty ||
+		!baseStart ||
+		!baseEnd ||
+		Number.isNaN(occurrenceStart.getTime())
+	) {
+		throw new Error("The Yandex recurring event resource is invalid.");
+	}
+
+	const durationMs = Math.max(0, baseEnd.getTime() - baseStart.getTime());
+	const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
+	const isAllDay =
+		startProperty.parameters.VALUE === "DATE" ||
+		/^\d{8}$/u.test(startProperty.value);
+	const timeLines = isAllDay
+		? [
+				`DTSTART;VALUE=DATE:${formatIcsDate(occurrenceStart.toISOString().slice(0, 10))}`,
+				`DTEND;VALUE=DATE:${formatIcsDate(occurrenceEnd.toISOString().slice(0, 10))}`,
+			]
+		: [
+				`DTSTART:${formatIcsDateTime(occurrenceStart.toISOString())}`,
+				`DTEND:${formatIcsDateTime(occurrenceEnd.toISOString())}`,
+			];
+
+	return [
+		"BEGIN:VEVENT",
+		`UID:${uid}`,
+		`DTSTAMP:${formatCalDavTimestamp(now)}`,
+		`SEQUENCE:${getNextSequence(baseEvent)}`,
+		formatYandexRecurrenceId({ isAllDay, recurrenceId }),
+		...timeLines,
+		...getManagedYandexAttendeeLines({
+			eventLines: baseEventLines,
+			guests,
+			selfEmail,
+		}),
+		...getGuestOverridePreservedLines(baseEventLines),
+		"END:VEVENT",
+	];
+};
+
+const updateYandexGuestEventLines = ({
+	baseEventLines,
+	guests,
+	now,
+	selfEmail,
+	targetEventLines,
+}: {
+	baseEventLines: string[];
+	guests: string[];
+	now: number;
+	selfEmail: string;
+	targetEventLines: string[];
+}) => {
+	const targetEvent = parseIcsEventBlock(targetEventLines);
+
+	if (!targetEvent) {
+		throw new Error("The Yandex event resource is invalid.");
+	}
+
+	const retainedLines = targetEventLines.slice(1, -1).filter((line) => {
+		const propertyName = getIcsLinePropertyName(line);
+		return (
+			propertyName !== "ATTENDEE" &&
+			propertyName !== "DTSTAMP" &&
+			propertyName !== "SEQUENCE"
+		);
+	});
+
+	return [
+		"BEGIN:VEVENT",
+		`DTSTAMP:${formatCalDavTimestamp(now)}`,
+		`SEQUENCE:${getNextSequence(targetEvent)}`,
+		...retainedLines,
+		...getManagedYandexAttendeeLines({
+			eventLines: [...baseEventLines, ...targetEventLines],
+			guests,
+			selfEmail,
+		}),
+		"END:VEVENT",
+	];
+};
+
+export const hasYandexCalendarGuestChanges = ({
+	calendarData,
+	guests,
+	recurrenceId,
+	selfEmail,
+}: {
+	calendarData: string;
+	guests: string[];
+	recurrenceId?: string;
+	selfEmail: string;
+}) => {
+	const { baseEventLines, baseRange, lines, ranges } =
+		parseEditableYandexCalendar(calendarData);
+	const targetRange = recurrenceId
+		? findIcsEventRange({ lines, ranges, recurrenceId })
+		: baseRange;
+	const targetEventLines = targetRange
+		? lines.slice(targetRange.start, targetRange.end + 1)
+		: baseEventLines;
+	const effectiveEventLines = targetEventLines.some(
+		(line) => getIcsLinePropertyName(line) === "ATTENDEE",
+	)
+		? targetEventLines
+		: baseEventLines;
+	const organizerLine = baseEventLines.find(
+		(line) => getIcsLinePropertyName(line) === "ORGANIZER",
+	);
+	const organizerEmail = organizerLine
+		? normalizeYandexAttendeeEmail(getIcsPropertyValue(organizerLine))
+		: null;
+	const normalizedSelfEmail = normalizeYandexAttendeeEmail(selfEmail);
+	const currentGuestEmails = new Set(
+		effectiveEventLines.flatMap((line) => {
+			if (getIcsLinePropertyName(line) !== "ATTENDEE") {
+				return [];
+			}
+
+			const email = normalizeYandexAttendeeEmail(getIcsPropertyValue(line));
+			return email && email !== organizerEmail && email !== normalizedSelfEmail
+				? [email]
+				: [];
+		}),
+	);
+	const requestedGuestEmails = new Set(
+		guests
+			.map(normalizeYandexAttendeeEmail)
+			.filter(
+				(email) =>
+					email && email !== organizerEmail && email !== normalizedSelfEmail,
+			),
+	);
+
+	return (
+		currentGuestEmails.size !== requestedGuestEmails.size ||
+		[...requestedGuestEmails].some((email) => !currentGuestEmails.has(email))
+	);
+};
+
 export const updateYandexCalendarResource = ({
 	calendarData,
 	input,
@@ -257,49 +551,68 @@ export const updateYandexCalendarResource = ({
 	input: UpdateCalendarEventInput;
 	now: number;
 }) => {
-	const lines = unfoldIcsLines(calendarData)
-		.split("\n")
-		.map((line) => line.trimEnd());
-	const ranges = getIcsEventBlockRanges(lines);
-	const baseRange = ranges.find(({ end, start }) => {
-		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && !event.properties["RECURRENCE-ID"];
-	});
-
-	if (!baseRange) {
-		throw new Error("The Yandex event resource has no editable event.");
-	}
-
-	const baseEventLines = lines.slice(baseRange.start, baseRange.end + 1);
+	const { baseEventLines, baseRange, lines, ranges } =
+		parseEditableYandexCalendar(calendarData);
 	const updatedEventLines = buildUpdatedYandexEventLines({
 		baseEventLines,
 		input,
 		now,
 	});
 	const targetRange = input.recurrenceId
-		? ranges.find(({ end, start }) => {
-				const event = parseIcsEventBlock(lines.slice(start, end + 1));
-				return event && getRecurrenceIdIso(event) === input.recurrenceId;
+		? findIcsEventRange({
+				lines,
+				ranges,
+				recurrenceId: input.recurrenceId,
 			})
 		: baseRange;
+	replaceOrAppendIcsEvent({
+		eventLines: updatedEventLines,
+		lines,
+		targetRange,
+	});
+	return serializeYandexCalendarLines(lines);
+};
 
-	if (targetRange) {
-		lines.splice(
-			targetRange.start,
-			targetRange.end - targetRange.start + 1,
-			...updatedEventLines,
-		);
-	} else {
-		const calendarEnd = lines.lastIndexOf("END:VCALENDAR");
+export const updateYandexCalendarResourceGuests = ({
+	calendarData,
+	guests,
+	now,
+	recurrenceId,
+	selfEmail,
+}: {
+	calendarData: string;
+	guests: string[];
+	now: number;
+	recurrenceId?: string;
+	selfEmail: string;
+}) => {
+	const { baseEventLines, baseRange, lines, ranges } =
+		parseEditableYandexCalendar(calendarData);
+	const targetRange = recurrenceId
+		? findIcsEventRange({ lines, ranges, recurrenceId })
+		: baseRange;
+	const updatedEventLines = targetRange
+		? updateYandexGuestEventLines({
+				baseEventLines,
+				guests,
+				now,
+				selfEmail,
+				targetEventLines: lines.slice(targetRange.start, targetRange.end + 1),
+			})
+		: buildYandexGuestOverrideLines({
+				baseEventLines,
+				guests,
+				now,
+				recurrenceId: recurrenceId ?? "",
+				selfEmail,
+			});
 
-		if (calendarEnd < 0) {
-			throw new Error("The Yandex event resource has no calendar boundary.");
-		}
-
-		lines.splice(calendarEnd, 0, ...updatedEventLines);
-	}
-
-	return `${lines.flatMap(foldIcsLine).join("\r\n")}\r\n`;
+	replaceOrAppendIcsEvent({
+		eventLines: updatedEventLines,
+		lines,
+		targetRange,
+	});
+	return serializeYandexCalendarLines(lines);
 };
 
 export const cancelYandexCalendarOccurrence = ({
@@ -313,45 +626,42 @@ export const cancelYandexCalendarOccurrence = ({
 	recurrenceId: string;
 	recurrenceIsAllDay: boolean;
 }) => {
-	const lines = unfoldIcsLines(calendarData)
-		.split("\n")
-		.map((line) => line.trimEnd());
-	const ranges = getIcsEventBlockRanges(lines);
-	const baseRange = ranges.find(({ end, start }) => {
-		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && !event.properties["RECURRENCE-ID"];
-	});
-
-	if (!baseRange) {
-		throw new Error("The Yandex event resource has no editable event.");
-	}
-
+	const { baseEventLines, lines, ranges } =
+		parseEditableYandexCalendar(calendarData);
 	const cancelledEventLines = buildCancelledYandexEventLines({
-		baseEventLines: lines.slice(baseRange.start, baseRange.end + 1),
+		baseEventLines,
 		now,
 		recurrenceId,
 		recurrenceIsAllDay,
 	});
-	const targetRange = ranges.find(({ end, start }) => {
-		const event = parseIcsEventBlock(lines.slice(start, end + 1));
-		return event && getRecurrenceIdIso(event) === recurrenceId;
+	const targetRange = findIcsEventRange({ lines, ranges, recurrenceId });
+	replaceOrAppendIcsEvent({
+		eventLines: cancelledEventLines,
+		lines,
+		targetRange,
 	});
+	return serializeYandexCalendarLines(lines);
+};
 
-	if (targetRange) {
-		lines.splice(
-			targetRange.start,
-			targetRange.end - targetRange.start + 1,
-			...cancelledEventLines,
-		);
-	} else {
-		const calendarEnd = lines.lastIndexOf("END:VCALENDAR");
+export const declineYandexCalendarOccurrence = ({
+	calendarData,
+	recurrenceId,
+	recurrenceIsAllDay,
+}: {
+	calendarData: string;
+	recurrenceId: string;
+	recurrenceIsAllDay: boolean;
+}) => {
+	const { baseEventLines, baseRange, lines } =
+		parseEditableYandexCalendar(calendarData);
 
-		if (calendarEnd < 0) {
-			throw new Error("The Yandex event resource has no calendar boundary.");
-		}
-
-		lines.splice(calendarEnd, 0, ...cancelledEventLines);
+	const exclusionLine = recurrenceIsAllDay
+		? `EXDATE;VALUE=DATE:${formatIcsDate(recurrenceId.slice(0, 10))}`
+		: `EXDATE:${formatIcsDateTime(recurrenceId)}`;
+	if (baseEventLines.some((line) => line === exclusionLine)) {
+		return calendarData;
 	}
 
-	return `${lines.flatMap(foldIcsLine).join("\r\n")}\r\n`;
+	lines.splice(baseRange.end, 0, exclusionLine);
+	return serializeYandexCalendarLines(lines);
 };

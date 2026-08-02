@@ -14,13 +14,20 @@ import { Button } from "@workspace/ui/components/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
 import { Spinner } from "@workspace/ui/components/spinner";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import {
+	Ban,
 	ChevronLeft,
 	ChevronRight,
 	MoreHorizontal,
@@ -32,6 +39,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import type { UpcomingCalendarEvent } from "@/app/app-types";
 import { getAllDayDisplayDate } from "@/components/calendar/calendar-all-day-date";
+import { formatCalendarRecurrence } from "@/components/calendar/calendar-recurrence";
 import type {
 	CalendarAgendaRange,
 	CalendarSource,
@@ -74,6 +82,7 @@ type CalendarAgendaProps = {
 	onDeleteEvent: (event: UpcomingCalendarEvent) => Promise<void>;
 	onEditEvent: (event: UpcomingCalendarEvent) => void;
 	onEventClick: (event: UpcomingCalendarEvent) => void;
+	onRemoveEvent: (event: UpcomingCalendarEvent) => Promise<void>;
 	onNext: () => void;
 	onPrevious: () => void;
 	onToday: () => void;
@@ -84,6 +93,43 @@ type CalendarAgendaGroup = {
 	date: Date;
 	events: UpcomingCalendarEvent[];
 	key: string;
+};
+
+type PendingCalendarEventAction = {
+	event: UpcomingCalendarEvent;
+	kind: "delete" | "remove";
+};
+
+const destructiveAlertActionClassName =
+	"bg-destructive/15 text-destructive hover:bg-destructive/20 hover:text-destructive dark:text-red-500 dark:hover:bg-destructive/25";
+
+const getPendingEventActionCopy = ({
+	event,
+	kind,
+}: PendingCalendarEventAction) => {
+	if (kind === "delete") {
+		return {
+			actionLabel: "Delete",
+			description: event.isRecurring
+				? "This action cannot be undone. This will delete this occurrence for every guest and remove it from the connected calendar. The rest of the series will stay."
+				: "This action cannot be undone. This will delete the event for every guest and remove it from the connected calendar.",
+			pendingLabel: "Deleting…",
+		};
+	}
+
+	return event.provider === "yandex"
+		? {
+				actionLabel: "Not going",
+				description:
+					"This action cannot be undone. This will mark you as not going, notify the organizer, and remove the event from your calendar.",
+				pendingLabel: "Removing…",
+			}
+		: {
+				actionLabel: "Remove",
+				description:
+					"This action cannot be undone. This will remove the event from your calendar. The event will remain on the organizer's and other guests' calendars.",
+				pendingLabel: "Removing…",
+			};
 };
 
 const toLocalDateKey = (date: Date) =>
@@ -149,6 +195,7 @@ export function CalendarAgenda({
 	onDeleteEvent,
 	onEditEvent,
 	onEventClick,
+	onRemoveEvent,
 	onNext,
 	onPrevious,
 	onToday,
@@ -161,12 +208,22 @@ export function CalendarAgenda({
 	);
 	const groups = React.useMemo(() => groupAgendaEvents(events), [events]);
 	const todayKey = toLocalDateKey(new Date());
-	const [eventPendingDeletion, setEventPendingDeletion] =
-		React.useState<UpcomingCalendarEvent | null>(null);
-	const [isDeleting, setIsDeleting] = React.useState(false);
+	const [pendingEventAction, setPendingEventAction] =
+		React.useState<PendingCalendarEventAction | null>(null);
+	const [isResolvingEventAction, setIsResolvingEventAction] =
+		React.useState(false);
+	const pendingEventActionCopy = pendingEventAction
+		? getPendingEventActionCopy(pendingEventAction)
+		: null;
 	const handleRequestDelete = React.useCallback(
 		(event: UpcomingCalendarEvent) => {
-			setEventPendingDeletion(event);
+			setPendingEventAction({ event, kind: "delete" });
+		},
+		[],
+	);
+	const handleRequestRemove = React.useCallback(
+		(event: UpcomingCalendarEvent) => {
+			setPendingEventAction({ event, kind: "remove" });
 		},
 		[],
 	);
@@ -176,24 +233,36 @@ export function CalendarAgenda({
 		}
 		onToday();
 	};
-	const handleDelete = async () => {
-		if (!eventPendingDeletion) {
+	const handleConfirmedEventAction = async () => {
+		if (!pendingEventAction) {
 			return;
 		}
 
-		setIsDeleting(true);
+		setIsResolvingEventAction(true);
 		try {
-			await onDeleteEvent(eventPendingDeletion);
+			const { event, kind } = pendingEventAction;
+			await (kind === "delete" ? onDeleteEvent(event) : onRemoveEvent(event));
 			toast.success(
-				eventPendingDeletion.isRecurring
-					? "Occurrence deleted."
-					: "Event deleted.",
+				kind === "remove"
+					? event.provider === "yandex"
+						? "Invitation declined."
+						: "Event removed from your calendar."
+					: event.isRecurring
+						? "Occurrence deleted."
+						: "Event deleted.",
 			);
-			setEventPendingDeletion(null);
+			setPendingEventAction(null);
 		} catch (error) {
-			toast.error(getConnectionErrorMessage(error, "Failed to delete event"));
+			toast.error(
+				getConnectionErrorMessage(
+					error,
+					pendingEventAction.kind === "remove"
+						? "Failed to remove event"
+						: "Failed to delete event",
+				),
+			);
 		} finally {
-			setIsDeleting(false);
+			setIsResolvingEventAction(false);
 		}
 	};
 
@@ -284,6 +353,7 @@ export function CalendarAgenda({
 										onClick={onEventClick}
 										onEdit={onEditEvent}
 										onRequestDelete={handleRequestDelete}
+										onRequestRemove={handleRequestRemove}
 									/>
 								);
 							})}
@@ -291,41 +361,37 @@ export function CalendarAgenda({
 					))}
 				</div>
 			</section>
-			{eventPendingDeletion ? (
+			{pendingEventAction ? (
 				<AlertDialog
 					open
 					onOpenChange={(open) => {
-						if (!open && !isDeleting) {
-							setEventPendingDeletion(null);
+						if (!open && !isResolvingEventAction) {
+							setPendingEventAction(null);
 						}
 					}}
 				>
 					<AlertDialogContent>
 						<AlertDialogHeader>
-							<AlertDialogTitle>
-								{eventPendingDeletion.isRecurring
-									? "Delete this occurrence?"
-									: "Delete event?"}
-							</AlertDialogTitle>
+							<AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
 							<AlertDialogDescription>
-								{eventPendingDeletion.isRecurring
-									? "This will cancel this occurrence for every guest and remove it from the connected calendar. The rest of the series will stay."
-									: "This will cancel the event for every guest and remove it from the connected calendar."}
+								{pendingEventActionCopy?.description}
 							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<AlertDialogFooter>
-							<AlertDialogCancel disabled={isDeleting}>
+							<AlertDialogCancel disabled={isResolvingEventAction}>
 								Cancel
 							</AlertDialogCancel>
 							<AlertDialogAction
-								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-								disabled={isDeleting}
+								className={destructiveAlertActionClassName}
+								disabled={isResolvingEventAction}
 								onClick={(dialogEvent) => {
 									dialogEvent.preventDefault();
-									void handleDelete();
+									void handleConfirmedEventAction();
 								}}
 							>
-								{isDeleting ? "Deleting…" : "Delete"}
+								{isResolvingEventAction
+									? pendingEventActionCopy?.pendingLabel
+									: pendingEventActionCopy?.actionLabel}
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>
@@ -341,14 +407,21 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 	onClick,
 	onEdit,
 	onRequestDelete,
+	onRequestRemove,
 }: {
 	color: string;
 	event: UpcomingCalendarEvent;
 	onClick: (event: UpcomingCalendarEvent) => void;
 	onEdit: (event: UpcomingCalendarEvent) => void;
 	onRequestDelete: (event: UpcomingCalendarEvent) => void;
+	onRequestRemove: (event: UpcomingCalendarEvent) => void;
 }) {
 	const closedByPointerOutsideRef = React.useRef(false);
+	const hasActions =
+		event.canEdit ||
+		event.guestPermissions !== "none" ||
+		event.canDelete ||
+		event.canRemove;
 
 	return (
 		<div className="group/event relative border-b">
@@ -357,7 +430,7 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 				aria-label={`${event.title}, ${formatAgendaTime(event)}${event.isRecurring ? ", recurring" : ""}`}
 				className={cn(
 					"flex w-full min-w-0 cursor-pointer items-center gap-3 px-4 py-2.5 text-start outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring/50",
-					(event.canEdit || event.canDelete) && "pr-12",
+					hasActions && "pr-12",
 				)}
 				data-hover-scroll-title-row
 				onClick={() => onClick(event)}
@@ -379,16 +452,29 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 							{event.title}
 						</HoverScrollTitle>
 						{event.isRecurring ? (
-							<Repeat2
-								aria-hidden
-								className="size-3.5 shrink-0 text-muted-foreground"
-								data-recurring-indicator
-							/>
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<span
+										className="inline-flex shrink-0"
+										data-recurring-indicator
+									>
+										<Repeat2
+											aria-hidden
+											className="size-3.5 text-muted-foreground"
+										/>
+									</span>
+								</TooltipTrigger>
+								<TooltipContent>
+									{event.recurrence
+										? formatCalendarRecurrence(event.recurrence)
+										: "Recurring event"}
+								</TooltipContent>
+							</Tooltip>
 						) : null}
 					</span>
 				</span>
 			</button>
-			{event.canEdit || event.canDelete ? (
+			{hasActions ? (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<button
@@ -413,24 +499,42 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 							closedByPointerOutsideRef.current = false;
 						}}
 					>
-						{event.canEdit ? (
-							<DropdownMenuItem onSelect={() => onEdit(event)}>
-								<Pencil className="size-4" aria-hidden />
+						<DropdownMenuGroup>
+							<DropdownMenuItem
+								disabled={!event.canEdit && event.guestPermissions === "none"}
+								onSelect={() => onEdit(event)}
+							>
+								<Pencil aria-hidden />
 								Edit
 							</DropdownMenuItem>
-						) : null}
-						{event.canEdit && event.canDelete ? (
-							<DropdownMenuSeparator />
-						) : null}
-						{event.canDelete ? (
-							<DropdownMenuItem
-								variant="destructive"
-								onSelect={() => onRequestDelete(event)}
-							>
-								<Trash2 className="size-4" aria-hidden />
-								Delete
-							</DropdownMenuItem>
-						) : null}
+							{event.canRemove ? (
+								<DropdownMenuItem onSelect={() => onRequestRemove(event)}>
+									{event.provider === "yandex" ? (
+										<Ban aria-hidden />
+									) : (
+										<Trash2 aria-hidden />
+									)}
+									{event.provider === "yandex"
+										? "Not going"
+										: "Remove from calendar"}
+								</DropdownMenuItem>
+							) : null}
+						</DropdownMenuGroup>
+						{event.canRemove ? null : (
+							<>
+								<DropdownMenuSeparator />
+								<DropdownMenuGroup>
+									<DropdownMenuItem
+										disabled={!event.canDelete}
+										variant="destructive"
+										onSelect={() => onRequestDelete(event)}
+									>
+										<Trash2 aria-hidden />
+										Delete
+									</DropdownMenuItem>
+								</DropdownMenuGroup>
+							</>
+						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
 			) : null}

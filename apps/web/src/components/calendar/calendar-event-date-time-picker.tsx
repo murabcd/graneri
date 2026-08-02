@@ -33,6 +33,7 @@ const formatEventTimeInputValue = (value: string) => {
 
 type EventDateTimeRangePickerProps = {
 	allDay: boolean;
+	disabled?: boolean;
 	endDateValue: string;
 	endTimeValue: string;
 	id: string;
@@ -51,6 +52,7 @@ type EventDateTimeRangePickerProps = {
 
 export function CalendarEventDateTimePicker({
 	allDay,
+	disabled = false,
 	endDateValue,
 	endTimeValue,
 	id,
@@ -71,7 +73,7 @@ export function CalendarEventDateTimePicker({
 	const selectingEndRef = React.useRef(false);
 
 	return (
-		<Field>
+		<Field data-disabled={disabled || undefined}>
 			<FieldLabel className={FIELD_LABEL_CLASS_NAME}>{label}</FieldLabel>
 			<Popover
 				open={open}
@@ -86,6 +88,8 @@ export function CalendarEventDateTimePicker({
 				<PopoverTrigger asChild>
 					<Button
 						id={id}
+						aria-label={label}
+						disabled={disabled}
 						type="button"
 						variant="outline"
 						data-empty={!startDate}
