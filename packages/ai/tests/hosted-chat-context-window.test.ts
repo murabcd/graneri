@@ -13,6 +13,28 @@ const createMessage = (index: number) => ({
 });
 
 describe("hosted chat context window", () => {
+	it("does not start a lifecycle when the exact tail already fits", async () => {
+		const compactionLifecycle = {
+			start: vi.fn().mockResolvedValue(null),
+			cancel: vi.fn().mockResolvedValue(null),
+		};
+
+		const result = await prepareHostedChatContextWindow({
+			compactionLifecycle,
+			loadState: async () => ({
+				compaction: null,
+				hasMoreMessages: false,
+				messages: [createMessage(1)],
+			}),
+			safetyIdentifier: "safe-user",
+			saveCompaction: vi.fn(),
+		});
+
+		expect(result.compactionCount).toBe(0);
+		expect(compactionLifecycle.start).not.toHaveBeenCalled();
+		expect(compactionLifecycle.cancel).not.toHaveBeenCalled();
+	});
+
 	it("rolls old messages into a durable summary and keeps the exact recent tail", async () => {
 		let messages = Array.from({ length: 201 }, (_, index) =>
 			createMessage(index + 1),
@@ -24,6 +46,15 @@ describe("hosted chat context window", () => {
 			updatedAt: number;
 		} | null = null;
 		const summarize = vi.fn().mockResolvedValue("Durable summary");
+		const compactionLifecycle = {
+			start: vi.fn().mockResolvedValue(null),
+			cancel: vi.fn().mockResolvedValue(null),
+		};
+		const readState = () => ({
+			compaction,
+			hasMoreMessages: messages.length > 200,
+			messages: messages.slice(0, 201),
+		});
 		const saveCompaction = vi.fn(async (args) => {
 			compaction = {
 				summary: args.summary,
@@ -34,14 +65,12 @@ describe("hosted chat context window", () => {
 			messages = messages.filter(
 				(message) => message.creationTime > args.throughCreationTime,
 			);
+			return readState();
 		});
 
 		const result = await prepareHostedChatContextWindow({
-			loadState: async () => ({
-				compaction,
-				hasMoreMessages: messages.length > 200,
-				messages: messages.slice(0, 201),
-			}),
+			compactionLifecycle,
+			loadState: async () => readState(),
 			safetyIdentifier: "safe-user",
 			saveCompaction,
 			summarize,
@@ -63,6 +92,8 @@ describe("hosted chat context window", () => {
 			}),
 		);
 		expect(result.compactionCount).toBe(1);
+		expect(compactionLifecycle.start).toHaveBeenCalledOnce();
+		expect(compactionLifecycle.cancel).not.toHaveBeenCalled();
 		expect(result.compactionSummary).toBe("Durable summary");
 		expect(result.messages).toHaveLength(101);
 		expect(result.messages[0]?.id).toBe("message-101");
@@ -83,13 +114,18 @@ describe("hosted chat context window", () => {
 			.fn()
 			.mockResolvedValueOnce("Summary through 100")
 			.mockResolvedValueOnce("Summary through 200");
+		const readState = () => ({
+			compaction,
+			hasMoreMessages: messages.length > 200,
+			messages: messages.slice(0, 201),
+		});
 
 		const result = await prepareHostedChatContextWindow({
-			loadState: async () => ({
-				compaction,
-				hasMoreMessages: messages.length > 200,
-				messages: messages.slice(0, 201),
-			}),
+			compactionLifecycle: {
+				start: vi.fn().mockResolvedValue(null),
+				cancel: vi.fn().mockResolvedValue(null),
+			},
+			loadState: async () => readState(),
 			safetyIdentifier: "safe-user",
 			saveCompaction: async (args) => {
 				compaction = {
@@ -101,6 +137,7 @@ describe("hosted chat context window", () => {
 				messages = messages.filter(
 					(message) => message.creationTime > args.throughCreationTime,
 				);
+				return readState();
 			},
 			summarize,
 		});
@@ -112,6 +149,34 @@ describe("hosted chat context window", () => {
 		expect(result.compactionCount).toBe(2);
 		expect(result.compactionSummary).toBe("Summary through 200");
 		expect(result.messages[0]?.id).toBe("message-201");
+	});
+
+	it("cancels the matching lifecycle when summary generation fails", async () => {
+		const compactionLifecycle = {
+			start: vi.fn().mockResolvedValue(null),
+			cancel: vi.fn().mockResolvedValue(null),
+		};
+		const saveCompaction = vi.fn();
+
+		await expect(
+			prepareHostedChatContextWindow({
+				compactionLifecycle,
+				loadState: async () => ({
+					compaction: null,
+					hasMoreMessages: true,
+					messages: Array.from({ length: 201 }, (_, index) =>
+						createMessage(index + 1),
+					),
+				}),
+				safetyIdentifier: "safe-user",
+				saveCompaction,
+				summarize: vi.fn().mockRejectedValue(new Error("summary failed")),
+			}),
+		).rejects.toThrow("summary failed");
+
+		expect(compactionLifecycle.start).toHaveBeenCalledOnce();
+		expect(compactionLifecycle.cancel).toHaveBeenCalledOnce();
+		expect(saveCompaction).not.toHaveBeenCalled();
 	});
 
 	it("preserves consequential tool input and output in the summary transcript", () => {

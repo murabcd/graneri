@@ -18,6 +18,12 @@ export type HostedChatStoredContextMessage = Omit<
 	"creationTime"
 >;
 
+export type HostedChatContextPreparationState = {
+	compaction: HostedChatContextCompaction | null;
+	hasMoreMessages: boolean;
+	messages: HostedChatContextMessage[];
+};
+
 export function buildHostedChatCompactionTranscript(
 	messages: HostedChatContextMessage[],
 ): string;
@@ -29,11 +35,11 @@ export function generateHostedChatContextSummary(args: {
 }): Promise<string>;
 
 export function prepareHostedChatContextWindow(args: {
-	loadState: () => Promise<{
-		compaction: HostedChatContextCompaction | null;
-		hasMoreMessages: boolean;
-		messages: HostedChatContextMessage[];
-	}>;
+	compactionLifecycle: {
+		start: () => Promise<unknown>;
+		cancel: () => Promise<unknown>;
+	};
+	loadState: () => Promise<HostedChatContextPreparationState>;
 	safetyIdentifier: string;
 	saveCompaction: (args: {
 		expectedThroughCreationTime?: number;
@@ -41,7 +47,7 @@ export function prepareHostedChatContextWindow(args: {
 		summary: string;
 		throughCreationTime: number;
 		throughMessageId: string;
-	}) => Promise<unknown>;
+	}) => Promise<HostedChatContextPreparationState>;
 	summarize?: typeof generateHostedChatContextSummary;
 }): Promise<{
 	compactionCount: number;

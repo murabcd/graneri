@@ -333,6 +333,10 @@ describe("ChatMessageListContent performance", () => {
 				<NoteChatMessages
 					chatError={undefined}
 					chatMessages={[userMessage, assistantMessage]}
+					compactionActivity={{
+						anchorMessageId: "user-1",
+						status: "running",
+					}}
 					disableAddToNote={false}
 					disablePadding={false}
 					isChatLoading={true}
@@ -345,6 +349,7 @@ describe("ChatMessageListContent performance", () => {
 				.querySelector('[data-message-id="user-1"]')
 				?.getAttribute("data-scroll-anchor"),
 		).toBe("false");
+		expect(screen.getByText("Conversation compacting")).toBeTruthy();
 		expect(
 			document
 				.querySelector('[data-message-id="assistant-1"]')
@@ -359,6 +364,10 @@ describe("ChatMessageListContent performance", () => {
 			<TooltipProvider>
 				<TestMessageScroller>
 					<ChatMessages
+						compactionActivity={{
+							anchorMessageId: "assistant-1",
+							status: "completed",
+						}}
 						hasEarlierMessages={true}
 						messages={[
 							createTextMessage({
@@ -381,6 +390,7 @@ describe("ChatMessageListContent performance", () => {
 
 		expect(onLoadEarlierMessages).toHaveBeenCalledOnce();
 		expect(onForkMessage).toHaveBeenCalledWith("assistant-1");
+		expect(screen.getByText("Conversation compacted")).toBeTruthy();
 		expectCanonicalMessageScrollerRows();
 	});
 
@@ -437,13 +447,13 @@ describe("ChatMessageListContent performance", () => {
 		).toBeNull();
 	});
 
-	it("places the compaction marker after its exact message boundary", () => {
-		render(
+	it("transitions the anchored compaction activity from shimmer to completed", () => {
+		const { rerender } = render(
 			<TestMessageScroller>
 				<ChatMessageListContent
-					historyMarkerState={{
-						kind: "original",
-						compactionThroughMessageId: "assistant-1",
+					compactionActivity={{
+						anchorMessageId: "user-2",
+						status: "running",
 					}}
 					messages={[
 						createTextMessage({
@@ -466,11 +476,50 @@ describe("ChatMessageListContent performance", () => {
 			</TestMessageScroller>,
 		);
 
-		const boundaryMessage = document.querySelector(
-			'[data-message-id="assistant-1"]',
+		const anchorMessage = document.querySelector('[data-message-id="user-2"]');
+		const shimmeringLabel = screen.getByText("Conversation compacting");
+		expect(
+			(anchorMessage?.compareDocumentPosition(shimmeringLabel) ?? 0) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		expect(shimmeringLabel.style.animation).toContain("graneri-text-shimmer");
+
+		rerender(
+			<TestMessageScroller>
+				<ChatMessageListContent
+					compactionActivity={{
+						anchorMessageId: "user-2",
+						status: "completed",
+					}}
+					messages={[
+						createTextMessage({
+							id: "user-1",
+							role: "user",
+							text: "Earlier question.",
+						}),
+						createTextMessage({
+							id: "assistant-1",
+							role: "assistant",
+							text: "Earlier answer.",
+						}),
+						createTextMessage({
+							id: "user-2",
+							role: "user",
+							text: "New question.",
+						}),
+					]}
+				/>
+			</TestMessageScroller>,
 		);
-		expect(boundaryMessage?.nextElementSibling?.textContent).toContain(
-			"Conversation compacted",
-		);
+
+		expect(screen.queryByText("Conversation compacting")).toBeNull();
+		expect(screen.getByText("Conversation compacted")).toBeTruthy();
+		const completedLabel = screen.getByText("Conversation compacted");
+		expect(
+			(document
+				.querySelector('[data-message-id="user-2"]')
+				?.compareDocumentPosition(completedLabel) ?? 0) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 	});
 });

@@ -353,12 +353,22 @@ const deleteChatRuntimeBatch = async (
 	ctx: MutationCtx,
 	chatId: Doc<"chats">["_id"],
 ) => {
-	const [activeStreams, compactions, queuedMessages, toolCalls, runs] =
-		await Promise.all([
+	const [
+		activeStreams,
+		compactionActivities,
+		compactions,
+		queuedMessages,
+		toolCalls,
+		runs,
+	] = await Promise.all([
 			ctx.db
 				.query("chatActiveStreams")
 				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
 				.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+			ctx.db
+				.query("chatContextCompactionActivities")
+				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+				.take(1),
 			ctx.db
 				.query("chatContextCompactions")
 				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
@@ -375,7 +385,7 @@ const deleteChatRuntimeBatch = async (
 				.query("assistantRuns")
 				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
 				.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
-		]);
+	]);
 
 	const eventBatchesHaveMore = await Promise.all(
 		runs.map((run) => deleteRunEventsBatch(ctx, run._id)),
@@ -389,6 +399,7 @@ const deleteChatRuntimeBatch = async (
 
 	await Promise.all([
 		...activeStreams.map((stream) => ctx.db.delete(stream._id)),
+		...compactionActivities.map((activity) => ctx.db.delete(activity._id)),
 		...compactions.map((compaction) => ctx.db.delete(compaction._id)),
 		...queuedMessages.map((message) => ctx.db.delete(message._id)),
 		...toolCalls.map((toolCall) => ctx.db.delete(toolCall._id)),

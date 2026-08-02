@@ -24,6 +24,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
 import {
+	type ChatCompactionActivity,
 	type ChatHistoryMarkerState,
 	type ChatMessageActionContext,
 	ChatMessageListContent,
@@ -44,6 +45,7 @@ const COMPLETE_CHAT_HISTORY: NoteChatHistoryPagination = {
 export type NoteChatMessagesProps = {
 	chatError: Error | undefined;
 	chatMessages: UIMessage[];
+	compactionActivity?: ChatCompactionActivity | null;
 	disableAddToNote: boolean;
 	disablePadding: boolean;
 	historyPagination?: NoteChatHistoryPagination;
@@ -60,6 +62,7 @@ export type NoteChatMessagesProps = {
 export default function NoteChatMessages({
 	chatError,
 	chatMessages,
+	compactionActivity,
 	disableAddToNote,
 	disablePadding,
 	historyPagination = COMPLETE_CHAT_HISTORY,
@@ -122,6 +125,7 @@ export default function NoteChatMessages({
 					)}
 				>
 					<ChatMessageListContent
+						compactionActivity={compactionActivity}
 						error={chatError}
 						hasEarlierMessages={hasEarlierMessages}
 						historyMarkerState={historyMarkerState}

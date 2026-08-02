@@ -612,6 +612,7 @@ export const handleChatRequest = async (
 		toolApprovalResponse = getToolApprovalResponse(effectiveMessage);
 		const currentToolApprovalResponse = toolApprovalResponse;
 		const contextWindow = await prepareServerChatContextWindow({
+			anchorMessageId: effectiveMessage.id,
 			chatId: id,
 			convexClient,
 			logLatency,

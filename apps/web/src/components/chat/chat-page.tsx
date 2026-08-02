@@ -394,7 +394,7 @@ const useChatPageController = ({
 	const stopAutomationRun = useMutation(api.automations.stopRun);
 	const userPreferences = useQuery(api.userPreferences.get, {});
 	const {
-		compactionThroughMessageId,
+		compactionActivity,
 		hasEarlierMessages,
 		isLoadingEarlierMessages,
 		loadEarlierMessages,
@@ -1083,19 +1083,16 @@ const useChatPageController = ({
 		hasMessages,
 		activeStreamingChatIds: visibleActiveStreamingChatIds,
 		canStop,
+		compactionActivity,
 		isLoading: isChatUiPending,
 		hasEarlierMessages,
 		historyMarkerState:
 			currentChat?.forkedFromChatId !== undefined
 				? {
 						kind: "fork" as const,
-						compactionThroughMessageId,
 						historyOmittedBefore: currentChat.historyOmittedBefore === true,
 					}
-				: {
-						kind: "original" as const,
-						compactionThroughMessageId,
-					},
+				: { kind: "original" as const },
 		isLoadingEarlierMessages,
 		loadEarlierMessages,
 		messages: displayMessages,
@@ -1509,6 +1506,7 @@ export function ChatPage({
 						) : null}
 						<div className="flex-1 pt-8 pb-28 md:pb-32">
 							<ChatMessagesEntry
+								compactionActivity={controller.compactionActivity}
 								messages={controller.messages}
 								error={controller.error}
 								isLoading={controller.isLoading}

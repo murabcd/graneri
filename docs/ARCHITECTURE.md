@@ -232,17 +232,28 @@ batches and then sends the trusted summary through top-level AI SDK instructions
 followed by the exact uncompacted user/assistant tail. Compaction never creates
 or stores synthetic system messages, and it never deletes or rewrites saved chat
 messages, so the user-visible transcript and future pagination retain complete
-history. A narrow owner-checked display query exposes only the checkpoint
-message ID, allowing the renderer to place a `Conversation compacted` marker
-after the exact boundary once that page is loaded. Checkpoint updates use
-optimistic boundary validation and must fail
+history. The checkpoint is private context-assembly state; renderer code does
+not infer compaction from it. When preparation discovers that compaction is
+required, the hosted route first creates one owner-scoped, server-backed
+activity anchored to the triggering message. Ask AI and note chat subscribe to
+that same bounded activity record through their shared message renderer, show a
+shimmering `Conversation compacting` activity while its status is `running`,
+and replace that label in place with static `Conversation compacted` only when
+the final checkpoint and completed activity commit atomically. Each checkpoint
+mutation returns the next bounded preparation state, so multi-round compaction
+does not reload that state through a separate query. Failed preparation removes
+the matching running activity, lifecycle mutations are fenced by activity ID,
+and an abandoned running activity expires automatically; a completed activity
+remains until the next compaction replaces it or the chat history boundary
+changes. Checkpoint updates use optimistic boundary validation and must fail
 closed if another request changes the checkpoint while a summary is being
 generated.
 Editing a user message or regenerating an assistant response replaces the active
 suffix without destroying it. Convex atomically moves the replaced active rows
 into `chatBranches` and `chatBranchMessages`, retains their attachment storage
 references, stops superseded run state, and clears the rolling context
-compaction checkpoint before the new turn starts. The renderer reads active
+compaction checkpoint and its current display activity before the new turn
+starts. The renderer reads active
 history through cursor-paginated `chatThreads.readPage` pages and explicitly
 offers older pages instead of silently truncating the transcript. Preserved
 replacement branches remain durable recovery data. Separately, an assistant

@@ -19,6 +19,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
 import {
+	type ChatCompactionActivity,
 	type ChatHistoryMarkerState,
 	type ChatMessageActionContext,
 	ChatMessageListContent,
@@ -53,6 +54,7 @@ export type ChatMessagesProps = {
 	messages: UIMessage[];
 	error?: Error;
 	hasEarlierMessages?: boolean;
+	compactionActivity?: ChatCompactionActivity | null;
 	historyMarkerState?: ChatHistoryMarkerState;
 	isLoading?: boolean;
 	isLoadingEarlierMessages?: boolean;
@@ -77,6 +79,7 @@ export default function ChatMessages({
 	messages,
 	error,
 	hasEarlierMessages,
+	compactionActivity,
 	historyMarkerState,
 	isLoading,
 	isLoadingEarlierMessages,
@@ -151,6 +154,7 @@ export default function ChatMessages({
 	return (
 		<ChatMessageListContent
 			className="gap-4"
+			compactionActivity={compactionActivity}
 			error={error}
 			errorClassName="px-4"
 			hasEarlierMessages={hasEarlierMessages}

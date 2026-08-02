@@ -49,6 +49,26 @@ const transcriptRefinementStatusValidator = v.union(
 	v.literal("failed"),
 );
 
+const chatContextCompactionActivityBaseValidator = v.object({
+	ownerTokenIdentifier: v.string(),
+	workspaceId: v.id("workspaces"),
+	chatId: v.id("chats"),
+	activityId: v.string(),
+	anchorMessageId: v.string(),
+	startedAt: v.number(),
+	updatedAt: v.number(),
+});
+
+const chatContextCompactionActivityValidator = v.union(
+	chatContextCompactionActivityBaseValidator.extend({
+		status: v.literal("running"),
+	}),
+	chatContextCompactionActivityBaseValidator.extend({
+		status: v.literal("completed"),
+		completedAt: v.number(),
+	}),
+);
+
 const appConnectionProviderValidator = v.union(
 	v.literal("yandex-tracker"),
 	v.literal("yandex-calendar"),
@@ -669,6 +689,9 @@ export default defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_chatId", ["chatId"]),
+	chatContextCompactionActivities: defineTable(
+		chatContextCompactionActivityValidator,
+	).index("by_chatId", ["chatId"]),
 	assistantRuns: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

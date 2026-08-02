@@ -104,13 +104,24 @@ export const branchFromMessage = mutation({
 			}),
 		);
 
-		const compaction = await ctx.db
-			.query("chatContextCompactions")
-			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-			.unique();
+		const [compaction, compactionActivity] = await Promise.all([
+			ctx.db
+				.query("chatContextCompactions")
+				.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+				.unique(),
+			ctx.db
+				.query("chatContextCompactionActivities")
+				.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+				.unique(),
+		]);
+		const compactionDeletes: Promise<void>[] = [];
 		if (compaction) {
-			await ctx.db.delete(compaction._id);
+			compactionDeletes.push(ctx.db.delete(compaction._id));
 		}
+		if (compactionActivity) {
+			compactionDeletes.push(ctx.db.delete(compactionActivity._id));
+		}
+		await Promise.all(compactionDeletes);
 		const activeRunsHaveMore = await stopActiveRunsForChat(ctx, chat._id);
 		if (activeRunsHaveMore) {
 			throw new ConvexError({

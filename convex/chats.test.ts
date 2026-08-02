@@ -410,6 +410,17 @@ test("branching from an edited message preserves the replaced branch", async () 
 			createdAt: 2_300,
 			updatedAt: 2_300,
 		});
+		await ctx.db.insert("chatContextCompactionActivities", {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			workspaceId,
+			chatId: chat._id,
+			activityId: "completed-compaction",
+			anchorMessageId: "msg-3",
+			status: "completed",
+			startedAt: 2_200,
+			completedAt: 2_300,
+			updatedAt: 2_300,
+		});
 	});
 
 	const result = await asOwner.mutation(api.chatBranches.branchFromMessage, {
@@ -471,6 +482,10 @@ test("branching from an edited message preserves the replaced branch", async () 
 			.query("chatContextCompactions")
 			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
 			.unique();
+		const compactionActivity = await ctx.db
+			.query("chatContextCompactionActivities")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+			.unique();
 		const toolCalls = await ctx.db
 			.query("chatToolCalls")
 			.withIndex("by_runId", (q) => q.eq("runId", run._id))
@@ -499,6 +514,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 			activeStream,
 			claimedMessages,
 			compaction,
+			compactionActivity,
 			queuedMessages,
 			runEvents,
 			runRow,
@@ -508,6 +524,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 
 	expect(relatedRows.activeStream).toBeNull();
 	expect(relatedRows.compaction).toBeNull();
+	expect(relatedRows.compactionActivity).toBeNull();
 	expect(relatedRows.runRow).toMatchObject({
 		status: "stopped",
 		stopReason: "superseded",

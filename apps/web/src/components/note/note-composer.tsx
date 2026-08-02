@@ -467,6 +467,7 @@ const useNoteComposerController = ({
 	const {
 		activeRun,
 		chatTitle,
+		compactionActivity,
 		currentChatId,
 		groupedNoteChats,
 		handleReasoningEffortChange,
@@ -1742,6 +1743,7 @@ const useNoteComposerController = ({
 		chatError,
 		chatMessages: displayChatMessages,
 		chatTitle,
+		compactionActivity,
 		closeRightSidebar,
 		composerPlaceholder,
 		currentChatId,
@@ -3537,6 +3539,7 @@ function NoteComposerPanels({
 		<NoteChatMessagesEntry
 			chatError={controller.chatError}
 			chatMessages={controller.chatMessages}
+			compactionActivity={controller.compactionActivity}
 			disableAddToNote={!onAddMessageToNote}
 			disablePadding={controller.isSidebarPresentation}
 			historyPagination={controller.historyPagination}

@@ -32,8 +32,8 @@ export const usePaginatedChatMessages = ({
 		chatId && workspaceId ? { chatId, workspaceId } : "skip",
 		{ initialNumItems: CHAT_HISTORY_PAGE_SIZE },
 	);
-	const compactionDisplayState = useQuery(
-		api.chatContextCompactions.getDisplayState,
+	const compactionActivity = useQuery(
+		api.chatContextCompactions.getActivity,
 		chatId && workspaceId ? { chatId, workspaceId } : "skip",
 	);
 	const messages = React.useMemo(() => {
@@ -53,8 +53,7 @@ export const usePaginatedChatMessages = ({
 	}, [pagination]);
 
 	return {
-		compactionThroughMessageId:
-			compactionDisplayState?.throughMessageId ?? null,
+		compactionActivity: compactionActivity ?? null,
 		hasEarlierMessages:
 			pagination.status === "CanLoadMore" ||
 			pagination.status === "LoadingMore",

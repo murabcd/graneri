@@ -117,47 +117,66 @@ export const generateHostedChatContextSummary = async ({
 };
 
 export const prepareHostedChatContextWindow = async ({
+	compactionLifecycle,
 	loadState,
 	safetyIdentifier,
 	saveCompaction,
 	summarize = generateHostedChatContextSummary,
 }) => {
-	let state = await loadState();
-	let compactionCount = 0;
+	let compactionStarted = false;
+	try {
+		let state = await loadState();
+		let compactionCount = 0;
+		if (state.hasMoreMessages) {
+			compactionStarted = true;
+			await compactionLifecycle.start();
+		}
 
-	while (state.hasMoreMessages) {
-		if (compactionCount >= MAX_COMPACTION_ROUNDS) {
-			throw new Error("Chat history requires too many compaction rounds.");
+		while (state.hasMoreMessages) {
+			if (compactionCount >= MAX_COMPACTION_ROUNDS) {
+				throw new Error("Chat history requires too many compaction rounds.");
+			}
+			const candidates = state.messages.slice(
+				0,
+				HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
+			);
+			const boundary = candidates.at(-1);
+			if (!boundary) {
+				throw new Error("Chat context compaction has no message boundary.");
+			}
+			const summary = await summarize({
+				messages: candidates,
+				previousSummary: state.compaction?.summary ?? "",
+				safetyIdentifier,
+			});
+			state = await saveCompaction({
+				expectedThroughCreationTime: state.compaction?.throughCreationTime,
+				expectedThroughMessageId: state.compaction?.throughMessageId,
+				summary,
+				throughCreationTime: boundary.creationTime,
+				throughMessageId: boundary.id,
+			});
+			compactionCount += 1;
 		}
-		const candidates = state.messages.slice(
-			0,
-			HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
-		);
-		const boundary = candidates.at(-1);
-		if (!boundary) {
-			throw new Error("Chat context compaction has no message boundary.");
+
+		return {
+			compactionCount,
+			compactionSummary: state.compaction?.summary ?? null,
+			messages: state.messages.map(
+				({ creationTime: _creationTime, ...message }) => message,
+			),
+		};
+	} catch (error) {
+		if (compactionStarted) {
+			try {
+				await compactionLifecycle.cancel();
+			} catch (cancellationError) {
+				throw new AggregateError(
+					[error, cancellationError],
+					"Chat context compaction failed and its activity could not be cancelled.",
+				);
+			}
 		}
-		const summary = await summarize({
-			messages: candidates,
-			previousSummary: state.compaction?.summary ?? "",
-			safetyIdentifier,
-		});
-		await saveCompaction({
-			expectedThroughCreationTime: state.compaction?.throughCreationTime,
-			expectedThroughMessageId: state.compaction?.throughMessageId,
-			summary,
-			throughCreationTime: boundary.creationTime,
-			throughMessageId: boundary.id,
-		});
-		compactionCount += 1;
-		state = await loadState();
+		throw error;
 	}
-
-	return {
-		compactionCount,
-		compactionSummary: state.compaction?.summary ?? null,
-		messages: state.messages.map(
-			({ creationTime: _creationTime, ...message }) => message,
-		),
-	};
 };

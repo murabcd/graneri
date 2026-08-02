@@ -18,6 +18,7 @@ import {
 	GitBranch,
 	LoaderCircle,
 	Paperclip,
+	Scissors,
 } from "lucide-react";
 import * as React from "react";
 import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
@@ -71,15 +72,16 @@ export type ChatMessageActionContext = {
 };
 
 export type ChatHistoryMarkerState =
-	| {
-			kind: "original";
-			compactionThroughMessageId?: string | null;
-	  }
+	| { kind: "original" }
 	| {
 			kind: "fork";
-			compactionThroughMessageId?: string | null;
 			historyOmittedBefore: boolean;
 	  };
+
+export type ChatCompactionActivity = {
+	anchorMessageId: string;
+	status: "running" | "completed";
+};
 
 const EMPTY_MESSAGE_PARTS: UIMessage["parts"] = [];
 const EMPTY_CHART_ARTIFACTS: ReturnType<typeof extractChatChartArtifacts> = [];
@@ -97,6 +99,7 @@ export function ChatMessageListContent({
 	includeSources = true,
 	hasEarlierMessages = false,
 	historyMarkerState,
+	compactionActivity,
 	isLoadingEarlierMessages = false,
 	onLoadEarlierMessages,
 	scrollAnchorUserMessages = true,
@@ -116,6 +119,7 @@ export function ChatMessageListContent({
 	includeSources?: boolean;
 	hasEarlierMessages?: boolean;
 	historyMarkerState?: ChatHistoryMarkerState;
+	compactionActivity?: ChatCompactionActivity | null;
 	isLoadingEarlierMessages?: boolean;
 	onLoadEarlierMessages?: () => void;
 	scrollAnchorUserMessages?: boolean;
@@ -148,8 +152,6 @@ export function ChatMessageListContent({
 	}, [isLoading, normalizedMessages]);
 	const lastMessage = displayMessages[displayMessages.length - 1];
 	const forcedStreamingMessageIds = streamingMessageIds ?? EMPTY_MESSAGE_IDS;
-	const compactionThroughMessageId =
-		historyMarkerState?.compactionThroughMessageId;
 	const turns = React.useMemo(
 		() => groupMessagesIntoTurns(displayMessages),
 		[displayMessages],
@@ -246,10 +248,10 @@ export function ChatMessageListContent({
 										textContainerClassName={textContainerClassName}
 									/>
 								</div>
-								{message.id === compactionThroughMessageId ? (
-									<Marker className="my-2" variant="separator">
-										<MarkerContent>Conversation compacted</MarkerContent>
-									</Marker>
+								{message.id === compactionActivity?.anchorMessageId ? (
+									<ConversationCompactionActivity
+										activity={compactionActivity}
+									/>
 								) : null}
 							</React.Fragment>
 						))}
@@ -277,6 +279,27 @@ export function ChatMessageListContent({
 				</MessageScrollerItem>
 			) : null}
 		</MessageScrollerContent>
+	);
+}
+
+function ConversationCompactionActivity({
+	activity,
+}: {
+	activity: ChatCompactionActivity;
+}) {
+	return (
+		<Marker aria-live="polite" className="my-2">
+			<MarkerIcon>
+				<Scissors className="size-4" />
+			</MarkerIcon>
+			<MarkerContent>
+				{activity.status === "running" ? (
+					<ShimmerText as="span">Conversation compacting</ShimmerText>
+				) : (
+					"Conversation compacted"
+				)}
+			</MarkerContent>
+		</Marker>
 	);
 }
 
