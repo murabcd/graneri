@@ -30,10 +30,12 @@ import {
 	type CalendarEventDraft,
 	createCalendarEventDraftFromEvent,
 	createInitialCalendarEventDraft,
+	getCalendarRecurrenceWeekday,
 	toCalendarEventCreation,
 } from "@/components/calendar/calendar-event-draft";
 import { CalendarEventGuestPicker } from "@/components/calendar/calendar-event-guest-picker";
 import { CalendarEventPanelHeader } from "@/components/calendar/calendar-event-panel-header";
+import { CalendarEventRecurrenceFields } from "@/components/calendar/calendar-event-recurrence-fields";
 import {
 	CalendarSourceDot,
 	CalendarSourceLabel,
@@ -118,7 +120,18 @@ export function CalendarEventEditorPanel({
 
 	const patchDraft = React.useCallback(
 		(partial: Partial<CalendarEventDraft>) => {
-			setDraft((current) => ({ ...current, ...partial }));
+			setDraft((current) => {
+				const nextStartWeekday = partial.startDate
+					? getCalendarRecurrenceWeekday(partial.startDate)
+					: undefined;
+				const recurrence =
+					partial.recurrence ??
+					(nextStartWeekday && !current.recurrence.enabled
+						? { ...current.recurrence, weekdays: [nextStartWeekday] }
+						: current.recurrence);
+
+				return { ...current, ...partial, recurrence };
+			});
 		},
 		[],
 	);
@@ -282,6 +295,14 @@ export function CalendarEventEditorPanel({
 									onCheckedChange={(allDay) => patchDraft({ allDay })}
 								/>
 							</Field>
+
+							{event ? null : (
+								<CalendarEventRecurrenceFields
+									recurrence={draft.recurrence}
+									startDate={draft.startDate}
+									onValueChange={(recurrence) => patchDraft({ recurrence })}
+								/>
+							)}
 
 							<CalendarEventDateTimePicker
 								id="calendar-event-date-range"

@@ -13,6 +13,14 @@ const draft: CalendarEventDraft = {
 	endTime: "11:00",
 	guests: ["one@example.com", "two@example.com"],
 	location: "Room 1",
+	recurrence: {
+		enabled: false,
+		endDate: "2026-08-24",
+		endMode: "never",
+		frequency: "weekly",
+		interval: 1,
+		weekdays: ["mon"],
+	},
 	startDate: "2026-07-27",
 	startTime: "10:00",
 	title: "Product sync",
@@ -59,6 +67,49 @@ describe("calendar event draft", () => {
 			startDate: "2026-07-27",
 			endDate: "2026-07-29",
 		});
+	});
+
+	it("adds a complete provider recurrence with the local time zone", () => {
+		const result = toCalendarEventCreation(
+			{
+				...draft,
+				recurrence: {
+					...draft.recurrence,
+					enabled: true,
+					endDate: "2026-08-31",
+					endMode: "on_date",
+					frequency: "weekly",
+					interval: 2,
+					weekdays: ["mon", "wed"],
+				},
+			},
+			"google",
+		);
+
+		expect(result.recurrence).toEqual({
+			end: { date: "2026-08-31", kind: "on_date" },
+			frequency: "weekly",
+			interval: 2,
+			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+			weekdays: ["mon", "wed"],
+		});
+	});
+
+	it("rejects a repeat end date before the event", () => {
+		expect(() =>
+			toCalendarEventCreation(
+				{
+					...draft,
+					recurrence: {
+						...draft.recurrence,
+						enabled: true,
+						endDate: "2026-07-26",
+						endMode: "on_date",
+					},
+				},
+				"google",
+			),
+		).toThrow("Repeat end date must be on or after the event date.");
 	});
 
 	it("keeps provider all-day UTC dates stable in the local editor", () => {

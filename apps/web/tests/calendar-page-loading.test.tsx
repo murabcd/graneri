@@ -413,6 +413,7 @@ describe("CalendarPage loading", () => {
 					...readyCalendar.events[0],
 					isRecurring: true,
 					recurrence: {
+						end: { count: 8, kind: "after_count" as const },
 						frequency: "weekly" as const,
 						interval: 2,
 						weekdays: ["mon" as const, "wed" as const],
@@ -437,7 +438,7 @@ describe("CalendarPage loading", () => {
 		await user.hover(recurringIndicator);
 		expect(
 			await screen.findByRole("tooltip", {
-				name: "Repeats every 2 weeks on Mon, Wed",
+				name: "Repeats every 2 weeks on Mon, Wed for 8 occurrences",
 			}),
 		).not.toBeNull();
 	});
@@ -499,6 +500,23 @@ describe("CalendarPage loading", () => {
 		);
 	});
 
+	it("closes the recurrence end-date calendar when its label is pressed", async () => {
+		const user = userEvent.setup();
+		renderCalendarPageWithNewEventTrigger(workspaceId);
+		await screen.findByText("Planning");
+
+		await user.click(screen.getByRole("button", { name: "New event" }));
+		await user.click(screen.getByRole("switch", { name: "Repeat" }));
+		await user.click(screen.getByRole("combobox", { name: "Ends" }));
+		await user.click(screen.getByRole("option", { name: "On date" }));
+		await user.click(screen.getByRole("button", { name: /^End date:/u }));
+		expect(document.querySelector('[data-slot="calendar"]')).not.toBeNull();
+
+		await user.click(screen.getByText("End date", { selector: "label" }));
+
+		expect(document.querySelector('[data-slot="calendar"]')).toBeNull();
+	});
+
 	it("creates an event and reloads the agenda", async () => {
 		const user = userEvent.setup();
 		renderCalendarPageWithNewEventTrigger(workspaceId);
@@ -510,6 +528,27 @@ describe("CalendarPage loading", () => {
 			await screen.findByRole("textbox", { name: "Title" }),
 			"Product sync",
 		);
+		await user.click(screen.getByRole("switch", { name: "Repeat" }));
+		await user.clear(screen.getByRole("textbox", { name: "Repeat interval" }));
+		await user.type(
+			screen.getByRole("textbox", { name: "Repeat interval" }),
+			"2",
+		);
+		await user.click(
+			screen.getByRole("combobox", { name: "Repeat frequency" }),
+		);
+		await user.click(screen.getByRole("option", { name: "Week" }));
+		const weekdays = screen.getByRole("button", { name: "Repeat weekdays" });
+		await user.click(weekdays);
+		await user.click(
+			screen.getByRole("menuitemcheckbox", { name: "Wednesday" }),
+		);
+		await user.keyboard("{Escape}");
+		await user.click(screen.getByRole("combobox", { name: "Ends" }));
+		await user.click(screen.getByRole("option", { name: "On date" }));
+		await user.click(screen.getByRole("button", { name: /^End date:/u }));
+		expect(document.querySelector('[data-slot="calendar"]')).not.toBeNull();
+		await user.keyboard("{Escape}");
 		const guests = screen.getByRole("combobox", { name: "Guests" });
 		await user.click(guests);
 		await user.click(
@@ -532,6 +571,13 @@ describe("CalendarPage loading", () => {
 					calendarId: "work",
 					guests: ["alina@acme.com", "mark@acme.com", "new.person@example.com"],
 					provider: "google",
+					recurrence: {
+						end: expect.objectContaining({ kind: "on_date" }),
+						frequency: "weekly",
+						interval: 2,
+						timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+						weekdays: expect.arrayContaining(["wed"]),
+					},
 					title: "Product sync",
 					time: expect.objectContaining({ kind: "timed" }),
 				}),

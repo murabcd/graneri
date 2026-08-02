@@ -6,6 +6,7 @@ import {
 	getCalendarWeekdayByIndex,
 	parseCalendarRecurrence,
 } from "./calendarRecurrence";
+import { zonedCalendarDateTimeToUtc } from "./calendarTimeZone";
 import type { CalendarRecurrence } from "./calendarTypes";
 import type {
 	ParsedIcsEvent,
@@ -196,6 +197,22 @@ const addDaysToDateParts = (parts: IcsDateParts, days: number) => {
 	};
 };
 
+const getDatePartsAfterMonths = (
+	parts: IcsDateParts,
+	months: number,
+): IcsDateParts | null => {
+	const monthIndex = parts.year * 12 + (parts.month - 1) + months;
+	const year = Math.floor(monthIndex / 12);
+	const month = (monthIndex % 12) + 1;
+	const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+	if (parts.day > daysInMonth) {
+		return null;
+	}
+
+	return { ...parts, day: parts.day, month, year };
+};
+
 const getDatePartWeekday = (parts: IcsDateParts) =>
 	new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
 
@@ -208,50 +225,26 @@ const parseRrule = (value: string) =>
 			.map(([key, parsedValue]) => [key.toUpperCase(), parsedValue]),
 	);
 
-const getTimeZoneOffsetMs = (date: Date, timeZone: string) => {
-	const formatter = new Intl.DateTimeFormat("en-US", {
-		day: "2-digit",
-		hour: "2-digit",
-		hour12: false,
-		minute: "2-digit",
-		month: "2-digit",
-		second: "2-digit",
-		timeZone,
-		year: "numeric",
-	});
-	const parts = formatter.formatToParts(date);
-	const numericPart = (type: string) =>
-		Number(parts.find((part) => part.type === type)?.value ?? "0");
-	const asUtc = Date.UTC(
-		numericPart("year"),
-		numericPart("month") - 1,
-		numericPart("day"),
-		numericPart("hour"),
-		numericPart("minute"),
-		numericPart("second"),
-	);
+const SIMPLE_PERIODIC_RRULE_KEYS = new Set([
+	"COUNT",
+	"FREQ",
+	"INTERVAL",
+	"UNTIL",
+]);
 
-	return asUtc - date.getTime();
-};
+const isSimplePeriodicRule = (rule: Record<string, string>) =>
+	Object.keys(rule).every((key) => SIMPLE_PERIODIC_RRULE_KEYS.has(key));
 
-const zonedDateTimeToUtc = (parts: IcsDateParts, timeZone: string) => {
-	const utcGuess = Date.UTC(
-		parts.year,
-		parts.month - 1,
-		parts.day,
-		parts.hour,
-		parts.minute,
-		parts.second,
-	);
-	const initialOffset = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
-	let timestamp = utcGuess - initialOffset;
-	const adjustedOffset = getTimeZoneOffsetMs(new Date(timestamp), timeZone);
-
-	if (adjustedOffset !== initialOffset) {
-		timestamp = utcGuess - adjustedOffset;
+const parsePositiveRruleInteger = (
+	value: string | undefined,
+	fallback: number | null,
+) => {
+	if (value === undefined) {
+		return fallback;
 	}
 
-	return new Date(timestamp);
+	const parsed = Number(value);
+	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
 export const parseIcsDateValue = (
@@ -285,7 +278,7 @@ export const parseIcsDateValue = (
 	}
 
 	if (parameters.TZID) {
-		return zonedDateTimeToUtc(parts, parameters.TZID);
+		return zonedCalendarDateTimeToUtc(parts, parameters.TZID);
 	}
 
 	return new Date(
@@ -430,6 +423,7 @@ const normalizeEvent = ({
 						startParts ? getDatePartWeekday(startParts) : startAt.getUTCDay(),
 					),
 					recurrenceLines: [properties.RRULE.value],
+					timeZone: startProperty.parameters.TZID,
 				})
 			: undefined);
 
@@ -505,7 +499,7 @@ const getRecurringOccurrenceStart = ({
 	}
 
 	return startProperty.parameters.TZID
-		? zonedDateTimeToUtc(candidateDate, startProperty.parameters.TZID)
+		? zonedCalendarDateTimeToUtc(candidateDate, startProperty.parameters.TZID)
 		: new Date(
 				Date.UTC(
 					candidateDate.year,
@@ -563,14 +557,15 @@ const expandRecurringEvent = ({
 	const recurrence = parseCalendarRecurrence({
 		defaultWeekday: getCalendarWeekdayByIndex(getDatePartWeekday(startParts)),
 		recurrenceLines: [properties.RRULE.value],
+		timeZone: startProperty.parameters.TZID,
 	});
 
 	const durationMs = Math.max(0, seriesEnd.getTime() - seriesStart.getTime());
-	const interval = Math.max(1, Number(rule.INTERVAL ?? "1"));
+	const interval = parsePositiveRruleInteger(rule.INTERVAL, 1) ?? 1;
 	const until = rule.UNTIL
 		? (parseIcsDateValue(rule.UNTIL, {}, false)?.getTime() ?? null)
 		: null;
-	const count = rule.COUNT ? Number(rule.COUNT) : null;
+	const count = parsePositiveRruleInteger(rule.COUNT, null);
 	const occurrences: YandexUpcomingCalendarEvent[] = [];
 	const appendOccurrence = (occurrenceStart: Date) => {
 		const recurrenceId = occurrenceStart.toISOString();
@@ -619,6 +614,63 @@ const expandRecurringEvent = ({
 
 			currentParts = addDaysToDateParts(currentParts, interval);
 			occurrenceIndex += 1;
+		}
+
+		return occurrences;
+	}
+
+	if (rule.FREQ === "MONTHLY" || rule.FREQ === "YEARLY") {
+		if (!isSimplePeriodicRule(rule)) {
+			return [];
+		}
+
+		const monthInterval = rule.FREQ === "YEARLY" ? interval * 12 : interval;
+		let periodIndex = 0;
+		let generatedCount = 0;
+
+		while (true) {
+			const monthStartParts = getDatePartsAfterMonths(
+				{ ...startParts, day: 1 },
+				periodIndex * monthInterval,
+			);
+			if (!monthStartParts) {
+				break;
+			}
+			const monthStart = getRecurringOccurrenceStart({
+				candidateDate: monthStartParts,
+				startProperty,
+			});
+
+			if (monthStart.getTime() > timeMax) {
+				break;
+			}
+
+			const candidateDate = getDatePartsAfterMonths(
+				startParts,
+				periodIndex * monthInterval,
+			);
+			periodIndex += 1;
+
+			if (!candidateDate) {
+				continue;
+			}
+
+			const occurrenceStart = getRecurringOccurrenceStart({
+				candidateDate,
+				startProperty,
+			});
+			if (
+				(until !== null && occurrenceStart.getTime() > until) ||
+				(count !== null && generatedCount >= count)
+			) {
+				break;
+			}
+
+			const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
+			if (occurrenceEnd.getTime() >= timeMin) {
+				appendOccurrence(occurrenceStart);
+			}
+			generatedCount += 1;
 		}
 
 		return occurrences;

@@ -71,13 +71,49 @@ const recurrenceWeekdays = new Set([
 	"sat",
 ]);
 
+const normalizeRecurrenceEnd = (value) => {
+	if (!isRecord(value)) {
+		return null;
+	}
+
+	if (value.kind === "never") {
+		return { kind: "never" };
+	}
+
+	if (
+		value.kind === "after_count" &&
+		Number.isSafeInteger(value.count) &&
+		value.count > 0
+	) {
+		return { count: value.count, kind: "after_count" };
+	}
+
+	if (value.kind === "on_date" && /^\d{4}-\d{2}-\d{2}$/u.test(value.date)) {
+		const [year, month, day] = value.date.split("-").map(Number);
+		const date = new Date(Date.UTC(year, month - 1, day));
+
+		if (
+			date.getUTCFullYear() === year &&
+			date.getUTCMonth() === month - 1 &&
+			date.getUTCDate() === day
+		) {
+			return { date: value.date, kind: "on_date" };
+		}
+	}
+
+	return null;
+};
+
 const normalizeRecurrence = (value) => {
 	if (value === undefined) {
 		return undefined;
 	}
 
+	const end = isRecord(value) ? normalizeRecurrenceEnd(value.end) : null;
+
 	if (
 		!isRecord(value) ||
+		!end ||
 		!recurrenceFrequencies.has(value.frequency) ||
 		!Number.isSafeInteger(value.interval) ||
 		value.interval < 1 ||
@@ -88,6 +124,7 @@ const normalizeRecurrence = (value) => {
 	}
 
 	return {
+		end,
 		frequency: value.frequency,
 		interval: value.interval,
 		weekdays: [...new Set(value.weekdays)],

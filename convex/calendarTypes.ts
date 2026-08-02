@@ -13,9 +13,23 @@ export type CalendarWeekday =
 	| "fri"
 	| "sat";
 
+export type CalendarRecurrenceEnd =
+	| { kind: "never" }
+	| { count: number; kind: "after_count" }
+	| { date: string; kind: "on_date" };
+
 export type CalendarRecurrence = {
+	end: CalendarRecurrenceEnd;
 	frequency: "daily" | "weekly" | "monthly" | "yearly" | "custom";
 	interval: number;
+	weekdays: CalendarWeekday[];
+};
+
+export type CalendarEventRecurrenceInput = {
+	end: { kind: "never" } | { date: string; kind: "on_date" };
+	frequency: Exclude<CalendarRecurrence["frequency"], "custom">;
+	interval: number;
+	timeZone: string;
 	weekdays: CalendarWeekday[];
 };
 
@@ -96,6 +110,7 @@ export type CalendarEventDetailsInput = {
 	description?: string;
 	guests: string[];
 	location?: string;
+	recurrence?: CalendarEventRecurrenceInput;
 	time: CalendarEventTime;
 	title: string;
 };

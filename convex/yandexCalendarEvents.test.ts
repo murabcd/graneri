@@ -14,8 +14,91 @@ import {
 	removeYandexCalendarEvent,
 	updateYandexCalendarEvent,
 } from "./yandexCalendarEvents";
+import { parseYandexCalendarData } from "./yandexCalendarIcs";
 
 describe("Yandex Calendar events", () => {
+	it("expands monthly and yearly events created with simple RRULEs", () => {
+		const events = parseYandexCalendarData({
+			calendar: {
+				canEdit: true,
+				canWrite: true,
+				color: "#3b82f6",
+				displayName: "Work",
+				href: "/calendars/owner/events/",
+				id: "yandex:/calendars/owner/events/",
+			},
+			calendarData: [
+				"BEGIN:VCALENDAR",
+				"BEGIN:VEVENT",
+				"UID:monthly-planning",
+				"DTSTART;TZID=Europe/Moscow:20260731T100000",
+				"DTEND;TZID=Europe/Moscow:20260731T110000",
+				"RRULE:FREQ=MONTHLY;INTERVAL=1;COUNT=2",
+				"SUMMARY:Monthly planning",
+				"END:VEVENT",
+				"BEGIN:VEVENT",
+				"UID:yearly-planning",
+				"DTSTART;TZID=Europe/Moscow:20240229T100000",
+				"DTEND;TZID=Europe/Moscow:20240229T110000",
+				"RRULE:FREQ=YEARLY;INTERVAL=1;COUNT=2",
+				"SUMMARY:Yearly planning",
+				"END:VEVENT",
+				"END:VCALENDAR",
+			].join("\r\n"),
+			href: "/calendars/owner/events/recurring.ics",
+			minimumEndAt: 0,
+			selfEmail: "owner@example.com",
+			timeMax: Date.UTC(2028, 11, 31),
+			timeMin: Date.UTC(2026, 6, 1),
+		});
+
+		expect(events.map(({ startAt, title }) => ({ startAt, title }))).toEqual([
+			{
+				startAt: "2026-07-31T07:00:00.000Z",
+				title: "Monthly planning",
+			},
+			{
+				startAt: "2026-08-31T07:00:00.000Z",
+				title: "Monthly planning",
+			},
+			{
+				startAt: "2028-02-29T07:00:00.000Z",
+				title: "Yearly planning",
+			},
+		]);
+	});
+
+	it("does not fabricate occurrences for unsupported periodic RRULEs", () => {
+		const events = parseYandexCalendarData({
+			calendar: {
+				canEdit: true,
+				canWrite: true,
+				color: "#3b82f6",
+				displayName: "Work",
+				href: "/calendars/owner/events/",
+				id: "yandex:/calendars/owner/events/",
+			},
+			calendarData: [
+				"BEGIN:VCALENDAR",
+				"BEGIN:VEVENT",
+				"UID:last-weekday",
+				"DTSTART;TZID=Europe/Moscow:20260731T100000",
+				"DTEND;TZID=Europe/Moscow:20260731T110000",
+				"RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1",
+				"SUMMARY:Last weekday",
+				"END:VEVENT",
+				"END:VCALENDAR",
+			].join("\r\n"),
+			href: "/calendars/owner/events/recurring.ics",
+			minimumEndAt: 0,
+			selfEmail: "owner@example.com",
+			timeMax: Date.UTC(2026, 11, 31),
+			timeMin: Date.UTC(2026, 6, 1),
+		});
+
+		expect(events).toEqual([]);
+	});
+
 	it("marks expanded recurrence instances as recurring", async () => {
 		const fetchMock = vi.fn(
 			async (input: string | URL | Request, init?: RequestInit) => {
@@ -42,6 +125,7 @@ describe("Yandex Calendar events", () => {
 					guestPermissions: "manage",
 					isRecurring: true,
 					recurrence: {
+						end: { count: 2, kind: "after_count" },
 						frequency: "weekly",
 						interval: 1,
 						weekdays: ["mon"],
@@ -113,6 +197,53 @@ describe("Yandex Calendar events", () => {
 		);
 		expect(putInit?.body).toContain(
 			"ATTENDEE;ROLE=REQ-PARTICIPANT:mailto:guest@example.com\r\n",
+		);
+	});
+
+	it("creates a recurring event with an RRULE and zoned wall time", async () => {
+		const fetchMock = vi.fn(
+			async (_input: string | URL | Request, init?: RequestInit) => {
+				if (init?.method === "PROPFIND") {
+					return new Response(calendarsResponse, { status: 207 });
+				}
+
+				return new Response("", { status: 201 });
+			},
+		);
+
+		await createYandexCalendarEvent({
+			connection,
+			input: {
+				calendarId: "yandex:/calendars/owner%40example.com/events-1/",
+				guests: [],
+				recurrence: {
+					end: { date: "2026-08-31", kind: "on_date" },
+					frequency: "weekly",
+					interval: 2,
+					timeZone: "Europe/Moscow",
+					weekdays: ["mon", "wed"],
+				},
+				time: {
+					kind: "timed",
+					startAt: "2026-07-27T07:00:00.000Z",
+					endAt: "2026-07-27T08:00:00.000Z",
+				},
+				title: "Weekly planning",
+			},
+			now: Date.UTC(2026, 6, 25, 10),
+			request: fetchMock,
+			uid: "recurring-event-123",
+		});
+
+		const putInit = fetchMock.mock.calls[1]?.[1];
+		expect(putInit?.body).toContain(
+			"DTSTART;TZID=Europe/Moscow:20260727T100000\r\n",
+		);
+		expect(putInit?.body).toContain(
+			"DTEND;TZID=Europe/Moscow:20260727T110000\r\n",
+		);
+		expect(putInit?.body).toContain(
+			"RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;UNTIL=20260831T205959Z\r\n",
 		);
 	});
 

@@ -13,6 +13,7 @@ import {
 	createWorkspaceCalendarProviderAdapters,
 } from "./calendarProviderAdapters";
 import { createCalendarProviderModule } from "./calendarProviderModule";
+import { normalizeCalendarEventRecurrenceInput } from "./calendarRecurrence";
 import type {
 	CalendarEventDetailsInput,
 	CalendarEventsFetchResult,
@@ -22,6 +23,7 @@ import type {
 	UpdateCalendarEventInput,
 } from "./calendarTypes";
 import {
+	calendarEventRecurrenceInputValidator,
 	calendarEventsResponseValidator,
 	calendarEventTimeValidator,
 	calendarProviderValidator,
@@ -35,7 +37,6 @@ const CALENDAR_VIEW_MAX_WINDOW_MS = 62 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_EVENT_LIMIT = 10;
 const CALENDAR_TOOL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
-
 type UpcomingEventsResponse =
 	| {
 			status: "not_connected";
@@ -357,11 +358,19 @@ const normalizeCalendarEventDetails = <Input extends CalendarEventDetailsInput>(
 		}
 	}
 
+	const recurrence = input.recurrence
+		? normalizeCalendarEventRecurrenceInput({
+				recurrence: input.recurrence,
+				time: input.time,
+			})
+		: undefined;
+
 	return {
 		...input,
 		description: input.description?.trim() || undefined,
 		guests,
 		location: input.location?.trim() || undefined,
+		recurrence,
 		title,
 	};
 };
@@ -595,6 +604,7 @@ export const createCalendarEvent = action({
 		guests: v.array(v.string()),
 		location: v.optional(v.string()),
 		provider: calendarProviderValidator,
+		recurrence: v.optional(calendarEventRecurrenceInputValidator),
 		time: calendarEventTimeValidator,
 		title: v.string(),
 		workspaceId: v.id("workspaces"),
@@ -616,6 +626,7 @@ export const createCalendarEvent = action({
 			guests: args.guests,
 			location: args.location,
 			provider: args.provider,
+			recurrence: args.recurrence,
 			time: args.time,
 			title: args.title,
 		});

@@ -15,6 +15,13 @@ const cloneCalendarState = (value) => ({
 	events: value.events.map((event) => ({
 		...event,
 		attendees: event.attendees.map((attendee) => ({ ...attendee })),
+		recurrence: event.recurrence
+			? {
+					...event.recurrence,
+					end: { ...event.recurrence.end },
+					weekdays: [...event.recurrence.weekdays],
+				}
+			: undefined,
 	})),
 });
 

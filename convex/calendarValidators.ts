@@ -32,7 +32,18 @@ const calendarWeekdayValidator = v.union(
 	v.literal("sat"),
 );
 
+const calendarRecurrenceFields = {
+	interval: v.number(),
+	weekdays: v.array(calendarWeekdayValidator),
+};
+
 const calendarRecurrenceValidator = v.object({
+	...calendarRecurrenceFields,
+	end: v.union(
+		v.object({ kind: v.literal("never") }),
+		v.object({ count: v.number(), kind: v.literal("after_count") }),
+		v.object({ date: v.string(), kind: v.literal("on_date") }),
+	),
 	frequency: v.union(
 		v.literal("daily"),
 		v.literal("weekly"),
@@ -40,8 +51,21 @@ const calendarRecurrenceValidator = v.object({
 		v.literal("yearly"),
 		v.literal("custom"),
 	),
-	interval: v.number(),
-	weekdays: v.array(calendarWeekdayValidator),
+});
+
+export const calendarEventRecurrenceInputValidator = v.object({
+	...calendarRecurrenceFields,
+	end: v.union(
+		v.object({ kind: v.literal("never") }),
+		v.object({ date: v.string(), kind: v.literal("on_date") }),
+	),
+	frequency: v.union(
+		v.literal("daily"),
+		v.literal("weekly"),
+		v.literal("monthly"),
+		v.literal("yearly"),
+	),
+	timeZone: v.string(),
 });
 
 export const upcomingCalendarEventValidator = v.object({

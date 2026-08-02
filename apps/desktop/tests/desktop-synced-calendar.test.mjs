@@ -98,6 +98,44 @@ test("rejects invalid tray calendar status", () => {
 	);
 });
 
+test("preserves recurrence end rules without exposing mutable state", async () => {
+	const calendar = createDesktopSyncedCalendar();
+
+	calendar.setState({
+		connectedCalendarCount: 1,
+		events: [
+			createCalendarEvent({
+				isRecurring: true,
+				recurrence: {
+					end: { count: 8, kind: "after_count" },
+					frequency: "weekly",
+					interval: 2,
+					weekdays: ["mon", "wed"],
+				},
+			}),
+		],
+		status: "ready",
+	});
+
+	const firstRead = await calendar.listCurrentDayEvents();
+	assert.deepEqual(firstRead.events[0]?.recurrence, {
+		end: { count: 8, kind: "after_count" },
+		frequency: "weekly",
+		interval: 2,
+		weekdays: ["mon", "wed"],
+	});
+	firstRead.events[0].recurrence.end.count = 1;
+	firstRead.events[0].recurrence.weekdays.push("fri");
+
+	const secondRead = await calendar.listCurrentDayEvents();
+	assert.deepEqual(secondRead.events[0]?.recurrence, {
+		end: { count: 8, kind: "after_count" },
+		frequency: "weekly",
+		interval: 2,
+		weekdays: ["mon", "wed"],
+	});
+});
+
 test("clears synced tray calendar events when disconnected", async () => {
 	const calendar = createDesktopSyncedCalendar();
 

@@ -8,7 +8,7 @@ import {
 } from "@workspace/ui/components/dropdown-menu";
 import { Field } from "@workspace/ui/components/field";
 import { Label } from "@workspace/ui/components/label";
-import { MessageCircle, MoreHorizontal, Settings, Trash2 } from "lucide-react";
+import { MessageCircle, MoreHorizontal, Settings2, Trash2 } from "lucide-react";
 import {
 	pluginGroups,
 	type ToolConnection,
@@ -108,7 +108,7 @@ function PluginConnectionRow({
 							Try now
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={connection.onConfigure}>
-							<Settings />
+							<Settings2 />
 							Manage
 						</DropdownMenuItem>
 						{installed.onUninstall ? (

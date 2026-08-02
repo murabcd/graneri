@@ -8,6 +8,7 @@ import {
 } from "./googleAuth";
 import {
 	createGoogleCalendar,
+	createGoogleCalendarEvent,
 	deleteGoogleCalendarEvent,
 	fetchGoogleCalendarEvents,
 	removeGoogleCalendar,
@@ -88,6 +89,58 @@ describe("Google Calendar provider", () => {
 				requiresEventMove: false,
 			},
 		]);
+	});
+
+	it("creates a recurring event with an RRULE and time zone", async () => {
+		fetchGoogleJsonWithRetry
+			.mockResolvedValueOnce({
+				items: [
+					{
+						accessRole: "owner",
+						id: "work",
+						primary: true,
+					},
+				],
+			})
+			.mockResolvedValueOnce({ id: "recurring-event-1" });
+
+		await expect(
+			createGoogleCalendarEvent({
+				authContext,
+				input: {
+					calendarId: "work",
+					guests: [],
+					recurrence: {
+						end: { kind: "never" },
+						frequency: "weekly",
+						interval: 2,
+						timeZone: "Europe/Moscow",
+						weekdays: ["mon", "wed"],
+					},
+					time: {
+						kind: "timed",
+						endAt: "2026-08-03T08:00:00.000Z",
+						startAt: "2026-08-03T07:00:00.000Z",
+					},
+					title: "Weekly planning",
+				},
+			}),
+		).resolves.toEqual({ id: "recurring-event-1" });
+
+		const createInit = fetchGoogleJsonWithRetry.mock.calls[1]?.[3];
+		expect(JSON.parse(String(createInit?.body))).toEqual({
+			attendees: [],
+			end: {
+				dateTime: "2026-08-03T08:00:00.000Z",
+				timeZone: "Europe/Moscow",
+			},
+			recurrence: ["RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE"],
+			start: {
+				dateTime: "2026-08-03T07:00:00.000Z",
+				timeZone: "Europe/Moscow",
+			},
+			summary: "Weekly planning",
+		});
 	});
 
 	it("normalizes attendee identity, roles, and response state", async () => {
@@ -188,7 +241,7 @@ describe("Google Calendar provider", () => {
 			})
 			.mockResolvedValueOnce({
 				id: "series-1",
-				recurrence: ["RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE"],
+				recurrence: ["RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=8"],
 				start: { dateTime: "2026-08-03T10:00:00+03:00" },
 			});
 
@@ -201,6 +254,7 @@ describe("Google Calendar provider", () => {
 		});
 
 		expect(result.events[0]?.recurrence).toEqual({
+			end: { count: 8, kind: "after_count" },
 			frequency: "weekly",
 			interval: 2,
 			weekdays: ["mon", "wed"],

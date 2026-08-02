@@ -17,6 +17,12 @@ const FREQUENCY_LABELS = {
 	yearly: { singular: "year", standard: "yearly" },
 } as const;
 
+const RECURRENCE_END_DATE_FORMATTER = new Intl.DateTimeFormat("en", {
+	day: "numeric",
+	month: "short",
+	year: "numeric",
+});
+
 export const formatCalendarRecurrence = (
 	recurrence: NonNullable<UpcomingCalendarEvent["recurrence"]>,
 ) => {
@@ -32,6 +38,18 @@ export const formatCalendarRecurrence = (
 	const weekdays = recurrence.weekdays
 		.map((weekday) => WEEKDAY_LABELS[weekday])
 		.join(", ");
+	const end = (() => {
+		switch (recurrence.end.kind) {
+			case "after_count":
+				return ` for ${recurrence.end.count} occurrences`;
+			case "on_date":
+				return ` until ${RECURRENCE_END_DATE_FORMATTER.format(
+					new Date(`${recurrence.end.date}T00:00:00`),
+				)}`;
+			case "never":
+				return "";
+		}
+	})();
 
-	return `Repeats ${frequency}${weekdays ? ` on ${weekdays}` : ""}`;
+	return `Repeats ${frequency}${weekdays ? ` on ${weekdays}` : ""}${end}`;
 };

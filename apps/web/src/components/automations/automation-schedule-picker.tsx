@@ -1,13 +1,6 @@
 import type { AutomationDeliveryPolicy } from "@workspace/ai/automation-tools";
 import { Button } from "@workspace/ui/components/button";
 import { Calendar } from "@workspace/ui/components/calendar";
-import {
-	DropdownMenu,
-	DropdownMenuCheckboxItem,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu";
 import { Input } from "@workspace/ui/components/input";
 import {
 	InputGroup,
@@ -34,7 +27,8 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { CalendarIcon, ChevronDown, Clock } from "lucide-react";
+import { CalendarIcon, Clock } from "lucide-react";
+import { WeekdayPicker } from "@/components/scheduling/weekday-picker";
 import {
 	type AutomationScheduleDraft,
 	getAutomationScheduleDraftLabel,
@@ -135,66 +129,6 @@ function AutomationDatePicker({
 				/>
 			</PopoverContent>
 		</Popover>
-	);
-}
-
-function AutomationWeekdayPicker({
-	value,
-	onChange,
-}: {
-	value: number[];
-	onChange: (value: number[]) => void;
-}) {
-	const selectedWeekdays = new Set(value);
-	const label = WEEKDAY_OPTIONS.reduce<string[]>((labels, day) => {
-		if (selectedWeekdays.has(day.value)) {
-			labels.push(day.label);
-		}
-		return labels;
-	}, []).join(", ");
-
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					type="button"
-					variant="outline"
-					className={cn(
-						"w-full justify-between overflow-hidden font-normal",
-						AUTOMATION_CONTROL_CLASS_NAME,
-					)}
-				>
-					<span className="truncate">{label}</span>
-					<ChevronDown data-icon="inline-end" />
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="start" className="w-56">
-				<DropdownMenuGroup>
-					{WEEKDAY_OPTIONS.map((day) => {
-						const checked = selectedWeekdays.has(day.value);
-						return (
-							<DropdownMenuCheckboxItem
-								key={day.value}
-								checked={checked}
-								className="pr-8 pl-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:right-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:left-auto"
-								onSelect={(event) => event.preventDefault()}
-								onCheckedChange={(nextChecked) => {
-									if (!nextChecked && value.length === 1) {
-										return;
-									}
-									const nextValue = nextChecked
-										? [...value, day.value]
-										: value.filter((weekday) => weekday !== day.value);
-									onChange([...new Set(nextValue)].sort());
-								}}
-							>
-								{day.name}
-							</DropdownMenuCheckboxItem>
-						);
-					})}
-				</DropdownMenuGroup>
-			</DropdownMenuContent>
-		</DropdownMenu>
 	);
 }
 
@@ -348,8 +282,11 @@ export function AutomationSchedulePicker({
 								</InputGroupText>
 							</InputGroup>
 							{customFrequency === "weekly" ? (
-								<AutomationWeekdayPicker
+								<WeekdayPicker
+									ariaLabel="Repeat weekdays"
+									options={WEEKDAY_OPTIONS}
 									value={scheduleWeekdays}
+									className={AUTOMATION_CONTROL_CLASS_NAME}
 									onChange={(weekdays) =>
 										onChange(updateAutomationScheduleDraft(value, { weekdays }))
 									}

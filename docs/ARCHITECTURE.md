@@ -107,8 +107,17 @@ organizer-owned events expose move capability. Every move destination and every
 attendee-removal request is re-authorized server-side. The renderer receives
 explicit provider identity, opaque provider event identity, provider-owned
 calendar color, per-calendar write capability, separate edit, guest permission,
-cancel, remove, and move capabilities, and normalized recurrence identities; it offers
-only same-provider writable destination calendars while editing.
+cancel, remove, and move capabilities, and normalized recurrence identities; it
+offers only same-provider writable destination calendars while editing.
+New-event creation supports daily, weekly, monthly, and yearly recurrence with
+an interval, explicit weekly weekdays, and never/on-date end
+conditions. The renderer sends the user's IANA time zone with that normalized
+recurrence contract. The server canonicalizes the zone, validates numeric and
+date bounds, orders weekly days, and provider adapters serialize one standard
+RRULE so Google and Yandex preserve the intended local wall time through
+daylight-saving changes. Recurrence controls are intentionally absent from
+occurrence-scoped editing until whole-series recurrence editing has a separate
+provider contract.
 Provider reads are complete-snapshot operations: a
 failed calendar read rejects the refresh instead of caching a partial agenda,
 so the renderer retains the last successful snapshot while provider reads and

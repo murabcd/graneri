@@ -5,6 +5,30 @@ import type {
 	CalendarSource,
 } from "@/components/calendar/calendar-view-model";
 
+export type CalendarRecurrenceFrequency =
+	| "daily"
+	| "weekly"
+	| "monthly"
+	| "yearly";
+
+export type CalendarRecurrenceWeekday =
+	| "mon"
+	| "tue"
+	| "wed"
+	| "thu"
+	| "fri"
+	| "sat"
+	| "sun";
+
+export type CalendarEventRecurrenceDraft = {
+	enabled: boolean;
+	endDate: string;
+	endMode: "never" | "on_date";
+	frequency: CalendarRecurrenceFrequency;
+	interval: number | null;
+	weekdays: CalendarRecurrenceWeekday[];
+};
+
 export type CalendarEventDraft = {
 	allDay: boolean;
 	calendarId: string;
@@ -13,6 +37,7 @@ export type CalendarEventDraft = {
 	endTime: string;
 	guests: string[];
 	location: string;
+	recurrence: CalendarEventRecurrenceDraft;
 	startDate: string;
 	startTime: string;
 	title: string;
@@ -24,6 +49,13 @@ export type CalendarEventCreation = {
 	guests: string[];
 	location?: string;
 	provider: CalendarProvider;
+	recurrence?: {
+		end: { kind: "never" } | { date: string; kind: "on_date" };
+		frequency: CalendarRecurrenceFrequency;
+		interval: number;
+		timeZone: string;
+		weekdays: CalendarRecurrenceWeekday[];
+	};
 	time:
 		| {
 				kind: "all_day";
@@ -72,6 +104,38 @@ export const formatEventDateRange = (startDate: Date, endDate: Date) => {
 const toTimeInputValue = (date: Date) =>
 	`${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")}`;
 
+const WEEKDAY_BY_INDEX = [
+	"sun",
+	"mon",
+	"tue",
+	"wed",
+	"thu",
+	"fri",
+	"sat",
+] as const satisfies readonly CalendarRecurrenceWeekday[];
+
+export const getCalendarRecurrenceWeekday = (dateValue: string) => {
+	const date = fromDateInputValue(dateValue);
+	return date ? WEEKDAY_BY_INDEX[date.getDay()] : undefined;
+};
+
+const createInitialRecurrenceDraft = (
+	startDate: string,
+): CalendarEventRecurrenceDraft => {
+	const endDate = fromDateInputValue(startDate) ?? new Date();
+	endDate.setDate(endDate.getDate() + 28);
+	const weekday = getCalendarRecurrenceWeekday(startDate);
+
+	return {
+		enabled: false,
+		endDate: toDateInputValue(endDate),
+		endMode: "never",
+		frequency: "weekly",
+		interval: 1,
+		weekdays: weekday ? [weekday] : ["mon"],
+	};
+};
+
 export const createInitialCalendarEventDraft = (
 	calendars: CalendarSource[],
 	defaultCalendarId: string | null,
@@ -82,6 +146,7 @@ export const createInitialCalendarEventDraft = (
 
 	const end = new Date(start);
 	end.setMinutes(end.getMinutes() + 30);
+	const startDate = toDateInputValue(start);
 
 	return {
 		allDay: false,
@@ -94,7 +159,8 @@ export const createInitialCalendarEventDraft = (
 		endTime: toTimeInputValue(end),
 		guests: [],
 		location: "",
-		startDate: toDateInputValue(start),
+		recurrence: createInitialRecurrenceDraft(startDate),
+		startDate,
 		startTime: toTimeInputValue(start),
 		title: "",
 	};
@@ -107,6 +173,7 @@ export const createCalendarEventDraftFromEvent = (
 	const end = new Date(event.endAt);
 	const draftStart = event.isAllDay ? getAllDayDisplayDate(start) : start;
 	const draftEnd = event.isAllDay ? getAllDayDisplayDate(end) : end;
+	const startDate = toDateInputValue(draftStart);
 
 	return {
 		allDay: event.isAllDay,
@@ -118,7 +185,8 @@ export const createCalendarEventDraftFromEvent = (
 			.filter((attendee) => !attendee.isOrganizer && !attendee.isSelf)
 			.map((attendee) => attendee.email),
 		location: event.location ?? "",
-		startDate: toDateInputValue(draftStart),
+		recurrence: createInitialRecurrenceDraft(startDate),
+		startDate,
 		startTime: toTimeInputValue(draftStart),
 		title: event.title,
 	};
@@ -133,6 +201,52 @@ const getExclusiveEndDate = (value: string) => {
 
 	endDate.setDate(endDate.getDate() + 1);
 	return toDateInputValue(endDate);
+};
+
+const toCalendarEventRecurrence = (
+	draft: CalendarEventDraft,
+): CalendarEventCreation["recurrence"] => {
+	const recurrence = draft.recurrence;
+
+	if (!recurrence.enabled) {
+		return undefined;
+	}
+
+	if (
+		recurrence.interval === null ||
+		!Number.isSafeInteger(recurrence.interval) ||
+		recurrence.interval < 1 ||
+		recurrence.interval > 999
+	) {
+		throw new Error("Repeat interval must be between 1 and 999.");
+	}
+
+	if (recurrence.frequency === "weekly" && recurrence.weekdays.length === 0) {
+		throw new Error("Select at least one weekday.");
+	}
+
+	let end: NonNullable<CalendarEventCreation["recurrence"]>["end"];
+	if (recurrence.endMode === "on_date") {
+		const endDate = fromDateInputValue(recurrence.endDate);
+		if (
+			!endDate ||
+			toDateInputValue(endDate) !== recurrence.endDate ||
+			recurrence.endDate < draft.startDate
+		) {
+			throw new Error("Repeat end date must be on or after the event date.");
+		}
+		end = { date: recurrence.endDate, kind: "on_date" };
+	} else {
+		end = { kind: "never" };
+	}
+
+	return {
+		end,
+		frequency: recurrence.frequency,
+		interval: recurrence.interval,
+		timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		weekdays: recurrence.frequency === "weekly" ? recurrence.weekdays : [],
+	};
 };
 
 export const toCalendarEventCreation = (
@@ -155,6 +269,7 @@ export const toCalendarEventCreation = (
 		guests: draft.guests,
 		location: draft.location.trim() || undefined,
 		provider,
+		recurrence: toCalendarEventRecurrence(draft),
 		title,
 	};
 

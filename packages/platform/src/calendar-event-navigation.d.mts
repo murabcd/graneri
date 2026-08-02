@@ -36,6 +36,10 @@ export type CalendarEventPayload = {
 	provider: "google" | "yandex";
 	providerEventId: string;
 	recurrence?: {
+		end:
+			| { kind: "never" }
+			| { count: number; kind: "after_count" }
+			| { date: string; kind: "on_date" };
 		frequency: "daily" | "weekly" | "monthly" | "yearly" | "custom";
 		interval: number;
 		weekdays: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;

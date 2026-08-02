@@ -1,3 +1,5 @@
+import { formatCalendarRecurrenceRule } from "./calendarRecurrence";
+import { getCalendarDateTimePartsInTimeZone } from "./calendarTimeZone";
 import type { CalendarEventDetailsInput } from "./calendarTypes";
 
 export const formatCalDavTimestamp = (value: number) => {
@@ -33,6 +35,13 @@ export const formatIcsDateTime = (value: string) =>
 		.replaceAll("-", "")
 		.replaceAll(":", "")
 		.replace(/\.\d{3}Z$/u, "Z");
+
+const formatIcsZonedDateTime = (value: string, timeZone: string) => {
+	const parts = getCalendarDateTimePartsInTimeZone(new Date(value), timeZone);
+	const pad = (part: number) => part.toString().padStart(2, "0");
+
+	return `${parts.year.toString().padStart(4, "0")}${pad(parts.month)}${pad(parts.day)}T${pad(parts.hour)}${pad(parts.minute)}${pad(parts.second)}`;
+};
 
 export const foldIcsLine = (line: string) => {
 	const foldedLines: string[] = [];
@@ -76,11 +85,23 @@ export const buildYandexCalendarEventIcs = ({
 		`DTSTAMP:${formatCalDavTimestamp(now)}`,
 		input.time.kind === "all_day"
 			? `DTSTART;VALUE=DATE:${formatIcsDate(input.time.startDate)}`
-			: `DTSTART:${formatIcsDateTime(input.time.startAt)}`,
+			: input.recurrence
+				? `DTSTART;TZID=${input.recurrence.timeZone}:${formatIcsZonedDateTime(input.time.startAt, input.recurrence.timeZone)}`
+				: `DTSTART:${formatIcsDateTime(input.time.startAt)}`,
 		input.time.kind === "all_day"
 			? `DTEND;VALUE=DATE:${formatIcsDate(input.time.endDate)}`
-			: `DTEND:${formatIcsDateTime(input.time.endAt)}`,
+			: input.recurrence
+				? `DTEND;TZID=${input.recurrence.timeZone}:${formatIcsZonedDateTime(input.time.endAt, input.recurrence.timeZone)}`
+				: `DTEND:${formatIcsDateTime(input.time.endAt)}`,
 		`SUMMARY:${escapeIcsText(input.title)}`,
+		...(input.recurrence
+			? [
+					formatCalendarRecurrenceRule({
+						isAllDay: input.time.kind === "all_day",
+						recurrence: input.recurrence,
+					}),
+				]
+			: []),
 		...(input.description
 			? [`DESCRIPTION:${escapeIcsText(input.description)}`]
 			: []),

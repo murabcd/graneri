@@ -7,6 +7,7 @@ import {
 } from "./calendarAttendees";
 import { requireCalendarEventEtag } from "./calendarProviderConcurrency";
 import {
+	formatCalendarRecurrenceRule,
 	getCalendarWeekdayFromDateValue,
 	parseCalendarRecurrence,
 } from "./calendarRecurrence";
@@ -93,6 +94,7 @@ type GoogleCalendarEvent = {
 type GoogleCalendarDateTime = {
 	date?: string;
 	dateTime?: string;
+	timeZone?: string;
 };
 
 const isVisibleCalendar = (calendar: GoogleCalendarListEntry) =>
@@ -294,6 +296,7 @@ const normalizeEvent = (
 					event.start?.dateTime ?? event.start?.date,
 				),
 				recurrenceLines: event.recurrence ?? [],
+				timeZone: event.start?.timeZone,
 			}),
 		recurrenceId: event.originalStartTime
 			? (toDate(event.originalStartTime, false)?.toISOString() ?? undefined)
@@ -312,6 +315,7 @@ const getGoogleEventRecurrence = (event: GoogleCalendarEvent) =>
 			event.start?.dateTime ?? event.start?.date,
 		),
 		recurrenceLines: event.recurrence ?? [],
+		timeZone: event.start?.timeZone,
 	});
 
 const fetchGoogleSeriesRecurrences = async ({
@@ -580,15 +584,37 @@ export const createGoogleCalendarEvent = async ({
 					description: input.description,
 					end: { date: input.time.endDate },
 					location: input.location,
+					recurrence: input.recurrence
+						? [
+								formatCalendarRecurrenceRule({
+									isAllDay: true,
+									recurrence: input.recurrence,
+								}),
+							]
+						: undefined,
 					start: { date: input.time.startDate },
 					summary: input.title,
 				}
 			: {
 					attendees: input.guests.map((email) => ({ email })),
 					description: input.description,
-					end: { dateTime: input.time.endAt },
+					end: {
+						dateTime: input.time.endAt,
+						timeZone: input.recurrence?.timeZone,
+					},
 					location: input.location,
-					start: { dateTime: input.time.startAt },
+					recurrence: input.recurrence
+						? [
+								formatCalendarRecurrenceRule({
+									isAllDay: false,
+									recurrence: input.recurrence,
+								}),
+							]
+						: undefined,
+					start: {
+						dateTime: input.time.startAt,
+						timeZone: input.recurrence?.timeZone,
+					},
 					summary: input.title,
 				};
 	const createdEvent = await fetchGoogleJsonWithRetry<{ id: string }>(
