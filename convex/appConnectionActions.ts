@@ -880,7 +880,7 @@ const connectRemoteHeaderMcp = async <
 	const env = sanitizeRemoteMcpEnv(args.env);
 	const envArgs = Object.keys(env).length > 0 ? { env } : {};
 
-	await ctx.runQuery(internal.appConnections.assertWorkspaceAccess, {
+	await ctx.runQuery(internal.workspaces.assertAccess, {
 		ownerTokenIdentifier: identity.tokenIdentifier,
 		workspaceId: args.workspaceId,
 	});

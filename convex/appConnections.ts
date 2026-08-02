@@ -530,22 +530,6 @@ type McpOAuthChatToolConnection = Extract<
 >;
 const { requireIdentity } = createResourceAccess("app connections");
 
-export const assertWorkspaceAccess = internalQuery({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		await requireOwnedWorkspace(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-		);
-		return null;
-	},
-});
-
 const toAppSourceId = (id: Id<"appConnections">) => `${APP_SOURCE_PREFIX}${id}`;
 
 const getProviderPreview = (connection: Doc<"appConnections">) => {

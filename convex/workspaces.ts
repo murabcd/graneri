@@ -2,7 +2,12 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import { seedDefaultRecipesForWorkspace } from "./recipes";
 import { seedDefaultTemplatesForWorkspace } from "./templates";
@@ -36,6 +41,22 @@ const REMOVE_ALL_WORKSPACES_BATCH_SIZE = 100;
 const MAX_RETURNED_WORKSPACES = 20;
 const MAX_WORKSPACE_NAME_LENGTH = 48;
 const { requireIdentity } = createResourceAccess("workspaces");
+
+export const assertAccess = internalQuery({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		await requireOwnedWorkspace(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.workspaceId,
+		);
+		return null;
+	},
+});
 
 const normalizeWorkspaceName = (value: string) =>
 	value.replace(/\s+/g, " ").trim();

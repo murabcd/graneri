@@ -1,4 +1,5 @@
 import { ConvexError } from "convex/values";
+import { isValidCalendarDateParts } from "./calendarDate";
 import {
 	getCalendarDateValueInTimeZone,
 	zonedCalendarDateTimeToUtc,
@@ -117,7 +118,14 @@ export const getCalendarWeekdayFromDateValue = (
 ): CalendarWeekday | undefined => {
 	const dateMatch = value?.match(/^(\d{4})-(\d{2})-(\d{2})/u);
 
-	if (!dateMatch) {
+	if (
+		!dateMatch ||
+		!isValidCalendarDateParts(
+			Number(dateMatch[1]),
+			Number(dateMatch[2]),
+			Number(dateMatch[3]),
+		)
+	) {
 		return undefined;
 	}
 
@@ -150,15 +158,6 @@ const formatDateParts = (year: number, month: number, day: number) =>
 	`${year.toString().padStart(4, "0")}-${month
 		.toString()
 		.padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-
-const isValidCalendarDate = (year: number, month: number, day: number) => {
-	const date = new Date(Date.UTC(year, month - 1, day));
-	return (
-		date.getUTCFullYear() === year &&
-		date.getUTCMonth() === month - 1 &&
-		date.getUTCDate() === day
-	);
-};
 
 export const normalizeCalendarEventRecurrenceInput = ({
 	recurrence,
@@ -215,7 +214,7 @@ export const normalizeCalendarEventRecurrenceInput = ({
 
 		if (
 			!dateMatch ||
-			!isValidCalendarDate(year, month, day) ||
+			!isValidCalendarDateParts(year, month, day) ||
 			recurrence.end.date < startDate
 		) {
 			throw new ConvexError({
@@ -247,7 +246,7 @@ const parseUntilDate = (value: string | undefined, timeZone?: string) => {
 	const month = Number(rawMonth);
 	const day = Number(rawDay);
 
-	if (!isValidCalendarDate(year, month, day)) {
+	if (!isValidCalendarDateParts(year, month, day)) {
 		return undefined;
 	}
 

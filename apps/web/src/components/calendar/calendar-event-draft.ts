@@ -84,7 +84,8 @@ export const fromDateInputValue = (value: string) => {
 		return undefined;
 	}
 
-	return new Date(year, month - 1, day);
+	const date = new Date(year, month - 1, day);
+	return toDateInputValue(date) === value ? date : undefined;
 };
 
 const formatEventDate = (date: Date) =>

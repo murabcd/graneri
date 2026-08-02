@@ -51,6 +51,7 @@ import type * as automationValidators from "../automationValidators.js";
 import type * as automations from "../automations.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarAttendees from "../calendarAttendees.js";
+import type * as calendarDate from "../calendarDate.js";
 import type * as calendarNoteRelationships from "../calendarNoteRelationships.js";
 import type * as calendarPeopleSync from "../calendarPeopleSync.js";
 import type * as calendarPreferences from "../calendarPreferences.js";
@@ -164,6 +165,7 @@ declare const fullApi: ApiFromModules<{
   automations: typeof automations;
   calendar: typeof calendar;
   calendarAttendees: typeof calendarAttendees;
+  calendarDate: typeof calendarDate;
   calendarNoteRelationships: typeof calendarNoteRelationships;
   calendarPeopleSync: typeof calendarPeopleSync;
   calendarPreferences: typeof calendarPreferences;

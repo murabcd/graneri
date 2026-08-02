@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	type CalendarEventDraft,
 	createCalendarEventDraftFromEvent,
+	fromDateInputValue,
 	toCalendarEventCreation,
 } from "../src/components/calendar/calendar-event-draft";
 
@@ -27,6 +28,11 @@ const draft: CalendarEventDraft = {
 };
 
 describe("calendar event draft", () => {
+	it("rejects invalid date input values instead of normalizing them", () => {
+		expect(fromDateInputValue("2026-02-29")).toBeUndefined();
+		expect(fromDateInputValue("2028-02-29")).toEqual(new Date(2028, 1, 29));
+	});
+
 	it("converts local event times to instants", () => {
 		const result = toCalendarEventCreation(draft, "google");
 

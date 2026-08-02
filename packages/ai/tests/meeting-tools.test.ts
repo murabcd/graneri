@@ -7,7 +7,24 @@ describe("meeting tools", () => {
 		const tools = buildMeetingTools({
 			searchMeetings: async (input) => {
 				calls.push(input);
-				return { meetings: [{ title: "Customer review" }] };
+				return {
+					hasMore: false,
+					matchedCompanies: [],
+					matchedPeople: [{ displayName: "Mark", email: "mark@example.com" }],
+					meetings: [
+						{
+							endAt: "2026-01-14T11:00:00.000Z",
+							matchedCompanies: [],
+							matchedPeople: ["Mark"],
+							noteId: "note_1",
+							provider: "google",
+							searchableText: "Customer review notes",
+							searchableTextTruncated: false,
+							startAt: "2026-01-14T10:00:00.000Z",
+							title: "Customer review",
+						},
+					],
+				};
 			},
 		});
 

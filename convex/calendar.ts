@@ -1,11 +1,12 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action } from "./_generated/server";
 import { normalizeEmail } from "./calendarAttendees";
+import { isCalendarDateValue } from "./calendarDate";
 import { scheduleCalendarPeopleSync } from "./calendarPeopleSync";
 import {
 	type CalendarToolProviderInput,
@@ -30,6 +31,7 @@ import {
 	calendarToolResponseValidator,
 	upcomingEventsResponseValidator,
 } from "./calendarValidators";
+import { createResourceAccess } from "./domain";
 
 const UPCOMING_EVENTS_LIMIT = 12;
 const CALENDAR_EVENTS_LIMIT = 250;
@@ -37,6 +39,8 @@ const CALENDAR_VIEW_MAX_WINDOW_MS = 62 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_EVENT_LIMIT = 10;
 const CALENDAR_TOOL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const CALENDAR_TOOL_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
+const { requireIdentity: requireCalendarIdentity } =
+	createResourceAccess("calendars");
 type UpcomingEventsResponse =
 	| {
 			status: "not_connected";
@@ -139,6 +143,26 @@ const createWorkspaceCalendarProviderModule = ({
 			workspaceId,
 		}),
 	});
+
+const createOwnedWorkspaceCalendarProviderModule = async ({
+	ctx,
+	workspaceId,
+}: {
+	ctx: ActionCtx;
+	workspaceId: Id<"workspaces">;
+}) => {
+	const identity = await requireCalendarIdentity(ctx);
+	await ctx.runQuery(internal.workspaces.assertAccess, {
+		ownerTokenIdentifier: identity.tokenIdentifier,
+		workspaceId,
+	});
+
+	return createWorkspaceCalendarProviderModule({
+		ctx,
+		ownerTokenIdentifier: identity.tokenIdentifier,
+		workspaceId,
+	});
+};
 
 const fetchWorkspaceCalendarEvents = async ({
 	ctx,
@@ -333,8 +357,8 @@ const normalizeCalendarEventDetails = <Input extends CalendarEventDetailsInput>(
 
 	if (input.time.kind === "all_day") {
 		if (
-			!/^\d{4}-\d{2}-\d{2}$/u.test(input.time.startDate) ||
-			!/^\d{4}-\d{2}-\d{2}$/u.test(input.time.endDate) ||
+			!isCalendarDateValue(input.time.startDate) ||
+			!isCalendarDateValue(input.time.endDate) ||
 			input.time.endDate <= input.time.startDate
 		) {
 			throw new ConvexError({
@@ -455,21 +479,11 @@ export const createCalendar = action({
 	},
 	returns: v.object({ id: v.string() }),
 	handler: async (ctx, args): Promise<{ id: string }> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to create calendars.",
-			});
-		}
-
-		const input = normalizeCreateCalendarInput(args);
-		const providerModule = createWorkspaceCalendarProviderModule({
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
 		});
+		const input = normalizeCreateCalendarInput(args);
 
 		return await providerModule.createCalendar(input.provider, {
 			color: input.color,
@@ -488,15 +502,10 @@ export const updateCalendar = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to update calendars.",
-			});
-		}
-
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
+			ctx,
+			workspaceId: args.workspaceId,
+		});
 		const calendarId = args.calendarId.trim();
 		if (!calendarId) {
 			throw new ConvexError({
@@ -505,11 +514,6 @@ export const updateCalendar = action({
 			});
 		}
 		const input = normalizeCreateCalendarInput(args);
-		const providerModule = createWorkspaceCalendarProviderModule({
-			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-		});
 
 		return await providerModule.updateCalendar(args.provider, {
 			calendarId,
@@ -527,15 +531,10 @@ export const setDefaultCalendar = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to set a default calendar.",
-			});
-		}
-
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
+			ctx,
+			workspaceId: args.workspaceId,
+		});
 		const calendarId = args.calendarId.trim();
 		if (!calendarId) {
 			throw new ConvexError({
@@ -543,11 +542,6 @@ export const setDefaultCalendar = action({
 				message: "Calendar identifier is invalid.",
 			});
 		}
-		const providerModule = createWorkspaceCalendarProviderModule({
-			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-		});
 
 		return await providerModule.setDefaultCalendar(args.provider, {
 			calendarId,
@@ -564,15 +558,10 @@ export const deleteCalendar = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to delete calendars.",
-			});
-		}
-
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
+			ctx,
+			workspaceId: args.workspaceId,
+		});
 		const calendarId = args.calendarId.trim();
 		const destinationCalendarId = args.destinationCalendarId?.trim();
 		if (
@@ -584,11 +573,6 @@ export const deleteCalendar = action({
 				message: "Calendar identifier is invalid.",
 			});
 		}
-		const providerModule = createWorkspaceCalendarProviderModule({
-			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-		});
 
 		return await providerModule.removeCalendar(args.provider, {
 			calendarId,
@@ -611,15 +595,10 @@ export const createCalendarEvent = action({
 	},
 	returns: v.object({ id: v.string() }),
 	handler: async (ctx, args): Promise<{ id: string }> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to create calendar events.",
-			});
-		}
-
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
+			ctx,
+			workspaceId: args.workspaceId,
+		});
 		const input = normalizeCalendarEventDetails({
 			calendarId: args.calendarId,
 			description: args.description,
@@ -629,11 +608,6 @@ export const createCalendarEvent = action({
 			recurrence: args.recurrence,
 			time: args.time,
 			title: args.title,
-		});
-		const providerModule = createWorkspaceCalendarProviderModule({
-			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
 		});
 
 		const { provider, ...eventInput } = input;
@@ -659,15 +633,10 @@ export const updateCalendarEvent = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to update calendar events.",
-			});
-		}
-
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
+			ctx,
+			workspaceId: args.workspaceId,
+		});
 		const input = normalizeUpdateCalendarEventInput({
 			calendarId: args.calendarId,
 			destinationCalendarId: args.destinationCalendarId,
@@ -680,11 +649,6 @@ export const updateCalendarEvent = action({
 			seriesProviderEventId: args.seriesProviderEventId,
 			time: args.time,
 			title: args.title,
-		});
-		const providerModule = createWorkspaceCalendarProviderModule({
-			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
 		});
 
 		return await providerModule.updateEvent(args.provider, input);
@@ -702,15 +666,10 @@ export const deleteCalendarEvent = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to delete calendar events.",
-			});
-		}
-
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
+			ctx,
+			workspaceId: args.workspaceId,
+		});
 		const providerEventId = args.providerEventId.trim();
 
 		if (!providerEventId) {
@@ -719,11 +678,6 @@ export const deleteCalendarEvent = action({
 				message: "The calendar event identifier is invalid.",
 			});
 		}
-		const providerModule = createWorkspaceCalendarProviderModule({
-			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-		});
 
 		return await providerModule.deleteEvent(args.provider, {
 			calendarId: args.calendarId,
@@ -745,15 +699,10 @@ export const removeCalendarEvent = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
-		const identity = await ctx.auth.getUserIdentity();
-
-		if (!identity) {
-			throw new ConvexError({
-				code: "UNAUTHENTICATED",
-				message: "Sign in to remove calendar events.",
-			});
-		}
-
+		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
+			ctx,
+			workspaceId: args.workspaceId,
+		});
 		const providerEventId = args.providerEventId.trim();
 		if (!providerEventId) {
 			throw new ConvexError({
@@ -761,11 +710,6 @@ export const removeCalendarEvent = action({
 				message: "The calendar event identifier is invalid.",
 			});
 		}
-		const providerModule = createWorkspaceCalendarProviderModule({
-			ctx,
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-		});
 
 		return await providerModule.removeEvent(args.provider, {
 			calendarId: args.calendarId,

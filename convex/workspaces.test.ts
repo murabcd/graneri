@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -10,6 +10,14 @@ const ownerIdentity = {
 	tokenIdentifier: "test|owner",
 	name: "Owner",
 	email: "owner@example.com",
+};
+
+const otherIdentity = {
+	issuer: "https://graneri.test",
+	subject: "other-subject",
+	tokenIdentifier: "test|other",
+	name: "Other",
+	email: "other@example.com",
 };
 
 test("workspace creation seeds default templates and recipes as stored rows", async () => {
@@ -45,4 +53,26 @@ test("workspace creation seeds default templates and recipes as stored rows", as
 		templates: 3,
 		recipes: 3,
 	});
+});
+
+test("internal workspace access assertion rejects a different owner", async () => {
+	const t = convexTest(schema, modules);
+	const workspace = await t
+		.withIdentity(ownerIdentity)
+		.mutation(api.workspaces.create, {
+			name: "Workspace",
+		});
+	await expect(
+		t.query(internal.workspaces.assertAccess, {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			workspaceId: workspace._id,
+		}),
+	).resolves.toBeNull();
+
+	await expect(
+		t.query(internal.workspaces.assertAccess, {
+			ownerTokenIdentifier: otherIdentity.tokenIdentifier,
+			workspaceId: workspace._id,
+		}),
+	).rejects.toThrow("Workspace not found.");
 });
