@@ -76,12 +76,3 @@ export declare const normalizeStoredUiMessage: <
 >(
 	message: Message,
 ) => Promise<Message>;
-
-export declare const decodeStoredUiMessagesForModelInput: (
-	messages: Array<{
-		id: string;
-		role: unknown;
-		partsJson: string;
-		metadataJson?: string;
-	}>,
-) => GraneriUIMessage[];

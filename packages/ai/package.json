@@ -155,6 +155,10 @@
       "types": "./src/safety-identifier.d.mts",
       "import": "./src/safety-identifier.mjs"
     },
+    "./stored-ui-message-context": {
+      "types": "./src/stored-ui-message-context.d.mts",
+      "import": "./src/stored-ui-message-context.mjs"
+    },
     "./tool-ui-metadata": {
       "types": "./src/tool-ui-metadata.d.mts",
       "import": "./src/tool-ui-metadata.mjs"

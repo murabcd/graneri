@@ -1,6 +1,5 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { z } from "zod";
 import {
 	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
 	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
@@ -9,7 +8,7 @@ import {
 	CONTEXT_COMPACTION_MODEL_ID,
 	getOpenAiModelProviderOptions,
 } from "./models.mjs";
-import { tryParseUiMessagePartsJson } from "./ui-message-codec.mjs";
+import { buildStoredUiMessageCompactionTranscript } from "./stored-ui-message-context.mjs";
 
 export {
 	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
@@ -18,78 +17,17 @@ export {
 
 const MAX_COMPACTION_ROUNDS = 10;
 const MAX_COMPACTION_SUMMARY_CHARS = 12_000;
-const MAX_COMPACTION_MESSAGE_CHARS = 4_000;
-const MAX_COMPACTION_PART_CHARS = 8_000;
-
 const clampText = (value, maxLength) =>
 	value.length <= maxLength
 		? value
 		: `${value.slice(0, maxLength)}\n[truncated]`;
-
-const compactionPartSchema = z.union([
-	z.object({ text: z.string(), type: z.literal("text") }),
-	z.object({
-		errorText: z.unknown().optional(),
-		input: z.unknown().optional(),
-		output: z.unknown().optional(),
-		state: z.string(),
-		toolName: z.string().optional(),
-		type: z
-			.string()
-			.refine((type) => type === "dynamic-tool" || type.startsWith("tool-")),
-	}),
-]);
-
-const stringifyValue = (value) => {
-	if (typeof value === "string") {
-		return value;
-	}
-	try {
-		return JSON.stringify(value);
-	} catch {
-		return "[unserializable]";
-	}
-};
-
-const renderStoredMessage = (message) => {
-	const parts = tryParseUiMessagePartsJson(message.partsJson) ?? [];
-
-	const content = parts.flatMap((value) => {
-		const result = compactionPartSchema.safeParse(value);
-		if (!result.success) {
-			return [];
-		}
-		const part = result.data;
-		if (part.type === "text" && typeof part.text === "string") {
-			return [part.text];
-		}
-		const toolName =
-			part.type === "dynamic-tool"
-				? part.toolName
-				: part.type.slice("tool-".length);
-		return [
-			clampText(
-				`[tool ${String(toolName)} ${part.state}] input=${stringifyValue(part.input)} output=${stringifyValue(part.output)} error=${stringifyValue(part.errorText)}`,
-				MAX_COMPACTION_PART_CHARS,
-			),
-		];
-	});
-
-	return clampText(
-		`${message.role.toUpperCase()}:\n${content.join("\n").trim() || "[no text content]"}`,
-		MAX_COMPACTION_MESSAGE_CHARS,
-	);
-};
-
-export const buildHostedChatCompactionTranscript = (messages) =>
-	messages.map(renderStoredMessage).join("\n\n");
 
 export const generateHostedChatContextSummary = async ({
 	messages,
 	previousSummary,
 	safetyIdentifier,
 }) => {
-	const transcript = buildHostedChatCompactionTranscript(messages);
+	const transcript = buildStoredUiMessageCompactionTranscript(messages);
 	const result = await generateText({
 		model: openai(CONTEXT_COMPACTION_MODEL_ID),
 		maxOutputTokens: 3_000,

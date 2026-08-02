@@ -180,35 +180,3 @@ export const normalizeStoredUiMessage = async (message) => {
 		),
 	};
 };
-
-export const decodeStoredUiMessagesForModelInput = (messages) =>
-	messages.flatMap((message) => {
-		if (!isStoredMessageRole(message.role)) {
-			return [];
-		}
-		const storedParts = tryParseUiMessagePartsJson(message.partsJson);
-		if (!storedParts) {
-			return [];
-		}
-		const parts = storedParts.flatMap((part) =>
-			part &&
-			typeof part === "object" &&
-			part.type === "text" &&
-			typeof part.text === "string" &&
-			part.text.length > 0
-				? [{ type: "text", text: part.text }]
-				: [],
-		);
-		if (parts.length === 0) {
-			return [];
-		}
-		const metadata = tryParseUiMessageMetadataJson(message.metadataJson);
-		return [
-			{
-				id: message.id,
-				role: message.role,
-				...(metadata === undefined ? {} : { metadata }),
-				parts,
-			},
-		];
-	});

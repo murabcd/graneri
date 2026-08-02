@@ -24,10 +24,6 @@ export type HostedChatContextPreparationState = {
 	messages: HostedChatContextMessage[];
 };
 
-export function buildHostedChatCompactionTranscript(
-	messages: HostedChatContextMessage[],
-): string;
-
 export function generateHostedChatContextSummary(args: {
 	messages: HostedChatContextMessage[];
 	previousSummary: string;

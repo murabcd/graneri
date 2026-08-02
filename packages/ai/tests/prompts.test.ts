@@ -5,7 +5,6 @@ import {
 	buildHostedChatRuntimeInstructions,
 	buildHostedChatSaveMessageArgs,
 	buildHostedNotesContext,
-	fromHostedStoredMessages,
 	getHostedChatConvexRouteError,
 	getHostedChatReplayAcceptanceHeaders,
 	getHostedChatSteerAcceptanceHeaders,
@@ -646,40 +645,6 @@ describe("prompt helpers", () => {
 		).toThrow("Queued chat message cannot be empty.");
 	});
 
-	it("replays stored hosted messages with tolerant parsing", () => {
-		const messages = fromHostedStoredMessages([
-			{
-				id: "invalid-parts",
-				role: "assistant",
-				partsJson: "{",
-				metadataJson: '{"status":"ignored"}',
-			},
-			{
-				id: "empty-parts",
-				role: "assistant",
-				partsJson: JSON.stringify([{ type: "file", url: "file://local" }]),
-			},
-			{
-				id: "valid-text",
-				role: "user",
-				partsJson: JSON.stringify([
-					{ type: "text", text: "Replay this" },
-					{ type: "text", text: "" },
-				]),
-				metadataJson: "{",
-			},
-		]);
-
-		expect(messages).toEqual([
-			{
-				id: "valid-text",
-				role: "user",
-				metadata: undefined,
-				parts: [{ type: "text", text: "Replay this" }],
-			},
-		]);
-	});
-
 	it("prepares edited hosted chat branches from stored snapshots", () => {
 		const branch = prepareHostedChatBranch({
 			message: {
@@ -710,6 +675,36 @@ describe("prompt helpers", () => {
 			"msg-1",
 			"edited-message",
 		]);
+	});
+
+	it("replaces a projected stored message with the current canonical message", () => {
+		const currentMessage = {
+			id: "assistant-approval",
+			role: "assistant" as const,
+			parts: [
+				{
+					type: "tool-delete_note",
+					toolCallId: "call-1",
+					state: "approval-responded",
+					input: { noteId: "note-1" },
+					approval: { id: "approval-1", approved: true },
+				},
+			],
+		};
+		const branch = prepareHostedChatBranch({
+			message: currentMessage,
+			storedMessages: [
+				{
+					id: "assistant-approval",
+					role: "assistant",
+					partsJson: JSON.stringify([
+						{ type: "text", text: "I need approval." },
+					]),
+				},
+			],
+		});
+
+		expect(branch.incomingMessages).toEqual([currentMessage]);
 	});
 
 	it("omits every interrupted assistant segment from continued run context", () => {

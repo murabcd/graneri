@@ -17,9 +17,9 @@ import {
 	buildChatInstructions,
 	CHAT_TITLE_INSTRUCTIONS,
 } from "./prompts.mjs";
+import { projectStoredUiMessagesForAssistantRun } from "./stored-ui-message-context.mjs";
 import { getToolApprovalResponse } from "./tool-approval-state.mjs";
 import {
-	decodeStoredUiMessagesForModelInput,
 	encodeUiMessage,
 	tryParseUiMessageMetadataJson,
 } from "./ui-message-codec.mjs";
@@ -483,8 +483,6 @@ export const toHostedQueuedUserMessage = (queuedMessage) => {
 	};
 };
 
-export const fromHostedStoredMessages = decodeStoredUiMessagesForModelInput;
-
 export const prepareHostedChatBranch = ({
 	interruptedAssistantMessageIds = [],
 	message,
@@ -514,7 +512,8 @@ export const prepareHostedChatBranch = ({
 		editedMessageIndex >= 0
 			? branchStoredMessages.slice(0, editedMessageIndex)
 			: branchStoredMessages;
-	const baseMessages = fromHostedStoredMessages(baseStoredMessages);
+	const baseMessages =
+		projectStoredUiMessagesForAssistantRun(baseStoredMessages);
 	const baseMessageIds = new Set(
 		baseMessages.map((baseMessage) => baseMessage.id),
 	);
@@ -526,8 +525,15 @@ export const prepareHostedChatBranch = ({
 		pendingIncomingMessages.push(pendingMessage);
 		baseMessageIds.add(pendingMessage.id);
 	}
-	if (message && !baseMessageIds.has(message.id)) {
-		pendingIncomingMessages.push(message);
+	if (message) {
+		const baseMessageIndex = baseMessages.findIndex(
+			(baseMessage) => baseMessage.id === message.id,
+		);
+		if (baseMessageIndex >= 0) {
+			baseMessages[baseMessageIndex] = message;
+		} else if (!baseMessageIds.has(message.id)) {
+			pendingIncomingMessages.push(message);
+		}
 	}
 	const incomingMessages = message
 		? [...baseMessages, ...pendingIncomingMessages]

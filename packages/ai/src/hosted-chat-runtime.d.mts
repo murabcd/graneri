@@ -132,14 +132,6 @@ export declare const buildHostedChatSaveMessageArgs: <
 	reasoningEffort: ReasoningEffort;
 	message: ReturnType<typeof toHostedStoredMessage>;
 };
-export declare const fromHostedStoredMessages: (
-	messages: Array<{
-		id: string;
-		role: StoredUiMessageRole;
-		partsJson: string;
-		metadataJson?: string;
-	}>,
-) => UIMessage[];
 export declare const prepareHostedChatBranch: (args: {
 	interruptedAssistantMessageIds?: string[];
 	message?: UIMessage;

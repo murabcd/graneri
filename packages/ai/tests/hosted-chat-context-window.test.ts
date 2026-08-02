@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-	buildHostedChatCompactionTranscript,
-	prepareHostedChatContextWindow,
-} from "../src/hosted-chat-context-window.mjs";
+import { prepareHostedChatContextWindow } from "../src/hosted-chat-context-window.mjs";
 
 const createMessage = (index: number) => ({
 	id: `message-${index}`,
@@ -177,38 +174,5 @@ describe("hosted chat context window", () => {
 		expect(compactionLifecycle.start).toHaveBeenCalledOnce();
 		expect(compactionLifecycle.cancel).toHaveBeenCalledOnce();
 		expect(saveCompaction).not.toHaveBeenCalled();
-	});
-
-	it("preserves consequential tool input and output in the summary transcript", () => {
-		const transcript = buildHostedChatCompactionTranscript([
-			{
-				...createMessage(1),
-				role: "assistant",
-				partsJson: JSON.stringify([
-					{
-						type: "tool-search_notes",
-						state: "output-available",
-						input: { query: "roadmap" },
-						output: { result: "Launch in September" },
-					},
-				]),
-			},
-		]);
-
-		expect(transcript).toContain("tool search_notes output-available");
-		expect(transcript).toContain("Launch in September");
-	});
-
-	it("represents every message even when individual content is oversized", () => {
-		const transcript = buildHostedChatCompactionTranscript([
-			{
-				...createMessage(1),
-				partsJson: JSON.stringify([{ type: "text", text: "a".repeat(10_000) }]),
-			},
-			createMessage(2),
-		]);
-
-		expect(transcript).toContain("[truncated]");
-		expect(transcript).toContain("content 2");
 	});
 });

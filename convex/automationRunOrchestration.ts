@@ -3,7 +3,7 @@ import {
 	BASE_CHAT_INSTRUCTIONS,
 	buildChatHistoryInstructions,
 } from "@workspace/ai/prompts";
-import { decodeTrustedStoredUiMessage } from "@workspace/ai/ui-message-codec";
+import { projectStoredUiMessagesForAssistantRun } from "@workspace/ai/stored-ui-message-context";
 import type { UIMessage } from "ai";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -132,14 +132,13 @@ const loadAutomationMessages = async (
 		})
 		.order("desc")
 		.take(HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT);
-	const storedMessages = messages.reverse().map((message) =>
-		decodeTrustedStoredUiMessage({
+	const storedMessages = projectStoredUiMessagesForAssistantRun(
+		messages.reverse().map((message) => ({
 			id: message.messageId,
 			role: message.role,
 			partsJson: message.partsJson,
 			metadataJson: message.metadataJson,
-			createdAt: message.createdAt,
-		}),
+		})),
 	);
 
 	return {

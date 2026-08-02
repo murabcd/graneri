@@ -200,6 +200,11 @@ classification. Convex imports this runtime-neutral module through
 `@workspace/ai/hosted-assistant-execution`; it must not import the broader
 hosted-turn interface because that graph includes web and desktop-local tool
 implementations. Stored UI Message validation belongs to the UI message codec.
+The Stored UI Message context projection is separately canonical: interactive
+and automated Assistant Runs preserve text and stable completed-tool outcomes
+through `stored-ui-message-context`, and rolling compaction renders the same
+consequential content policy. Ephemeral parts and historical file references do
+not cross that model-context boundary.
 Web and Convex remain producer adapters: web owns desktop-local tool streaming
 and HTTP delivery, while Convex owns liveness checks, durable snapshot cadence,
 scheduling, and transactional finalization.

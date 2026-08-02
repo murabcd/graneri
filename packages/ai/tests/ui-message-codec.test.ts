@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
 	decodeStoredUiMessage,
-	decodeStoredUiMessagesForModelInput,
 	decodeTrustedStoredUiMessage,
 	encodeUiMessage,
 	parseUiMessagePartsJson,
@@ -95,32 +94,5 @@ describe("UI message codec", () => {
 			code: "invalid_message_shape",
 			message: "Stored UI messages must have a user or assistant role.",
 		});
-	});
-
-	it("makes tolerant model projection explicit", () => {
-		expect(
-			decodeStoredUiMessagesForModelInput([
-				{
-					id: "bad",
-					role: "assistant",
-					partsJson: "not-json",
-				},
-				{
-					id: "message-1",
-					role: "user",
-					partsJson: JSON.stringify([
-						{ type: "file", url: "https://example.com/file" },
-						{ type: "text", text: "Question" },
-					]),
-					metadataJson: "not-json",
-				},
-			]),
-		).toEqual([
-			{
-				id: "message-1",
-				role: "user",
-				parts: [{ type: "text", text: "Question" }],
-			},
-		]);
 	});
 });
