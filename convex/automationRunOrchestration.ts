@@ -1,4 +1,4 @@
-import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
+import { CHAT_CONTEXT_POLICY } from "@workspace/ai/chat-context-policy";
 import {
 	BASE_CHAT_INSTRUCTIONS,
 	buildChatHistoryInstructions,
@@ -131,7 +131,7 @@ const loadAutomationMessages = async (
 				: chatMessages;
 		})
 		.order("desc")
-		.take(HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT);
+		.take(CHAT_CONTEXT_POLICY.exactTailMessageLimit);
 	const storedMessages = projectStoredUiMessagesForAssistantRun(
 		messages.reverse().map((message) => ({
 			id: message.messageId,

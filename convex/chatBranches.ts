@@ -1,4 +1,3 @@
-import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
 import { ConvexError, v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
@@ -9,6 +8,7 @@ import { requireConvexDocumentWithinLimit } from "./documentSize";
 import { clampWhitespace, createResourceAccess } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess("chat branches");
+const MAX_CHAT_BRANCH_MESSAGES = 200;
 
 export const branchFromMessage = mutation({
 	args: {
@@ -46,19 +46,35 @@ export const branchFromMessage = mutation({
 			.query("chatMessages")
 			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chat._id))
 			.order("desc")
-			.take(HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT + 1);
+			.take(MAX_CHAT_BRANCH_MESSAGES + 1);
 		messages.reverse();
 		const targetIndex = messages.findIndex(
 			(message) => message.messageId === targetMessageId,
 		);
 		if (targetIndex < 0) {
+			const olderTarget = await ctx.db
+				.query("chatMessages")
+				.withIndex("by_chatId_and_messageId", (q) =>
+					q.eq("chatId", chat._id).eq("messageId", targetMessageId),
+				)
+				.unique();
 			throw new ConvexError({
-				code: "CHAT_BRANCH_TARGET_NOT_FOUND",
-				message: "Chat branch target is no longer available.",
+				code: olderTarget
+					? "CHAT_BRANCH_TARGET_TOO_OLD"
+					: "CHAT_BRANCH_TARGET_NOT_FOUND",
+				message: olderTarget
+					? "Chat branch target is too far back to replace."
+					: "Chat branch target is no longer available.",
 			});
 		}
 
 		const messagesToBranch = messages.slice(targetIndex);
+		if (messagesToBranch.length > MAX_CHAT_BRANCH_MESSAGES) {
+			throw new ConvexError({
+				code: "CHAT_BRANCH_TARGET_TOO_OLD",
+				message: "Chat branch target is too far back to replace.",
+			});
+		}
 		const previousMessage = targetIndex > 0 ? messages[targetIndex - 1] : null;
 		const now = Date.now();
 		const branchDocument = {

@@ -1,4 +1,3 @@
-import { HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT } from "@workspace/ai/chat-context-contract";
 import {
 	normalizeStoredUiMessage,
 	type StoredUiMessageRole,
@@ -56,10 +55,7 @@ import {
 	uppercaseFirstCharacter,
 } from "./domain";
 
-const chatRoleValidator = v.union(
-	v.literal("user"),
-	v.literal("assistant"),
-);
+const chatRoleValidator = v.union(v.literal("user"), v.literal("assistant"));
 
 const reasoningEffortValidator = v.union(
 	v.literal("low"),
@@ -164,7 +160,7 @@ type RemoveAllChatsResult = {
 
 const MAX_CHAT_TITLE_LENGTH = 80;
 const MAX_RETURNED_CHATS = 100;
-const MAX_RETURNED_CHAT_MESSAGES = HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT;
+const MAX_CHAT_MESSAGE_SNAPSHOT_SIZE = 200;
 const REMOVE_CHAT_MESSAGES_BATCH_SIZE = 100;
 const REMOVE_CHAT_RUNTIME_BATCH_SIZE = 100;
 const NOTE_CHAT_BATCH_SIZE = 25;
@@ -281,7 +277,7 @@ const getStoredChatMessages = async (
 		.query("chatMessages")
 		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
 		.order("desc")
-		.take(MAX_RETURNED_CHAT_MESSAGES);
+		.take(MAX_CHAT_MESSAGE_SNAPSHOT_SIZE);
 
 const getActiveStreamByChatId = async (
 	ctx: QueryCtx | MutationCtx,
@@ -378,9 +374,7 @@ const deleteChatRuntimeBatch = async (
 	);
 	const deletableRuns = runs.filter((_, index) => !eventBatchesHaveMore[index]);
 	await Promise.all(
-		deletableRuns.map((run) =>
-			cleanupAssistantRunToolExecutions(ctx, run._id),
-		),
+		deletableRuns.map((run) => cleanupAssistantRunToolExecutions(ctx, run._id)),
 	);
 
 	await Promise.all([

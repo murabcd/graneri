@@ -55,9 +55,9 @@
       "types": "./src/chat-message-metadata.d.mts",
       "import": "./src/chat-message-metadata.mjs"
     },
-    "./chat-context-contract": {
-      "types": "./src/chat-context-contract.d.mts",
-      "import": "./src/chat-context-contract.mjs"
+    "./chat-context-policy": {
+      "types": "./src/chat-context-policy.d.mts",
+      "import": "./src/chat-context-policy.mjs"
     },
     "./chart-generation-tool": {
       "types": "./src/chart-generation-tool.d.mts",

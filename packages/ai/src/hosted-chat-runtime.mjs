@@ -107,6 +107,10 @@ const hostedChatConvexRouteErrorMessages = new Map([
 		"Chat branch target is no longer available.",
 	],
 	[
+		"CHAT_BRANCH_TARGET_TOO_OLD",
+		"Chat branch target is too far back to replace.",
+	],
+	[
 		"CONTEXT_COMPACTION_INVALID",
 		"Chat context changed while its history was being compacted.",
 	],
@@ -163,7 +167,8 @@ export const getHostedChatConvexRouteError = (error) => {
 	const isChatLifecycleError = code === "CHAT_NOT_FOUND";
 	const isChatBranchTargetError =
 		code === "CHAT_BRANCH_TARGET_INVALID" ||
-		code === "CHAT_BRANCH_TARGET_NOT_FOUND";
+		code === "CHAT_BRANCH_TARGET_NOT_FOUND" ||
+		code === "CHAT_BRANCH_TARGET_TOO_OLD";
 	const isContextCompactionConflict =
 		code === "CONTEXT_COMPACTION_INVALID" ||
 		code === "CONTEXT_COMPACTION_STALE";
@@ -200,6 +205,7 @@ export const getHostedChatConvexRouteError = (error) => {
 			isChatLifecycleError ||
 			isContextCompactionConflict ||
 			code === "CHAT_BRANCH_TARGET_NOT_FOUND" ||
+			code === "CHAT_BRANCH_TARGET_TOO_OLD" ||
 			code === "QUEUED_MESSAGE_NOT_FOUND"
 				? 409
 				: code === "TOOL_APPROVAL_NOT_PENDING"

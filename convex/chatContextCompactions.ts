@@ -1,8 +1,7 @@
 import {
-	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
-	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
+	CHAT_CONTEXT_POLICY,
 	type HostedChatContextMessage,
-} from "@workspace/ai/chat-context-contract";
+} from "@workspace/ai/chat-context-policy";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -124,11 +123,12 @@ const readPreparationState = async (
 				: chatMessages;
 		})
 		.order("asc")
-		.take(HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT + 1);
+		.take(CHAT_CONTEXT_POLICY.exactTailMessageLimit + 1);
 
 	return {
 		compaction: checkpoint,
-		hasMoreMessages: messages.length > HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
+		hasMoreMessages:
+			messages.length > CHAT_CONTEXT_POLICY.exactTailMessageLimit,
 		messages: messages.map(toContextMessage),
 	};
 };
@@ -341,10 +341,10 @@ export const save = mutation({
 					: chatMessages;
 			})
 			.order("asc")
-			.take(HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE);
+			.take(CHAT_CONTEXT_POLICY.compactionBatchSize);
 		const boundary = boundaryCandidates.at(-1);
 		if (
-			boundaryCandidates.length !== HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE ||
+			boundaryCandidates.length !== CHAT_CONTEXT_POLICY.compactionBatchSize ||
 			!boundary ||
 			boundary.messageId !== args.throughMessageId ||
 			boundary._creationTime !== args.throughCreationTime

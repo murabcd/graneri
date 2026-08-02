@@ -1,7 +1,10 @@
 import type { StoredUiMessageRole } from "./ui-message-codec.mjs";
 
-export const HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT: 200;
-export const HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE: 100;
+export const CHAT_CONTEXT_POLICY: Readonly<{
+	exactTailMessageLimit: 200;
+	compactionBatchSize: 100;
+	maxCompactionRounds: 10;
+}>;
 
 export type HostedChatContextMessage = {
 	id: string;

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { CHAT_CONTEXT_POLICY } from "../src/chat-context-policy.mjs";
 import { prepareHostedChatContextWindow } from "../src/hosted-chat-context-window.mjs";
 
 const createMessage = (index: number) => ({
@@ -33,8 +34,9 @@ describe("hosted chat context window", () => {
 	});
 
 	it("rolls old messages into a durable summary and keeps the exact recent tail", async () => {
-		let messages = Array.from({ length: 201 }, (_, index) =>
-			createMessage(index + 1),
+		let messages = Array.from(
+			{ length: CHAT_CONTEXT_POLICY.exactTailMessageLimit + 1 },
+			(_, index) => createMessage(index + 1),
 		);
 		let compaction: {
 			summary: string;
@@ -49,8 +51,12 @@ describe("hosted chat context window", () => {
 		};
 		const readState = () => ({
 			compaction,
-			hasMoreMessages: messages.length > 200,
-			messages: messages.slice(0, 201),
+			hasMoreMessages:
+				messages.length > CHAT_CONTEXT_POLICY.exactTailMessageLimit,
+			messages: messages.slice(
+				0,
+				CHAT_CONTEXT_POLICY.exactTailMessageLimit + 1,
+			),
 		});
 		const saveCompaction = vi.fn(async (args) => {
 			compaction = {
@@ -98,8 +104,14 @@ describe("hosted chat context window", () => {
 	});
 
 	it("feeds each durable summary into the next compaction round", async () => {
-		let messages = Array.from({ length: 301 }, (_, index) =>
-			createMessage(index + 1),
+		let messages = Array.from(
+			{
+				length:
+					CHAT_CONTEXT_POLICY.exactTailMessageLimit +
+					CHAT_CONTEXT_POLICY.compactionBatchSize +
+					1,
+			},
+			(_, index) => createMessage(index + 1),
 		);
 		let compaction: {
 			summary: string;
@@ -113,8 +125,12 @@ describe("hosted chat context window", () => {
 			.mockResolvedValueOnce("Summary through 200");
 		const readState = () => ({
 			compaction,
-			hasMoreMessages: messages.length > 200,
-			messages: messages.slice(0, 201),
+			hasMoreMessages:
+				messages.length > CHAT_CONTEXT_POLICY.exactTailMessageLimit,
+			messages: messages.slice(
+				0,
+				CHAT_CONTEXT_POLICY.exactTailMessageLimit + 1,
+			),
 		});
 
 		const result = await prepareHostedChatContextWindow({
@@ -161,8 +177,9 @@ describe("hosted chat context window", () => {
 				loadState: async () => ({
 					compaction: null,
 					hasMoreMessages: true,
-					messages: Array.from({ length: 201 }, (_, index) =>
-						createMessage(index + 1),
+					messages: Array.from(
+						{ length: CHAT_CONTEXT_POLICY.exactTailMessageLimit + 1 },
+						(_, index) => createMessage(index + 1),
 					),
 				}),
 				safetyIdentifier: "safe-user",
@@ -174,5 +191,40 @@ describe("hosted chat context window", () => {
 		expect(compactionLifecycle.start).toHaveBeenCalledOnce();
 		expect(compactionLifecycle.cancel).toHaveBeenCalledOnce();
 		expect(saveCompaction).not.toHaveBeenCalled();
+	});
+
+	it("fails closed when one request would exceed the compaction round policy", async () => {
+		const messages = Array.from(
+			{ length: CHAT_CONTEXT_POLICY.exactTailMessageLimit + 1 },
+			(_, index) => createMessage(index + 1),
+		);
+		const compactionLifecycle = {
+			start: vi.fn().mockResolvedValue(null),
+			cancel: vi.fn().mockResolvedValue(null),
+		};
+		const saveCompaction = vi.fn().mockResolvedValue({
+			compaction: null,
+			hasMoreMessages: true,
+			messages,
+		});
+
+		await expect(
+			prepareHostedChatContextWindow({
+				compactionLifecycle,
+				loadState: async () => ({
+					compaction: null,
+					hasMoreMessages: true,
+					messages,
+				}),
+				safetyIdentifier: "safe-user",
+				saveCompaction,
+				summarize: vi.fn().mockResolvedValue("Durable summary"),
+			}),
+		).rejects.toThrow("Chat history requires too many compaction rounds.");
+
+		expect(saveCompaction).toHaveBeenCalledTimes(
+			CHAT_CONTEXT_POLICY.maxCompactionRounds,
+		);
+		expect(compactionLifecycle.cancel).toHaveBeenCalledOnce();
 	});
 });

@@ -258,6 +258,21 @@ describe("prompt helpers", () => {
 		});
 	});
 
+	it("maps old chat branch targets to route conflicts", () => {
+		const error = Object.assign(new Error("Branch is too large."), {
+			data: {
+				code: "CHAT_BRANCH_TARGET_TOO_OLD",
+				message: "Branch is too large.",
+			},
+		});
+
+		expect(getHostedChatConvexRouteError(error)).toEqual({
+			error: "Chat branch target is too far back to replace.",
+			errorCode: "CHAT_BRANCH_TARGET_TOO_OLD",
+			statusCode: 409,
+		});
+	});
+
 	it.each([
 		"CONTEXT_COMPACTION_INVALID",
 		"CONTEXT_COMPACTION_STALE",

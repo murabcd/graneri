@@ -241,7 +241,13 @@ batches and then sends the trusted summary through top-level AI SDK instructions
 followed by the exact uncompacted user/assistant tail. Compaction never creates
 or stores synthetic system messages, and it never deletes or rewrites saved chat
 messages, so the user-visible transcript and future pagination retain complete
-history. The checkpoint is private context-assembly state; renderer code does
+history. The shared chat-context policy owns the exact Assistant Run tail,
+compaction batch size, and maximum compaction rounds as one coherent model-input
+policy. Renderer snapshots and preserved replacement branches own independent
+bounds; changing either operational limit must not silently alter compaction.
+Automations deliberately use the same exact-tail policy because they assemble
+the same checkpoint-backed model context. The checkpoint is private
+context-assembly state; renderer code does
 not infer compaction from it. When preparation discovers that compaction is
 required, preparation first creates one owner-scoped, server-backed activity
 through the web adapter, anchored to the triggering message. Ask AI and note

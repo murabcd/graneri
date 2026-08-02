@@ -1,10 +1,6 @@
-import type { HostedChatContextMessage } from "./chat-context-contract.mjs";
+import type { HostedChatContextMessage } from "./chat-context-policy.mjs";
 
-export {
-	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
-	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
-	type HostedChatContextMessage,
-} from "./chat-context-contract.mjs";
+export type { HostedChatContextMessage } from "./chat-context-policy.mjs";
 
 export type HostedChatContextCompaction = {
 	summary: string;

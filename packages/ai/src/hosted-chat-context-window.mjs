@@ -1,21 +1,12 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import {
-	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
-	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
-} from "./chat-context-contract.mjs";
+import { CHAT_CONTEXT_POLICY } from "./chat-context-policy.mjs";
 import {
 	CONTEXT_COMPACTION_MODEL_ID,
 	getOpenAiModelProviderOptions,
 } from "./models.mjs";
 import { buildStoredUiMessageCompactionTranscript } from "./stored-ui-message-context.mjs";
 
-export {
-	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
-	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
-};
-
-const MAX_COMPACTION_ROUNDS = 10;
 const MAX_COMPACTION_SUMMARY_CHARS = 12_000;
 const clampText = (value, maxLength) =>
 	value.length <= maxLength
@@ -71,12 +62,12 @@ export const prepareHostedChatContextWindow = async ({
 		}
 
 		while (state.hasMoreMessages) {
-			if (compactionCount >= MAX_COMPACTION_ROUNDS) {
+			if (compactionCount >= CHAT_CONTEXT_POLICY.maxCompactionRounds) {
 				throw new Error("Chat history requires too many compaction rounds.");
 			}
 			const candidates = state.messages.slice(
 				0,
-				HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
+				CHAT_CONTEXT_POLICY.compactionBatchSize,
 			);
 			const boundary = candidates.at(-1);
 			if (!boundary) {
