@@ -46,12 +46,13 @@ classification remain in Electron main behind IPC.
 The calendar page reads and creates events and provider calendars through
 authenticated Convex actions. Provider credentials and write requests remain
 server-side. `calendarProviderModule` owns provider selection, parallel
-complete-snapshot aggregation, deduplication, and write dispatch; Google and
-Yandex implementations are adapters that own their credentials and wire
-protocols. Google event creation uses the calendar event scope; real secondary
-calendar creation, metadata changes, and owned-secondary deletion use the
-calendar-management scope, while calendar-list color/alias changes and
-subscription removal use the calendar-list scope. Yandex creates
+complete-snapshot aggregation, deduplication, provider-neutral command
+normalization, and write dispatch; public Convex actions remain authenticated
+adapters, while Google and Yandex implementations own their credentials and
+wire protocols. Google event creation uses the calendar event scope; real
+secondary calendar creation, metadata changes, and owned-secondary deletion
+use the calendar-management scope, while calendar-list color/alias changes
+and subscription removal use the calendar-list scope. Yandex creates
 event-only collections with CalDAV MKCALENDAR and writes VEVENT resources with
 CalDAV PUT. Calendar sources expose server-derived edit and removal
 capabilities. Google primary calendars are editable but not removable, owned

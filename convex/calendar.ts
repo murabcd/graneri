@@ -5,8 +5,6 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action } from "./_generated/server";
-import { normalizeEmail } from "./calendarAttendees";
-import { isCalendarDateValue } from "./calendarDate";
 import { scheduleCalendarPeopleSync } from "./calendarPeopleSync";
 import {
 	type CalendarToolProviderInput,
@@ -14,14 +12,11 @@ import {
 	createWorkspaceCalendarProviderAdapters,
 } from "./calendarProviderAdapters";
 import { createCalendarProviderModule } from "./calendarProviderModule";
-import { normalizeCalendarEventRecurrenceInput } from "./calendarRecurrence";
 import type {
-	CalendarEventDetailsInput,
 	CalendarEventsFetchResult,
 	CalendarProvider,
 	CalendarSource,
 	UpcomingCalendarEvent,
-	UpdateCalendarEventInput,
 } from "./calendarTypes";
 import {
 	calendarEventRecurrenceInputValidator,
@@ -330,146 +325,6 @@ export const listCalendarEvents = action({
 	},
 });
 
-const normalizeCalendarEventDetails = <Input extends CalendarEventDetailsInput>(
-	input: Input,
-): Input => {
-	const title = input.title.trim();
-
-	if (!title) {
-		throw new ConvexError({
-			code: "CALENDAR_EVENT_TITLE_REQUIRED",
-			message: "Event title is required.",
-		});
-	}
-
-	const normalizedGuests = input.guests.map(normalizeEmail);
-
-	if (normalizedGuests.some((guest) => guest === null)) {
-		throw new ConvexError({
-			code: "INVALID_CALENDAR_EVENT_GUEST",
-			message: "One or more guest email addresses are invalid.",
-		});
-	}
-
-	const guests = Array.from(
-		new Set(normalizedGuests.filter((guest) => guest !== null)),
-	);
-
-	if (input.time.kind === "all_day") {
-		if (
-			!isCalendarDateValue(input.time.startDate) ||
-			!isCalendarDateValue(input.time.endDate) ||
-			input.time.endDate <= input.time.startDate
-		) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_EVENT_TIME",
-				message: "Event dates are invalid.",
-			});
-		}
-	} else {
-		const startAt = new Date(input.time.startAt).getTime();
-		const endAt = new Date(input.time.endAt).getTime();
-
-		if (
-			!Number.isFinite(startAt) ||
-			!Number.isFinite(endAt) ||
-			endAt <= startAt
-		) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_EVENT_TIME",
-				message: "Event time is invalid.",
-			});
-		}
-	}
-
-	const recurrence = input.recurrence
-		? normalizeCalendarEventRecurrenceInput({
-				recurrence: input.recurrence,
-				time: input.time,
-			})
-		: undefined;
-
-	return {
-		...input,
-		description: input.description?.trim() || undefined,
-		guests,
-		location: input.location?.trim() || undefined,
-		recurrence,
-		title,
-	};
-};
-
-const normalizeUpdateCalendarEventInput = (
-	input: UpdateCalendarEventInput,
-): UpdateCalendarEventInput => {
-	const normalized = normalizeCalendarEventDetails({
-		calendarId: input.calendarId,
-		description: input.description,
-		guests: input.guests,
-		location: input.location,
-		time: input.time,
-		title: input.title,
-	});
-	const providerEventId = input.providerEventId.trim();
-	const destinationCalendarId = input.destinationCalendarId.trim();
-	const seriesProviderEventId =
-		input.seriesProviderEventId?.trim() || undefined;
-
-	if (!providerEventId || !destinationCalendarId) {
-		throw new ConvexError({
-			code: "INVALID_CALENDAR_EVENT_ID",
-			message: "The calendar event or destination identifier is invalid.",
-		});
-	}
-
-	return {
-		calendarId: normalized.calendarId,
-		destinationCalendarId,
-		description: normalized.description,
-		guests: normalized.guests,
-		location: normalized.location,
-		providerEventId,
-		recurrenceId: input.recurrenceId,
-		recurrenceIsAllDay: input.recurrenceIsAllDay,
-		seriesProviderEventId,
-		time: normalized.time,
-		title: normalized.title,
-	};
-};
-
-const normalizeCreateCalendarInput = ({
-	color,
-	name,
-	provider,
-}: {
-	color: string;
-	name: string;
-	provider: "google" | "yandex";
-}) => {
-	const normalizedName = name.trim();
-	const normalizedColor = color.trim().toLowerCase();
-
-	if (!normalizedName || normalizedName.length > 128) {
-		throw new ConvexError({
-			code: "INVALID_CALENDAR_NAME",
-			message: "Calendar name must contain between 1 and 128 characters.",
-		});
-	}
-
-	if (!/^#[0-9a-f]{6}$/u.test(normalizedColor)) {
-		throw new ConvexError({
-			code: "INVALID_CALENDAR_COLOR",
-			message: "Calendar color is invalid.",
-		});
-	}
-
-	return {
-		color: normalizedColor,
-		name: normalizedName,
-		provider,
-	};
-};
-
 export const createCalendar = action({
 	args: {
 		color: v.string(),
@@ -479,16 +334,12 @@ export const createCalendar = action({
 	},
 	returns: v.object({ id: v.string() }),
 	handler: async (ctx, args): Promise<{ id: string }> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const input = normalizeCreateCalendarInput(args);
-
-		return await providerModule.createCalendar(input.provider, {
-			color: input.color,
-			name: input.name,
-		});
+		return await providerModule.createCalendar(command);
 	},
 });
 
@@ -502,24 +353,12 @@ export const updateCalendar = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const calendarId = args.calendarId.trim();
-		if (!calendarId) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_ID",
-				message: "Calendar identifier is invalid.",
-			});
-		}
-		const input = normalizeCreateCalendarInput(args);
-
-		return await providerModule.updateCalendar(args.provider, {
-			calendarId,
-			color: input.color,
-			name: input.name,
-		});
+		return await providerModule.updateCalendar(command);
 	},
 });
 
@@ -531,21 +370,12 @@ export const setDefaultCalendar = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const calendarId = args.calendarId.trim();
-		if (!calendarId) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_ID",
-				message: "Calendar identifier is invalid.",
-			});
-		}
-
-		return await providerModule.setDefaultCalendar(args.provider, {
-			calendarId,
-		});
+		return await providerModule.setDefaultCalendar(command);
 	},
 });
 
@@ -558,26 +388,12 @@ export const deleteCalendar = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const calendarId = args.calendarId.trim();
-		const destinationCalendarId = args.destinationCalendarId?.trim();
-		if (
-			!calendarId ||
-			(args.destinationCalendarId !== undefined && !destinationCalendarId)
-		) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_ID",
-				message: "Calendar identifier is invalid.",
-			});
-		}
-
-		return await providerModule.removeCalendar(args.provider, {
-			calendarId,
-			destinationCalendarId,
-		});
+		return await providerModule.removeCalendar(command);
 	},
 });
 
@@ -595,23 +411,12 @@ export const createCalendarEvent = action({
 	},
 	returns: v.object({ id: v.string() }),
 	handler: async (ctx, args): Promise<{ id: string }> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const input = normalizeCalendarEventDetails({
-			calendarId: args.calendarId,
-			description: args.description,
-			guests: args.guests,
-			location: args.location,
-			provider: args.provider,
-			recurrence: args.recurrence,
-			time: args.time,
-			title: args.title,
-		});
-
-		const { provider, ...eventInput } = input;
-		return await providerModule.createEvent(provider, eventInput);
+		return await providerModule.createEvent(command);
 	},
 });
 
@@ -633,25 +438,12 @@ export const updateCalendarEvent = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const input = normalizeUpdateCalendarEventInput({
-			calendarId: args.calendarId,
-			destinationCalendarId: args.destinationCalendarId,
-			description: args.description,
-			guests: args.guests,
-			location: args.location,
-			providerEventId: args.providerEventId,
-			recurrenceId: args.recurrenceId,
-			recurrenceIsAllDay: args.recurrenceIsAllDay,
-			seriesProviderEventId: args.seriesProviderEventId,
-			time: args.time,
-			title: args.title,
-		});
-
-		return await providerModule.updateEvent(args.provider, input);
+		return await providerModule.updateEvent(command);
 	},
 });
 
@@ -666,25 +458,12 @@ export const deleteCalendarEvent = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const providerEventId = args.providerEventId.trim();
-
-		if (!providerEventId) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_EVENT_ID",
-				message: "The calendar event identifier is invalid.",
-			});
-		}
-
-		return await providerModule.deleteEvent(args.provider, {
-			calendarId: args.calendarId,
-			providerEventId,
-			recurrenceId: args.recurrenceId,
-			recurrenceIsAllDay: args.recurrenceIsAllDay,
-		});
+		return await providerModule.deleteEvent(command);
 	},
 });
 
@@ -699,24 +478,12 @@ export const removeCalendarEvent = action({
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
+		const { workspaceId, ...command } = args;
 		const providerModule = await createOwnedWorkspaceCalendarProviderModule({
 			ctx,
-			workspaceId: args.workspaceId,
+			workspaceId,
 		});
-		const providerEventId = args.providerEventId.trim();
-		if (!providerEventId) {
-			throw new ConvexError({
-				code: "INVALID_CALENDAR_EVENT_ID",
-				message: "The calendar event identifier is invalid.",
-			});
-		}
-
-		return await providerModule.removeEvent(args.provider, {
-			calendarId: args.calendarId,
-			providerEventId,
-			recurrenceId: args.recurrenceId,
-			recurrenceIsAllDay: args.recurrenceIsAllDay,
-		});
+		return await providerModule.removeEvent(command);
 	},
 });
 

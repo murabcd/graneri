@@ -214,7 +214,7 @@ describe("calendar provider module", () => {
 		).rejects.toThrow("Yandex unavailable");
 	});
 
-	it("dispatches writes only to the selected provider", async () => {
+	it("normalizes commands and dispatches writes only to the selected provider", async () => {
 		const google = createProviderAdapter(
 			createResult({ events: [], provider: "google" }),
 		);
@@ -225,27 +225,77 @@ describe("calendar provider module", () => {
 			adapters: { google, yandex },
 		});
 
-		await providerModule.createCalendar("yandex", {
+		await providerModule.createCalendar({
+			color: " #10B981 ",
+			name: " Personal ",
+			provider: "yandex",
+		});
+		await providerModule.updateCalendar({
+			calendarId: " calendar-id ",
+			color: " #10B981 ",
+			name: " Personal ",
+			provider: "yandex",
+		});
+		await providerModule.removeCalendar({
+			calendarId: " calendar-id ",
+			destinationCalendarId: " destination-id ",
+			provider: "yandex",
+		});
+		await providerModule.createEvent({
+			...eventDetails,
+			description: " Notes ",
+			guests: [" Guest@EXAMPLE.COM ", "guest@example.com"],
+			provider: "yandex",
+		});
+		await providerModule.updateEvent({
+			...updateDetails,
+			destinationCalendarId: " calendar-id ",
+			provider: "yandex",
+			providerEventId: " event-id ",
+		});
+		await providerModule.deleteEvent({
+			calendarId: "calendar-id",
+			provider: "yandex",
+			providerEventId: " event-id ",
+		});
+		await providerModule.removeEvent({
+			calendarId: "calendar-id",
+			provider: "yandex",
+			providerEventId: " event-id ",
+		});
+		await providerModule.setDefaultCalendar({
+			calendarId: " calendar-id ",
+			provider: "yandex",
+		});
+
+		expect(yandex.createCalendar).toHaveBeenCalledWith({
 			color: "#10b981",
 			name: "Personal",
 		});
-		await providerModule.createEvent("yandex", eventDetails);
-		await providerModule.updateEvent("yandex", updateDetails);
-		await providerModule.deleteEvent("yandex", {
+		expect(yandex.updateCalendar).toHaveBeenCalledWith({
 			calendarId: "calendar-id",
-			providerEventId: "event-id",
+			color: "#10b981",
+			name: "Personal",
 		});
-		await providerModule.removeEvent("yandex", {
+		expect(yandex.removeCalendar).toHaveBeenCalledWith({
 			calendarId: "calendar-id",
-			providerEventId: "event-id",
+			destinationCalendarId: "destination-id",
 		});
-		await providerModule.setDefaultCalendar("yandex", {
-			calendarId: "calendar-id",
+		expect(yandex.createEvent).toHaveBeenCalledWith({
+			...eventDetails,
+			description: "Notes",
+			guests: ["guest@example.com"],
+			location: undefined,
+			recurrence: undefined,
 		});
-
-		expect(yandex.createCalendar).toHaveBeenCalledOnce();
-		expect(yandex.createEvent).toHaveBeenCalledWith(eventDetails);
-		expect(yandex.updateEvent).toHaveBeenCalledWith(updateDetails);
+		expect(yandex.updateEvent).toHaveBeenCalledWith({
+			...updateDetails,
+			description: undefined,
+			location: undefined,
+			recurrenceId: undefined,
+			recurrenceIsAllDay: undefined,
+			seriesProviderEventId: undefined,
+		});
 		expect(yandex.deleteEvent).toHaveBeenCalledWith({
 			calendarId: "calendar-id",
 			providerEventId: "event-id",
@@ -258,10 +308,55 @@ describe("calendar provider module", () => {
 			calendarId: "calendar-id",
 		});
 		expect(google.createCalendar).not.toHaveBeenCalled();
+		expect(google.updateCalendar).not.toHaveBeenCalled();
+		expect(google.removeCalendar).not.toHaveBeenCalled();
 		expect(google.createEvent).not.toHaveBeenCalled();
 		expect(google.updateEvent).not.toHaveBeenCalled();
 		expect(google.deleteEvent).not.toHaveBeenCalled();
 		expect(google.removeEvent).not.toHaveBeenCalled();
 		expect(google.setDefaultCalendar).not.toHaveBeenCalled();
+	});
+
+	it("rejects invalid commands before the provider seam", async () => {
+		const google = createProviderAdapter(
+			createResult({ events: [], provider: "google" }),
+		);
+		const yandex = createProviderAdapter(
+			createResult({ events: [], provider: "yandex" }),
+		);
+		const providerModule = createCalendarProviderModule({
+			adapters: { google, yandex },
+		});
+
+		await expect(
+			providerModule.createEvent({
+				...eventDetails,
+				provider: "google",
+				title: " ",
+			}),
+		).rejects.toMatchObject({
+			data: { code: "CALENDAR_EVENT_TITLE_REQUIRED" },
+		});
+		await expect(
+			providerModule.updateCalendar({
+				calendarId: " ",
+				color: "#10b981",
+				name: "Personal",
+				provider: "google",
+			}),
+		).rejects.toMatchObject({ data: { code: "INVALID_CALENDAR_ID" } });
+		await expect(
+			providerModule.deleteEvent({
+				calendarId: "calendar-id",
+				provider: "google",
+				providerEventId: " ",
+			}),
+		).rejects.toMatchObject({
+			data: { code: "INVALID_CALENDAR_EVENT_ID" },
+		});
+
+		expect(google.createEvent).not.toHaveBeenCalled();
+		expect(google.updateCalendar).not.toHaveBeenCalled();
+		expect(google.deleteEvent).not.toHaveBeenCalled();
 	});
 });
