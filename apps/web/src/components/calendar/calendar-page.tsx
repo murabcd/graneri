@@ -181,16 +181,17 @@ export function CalendarPage({
 	const toggleCalendar = React.useCallback(
 		(calendarId: string) => {
 			setCalendarFilter((current) => {
-				const excludedCalendarIds =
+				const currentExcludedCalendarIds =
 					current.workspaceId === activeWorkspaceId
-						? new Set(current.excludedCalendarIds)
+						? current.excludedCalendarIds
 						: new Set<string>();
-
-				if (excludedCalendarIds.has(calendarId)) {
-					excludedCalendarIds.delete(calendarId);
-				} else {
-					excludedCalendarIds.add(calendarId);
-				}
+				const excludedCalendarIds = currentExcludedCalendarIds.has(calendarId)
+					? new Set(
+							[...currentExcludedCalendarIds].filter(
+								(excludedId) => excludedId !== calendarId,
+							),
+						)
+					: new Set([...currentExcludedCalendarIds, calendarId]);
 
 				return {
 					excludedCalendarIds,

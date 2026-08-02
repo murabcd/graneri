@@ -32,20 +32,22 @@ type KnownPerson = FunctionReturnType<
 	typeof api.people.listForPicker
 >["people"][number];
 
+const EMPTY_LOCKED_VALUES: readonly string[] = [];
+
 const getPerson = (person: KnownPerson | undefined, email: string) =>
 	person ?? { email };
 
 export function CalendarEventGuestPicker({
 	disabled = false,
 	id,
-	lockedValues = [],
+	lockedValues = EMPTY_LOCKED_VALUES,
 	onValueChange,
 	value,
 	workspaceId,
 }: {
 	disabled?: boolean;
 	id: string;
-	lockedValues?: string[];
+	lockedValues?: readonly string[];
 	onValueChange: (value: string[]) => void;
 	value: string[];
 	workspaceId: Id<"workspaces">;
@@ -63,21 +65,25 @@ export function CalendarEventGuestPicker({
 		query: deferredSearchValue,
 		workspaceId,
 	});
-	const peopleCache = React.useRef(new Map<string, KnownPerson>());
+	const peopleCacheRef = React.useRef<Map<string, KnownPerson> | null>(null);
+	if (peopleCacheRef.current === null) {
+		peopleCacheRef.current = new Map();
+	}
+	const peopleCache = peopleCacheRef.current;
 
 	React.useEffect(() => {
 		for (const person of result?.people ?? []) {
-			peopleCache.current.set(person.email, person);
+			peopleCache.set(person.email, person);
 		}
-	}, [result]);
+	}, [peopleCache, result]);
 
 	const peopleByEmail = React.useMemo(() => {
-		const people = new Map(peopleCache.current);
+		const people = new Map(peopleCache);
 		for (const person of result?.people ?? []) {
 			people.set(person.email, person);
 		}
 		return people;
-	}, [result]);
+	}, [peopleCache, result]);
 	const normalizedSearchEmail = normalizeCalendarGuestEmail(searchValue);
 	const creatableEmail =
 		normalizedSearchEmail && !value.includes(normalizedSearchEmail)

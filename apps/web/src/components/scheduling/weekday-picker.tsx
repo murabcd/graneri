@@ -31,10 +31,13 @@ export function WeekdayPicker<Value extends number | string>({
 	value: Value[];
 }) {
 	const selectedWeekdays = new Set(value);
-	const label = options
-		.filter((day) => selectedWeekdays.has(day.value))
-		.map((day) => day.label)
-		.join(", ");
+	const selectedLabels: string[] = [];
+	for (const day of options) {
+		if (selectedWeekdays.has(day.value)) {
+			selectedLabels.push(day.label);
+		}
+	}
+	const label = selectedLabels.join(", ");
 
 	return (
 		<DropdownMenu>
@@ -74,11 +77,14 @@ export function WeekdayPicker<Value extends number | string>({
 										nextWeekdays.delete(day.value);
 									}
 
-									onChange(
-										options
-											.filter((option) => nextWeekdays.has(option.value))
-											.map((option) => option.value),
-									);
+									const nextValue: Value[] = [];
+									for (const option of options) {
+										if (nextWeekdays.has(option.value)) {
+											nextValue.push(option.value);
+										}
+									}
+
+									onChange(nextValue);
 								}}
 							>
 								{day.name}

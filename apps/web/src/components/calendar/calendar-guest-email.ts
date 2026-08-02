@@ -18,7 +18,7 @@ export const normalizeCalendarGuestEmail = (value: string) => {
 	return `${normalizedEmail.slice(0, normalizedEmail.lastIndexOf("@"))}@${domain}`;
 };
 
-export const normalizeCalendarGuestEmails = (values: string[]) => {
+export const normalizeCalendarGuestEmails = (values: readonly string[]) => {
 	const normalizedEmails: string[] = [];
 	const seenEmails = new Set<string>();
 

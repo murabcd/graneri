@@ -166,6 +166,20 @@ export const createInitialCalendarEventDraft = (
 	};
 };
 
+export const getCalendarEventGuestEmails = (
+	event: UpcomingCalendarEvent,
+): string[] => {
+	const guestEmails: string[] = [];
+
+	for (const attendee of event.attendees) {
+		if (!attendee.isOrganizer && !attendee.isSelf) {
+			guestEmails.push(attendee.email);
+		}
+	}
+
+	return guestEmails;
+};
+
 export const createCalendarEventDraftFromEvent = (
 	event: UpcomingCalendarEvent,
 ): CalendarEventDraft => {
@@ -181,9 +195,7 @@ export const createCalendarEventDraftFromEvent = (
 		description: event.description ?? "",
 		endDate: toDateInputValue(draftEnd),
 		endTime: toTimeInputValue(draftEnd),
-		guests: event.attendees
-			.filter((attendee) => !attendee.isOrganizer && !attendee.isSelf)
-			.map((attendee) => attendee.email),
+		guests: getCalendarEventGuestEmails(event),
 		location: event.location ?? "",
 		recurrence: createInitialRecurrenceDraft(startDate),
 		startDate,
