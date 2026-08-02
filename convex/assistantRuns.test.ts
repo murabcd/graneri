@@ -154,7 +154,7 @@ const startRunWithSnapshots = async ({
 const queuedMessageInput = (messageId: string, text: string) => ({
 	messageId,
 	text,
-	requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+	requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 });
 
 const backgroundJob = {
@@ -1028,7 +1028,7 @@ test("finishStoppedAssistantRun idempotently removes stale queued rows", async (
 			runId: run._id,
 			messageId: "stale-queued",
 			text: "Stale queued",
-			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			status: "queued",
 			createdAt: 3_000,
 			updatedAt: 3_000,
@@ -1041,7 +1041,7 @@ test("finishStoppedAssistantRun idempotently removes stale queued rows", async (
 			runId: run._id,
 			messageId: "stale-claimed",
 			text: "Stale claimed",
-			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			status: "claimed",
 			createdAt: 3_001,
 			updatedAt: 3_001,
@@ -1100,7 +1100,7 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 			runId: run._id,
 			messageId: "stale-terminal-queued",
 			text: "Stale queued",
-			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			status: "queued",
 			createdAt: 4_000,
 			updatedAt: 4_000,
@@ -1113,7 +1113,7 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 			runId: run._id,
 			messageId: "stale-terminal-claimed",
 			text: "Stale claimed",
-			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			status: "claimed",
 			createdAt: 4_001,
 			updatedAt: 4_001,

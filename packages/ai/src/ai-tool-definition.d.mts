@@ -31,7 +31,7 @@ export declare function requiresAiToolUserApproval(
 	toolDefinition: ToolSet[string],
 ): boolean;
 
-export declare function defineAiTool<TInput, TOutput>(args: {
+export declare function defineAiTool<TInput, TOutput extends object>(args: {
 	deferLoading?: boolean;
 	description: string;
 	execute(input: TInput): Promise<TOutput> | TOutput;

@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "type": "module",
   "private": true,
+  "dependencies": {
+    "zod": "^4.1.12"
+  },
   "scripts": {
     "lint": "biome lint src",
     "lint:fix": "biome lint --write src",
@@ -16,7 +19,7 @@
     "typescript": "workspace:*"
   },
   "exports": {
-	"./calendar-event-navigation": "./src/calendar-event-navigation.mjs",
+    "./calendar-event-navigation": "./src/calendar-event-navigation.mjs",
     "./desktop": "./src/desktop.ts",
     "./desktop-bridge": "./src/desktop-bridge.ts",
     "./desktop-ipc-contract": "./src/desktop-ipc-contract.ts",

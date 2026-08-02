@@ -1,16 +1,20 @@
 import {
+	type ChatMessageMetadata,
+	parseChatMessageMetadata,
+} from "@workspace/ai/chat-message-metadata";
+import {
 	clampHostedChatWhitespace,
 	clampHostedNoteContext,
 } from "@workspace/ai/hosted-chat-runtime";
+import {
+	type DurableQueuedChatRequest,
+	parseDurableQueuedChatRequest,
+} from "@workspace/ai/queued-chat-request";
 import { parseUiMessageMetadataJson } from "@workspace/ai/ui-message-codec";
-import type { UIMessage } from "ai";
 import { createChatComposerEditDraft } from "@/lib/chat-composer-mentions";
-import { parseChatMessageMetadata } from "@/lib/chat-message";
+import type { QueueableChatRequestBody } from "@/lib/chat-request-preparation";
 
-type QueuedRequestBody = Record<string, unknown>;
-
-const hasDurableUnsafeLocalFolders = (requestBody: Record<string, unknown>) =>
-	Array.isArray(requestBody.localFolders) &&
+const hasDurableUnsafeLocalFolders = (requestBody: QueueableChatRequestBody) =>
 	requestBody.localFolders.length > 0;
 
 type QueuedMessage = {
@@ -27,46 +31,39 @@ const generatedQueuedMessageIdPrefix = "queued-";
 export const createQueuedUserMessageId = () =>
 	`${generatedQueuedMessageIdPrefix}${crypto.randomUUID()}`;
 
-const isRecord = (value: unknown): value is QueuedRequestBody =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
 export const isGeneratedQueuedMessageId = (messageId: string) =>
 	messageId.startsWith(generatedQueuedMessageIdPrefix);
 
-const parseQueuedRequestBody = (requestBodyJson: string): QueuedRequestBody => {
+const parseQueuedRequestBody = (
+	requestBodyJson: string,
+): DurableQueuedChatRequest => {
 	const parsed = JSON.parse(requestBodyJson) as unknown;
-
-	if (!isRecord(parsed)) {
+	const requestBody = parseDurableQueuedChatRequest(parsed);
+	if (!requestBody) {
 		throw new Error("Queued chat request body is invalid.");
 	}
-
-	return parsed;
+	return requestBody;
 };
 
 const parseQueuedMessageMetadata = (
 	metadataJson: string | undefined,
-): UIMessage["metadata"] | undefined => {
-	const parsed =
-		parseUiMessageMetadataJson<UIMessage["metadata"]>(metadataJson);
+): ChatMessageMetadata | undefined => {
+	const parsed = parseUiMessageMetadataJson(metadataJson);
 
-	if (parsed !== undefined && !isRecord(parsed)) {
+	if (parsed === undefined) {
+		return undefined;
+	}
+	const metadata = parseChatMessageMetadata(parsed);
+	if (!metadata) {
 		throw new Error("Queued chat message metadata is invalid.");
 	}
-
-	return parsed as UIMessage["metadata"];
+	return metadata;
 };
 
 export const getQueuedChatComposerEditDraft = (
 	queuedMessage: Pick<QueuedMessage, "metadataJson" | "text">,
 ) => {
-	const parsedMetadata = parseQueuedMessageMetadata(queuedMessage.metadataJson);
-	const metadata =
-		parsedMetadata === undefined
-			? null
-			: parseChatMessageMetadata(parsedMetadata);
-	if (parsedMetadata !== undefined && !metadata) {
-		throw new Error("Queued chat message metadata is invalid.");
-	}
+	const metadata = parseQueuedMessageMetadata(queuedMessage.metadataJson);
 
 	return createChatComposerEditDraft({
 		mentionPositions: metadata?.mentionPositions ?? [],
@@ -75,29 +72,26 @@ export const getQueuedChatComposerEditDraft = (
 	});
 };
 
-const sanitizeQueuedNoteContext = (value: unknown) => {
-	if (!isRecord(value)) {
-		return undefined;
-	}
-
-	const noteId = typeof value.noteId === "string" ? value.noteId : null;
-	if (noteId) {
-		return { noteId };
+const sanitizeQueuedNoteContext = (
+	noteContext: NonNullable<DurableQueuedChatRequest["noteContext"]>,
+) => {
+	if (noteContext.noteId !== null) {
+		return { noteId: noteContext.noteId };
 	}
 
 	return {
 		noteId: null,
-		title:
-			typeof value.title === "string"
-				? clampHostedNoteContext(value.title)
-				: "",
-		text:
-			typeof value.text === "string" ? clampHostedNoteContext(value.text) : "",
+		text: clampHostedNoteContext(noteContext.text),
+		title: clampHostedNoteContext(noteContext.title),
 	};
 };
 
-const sanitizeQueuedRequestBody = (requestBody: QueuedRequestBody) => {
-	const durableNoteContext = sanitizeQueuedNoteContext(requestBody.noteContext);
+const sanitizeQueuedRequestBody = (
+	requestBody: QueueableChatRequestBody,
+): DurableQueuedChatRequest => {
+	const durableNoteContext = requestBody.noteContext
+		? sanitizeQueuedNoteContext(requestBody.noteContext)
+		: undefined;
 
 	return {
 		mentions: requestBody.mentions,
@@ -119,8 +113,8 @@ export const toQueuedUserMessageInput = ({
 	text,
 }: {
 	messageId?: string;
-	metadata?: UIMessage["metadata"];
-	requestBody: Record<string, unknown>;
+	metadata?: ChatMessageMetadata;
+	requestBody: QueueableChatRequestBody;
 	text: string;
 }) => {
 	const canonicalText = clampHostedChatWhitespace(text);

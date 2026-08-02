@@ -354,7 +354,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 			message: {
 				messageId: "msg-queued-1",
 				text: "queued follow-up",
-				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			},
 		},
 	);
@@ -365,7 +365,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 		message: {
 			messageId: "msg-queued-2",
 			text: "next follow-up",
-			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 		},
 	});
 	await t.run(async (ctx) =>
@@ -921,7 +921,7 @@ test("an interrupted run can continue with a new assistant message", async () =>
 			message: {
 				messageId: "msg-user-2",
 				text: "Steer",
-				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			},
 		},
 	);
@@ -1116,7 +1116,7 @@ test("accepting a steered user message requires the claimed queued payload", asy
 			message: {
 				messageId: "msg-user-2",
 				text: "Queued steer",
-				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			},
 		},
 	);
@@ -1225,7 +1225,7 @@ test("accepting a steered user message resumes a waiting run", async () => {
 			message: {
 				messageId: "msg-user-2",
 				text: "Use notes",
-				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			},
 		},
 	);
@@ -1346,7 +1346,7 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 		message: {
 			messageId: "msg-user-2",
 			text: "First steer",
-			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 		},
 	});
 	const secondQueuedMessage = await asOwner.mutation(
@@ -1358,7 +1358,7 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 			message: {
 				messageId: "msg-user-3",
 				text: "Second steer",
-				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			},
 		},
 	);
@@ -1470,7 +1470,7 @@ test("accepting a queued user message atomically saves and deletes the claim", a
 			message: {
 				messageId: "msg-user-2",
 				text: "Queued replay",
-				requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			},
 		},
 	);
@@ -1553,7 +1553,7 @@ test("accepting a queued user message requires the claimed queued payload", asyn
 		message: {
 			messageId: "msg-user-2",
 			text: "Queued replay",
-			requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 		},
 	});
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
@@ -1645,7 +1645,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 		message: {
 			messageId: "queued-message-1",
 			text: "Next",
-			requestBodyJson: "{}",
+			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 		},
 	});
 

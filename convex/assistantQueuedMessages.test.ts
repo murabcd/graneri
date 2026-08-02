@@ -119,7 +119,7 @@ const queuedMessageInput = (messageId: string, text: string) => ({
 	text,
 	requestBodyJson: JSON.stringify({
 		model: "gpt-5",
-		text,
+		timezone: "UTC",
 	}),
 });
 type QueuedMessageInput = ReturnType<typeof queuedMessageInput> & {

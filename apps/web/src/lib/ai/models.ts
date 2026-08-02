@@ -1,4 +1,4 @@
-export type { ServiceTier } from "@workspace/ai/models";
+export type { ReasoningEffort, ServiceTier } from "@workspace/ai/models";
 export {
 	CHAT_MODELS as chatModels,
 	DEFAULT_REASONING_EFFORT,

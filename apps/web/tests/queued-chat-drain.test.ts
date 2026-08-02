@@ -13,7 +13,7 @@ const createQueuedMessage = () => ({
 	createdAt: 1,
 	messageId: "queued-message-1",
 	ownerTokenIdentifier: "owner",
-	requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+	requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 	runId: "run-1" as Id<"assistantRuns">,
 	status: "claimed" as const,
 	text: "Queued",
@@ -66,6 +66,7 @@ describe("queued chat drain", () => {
 			convexToken: "fresh-token",
 			model: "gpt-5",
 			replayQueuedMessageId: queuedMessageId,
+			timezone: "UTC",
 			workspaceId,
 		});
 		expect(args.sendMessage).toHaveBeenCalledWith(
@@ -77,6 +78,7 @@ describe("queued chat drain", () => {
 					convexToken: "fresh-token",
 					model: "gpt-5",
 					replayQueuedMessageId: queuedMessageId,
+					timezone: "UTC",
 					workspaceId,
 				},
 			},

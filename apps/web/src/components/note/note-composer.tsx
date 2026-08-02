@@ -1,6 +1,7 @@
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
+import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import {
 	canOpenDesktopSoundSettings,
 	openDesktopSoundSettings,
@@ -53,7 +54,7 @@ import {
 	APP_SIDEBAR_EXPANDED_WIDTH,
 } from "@workspace/ui/lib/panel-dimensions";
 import { cn } from "@workspace/ui/lib/utils";
-import type { FileUIPart, UIMessage } from "ai";
+import type { FileUIPart } from "ai";
 import { useMutation, useQuery } from "convex/react";
 import {
 	ArrowUp,
@@ -1218,7 +1219,7 @@ const useNoteComposerController = ({
 
 		try {
 			const outgoingText = nextMessage || selectedRecipe?.name || "";
-			const recipeMetadata: UIMessage["metadata"] | undefined = selectedRecipe
+			const recipeMetadata: ChatMessageMetadata | undefined = selectedRecipe
 				? {
 						recipe: {
 							slug: selectedRecipe.slug,

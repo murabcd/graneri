@@ -1,5 +1,9 @@
 import { remoteMcpToolPrefixes } from "@workspace/ai/capability-metadata";
-import { toolUiMetadata } from "@workspace/ai/tool-ui-metadata";
+import {
+	type ToolUiIcon,
+	toolUiMetadata,
+} from "@workspace/ai/tool-ui-metadata";
+import type { DynamicToolUIPart, JSONValue, ToolUIPart } from "ai";
 import {
 	AudioLines,
 	Calendar,
@@ -12,10 +16,11 @@ import {
 	FolderOpen,
 	Globe,
 	Search,
+	Terminal,
 	Video,
 } from "lucide-react";
 import type React from "react";
-import { asRecord } from "@/lib/object-record";
+import { z } from "zod";
 import { getTrimmedString } from "@/lib/string-value";
 
 export type ToolMeta = {
@@ -27,28 +32,24 @@ export type ToolMeta = {
 	title: (part: ToolPartLike) => string;
 };
 
+type NativeToolPart = ToolUIPart | DynamicToolUIPart;
+
 export type ToolPartLike = {
-	callProviderMetadata?: { custom?: { startedAt?: unknown } };
 	errorText?: string;
-	input?: Record<string, unknown>;
-	output?: Record<string, unknown>;
-	result?: Record<string, unknown>;
-	state?: string;
-	startedAt?: unknown;
-	toolMetadata?: Record<string, unknown>;
-	toolCallId?: string;
-	toolName?: string;
-	type: string;
+	input?: JSONValue;
+	output?: JSONValue;
+	state: NativeToolPart["state"];
+	toolMetadata?: NativeToolPart["toolMetadata"];
+	toolCallId: string;
+	toolName: string;
+	type: NativeToolPart["type"];
 };
 
 const isPending = (part: ToolPartLike) =>
 	part.state !== "output-available" && part.state !== "output-error";
 
-const getFirstString = (
-	value: Record<string, unknown> | undefined,
-	keys: string[],
-) => {
-	if (!value) {
+const getFirstString = (value: JSONValue | undefined, keys: string[]) => {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
 		return "";
 	}
 
@@ -85,8 +86,38 @@ const toolIconRegistry = {
 	"folder-open": FolderOpen,
 	globe: Globe,
 	search: Search,
+	terminal: Terminal,
 	video: Video,
-} satisfies Record<string, React.ComponentType<{ className?: string }>>;
+} satisfies Record<
+	ToolUiIcon | "audio-lines" | "video",
+	React.ComponentType<{ className?: string }>
+>;
+
+const dynamicToolIconSchema = z.enum([
+	"audio-lines",
+	"calendar",
+	"chart",
+	"database",
+	"file-image",
+	"file-search",
+	"file-text",
+	"folder",
+	"folder-open",
+	"globe",
+	"search",
+	"terminal",
+	"video",
+]);
+
+const toolUiSchema = z.object({
+	complete: z.string().min(1),
+	error: z.string().optional(),
+	groupKey: z.string().optional(),
+	groupLabel: z.string().optional(),
+	icon: dynamicToolIconSchema,
+	running: z.string().min(1),
+	subtitleKeys: z.array(z.string()).optional(),
+});
 
 const makeToolMeta = ({
 	complete,
@@ -99,7 +130,7 @@ const makeToolMeta = ({
 	complete: string;
 	error?: string;
 	groupKey?: string;
-	icon: keyof typeof toolIconRegistry;
+	icon: ToolUiIcon;
 	running: string;
 	subtitleKeys?: string[];
 }): ToolMeta => ({
@@ -112,15 +143,10 @@ const makeToolMeta = ({
 		: undefined,
 });
 
-const toolRegistry = Object.fromEntries(
-	Object.entries(toolUiMetadata).map(([toolName, metadata]) => [
-		`tool-${toolName}`,
-		makeToolMeta({
-			...metadata,
-			icon: metadata.icon as keyof typeof toolIconRegistry,
-		}),
-	]),
-) as Record<string, ToolMeta>;
+const toolRegistry: Record<string, ToolMeta> = {};
+for (const [toolName, metadata] of Object.entries(toolUiMetadata)) {
+	toolRegistry[`tool-${toolName}`] = makeToolMeta(metadata);
+}
 
 const getStaticToolMeta = (part: ToolPartLike) => {
 	if (part.type === "dynamic-tool") {
@@ -173,30 +199,23 @@ function getRemoteMcpPrefixMeta(part: ToolPartLike): ToolMeta | null {
 	};
 }
 
-const getStringArray = (value: unknown) =>
-	Array.isArray(value)
-		? value.filter((item): item is string => typeof item === "string")
-		: [];
-
 function getMetadataToolMeta(part: ToolPartLike): ToolMeta | null {
 	const metadata = part.toolMetadata;
-	const ui = asRecord(metadata?.ui);
-
-	if (!ui) {
+	const result = toolUiSchema.safeParse(metadata?.ui);
+	if (!result.success) {
 		return null;
 	}
+	const ui = result.data;
 
 	const running = getTrimmedString(ui.running);
 	const complete = getTrimmedString(ui.complete);
 	const error = getTrimmedString(ui.error);
-	const iconKey = getTrimmedString(ui.icon);
-
-	if (!running || !complete || !(iconKey in toolIconRegistry)) {
+	if (!running || !complete) {
 		return null;
 	}
 
-	const icon = toolIconRegistry[iconKey as keyof typeof toolIconRegistry];
-	const subtitleKeys = getStringArray(ui.subtitleKeys);
+	const icon = toolIconRegistry[ui.icon];
+	const subtitleKeys = ui.subtitleKeys ?? [];
 	const groupKey = getTrimmedString(ui.groupKey) || undefined;
 	const groupLabel = getTrimmedString(ui.groupLabel) || undefined;
 	const isRemoteMcpTool = getTrimmedString(metadata?.source) === "mcp";

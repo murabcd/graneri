@@ -1,5 +1,6 @@
 import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
+import { z } from "zod";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
@@ -52,24 +53,41 @@ const getToolCallByRunIdAndToolCallId = async (
 		)
 		.unique();
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-	value && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: null;
+const toolSnapshotStateSchema = z.enum([
+	"input-streaming",
+	"input-available",
+	"approval-requested",
+	"approval-responded",
+	"output-available",
+	"output-error",
+	"output-denied",
+]);
+const toolPayloadSchema = z.json();
 
-const getNonEmptyString = (value: unknown) =>
-	typeof value === "string" && value.length > 0 ? value : null;
+const toolSnapshotPartSchema = z.object({
+	errorText: z.string().optional(),
+	input: toolPayloadSchema.optional(),
+	output: toolPayloadSchema.optional(),
+	state: toolSnapshotStateSchema,
+	toolCallId: z.string().min(1),
+	toolName: z.string().optional(),
+	type: z.string(),
+});
 
-const getSnapshotToolName = (part: Record<string, unknown>) => {
+const getNonEmptyString = (value: string | undefined) => value || null;
+
+const getSnapshotToolName = (part: z.infer<typeof toolSnapshotPartSchema>) => {
 	if (part.type === "dynamic-tool") {
 		return getNonEmptyString(part.toolName);
 	}
-	return typeof part.type === "string" && part.type.startsWith("tool-")
+	return part.type.startsWith("tool-")
 		? getNonEmptyString(part.type.slice("tool-".length))
 		: null;
 };
 
-const getSnapshotToolStatus = (state: unknown) => {
+const getSnapshotToolStatus = (
+	state: z.infer<typeof toolSnapshotStateSchema>,
+) => {
 	switch (state) {
 		case "input-streaming":
 		case "input-available":
@@ -82,13 +100,12 @@ const getSnapshotToolStatus = (state: unknown) => {
 			return "failed" as const;
 		case "output-denied":
 			return "denied" as const;
-		default:
-			return null;
 	}
 };
 
-const stringifyPayload = (value: unknown) =>
-	value === undefined ? undefined : JSON.stringify(value);
+const stringifyPayload = (
+	value: z.infer<typeof toolPayloadSchema> | undefined,
+) => (value === undefined ? undefined : JSON.stringify(value));
 
 export const syncAssistantRunToolCalls = async (
 	ctx: MutationCtx,
@@ -98,11 +115,12 @@ export const syncAssistantRunToolCalls = async (
 	const parts = parseUiMessagePartsJson(partsJson);
 
 	for (const value of parts) {
-		const part = asRecord(value);
-		if (!part) {
+		const result = toolSnapshotPartSchema.safeParse(value);
+		if (!result.success) {
 			continue;
 		}
-		const toolCallId = getNonEmptyString(part.toolCallId);
+		const part = result.data;
+		const toolCallId = part.toolCallId;
 		const toolName = getSnapshotToolName(part);
 		const status = getSnapshotToolStatus(part.state);
 		if (!toolCallId || !toolName || !status) {

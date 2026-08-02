@@ -1,14 +1,24 @@
+import { z } from "zod";
 import { normalizeCalendarEventPayload } from "../../../packages/platform/src/calendar-event-navigation.mjs";
-import { isRecord } from "./object-record.mjs";
-
-const normalizeSyncedCalendarEvent = (event) =>
-	normalizeCalendarEventPayload(event);
 
 const createUnavailableCalendarResult = (status) => ({
 	connectedCalendarCount: 0,
 	events: [],
 	status,
 });
+
+const syncedCalendarStateSchema = z.discriminatedUnion("status", [
+	z.strictObject({
+		connectedCalendarCount: z.number().int().nonnegative().optional(),
+		events: z.tuple([]).optional(),
+		status: z.enum(["not_connected", "error"]),
+	}),
+	z.strictObject({
+		connectedCalendarCount: z.number().int().nonnegative(),
+		events: z.array(z.unknown()),
+		status: z.literal("ready"),
+	}),
+]);
 
 const cloneCalendarState = (value) => ({
 	...value,
@@ -26,28 +36,25 @@ const cloneCalendarState = (value) => ({
 });
 
 const normalizeSyncedCalendarState = (payload) => {
-	if (!isRecord(payload)) {
-		throw new Error("Tray calendar payload must be an object.");
+	const result = syncedCalendarStateSchema.safeParse(payload);
+	if (!result.success) {
+		throw new Error("Tray calendar payload is invalid.", {
+			cause: result.error,
+		});
 	}
+	const syncedState = result.data;
 
-	if (payload.status === "not_connected" || payload.status === "error") {
-		return createUnavailableCalendarResult(payload.status);
+	if (syncedState.status !== "ready") {
+		return createUnavailableCalendarResult(syncedState.status);
 	}
-
-	if (payload.status !== "ready") {
-		throw new Error("Tray calendar status is invalid.");
+	const events = syncedState.events.map(normalizeCalendarEventPayload);
+	if (events.some((event) => event === null)) {
+		throw new Error("Tray calendar contains an invalid event.");
 	}
 
 	return {
-		connectedCalendarCount:
-			typeof payload.connectedCalendarCount === "number"
-				? payload.connectedCalendarCount
-				: 0,
-		events: Array.isArray(payload.events)
-			? payload.events
-					.map((event) => normalizeSyncedCalendarEvent(event))
-					.filter(Boolean)
-			: [],
+		connectedCalendarCount: syncedState.connectedCalendarCount,
+		events,
 		status: "ready",
 	};
 };

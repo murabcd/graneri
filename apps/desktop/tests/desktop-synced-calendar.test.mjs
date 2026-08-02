@@ -94,7 +94,34 @@ test("rejects invalid tray calendar status", () => {
 
 	assert.throws(
 		() => calendar.setState({ events: [], status: "checking" }),
-		/Tray calendar status is invalid/,
+		/Tray calendar payload is invalid/,
+	);
+});
+
+test("rejects stale events in an unavailable tray snapshot", () => {
+	const calendar = createDesktopSyncedCalendar();
+
+	assert.throws(
+		() =>
+			calendar.setState({
+				events: [createCalendarEvent()],
+				status: "not_connected",
+			}),
+		/Tray calendar payload is invalid/,
+	);
+});
+
+test("rejects the complete tray snapshot when any event is invalid", () => {
+	const calendar = createDesktopSyncedCalendar();
+
+	assert.throws(
+		() =>
+			calendar.setState({
+				connectedCalendarCount: 1,
+				events: [createCalendarEvent(), { title: "Incomplete" }],
+				status: "ready",
+			}),
+		/Tray calendar contains an invalid event/,
 	);
 });
 

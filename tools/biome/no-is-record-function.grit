@@ -1,0 +1,10 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+	JsIdentifierBinding() as $name,
+	JsLiteralMemberName() as $name
+} where {
+	$name <: `isRecord`,
+	register_diagnostic(span=$name, message="`isRecord` is forbidden. `unknown` must not reach this point. Fix the upstream type flow first. At a real external boundary, parse one named schema and pass the concrete domain type downstream. Do not rename or recreate a generic object or record guard.", severity="error")
+}

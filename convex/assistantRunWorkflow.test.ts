@@ -231,7 +231,7 @@ test("user answers resolve the question and continue the durable workflow", asyn
 			message: {
 				messageId: "user-answer-1",
 				text: "Search all meeting notes.",
-				requestBodyJson: "{}",
+				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 			},
 		},
 	);

@@ -1,5 +1,7 @@
+import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import type { FileUIPart, UIMessage } from "ai";
+import { z } from "zod";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { getReadyFileParts } from "@/components/ai-elements/file-attachment-utils";
 import { createChatUserMessage } from "@/lib/chat-message-state";
@@ -8,6 +10,7 @@ import {
 	toQueuedUserMessageInput,
 } from "@/lib/chat-queue";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
+import type { ChatRequestBody } from "@/lib/chat-request-preparation";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export type ActiveRun =
@@ -20,7 +23,7 @@ export type ActiveRun =
 type SubmitChatTurnMessage = {
 	files?: FileUIPart[];
 	messageId?: string;
-	metadata?: UIMessage["metadata"];
+	metadata?: ChatMessageMetadata;
 	text: string;
 };
 
@@ -33,7 +36,7 @@ export type EnqueueQueuedChatTurn = (args: {
 
 export type SendChatTurn = (
 	message: SubmitChatTurnMessage,
-	options: { body: Record<string, unknown> },
+	options: { body: ChatRequestBody },
 ) => Promise<unknown> | unknown;
 
 export type SubmitChatTurnResult =
@@ -44,37 +47,25 @@ export type SubmitChatTurnResult =
 			status: "sent";
 	  };
 
-const isAssistantRunNoLongerActiveError = (error: unknown) => {
-	const maybeError = error as
-		| { data?: unknown; message?: unknown; code?: unknown }
-		| null
-		| undefined;
-	if (maybeError?.code === "ASSISTANT_RUN_NOT_ACTIVE") {
-		return true;
-	}
+const assistantRunNoLongerActiveErrorSchema = z.union([
+	z.object({ code: z.literal("ASSISTANT_RUN_NOT_ACTIVE") }),
+	z.object({
+		data: z.object({ code: z.literal("ASSISTANT_RUN_NOT_ACTIVE") }),
+	}),
+	z.object({
+		message: z.string().includes("ASSISTANT_RUN_NOT_ACTIVE"),
+	}),
+]);
 
-	if (
-		maybeError?.data &&
-		typeof maybeError.data === "object" &&
-		(maybeError.data as { code?: unknown }).code === "ASSISTANT_RUN_NOT_ACTIVE"
-	) {
-		return true;
-	}
-
-	return (
-		typeof maybeError?.message === "string" &&
-		maybeError.message.includes("ASSISTANT_RUN_NOT_ACTIVE")
-	);
-};
+const isAssistantRunNoLongerActiveError = (error: unknown) =>
+	assistantRunNoLongerActiveErrorSchema.safeParse(error).success;
 
 export const removeChatMessageById = (
 	messages: UIMessage[],
 	messageId: string,
 ) => messages.filter((message) => message.id !== messageId);
 
-export const submitChatTurn = async <
-	TRequestBody extends Record<string, unknown>,
->({
+export const submitChatTurn = async ({
 	attachedFiles,
 	buildRequestBody,
 	chatId,
@@ -91,18 +82,16 @@ export const submitChatTurn = async <
 	workspaceId,
 }: {
 	attachedFiles: ChatAttachment[];
-	buildRequestBody: () => Promise<
-		TRequestBody & { localFolders: DesktopLocalFolder[] }
-	>;
+	buildRequestBody: () => Promise<ChatRequestBody>;
 	chatId: string;
 	displayActiveRun: ActiveRun;
 	editingMessageId: string | null;
 	enqueueQueuedMessage: EnqueueQueuedChatTurn;
-	metadata?: UIMessage["metadata"];
+	metadata?: ChatMessageMetadata;
 	onOptimisticMessage: (message: UIMessage) => void;
 	onRequestPrepared: (args: {
 		localFolders: DesktopLocalFolder[];
-		requestBody: Record<string, unknown>;
+		requestBody: ChatRequestBody;
 	}) => void;
 	onQueuedMessageSaved?: (args: {
 		optimisticMessageId: string;

@@ -1,7 +1,9 @@
-import type { UIMessage } from "ai";
 import { memo, useEffect, useMemo, useState } from "react";
 import { ToolDetails } from "@/components/ai-elements/tools/tool-details";
-import { toToolPartLike } from "@/components/ai-elements/tools/tool-part-like";
+import {
+	type ToolUiPart,
+	toToolPartLike,
+} from "@/components/ai-elements/tools/tool-part-like";
 import { ToolPreview } from "@/components/ai-elements/tools/tool-preview";
 import { hasCustomToolPreview } from "@/components/ai-elements/tools/tool-preview-policy";
 import { getToolMeta } from "@/components/ai-elements/tools/tool-registry";
@@ -10,12 +12,11 @@ import { getToolStatus } from "@/components/ai-elements/utils/format-tool";
 import {
 	formatElapsedTime,
 	getToolDurationMs,
-	getToolStartedAt,
 } from "@/components/ai-elements/utils/tool-display";
 
 export type ToolGroupProps = {
 	chatStatus: "streaming" | "ready";
-	parts: UIMessage["parts"];
+	parts: ToolUiPart[];
 };
 
 const formatCallCount = (count: number) =>
@@ -144,13 +145,11 @@ const getToolDisplayDurationMs = ({
 		return completedDuration;
 	}
 
-	const startedAt = getToolStartedAt(part) ?? fallbackStartedAt;
-
 	if (!isPending && completedAt !== null) {
-		return Math.max(1, completedAt - startedAt);
+		return Math.max(1, completedAt - fallbackStartedAt);
 	}
 
-	return isPending ? Math.max(1, now - startedAt) : null;
+	return isPending ? Math.max(1, now - fallbackStartedAt) : null;
 };
 
 const useToolTimer = (isPending: boolean) => {
@@ -191,17 +190,15 @@ const useToolTimer = (isPending: boolean) => {
 	};
 };
 
-const getToolPartKey = (part: UIMessage["parts"][number], index: number) =>
-	"toolCallId" in part && typeof part.toolCallId === "string"
-		? part.toolCallId
-		: `${part.type}:${index}`;
+const getToolPartKey = (part: ToolUiPart, index: number) =>
+	part.toolCallId || `${part.type}:${index}`;
 
 const NestedToolRow = memo(function NestedToolRow({
 	chatStatus,
 	part,
 }: {
 	chatStatus: "streaming" | "ready";
-	part: UIMessage["parts"][number];
+	part: ToolUiPart;
 }) {
 	const toolPart = toToolPartLike(part);
 	const { isError, isPending } = getToolStatus(toolPart, chatStatus);
@@ -217,11 +214,7 @@ const NestedToolRow = memo(function NestedToolRow({
 		durationMs !== null ? formatElapsedTime(Math.max(1, durationMs)) : "";
 	const hasPreview = hasCustomToolPreview({ isError, toolPart });
 	const hasDetails = Boolean(
-		hasPreview ||
-			toolPart.input ||
-			toolPart.output ||
-			toolPart.result ||
-			toolPart.errorText,
+		hasPreview || toolPart.input || toolPart.output || toolPart.errorText,
 	);
 
 	const meta = getToolMeta(toolPart);
@@ -258,7 +251,7 @@ const NestedToolRow = memo(function NestedToolRow({
 			) : (
 				<ToolDetails
 					input={toolPart.input}
-					output={toolPart.output ?? toolPart.result}
+					output={toolPart.output}
 					errorText={toolPart.errorText}
 				/>
 			)}

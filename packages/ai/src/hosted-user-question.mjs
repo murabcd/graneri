@@ -12,20 +12,13 @@ const requestUserInputSchema = z.object({
 		.describe("One focused question the user can answer in the chat composer."),
 });
 
-const isRecord = (value) =>
-	value !== null && typeof value === "object" && !Array.isArray(value);
-
 const getQuestion = (input) => {
-	if (!isRecord(input) || typeof input.question !== "string") {
-		return null;
-	}
-	const question = input.question.trim();
-	return question || null;
+	const result = requestUserInputSchema.safeParse(input);
+	return result.success ? result.data.question : null;
 };
 
 const getQuestionPart = (part) => {
 	if (
-		!isRecord(part) ||
 		part.type !== `tool-${HOSTED_REQUEST_USER_INPUT_TOOL_NAME}` ||
 		part.state !== "input-available" ||
 		typeof part.toolCallId !== "string"

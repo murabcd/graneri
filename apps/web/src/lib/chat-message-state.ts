@@ -1,3 +1,4 @@
+import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import type { UIMessage } from "ai";
 import { isGeneratedQueuedMessageId } from "@/lib/chat-queue";
 
@@ -15,7 +16,7 @@ export const createChatUserMessage = ({
 }: {
 	files: UIMessage["parts"];
 	id: string;
-	metadata?: UIMessage["metadata"];
+	metadata?: ChatMessageMetadata;
 	text: string;
 }): UIMessage => ({
 	id,

@@ -1,8 +1,11 @@
+import { parseChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
+import { parseDurableQueuedChatRequest } from "@workspace/ai/queued-chat-request";
 import {
 	parseUiMessageMetadataJson,
 	tryParseUiMessagePartsJson,
 } from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
+import { z } from "zod";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import {
@@ -12,6 +15,13 @@ import {
 
 const CLAIMED_QUEUE_MESSAGE_STALE_MS = 5 * 60 * 1000;
 const QUEUED_MESSAGES_LIST_LIMIT = 20;
+const modelTextPartSchema = z.object({
+	type: z.literal("text"),
+	text: z.string().refine((text) => text.trim().length > 0),
+});
+const unsafeLocalFolderRequestSchema = z.looseObject({
+	localFolders: z.array(z.unknown()).min(1),
+});
 
 export type QueuedMessageInput = {
 	messageId: string;
@@ -19,9 +29,6 @@ export type QueuedMessageInput = {
 	text: string;
 	requestBodyJson: string;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
 
 export const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 	if (!message.messageId.trim()) {
@@ -46,7 +53,7 @@ export const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 				message: "Queued message metadata is invalid.",
 			});
 		}
-		if (!isRecord(metadata)) {
+		if (!parseChatMessageMetadata(metadata)) {
 			throw new ConvexError({
 				code: "QUEUED_MESSAGE_INVALID_METADATA",
 				message: "Queued message metadata is invalid.",
@@ -62,19 +69,17 @@ export const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 			message: "Queued message request body is invalid.",
 		});
 	}
-	if (!isRecord(requestBody)) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_INVALID_REQUEST_BODY",
-			message: "Queued message request body is invalid.",
-		});
-	}
-	if (
-		Array.isArray(requestBody.localFolders) &&
-		requestBody.localFolders.length > 0
-	) {
+	if (unsafeLocalFolderRequestSchema.safeParse(requestBody).success) {
 		throw new ConvexError({
 			code: "QUEUED_MESSAGE_LOCAL_FOLDERS_UNSAFE",
 			message: "Queued messages cannot persist local folder selections.",
+		});
+	}
+	const durableRequestBody = parseDurableQueuedChatRequest(requestBody);
+	if (!durableRequestBody) {
+		throw new ConvexError({
+			code: "QUEUED_MESSAGE_INVALID_REQUEST_BODY",
+			message: "Queued message request body is invalid.",
 		});
 	}
 };
@@ -408,14 +413,12 @@ const getModelTextPartSignature = (partsJson: string) => {
 		return null;
 	}
 	return JSON.stringify(
-		parts.flatMap((part) =>
-			isRecord(part) &&
-			part.type === "text" &&
-			typeof part.text === "string" &&
-			part.text.trim().length > 0
-				? [{ type: "text", text: part.text }]
-				: [],
-		),
+		parts.flatMap((part) => {
+			const result = modelTextPartSchema.safeParse(part);
+			return result.success
+				? [{ type: result.data.type, text: result.data.text }]
+				: [];
+		}),
 	);
 };
 

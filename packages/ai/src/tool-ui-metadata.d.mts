@@ -1,7 +1,21 @@
+export type ToolUiIcon =
+	| "calendar"
+	| "chart"
+	| "database"
+	| "file-image"
+	| "file-search"
+	| "file-text"
+	| "folder"
+	| "folder-open"
+	| "globe"
+	| "search"
+	| "terminal";
+
 export type ToolUiMetadata = {
 	complete: string;
+	error?: string;
 	groupKey?: string;
-	icon: string;
+	icon: ToolUiIcon;
 	running: string;
 	subtitleKeys?: string[];
 };

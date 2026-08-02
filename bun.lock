@@ -48,6 +48,7 @@
         "electron-updater": "^6.6.2",
         "pino": "^10.3.1",
         "ws": "^8.18.0",
+        "zod": "^4.1.12",
       },
       "devDependencies": {
         "electron": "^42.3.3",
@@ -149,6 +150,9 @@
     "packages/platform": {
       "name": "@workspace/platform",
       "version": "0.0.0",
+      "dependencies": {
+        "zod": "^4.1.12",
+      },
       "devDependencies": {
         "typescript": "workspace:*",
       },

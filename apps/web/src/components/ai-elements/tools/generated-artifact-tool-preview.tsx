@@ -5,6 +5,7 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@workspace/ui/components/dialog";
+import type { JSONValue } from "ai";
 import { Paperclip, X } from "lucide-react";
 import { type CSSProperties, useState } from "react";
 import {
@@ -12,7 +13,11 @@ import {
 	parseGeneratedArtifact,
 } from "@/lib/chat-message";
 
-export function GeneratedArtifactToolPreview({ output }: { output: unknown }) {
+export function GeneratedArtifactToolPreview({
+	output,
+}: {
+	output?: JSONValue;
+}) {
 	const artifact = parseGeneratedArtifact(output);
 	const [previewImage, setPreviewImage] =
 		useState<ChatGeneratedArtifact | null>(null);

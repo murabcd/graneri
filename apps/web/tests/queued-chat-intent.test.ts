@@ -17,7 +17,7 @@ const createQueuedMessage = () => ({
 	createdAt: 1,
 	messageId: "queued-message-1",
 	ownerTokenIdentifier: "owner",
-	requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+	requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 	runId,
 	status: "claimed" as const,
 	text: "Queued",

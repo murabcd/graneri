@@ -1,0 +1,19 @@
+import type { ReasoningEffort, ServiceTier } from "./models.mjs";
+
+export type DurableQueuedChatRequest = {
+	mentions?: string[];
+	model: string;
+	noteContext?:
+		| { noteId: string }
+		| { noteId: null; text: string; title: string };
+	reasoningEffort?: ReasoningEffort;
+	recipeSlug?: string | null;
+	selectedSourceIds?: string[];
+	serviceTier?: ServiceTier;
+	timezone: string;
+	webSearchEnabled?: boolean;
+};
+
+export declare const parseDurableQueuedChatRequest: (
+	value: unknown,
+) => DurableQueuedChatRequest | null;

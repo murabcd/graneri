@@ -51,6 +51,10 @@
       "types": "./src/chat-latency-logger.d.mts",
       "import": "./src/chat-latency-logger.mjs"
     },
+    "./chat-message-metadata": {
+      "types": "./src/chat-message-metadata.d.mts",
+      "import": "./src/chat-message-metadata.mjs"
+    },
     "./chat-context-contract": {
       "types": "./src/chat-context-contract.d.mts",
       "import": "./src/chat-context-contract.mjs"
@@ -138,6 +142,10 @@
     "./prompts": {
       "types": "./src/prompts.d.mts",
       "import": "./src/prompts.mjs"
+    },
+    "./queued-chat-request": {
+      "types": "./src/queued-chat-request.d.mts",
+      "import": "./src/queued-chat-request.mjs"
     },
     "./remote-mcp-tools": {
       "types": "./src/remote-mcp-tools.d.mts",

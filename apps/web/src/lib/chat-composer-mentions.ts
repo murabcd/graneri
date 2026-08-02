@@ -1,8 +1,11 @@
 import type { JSONContent } from "@tiptap/core";
-import {
-	type ChatAppSourceProvider,
-	isChatAppSourceProvider,
-} from "@/lib/chat-source-display";
+import type {
+	ChatMessageMention,
+	ChatRecipeReceipt,
+} from "@workspace/ai/chat-message-metadata";
+import { isChatAppSourceProvider } from "@/lib/chat-source-display";
+
+export type { ChatMessageMention, ChatRecipeReceipt };
 
 type ChatComposerMentionBase = {
 	id: string;
@@ -12,26 +15,10 @@ type ChatComposerMentionBase = {
 };
 
 export type ChatComposerMention =
-	| (ChatComposerMentionBase & {
-			type: "note";
-	  })
+	| ChatMessageMention
 	| (ChatComposerMentionBase & {
 			type: "recipe";
-	  })
-	| (ChatComposerMentionBase & {
-			type: "tool";
-			provider: ChatAppSourceProvider;
 	  });
-
-export type ChatMessageMention = Exclude<
-	ChatComposerMention,
-	{ type: "recipe" }
->;
-
-export type ChatRecipeReceipt = {
-	slug: string;
-	name: string;
-};
 
 const createEmptyDocument = (): JSONContent => ({
 	type: "doc",

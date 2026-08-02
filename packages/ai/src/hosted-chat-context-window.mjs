@@ -1,5 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
+import { z } from "zod";
 import {
 	HOSTED_CHAT_CONTEXT_COMPACTION_BATCH_SIZE,
 	HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
@@ -25,8 +26,19 @@ const clampText = (value, maxLength) =>
 		? value
 		: `${value.slice(0, maxLength)}\n[truncated]`;
 
-const asRecord = (value) =>
-	value && typeof value === "object" && !Array.isArray(value) ? value : null;
+const compactionPartSchema = z.union([
+	z.object({ text: z.string(), type: z.literal("text") }),
+	z.object({
+		errorText: z.unknown().optional(),
+		input: z.unknown().optional(),
+		output: z.unknown().optional(),
+		state: z.string(),
+		toolName: z.string().optional(),
+		type: z
+			.string()
+			.refine((type) => type === "dynamic-tool" || type.startsWith("tool-")),
+	}),
+]);
 
 const stringifyValue = (value) => {
 	if (typeof value === "string") {
@@ -42,33 +54,26 @@ const stringifyValue = (value) => {
 const renderStoredMessage = (message) => {
 	const parts = tryParseUiMessagePartsJson(message.partsJson) ?? [];
 
-	const content = Array.isArray(parts)
-		? parts.flatMap((value) => {
-				const part = asRecord(value);
-				if (!part) {
-					return [];
-				}
-				if (part.type === "text" && typeof part.text === "string") {
-					return [part.text];
-				}
-				const isToolPart =
-					part.type === "dynamic-tool" ||
-					(typeof part.type === "string" && part.type.startsWith("tool-"));
-				if (!isToolPart || typeof part.state !== "string") {
-					return [];
-				}
-				const toolName =
-					part.type === "dynamic-tool"
-						? part.toolName
-						: part.type.slice("tool-".length);
-				return [
-					clampText(
-						`[tool ${String(toolName)} ${part.state}] input=${stringifyValue(part.input)} output=${stringifyValue(part.output)} error=${stringifyValue(part.errorText)}`,
-						MAX_COMPACTION_PART_CHARS,
-					),
-				];
-			})
-		: [];
+	const content = parts.flatMap((value) => {
+		const result = compactionPartSchema.safeParse(value);
+		if (!result.success) {
+			return [];
+		}
+		const part = result.data;
+		if (part.type === "text" && typeof part.text === "string") {
+			return [part.text];
+		}
+		const toolName =
+			part.type === "dynamic-tool"
+				? part.toolName
+				: part.type.slice("tool-".length);
+		return [
+			clampText(
+				`[tool ${String(toolName)} ${part.state}] input=${stringifyValue(part.input)} output=${stringifyValue(part.output)} error=${stringifyValue(part.errorText)}`,
+				MAX_COMPACTION_PART_CHARS,
+			),
+		];
+	});
 
 	return clampText(
 		`${message.role.toUpperCase()}:\n${content.join("\n").trim() || "[no text content]"}`,

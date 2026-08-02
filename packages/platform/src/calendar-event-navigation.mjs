@@ -1,18 +1,65 @@
+import { z } from "zod";
+
 const calendarEventRequestSearchParam = "calendarEventRequestId";
 const maxCalendarEventPayloadLength = 256_000;
 const maxCalendarAttendees = 250;
 
-const attendeeResponseStatuses = new Set([
-	"accepted",
-	"declined",
-	"needs_action",
-	"tentative",
-	"unknown",
-]);
-const guestPermissions = new Set(["none", "invite", "manage"]);
+const attendeeSchema = z.strictObject({
+	displayName: z.string().optional(),
+	email: z.string(),
+	isOrganizer: z.boolean(),
+	isSelf: z.boolean(),
+	responseStatus: z.enum([
+		"accepted",
+		"declined",
+		"needs_action",
+		"tentative",
+		"unknown",
+	]),
+});
 
-const isRecord = (value) =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
+const recurrenceEndSchema = z.discriminatedUnion("kind", [
+	z.strictObject({ kind: z.literal("never") }),
+	z.strictObject({
+		count: z.number().int().positive(),
+		kind: z.literal("after_count"),
+	}),
+	z.strictObject({ date: z.string(), kind: z.literal("on_date") }),
+]);
+
+const recurrenceSchema = z.strictObject({
+	end: recurrenceEndSchema,
+	frequency: z.enum(["daily", "weekly", "monthly", "yearly", "custom"]),
+	interval: z.number().int().positive(),
+	weekdays: z.array(z.enum(["sun", "mon", "tue", "wed", "thu", "fri", "sat"])),
+});
+
+const calendarEventSchema = z.strictObject({
+	attendees: z.array(attendeeSchema).max(maxCalendarAttendees),
+	calendarId: z.string(),
+	calendarName: z.string(),
+	canDelete: z.boolean(),
+	canEdit: z.boolean(),
+	canMove: z.boolean(),
+	canRemove: z.boolean(),
+	description: z.string().optional(),
+	endAt: z.string(),
+	guestPermissions: z.enum(["none", "invite", "manage"]),
+	htmlLink: z.string().optional(),
+	id: z.string(),
+	isAllDay: z.boolean(),
+	isMeeting: z.boolean(),
+	isRecurring: z.boolean(),
+	location: z.string().optional(),
+	meetingUrl: z.string().optional(),
+	provider: z.enum(["google", "yandex"]),
+	providerEventId: z.string(),
+	recurrence: recurrenceSchema.optional(),
+	recurrenceId: z.string().optional(),
+	seriesProviderEventId: z.string().optional(),
+	startAt: z.string(),
+	title: z.string(),
+});
 
 const normalizeRequiredString = (value) => {
 	const normalized = typeof value === "string" ? value.trim() : "";
@@ -27,69 +74,33 @@ const normalizeTimestamp = (value) => {
 	return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 };
 
-const normalizeAttendee = (value) => {
-	if (!isRecord(value)) {
-		return null;
-	}
+const normalizeAttendee = (attendee) => {
+	const email = normalizeRequiredString(attendee.email)?.toLowerCase();
 
-	const email = normalizeRequiredString(value.email)?.toLowerCase();
-	const responseStatus = normalizeRequiredString(value.responseStatus);
-
-	if (
-		!email?.includes("@") ||
-		typeof value.isOrganizer !== "boolean" ||
-		typeof value.isSelf !== "boolean" ||
-		!responseStatus ||
-		!attendeeResponseStatuses.has(responseStatus)
-	) {
+	if (!email?.includes("@")) {
 		return null;
 	}
 
 	return {
-		displayName: normalizeOptionalString(value.displayName),
+		displayName: normalizeOptionalString(attendee.displayName),
 		email,
-		isOrganizer: value.isOrganizer,
-		isSelf: value.isSelf,
-		responseStatus,
+		isOrganizer: attendee.isOrganizer,
+		isSelf: attendee.isSelf,
+		responseStatus: attendee.responseStatus,
 	};
 };
 
-const recurrenceFrequencies = new Set([
-	"daily",
-	"weekly",
-	"monthly",
-	"yearly",
-	"custom",
-]);
-const recurrenceWeekdays = new Set([
-	"sun",
-	"mon",
-	"tue",
-	"wed",
-	"thu",
-	"fri",
-	"sat",
-]);
-
-const normalizeRecurrenceEnd = (value) => {
-	if (!isRecord(value)) {
-		return null;
-	}
-
-	if (value.kind === "never") {
+const normalizeRecurrenceEnd = (end) => {
+	if (end.kind === "never") {
 		return { kind: "never" };
 	}
 
-	if (
-		value.kind === "after_count" &&
-		Number.isSafeInteger(value.count) &&
-		value.count > 0
-	) {
-		return { count: value.count, kind: "after_count" };
+	if (end.kind === "after_count") {
+		return { count: end.count, kind: "after_count" };
 	}
 
-	if (value.kind === "on_date" && /^\d{4}-\d{2}-\d{2}$/u.test(value.date)) {
-		const [year, month, day] = value.date.split("-").map(Number);
+	if (/^\d{4}-\d{2}-\d{2}$/u.test(end.date)) {
+		const [year, month, day] = end.date.split("-").map(Number);
 		const date = new Date(Date.UTC(year, month - 1, day));
 
 		if (
@@ -97,62 +108,50 @@ const normalizeRecurrenceEnd = (value) => {
 			date.getUTCMonth() === month - 1 &&
 			date.getUTCDate() === day
 		) {
-			return { date: value.date, kind: "on_date" };
+			return { date: end.date, kind: "on_date" };
 		}
 	}
 
 	return null;
 };
 
-const normalizeRecurrence = (value) => {
-	if (value === undefined) {
+const normalizeRecurrence = (recurrence) => {
+	if (recurrence === undefined) {
 		return undefined;
 	}
-
-	const end = isRecord(value) ? normalizeRecurrenceEnd(value.end) : null;
-
-	if (
-		!isRecord(value) ||
-		!end ||
-		!recurrenceFrequencies.has(value.frequency) ||
-		!Number.isSafeInteger(value.interval) ||
-		value.interval < 1 ||
-		!Array.isArray(value.weekdays) ||
-		value.weekdays.some((weekday) => !recurrenceWeekdays.has(weekday))
-	) {
-		return null;
-	}
+	const end = normalizeRecurrenceEnd(recurrence.end);
+	if (!end) return null;
 
 	return {
 		end,
-		frequency: value.frequency,
-		interval: value.interval,
-		weekdays: [...new Set(value.weekdays)],
+		frequency: recurrence.frequency,
+		interval: recurrence.interval,
+		weekdays: [...new Set(recurrence.weekdays)],
 	};
 };
 
 export const normalizeCalendarEventPayload = (value) => {
-	if (!isRecord(value) || !Array.isArray(value.attendees)) {
+	const result = calendarEventSchema.safeParse(value);
+	if (!result.success) {
 		return null;
 	}
+	const calendarEvent = result.data;
 
-	if (value.attendees.length > maxCalendarAttendees) {
-		return null;
-	}
-
-	const attendees = value.attendees.map(normalizeAttendee);
+	const attendees = calendarEvent.attendees.map(normalizeAttendee);
 	if (attendees.some((attendee) => attendee === null)) {
 		return null;
 	}
 
-	const id = normalizeRequiredString(value.id);
-	const calendarId = normalizeRequiredString(value.calendarId);
-	const calendarName = normalizeRequiredString(value.calendarName);
-	const providerEventId = normalizeRequiredString(value.providerEventId);
-	const title = normalizeRequiredString(value.title);
-	const startAt = normalizeTimestamp(value.startAt);
-	const endAt = normalizeTimestamp(value.endAt);
-	const recurrence = normalizeRecurrence(value.recurrence);
+	const id = normalizeRequiredString(calendarEvent.id);
+	const calendarId = normalizeRequiredString(calendarEvent.calendarId);
+	const calendarName = normalizeRequiredString(calendarEvent.calendarName);
+	const providerEventId = normalizeRequiredString(
+		calendarEvent.providerEventId,
+	);
+	const title = normalizeRequiredString(calendarEvent.title);
+	const startAt = normalizeTimestamp(calendarEvent.startAt);
+	const endAt = normalizeTimestamp(calendarEvent.endAt);
+	const recurrence = normalizeRecurrence(calendarEvent.recurrence);
 
 	if (
 		!id ||
@@ -163,43 +162,36 @@ export const normalizeCalendarEventPayload = (value) => {
 		!startAt ||
 		!endAt ||
 		recurrence === null ||
-		endAt < startAt ||
-		(value.provider !== "google" && value.provider !== "yandex") ||
-		typeof value.canDelete !== "boolean" ||
-		typeof value.canEdit !== "boolean" ||
-		!guestPermissions.has(value.guestPermissions) ||
-		typeof value.canMove !== "boolean" ||
-		typeof value.canRemove !== "boolean" ||
-		typeof value.isAllDay !== "boolean" ||
-		typeof value.isMeeting !== "boolean" ||
-		typeof value.isRecurring !== "boolean"
+		endAt < startAt
 	) {
 		return null;
 	}
 
 	const event = {
 		attendees,
-		canDelete: value.canDelete,
-		canEdit: value.canEdit,
-		guestPermissions: value.guestPermissions,
-		canMove: value.canMove,
-		canRemove: value.canRemove,
+		canDelete: calendarEvent.canDelete,
+		canEdit: calendarEvent.canEdit,
+		guestPermissions: calendarEvent.guestPermissions,
+		canMove: calendarEvent.canMove,
+		canRemove: calendarEvent.canRemove,
 		calendarId,
 		calendarName,
-		description: normalizeOptionalString(value.description),
+		description: normalizeOptionalString(calendarEvent.description),
 		endAt,
-		htmlLink: normalizeOptionalString(value.htmlLink),
+		htmlLink: normalizeOptionalString(calendarEvent.htmlLink),
 		id,
-		isAllDay: value.isAllDay,
-		isMeeting: value.isMeeting,
-		isRecurring: value.isRecurring,
-		location: normalizeOptionalString(value.location),
-		meetingUrl: normalizeOptionalString(value.meetingUrl),
-		provider: value.provider,
+		isAllDay: calendarEvent.isAllDay,
+		isMeeting: calendarEvent.isMeeting,
+		isRecurring: calendarEvent.isRecurring,
+		location: normalizeOptionalString(calendarEvent.location),
+		meetingUrl: normalizeOptionalString(calendarEvent.meetingUrl),
+		provider: calendarEvent.provider,
 		providerEventId,
 		recurrence,
-		recurrenceId: normalizeOptionalString(value.recurrenceId),
-		seriesProviderEventId: normalizeOptionalString(value.seriesProviderEventId),
+		recurrenceId: normalizeOptionalString(calendarEvent.recurrenceId),
+		seriesProviderEventId: normalizeOptionalString(
+			calendarEvent.seriesProviderEventId,
+		),
 		startAt,
 		title,
 	};

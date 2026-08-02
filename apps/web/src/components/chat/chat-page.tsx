@@ -1,3 +1,4 @@
+import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import { isDesktopRuntime } from "@workspace/platform/desktop";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import { Button } from "@workspace/ui/components/button";
@@ -655,19 +656,16 @@ const useChatPageController = ({
 				mentions,
 				recipes,
 			});
-			const metadata: UIMessage["metadata"] =
-				submission.mentionPositions.length > 0 || submission.recipe
-					? {
-							...(submission.mentionPositions.length > 0
-								? { mentionPositions: submission.mentionPositions }
-								: {}),
-							...(submission.recipe
-								? {
-										recipe: submission.recipe,
-										recipeOnly: submission.recipeOnly,
-									}
-								: {}),
-						}
+			const metadata: ChatMessageMetadata | undefined = submission.recipe
+				? {
+						recipe: submission.recipe,
+						recipeOnly: submission.recipeOnly,
+						...(submission.mentionPositions.length > 0
+							? { mentionPositions: submission.mentionPositions }
+							: {}),
+					}
+				: submission.mentionPositions.length > 0
+					? { mentionPositions: submission.mentionPositions }
 					: undefined;
 			const { mentionIds, requestSelectedSourceIds } =
 				getWorkspaceChatMentionContext(mentions);

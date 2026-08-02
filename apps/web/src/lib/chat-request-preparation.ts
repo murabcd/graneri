@@ -1,5 +1,6 @@
+import type { DurableQueuedChatRequest } from "@workspace/ai/queued-chat-request";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
-import type { ServiceTier } from "@/lib/ai/models";
+import type { ReasoningEffort, ServiceTier } from "@/lib/ai/models";
 import {
 	requireRehydratedSharedLocalFolders,
 	shareLocalFoldersFromText,
@@ -11,7 +12,7 @@ type ChatRequestBase = {
 	localFolders: DesktopLocalFolder[];
 	model: string;
 	recipeSlug: string | null;
-	reasoningEffort: string | undefined;
+	reasoningEffort: ReasoningEffort | undefined;
 	serviceTier: ServiceTier;
 	timezone: string;
 };
@@ -29,6 +30,12 @@ export type NoteChatRequestBody = ChatRequestBase & {
 		title: string;
 		text: string;
 	};
+};
+
+export type ChatRequestBody = WorkspaceChatRequestBody | NoteChatRequestBody;
+
+export type QueueableChatRequestBody = DurableQueuedChatRequest & {
+	localFolders: DesktopLocalFolder[];
 };
 
 export const prepareSharedLocalFoldersForChatRequest = async ({
@@ -63,7 +70,7 @@ const buildChatRequestBase = async ({
 	localFolders: DesktopLocalFolder[];
 	model: string;
 	recipeSlug: string | null;
-	reasoningEffort: string | undefined;
+	reasoningEffort: ReasoningEffort | undefined;
 	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 }): Promise<ChatRequestBase> => ({
@@ -88,7 +95,7 @@ const resolveChatRequestBase = async ({
 	localFolderStorageScope: string;
 	model: string;
 	recipeSlug: string | null;
-	reasoningEffort: string | undefined;
+	reasoningEffort: ReasoningEffort | undefined;
 	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 	text: string;
@@ -123,7 +130,7 @@ export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 	mentions: string[];
 	model: string;
 	recipeSlug: string | null;
-	reasoningEffort: string | undefined;
+	reasoningEffort: ReasoningEffort | undefined;
 	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
@@ -148,7 +155,7 @@ export const buildWorkspaceChatRequestBody = async ({
 	mentions: string[];
 	model: string;
 	recipeSlug: string | null;
-	reasoningEffort: string | undefined;
+	reasoningEffort: ReasoningEffort | undefined;
 	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
@@ -170,7 +177,7 @@ export const buildNoteChatRequestBody = async ({
 	localFolderStorageScope: string;
 	model: string;
 	noteContext: NoteChatRequestBody["noteContext"];
-	reasoningEffort: string | undefined;
+	reasoningEffort: ReasoningEffort | undefined;
 	serviceTier: ServiceTier;
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
@@ -187,7 +194,7 @@ export const buildNoteChatRequestBodyFromLocalFolders = async ({
 	localFolders: DesktopLocalFolder[];
 	model: string;
 	noteContext: NoteChatRequestBody["noteContext"];
-	reasoningEffort: string | undefined;
+	reasoningEffort: ReasoningEffort | undefined;
 	serviceTier: "auto" | "priority";
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;

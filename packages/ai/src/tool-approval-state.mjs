@@ -1,10 +1,20 @@
+import { z } from "zod";
 import {
 	parseUiMessagePartsJson,
 	tryParseUiMessageMetadataJson,
 } from "./ui-message-codec.mjs";
 
-const asRecord = (value) =>
-	value && typeof value === "object" && !Array.isArray(value) ? value : null;
+const toolApprovalPartSchema = z.looseObject({
+	approval: z.looseObject({
+		approved: z.boolean().optional(),
+		id: z.string().min(1),
+	}),
+	input: z.unknown().optional(),
+	state: z.enum(["approval-requested", "approval-responded"]),
+	toolCallId: z.string().min(1),
+	toolName: z.string().optional(),
+	type: z.string(),
+});
 
 const getNonEmptyString = (value) =>
 	typeof value === "string" && value.length > 0 ? value : null;
@@ -26,14 +36,13 @@ const getToolApprovals = (message, state) => {
 
 	const approvals = [];
 	for (const value of message.parts) {
-		const part = asRecord(value);
-		if (part?.state !== state) {
+		const result = toolApprovalPartSchema.safeParse(value);
+		if (!result.success || result.data.state !== state) {
 			continue;
 		}
-
-		const approval = asRecord(part.approval);
-		const approvalId = getNonEmptyString(approval?.id);
-		const toolCallId = getNonEmptyString(part.toolCallId);
+		const part = result.data;
+		const approvalId = part.approval.id;
+		const toolCallId = part.toolCallId;
 		const toolName = getToolName(part);
 		if (!approvalId || !toolCallId || !toolName) {
 			continue;
@@ -46,8 +55,8 @@ const getToolApprovals = (message, state) => {
 			toolCallId,
 			toolName,
 			...(state === "approval-responded" &&
-			typeof approval.approved === "boolean"
-				? { approved: approval.approved }
+			typeof part.approval.approved === "boolean"
+				? { approved: part.approval.approved }
 				: {}),
 		});
 	}
@@ -90,16 +99,15 @@ export const createCanonicalToolApprovalResponse = ({
 	);
 	let matchedExpectedApproval = false;
 	const parts = storedParts.map((value) => {
-		const part = asRecord(value);
-		const approval = asRecord(part?.approval);
-		const response = getNonEmptyString(part?.toolCallId)
-			? responsesByToolCallId.get(part.toolCallId)
-			: null;
+		const result = toolApprovalPartSchema.safeParse(value);
+		if (!result.success) return value;
+		const part = result.data;
+		const response = responsesByToolCallId.get(part.toolCallId);
 		if (
-			part?.state !== "approval-requested" ||
+			part.state !== "approval-requested" ||
 			!response ||
 			getToolName(part) !== response.toolName ||
-			approval?.id !== response.approvalId
+			part.approval.id !== response.approvalId
 		) {
 			return value;
 		}
@@ -110,7 +118,7 @@ export const createCanonicalToolApprovalResponse = ({
 		return {
 			...part,
 			approval: {
-				...approval,
+				...part.approval,
 				approved: response.approved,
 				reason: response.approved ? "Approved by user." : "Denied by user.",
 			},

@@ -72,6 +72,6 @@ test("desktop auth cookie store rejects malformed stored shape", () => {
 					},
 				},
 			}),
-		/Desktop auth cookie entry https:\/\/auth\.example\.com\/session must include a string value/u,
+		/Desktop auth cookie jars are invalid/u,
 	);
 });

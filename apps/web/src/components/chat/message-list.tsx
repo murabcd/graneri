@@ -11,7 +11,7 @@ import {
 	MessageScrollerItem,
 } from "@workspace/ui/components/message-scroller";
 import { cn } from "@workspace/ui/lib/utils";
-import type { UIMessage } from "ai";
+import { isToolUIPart, type UIMessage } from "ai";
 import {
 	CornerDownRight,
 	FileText,
@@ -30,6 +30,7 @@ import {
 	SourcesTrigger,
 } from "@/components/ai-elements/sources";
 import { ToolGroup } from "@/components/ai-elements/tools/tool-group";
+import type { ToolUiPart } from "@/components/ai-elements/tools/tool-part-like";
 import { toToolPartLike } from "@/components/ai-elements/tools/tool-part-like";
 import { getToolMeta } from "@/components/ai-elements/tools/tool-registry";
 import { AppSourceIcon } from "@/components/app-source-icon";
@@ -502,7 +503,7 @@ const ChatMessageToolCalls = React.memo(function ChatMessageToolCalls({
 	);
 });
 
-const getToolGroupInfo = (part: UIMessage["parts"][number]) => {
+const getToolGroupInfo = (part: ToolUiPart) => {
 	const toolPart = toToolPartLike(part);
 	const meta = getToolMeta(toolPart);
 	const groupKey = meta?.groupKey;
@@ -559,10 +560,13 @@ const groupAdjacentToolParts = (parts: UIMessage["parts"]) => {
 	const groups: Array<{
 		groupKey: string;
 		key: string;
-		parts: UIMessage["parts"];
+		parts: ToolUiPart[];
 	}> = [];
 
 	for (const part of parts) {
+		if (!isToolUIPart(part)) {
+			continue;
+		}
 		const groupInfo = getToolGroupInfo(part);
 		if (!groupInfo) {
 			continue;
@@ -578,10 +582,7 @@ const groupAdjacentToolParts = (parts: UIMessage["parts"]) => {
 
 		groups.push({
 			groupKey: key,
-			key:
-				"toolCallId" in part && typeof part.toolCallId === "string"
-					? `${key}:${part.toolCallId}`
-					: `${key}:${part.type}`,
+			key: `${key}:${part.toolCallId}`,
 			parts: [part],
 		});
 	}

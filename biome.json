@@ -9,6 +9,7 @@
     "ignoreUnknown": false
   },
   "plugins": [
+    "./tools/biome/no-is-record-function.grit",
     "./tools/biome/no-local-vitest-mocks.grit",
     "./tools/biome/no-vitest-global-mutation.grit"
   ],

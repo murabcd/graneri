@@ -17,7 +17,7 @@ const createQueuedFollowUpMessage = (text: string): QueuedFollowUpMessage =>
 		createdAt: 1,
 		messageId: "queued-user-message-1",
 		ownerTokenIdentifier: "owner",
-		requestBodyJson: JSON.stringify({ model: "gpt-5" }),
+		requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
 		runId,
 		status: "queued",
 		text,
@@ -53,7 +53,10 @@ describe("chat submit session", () => {
 			displayActiveRun: null,
 			editingMessageId: null,
 			enqueueQueuedMessage: vi.fn(),
-			metadata: { source: "test" },
+			metadata: {
+				recipe: { name: "Review", slug: "review" },
+				recipeOnly: false,
+			},
 			onOptimisticMessage: (message) => {
 				events.push("optimistic");
 				optimisticMessages.push(message);
@@ -91,7 +94,10 @@ describe("chat submit session", () => {
 						url: "convex://file",
 					}),
 				],
-				metadata: { source: "test" },
+				metadata: {
+					recipe: { name: "Review", slug: "review" },
+					recipeOnly: false,
+				},
 				text: "Summarize this",
 			}),
 			{

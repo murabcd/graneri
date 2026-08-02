@@ -1,3 +1,4 @@
+import type { JSONValue } from "ai";
 import { formatToolPayload } from "@/components/ai-elements/utils/tool-display";
 
 export function ToolDetails({
@@ -6,8 +7,8 @@ export function ToolDetails({
 	errorText,
 }: {
 	errorText?: string;
-	input?: unknown;
-	output?: unknown;
+	input?: JSONValue;
+	output?: JSONValue;
 }) {
 	const inputText = formatToolPayload(input);
 	const outputText = formatToolPayload(output);

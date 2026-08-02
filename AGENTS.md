@@ -51,6 +51,13 @@ Biome is the formatter and linter (`biome.json`). Use tabs for indentation, doub
 ## Code Quality
 Avoid `any` types unless they are absolutely necessary and locally justified. Before guessing external API shapes, check the dependency's installed type definitions under `node_modules` and use the exported types. Never use inline imports: do not write `await import("./foo.js")` for runtime code or `import("pkg").Type` in type positions. Use standard top-level imports for runtime values and `import type` declarations for types.
 
+Do not add generic `isRecord` or `asRecord` helpers. If a trusted value is
+`unknown` at that point, stop and fix the upstream type flow first. Trusted
+values must keep their source-derived types end to end. Truly unknown data must
+be parsed once at its external, persisted, or SDK boundary with a named schema
+that describes the actual contract, then passed downstream as the concrete
+domain type. Do not rename or recreate a generic object or record guard.
+
 ## Testing Guidelines
 Web tests use Vitest with Testing Library and `jsdom`. Name tests `*.test.tsx` and keep them near feature-level behavior, as in `apps/web/tests/chat-page.test.tsx`. Run `bun run test` before opening a PR; for frontend changes, also run `bun run typecheck` and `bun run check`. Desktop changes should pass `bun --filter=desktop run typecheck` and `bun --filter=desktop run check`; native behavior should include targeted tests when practical or a clear manual verification note when it depends on macOS permissions, packaging, or system audio. Desktop realtime transcription changes must cover stop-flush behavior, combined-helper AEC3 behavior, and renderer auto-stop behavior where applicable.
 

@@ -410,6 +410,9 @@ queued-message mutations enforce the actual 1 MiB document limit with
 from character counts. Queued rows persist one canonical text value plus the
 minimum replay context: they omit credentials, desktop-local folder selections,
 duplicate workspace identity, and note contents that can be reloaded by note ID.
+The renderer and Convex parse that replay context through the single
+`@workspace/ai/queued-chat-request` contract; neither side accepts an arbitrary
+object container or maintains a parallel request-shape check.
 Rich message JSON crosses storage and runtime boundaries only through
 `@workspace/ai/ui-message-codec`. Strict consumers fail closed on malformed
 parts, metadata, message arrays, and any stored role other than `user` or

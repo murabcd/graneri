@@ -1,35 +1,37 @@
 import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
+import { z } from "zod";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 const CONVEX_STORAGE_PATH_SEGMENT = "/api/storage/";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null;
+const filePartSchema = z.object({
+	providerMetadata: z
+		.object({
+			graneri: z.object({ storageId: z.string() }).optional(),
+		})
+		.optional(),
+	type: z.literal("file"),
+	url: z.string().optional(),
+});
 
 const getStorageIdFromFilePart = (part: unknown) => {
-	if (!isRecord(part) || part.type !== "file") {
+	const result = filePartSchema.safeParse(part);
+	if (!result.success) {
 		return null;
 	}
-
-	const providerMetadata = part.providerMetadata;
-	if (isRecord(providerMetadata)) {
-		const graneriMetadata = providerMetadata.graneri;
-		if (
-			isRecord(graneriMetadata) &&
-			typeof graneriMetadata.storageId === "string"
-		) {
-			return graneriMetadata.storageId;
-		}
+	const filePart = result.data;
+	if (filePart.providerMetadata?.graneri) {
+		return filePart.providerMetadata.graneri.storageId;
 	}
 
-	if (typeof part.url !== "string") {
+	if (!filePart.url) {
 		return null;
 	}
 	let url: URL;
 	try {
-		url = new URL(part.url);
+		url = new URL(filePart.url);
 	} catch {
 		throw new ConvexError({
 			code: "INVALID_CHAT_ATTACHMENT_METADATA",
@@ -51,7 +53,7 @@ const getAttachmentStorageIds = (
 	ctx: MutationCtx,
 	partsJson: string,
 ): Set<Id<"_storage">> => {
-	let parts;
+	let parts: unknown[];
 	try {
 		parts = parseUiMessagePartsJson(partsJson);
 	} catch (error) {

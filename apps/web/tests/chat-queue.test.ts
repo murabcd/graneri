@@ -204,7 +204,10 @@ describe("chat queue serialization", () => {
 
 	it("restores queued request state with a fresh Convex token", async () => {
 		const queuedMessage = toQueuedUserMessageInput({
-			metadata: { selectedModel: "gpt-5" },
+			metadata: {
+				recipe: { name: "Review", slug: "review" },
+				recipeOnly: false,
+			},
 			requestBody: {
 				convexToken: "stale-token",
 				localFolders: [],
@@ -230,7 +233,10 @@ describe("chat queue serialization", () => {
 			workspaceId,
 		});
 		expect(prepared.message.messageId).toBeUndefined();
-		expect(prepared.message.metadata).toEqual({ selectedModel: "gpt-5" });
+		expect(prepared.message.metadata).toEqual({
+			recipe: { name: "Review", slug: "review" },
+			recipeOnly: false,
+		});
 		expect(prepared.message.text).toBe("Follow up");
 	});
 

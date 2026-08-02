@@ -1,3 +1,5 @@
+import type { JSONValue } from "ai";
+
 export const formatElapsedTime = (ms: number) => {
 	if (!Number.isFinite(ms) || ms <= 0) {
 		return "";
@@ -20,34 +22,17 @@ export const formatElapsedTime = (ms: number) => {
 		: `${minutes}m ${remainingSeconds}s`;
 };
 
-export const getToolStartedAt = (part: {
-	callProviderMetadata?: { custom?: { startedAt?: unknown } };
-	startedAt?: unknown;
-}) => {
-	const metadataStartedAt = part.callProviderMetadata?.custom?.startedAt;
-	if (typeof metadataStartedAt === "number") {
-		return metadataStartedAt;
+export const getToolDurationMs = (part: { output?: JSONValue }) => {
+	const output = part.output;
+	if (output === null || typeof output !== "object" || Array.isArray(output)) {
+		return null;
 	}
-
-	if (typeof part.startedAt === "number") {
-		return part.startedAt;
-	}
-
-	return null;
-};
-
-export const getToolDurationMs = (part: {
-	output?: Record<string, unknown>;
-	result?: Record<string, unknown>;
-}) => {
-	const output = part.output ?? part.result;
-	const duration =
-		output?.totalDurationMs ?? output?.durationMs ?? output?.duration_ms;
+	const duration = output.totalDurationMs ?? output.durationMs;
 
 	return typeof duration === "number" ? duration : null;
 };
 
-export const formatToolPayload = (value: unknown) => {
+export const formatToolPayload = (value: JSONValue | undefined) => {
 	if (value === undefined || value === null || value === "") {
 		return "";
 	}

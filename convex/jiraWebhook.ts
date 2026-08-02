@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
@@ -39,10 +40,43 @@ const jsonResponse = (payload: unknown, status: number) =>
 const getJiraAuthHeader = (email: string, token: string) =>
 	`Basic ${btoa(`${email}:${token}`)}`;
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-	value && typeof value === "object" && !Array.isArray(value)
-		? (value as Record<string, unknown>)
-		: null;
+const jiraDocumentNodeSchema = z.object({
+	attrs: z.object({ id: z.string().optional() }).optional(),
+	content: z.array(z.unknown()).optional(),
+	text: z.string().optional(),
+	type: z.string().optional(),
+});
+
+const jiraActorSchema = z.object({
+	accountId: z.string().optional(),
+	avatarUrls: z
+		.object({
+			"24x24": z.string().optional(),
+			"48x48": z.string().optional(),
+		})
+		.optional(),
+	displayName: z.string().optional(),
+});
+
+const jiraWebhookPayloadSchema = z.object({
+	comment: z
+		.object({
+			author: jiraActorSchema.optional(),
+			body: z.unknown().optional(),
+			id: z.union([z.string(), z.number()]).optional(),
+		})
+		.optional(),
+	issue: z
+		.object({
+			fields: z.object({ summary: z.string().optional() }).optional(),
+			key: z.string().optional(),
+		})
+		.optional(),
+	user: jiraActorSchema.optional(),
+	webhookEvent: z.string().optional(),
+});
+
+const jiraCurrentUserSchema = z.object({ accountId: z.string().min(1) });
 
 const readString = (value: unknown) =>
 	typeof value === "string" && value.trim().length > 0 ? value : null;
@@ -169,11 +203,11 @@ const extractJiraText = (value: unknown, limit = 240) => {
 			return;
 		}
 
-		const record = asRecord(node);
-
-		if (!record) {
+		const result = jiraDocumentNodeSchema.safeParse(node);
+		if (!result.success) {
 			return;
 		}
+		const record = result.data;
 
 		if (typeof record.text === "string") {
 			push(record.text);
@@ -207,19 +241,21 @@ const documentHasMention = (value: unknown, accountId: string): boolean => {
 		return value.some((item) => documentHasMention(item, accountId));
 	}
 
-	const record = asRecord(value);
-
-	if (!record) {
+	const result = jiraDocumentNodeSchema.safeParse(value);
+	if (!result.success) {
 		return false;
 	}
+	const record = result.data;
 
-	if (typeof record.text === "string" && stringHasMention(record.text, accountId)) {
+	if (
+		typeof record.text === "string" &&
+		stringHasMention(record.text, accountId)
+	) {
 		return true;
 	}
 
 	if (record.type === "mention") {
-		const attrs = asRecord(record.attrs);
-		return typeof attrs?.id === "string" && attrs.id === accountId;
+		return record.attrs?.id === accountId;
 	}
 
 	return Array.isArray(record.content)
@@ -248,8 +284,10 @@ const resolveJiraAccountId = async (
 		throw new Error(`Failed to load Jira account (${response.status}).`);
 	}
 
-	const currentUser = asRecord(await response.json().catch(() => null));
-	return readString(currentUser?.accountId);
+	const currentUser = jiraCurrentUserSchema.safeParse(
+		await response.json().catch(() => null),
+	);
+	return currentUser.success ? currentUser.data.accountId : null;
 };
 
 const isCommentWebhookEvent = (value: string | null) =>
@@ -297,10 +335,10 @@ export const handleJiraWebhookRequest = async (
 		return jsonResponse({ message: "Jira webhook is not authorized." }, 401);
 	}
 
-	let payload: Record<string, unknown>;
+	let payloadValue: unknown;
 
 	try {
-		payload = (await request.json()) as Record<string, unknown>;
+		payloadValue = await request.json();
 	} catch {
 		logJiraWebhookEvent({
 			outcome: "error",
@@ -310,8 +348,16 @@ export const handleJiraWebhookRequest = async (
 			connectionId: connection.connectionId,
 			workspaceId: connection.workspaceId,
 		});
-		return jsonResponse({ message: "Jira webhook payload must be valid JSON." }, 400);
+		return jsonResponse(
+			{ message: "Jira webhook payload must be valid JSON." },
+			400,
+		);
 	}
+	const payloadResult = jiraWebhookPayloadSchema.safeParse(payloadValue);
+	if (!payloadResult.success) {
+		return jsonResponse({ message: "Jira webhook payload is invalid." }, 400);
+	}
+	const payload = payloadResult.data;
 
 	const receivedAt = Date.now();
 	const webhookEvent = readString(payload.webhookEvent);
@@ -376,10 +422,12 @@ export const handleJiraWebhookRequest = async (
 		return jsonResponse({ message: "Ignored Jira webhook event." }, 200);
 	}
 
-	const issue = asRecord(payload.issue);
-	const comment = asRecord(payload.comment);
-	const actor = asRecord(payload.user) ?? asRecord(comment?.author);
-	const commentId = readString(comment?.id);
+	const issue = payload.issue;
+	const comment = payload.comment;
+	const actor = payload.user ?? comment?.author;
+	const commentId = readString(
+		typeof comment?.id === "number" ? String(comment.id) : comment?.id,
+	);
 
 	if (!commentId) {
 		await ctx.runMutation(internal.appConnections.recordJiraWebhookActivity, {
@@ -397,7 +445,10 @@ export const handleJiraWebhookRequest = async (
 			accountId,
 			webhookEvent,
 		});
-		return jsonResponse({ message: "Ignored Jira comment event without id." }, 200);
+		return jsonResponse(
+			{ message: "Ignored Jira comment event without id." },
+			200,
+		);
 	}
 
 	const externalId = toCommentExternalId(commentId);
@@ -432,8 +483,7 @@ export const handleJiraWebhookRequest = async (
 	const body = comment?.body;
 	const hasMention = documentHasMention(body, accountId);
 	const issueKey = readString(issue?.key) ?? "Jira";
-	const issueFields = asRecord(issue?.fields);
-	const issueSummary = readString(issueFields?.summary) ?? undefined;
+	const issueSummary = readString(issue?.fields?.summary) ?? undefined;
 	const bodyPreview = extractJiraText(body);
 
 	if (!hasMention) {
@@ -463,14 +513,16 @@ export const handleJiraWebhookRequest = async (
 			hasMention,
 			bodyPreview,
 		});
-		return jsonResponse({ message: "Processed Jira comment without mention." }, 200);
+		return jsonResponse(
+			{ message: "Processed Jira comment without mention." },
+			200,
+		);
 	}
 
 	const actorDisplayName = readString(actor?.displayName) ?? undefined;
-	const avatarUrls = asRecord(actor?.avatarUrls);
 	const actorAvatarUrl =
-		readString(avatarUrls?.["48x48"]) ??
-		readString(avatarUrls?.["24x24"]) ??
+		readString(actor?.avatarUrls?.["48x48"]) ??
+		readString(actor?.avatarUrls?.["24x24"]) ??
 		undefined;
 	const preview =
 		bodyPreview || `${actorDisplayName ?? "Someone"} mentioned you`;
