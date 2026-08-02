@@ -7,6 +7,7 @@ import {
 	requireOwnedWorkspace,
 	truncate,
 } from "./domain";
+import { searchWorkspaceCompanies } from "./companyDomain";
 import { searchWorkspacePeople } from "./peopleDomain";
 
 const MAX_ENTITY_MATCHES = 5;
@@ -82,65 +83,6 @@ const getSearchBoundary = (value: string | undefined, label: string) => {
 	}
 
 	return new Date(timestamp).toISOString();
-};
-
-const mergeEntityMatches = <T extends { _id: string }>(
-	exactMatch: T | null,
-	searchMatches: T[],
-) => {
-	const matches = new Map<string, T>();
-	if (exactMatch) {
-		matches.set(exactMatch._id, exactMatch);
-	}
-	for (const match of searchMatches) {
-		matches.set(match._id, match);
-	}
-	return {
-		hasMore: matches.size > MAX_ENTITY_MATCHES,
-		matches: [...matches.values()].slice(0, MAX_ENTITY_MATCHES),
-	};
-};
-
-const normalizeDomainSearch = (value: string) => {
-	const candidate = value.replace(/^@/u, "").toLowerCase();
-	return /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/u.test(candidate)
-		? candidate
-		: null;
-};
-
-const findCompanies = async (
-	ctx: QueryCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	searchTerm: string,
-) => {
-	const exactDomain = normalizeDomainSearch(searchTerm);
-	const [exactMatch, searchMatches] = await Promise.all([
-		exactDomain
-			? ctx.db
-					.query("companies")
-					.withIndex(
-						"by_ownerTokenIdentifier_and_workspaceId_and_domain",
-						(q) =>
-							q
-								.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-								.eq("workspaceId", workspaceId)
-								.eq("domain", exactDomain),
-					)
-					.unique()
-			: null,
-		ctx.db
-			.query("companies")
-			.withSearchIndex("search_companies", (q) =>
-				q
-					.search("searchText", searchTerm.replaceAll(".", " "))
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", workspaceId),
-			)
-			.take(MAX_ENTITY_MATCHES + 1),
-	]);
-
-	return mergeEntityMatches(exactMatch, searchMatches);
 };
 
 const getMeetingResultLimit = (value: number | undefined) => {
@@ -317,7 +259,13 @@ const searchMeetingNotesForOwner = async ({
 			searchTerm,
 			MAX_ENTITY_MATCHES,
 		),
-		findCompanies(ctx, ownerTokenIdentifier, args.workspaceId, searchTerm),
+		searchWorkspaceCompanies(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			searchTerm,
+			MAX_ENTITY_MATCHES,
+		),
 	]);
 	const people = peopleResult.matches;
 	const companies = companiesResult.matches;

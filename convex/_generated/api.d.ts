@@ -70,6 +70,7 @@ import type * as chatFormatting from "../chatFormatting.js";
 import type * as chatThreads from "../chatThreads.js";
 import type * as chatToolCalls from "../chatToolCalls.js";
 import type * as chats from "../chats.js";
+import type * as companyDomain from "../companyDomain.js";
 import type * as crons from "../crons.js";
 import type * as dictationActions from "../dictationActions.js";
 import type * as dictationHttp from "../dictationHttp.js";
@@ -185,6 +186,7 @@ declare const fullApi: ApiFromModules<{
   chatThreads: typeof chatThreads;
   chatToolCalls: typeof chatToolCalls;
   chats: typeof chats;
+  companyDomain: typeof companyDomain;
   crons: typeof crons;
   dictationActions: typeof dictationActions;
   dictationHttp: typeof dictationHttp;

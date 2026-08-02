@@ -144,6 +144,9 @@ through parsing before normalization. Creating a calendar-linked note is one
 Convex transaction that stores the immutable event/attendee snapshot, resolves
 workspace-scoped people by email, resolves companies by non-personal business
 email domain, and creates the note-to-person and note-to-company associations.
+`companyDomain` owns canonical Company creation, domain-aware search, and
+orphan cleanup; note relationships own atomic association persistence, while
+meeting search owns result composition.
 Archiving mirrors state onto those associations for indexed reads; permanent
 deletion removes the associations and any now-orphaned canonical identities.
 An invalid attendee or an event above the supported attendee bound rejects the

@@ -8,6 +8,7 @@ import {
 	normalizeCalendarAttendees,
 } from "./calendarAttendees";
 import type { UpcomingCalendarEvent } from "./calendarTypes";
+import { deleteCompanyIfOrphaned, getOrCreateCompany } from "./companyDomain";
 import { getOrCreatePerson } from "./peopleDomain";
 
 const MAX_CALENDAR_DESCRIPTION_LENGTH = 100_000;
@@ -161,44 +162,6 @@ const requireValidCalendarEvent = (event: UpcomingCalendarEvent) => {
 		attendees: normalizeCalendarAttendees(event.attendees),
 		snapshot,
 	};
-};
-
-const getOrCreateCompany = async ({
-	ctx,
-	domain,
-	now,
-	ownerTokenIdentifier,
-	workspaceId,
-}: {
-	ctx: MutationCtx;
-	domain: string;
-	now: number;
-	ownerTokenIdentifier: string;
-	workspaceId: Id<"workspaces">;
-}) => {
-	const existing = await ctx.db
-		.query("companies")
-		.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_domain", (q) =>
-			q
-				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-				.eq("workspaceId", workspaceId)
-				.eq("domain", domain),
-		)
-		.unique();
-
-	if (existing) {
-		return existing._id;
-	}
-
-	return await ctx.db.insert("companies", {
-		ownerTokenIdentifier,
-		workspaceId,
-		domain,
-		displayName: domain,
-		searchText: domain.replaceAll(/[.-]/gu, " "),
-		createdAt: now,
-		updatedAt: now,
-	});
 };
 
 export const createCalendarNoteRelationships = async ({
@@ -382,18 +345,11 @@ export const removeCalendarNoteRelationships = async (
 	}
 
 	for (const companyId of companyIds) {
-		const remaining = await ctx.db
-			.query("noteCompanies")
-			.withIndex("by_owner_ws_company_arch_start", (q) =>
-				q
-					.eq("ownerTokenIdentifier", note.ownerTokenIdentifier)
-					.eq("workspaceId", note.workspaceId)
-					.eq("companyId", companyId),
-			)
-			.first();
-
-		if (!remaining) {
-			await ctx.db.delete(companyId);
-		}
+		await deleteCompanyIfOrphaned({
+			companyId,
+			ctx,
+			ownerTokenIdentifier: note.ownerTokenIdentifier,
+			workspaceId: note.workspaceId,
+		});
 	}
 };
