@@ -1,17 +1,14 @@
 import type { UIMessage } from "ai";
-import type { StoredUiMessageRole } from "./ui-message-codec.mjs";
+import type {
+	HostedChatStoredContextMessage,
+	prepareHostedChatContextWindow,
+} from "./hosted-chat-context-window.mjs";
+import type { buildHostedChatRunContext } from "./hosted-chat-run-context.mjs";
 
 type LogLatencyDetails = Record<
 	string,
 	boolean | null | number | string | undefined
 >;
-
-type StoredHostedChatMessage = {
-	id: string;
-	role: StoredUiMessageRole;
-	partsJson: string;
-	metadataJson?: string;
-};
 
 type AssistantRunEvent = {
 	event: {
@@ -20,29 +17,30 @@ type AssistantRunEvent = {
 	};
 };
 
-type PreparedHostedChatTurnBranch = {
-	branchMessageId?: string;
-	editedMessageIndex: number;
-	incomingMessages: UIMessage[];
-	shouldCreateChatBranch: boolean;
-};
+type RunContext = Awaited<ReturnType<typeof buildHostedChatRunContext>>;
+type RunContextInput = Omit<
+	Parameters<typeof buildHostedChatRunContext>[0],
+	"compactionSummary"
+>;
 
-export declare const getHostedInterruptedAssistantMessageIds: (
-	runEvents: AssistantRunEvent[],
-) => string[];
-
-export declare const prepareHostedChatTurnBranch: <
+export declare const prepareHostedAssistantRunInput: <
 	WorkspaceId extends string,
 	ChatId extends string,
 	RunId extends string,
 >(args: {
 	attachableRunId?: RunId | null;
+	branchFromMessage: (args: {
+		workspaceId: WorkspaceId;
+		chatId: ChatId;
+		messageId: string;
+	}) => Promise<unknown>;
 	chatId: ChatId;
+	contextWindow: Parameters<typeof prepareHostedChatContextWindow>[0];
 	continueRunId?: RunId | null;
 	getMessagesSnapshot: (args: {
 		workspaceId: WorkspaceId;
 		chatId: ChatId;
-	}) => Promise<StoredHostedChatMessage[]>;
+	}) => Promise<HostedChatStoredContextMessage[]>;
 	listRunEventsAfter: (args: {
 		runId: RunId;
 		limit: 500;
@@ -50,7 +48,6 @@ export declare const prepareHostedChatTurnBranch: <
 	logLatency?: (stage: string, details?: LogLatencyDetails) => void;
 	message?: UIMessage | null;
 	messageId?: string | null;
-	messages?: UIMessage[];
 	onBranchError?: (args: {
 		error: unknown;
 		messageId: string;
@@ -58,26 +55,19 @@ export declare const prepareHostedChatTurnBranch: <
 	pendingMessages?: UIMessage[];
 	prepareMessage?: (args: {
 		message?: UIMessage | null;
-		storedMessages: StoredHostedChatMessage[];
+		storedMessages: HostedChatStoredContextMessage[];
 	}) => Promise<UIMessage | null | undefined> | UIMessage | null | undefined;
-	shouldLoadStoredMessages?: boolean;
-	storedMessagesForStatelessBranch?: StoredHostedChatMessage[];
 	trigger?: "submit-message" | "regenerate-message";
-	branchFromMessage: (args: {
-		workspaceId: WorkspaceId;
-		chatId: ChatId;
-		messageId: string;
-	}) => Promise<unknown>;
 	workspaceId: WorkspaceId;
 }) => Promise<
 	| {
-			ok: true;
-			preparedBranch: PreparedHostedChatTurnBranch;
-			shouldCreateChatBranch: boolean;
-			storedMessages: StoredHostedChatMessage[];
-	  }
-	| {
 			ok: false;
 			reason: "branch_error_handled";
+	  }
+	| {
+			ok: true;
+			complete: (
+				context: RunContextInput,
+			) => Promise<RunContext & { chatMessages: UIMessage[] }>;
 	  }
 >;

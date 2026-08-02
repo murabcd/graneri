@@ -1,8 +1,8 @@
+export { prepareHostedAssistantRunInput } from "./hosted-assistant-run-input.mjs";
 export {
 	createHostedActiveStreamKey,
 	type HostedActiveStreamSession,
 } from "./hosted-chat-active-stream.mjs";
-export { prepareHostedChatContextWindow } from "./hosted-chat-context-window.mjs";
 export {
 	type HostedAssistantExecutionOutcome,
 	prepareHostedAssistantExecution,
@@ -13,7 +13,6 @@ export { createHostedAssistantRunFinalizer } from "./hosted-chat-run-finalizer.m
 export { startHostedChatRun } from "./hosted-chat-run-starter.mjs";
 export { createHostedChatRunResponseStream } from "./hosted-chat-stream-lifecycle.mjs";
 export { createHostedChatTurnInput } from "./hosted-chat-turn-input.mjs";
-export { prepareHostedChatTurn } from "./hosted-chat-turn-preparer.mjs";
 export {
 	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,

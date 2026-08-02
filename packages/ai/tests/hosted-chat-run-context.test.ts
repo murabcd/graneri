@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildChatAutomationContext } from "../src/automation-tools.mjs";
+import { prepareHostedAssistantRunInput } from "../src/hosted-assistant-run-input.mjs";
 import {
 	buildHostedChatRunContext,
 	getHostedChatLocalFolderReferenceIds,
 	getHostedChatLocalFolderReferencePaths,
 } from "../src/hosted-chat-run-context.mjs";
-import { prepareHostedChatTurn } from "../src/hosted-chat-turn-preparer.mjs";
 
 describe("hosted chat run context", () => {
 	it("extracts web local folder paths and desktop local folder ids", () => {
@@ -35,24 +35,42 @@ describe("hosted chat run context", () => {
 			mutation: async () => null,
 		};
 
-		const preparedTurn = await prepareHostedChatTurn({
-			branch: {
-				branchFromMessage: async () => undefined,
-				chatId: "chat-1",
-				getMessagesSnapshot: async () => [],
-				listRunEventsAfter: async () => [],
-				message: {
-					id: "message-1",
-					role: "user",
-					parts: [{ type: "text", text: "Use the project" }],
+		const preparedInput = await prepareHostedAssistantRunInput({
+			branchFromMessage: async () => undefined,
+			chatId: "chat-1",
+			contextWindow: {
+				compactionLifecycle: {
+					start: async () => undefined,
+					cancel: async () => undefined,
 				},
-				workspaceId: "workspace-1",
+				loadState: async () => ({
+					compaction: {
+						summary: "Earlier context.",
+						throughCreationTime: 1,
+						throughMessageId: "earlier-1",
+						updatedAt: 1,
+					},
+					hasMoreMessages: false,
+					messages: [],
+				}),
+				safetyIdentifier: "owner-1",
+				saveCompaction: async () => {
+					throw new Error("compaction should not be needed");
+				},
 			},
+			getMessagesSnapshot: async () => [],
+			listRunEventsAfter: async () => [],
+			message: {
+				id: "message-1",
+				role: "user",
+				parts: [{ type: "text", text: "Use the project" }],
+			},
+			workspaceId: "workspace-1",
 		});
-		if (!preparedTurn.ok) {
-			throw new Error("Expected hosted turn preparation to succeed.");
+		if (!preparedInput.ok) {
+			throw new Error("Expected Assistant Run input preparation to succeed.");
 		}
-		const context = await preparedTurn.complete({
+		const context = await preparedInput.complete({
 			appsEnabled: false,
 			automationActions: {
 				createAutomation: async (automation) => {
@@ -85,7 +103,6 @@ describe("hosted chat run context", () => {
 			}),
 			getStoredNoteContext: async () => "stored note",
 			getUserProfileContext: async () => ({ name: "Murad" }),
-			compactionSummary: "Earlier context.",
 			localFolders: [{ id: "folder-1", path: "/tmp/project" }],
 			logLatency: (stage) => latencyStages.push(stage),
 			message: {

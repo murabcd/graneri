@@ -14,7 +14,7 @@ import {
 	type HostedActiveStreamSession,
 	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,
-	type prepareHostedChatTurn,
+	type prepareHostedAssistantRunInput,
 	startHostedChatRun,
 } from "@workspace/ai/hosted-chat-turn";
 import type { ReasoningEffort, ServiceTier } from "@workspace/ai/models";
@@ -40,11 +40,13 @@ type HostedTurnInput = ReturnType<
 type HostedQueuedInput = HostedTurnInput["queuedInput"];
 type HostedTurnController = HostedTurnInput["turnController"];
 
-type PreparedHostedTurn = Extract<
-	Awaited<ReturnType<typeof prepareHostedChatTurn>>,
+type PreparedHostedAssistantRunInput = Extract<
+	Awaited<ReturnType<typeof prepareHostedAssistantRunInput>>,
 	{ ok: true }
 >;
-type HostedRunContext = Awaited<ReturnType<PreparedHostedTurn["complete"]>>;
+type HostedRunContext = Awaited<
+	ReturnType<PreparedHostedAssistantRunInput["complete"]>
+>;
 
 type SendJson = (
 	response: ServerResponse,

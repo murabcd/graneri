@@ -19,7 +19,7 @@ import {
 	createHostedActiveStreamKey,
 	createHostedChatTurnInput,
 	type HostedActiveStreamSession,
-	prepareHostedChatTurn,
+	type prepareHostedAssistantRunInput,
 	stopOrphanedHostedAssistantRun,
 } from "@workspace/ai/hosted-chat-turn";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
@@ -39,8 +39,8 @@ import {
 	normalizeReasoningEffort,
 	normalizeServiceTier,
 } from "../src/lib/ai/models.js";
+import { prepareServerAssistantRunInput } from "./chat-assistant-run-input.js";
 import { createHostedChatAutomationActions } from "./chat-automation-actions.js";
-import { prepareServerChatContextWindow } from "./chat-context-window.js";
 import type {
 	AttachableAssistantRun,
 	ChatRequestBody,
@@ -64,12 +64,12 @@ const activeChatStreamControllers = new Map<
 >();
 const AI_LATENCY_DEBUG_ENABLED = process.env.GRANERI_AI_LATENCY_DEBUG === "1";
 
-type PreparedHostedChatTurn = Extract<
-	Awaited<ReturnType<typeof prepareHostedChatTurn>>,
+type PreparedHostedAssistantRunInput = Extract<
+	Awaited<ReturnType<typeof prepareHostedAssistantRunInput>>,
 	{ ok: true }
 >;
 type HostedChatRunContext = Awaited<
-	ReturnType<PreparedHostedChatTurn["complete"]>
+	ReturnType<PreparedHostedAssistantRunInput["complete"]>
 >;
 
 const canUseLocalFolderTools = () => process.env.GRANERI_ENV_MODE === "local";
@@ -611,74 +611,61 @@ export const handleChatRequest = async (
 	try {
 		toolApprovalResponse = getToolApprovalResponse(effectiveMessage);
 		const currentToolApprovalResponse = toolApprovalResponse;
-		const contextWindow = await prepareServerChatContextWindow({
+		const preparedAssistantRunInput = await prepareServerAssistantRunInput({
 			anchorMessageId: effectiveMessage.id,
+			attachableRunId: attachableRun?._id,
 			chatId: id,
+			continueRunId,
 			convexClient,
 			logLatency,
+			message: effectiveMessage,
+			messageId: toolApprovalResponse ? undefined : messageId,
+			onBranchError: async ({ error, messageId: branchMessageId }) => {
+				if (
+					queuedInput.hasClaimed &&
+					!(await cleanupClaimedSteerQueuedMessage(
+						"steer_queue_branch_create_cleanup",
+					))
+				) {
+					return true;
+				}
+				recordServerError({
+					details: {
+						message_id: branchMessageId,
+					},
+					error,
+					event: wideEvent,
+					operation: "branch_create",
+				});
+				const routeError = getHostedChatConvexRouteError(error);
+				wideEvent.outcome = "error";
+				wideEvent.status_code = routeError?.statusCode ?? 500;
+				wideEvent.error_code = routeError?.errorCode ?? "branch_create_failed";
+				emitWideEvent("error");
+				sendJson(response, routeError?.statusCode ?? 500, {
+					error: routeError?.error ?? "Failed to prepare edited chat branch.",
+					...(routeError ? { errorCode: routeError.errorCode } : {}),
+				});
+				return true;
+			},
+			pendingMessages: pendingSteerMessages,
+			prepareMessage: currentToolApprovalResponse
+				? ({ storedMessages }) =>
+						createCanonicalToolApprovalResponse({
+							approvalResponse: currentToolApprovalResponse,
+							approvalResponses: getToolApprovalResponses(effectiveMessage),
+							storedMessage: storedMessages.find(
+								(storedMessage) =>
+									storedMessage.id ===
+									currentToolApprovalResponse.assistantMessageId,
+							),
+						})
+				: undefined,
 			safetyIdentifier: admission.safetyIdentifier,
+			trigger,
 			workspaceId: resolvedWorkspaceId,
 		});
-		const preparedTurn = await prepareHostedChatTurn({
-			branch: {
-				attachableRunId: attachableRun?._id,
-				chatId: id,
-				continueRunId,
-				getMessagesSnapshot: () => Promise.resolve(contextWindow.messages),
-				listRunEventsAfter: (args) =>
-					convexClient.query(api.assistantRunEvents.listRunEventsAfter, args),
-				logLatency,
-				message: effectiveMessage,
-				messageId: toolApprovalResponse ? undefined : messageId,
-				onBranchError: async ({ error, messageId: branchMessageId }) => {
-					if (
-						queuedInput.hasClaimed &&
-						!(await cleanupClaimedSteerQueuedMessage(
-							"steer_queue_branch_create_cleanup",
-						))
-					) {
-						return true;
-					}
-					recordServerError({
-						details: {
-							message_id: branchMessageId,
-						},
-						error,
-						event: wideEvent,
-						operation: "branch_create",
-					});
-					const routeError = getHostedChatConvexRouteError(error);
-					wideEvent.outcome = "error";
-					wideEvent.status_code = routeError?.statusCode ?? 500;
-					wideEvent.error_code =
-						routeError?.errorCode ?? "branch_create_failed";
-					emitWideEvent("error");
-					sendJson(response, routeError?.statusCode ?? 500, {
-						error: routeError?.error ?? "Failed to prepare edited chat branch.",
-						...(routeError ? { errorCode: routeError.errorCode } : {}),
-					});
-					return true;
-				},
-				pendingMessages: pendingSteerMessages,
-				prepareMessage: currentToolApprovalResponse
-					? ({ storedMessages }) =>
-							createCanonicalToolApprovalResponse({
-								approvalResponse: currentToolApprovalResponse,
-								approvalResponses: getToolApprovalResponses(effectiveMessage),
-								storedMessage: storedMessages.find(
-									(storedMessage) =>
-										storedMessage.id ===
-										currentToolApprovalResponse.assistantMessageId,
-								),
-							})
-					: undefined,
-				trigger,
-				branchFromMessage: (args) =>
-					convexClient.mutation(api.chatBranches.branchFromMessage, args),
-				workspaceId: resolvedWorkspaceId,
-			},
-		});
-		if (!preparedTurn.ok) {
+		if (!preparedAssistantRunInput.ok) {
 			return;
 		}
 		({
@@ -689,7 +676,7 @@ export const handleChatRequest = async (
 			instructions,
 			localFolderRoots,
 			selectedAppConnections,
-		} = await preparedTurn.complete({
+		} = await preparedAssistantRunInput.complete({
 			appsEnabled,
 			automationActions: createHostedChatAutomationActions({
 				convexClient,
@@ -697,7 +684,6 @@ export const handleChatRequest = async (
 			}),
 			chatAttachmentsApi: api.chatAttachments,
 			chatId: id,
-			compactionSummary: contextWindow.compactionSummary,
 			convexClient,
 			defaultModel: resolvedModel.model,
 			defaultReasoningEffort: resolvedReasoningEffort,

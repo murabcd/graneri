@@ -187,18 +187,19 @@ only non-archived calendar-linked notes through person/company association
 indexes and returns bounded note text plus event schedule details. This is
 stored meeting knowledge; live events that do not yet have a linked note remain
 the responsibility of the selected Google or Yandex Calendar capability.
-The route-facing hosted-turn interface exposes intention-level preparation:
+The route-facing hosted Assistant Run interface exposes intention-level preparation:
 `createHostedChatTurnInput` couples the durable Follow-up adapter to its turn
-controller, while `prepareHostedChatTurn` owns branch-first preparation and
-completes run-context assembly with AI SDK message validation. Callers must not
-independently reconstruct either sequence from the private leaf modules.
+controller, while `prepareHostedAssistantRunInput` owns branch resolution,
+rolling context compaction, final Stored UI Message tail assembly, and AI SDK
+message validation. Callers must not independently reconstruct either sequence
+from private leaf modules.
 The producer-neutral assistant execution module owns AI SDK agent construction,
 stream creation, rich-message reconstruction, explicit streamed or consumed
 delivery, tool-approval outcome detection, and completed/aborted outcome
 classification. Convex imports this runtime-neutral module through
 `@workspace/ai/hosted-assistant-execution`; it must not import the broader
 hosted-turn interface because that graph includes web and desktop-local tool
-implementations. Stored-message validation belongs to the UI message codec.
+implementations. Stored UI Message validation belongs to the UI message codec.
 Web and Convex remain producer adapters: web owns desktop-local tool streaming
 and HTTP delivery, while Convex owns liveness checks, durable snapshot cadence,
 scheduling, and transactional finalization.
@@ -225,8 +226,11 @@ The hosted web chat route delegates active-run policy, same-run validation,
 queued acceptance headers, assistant-run start, stream finalization, initial
 AI SDK stream piping, and reconnect stream piping to its hosted stream runtime
 module so HTTP parsing/context assembly stays separate from turn execution.
-Long chat context is prepared before branch handling through a durable rolling
-compaction checkpoint. Convex stores the authoritative summary boundary by
+Long chat context is prepared through a durable rolling compaction checkpoint.
+Ordinary input uses that context directly. Editing and regeneration first move
+the replaced active suffix into its durable branch, clear the invalidated
+checkpoint, and only then prepare the final Assistant Run input from the new
+active history. Convex stores the authoritative summary boundary by
 message ID and insertion time; the AI layer summarizes fixed oldest-first
 batches and then sends the trusted summary through top-level AI SDK instructions
 followed by the exact uncompacted user/assistant tail. Compaction never creates
@@ -234,8 +238,8 @@ or stores synthetic system messages, and it never deletes or rewrites saved chat
 messages, so the user-visible transcript and future pagination retain complete
 history. The checkpoint is private context-assembly state; renderer code does
 not infer compaction from it. When preparation discovers that compaction is
-required, the hosted route first creates one owner-scoped, server-backed
-activity anchored to the triggering message. Ask AI and note chat subscribe to
+required, preparation first creates one owner-scoped, server-backed activity
+through the web adapter, anchored to the triggering message. Ask AI and note chat subscribe to
 that same bounded activity record through their shared message renderer, show a
 shimmering `Conversation compacting` activity while its status is `running`,
 and replace that label in place with static `Conversation compacted` only when
@@ -252,8 +256,8 @@ Editing a user message or regenerating an assistant response replaces the active
 suffix without destroying it. Convex atomically moves the replaced active rows
 into `chatBranches` and `chatBranchMessages`, retains their attachment storage
 references, stops superseded run state, and clears the rolling context
-compaction checkpoint and its current display activity before the new turn
-starts. The renderer reads active
+compaction checkpoint and its current display activity before the new Assistant
+Run input is prepared. The renderer reads active
 history through cursor-paginated `chatThreads.readPage` pages and explicitly
 offers older pages instead of silently truncating the transcript. Preserved
 replacement branches remain durable recovery data. Separately, an assistant

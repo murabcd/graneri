@@ -117,7 +117,7 @@ describe("AI package boundary", () => {
 		]);
 	});
 
-	it("keeps the hosted turn interface intention-level", () => {
+	it("keeps the hosted Assistant Run interface intention-level", () => {
 		expect(Object.keys(hostedTurn).sort()).toEqual([
 			"createHostedActiveStreamKey",
 			"createHostedAssistantRunFinalizer",
@@ -126,14 +126,13 @@ describe("AI package boundary", () => {
 			"isHostedQueuedUserMessageAccept",
 			"persistHostedChatUserMessage",
 			"prepareHostedAssistantExecution",
-			"prepareHostedChatContextWindow",
-			"prepareHostedChatTurn",
+			"prepareHostedAssistantRunInput",
 			"startHostedAssistantExecution",
 			"startHostedChatRun",
 			"stopOrphanedHostedAssistantRun",
 		]);
 		expect(hostedTurn).not.toHaveProperty("buildHostedChatRunContext");
-		expect(hostedTurn).not.toHaveProperty("prepareHostedChatTurnBranch");
+		expect(hostedTurn).not.toHaveProperty("prepareHostedChatContextWindow");
 		expect(hostedTurn).not.toHaveProperty("createHostedChatQueuedInput");
 		expect(hostedTurn).not.toHaveProperty("createHostedChatTurnController");
 	});

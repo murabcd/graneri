@@ -481,26 +481,20 @@ describe("chat handler persistence failures", () => {
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
-		convexMock.contextState.mockResolvedValueOnce({
-			compaction: null,
-			hasMoreMessages: false,
-			messages: [
-				{
-					id: "msg-1",
-					role: "user",
-					partsJson: JSON.stringify([{ type: "text", text: "Original" }]),
-					createdAt: 1,
-					creationTime: 1,
-				},
-				{
-					id: "msg-2",
-					role: "assistant",
-					partsJson: JSON.stringify([{ type: "text", text: "Old answer" }]),
-					createdAt: 2,
-					creationTime: 2,
-				},
-			],
-		});
+		convexMock.query.mockResolvedValueOnce([
+			{
+				id: "msg-1",
+				role: "user",
+				partsJson: JSON.stringify([{ type: "text", text: "Original" }]),
+				createdAt: 1,
+			},
+			{
+				id: "msg-2",
+				role: "assistant",
+				partsJson: JSON.stringify([{ type: "text", text: "Old answer" }]),
+				createdAt: 2,
+			},
+		]);
 		convexMock.mutation.mockRejectedValueOnce(new Error("branch failed"));
 
 		await expect(
@@ -529,7 +523,7 @@ describe("chat handler persistence failures", () => {
 			chatId: "chat_1",
 			messageId: "msg-2",
 		});
-		expect(convexMock.query).toHaveBeenCalledTimes(2);
+		expect(convexMock.query).toHaveBeenCalledTimes(3);
 	});
 
 	it("prepares replayed queued messages from the claimed queue row before starting a run", async () => {
