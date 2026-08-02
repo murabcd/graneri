@@ -22,6 +22,11 @@ import {
 	updateYandexCalendarResource,
 	updateYandexCalendarResourceGuests,
 } from "./yandexCalendarEventMutation";
+import {
+	getYandexCalendarEventAuthority,
+	requireYandexCalendarEventOperation,
+	requireYandexCalendarEventUpdate,
+} from "./yandexCalendarEventAuthority";
 import { parseIcsEvents } from "./yandexCalendarIcs";
 import { buildYandexCalendarEventIcs } from "./yandexCalendarIcsWriter";
 import type { YandexCalendarConnection } from "./yandexCalendarTypes";
@@ -118,14 +123,12 @@ const loadYandexCalendarEventResource = async ({
 	};
 };
 
-const getYandexCalendarEventEditMode = ({
+const readYandexCalendarEventAuthority = ({
 	calendarData,
 	connection,
-	operation,
 }: {
 	calendarData: string;
 	connection: YandexCalendarConnection;
-	operation: "delete" | "edit" | "remove";
 }) => {
 	const baseEvent = parseIcsEvents(calendarData).find(
 		(event) => !event.properties["RECURRENCE-ID"],
@@ -143,29 +146,11 @@ const getYandexCalendarEventEditMode = ({
 	const isAttendee = baseEvent.attendees.some(
 		(attendee) => normalizeYandexAttendeeEmail(attendee.value) === selfEmail,
 	);
-	if (operation === "remove") {
-		if (!isOrganizer && isAttendee) {
-			return "remove" as const;
-		}
-		throw new ConvexError({
-			code: "CALENDAR_EVENT_REMOVE_FORBIDDEN",
-			message: "Only an invited attendee can remove this event.",
-		});
-	}
 
-	if (isOrganizer) {
-		return "full" as const;
-	}
-
-	if (operation === "edit" && isAttendee) {
-		return "guests" as const;
-	}
-	throw new ConvexError({
-		code:
-			operation === "edit"
-				? "CALENDAR_EVENT_EDIT_FORBIDDEN"
-				: "CALENDAR_EVENT_DELETE_FORBIDDEN",
-		message: `Only the organizer can ${operation} this event.`,
+	return getYandexCalendarEventAuthority({
+		canWrite: true,
+		isAttendee,
+		isOrganizer,
 	});
 };
 
@@ -191,11 +176,11 @@ export const updateYandexCalendarEvent = async ({
 		path,
 		request,
 	});
-	const editMode = getYandexCalendarEventEditMode({
+	const authority = readYandexCalendarEventAuthority({
 		calendarData,
 		connection,
-		operation: "edit",
 	});
+	const editMode = requireYandexCalendarEventUpdate(authority);
 	const isMoving = input.destinationCalendarId !== input.calendarId;
 	const destinationCalendar = isMoving
 		? await getWritableYandexCalendar({
@@ -204,11 +189,8 @@ export const updateYandexCalendarEvent = async ({
 				request,
 			})
 		: null;
-	if (isMoving && editMode !== "full") {
-		throw new ConvexError({
-			code: "CALENDAR_EVENT_MOVE_FORBIDDEN",
-			message: "Only the organizer can move this event.",
-		});
+	if (isMoving) {
+		requireYandexCalendarEventOperation(authority, "move");
 	}
 	if (
 		editMode === "guests" &&
@@ -301,11 +283,13 @@ export const removeYandexCalendarEvent = async ({
 		path,
 		request,
 	});
-	getYandexCalendarEventEditMode({
-		calendarData,
-		connection,
-		operation: "remove",
-	});
+	requireYandexCalendarEventOperation(
+		readYandexCalendarEventAuthority({
+			calendarData,
+			connection,
+		}),
+		"remove",
+	);
 	const concurrencyEtag = requireCalendarEventEtag(etag);
 
 	if (recurrenceId) {
@@ -378,11 +362,13 @@ export const deleteYandexCalendarEvent = async ({
 		path,
 		request,
 	});
-	getYandexCalendarEventEditMode({
-		calendarData,
-		connection,
-		operation: "delete",
-	});
+	requireYandexCalendarEventOperation(
+		readYandexCalendarEventAuthority({
+			calendarData,
+			connection,
+		}),
+		"delete",
+	);
 	const concurrencyEtag = requireCalendarEventEtag(etag);
 
 	if (!recurrenceId) {

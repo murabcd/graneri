@@ -108,6 +108,7 @@ import type * as trash from "../trash.js";
 import type * as userPreferences from "../userPreferences.js";
 import type * as workspaces from "../workspaces.js";
 import type * as yandexCalendar from "../yandexCalendar.js";
+import type * as yandexCalendarEventAuthority from "../yandexCalendarEventAuthority.js";
 import type * as yandexCalendarEventMutation from "../yandexCalendarEventMutation.js";
 import type * as yandexCalendarEvents from "../yandexCalendarEvents.js";
 import type * as yandexCalendarIcs from "../yandexCalendarIcs.js";
@@ -222,6 +223,7 @@ declare const fullApi: ApiFromModules<{
   userPreferences: typeof userPreferences;
   workspaces: typeof workspaces;
   yandexCalendar: typeof yandexCalendar;
+  yandexCalendarEventAuthority: typeof yandexCalendarEventAuthority;
   yandexCalendarEventMutation: typeof yandexCalendarEventMutation;
   yandexCalendarEvents: typeof yandexCalendarEvents;
   yandexCalendarIcs: typeof yandexCalendarIcs;

@@ -8,6 +8,7 @@ import {
 } from "./calendarRecurrence";
 import { zonedCalendarDateTimeToUtc } from "./calendarTimeZone";
 import type { CalendarRecurrence } from "./calendarTypes";
+import { getYandexCalendarEventAuthority } from "./yandexCalendarEventAuthority";
 import type {
 	ParsedIcsEvent,
 	ParsedIcsProperty,
@@ -410,10 +411,12 @@ const normalizeEvent = ({
 		].filter((attendee) => attendee !== null),
 	);
 	const organizerAttendee = attendees.find((attendee) => attendee.isOrganizer);
-	const canManageEvent =
-		calendar.canWrite && (organizerAttendee ? organizerAttendee.isSelf : true);
 	const isSelfAttendee = attendees.some((attendee) => attendee.isSelf);
-	const canInviteGuests = calendar.canWrite && isSelfAttendee;
+	const authority = getYandexCalendarEventAuthority({
+		canWrite: calendar.canWrite,
+		isAttendee: isSelfAttendee,
+		isOrganizer: organizerAttendee ? organizerAttendee.isSelf : true,
+	});
 	const startParts = parseIcsDateParts(startProperty.value);
 	const normalizedRecurrence =
 		recurrence ??
@@ -429,14 +432,11 @@ const normalizeEvent = ({
 
 	return {
 		attendees,
-		canDelete: canManageEvent,
-		canEdit: canManageEvent,
-		guestPermissions: canManageEvent || canInviteGuests ? "manage" : "none",
-		canMove: canManageEvent,
-		canRemove:
-			calendar.canWrite &&
-			isSelfAttendee &&
-			Boolean(organizerAttendee && !organizerAttendee.isSelf),
+		canDelete: authority.canDelete,
+		canEdit: authority.canEdit,
+		guestPermissions: authority.guestPermissions,
+		canMove: authority.canMove,
+		canRemove: authority.canRemove,
 		calendarId: calendar.id,
 		calendarName: calendar.displayName,
 		description: description || undefined,

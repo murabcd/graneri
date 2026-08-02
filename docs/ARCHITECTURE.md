@@ -85,10 +85,13 @@ changes for organizer-owned or organizerless personal events in a collection
 whose CalDAV ACL includes write access. Google attendees may receive additive
 invite permission without receiving full-edit or delete authority. Yandex
 attendees with participant editing may manage the guest list without receiving
-full event-edit or delete authority. Every mutation reloads the provider event
-and rechecks that authorization server-side; renderer capability flags are
-presentation data, not trusted authorization. Google invite-only requests retain
-all existing participants. Yandex guest-management requests preserve the
+full event-edit or delete authority. `yandexCalendarEventAuthority` is the
+single policy owner for both snapshot capability projection and refreshed write
+authorization; parser and transport code provide provider facts without
+reinterpreting organizer or attendee rules. Every mutation reloads the provider
+event and rechecks that authorization server-side; renderer capability flags
+are presentation data, not trusted authorization. Google invite-only requests
+retain all existing participants. Yandex guest-management requests preserve the
 current attendee's membership while applying the requested guest set. Both
 ignore client-supplied changes to the event title, description, time, and
 location.
