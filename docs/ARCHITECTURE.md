@@ -239,8 +239,9 @@ messages, so the user-visible transcript and future pagination retain complete
 history. The checkpoint is private context-assembly state; renderer code does
 not infer compaction from it. When preparation discovers that compaction is
 required, preparation first creates one owner-scoped, server-backed activity
-through the web adapter, anchored to the triggering message. Ask AI and note chat subscribe to
-that same bounded activity record through their shared message renderer, show a
+through the web adapter, anchored to the triggering message. Ask AI and note
+chat subscribe to that same bounded activity record through their shared
+message renderer, show a
 shimmering `Conversation compacting` activity while its status is `running`,
 and replace that label in place with static `Conversation compacted` only when
 the final checkpoint and completed activity commit atomically. Each checkpoint
@@ -249,9 +250,13 @@ does not reload that state through a separate query. Failed preparation removes
 the matching running activity, lifecycle mutations are fenced by activity ID,
 and an abandoned running activity expires automatically; a completed activity
 remains until the next compaction replaces it or the chat history boundary
-changes. Checkpoint updates use optimistic boundary validation and must fail
-closed if another request changes the checkpoint while a summary is being
-generated.
+changes. Convex stores the checkpoint and its activity lifecycle as one
+discriminated per-chat durable state record. `chatContextCompactions` alone owns
+its lease, completion, cancellation, reset, and retirement transitions; branch,
+automation, and chat-retirement modules use its intention-level helpers instead
+of reading that record directly. Checkpoint updates use optimistic boundary
+validation and must fail closed if another request changes the checkpoint while
+a summary is being generated.
 Editing a user message or regenerating an assistant response replaces the active
 suffix without destroying it. Convex atomically moves the replaced active rows
 into `chatBranches` and `chatBranchMessages`, retains their attachment storage

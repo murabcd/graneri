@@ -28,13 +28,13 @@ import {
 	cleanupAssistantRunToolExecutions,
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
-import { resolveAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import {
 	createAssistantRunStream,
 	getActiveStreamForChat,
 	getActiveStreamForRun,
 	updateAssistantRunStream,
 } from "./assistantRunStreamState";
+import { resolveAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import {
 	moveLinkedAutomationToFreshChat,
 	pauseLinkedAutomationForChat,
@@ -44,6 +44,7 @@ import {
 	deleteChatMessageAttachmentReferences,
 	syncChatMessageAttachmentReferences,
 } from "./chatAttachmentReferences";
+import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
@@ -353,38 +354,23 @@ const deleteChatRuntimeBatch = async (
 	ctx: MutationCtx,
 	chatId: Doc<"chats">["_id"],
 ) => {
-	const [
-		activeStreams,
-		compactionActivities,
-		compactions,
-		queuedMessages,
-		toolCalls,
-		runs,
-	] = await Promise.all([
-			ctx.db
-				.query("chatActiveStreams")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-				.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
-			ctx.db
-				.query("chatContextCompactionActivities")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-				.take(1),
-			ctx.db
-				.query("chatContextCompactions")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-				.take(1),
-			ctx.db
-				.query("assistantQueuedMessages")
-				.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
-				.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
-			ctx.db
-				.query("chatToolCalls")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-				.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
-			ctx.db
-				.query("assistantRuns")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-				.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+	const [activeStreams, queuedMessages, toolCalls, runs] = await Promise.all([
+		ctx.db
+			.query("chatActiveStreams")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+			.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+		ctx.db
+			.query("assistantQueuedMessages")
+			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
+			.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+		ctx.db
+			.query("chatToolCalls")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+			.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+		ctx.db
+			.query("assistantRuns")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+			.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
 	]);
 
 	const eventBatchesHaveMore = await Promise.all(
@@ -398,9 +384,8 @@ const deleteChatRuntimeBatch = async (
 	);
 
 	await Promise.all([
+		clearChatContextState(ctx, chatId),
 		...activeStreams.map((stream) => ctx.db.delete(stream._id)),
-		...compactionActivities.map((activity) => ctx.db.delete(activity._id)),
-		...compactions.map((compaction) => ctx.db.delete(compaction._id)),
 		...queuedMessages.map((message) => ctx.db.delete(message._id)),
 		...toolCalls.map((toolCall) => ctx.db.delete(toolCall._id)),
 		...deletableRuns.map((run) => deleteAssistantRunJob(ctx, run._id)),

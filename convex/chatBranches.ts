@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
+import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import { clampWhitespace, createResourceAccess } from "./domain";
@@ -104,25 +105,10 @@ export const branchFromMessage = mutation({
 			}),
 		);
 
-		const [compaction, compactionActivity] = await Promise.all([
-			ctx.db
-				.query("chatContextCompactions")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-				.unique(),
-			ctx.db
-				.query("chatContextCompactionActivities")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-				.unique(),
+		const [, activeRunsHaveMore] = await Promise.all([
+			clearChatContextState(ctx, chat._id),
+			stopActiveRunsForChat(ctx, chat._id),
 		]);
-		const compactionDeletes: Promise<void>[] = [];
-		if (compaction) {
-			compactionDeletes.push(ctx.db.delete(compaction._id));
-		}
-		if (compactionActivity) {
-			compactionDeletes.push(ctx.db.delete(compactionActivity._id));
-		}
-		await Promise.all(compactionDeletes);
-		const activeRunsHaveMore = await stopActiveRunsForChat(ctx, chat._id);
 		if (activeRunsHaveMore) {
 			throw new ConvexError({
 				code: "ASSISTANT_RUN_INVARIANT_VIOLATION",

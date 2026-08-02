@@ -179,35 +179,62 @@ test("context compaction advances a verified chat message boundary", async () =>
 	expect(prepared.messages).toHaveLength(101);
 	expect(prepared.messages[0]?.id).toBe("message-201");
 
-	const storedCompaction = await t.run(async (ctx) =>
+	const storedState = await t.run(async (ctx) =>
 		ctx.db
-			.query("chatContextCompactions")
+			.query("chatContextStates")
 			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
 			.unique(),
 	);
-	expect(storedCompaction?.ownerTokenIdentifier).toBe(
-		ownerIdentity.tokenIdentifier,
+	expect(storedState).toMatchObject({
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		kind: "completed",
+		checkpoint: {
+			summary: "Messages 1 through 200 summarized.",
+			throughMessageId: "message-200",
+		},
+	});
+	await asOwner.mutation(api.chatContextCompactions.startActivity, {
+		workspaceId,
+		chatId: "chat-context",
+		activityId: "cancelled-after-checkpoint",
+		anchorMessageId: "current-user-message-2",
+	});
+	await asOwner.mutation(api.chatContextCompactions.cancelActivity, {
+		workspaceId,
+		chatId: "chat-context",
+		activityId: "cancelled-after-checkpoint",
+	});
+	await expect(
+		asOwner.query(api.chatContextCompactions.getPreparationState, {
+			workspaceId,
+			chatId: "chat-context",
+		}),
+	).resolves.toMatchObject({
+		compaction: {
+			summary: "Messages 1 through 200 summarized.",
+			throughMessageId: "message-200",
+		},
+	});
+	const checkpointState = await t.run(async (ctx) =>
+		ctx.db
+			.query("chatContextStates")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+			.unique(),
 	);
+	expect(checkpointState?.kind).toBe("checkpoint");
 
 	await asOwner.mutation(api.chats.remove, {
 		workspaceId,
 		chatId: "chat-context",
 	});
 	await t.finishAllScheduledFunctions(vi.runAllTimers);
-	const deletedCompaction = await t.run(async (ctx) =>
+	const deletedState = await t.run(async (ctx) =>
 		ctx.db
-			.query("chatContextCompactions")
+			.query("chatContextStates")
 			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
 			.unique(),
 	);
-	expect(deletedCompaction).toBeNull();
-	const deletedActivity = await t.run(async (ctx) =>
-		ctx.db
-			.query("chatContextCompactionActivities")
-			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-			.unique(),
-	);
-	expect(deletedActivity).toBeNull();
+	expect(deletedState).toBeNull();
 });
 
 test("context compaction activity is cancelled or expires without a completed marker", async () => {

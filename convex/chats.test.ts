@@ -400,25 +400,22 @@ test("branching from an edited message preserves the replaced branch", async () 
 		if (!chat) {
 			throw new Error("Expected chat to exist.");
 		}
-		await ctx.db.insert("chatContextCompactions", {
+		await ctx.db.insert("chatContextStates", {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: chat._id,
-			summary: "Earlier context",
-			throughCreationTime: 1,
-			throughMessageId: "earlier-message",
-			createdAt: 2_300,
-			updatedAt: 2_300,
-		});
-		await ctx.db.insert("chatContextCompactionActivities", {
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			chatId: chat._id,
+			kind: "completed",
+			checkpoint: {
+				summary: "Earlier context",
+				throughCreationTime: 1,
+				throughMessageId: "earlier-message",
+				updatedAt: 2_300,
+			},
 			activityId: "completed-compaction",
 			anchorMessageId: "msg-3",
-			status: "completed",
 			startedAt: 2_200,
 			completedAt: 2_300,
+			createdAt: 2_200,
 			updatedAt: 2_300,
 		});
 	});
@@ -478,12 +475,8 @@ test("branching from an edited message preserves the replaced branch", async () 
 			.query("chatActiveStreams")
 			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
 			.unique();
-		const compaction = await ctx.db
-			.query("chatContextCompactions")
-			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-			.unique();
-		const compactionActivity = await ctx.db
-			.query("chatContextCompactionActivities")
+		const contextState = await ctx.db
+			.query("chatContextStates")
 			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
 			.unique();
 		const toolCalls = await ctx.db
@@ -513,8 +506,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 		return {
 			activeStream,
 			claimedMessages,
-			compaction,
-			compactionActivity,
+			contextState,
 			queuedMessages,
 			runEvents,
 			runRow,
@@ -523,8 +515,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 	});
 
 	expect(relatedRows.activeStream).toBeNull();
-	expect(relatedRows.compaction).toBeNull();
-	expect(relatedRows.compactionActivity).toBeNull();
+	expect(relatedRows.contextState).toBeNull();
 	expect(relatedRows.runRow).toMatchObject({
 		status: "stopped",
 		stopReason: "superseded",

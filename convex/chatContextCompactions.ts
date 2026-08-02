@@ -50,10 +50,8 @@ const preparationStateValidator = v.object({
 	messages: v.array(contextMessageValidator),
 });
 
-type CompactionState = Pick<
-	Doc<"chatContextCompactions">,
-	"summary" | "throughCreationTime" | "throughMessageId" | "updatedAt"
->;
+type ChatContextState = Doc<"chatContextStates">;
+type ChatContextCheckpoint = NonNullable<ChatContextState["checkpoint"]>;
 
 const toContextMessage = (message: {
 	messageId: string;
@@ -70,6 +68,33 @@ const toContextMessage = (message: {
 	createdAt: message.createdAt,
 	creationTime: message._creationTime,
 });
+
+const getChatContextState = async (
+	ctx: QueryCtx | MutationCtx,
+	chatId: Id<"chats">,
+) =>
+	await ctx.db
+		.query("chatContextStates")
+		.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+		.unique();
+
+export const getChatContextCheckpoint = async (
+	ctx: QueryCtx | MutationCtx,
+	chatId: Id<"chats">,
+): Promise<ChatContextCheckpoint | null> => {
+	const state = await getChatContextState(ctx, chatId);
+	return state?.checkpoint ?? null;
+};
+
+export const clearChatContextState = async (
+	ctx: MutationCtx,
+	chatId: Id<"chats">,
+) => {
+	const state = await getChatContextState(ctx, chatId);
+	if (state) {
+		await ctx.db.delete(state._id);
+	}
+};
 
 const getOwnedContextChat = async (
 	ctx: QueryCtx | MutationCtx,
@@ -88,31 +113,43 @@ const getOwnedContextChat = async (
 const readPreparationState = async (
 	ctx: QueryCtx | MutationCtx,
 	chatId: Id<"chats">,
-	compaction: CompactionState | null,
+	checkpoint: ChatContextCheckpoint | null,
 ) => {
 	const messages = await ctx.db
 		.query("chatMessages")
 		.withIndex("by_chatId", (q) => {
 			const chatMessages = q.eq("chatId", chatId);
-			return compaction
-				? chatMessages.gt("_creationTime", compaction.throughCreationTime)
+			return checkpoint
+				? chatMessages.gt("_creationTime", checkpoint.throughCreationTime)
 				: chatMessages;
 		})
 		.order("asc")
 		.take(HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT + 1);
 
 	return {
-		compaction: compaction
-			? {
-					summary: compaction.summary,
-					throughCreationTime: compaction.throughCreationTime,
-					throughMessageId: compaction.throughMessageId,
-					updatedAt: compaction.updatedAt,
-				}
-			: null,
+		compaction: checkpoint,
 		hasMoreMessages: messages.length > HOSTED_CHAT_CONTEXT_MESSAGE_LIMIT,
 		messages: messages.map(toContextMessage),
 	};
+};
+
+const removeRunningActivity = async (
+	ctx: MutationCtx,
+	state: Extract<ChatContextState, { kind: "running" }>,
+) => {
+	if (!state.checkpoint) {
+		await ctx.db.delete(state._id);
+		return;
+	}
+	await ctx.db.replace(state._id, {
+		ownerTokenIdentifier: state.ownerTokenIdentifier,
+		workspaceId: state.workspaceId,
+		chatId: state.chatId,
+		kind: "checkpoint",
+		checkpoint: state.checkpoint,
+		createdAt: state.createdAt,
+		updatedAt: Date.now(),
+	});
 };
 
 export const getPreparationState = query({
@@ -127,11 +164,8 @@ export const getPreparationState = query({
 			return { compaction: null, hasMoreMessages: false, messages: [] };
 		}
 
-		const compaction = await ctx.db
-			.query("chatContextCompactions")
-			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-			.unique();
-		return await readPreparationState(ctx, chat._id, compaction);
+		const checkpoint = await getChatContextCheckpoint(ctx, chat._id);
+		return await readPreparationState(ctx, chat._id, checkpoint);
 	},
 });
 
@@ -147,15 +181,11 @@ export const getActivity = query({
 			return null;
 		}
 
-		const activity = await ctx.db
-			.query("chatContextCompactionActivities")
-			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-			.unique();
-
-		return activity
+		const state = await getChatContextState(ctx, chat._id);
+		return state?.kind === "running" || state?.kind === "completed"
 			? {
-					anchorMessageId: activity.anchorMessageId,
-					status: activity.status,
+					anchorMessageId: state.anchorMessageId,
+					status: state.kind,
 				}
 			: null;
 	},
@@ -177,14 +207,11 @@ export const startActivity = mutation({
 				message: "Chat not found.",
 			});
 		}
-		const existing = await ctx.db
-			.query("chatContextCompactionActivities")
-			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-			.unique();
+		const state = await getChatContextState(ctx, chat._id);
 		const now = Date.now();
 		if (
-			existing?.status === "running" &&
-			now - existing.updatedAt < CONTEXT_COMPACTION_ACTIVITY_TIMEOUT_MS
+			state?.kind === "running" &&
+			now - state.updatedAt < CONTEXT_COMPACTION_ACTIVITY_TIMEOUT_MS
 		) {
 			throw new ConvexError({
 				code: "CONTEXT_COMPACTION_IN_PROGRESS",
@@ -195,27 +222,26 @@ export const startActivity = mutation({
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			chatId: chat._id,
+			kind: "running" as const,
+			...(state?.checkpoint ? { checkpoint: state.checkpoint } : {}),
 			activityId: args.activityId,
 			anchorMessageId: args.anchorMessageId,
-			status: "running" as const,
 			startedAt: now,
+			createdAt: state?.createdAt ?? now,
 			updatedAt: now,
 		};
-		let activityDocumentId: Id<"chatContextCompactionActivities">;
-		if (existing) {
-			await ctx.db.replace(existing._id, document);
-			activityDocumentId = existing._id;
+		let stateDocumentId: Id<"chatContextStates">;
+		if (state) {
+			await ctx.db.replace(state._id, document);
+			stateDocumentId = state._id;
 		} else {
-			activityDocumentId = await ctx.db.insert(
-				"chatContextCompactionActivities",
-				document,
-			);
+			stateDocumentId = await ctx.db.insert("chatContextStates", document);
 		}
 		await ctx.scheduler.runAfter(
 			CONTEXT_COMPACTION_ACTIVITY_TIMEOUT_MS,
 			internal.chatContextCompactions.expireActivity,
 			{
-				activityDocumentId,
+				stateDocumentId,
 				activityId: args.activityId,
 			},
 		);
@@ -235,15 +261,9 @@ export const cancelActivity = mutation({
 		if (!chat) {
 			return null;
 		}
-		const activity = await ctx.db
-			.query("chatContextCompactionActivities")
-			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-			.unique();
-		if (
-			activity?.activityId === args.activityId &&
-			activity.status === "running"
-		) {
-			await ctx.db.delete(activity._id);
+		const state = await getChatContextState(ctx, chat._id);
+		if (state?.kind === "running" && state.activityId === args.activityId) {
+			await removeRunningActivity(ctx, state);
 		}
 		return null;
 	},
@@ -251,20 +271,17 @@ export const cancelActivity = mutation({
 
 export const expireActivity = internalMutation({
 	args: {
-		activityDocumentId: v.id("chatContextCompactionActivities"),
+		stateDocumentId: v.id("chatContextStates"),
 		activityId: v.string(),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const activity = await ctx.db.get(args.activityDocumentId);
-		if (
-			activity?.activityId !== args.activityId ||
-			activity.status !== "running"
-		) {
+		const state = await ctx.db.get(args.stateDocumentId);
+		if (state?.kind !== "running" || state.activityId !== args.activityId) {
 			return null;
 		}
 		const remainingLifetime =
-			activity.updatedAt + CONTEXT_COMPACTION_ACTIVITY_TIMEOUT_MS - Date.now();
+			state.updatedAt + CONTEXT_COMPACTION_ACTIVITY_TIMEOUT_MS - Date.now();
 		if (remainingLifetime > 0) {
 			await ctx.scheduler.runAfter(
 				remainingLifetime,
@@ -272,7 +289,7 @@ export const expireActivity = internalMutation({
 				args,
 			);
 		} else {
-			await ctx.db.delete(activity._id);
+			await removeRunningActivity(ctx, state);
 		}
 		return null;
 	},
@@ -291,35 +308,24 @@ export const save = mutation({
 	},
 	returns: preparationStateValidator,
 	handler: async (ctx, args) => {
-		const { chat, ownerTokenIdentifier } = await getOwnedContextChat(ctx, args);
+		const { chat } = await getOwnedContextChat(ctx, args);
 		if (!chat) {
 			throw new ConvexError({
 				code: "CHAT_NOT_FOUND",
 				message: "Chat not found.",
 			});
 		}
-		const [existing, activity] = await Promise.all([
-			ctx.db
-				.query("chatContextCompactions")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-				.unique(),
-			ctx.db
-				.query("chatContextCompactionActivities")
-				.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
-				.unique(),
-		]);
-		if (
-			activity?.activityId !== args.activityId ||
-			activity.status !== "running"
-		) {
+		const state = await getChatContextState(ctx, chat._id);
+		if (state?.kind !== "running" || state.activityId !== args.activityId) {
 			throw new ConvexError({
 				code: "CONTEXT_COMPACTION_ACTIVITY_STALE",
 				message: "Chat context compaction activity changed during preparation.",
 			});
 		}
+		const checkpoint = state.checkpoint;
 		if (
-			existing?.throughCreationTime !== args.expectedThroughCreationTime ||
-			existing?.throughMessageId !== args.expectedThroughMessageId
+			checkpoint?.throughCreationTime !== args.expectedThroughCreationTime ||
+			checkpoint?.throughMessageId !== args.expectedThroughMessageId
 		) {
 			throw new ConvexError({
 				code: "CONTEXT_COMPACTION_STALE",
@@ -330,8 +336,8 @@ export const save = mutation({
 			.query("chatMessages")
 			.withIndex("by_chatId", (q) => {
 				const chatMessages = q.eq("chatId", chat._id);
-				return existing
-					? chatMessages.gt("_creationTime", existing.throughCreationTime)
+				return checkpoint
+					? chatMessages.gt("_creationTime", checkpoint.throughCreationTime)
 					: chatMessages;
 			})
 			.order("asc")
@@ -349,48 +355,48 @@ export const save = mutation({
 			});
 		}
 		const now = Date.now();
-		const document = {
-			ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			chatId: chat._id,
+		const nextCheckpoint = {
 			summary: args.summary,
 			throughCreationTime: args.throughCreationTime,
 			throughMessageId: args.throughMessageId,
-			createdAt: existing?.createdAt ?? now,
 			updatedAt: now,
 		};
+		const nextPreparationState = await readPreparationState(
+			ctx,
+			chat._id,
+			nextCheckpoint,
+		);
+		const activeStateDocument = {
+			ownerTokenIdentifier: state.ownerTokenIdentifier,
+			workspaceId: state.workspaceId,
+			chatId: state.chatId,
+			checkpoint: nextCheckpoint,
+			activityId: state.activityId,
+			anchorMessageId: state.anchorMessageId,
+			startedAt: state.startedAt,
+			createdAt: state.createdAt,
+			updatedAt: now,
+		};
+		const document = nextPreparationState.hasMoreMessages
+			? {
+					...activeStateDocument,
+					kind: "running" as const,
+				}
+			: {
+					...activeStateDocument,
+					kind: "completed" as const,
+					completedAt: now,
+				};
 		requireConvexDocumentWithinLimit({
-			document: existing
-				? {
-						...document,
-						_id: existing._id,
-						_creationTime: existing._creationTime,
-					}
-				: document,
+			document: {
+				...document,
+				_id: state._id,
+				_creationTime: state._creationTime,
+			},
 			errorCode: "CONTEXT_COMPACTION_TOO_LARGE",
 			message: "Chat context compaction exceeds Convex's document limit.",
 		});
-		if (existing) {
-			await ctx.db.replace(existing._id, document);
-		} else {
-			await ctx.db.insert("chatContextCompactions", document);
-		}
-		const nextState = await readPreparationState(ctx, chat._id, document);
-		if (nextState.hasMoreMessages) {
-			await ctx.db.patch(activity._id, { updatedAt: now });
-		} else {
-			await ctx.db.replace(activity._id, {
-				ownerTokenIdentifier: activity.ownerTokenIdentifier,
-				workspaceId: activity.workspaceId,
-				chatId: activity.chatId,
-				activityId: activity.activityId,
-				anchorMessageId: activity.anchorMessageId,
-				status: "completed",
-				startedAt: activity.startedAt,
-				completedAt: now,
-				updatedAt: now,
-			});
-		}
-		return nextState;
+		await ctx.db.replace(state._id, document);
+		return nextPreparationState;
 	},
 });

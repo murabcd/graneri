@@ -13,6 +13,7 @@ import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import { createAssistantRunStream } from "./assistantRunStreamState";
 import { startAssistantRunForOwner } from "./assistantRuns";
 import { reserveAutomationRun } from "./automationRunStateMachine";
+import { getChatContextCheckpoint } from "./chatContextCompactions";
 import { saveMessageForOwnerInternal } from "./chats";
 
 const MAX_CONTEXT_NOTES = 8;
@@ -120,10 +121,7 @@ const loadAutomationMessages = async (
 	ctx: MutationCtx,
 	chatId: Id<"chats">,
 ): Promise<{ compactionSummary: string | null; messages: UIMessage[] }> => {
-	const compaction = await ctx.db
-		.query("chatContextCompactions")
-		.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
-		.unique();
+	const compaction = await getChatContextCheckpoint(ctx, chatId);
 	const messages = await ctx.db
 		.query("chatMessages")
 		.withIndex("by_chatId", (q) => {

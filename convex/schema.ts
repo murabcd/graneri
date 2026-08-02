@@ -49,22 +49,41 @@ const transcriptRefinementStatusValidator = v.union(
 	v.literal("failed"),
 );
 
-const chatContextCompactionActivityBaseValidator = v.object({
-	ownerTokenIdentifier: v.string(),
-	workspaceId: v.id("workspaces"),
-	chatId: v.id("chats"),
-	activityId: v.string(),
-	anchorMessageId: v.string(),
-	startedAt: v.number(),
+const chatContextCheckpointValidator = v.object({
+	summary: v.string(),
+	throughCreationTime: v.number(),
+	throughMessageId: v.string(),
 	updatedAt: v.number(),
 });
 
-const chatContextCompactionActivityValidator = v.union(
-	chatContextCompactionActivityBaseValidator.extend({
-		status: v.literal("running"),
+const chatContextStateBaseValidator = v.object({
+	ownerTokenIdentifier: v.string(),
+	workspaceId: v.id("workspaces"),
+	chatId: v.id("chats"),
+	createdAt: v.number(),
+	updatedAt: v.number(),
+});
+
+const chatContextActivityBaseValidator = {
+	activityId: v.string(),
+	anchorMessageId: v.string(),
+	startedAt: v.number(),
+};
+
+const chatContextStateValidator = v.union(
+	chatContextStateBaseValidator.extend({
+		kind: v.literal("checkpoint"),
+		checkpoint: chatContextCheckpointValidator,
 	}),
-	chatContextCompactionActivityBaseValidator.extend({
-		status: v.literal("completed"),
+	chatContextStateBaseValidator.extend({
+		...chatContextActivityBaseValidator,
+		kind: v.literal("running"),
+		checkpoint: v.optional(chatContextCheckpointValidator),
+	}),
+	chatContextStateBaseValidator.extend({
+		...chatContextActivityBaseValidator,
+		kind: v.literal("completed"),
+		checkpoint: chatContextCheckpointValidator,
 		completedAt: v.number(),
 	}),
 );
@@ -679,19 +698,9 @@ export default defineSchema({
 	})
 		.index("by_chatId", ["chatId"])
 		.index("by_branchId_and_sequence", ["branchId", "sequence"]),
-	chatContextCompactions: defineTable({
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		chatId: v.id("chats"),
-		summary: v.string(),
-		throughCreationTime: v.number(),
-		throughMessageId: v.string(),
-		createdAt: v.number(),
-		updatedAt: v.number(),
-	}).index("by_chatId", ["chatId"]),
-	chatContextCompactionActivities: defineTable(
-		chatContextCompactionActivityValidator,
-	).index("by_chatId", ["chatId"]),
+	chatContextStates: defineTable(chatContextStateValidator).index("by_chatId", [
+		"chatId",
+	]),
 	assistantRuns: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
