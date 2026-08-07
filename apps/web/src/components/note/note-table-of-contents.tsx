@@ -64,15 +64,19 @@ export function NoteTableOfContents({
 	};
 
 	return (
-		<CompactNavigationRail
-			activeIndex={effectiveActiveIndex}
-			ariaLabel="Table of contents"
-			items={items}
-			onReveal={revealItem}
-			renderPreview={(item) => (
-				<NoteTableOfContentsPreview anchor={item.anchor} />
-			)}
-		/>
+		<div className="pointer-events-none absolute top-0 right-0 hidden h-full lg:block">
+			<div className="pointer-events-auto sticky top-1/2 -translate-y-1/2">
+				<CompactNavigationRail
+					activeIndex={effectiveActiveIndex}
+					ariaLabel="Table of contents"
+					items={items}
+					onReveal={revealItem}
+					renderPreview={(item) => (
+						<NoteTableOfContentsPreview anchor={item.anchor} />
+					)}
+				/>
+			</div>
+		</div>
 	);
 }
 

@@ -50,7 +50,6 @@ import {
 	type WorkspaceRecord,
 } from "@/lib/workspaces";
 import { api } from "../../../convex/_generated/api";
-import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 const DESKTOP_PERMISSION_BUTTON_LABELS: Record<DesktopPermissionId, string> = {
 	microphone: "Enable",
@@ -210,11 +209,6 @@ const useAppBootstrapState = () => {
 		handleSocialSignIn("google");
 	}, [handleSocialSignIn]);
 
-	const handleOpenOwnedSharedNote = React.useCallback((noteId: Id<"notes">) => {
-		setSharedNoteShareId(null);
-		window.history.pushState(null, "", `/note?noteId=${noteId}`);
-	}, []);
-
 	React.useEffect(() => {
 		const userEmail = session?.user?.email ?? null;
 		const userName = session?.user?.name ?? null;
@@ -292,7 +286,6 @@ const useAppBootstrapState = () => {
 		handleGitHubSignIn,
 		handleGoogleSignIn,
 		handleOpenDesktopPermissionSettings: desktopPermissions.handleOpenSettings,
-		handleOpenOwnedSharedNote,
 		handleRequestDesktopPermission: desktopPermissions.handleRequestPermission,
 		isAuthenticating,
 		isCompletingDesktopPermissions: desktopPermissions.isCompleting,
@@ -321,10 +314,7 @@ function MainApp() {
 	if (controller.sharedNoteShareId) {
 		return (
 			<ScrollArea className="h-svh" viewportClassName="overscroll-contain">
-				<SharedNotePageEntry
-					note={controller.sharedNote}
-					onOpenNote={controller.handleOpenOwnedSharedNote}
-				/>
+				<SharedNotePageEntry note={controller.sharedNote} />
 			</ScrollArea>
 		);
 	}
@@ -429,8 +419,6 @@ function MainApp() {
 
 	return (
 		<AppGate
-			sharedNoteShareId={controller.sharedNoteShareId}
-			sharedNote={controller.sharedNote}
 			authState={{
 				isSessionPending: controller.isSessionPending,
 				isConvexAuthenticated: controller.isConvexAuthenticated,
@@ -474,7 +462,6 @@ function MainApp() {
 				controller.handleOpenDesktopPermissionSettings
 			}
 			onRequestDesktopPermission={controller.handleRequestDesktopPermission}
-			onOpenOwnedSharedNote={controller.handleOpenOwnedSharedNote}
 		/>
 	);
 }
@@ -487,8 +474,6 @@ function App() {
 }
 
 function AppGate({
-	sharedNoteShareId,
-	sharedNote,
 	authState,
 	session,
 	authError,
@@ -511,10 +496,7 @@ function AppGate({
 	onCompleteDesktopPermissions,
 	onOpenDesktopPermissionSettings,
 	onRequestDesktopPermission,
-	onOpenOwnedSharedNote,
 }: {
-	sharedNoteShareId: string | null;
-	sharedNote: Doc<"notes"> | null | undefined;
 	authState: {
 		isSessionPending: boolean;
 		isConvexAuthenticated: boolean;
@@ -557,7 +539,6 @@ function AppGate({
 	onCompleteDesktopPermissions: () => void;
 	onOpenDesktopPermissionSettings: (permissionId: DesktopPermissionId) => void;
 	onRequestDesktopPermission: (permissionId: DesktopPermissionId) => void;
-	onOpenOwnedSharedNote: (noteId: Id<"notes">) => void;
 }) {
 	const {
 		isSessionPending,
@@ -574,17 +555,6 @@ function AppGate({
 		isCompletingDesktopPermissions,
 		areDesktopPermissionsReady,
 	} = desktopPermissionState;
-	if (sharedNoteShareId) {
-		return (
-			<ScrollArea className="h-svh" viewportClassName="overscroll-contain">
-				<SharedNotePageEntry
-					note={sharedNote}
-					onOpenNote={onOpenOwnedSharedNote}
-				/>
-			</ScrollArea>
-		);
-	}
-
 	if (isSessionPending || (session?.user && !isConvexAuthenticated)) {
 		return (
 			<AuthBootstrapScreen

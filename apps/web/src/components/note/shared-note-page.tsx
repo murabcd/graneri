@@ -15,6 +15,8 @@ import {
 	parseStoredNoteContent,
 } from "@/lib/note-editor";
 import type { Doc } from "../../../../../convex/_generated/dataModel";
+import { NoteTableOfContents } from "./note-table-of-contents";
+import { useNoteTableOfContents } from "./use-note-table-of-contents";
 
 function SharedNotePageShell({
 	children,
@@ -30,10 +32,8 @@ function SharedNotePageShell({
 				fullHeight && "min-h-svh",
 			)}
 		>
-			<div className="flex w-full max-w-5xl flex-1 flex-col pt-2 md:pt-4">
-				<div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-between gap-6">
-					{children}
-				</div>
+			<div className="relative flex w-full max-w-5xl flex-1 flex-col pt-2 md:pt-4">
+				{children}
 			</div>
 		</div>
 	);
@@ -41,12 +41,21 @@ function SharedNotePageShell({
 
 export type SharedNotePageProps = {
 	note: Doc<"notes"> | null | undefined;
-	onOpenNote?: (noteId: Doc<"notes">["_id"]) => void;
 };
 
 export function SharedNotePage({ note }: SharedNotePageProps) {
+	const {
+		anchors: tableOfContents,
+		getScrollParent: getTableOfContentsScrollParent,
+		handleSelect: handleTableOfContentsSelect,
+		handleUpdate: handleTableOfContentsUpdate,
+		sync: syncTableOfContents,
+	} = useNoteTableOfContents();
 	const editor = useEditor({
-		extensions: createNoteEditorExtensions(),
+		extensions: createNoteEditorExtensions({
+			onTableOfContentsUpdate: handleTableOfContentsUpdate,
+			getTableOfContentsScrollParent,
+		}),
 		immediatelyRender: false,
 		editable: false,
 		editorProps: {
@@ -68,7 +77,8 @@ export function SharedNotePage({ note }: SharedNotePageProps) {
 				emitUpdate: false,
 			},
 		);
-	}, [editor, note?.content]);
+		syncTableOfContents(editor);
+	}, [editor, note?.content, syncTableOfContents]);
 
 	if (note === undefined) {
 		return <SharedNotePageShell fullHeight />;
@@ -94,29 +104,35 @@ export function SharedNotePage({ note }: SharedNotePageProps) {
 
 	return (
 		<SharedNotePageShell>
-			<div className="flex-1 pt-4 md:pt-8">
-				<div className="shared-note-page-content flex flex-col gap-6">
-					<Textarea
-						value={note.title}
-						readOnly
-						placeholder="New note"
-						aria-label="Note title"
-						rows={1}
-						className="note-title min-h-0 flex-1 resize-none overflow-hidden rounded-none border-0 !bg-transparent p-0 text-2xl font-medium leading-tight tracking-tight shadow-none placeholder:text-muted-foreground/70 focus-visible:border-transparent focus-visible:ring-0 dark:!bg-transparent md:text-3xl"
-					/>
+			<div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-between gap-6">
+				<div className="flex-1 pt-4 md:pt-8">
+					<div className="shared-note-page-content flex flex-col gap-6">
+						<Textarea
+							value={note.title}
+							readOnly
+							placeholder="New note"
+							aria-label="Note title"
+							rows={1}
+							className="note-title min-h-0 flex-1 resize-none overflow-hidden rounded-none border-0 !bg-transparent p-0 text-2xl font-medium leading-tight tracking-tight shadow-none placeholder:text-muted-foreground/70 focus-visible:border-transparent focus-visible:ring-0 dark:!bg-transparent md:text-3xl"
+						/>
 
-					{editor ? (
-						<Tiptap editor={editor}>
-							<Tiptap.Content
-								className={cn(
-									"min-h-[320px] text-base text-foreground",
-									"[&_.ProseMirror]:min-h-[320px]",
-								)}
-							/>
-						</Tiptap>
-					) : null}
+						{editor ? (
+							<Tiptap editor={editor}>
+								<Tiptap.Content
+									className={cn(
+										"min-h-[320px] text-base text-foreground",
+										"[&_.ProseMirror]:min-h-[320px]",
+									)}
+								/>
+							</Tiptap>
+						) : null}
+					</div>
 				</div>
 			</div>
+			<NoteTableOfContents
+				anchors={tableOfContents}
+				onSelect={handleTableOfContentsSelect}
+			/>
 		</SharedNotePageShell>
 	);
 }

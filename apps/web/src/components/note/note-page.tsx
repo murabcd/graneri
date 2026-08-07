@@ -1,15 +1,11 @@
 import type { JSONContent } from "@tiptap/core";
-import type {
-	TableOfContentData,
-	TableOfContentDataItem,
-} from "@tiptap/extension-table-of-contents";
+import type { TableOfContentDataItem } from "@tiptap/extension-table-of-contents";
 import { Tiptap, useEditor } from "@tiptap/react";
 import { isDesktopRuntime } from "@workspace/platform/desktop";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile";
-import { isPanelLayoutActive } from "@workspace/ui/lib/panel-layout-activity";
 import { cn } from "@workspace/ui/lib/utils";
 import { useConvex, useMutation } from "convex/react";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
@@ -78,6 +74,7 @@ import { OPEN_NOTE_COMMENTS_EVENT } from "./note-page-events";
 import { NoteSelectionMenu } from "./note-selection-menu";
 import { NoteTableOfContents } from "./note-table-of-contents";
 import { writeRichTextToClipboard } from "./share-note";
+import { useNoteTableOfContents } from "./use-note-table-of-contents";
 
 type CssHighlightRegistry = {
 	set: (name: string, highlight: Highlight) => void;
@@ -97,25 +94,6 @@ const NOTE_SEARCH_ACTIVE_MATCH_HIGHLIGHT = "note-search-active-match";
 const showActionError = (message: string, error: unknown) => {
 	logError({ event: "client.error", error: error, message: message });
 	toast.error(message);
-};
-
-const areTableOfContentsEqual = (
-	currentAnchors: TableOfContentData,
-	nextAnchors: TableOfContentData,
-) => {
-	return (
-		currentAnchors.length === nextAnchors.length &&
-		currentAnchors.every((anchor, index) => {
-			const nextAnchor = nextAnchors[index];
-			return (
-				nextAnchor !== undefined &&
-				anchor.id === nextAnchor.id &&
-				anchor.textContent === nextAnchor.textContent &&
-				anchor.originalLevel === nextAnchor.originalLevel &&
-				anchor.isActive === nextAnchor.isActive
-			);
-		})
-	);
 };
 
 type NotePageCurrentUser = {
@@ -147,12 +125,14 @@ const useNotePageController = ({
 	const [title, setTitle] = React.useState("");
 	const [content, setContent] = React.useState(EMPTY_DOCUMENT_STRING);
 	const [searchableText, setSearchableText] = React.useState("");
-	const [tableOfContents, setTableOfContents] =
-		React.useState<TableOfContentData>([]);
-	const pendingTableOfContentsRef = React.useRef<TableOfContentData | null>(
-		null,
-	);
-	const tableOfContentsAnimationFrameRef = React.useRef<number | null>(null);
+	const {
+		anchors: tableOfContents,
+		getScrollParent: getTableOfContentsScrollParent,
+		handleSelect: handleTableOfContentsSelect,
+		handleUpdate: handleTableOfContentsUpdate,
+		reset: resetTableOfContents,
+		sync: syncTableOfContents,
+	} = useNoteTableOfContents({ scrollParentRef });
 	const [templateApplyState, setTemplateApplyState] = React.useState<{
 		isRunning: boolean;
 		templateName: string | null;
@@ -199,50 +179,6 @@ const useNotePageController = ({
 	const convex = useConvex();
 	const saveNote = useMutation(api.notes.save);
 
-	const getTableOfContentsScrollParent = React.useCallback(
-		() => scrollParentRef?.current ?? window,
-		[scrollParentRef],
-	);
-	const flushPendingTableOfContents = React.useCallback(() => {
-		tableOfContentsAnimationFrameRef.current = null;
-
-		if (isPanelLayoutActive()) {
-			tableOfContentsAnimationFrameRef.current = window.requestAnimationFrame(
-				flushPendingTableOfContents,
-			);
-			return;
-		}
-
-		const nextAnchors = pendingTableOfContentsRef.current;
-		pendingTableOfContentsRef.current = null;
-
-		if (!nextAnchors) {
-			return;
-		}
-
-		setTableOfContents((currentAnchors) =>
-			areTableOfContentsEqual(currentAnchors, nextAnchors)
-				? currentAnchors
-				: nextAnchors,
-		);
-	}, []);
-	const handleTableOfContentsUpdate = React.useCallback(
-		(nextAnchors: TableOfContentData) => {
-			pendingTableOfContentsRef.current = nextAnchors.map((anchor) => ({
-				...anchor,
-			}));
-
-			if (tableOfContentsAnimationFrameRef.current !== null) {
-				return;
-			}
-
-			tableOfContentsAnimationFrameRef.current = window.requestAnimationFrame(
-				flushPendingTableOfContents,
-			);
-		},
-		[flushPendingTableOfContents],
-	);
-
 	const editor = useEditor({
 		extensions: createNoteEditorExtensions({
 			onTableOfContentsUpdate: handleTableOfContentsUpdate,
@@ -265,24 +201,6 @@ const useNotePageController = ({
 		},
 	});
 
-	const syncTableOfContents = React.useCallback(() => {
-		if (!editor) {
-			return;
-		}
-
-		window.requestAnimationFrame(() => {
-			const updateTableOfContents = (
-				editor.commands as typeof editor.commands & {
-					updateTableOfContents?: () => void;
-				}
-			).updateTableOfContents;
-
-			if (!editor.isDestroyed && typeof updateTableOfContents === "function") {
-				updateTableOfContents();
-			}
-		});
-	}, [editor]);
-
 	const setEditorDocument = React.useCallback(
 		(nextDocument: JSONContent) => {
 			if (!editor) {
@@ -290,7 +208,7 @@ const useNotePageController = ({
 			}
 
 			editor.commands.setContent(nextDocument, { emitUpdate: false });
-			syncTableOfContents();
+			syncTableOfContents(editor);
 		},
 		[editor, syncTableOfContents],
 	);
@@ -316,10 +234,9 @@ const useNotePageController = ({
 					parseStoredNoteContent(document.content, editor.state.schema),
 				);
 			}
-			setTableOfContents([]);
-			pendingTableOfContentsRef.current = null;
+			resetTableOfContents();
 		};
-	}, [applyDraftState, editor, setEditorDocument]);
+	}, [applyDraftState, editor, resetTableOfContents, setEditorDocument]);
 
 	React.useEffect(() => {
 		saveNoteRef.current = saveNote;
@@ -409,14 +326,6 @@ const useNotePageController = ({
 						: null,
 		});
 	}, [activeWorkspaceId, documentSession, editor, note, noteId]);
-
-	React.useEffect(() => {
-		return () => {
-			if (tableOfContentsAnimationFrameRef.current !== null) {
-				window.cancelAnimationFrame(tableOfContentsAnimationFrameRef.current);
-			}
-		};
-	}, []);
 
 	React.useEffect(() => {
 		if (templateApplyState.isRunning) {
@@ -867,6 +776,7 @@ const useNotePageController = ({
 		title,
 		titleTextareaRef,
 		tableOfContents,
+		handleTableOfContentsSelect,
 	};
 };
 
@@ -1274,14 +1184,10 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 				</div>
 			</div>
 
-			<div className="pointer-events-none absolute top-0 right-0 hidden h-full lg:block">
-				<div className="pointer-events-auto sticky top-1/2 -translate-y-1/2">
-					<NoteTableOfContents
-						anchors={tableOfContents}
-						onSelect={handleTableOfContentsSelect}
-					/>
-				</div>
-			</div>
+			<NoteTableOfContents
+				anchors={tableOfContents}
+				onSelect={handleTableOfContentsSelect}
+			/>
 		</div>
 	);
 });
@@ -1293,7 +1199,6 @@ function NotePageContent({
 	composerNoteContext,
 	onAutoStartTranscriptionHandled,
 	stopTranscriptionWhenMeetingEnds,
-	scrollParentRef,
 	shouldHideEmptyBodyPlaceholder,
 	onOpenCommentComposer,
 	commentsOpen,
@@ -1305,7 +1210,6 @@ function NotePageContent({
 	onActiveThreadIdChange,
 	pendingCommentSelection,
 	onPendingSelectionChange,
-	handleTableOfContentsSelect,
 }: {
 	controller: ReturnType<typeof useNotePageController>;
 	autoStartTranscription: boolean;
@@ -1316,7 +1220,6 @@ function NotePageContent({
 	};
 	onAutoStartTranscriptionHandled?: () => void;
 	stopTranscriptionWhenMeetingEnds: boolean;
-	scrollParentRef?: React.RefObject<HTMLDivElement | null>;
 	shouldHideEmptyBodyPlaceholder: boolean;
 	onOpenCommentComposer: () => void;
 	commentsOpen: boolean;
@@ -1330,13 +1233,7 @@ function NotePageContent({
 	onPendingSelectionChange: (
 		selection: PendingNoteCommentSelection | null,
 	) => void;
-	handleTableOfContentsSelect: (
-		anchor: TableOfContentDataItem,
-		behavior?: ScrollBehavior,
-	) => void;
 }) {
-	void scrollParentRef;
-
 	return (
 		<div className="flex min-h-0 flex-1 justify-center px-4 md:px-6">
 			<NotePageEditorPane
@@ -1358,7 +1255,7 @@ function NotePageContent({
 				shouldHideEmptyBodyPlaceholder={shouldHideEmptyBodyPlaceholder}
 				onOpenCommentComposer={onOpenCommentComposer}
 				isDesktopMac={isDesktopMac}
-				handleTableOfContentsSelect={handleTableOfContentsSelect}
+				handleTableOfContentsSelect={controller.handleTableOfContentsSelect}
 			/>
 
 			<NoteCommentsSheet
@@ -1698,35 +1595,6 @@ export function NotePage({
 	const shouldHideEmptyBodyPlaceholder =
 		!controller.title.trim() && !controller.searchableText.trim();
 	const noteSearch = useNoteSearch(controller.searchableText);
-	const handleTableOfContentsSelect = React.useCallback(
-		(anchor: TableOfContentDataItem, behavior: ScrollBehavior = "smooth") => {
-			const topOffset = 72;
-			const scrollParent = scrollParentRef?.current ?? window;
-
-			if (scrollParent instanceof HTMLElement) {
-				const nextTop =
-					anchor.dom.getBoundingClientRect().top -
-					scrollParent.getBoundingClientRect().top +
-					scrollParent.scrollTop -
-					topOffset;
-
-				scrollParent.scrollTo({
-					top: Math.max(0, nextTop),
-					behavior,
-				});
-				return;
-			}
-
-			window.scrollTo({
-				top: Math.max(
-					0,
-					anchor.dom.getBoundingClientRect().top + window.scrollY - topOffset,
-				),
-				behavior,
-			});
-		},
-		[scrollParentRef],
-	);
 	const handleOpenCommentComposer = React.useCallback(() => {
 		if (!controller.editor) {
 			return;
@@ -1778,7 +1646,6 @@ export function NotePage({
 				composerNoteContext={composerNoteContext}
 				onAutoStartTranscriptionHandled={onAutoStartTranscriptionHandled}
 				stopTranscriptionWhenMeetingEnds={stopTranscriptionWhenMeetingEnds}
-				scrollParentRef={scrollParentRef}
 				shouldHideEmptyBodyPlaceholder={shouldHideEmptyBodyPlaceholder}
 				onOpenCommentComposer={handleOpenCommentComposer}
 				commentsOpen={commentPanel.commentsOpen}
@@ -1790,7 +1657,6 @@ export function NotePage({
 				onActiveThreadIdChange={commentPanel.handleActiveThreadIdChange}
 				pendingCommentSelection={commentPanel.pendingCommentSelection}
 				onPendingSelectionChange={commentPanel.handlePendingSelectionChange}
-				handleTableOfContentsSelect={handleTableOfContentsSelect}
 			/>
 		</>
 	);
