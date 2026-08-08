@@ -22,6 +22,16 @@ type TimestampedUIMessage = UIMessage & {
 export const getChatMessageTimestamp = (message: UIMessage) =>
 	(message as TimestampedUIMessage).createdAt;
 
+export const getChatMessageTimestampMs = (message: UIMessage) => {
+	const value = getChatMessageTimestamp(message);
+	if (value === undefined) {
+		return null;
+	}
+
+	const timestamp = new Date(value).getTime();
+	return Number.isNaN(timestamp) ? null : timestamp;
+};
+
 export const formatChatMessageTimestamp = (
 	value: Date | string | number | undefined,
 	now = new Date(),

@@ -11,7 +11,7 @@ import {
 	MessageScrollerItem,
 } from "@workspace/ui/components/message-scroller";
 import { cn } from "@workspace/ui/lib/utils";
-import { isToolUIPart, type UIMessage } from "ai";
+import type { UIMessage } from "ai";
 import {
 	CornerDownRight,
 	FileText,
@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
-import { Reasoning } from "@/components/ai-elements/reasoning";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 import {
 	Source,
@@ -31,9 +30,7 @@ import {
 	SourcesTrigger,
 } from "@/components/ai-elements/sources";
 import { ToolGroup } from "@/components/ai-elements/tools/tool-group";
-import type { ToolUiPart } from "@/components/ai-elements/tools/tool-part-like";
-import { toToolPartLike } from "@/components/ai-elements/tools/tool-part-like";
-import { getToolMeta } from "@/components/ai-elements/tools/tool-registry";
+import { isRenderableToolUiPart } from "@/components/ai-elements/tools/tool-part-like";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
@@ -57,6 +54,7 @@ import { collectMessageSources } from "@/lib/chat-sources";
 import {
 	formatChatMessageTimestamp,
 	getChatMessageTimestamp,
+	getChatMessageTimestampMs,
 } from "@/lib/chat-timestamp";
 import {
 	getLastAssistantHasRenderableContent,
@@ -156,6 +154,22 @@ export function ChatMessageListContent({
 		() => groupMessagesIntoTurns(displayMessages),
 		[displayMessages],
 	);
+	const lastTurnId = turns.at(-1)?.[0]?.id;
+	const [activeTurnTiming, setActiveTurnTiming] = React.useState<{
+		startedAt: number;
+		turnId: string;
+	} | null>(null);
+	React.useEffect(() => {
+		if (!isLoading || !lastTurnId) {
+			return;
+		}
+
+		setActiveTurnTiming((current) =>
+			current?.turnId === lastTurnId
+				? current
+				: { startedAt: Date.now(), turnId: lastTurnId },
+		);
+	}, [isLoading, lastTurnId]);
 	const showAssistantBreathingSpace =
 		isLoading ||
 		(lastMessage?.role === "assistant" &&
@@ -216,6 +230,43 @@ export function ChatMessageListContent({
 				const isLastTurn = turnIndex === turns.length - 1;
 				const scrollAnchor =
 					scrollAnchorUserMessages && turnMessages[0].role === "user";
+				const assistantMessages = turnMessages.filter(
+					(message) => message.role === "assistant",
+				);
+				const firstAssistantMessageId = assistantMessages[0]?.id;
+				const assistantWorkParts = assistantMessages.flatMap(
+					(message) => message.parts,
+				);
+				const hasAssistantWorkInTurn = assistantWorkParts.some(
+					(part) => part.type === "reasoning" || isRenderableToolUiPart(part),
+				);
+				const latestAssistantMessage = assistantMessages.at(-1);
+				const assistantTurnStartedAt =
+					getChatMessageTimestampMs(turnMessages[0]) ??
+					(activeTurnTiming?.turnId === turnMessages[0].id
+						? activeTurnTiming.startedAt
+						: null);
+				const assistantTurnCompletedAt = latestAssistantMessage
+					? getChatMessageTimestampMs(latestAssistantMessage)
+					: null;
+				const latestAssistantMetadata = latestAssistantMessage
+					? getChatMessageMetadata(latestAssistantMessage)
+					: null;
+				const isAssistantTurnStreaming = Boolean(
+					isLastTurn &&
+						isLoading &&
+						latestAssistantMessage?.id === lastMessage?.id &&
+						latestAssistantMetadata?.interrupted !== true &&
+						!forcedStreamingMessageIds.has(latestAssistantMessage.id),
+				);
+				const assistantTurnDurationMs =
+					!isAssistantTurnStreaming &&
+					assistantTurnStartedAt !== null &&
+					assistantTurnCompletedAt !== null
+						? Math.max(1, assistantTurnCompletedAt - assistantTurnStartedAt)
+						: undefined;
+				const showAssistantWorkSummary =
+					hasAssistantWorkInTurn || !isAssistantTurnStreaming;
 
 				return (
 					<MessageScrollerItem
@@ -236,6 +287,18 @@ export function ChatMessageListContent({
 									}
 								>
 									<ChatMessageListItem
+										assistantTurnWorkParts={
+											message.id === firstAssistantMessageId &&
+											showAssistantWorkSummary
+												? assistantWorkParts
+												: undefined
+										}
+										assistantTurnWorkStatus={
+											isAssistantTurnStreaming ? "streaming" : "ready"
+										}
+										assistantTurnStartedAt={assistantTurnStartedAt ?? undefined}
+										assistantTurnDurationMs={assistantTurnDurationMs}
+										hasAssistantWorkInTurn={hasAssistantWorkInTurn}
 										message={message}
 										includeSources={includeSources}
 										isLoading={isLoading}
@@ -304,6 +367,11 @@ function ConversationCompactionActivity({
 }
 
 const ChatMessageListItem = React.memo(function ChatMessageListItem({
+	assistantTurnWorkParts,
+	assistantTurnWorkStatus,
+	assistantTurnStartedAt,
+	assistantTurnDurationMs,
+	hasAssistantWorkInTurn,
 	message,
 	includeSources,
 	isLoading,
@@ -315,6 +383,11 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	streamingMessageIds,
 	textContainerClassName,
 }: {
+	assistantTurnWorkParts?: UIMessage["parts"];
+	assistantTurnWorkStatus: "streaming" | "ready";
+	assistantTurnStartedAt?: number;
+	assistantTurnDurationMs?: number;
+	hasAssistantWorkInTurn: boolean;
 	message: UIMessage;
 	includeSources: boolean;
 	isLoading?: boolean;
@@ -359,14 +432,8 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 			message.id === lastMessageId,
 	);
 	const isEmpty = displayText.length === 0;
-	const hasStreamingReasoningStatus = Boolean(
-		isStreamingAssistantMessage &&
-			reasoningParts.some(
-				(part) => part.type === "reasoning" && part.state !== "done",
-			),
-	);
 	const showThinkingPlaceholder = Boolean(
-		isStreamingAssistantMessage && isEmpty && !hasStreamingReasoningStatus,
+		isStreamingAssistantMessage && isEmpty && !hasAssistantWorkInTurn,
 	);
 	const timestamp = formatChatMessageTimestamp(
 		getChatMessageTimestamp(message),
@@ -374,6 +441,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 
 	if (
 		isEmpty &&
+		assistantTurnWorkParts === undefined &&
 		fileParts.length === 0 &&
 		chartArtifacts.length === 0 &&
 		reasoningParts.length === 0 &&
@@ -406,15 +474,15 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 			>
 				{selectedRecipe ? <ChatRecipeReceipt recipe={selectedRecipe} /> : null}
 				<ChatMessageFileAttachments files={fileParts} />
-				<ChatMessageToolCalls
-					parts={toolParts}
-					chatStatus={isStreamingAssistantMessage ? "streaming" : "ready"}
-				/>
+				{assistantTurnWorkParts ? (
+					<ToolGroup
+						parts={assistantTurnWorkParts}
+						chatStatus={assistantTurnWorkStatus}
+						startedAt={assistantTurnStartedAt}
+						totalDurationMs={assistantTurnDurationMs}
+					/>
+				) : null}
 				<ChatChartArtifacts charts={chartArtifacts} />
-				<ChatMessageReasoning
-					parts={reasoningParts}
-					isStreamingAssistantMessage={Boolean(isStreamingAssistantMessage)}
-				/>
 				<ChatMessageText
 					displayText={displayText}
 					isInterruptedAssistantMessage={isInterruptedAssistantMessage}
@@ -460,157 +528,6 @@ const filterSupersededChartToolFailures = (
 			!("state" in part) ||
 			part.state !== "output-error",
 	);
-};
-
-const ChatMessageReasoning = React.memo(function ChatMessageReasoning({
-	isStreamingAssistantMessage,
-	parts,
-}: {
-	isStreamingAssistantMessage: boolean;
-	parts: UIMessage["parts"];
-}) {
-	if (parts.length === 0) {
-		return null;
-	}
-
-	return (
-		<div className="mb-3 flex w-full flex-col gap-2 first:mt-0">
-			{parts.map((part, partIndex) => {
-				if (part.type !== "reasoning") {
-					return null;
-				}
-
-				return (
-					<Reasoning
-						key={getReasoningPartKey(part, partIndex)}
-						text={part.text}
-						isStreaming={isStreamingAssistantMessage && part.state !== "done"}
-					/>
-				);
-			})}
-		</div>
-	);
-});
-
-const getReasoningPartKey = (
-	part: Extract<UIMessage["parts"][number], { type: "reasoning" }>,
-	index: number,
-) => `reasoning:${index}:${part.type}`;
-
-const ChatMessageToolCalls = React.memo(function ChatMessageToolCalls({
-	chatStatus,
-	parts,
-}: {
-	chatStatus: "streaming" | "ready";
-	parts: UIMessage["parts"];
-}) {
-	if (parts.length === 0) {
-		return null;
-	}
-
-	const groups = groupAdjacentToolParts(parts);
-	if (groups.length === 0) {
-		return null;
-	}
-
-	return (
-		<div className="mb-3 flex w-full flex-col gap-2 first:mt-0">
-			{groups.map((group) => (
-				<ToolGroup
-					key={group.key}
-					parts={group.parts}
-					chatStatus={chatStatus}
-				/>
-			))}
-		</div>
-	);
-});
-
-const getToolGroupInfo = (part: ToolUiPart) => {
-	const toolPart = toToolPartLike(part);
-	const meta = getToolMeta(toolPart);
-	const groupKey = meta?.groupKey;
-
-	if (groupKey?.startsWith("mcp:")) {
-		return {
-			key: groupKey,
-		};
-	}
-
-	if (groupKey === "search") {
-		return {
-			key: "search",
-		};
-	}
-
-	if (groupKey === "image") {
-		return {
-			key: "image",
-		};
-	}
-
-	if (groupKey === "chart") {
-		return {
-			key: "chart",
-		};
-	}
-
-	if (groupKey === "local-folder") {
-		return {
-			key: "local-folder",
-		};
-	}
-
-	if (groupKey === "automation") {
-		return {
-			key: "automation",
-		};
-	}
-
-	if (!meta) {
-		return null;
-	}
-
-	return {
-		key:
-			"toolCallId" in part && typeof part.toolCallId === "string"
-				? `tool:${part.toolCallId}`
-				: `tool:${toolPart.type}`,
-	};
-};
-
-const groupAdjacentToolParts = (parts: UIMessage["parts"]) => {
-	const groups: Array<{
-		groupKey: string;
-		key: string;
-		parts: ToolUiPart[];
-	}> = [];
-
-	for (const part of parts) {
-		if (!isToolUIPart(part)) {
-			continue;
-		}
-		const groupInfo = getToolGroupInfo(part);
-		if (!groupInfo) {
-			continue;
-		}
-
-		const key = groupInfo.key;
-		const previousGroup = groups[groups.length - 1];
-
-		if (previousGroup?.groupKey === key) {
-			previousGroup.parts.push(part);
-			continue;
-		}
-
-		groups.push({
-			groupKey: key,
-			key: `${key}:${part.toolCallId}`,
-			parts: [part],
-		});
-	}
-
-	return groups;
 };
 
 const ChatMessageText = React.memo(function ChatMessageText({

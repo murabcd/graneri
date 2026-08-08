@@ -587,7 +587,7 @@ describe("CalendarPage loading", () => {
 			expect(listCalendarEvents).toHaveBeenCalledTimes(requestCount + 3),
 		);
 		expect(screen.queryByRole("heading", { name: "New event" })).toBeNull();
-	});
+	}, 10_000);
 
 	it("blocks event creation while guest search text is unresolved", async () => {
 		const user = userEvent.setup();

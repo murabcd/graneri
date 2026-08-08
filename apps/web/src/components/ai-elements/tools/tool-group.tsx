@@ -1,6 +1,9 @@
+import type { UIMessage } from "ai";
 import { memo, useEffect, useMemo, useState } from "react";
+import { Reasoning } from "@/components/ai-elements/reasoning";
 import { ToolDetails } from "@/components/ai-elements/tools/tool-details";
 import {
+	isRenderableToolUiPart,
 	type ToolUiPart,
 	toToolPartLike,
 } from "@/components/ai-elements/tools/tool-part-like";
@@ -16,20 +19,38 @@ import {
 
 export type ToolGroupProps = {
 	chatStatus: "streaming" | "ready";
-	parts: ToolUiPart[];
+	parts: UIMessage["parts"];
+	startedAt?: number;
+	totalDurationMs?: number;
 };
+
+type ReasoningPart = Extract<UIMessage["parts"][number], { type: "reasoning" }>;
+type AssistantWorkPart = ReasoningPart | ToolUiPart;
+
+const isRenderableToolPart = (
+	part: UIMessage["parts"][number],
+): part is ToolUiPart => isRenderableToolUiPart(part);
+
+const isAssistantWorkPart = (
+	part: UIMessage["parts"][number],
+): part is AssistantWorkPart =>
+	part.type === "reasoning" || isRenderableToolPart(part);
 
 const formatCallCount = (count: number) =>
 	`${count} ${count === 1 ? "call" : "calls"}`;
 
 const getGroupSummary = ({
 	failedCount,
-	totalCount,
+	toolCallCount,
 }: {
 	failedCount: number;
-	totalCount: number;
+	toolCallCount: number;
 }) => {
-	const segments = [formatCallCount(totalCount)];
+	if (toolCallCount === 0) {
+		return undefined;
+	}
+
+	const segments = [formatCallCount(toolCallCount)];
 
 	if (failedCount > 0) {
 		segments.push(`${failedCount} failed`);
@@ -41,22 +62,39 @@ const getGroupSummary = ({
 export const ToolGroup = memo(function ToolGroup({
 	chatStatus,
 	parts,
+	startedAt,
+	totalDurationMs,
 }: ToolGroupProps) {
-	const [expanded, setExpanded] = useState(false);
-	const toolParts = useMemo(() => parts.map(toToolPartLike), [parts]);
-	const statuses = useMemo(
-		() => toolParts.map((part) => getToolStatus(part, chatStatus)),
+	const workParts = useMemo(() => parts.filter(isAssistantWorkPart), [parts]);
+	const isWorking = chatStatus === "streaming";
+	const renderableWorkParts = useMemo(
+		() =>
+			workParts.filter(
+				(part) =>
+					part.type !== "reasoning" ||
+					part.text.trim().length > 0 ||
+					(isWorking && part.state !== "done"),
+			),
+		[isWorking, workParts],
+	);
+	const toolParts = useMemo(
+		() => workParts.filter(isRenderableToolPart),
+		[workParts],
+	);
+	const toolStatuses = useMemo(
+		() =>
+			toolParts.map((part) => getToolStatus(toToolPartLike(part), chatStatus)),
 		[chatStatus, toolParts],
 	);
-	const isPending = statuses.some((status) => status.isPending);
-	const { completedAt, fallbackStartedAt, now } = useToolTimer(isPending);
+	const [isWorkingCollapsed, setIsWorkingCollapsed] = useState(false);
+	const [isWorkedExpanded, setIsWorkedExpanded] = useState(false);
+	const isExpanded = isWorking ? !isWorkingCollapsed : isWorkedExpanded;
+	const { completedAt, fallbackStartedAt, now } = useWorkTimer(isWorking);
 	const summary = useMemo(() => {
-		let durationMs = 0;
 		let failedCount = 0;
-		let hasRecordedDuration = false;
 
-		for (const [index, part] of toolParts.entries()) {
-			const status = statuses[index];
+		for (const [index] of toolParts.entries()) {
+			const status = toolStatuses[index];
 			if (!status) {
 				continue;
 			}
@@ -64,66 +102,76 @@ export const ToolGroup = memo(function ToolGroup({
 			if (status.isError) {
 				failedCount += 1;
 			}
-
-			const displayDurationMs = getToolDisplayDurationMs({
-				completedAt,
-				fallbackStartedAt,
-				isPending: status.isPending,
-				now,
-				part,
-			});
-
-			if (displayDurationMs !== null) {
-				durationMs += displayDurationMs;
-				hasRecordedDuration = true;
-			}
 		}
 
-		const groupFallbackDurationMs = Math.max(
+		const measuredDurationMs = Math.max(
 			1,
-			(completedAt ?? now) - fallbackStartedAt,
+			(completedAt ?? now) - (startedAt ?? fallbackStartedAt),
 		);
-		const resolvedDurationMs = hasRecordedDuration
-			? Math.max(1, durationMs)
-			: groupFallbackDurationMs;
 
 		return {
-			durationLabel: formatElapsedTime(resolvedDurationMs),
-			failedCount,
-			summary: getGroupSummary({
+			durationLabel: formatElapsedTime(totalDurationMs ?? measuredDurationMs),
+			detail: getGroupSummary({
 				failedCount,
-				totalCount: toolParts.length,
+				toolCallCount: toolParts.length,
 			}),
 		};
-	}, [completedAt, fallbackStartedAt, now, statuses, toolParts]);
+	}, [
+		completedAt,
+		fallbackStartedAt,
+		now,
+		startedAt,
+		toolParts,
+		toolStatuses,
+		totalDurationMs,
+	]);
 
 	return (
-		<ToolRowBase
-			shimmerLabel="Working"
-			completeLabel="Worked"
-			isAnimating={isPending}
-			detail={summary.summary}
-			expandable
-			expanded={expanded}
-			onToggleExpand={() => setExpanded((value) => !value)}
-			trailingContent={
-				summary.durationLabel ? (
-					<span className="shrink-0 font-normal tabular-nums text-muted-foreground/60">
-						{summary.durationLabel}
-					</span>
-				) : undefined
-			}
-		>
-			<div className="flex flex-col gap-1.5">
-				{parts.map((part, index) => (
-					<NestedToolRow
-						key={getToolPartKey(part, index)}
-						part={part}
-						chatStatus={chatStatus}
-					/>
-				))}
-			</div>
-		</ToolRowBase>
+		<div className="mb-3 flex w-full flex-col gap-2 first:mt-0">
+			<ToolRowBase
+				shimmerLabel="Working"
+				completeLabel="Worked"
+				isAnimating={isWorking}
+				detail={summary.detail}
+				expandable={renderableWorkParts.length > 0}
+				expanded={isExpanded}
+				onToggleExpand={() => {
+					if (isWorking) {
+						setIsWorkingCollapsed((collapsed) => !collapsed);
+						return;
+					}
+
+					setIsWorkedExpanded((expanded) => !expanded);
+				}}
+				trailingContent={
+					summary.durationLabel ? (
+						<span className="shrink-0 font-normal tabular-nums text-muted-foreground/60">
+							{summary.durationLabel}
+						</span>
+					) : undefined
+				}
+			>
+				<div className="flex flex-col gap-1.5">
+					{renderableWorkParts.map((part, index) =>
+						part.type === "reasoning" ? (
+							<Reasoning
+								key={getWorkPartKey(part, index)}
+								text={part.text}
+								isStreaming={
+									chatStatus === "streaming" && part.state !== "done"
+								}
+							/>
+						) : (
+							<NestedToolRow
+								key={getWorkPartKey(part, index)}
+								part={part}
+								chatStatus={chatStatus}
+							/>
+						),
+					)}
+				</div>
+			</ToolRowBase>
+		</div>
 	);
 });
 
@@ -152,7 +200,7 @@ const getToolDisplayDurationMs = ({
 	return isPending ? Math.max(1, now - fallbackStartedAt) : null;
 };
 
-const useToolTimer = (isPending: boolean) => {
+const useWorkTimer = (isPending: boolean) => {
 	const [fallbackStartedAt] = useState(() => Date.now());
 	const [completedAt, setCompletedAt] = useState<number | null>(null);
 	const [now, setNow] = useState(() => Date.now());
@@ -190,8 +238,10 @@ const useToolTimer = (isPending: boolean) => {
 	};
 };
 
-const getToolPartKey = (part: ToolUiPart, index: number) =>
-	part.toolCallId || `${part.type}:${index}`;
+const getWorkPartKey = (part: AssistantWorkPart, index: number) =>
+	part.type === "reasoning"
+		? `reasoning:${index}`
+		: part.toolCallId || `${part.type}:${index}`;
 
 const NestedToolRow = memo(function NestedToolRow({
 	chatStatus,
@@ -202,7 +252,7 @@ const NestedToolRow = memo(function NestedToolRow({
 }) {
 	const toolPart = toToolPartLike(part);
 	const { isError, isPending } = getToolStatus(toolPart, chatStatus);
-	const { completedAt, fallbackStartedAt, now } = useToolTimer(isPending);
+	const { completedAt, fallbackStartedAt, now } = useWorkTimer(isPending);
 	const durationMs = getToolDisplayDurationMs({
 		completedAt,
 		fallbackStartedAt,

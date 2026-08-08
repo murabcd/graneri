@@ -1,11 +1,16 @@
 import {
 	type DynamicToolUIPart,
 	getToolName,
+	isToolUIPart,
 	type JSONValue,
 	type ToolUIPart,
+	type UIMessage,
 } from "ai";
 import { z } from "zod";
-import type { ToolPartLike } from "@/components/ai-elements/tools/tool-registry";
+import {
+	getToolMeta,
+	type ToolPartLike,
+} from "@/components/ai-elements/tools/tool-registry";
 
 export type ToolUiPart = ToolUIPart | DynamicToolUIPart;
 
@@ -26,3 +31,8 @@ export const toToolPartLike = (part: ToolUiPart): ToolPartLike => ({
 	toolName: getToolName(part),
 	type: part.type,
 });
+
+export const isRenderableToolUiPart = (
+	part: UIMessage["parts"][number],
+): part is ToolUiPart =>
+	isToolUIPart(part) && getToolMeta(toToolPartLike(part)) !== null;
