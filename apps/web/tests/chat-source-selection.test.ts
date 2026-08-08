@@ -1,9 +1,11 @@
 import {
 	getSelectedAppSourceIds,
 	getSelectedNoteSourceIds,
-	loadAvailableChatToolConnections,
-	selectAppSourceConnections,
 } from "@workspace/ai/capability-metadata";
+import {
+	buildWorkspaceToolCatalog,
+	loadWorkspaceToolConnections,
+} from "@workspace/ai/workspace-tool-catalog";
 import { describe, expect, it } from "vitest";
 
 describe("chat source selection", () => {
@@ -17,32 +19,38 @@ describe("chat source selection", () => {
 	});
 
 	it("loads every available Google and workspace connection by default", async () => {
-		const connections = await loadAvailableChatToolConnections({
-			listGoogleSources: async () => [
-				{
-					id: "app:google-calendar",
-					provider: "google-calendar",
-					title: "Google Calendar",
-				},
-				{
-					id: "app:google-drive",
-					provider: "google-drive",
-					title: "Google Drive",
-				},
-			],
-			getAppConnections: async () => [
-				{
-					sourceId: "app:notion-1",
-					provider: "notion",
-					displayName: "Notion workspace",
-				},
-				{
-					sourceId: "app:yandex-calendar-1",
-					provider: "yandex-calendar",
-					displayName: "Yandex Calendar",
-				},
-			],
-		});
+		const connections = await loadWorkspaceToolConnections([
+			{
+				label: "Apps",
+				load: async () => [
+					{
+						sourceId: "app:notion-1",
+						provider: "notion",
+						displayName: "Notion workspace",
+					},
+					{
+						sourceId: "app:yandex-calendar-1",
+						provider: "yandex-calendar",
+						displayName: "Yandex Calendar",
+					},
+				],
+			},
+			{
+				label: "Google",
+				load: async () => [
+					{
+						id: "app:google-calendar",
+						provider: "google-calendar",
+						title: "Google Calendar",
+					},
+					{
+						id: "app:google-drive",
+						provider: "google-drive",
+						title: "Google Drive",
+					},
+				],
+			},
+		]);
 
 		expect(connections.map((connection) => connection.provider)).toEqual([
 			"notion",
@@ -53,24 +61,35 @@ describe("chat source selection", () => {
 	});
 
 	it("uses app mentions as guidance without restricting available tools", async () => {
-		const connections = await loadAvailableChatToolConnections({
-			listGoogleSources: async () => [
-				{
-					id: "app:google-calendar",
-					provider: "google-calendar",
-					title: "Google Calendar",
-				},
-			],
-			getAppConnections: async () => [
-				{
-					sourceId: "app:notion-1",
-					provider: "notion",
-					displayName: "Notion workspace",
-				},
-			],
-		});
+		const connections = await loadWorkspaceToolConnections([
+			{
+				label: "Apps",
+				load: async () => [
+					{
+						sourceId: "app:notion-1",
+						provider: "notion",
+						displayName: "Notion workspace",
+					},
+				],
+			},
+			{
+				label: "Google",
+				load: async () => [
+					{
+						id: "app:google-calendar",
+						provider: "google-calendar",
+						title: "Google Calendar",
+					},
+				],
+			},
+		]);
 
-		expect(selectAppSourceConnections(connections, ["app:notion-1"])).toEqual([
+		const catalog = await buildWorkspaceToolCatalog({
+			connections,
+			scope: "disabled",
+			selectedSourceIds: ["app:notion-1"],
+		});
+		expect(catalog.selectedConnections).toEqual([
 			{
 				sourceId: "app:notion-1",
 				provider: "notion",
@@ -81,22 +100,28 @@ describe("chat source selection", () => {
 	});
 
 	it("deduplicates the same connection identity", async () => {
-		const connections = await loadAvailableChatToolConnections({
-			listGoogleSources: async () => [
-				{
-					id: "app:google-calendar",
-					provider: "google-calendar",
-					title: "Google Calendar",
-				},
-			],
-			getAppConnections: async () => [
-				{
-					id: "app:google-calendar",
-					provider: "google-calendar",
-					title: "Duplicate",
-				},
-			],
-		});
+		const connections = await loadWorkspaceToolConnections([
+			{
+				label: "Apps",
+				load: async () => [
+					{
+						id: "app:google-calendar",
+						provider: "google-calendar",
+						title: "Duplicate",
+					},
+				],
+			},
+			{
+				label: "Google",
+				load: async () => [
+					{
+						id: "app:google-calendar",
+						provider: "google-calendar",
+						title: "Google Calendar",
+					},
+				],
+			},
+		]);
 
 		expect(connections).toEqual([
 			{
@@ -108,18 +133,24 @@ describe("chat source selection", () => {
 	});
 
 	it("isolates one failed source inventory from the others", async () => {
-		const connections = await loadAvailableChatToolConnections({
-			listGoogleSources: async () => {
-				throw new Error("Google unavailable");
-			},
-			getAppConnections: async () => [
-				{
-					sourceId: "app:notion-1",
-					provider: "notion",
-					displayName: "Notion workspace",
+		const connections = await loadWorkspaceToolConnections([
+			{
+				label: "Google",
+				load: async () => {
+					throw new Error("Google unavailable");
 				},
-			],
-		});
+			},
+			{
+				label: "Apps",
+				load: async () => [
+					{
+						sourceId: "app:notion-1",
+						provider: "notion",
+						displayName: "Notion workspace",
+					},
+				],
+			},
+		]);
 
 		expect(connections).toEqual([
 			{

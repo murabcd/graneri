@@ -60,6 +60,7 @@ import type * as calendarProviderConcurrency from "../calendarProviderConcurrenc
 import type * as calendarProviderModule from "../calendarProviderModule.js";
 import type * as calendarRecurrence from "../calendarRecurrence.js";
 import type * as calendarTimeZone from "../calendarTimeZone.js";
+import type * as calendarToolQuery from "../calendarToolQuery.js";
 import type * as calendarTypes from "../calendarTypes.js";
 import type * as calendarValidators from "../calendarValidators.js";
 import type * as chatAttachmentReferences from "../chatAttachmentReferences.js";
@@ -176,6 +177,7 @@ declare const fullApi: ApiFromModules<{
   calendarProviderModule: typeof calendarProviderModule;
   calendarRecurrence: typeof calendarRecurrence;
   calendarTimeZone: typeof calendarTimeZone;
+  calendarToolQuery: typeof calendarToolQuery;
   calendarTypes: typeof calendarTypes;
   calendarValidators: typeof calendarValidators;
   chatAttachmentReferences: typeof chatAttachmentReferences;

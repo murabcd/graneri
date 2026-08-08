@@ -1,8 +1,4 @@
 import { buildChatAutomationContext } from "./automation-tools.mjs";
-import {
-	buildSelectedAppSourceInstructions,
-	selectAppSourceConnections,
-} from "./capability-metadata.mjs";
 import { buildCoreChatToolPolicy } from "./chat-tool-policy.mjs";
 import { buildConvexWorkspaceToolSet } from "./convex-workspace-tools.mjs";
 import { buildHostedChatRunPlan } from "./hosted-chat-run-plan.mjs";
@@ -102,13 +98,17 @@ export const buildHostedChatRunContext = async ({
 	const appConnections = appsEnabled
 		? await getAppConnections({ workspaceId })
 		: [];
-	const selectedAppConnections = selectAppSourceConnections(
-		appConnections,
+	const workspaceToolCatalog = await buildConvexWorkspaceToolSet({
+		connections: appConnections,
+		convexClient,
+		scope: appsEnabled ? "available" : "disabled",
 		selectedSourceIds,
-	);
-	const selectedAppSourceInstructions = buildSelectedAppSourceInstructions(
-		selectedAppConnections,
-	);
+		workspaceId,
+	});
+	const selectedAppConnections = workspaceToolCatalog.selectedConnections;
+	const selectedAppSourceInstructions =
+		workspaceToolCatalog.selectedSourceInstructions;
+	const appTools = workspaceToolCatalog.tools;
 	logLatency("context.sources_loaded", {
 		appConnectionCount: appConnections.length,
 		selectedAppConnectionCount: selectedAppConnections.length,
@@ -116,12 +116,6 @@ export const buildHostedChatRunContext = async ({
 		hasNotesContext: notesContext.length > 0,
 		hasRecipeContext: recipeContext.length > 0,
 		hasUserProfileContext: Boolean(userProfileContext),
-	});
-
-	const appTools = await buildConvexWorkspaceToolSet({
-		connections: appConnections,
-		convexClient,
-		workspaceId,
 	});
 	const localFolderRoots =
 		localFolderToolMode === "client"

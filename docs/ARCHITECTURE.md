@@ -196,8 +196,11 @@ Automations retain an explicit selected-source scope: they may use only the app
 connections stored on that automation rather than every connection in the
 workspace.
 
-The capability registry is the canonical assembly boundary for both hosted-web
-and Convex-produced tool sets. Connection inventory failures and individual
+The workspace tool catalog is the canonical policy and assembly boundary for
+both hosted-web and Convex-produced tool sets. It owns inventory deduplication,
+failure isolation, available-versus-selected scope, source guidance, meeting
+tool inclusion, and capability assembly; web and Convex supply narrow
+credential-bearing adapters. Connection inventory failures and individual
 provider discovery failures are isolated so one unavailable app does not remove
 healthy providers or prevent a non-tool answer. Remote MCP discovery runs in
 parallel, has a bounded timeout and inventory size, and uses a bounded

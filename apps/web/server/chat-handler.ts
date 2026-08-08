@@ -1,8 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import {
-	getSelectedNoteSourceIds,
-	loadAvailableChatToolConnections,
-} from "@workspace/ai/capability-metadata";
+import { getSelectedNoteSourceIds } from "@workspace/ai/capability-metadata";
 import { createChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
 import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
 import {
@@ -29,6 +26,7 @@ import {
 	getToolApprovalResponses,
 	type ToolApprovalResponse,
 } from "@workspace/ai/tool-approval-state";
+import { loadWorkspaceToolConnections } from "@workspace/ai/workspace-tool-catalog";
 import type { UIMessage } from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
@@ -153,16 +151,25 @@ const getAppConnections = async ({
 
 	const client = new ConvexHttpClient(getConvexUrl(), { auth: convexToken });
 
-	return await loadAvailableChatToolConnections({
-		listGoogleSources: async () =>
-			await client.action(api.googleTools.listAvailableSources, {
-				workspaceId: workspaceId as Id<"workspaces">,
-			}),
-		getAppConnections: async () =>
-			await client.action(api.appConnectionActions.getForChatWithFreshTokens, {
-				workspaceId: workspaceId as Id<"workspaces">,
-			}),
-	});
+	return await loadWorkspaceToolConnections([
+		{
+			label: "Google",
+			load: async () =>
+				await client.action(api.googleTools.listAvailableSources, {
+					workspaceId: workspaceId as Id<"workspaces">,
+				}),
+		},
+		{
+			label: "Connected app",
+			load: async () =>
+				await client.action(
+					api.appConnectionActions.getForChatWithFreshTokens,
+					{
+						workspaceId: workspaceId as Id<"workspaces">,
+					},
+				),
+		},
+	]);
 };
 
 const getSelectedRecipe = async ({

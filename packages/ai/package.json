@@ -175,6 +175,10 @@
       "types": "./src/transcription.d.mts",
       "import": "./src/transcription.mjs"
     },
+    "./workspace-tool-catalog": {
+      "types": "./src/workspace-tool-catalog.d.mts",
+      "import": "./src/workspace-tool-catalog.mjs"
+    },
     "./zoom-mcp-tools": {
       "types": "./src/zoom-mcp-tools.d.mts",
       "import": "./src/zoom-mcp-tools.mjs"

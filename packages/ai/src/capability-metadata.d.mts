@@ -158,18 +158,6 @@ export declare function getSelectedNoteSourceIds(args: {
 	mentions?: string[];
 }): string[];
 
-export declare function selectAppSourceConnections<
-	Connection extends AppSourceInstructionConnection,
->(connections: Connection[], selectedSourceIds?: string[]): Connection[];
-
-export declare function loadAvailableChatToolConnections<
-	GoogleConnection extends AppSourceInstructionConnection,
-	AppConnection extends AppSourceInstructionConnection,
->(args: {
-	listGoogleSources: () => Promise<GoogleConnection[]>;
-	getAppConnections: () => Promise<AppConnection[]>;
-}): Promise<Array<GoogleConnection | AppConnection>>;
-
 export declare function buildSelectedAppSourceInstructions(
 	connections: AppSourceInstructionConnection[],
 ): string;

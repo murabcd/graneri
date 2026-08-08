@@ -357,61 +357,6 @@ export const getSelectedAppSourceIds = (selectedSourceIds) =>
 export const getSelectedNoteSourceIds = ({ mentions }) =>
 	Array.from(new Set(mentions ?? [])).filter(Boolean);
 
-const getAppSourceConnectionId = (connection) => {
-	const connectionId = connection.sourceId ?? connection.id;
-
-	if (!connectionId) {
-		throw new Error(
-			`Connected capability ${connection.provider} is missing its source identity.`,
-		);
-	}
-
-	return connectionId;
-};
-
-export const selectAppSourceConnections = (connections, selectedSourceIds) => {
-	const selectedIds = new Set(getSelectedAppSourceIds(selectedSourceIds));
-
-	return connections.filter((connection) =>
-		selectedIds.has(getAppSourceConnectionId(connection)),
-	);
-};
-
-export const loadAvailableChatToolConnections = async ({
-	getAppConnections,
-	listGoogleSources,
-}) => {
-	const [googleResult, appConnectionResult] = await Promise.allSettled([
-		listGoogleSources(),
-		getAppConnections(),
-	]);
-	if (googleResult.status === "rejected") {
-		console.error(
-			"Google chat sources could not be loaded.",
-			googleResult.reason,
-		);
-	}
-	if (appConnectionResult.status === "rejected") {
-		console.error(
-			"Connected chat sources could not be loaded.",
-			appConnectionResult.reason,
-		);
-	}
-	const googleSources =
-		googleResult.status === "fulfilled" ? googleResult.value : [];
-	const appConnections =
-		appConnectionResult.status === "fulfilled" ? appConnectionResult.value : [];
-
-	return Array.from(
-		new Map(
-			[...appConnections, ...googleSources].map((connection) => [
-				getAppSourceConnectionId(connection),
-				connection,
-			]),
-		).values(),
-	);
-};
-
 export const buildSelectedAppSourceInstructions = (connections) =>
 	connections
 		.map((connection) => {
