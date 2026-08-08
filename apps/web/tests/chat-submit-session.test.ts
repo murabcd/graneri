@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import {
+	regenerateChatTurn,
 	removeChatMessageById,
 	submitChatTurn,
 } from "@/lib/chat-submit-session";
@@ -383,5 +384,80 @@ describe("chat submit session", () => {
 				"remove",
 			),
 		).toEqual([{ id: "keep", role: "user", parts: [] }]);
+	});
+
+	it("keeps the target assistant message available for regeneration", async () => {
+		const availableMessageIds = new Set(["user-1", "assistant-1"]);
+		const events: string[] = [];
+		const regenerate = vi.fn(
+			async ({ messageId }: { messageId: string; body: unknown }) => {
+				if (!availableMessageIds.has(messageId)) {
+					throw new Error(`message ${messageId} not found`);
+				}
+
+				events.push(`regenerate:${messageId}`);
+				availableMessageIds.delete(messageId);
+			},
+		);
+
+		await regenerateChatTurn({
+			assistantMessageId: "assistant-1",
+			beginRequestPreparation: () => {
+				events.push("begin");
+				return () => events.push("finish");
+			},
+			buildRequestBody: async () => ({
+				convexToken: "token",
+				localFolders: [],
+				model: "gpt-5",
+				timezone: "UTC",
+			}),
+			onRequestPrepared: () => {
+				events.push("prepared");
+			},
+			regenerate,
+			stopActiveRun: async () => {
+				events.push("stop");
+			},
+		});
+
+		expect(events).toEqual([
+			"stop",
+			"begin",
+			"prepared",
+			"regenerate:assistant-1",
+			"finish",
+		]);
+		expect(regenerate).toHaveBeenCalledWith({
+			body: {
+				convexToken: "token",
+				localFolders: [],
+				model: "gpt-5",
+				timezone: "UTC",
+			},
+			messageId: "assistant-1",
+		});
+	});
+
+	it("finalizes request preparation when regeneration rejects", async () => {
+		const finish = vi.fn();
+
+		await expect(
+			regenerateChatTurn({
+				assistantMessageId: "assistant-1",
+				beginRequestPreparation: () => finish,
+				buildRequestBody: async () => ({
+					localFolders: [],
+					model: "gpt-5",
+					timezone: "UTC",
+				}),
+				onRequestPrepared: () => undefined,
+				regenerate: async () => {
+					throw new Error("regeneration failed");
+				},
+			}),
+		).rejects.toThrow("regeneration failed");
+
+		expect(finish).toHaveBeenCalledOnce();
 	});
 });

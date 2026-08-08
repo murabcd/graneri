@@ -130,7 +130,7 @@ import {
 	buildNoteChatRequestBodyFromLocalFolders,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
-import { submitChatTurn } from "@/lib/chat-submit-session";
+import { regenerateChatTurn, submitChatTurn } from "@/lib/chat-submit-session";
 import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import {
@@ -1569,11 +1569,6 @@ const useNoteComposerController = ({
 
 	const handleRegenerateMessage = React.useCallback(
 		async (assistantMessageId: string) => {
-			if (canStop) {
-				await stopCurrentStream();
-			}
-
-			const finishRequestPreparation = beginRequestPreparation();
 			if (presentationMode === "inline") {
 				setPanelMode("chat");
 			} else {
@@ -1581,27 +1576,30 @@ const useNoteComposerController = ({
 			}
 
 			try {
-				const requestBody = await buildRequestBody();
-				latestRequestBodyRef.current = requestBody;
-
-				setEditingMessageId(null);
-				clearDraft();
-				resetTextareaHeight();
-				void Promise.resolve(
-					regenerate({
-						messageId: assistantMessageId,
-						body: requestBody,
-					}),
-				).finally(() => {
-					finishRequestPreparation();
+				await regenerateChatTurn({
+					assistantMessageId,
+					beginRequestPreparation,
+					buildRequestBody,
+					onRequestPrepared: (requestBody) => {
+						latestRequestBodyRef.current = requestBody;
+						setEditingMessageId(null);
+						clearDraft();
+						resetTextareaHeight();
+					},
+					regenerate,
+					...(canStop ? { stopActiveRun: stopCurrentStream } : {}),
 				});
 			} catch (error) {
 				logError({
 					event: "client.error",
 					error: error,
-					message: "Failed to prepare note chat regeneration",
+					message: "Failed to regenerate note chat message",
 				});
-				finishRequestPreparation();
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to regenerate message",
+				);
 			}
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.

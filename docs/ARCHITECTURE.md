@@ -299,7 +299,10 @@ suffix without destroying it. Convex atomically moves the replaced active rows
 into `chatBranches` and `chatBranchMessages`, retains their attachment storage
 references, stops superseded run state, and clears the rolling context
 compaction checkpoint and its current display activity before the new Assistant
-Run input is prepared. The renderer reads active
+Run input is prepared. Workspace chat and note chat use the same regeneration
+session, which owns stop, request preparation, target-preserving regeneration,
+and exactly-once preparation cleanup; callers own only presentation and error
+display. The renderer reads active
 history through cursor-paginated `chatThreads.readPage` pages and explicitly
 offers older pages instead of silently truncating the transcript. Preserved
 replacement branches remain durable recovery data. Separately, an assistant

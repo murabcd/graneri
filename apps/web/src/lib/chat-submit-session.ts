@@ -39,6 +39,11 @@ export type SendChatTurn = (
 	options: { body: ChatRequestBody },
 ) => Promise<unknown> | unknown;
 
+export type RegenerateChatTurn = (options: {
+	body: ChatRequestBody;
+	messageId: string;
+}) => Promise<unknown> | unknown;
+
 export type SubmitChatTurnResult =
 	| {
 			status: "queued";
@@ -64,6 +69,40 @@ export const removeChatMessageById = (
 	messages: UIMessage[],
 	messageId: string,
 ) => messages.filter((message) => message.id !== messageId);
+
+export const regenerateChatTurn = async ({
+	assistantMessageId,
+	beginRequestPreparation,
+	buildRequestBody,
+	onRequestPrepared,
+	regenerate,
+	stopActiveRun,
+}: {
+	assistantMessageId: string;
+	beginRequestPreparation: () => () => void;
+	buildRequestBody: () => Promise<ChatRequestBody>;
+	onRequestPrepared: (requestBody: ChatRequestBody) => void;
+	regenerate: RegenerateChatTurn;
+	stopActiveRun?: () => Promise<unknown>;
+}) => {
+	if (stopActiveRun) {
+		await stopActiveRun();
+	}
+
+	const finishRequestPreparation = beginRequestPreparation();
+	try {
+		const requestBody = await buildRequestBody();
+		onRequestPrepared(requestBody);
+		await Promise.resolve(
+			regenerate({
+				body: requestBody,
+				messageId: assistantMessageId,
+			}),
+		);
+	} finally {
+		finishRequestPreparation();
+	}
+};
 
 export const submitChatTurn = async ({
 	attachedFiles,

@@ -77,7 +77,6 @@ import {
 	prepareChatComposerSubmission,
 } from "@/lib/chat-composer-mentions";
 import { getChatText } from "@/lib/chat-message";
-import { normalizeChatMessages } from "@/lib/chat-message-state";
 import {
 	type ChatPluginPrefill,
 	createChatPluginDraft,
@@ -91,7 +90,7 @@ import {
 	buildWorkspaceChatRequestBodyFromLocalFolders,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
-import { submitChatTurn } from "@/lib/chat-submit-session";
+import { regenerateChatTurn, submitChatTurn } from "@/lib/chat-submit-session";
 import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
@@ -148,32 +147,6 @@ const getLatestUserMessageText = (messages: UIMessage[]) => {
 	}
 
 	return "";
-};
-
-const getRegenerationMessages = ({
-	assistantMessageId,
-	messages,
-}: {
-	assistantMessageId: string;
-	messages: UIMessage[];
-}) => {
-	const assistantMessageIndex = messages.findIndex(
-		(message) => message.id === assistantMessageId,
-	);
-
-	if (assistantMessageIndex < 0) {
-		throw new Error("Cannot regenerate a missing assistant message.");
-	}
-
-	const userMessageIndex = messages
-		.slice(0, assistantMessageIndex)
-		.findLastIndex((message) => message.role === "user");
-
-	if (userMessageIndex < 0) {
-		throw new Error("Cannot regenerate without a previous user message.");
-	}
-
-	return normalizeChatMessages(messages.slice(0, userMessageIndex + 1));
 };
 
 const getStoredChatModel = (model: string | undefined): ChatModel | null =>
@@ -477,7 +450,6 @@ const useChatPageController = ({
 		restoreEditedQueuedMessage,
 		rollbackOptimisticMessage,
 		sendMessage,
-		setMessages,
 		setQueuedMessages,
 		stopCurrentStream,
 		streamingMessageIds,
@@ -984,37 +956,30 @@ const useChatPageController = ({
 
 	const handleRegenerateMessage = React.useCallback(
 		async (assistantMessageId: string) => {
-			if (canStop) {
-				await stopCurrentStream();
-			}
-
-			const finishRequestPreparation = beginRequestPreparation();
-
 			try {
-				const requestBody = await buildRequestBody();
-				const regenerationMessages = getRegenerationMessages({
+				await regenerateChatTurn({
 					assistantMessageId,
-					messages: persistedMessages,
-				});
-				latestRequestBodyRef.current = requestBody;
-				setEditingMessageId(null);
-				clearDraft();
-				setMessages(regenerationMessages);
-				void Promise.resolve(
-					regenerate({
-						messageId: assistantMessageId,
-						body: requestBody,
-					}),
-				).finally(() => {
-					finishRequestPreparation();
+					beginRequestPreparation,
+					buildRequestBody,
+					onRequestPrepared: (requestBody) => {
+						latestRequestBodyRef.current = requestBody;
+						setEditingMessageId(null);
+						clearDraft();
+					},
+					regenerate,
+					...(canStop ? { stopActiveRun: stopCurrentStream } : {}),
 				});
 			} catch (error) {
 				logError({
 					event: "client.error",
 					error: error,
-					message: "Failed to prepare chat regeneration",
+					message: "Failed to regenerate chat message",
 				});
-				finishRequestPreparation();
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to regenerate message",
+				);
 			}
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
@@ -1024,9 +989,7 @@ const useChatPageController = ({
 			clearDraft,
 			canStop,
 			latestRequestBodyRef,
-			persistedMessages,
 			regenerate,
-			setMessages,
 			stopCurrentStream,
 		],
 	);
