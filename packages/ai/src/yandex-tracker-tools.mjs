@@ -161,7 +161,7 @@ export const getYandexTrackerIssue = async (connection, issueKey) => {
 	};
 };
 
-export const buildYandexTrackerToolDefinitions = (connection) => [
+const buildYandexTrackerToolDefinitionsWithAdapter = (adapter) => [
 	defineAiTool({
 		name: "yandex_tracker_search",
 		description:
@@ -178,7 +178,7 @@ export const buildYandexTrackerToolDefinitions = (connection) => [
 		},
 		ui: toolUiMetadata.yandex_tracker_search,
 		execute: async ({ query, limit }) =>
-			await searchYandexTrackerIssues(connection, query, limit ?? 5),
+			await adapter.searchIssues({ query, limit: limit ?? 5 }),
 	}),
 	defineAiTool({
 		name: "yandex_tracker_get_issue",
@@ -194,10 +194,24 @@ export const buildYandexTrackerToolDefinitions = (connection) => [
 			requiresConnection: true,
 		},
 		ui: toolUiMetadata.yandex_tracker_get_issue,
-		execute: async ({ issueKey }) =>
-			await getYandexTrackerIssue(connection, issueKey),
+		execute: async ({ issueKey }) => await adapter.getIssue({ issueKey }),
 	}),
 ];
 
+const createYandexTrackerToolAdapter = (connection) => ({
+	searchIssues: async ({ query, limit }) =>
+		await searchYandexTrackerIssues(connection, query, limit),
+	getIssue: async ({ issueKey }) =>
+		await getYandexTrackerIssue(connection, issueKey),
+});
+
+export const buildYandexTrackerToolDefinitions = (connection) =>
+	buildYandexTrackerToolDefinitionsWithAdapter(
+		createYandexTrackerToolAdapter(connection),
+	);
+
 export const buildYandexTrackerTools = (connection) =>
 	buildAiToolSet(buildYandexTrackerToolDefinitions(connection));
+
+export const buildYandexTrackerProxyTools = (adapter) =>
+	buildAiToolSet(buildYandexTrackerToolDefinitionsWithAdapter(adapter));

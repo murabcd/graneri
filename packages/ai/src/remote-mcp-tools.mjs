@@ -1,5 +1,6 @@
 import { createMCPClient } from "@ai-sdk/mcp";
 import { dynamicTool, jsonSchema } from "ai";
+import { z } from "zod";
 
 const REMOTE_MCP_DISCOVERY_TIMEOUT_MS = 5_000;
 const REMOTE_MCP_DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -8,6 +9,33 @@ const REMOTE_MCP_TOOL_LIMIT = 256;
 const REMOTE_MCP_INVENTORY_CHARACTER_LIMIT = 2_000_000;
 const remoteMcpDiscoveryCache = new Map();
 const remoteMcpDiscoveryPromises = new Map();
+
+const remoteMcpToolDefinitionSchema = z
+	.object({
+		name: z.string().min(1),
+		title: z.string().optional(),
+		description: z.string().optional(),
+		inputSchema: z
+			.object({
+				properties: z.record(z.string(), z.json()).optional(),
+			})
+			.catchall(z.json()),
+		annotations: z
+			.object({
+				title: z.string().optional(),
+			})
+			.catchall(z.json())
+			.optional(),
+	})
+	.catchall(z.json());
+
+const remoteMcpDefinitionsSchema = z
+	.object({
+		tools: z.array(remoteMcpToolDefinitionSchema).max(REMOTE_MCP_TOOL_LIMIT),
+	})
+	.catchall(z.json());
+const remoteMcpToolArgumentsSchema = z.record(z.string(), z.json());
+const remoteMcpToolResultSchema = z.json();
 
 const withRemoteMcpClient = async (connection, callback) => {
 	const headers = {};
@@ -181,25 +209,55 @@ const listRemoteMcpDefinitions = async (client) =>
 	});
 
 const validateRemoteMcpDefinitions = (connection, definitions) => {
-	if (!Array.isArray(definitions?.tools)) {
+	const serializedDefinitions = JSON.stringify(definitions);
+	if (typeof serializedDefinitions !== "string") {
 		throw new Error(
 			`${connection.displayName} returned an invalid MCP tool inventory.`,
 		);
 	}
-	if (definitions.tools.length > REMOTE_MCP_TOOL_LIMIT) {
-		throw new Error(
-			`${connection.displayName} exposes more than ${REMOTE_MCP_TOOL_LIMIT} MCP tools.`,
-		);
-	}
-	if (
-		JSON.stringify(definitions).length > REMOTE_MCP_INVENTORY_CHARACTER_LIMIT
-	) {
+	if (serializedDefinitions.length > REMOTE_MCP_INVENTORY_CHARACTER_LIMIT) {
 		throw new Error(
 			`${connection.displayName} returned an oversized MCP tool inventory.`,
 		);
 	}
 
-	return definitions;
+	const result = remoteMcpDefinitionsSchema.safeParse(definitions);
+	if (!result.success) {
+		const limitIssue = result.error.issues.find(
+			(issue) => issue.code === "too_big" && issue.path[0] === "tools",
+		);
+		throw new Error(
+			limitIssue
+				? `${connection.displayName} exposes more than ${REMOTE_MCP_TOOL_LIMIT} MCP tools.`
+				: `${connection.displayName} returned an invalid MCP tool inventory.`,
+		);
+	}
+
+	return result.data;
+};
+
+const parseRemoteMcpJson = (value, schema, errorMessage) => {
+	let parsed;
+	try {
+		parsed = JSON.parse(value);
+	} catch {
+		throw new Error(errorMessage);
+	}
+
+	const result = schema.safeParse(parsed);
+	if (!result.success) {
+		throw new Error(errorMessage);
+	}
+
+	return result.data;
+};
+
+const serializeRemoteMcpJson = (value, errorMessage) => {
+	const serialized = JSON.stringify(value);
+	if (typeof serialized !== "string") {
+		throw new Error(errorMessage);
+	}
+	return serialized;
 };
 
 const discoverRemoteMcpDefinitions = async (connection) => {
@@ -247,8 +305,11 @@ export const validateRemoteMcpConnection = async (connection) =>
 		return result.tools;
 	});
 
-export const buildRemoteMcpTools = async (connection) => {
-	const definitions = await discoverRemoteMcpDefinitions(connection);
+const buildRemoteMcpToolsFromDefinitions = (
+	connection,
+	definitions,
+	executeTool,
+) => {
 	const tools = {};
 
 	for (const definition of definitions.tools) {
@@ -279,10 +340,87 @@ export const buildRemoteMcpTools = async (connection) => {
 				},
 			},
 			execute: async (args, options) =>
-				await executeRemoteMcpTool(connection, definition, args, options),
+				await executeTool(definition, args, options),
 			toModelOutput: remoteMcpToolOutputForModel,
 		});
 	}
 
 	return tools;
+};
+
+export const buildRemoteMcpTools = async (connection) =>
+	buildRemoteMcpToolsFromDefinitions(
+		connection,
+		await discoverRemoteMcpDefinitions(connection),
+		async (definition, args, options) =>
+			await executeRemoteMcpTool(connection, definition, args, options),
+	);
+
+export const listRemoteMcpToolsForProxy = async (connection) =>
+	serializeRemoteMcpJson(
+		await discoverRemoteMcpDefinitions(connection),
+		`${connection.displayName} tool inventory could not be serialized.`,
+	);
+
+export const executeRemoteMcpToolForProxy = async (
+	connection,
+	{ inputJson, toolName },
+) => {
+	const definitions = await discoverRemoteMcpDefinitions(connection);
+	if (!definitions.tools.some((definition) => definition.name === toolName)) {
+		throw new Error(
+			`${connection.displayName} MCP tool "${toolName}" is unavailable.`,
+		);
+	}
+	const args = parseRemoteMcpJson(
+		inputJson,
+		remoteMcpToolArgumentsSchema,
+		`${connection.displayName} MCP tool input is invalid.`,
+	);
+	const output = await withRemoteMcpClient(
+		connection,
+		async (client) =>
+			await client.callTool({ name: toolName, arguments: args }),
+	);
+
+	return serializeRemoteMcpJson(
+		output,
+		`${connection.displayName} MCP tool result could not be serialized.`,
+	);
+};
+
+export const buildRemoteMcpProxyTools = async (connection, proxy) => {
+	const inventoryJson = await proxy.listTools();
+	if (inventoryJson.length > REMOTE_MCP_INVENTORY_CHARACTER_LIMIT) {
+		throw new Error(
+			`${connection.displayName} returned an oversized MCP tool inventory.`,
+		);
+	}
+	const definitions = validateRemoteMcpDefinitions(
+		connection,
+		parseRemoteMcpJson(
+			inventoryJson,
+			remoteMcpDefinitionsSchema,
+			`${connection.displayName} returned an invalid MCP tool inventory.`,
+		),
+	);
+
+	return buildRemoteMcpToolsFromDefinitions(
+		connection,
+		definitions,
+		async (definition, args) => {
+			const inputJson = serializeRemoteMcpJson(
+				remoteMcpToolArgumentsSchema.parse(args),
+				`${connection.displayName} MCP tool input could not be serialized.`,
+			);
+			return parseRemoteMcpJson(
+				await proxy.executeTool({
+					inputJson,
+					toolName: definition.name,
+				}),
+				remoteMcpToolResultSchema,
+				`${connection.displayName} returned an invalid MCP tool result.`,
+			);
+		},
+	);
 };

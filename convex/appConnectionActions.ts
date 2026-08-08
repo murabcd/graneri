@@ -592,6 +592,33 @@ const chatMcpOAuthRefreshProviders: McpOAuthRedirectProvider[] = [
 	"linear",
 ];
 
+const isChatMcpOAuthRefreshProvider = (
+	provider: ChatToolConnection["provider"],
+): provider is McpOAuthRedirectProvider =>
+	chatMcpOAuthRefreshProviders.some((candidate) => candidate === provider);
+
+const refreshChatConnectionToken = async (
+	ctx: ActionCtx,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+	provider: ChatToolConnection["provider"],
+) => {
+	if (provider === "zoom") {
+		await refreshZoomTokensForWorkspace(ctx, ownerTokenIdentifier, workspaceId);
+		return true;
+	}
+	if (isChatMcpOAuthRefreshProvider(provider)) {
+		await refreshMcpTokensForWorkspace(
+			ctx,
+			ownerTokenIdentifier,
+			workspaceId,
+			provider,
+		);
+		return true;
+	}
+	return false;
+};
+
 const refreshChatConnectionTokensForWorkspace = async (
 	ctx: ActionCtx,
 	ownerTokenIdentifier: string,
@@ -1338,25 +1365,6 @@ export const connectZoom = action({
 	},
 });
 
-export const getForChatWithFreshTokens = action({
-	args: {
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.array(chatToolConnectionValidator),
-	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
-		const identity = await requireIdentity(ctx);
-		await refreshChatConnectionTokensForWorkspace(
-			ctx,
-			identity.tokenIdentifier,
-			args.workspaceId,
-		);
-		return await ctx.runQuery(internal.appConnections.getForChatInternal, {
-			ownerTokenIdentifier: identity.tokenIdentifier,
-			workspaceId: args.workspaceId,
-		});
-	},
-});
-
 export const getForChatInternalWithFreshTokens = internalAction({
 	args: {
 		ownerTokenIdentifier: v.string(),
@@ -1373,6 +1381,48 @@ export const getForChatInternalWithFreshTokens = internalAction({
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 		});
+	},
+});
+
+export const getChatToolConnectionInternalWithFreshToken = internalAction({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		sourceId: v.string(),
+	},
+	returns: v.union(chatToolConnectionValidator, v.null()),
+	handler: async (ctx, args): Promise<ChatToolConnection | null> => {
+		const getConnection = async () => {
+			const connections = await ctx.runQuery(
+				internal.appConnections.getForChatInternal,
+				{
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+				},
+			);
+			return (
+				connections.find(
+					(connection) => connection.sourceId === args.sourceId,
+				) ?? null
+			);
+		};
+		const connection = await getConnection();
+		if (!connection) {
+			return null;
+		}
+
+		if (
+			await refreshChatConnectionToken(
+				ctx,
+				args.ownerTokenIdentifier,
+				args.workspaceId,
+				connection.provider,
+			)
+		) {
+			return await getConnection();
+		}
+
+		return connection;
 	},
 });
 

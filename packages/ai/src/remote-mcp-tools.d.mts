@@ -8,7 +8,7 @@ export type RemoteMcpToolConnection = {
 	toolPrefix?: string;
 	env?: Record<string, string>;
 	oauthClientId?: string;
-	oauthAccessToken: string;
+	oauthAccessToken?: string;
 	includeOAuthClientIdHeader?: boolean;
 };
 
@@ -18,4 +18,33 @@ export declare function validateRemoteMcpConnection(
 
 export declare function buildRemoteMcpTools(
 	connection: RemoteMcpToolConnection,
+): Promise<ToolSet>;
+
+export type RemoteMcpToolProxy = {
+	listTools(): Promise<string>;
+	executeTool(args: { inputJson: string; toolName: string }): Promise<string>;
+};
+
+export type RemoteMcpProxyToolConnection = {
+	sourceId: string;
+	provider: string;
+	displayName: string;
+	toolPrefix: string;
+};
+
+export declare function listRemoteMcpToolsForProxy(
+	connection: RemoteMcpToolConnection,
+): Promise<string>;
+
+export declare function executeRemoteMcpToolForProxy(
+	connection: RemoteMcpToolConnection,
+	args: {
+		inputJson: string;
+		toolName: string;
+	},
+): Promise<string>;
+
+export declare function buildRemoteMcpProxyTools(
+	connection: RemoteMcpProxyToolConnection,
+	proxy: RemoteMcpToolProxy,
 ): Promise<ToolSet>;

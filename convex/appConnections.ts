@@ -154,7 +154,6 @@ const appConnectionSourceValidator = v.object({
 	provider: v.union(
 		yandexCalendarProviderValidator,
 		yandexTrackerProviderValidator,
-		jiraProviderValidator,
 		jiraMcpProviderValidator,
 		posthogProviderValidator,
 		notionProviderValidator,
@@ -432,7 +431,6 @@ type AppConnectionSource = {
 	title: string;
 	preview: string;
 	provider:
-		| "jira"
 		| "jira-mcp"
 		| "notion"
 		| "posthog"
@@ -1501,26 +1499,6 @@ export const updateMcpOAuthTokens = internalMutation({
 		});
 
 		return null;
-	},
-});
-
-export const getForChat = query({
-	args: {
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.array(chatToolConnectionValidator),
-	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
-		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(
-			ctx,
-			identity.tokenIdentifier,
-			args.workspaceId,
-		);
-		return await getChatToolConnections(
-			ctx,
-			identity.tokenIdentifier,
-			args.workspaceId,
-		);
 	},
 });
 

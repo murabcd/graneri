@@ -162,12 +162,9 @@ const getAppConnections = async ({
 		{
 			label: "Connected app",
 			load: async () =>
-				await client.action(
-					api.appConnectionActions.getForChatWithFreshTokens,
-					{
-						workspaceId: workspaceId as Id<"workspaces">,
-					},
-				),
+				await client.query(api.appConnections.listSources, {
+					workspaceId: workspaceId as Id<"workspaces">,
+				}),
 		},
 	]);
 };

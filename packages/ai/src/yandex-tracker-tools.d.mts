@@ -18,6 +18,11 @@ export type YandexTrackerIssue = {
 	url: string;
 };
 
+export type YandexTrackerToolAdapter = {
+	searchIssues(args: { query: string; limit: number }): Promise<unknown>;
+	getIssue(args: { issueKey: string }): Promise<unknown>;
+};
+
 export declare function searchYandexTrackerIssues(
 	connection: YandexTrackerToolConnection,
 	query: string,
@@ -51,3 +56,6 @@ export declare function buildYandexTrackerTools(
 export declare function buildYandexTrackerToolDefinitions(
 	connection: YandexTrackerToolConnection,
 ): AiToolDefinition[];
+export declare function buildYandexTrackerProxyTools(
+	adapter: YandexTrackerToolAdapter,
+): ToolSet;

@@ -55,6 +55,7 @@
     "@ai-sdk/openai": "4.0.16",
     "@ai-sdk/react": "4.0.34",
     "@convex-dev/better-auth": "^0.12.5",
+    "@convex-dev/rate-limiter": "^0.3.2",
     "@convex-dev/workflow": "0.4.4",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",

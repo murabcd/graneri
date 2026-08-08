@@ -135,6 +135,10 @@ export declare const remoteMcpConnectionDefaults: Record<
 	RemoteMcpConnectionProvider,
 	RemoteMcpConnectionDefaults
 >;
+export declare const remoteMcpConnectionProviders: readonly RemoteMcpConnectionProvider[];
+export declare function isRemoteMcpConnectionProvider(
+	provider: unknown,
+): provider is RemoteMcpConnectionProvider;
 export declare const remoteMcpToolPrefixes: readonly {
 	prefix: string;
 	provider: AppSourceProvider;

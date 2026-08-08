@@ -72,6 +72,8 @@ import type * as chatThreads from "../chatThreads.js";
 import type * as chatToolCalls from "../chatToolCalls.js";
 import type * as chats from "../chats.js";
 import type * as companyDomain from "../companyDomain.js";
+import type * as connectedAppRateLimits from "../connectedAppRateLimits.js";
+import type * as connectedAppTools from "../connectedAppTools.js";
 import type * as crons from "../crons.js";
 import type * as dictationActions from "../dictationActions.js";
 import type * as dictationHttp from "../dictationHttp.js";
@@ -189,6 +191,8 @@ declare const fullApi: ApiFromModules<{
   chatToolCalls: typeof chatToolCalls;
   chats: typeof chats;
   companyDomain: typeof companyDomain;
+  connectedAppRateLimits: typeof connectedAppRateLimits;
+  connectedAppTools: typeof connectedAppTools;
   crons: typeof crons;
   dictationActions: typeof dictationActions;
   dictationHttp: typeof dictationHttp;
@@ -264,5 +268,6 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
   workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
 };

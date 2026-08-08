@@ -325,6 +325,14 @@ export const remoteMcpConnectionDefaults = Object.fromEntries(
 		]),
 );
 
+export const remoteMcpConnectionProviders = Object.keys(
+	remoteMcpConnectionDefaults,
+);
+
+export const isRemoteMcpConnectionProvider = (provider) =>
+	typeof provider === "string" &&
+	remoteMcpConnectionProviders.includes(provider);
+
 export const remoteMcpToolPrefixes = capabilityMetadataDefinitions
 	.filter((capability) => capability.toolPrefix)
 	.map((capability) => ({

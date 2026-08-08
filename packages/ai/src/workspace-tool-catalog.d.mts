@@ -1,4 +1,5 @@
 import type { ToolSet } from "ai";
+import type { AppSourceInstructionConnection } from "./capability-metadata.mjs";
 import type {
 	GraneriCapabilityAdapters,
 	WorkspaceToolConnection,
@@ -10,6 +11,14 @@ export type WorkspaceToolConnectionSource = {
 	label: string;
 	load(): Promise<WorkspaceToolConnection[]>;
 };
+
+export declare function getWorkspaceToolConnectionId(
+	connection: AppSourceInstructionConnection,
+): string;
+
+export declare function getWorkspaceToolConnectionDisplayName(
+	connection: AppSourceInstructionConnection,
+): string;
 
 export declare function loadWorkspaceToolConnections(
 	sources: WorkspaceToolConnectionSource[],

@@ -1,6 +1,9 @@
 "use node";
 
-import type { WorkspaceToolConnection } from "@workspace/ai/capability-registry";
+import type {
+	WorkspaceToolConnection,
+	YandexCalendarToolConnection,
+} from "@workspace/ai/capability-registry";
 import { buildMeetingTools } from "@workspace/ai/meeting-tools";
 import {
 	buildWorkspaceToolCatalog,
@@ -25,6 +28,11 @@ const hasConnection = (
 	connections: WorkspaceToolConnection[],
 	provider: WorkspaceToolConnection["provider"],
 ) => connections.some((connection) => connection.provider === provider);
+
+const isYandexCalendarToolConnection = (
+	connection: WorkspaceToolConnection,
+): connection is YandexCalendarToolConnection =>
+	connection.provider === "yandex-calendar" && "password" in connection;
 
 const loadGoogleToolConnections = async (
 	ctx: ActionCtx,
@@ -115,7 +123,7 @@ export const buildServerWorkspaceTools = async (
 					},
 				]);
 	const yandexCalendarConnection = connections.find(
-		(connection) => connection.provider === "yandex-calendar",
+		isYandexCalendarToolConnection,
 	);
 	const activeGoogleAuthContext = googleAuthContext;
 	const catalog = await buildWorkspaceToolCatalog({

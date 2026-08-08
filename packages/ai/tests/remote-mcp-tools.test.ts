@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mcpMocks = vi.hoisted(() => ({
 	close: vi.fn(async () => undefined),
+	callTool: vi.fn(async () => ({ content: [{ type: "text", text: "ok" }] })),
 	createClient: vi.fn(),
 	listTools: vi.fn(async () => ({
 		tools: [
@@ -28,6 +29,7 @@ const mcpMocks = vi.hoisted(() => ({
 
 vi.mock("@ai-sdk/mcp", () => {
 	mcpMocks.createClient.mockImplementation(async () => ({
+		callTool: mcpMocks.callTool,
 		close: mcpMocks.close,
 		listTools: mcpMocks.listTools,
 		toolsFromDefinitions: mcpMocks.toolsFromDefinitions,
@@ -36,14 +38,86 @@ vi.mock("@ai-sdk/mcp", () => {
 	return { createMCPClient: mcpMocks.createClient };
 });
 
-import { buildRemoteMcpTools } from "../src/remote-mcp-tools.mjs";
+import {
+	buildRemoteMcpProxyTools,
+	buildRemoteMcpTools,
+	executeRemoteMcpToolForProxy,
+} from "../src/remote-mcp-tools.mjs";
 
 describe("remote MCP tool discovery", () => {
 	beforeEach(() => {
 		mcpMocks.close.mockClear();
+		mcpMocks.callTool.mockClear();
 		mcpMocks.createClient.mockClear();
 		mcpMocks.listTools.mockClear();
 		mcpMocks.toolsFromDefinitions.mockClear();
+	});
+
+	it("builds hosted tools from a credential-free Convex proxy", async () => {
+		const executeTool = vi.fn(async () =>
+			JSON.stringify({ content: [{ type: "text", text: "proxied" }] }),
+		);
+		const tools = await buildRemoteMcpProxyTools(
+			{
+				sourceId: "app:test-proxy",
+				provider: "notion",
+				displayName: "Notion",
+				toolPrefix: "notion",
+			},
+			{
+				listTools: async () =>
+					JSON.stringify({
+						tools: [
+							{
+								name: "search",
+								description: "Search the connected workspace.",
+								inputSchema: {
+									type: "object",
+									properties: { query: { type: "string" } },
+								},
+							},
+						],
+					}),
+				executeTool,
+			},
+		);
+		const execute = tools.notion_search?.execute;
+		if (!execute) {
+			throw new Error("Expected proxied Notion tool execution.");
+		}
+
+		await execute(
+			{ query: "roadmap" },
+			{ messages: [], toolCallId: "tool-call" },
+		);
+
+		expect(executeTool).toHaveBeenCalledWith({
+			inputJson: JSON.stringify({ query: "roadmap" }),
+			toolName: "search",
+		});
+	});
+
+	it("executes remote tools inside the credential-holding proxy", async () => {
+		const connection = {
+			sourceId: "app:test-server-proxy",
+			provider: "notion",
+			displayName: "Notion",
+			baseUrl: "https://mcp.example.com",
+			oauthAccessToken: "secret-token",
+		};
+
+		await expect(
+			executeRemoteMcpToolForProxy(connection, {
+				inputJson: JSON.stringify({ query: "roadmap" }),
+				toolName: "search",
+			}),
+		).resolves.toBe(
+			JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+		);
+		expect(mcpMocks.callTool).toHaveBeenCalledWith({
+			name: "search",
+			arguments: { query: "roadmap" },
+		});
 	});
 
 	it("caches bounded discovery results between chat turns", async () => {

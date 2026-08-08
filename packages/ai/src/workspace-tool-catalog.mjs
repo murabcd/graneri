@@ -4,7 +4,7 @@ import {
 } from "./capability-metadata.mjs";
 import { buildCapabilityToolSet } from "./capability-registry.mjs";
 
-const getConnectionId = (connection) => {
+export const getWorkspaceToolConnectionId = (connection) => {
 	const id = connection.sourceId ?? connection.id;
 	if (!id) {
 		throw new Error(
@@ -14,11 +14,14 @@ const getConnectionId = (connection) => {
 	return id;
 };
 
+export const getWorkspaceToolConnectionDisplayName = (connection) =>
+	connection.displayName ?? connection.title ?? connection.provider;
+
 const deduplicateConnections = (connections) =>
 	Array.from(
 		new Map(
 			connections.map((connection) => [
-				getConnectionId(connection),
+				getWorkspaceToolConnectionId(connection),
 				connection,
 			]),
 		).values(),
@@ -53,7 +56,7 @@ export const buildWorkspaceToolCatalog = async ({
 	const availableConnections = deduplicateConnections(connections);
 	const selectedIds = new Set(getSelectedAppSourceIds(selectedSourceIds));
 	const selectedConnections = availableConnections.filter((connection) =>
-		selectedIds.has(getConnectionId(connection)),
+		selectedIds.has(getWorkspaceToolConnectionId(connection)),
 	);
 	let toolConnections = [];
 	if (scope === "available") {

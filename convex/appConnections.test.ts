@@ -110,7 +110,7 @@ test("Notion settings support endpoint-only connections", async () => {
 	});
 });
 
-test("chat sources include every connected token-backed MCP OAuth connection", async () => {
+test("chat sources expose connected MCP metadata without credentials", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const [posthogConnectionId, notionConnectionId, zoomConnectionId] =
 		await t.run(async (ctx) => {
@@ -147,42 +147,35 @@ test("chat sources include every connected token-backed MCP OAuth connection", a
 			]);
 		});
 
-	const selected = await asOwner.query(api.appConnections.getForChat, {
+	const selected = await asOwner.query(api.appConnections.listSources, {
 		workspaceId,
 	});
 
 	expect(selected).toEqual(
 		expect.arrayContaining([
 			{
-				sourceId: `app:${posthogConnectionId}`,
+				id: `app:${posthogConnectionId}`,
 				provider: "posthog",
-				displayName: "PostHog Cloud",
-				baseUrl: "https://us.posthog.com/mcp",
-				env: { "X-Team": "growth" },
-				oauthClientId: "client-id",
-				oauthAccessToken: "access-token",
+				title: "PostHog Cloud",
+				preview: "us.posthog.com",
 			},
 			{
-				sourceId: `app:${notionConnectionId}`,
+				id: `app:${notionConnectionId}`,
 				provider: "notion",
-				displayName: "Notion",
-				baseUrl: "https://mcp.notion.com/mcp",
-				env: { "X-Team": "growth" },
-				oauthClientId: "client-id",
-				oauthAccessToken: "access-token",
+				title: "Notion",
+				preview: "mcp.notion.com",
 			},
 			{
-				sourceId: `app:${zoomConnectionId}`,
+				id: `app:${zoomConnectionId}`,
 				provider: "zoom",
-				displayName: "Zoom",
-				baseUrl: "https://mcp.zoom.us/mcp/zoom/streamable",
-				env: { "X-Team": "growth" },
-				oauthClientId: "client-id",
-				oauthAccessToken: "access-token",
+				title: "Zoom",
+				preview: "mcp.zoom.us",
 			},
 		]),
 	);
 	expect(selected).toHaveLength(3);
+	expect(JSON.stringify(selected)).not.toContain("access-token");
+	expect(JSON.stringify(selected)).not.toContain("X-Team");
 });
 
 test("chat tools include a connected Yandex Calendar", async () => {

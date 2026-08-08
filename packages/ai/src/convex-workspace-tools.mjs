@@ -1,6 +1,12 @@
 import { api } from "../../../convex/_generated/api.js";
 import { buildMeetingTools } from "./meeting-tools.mjs";
-import { buildWorkspaceToolCatalog } from "./workspace-tool-catalog.mjs";
+import { buildRemoteMcpProxyTools } from "./remote-mcp-tools.mjs";
+import {
+	buildWorkspaceToolCatalog,
+	getWorkspaceToolConnectionDisplayName,
+	getWorkspaceToolConnectionId,
+} from "./workspace-tool-catalog.mjs";
+import { buildYandexTrackerProxyTools } from "./yandex-tracker-tools.mjs";
 
 const hasConnection = (connections, provider) =>
 	connections.some((connection) => connection.provider === provider);
@@ -108,6 +114,58 @@ export const buildConvexWorkspaceToolSet = async ({
 										: {}),
 								},
 							),
+					},
+				}
+			: {}),
+		...(convexClient && canUseWorkspaceTools
+			? {
+					remoteMcp: {
+						buildTools: async ({ connection, toolPrefix }) => {
+							const sourceId = getWorkspaceToolConnectionId(connection);
+							return await buildRemoteMcpProxyTools(
+								{
+									sourceId,
+									provider: connection.provider,
+									displayName:
+										getWorkspaceToolConnectionDisplayName(connection),
+									toolPrefix,
+								},
+								{
+									listTools: async () =>
+										await convexClient.action(
+											api.connectedAppTools.listRemoteMcpTools,
+											{ workspaceId, sourceId },
+										),
+									executeTool: async ({ inputJson, toolName }) =>
+										await convexClient.action(
+											api.connectedAppTools.executeRemoteMcpTool,
+											{
+												workspaceId,
+												sourceId,
+												inputJson,
+												toolName,
+											},
+										),
+								},
+							);
+						},
+					},
+					yandexTracker: {
+						buildTools: (connection) => {
+							const sourceId = getWorkspaceToolConnectionId(connection);
+							return buildYandexTrackerProxyTools({
+								searchIssues: async ({ query, limit }) =>
+									await convexClient.action(
+										api.connectedAppTools.searchYandexTrackerIssuesForTool,
+										{ workspaceId, sourceId, query, limit },
+									),
+								getIssue: async ({ issueKey }) =>
+									await convexClient.action(
+										api.connectedAppTools.getYandexTrackerIssueForTool,
+										{ workspaceId, sourceId, issueKey },
+									),
+							});
+						},
 					},
 				}
 			: {}),

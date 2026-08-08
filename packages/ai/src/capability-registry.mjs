@@ -11,6 +11,12 @@ import { buildYandexCalendarTools } from "./yandex-calendar-tools.mjs";
 import { buildYandexTrackerTools } from "./yandex-tracker-tools.mjs";
 import { buildZoomMcpTools } from "./zoom-mcp-tools.mjs";
 
+const buildRemoteMcpCapabilityTools =
+	(toolPrefix, buildDirectTools) => async (connection, adapters) =>
+		adapters.remoteMcp
+			? await adapters.remoteMcp.buildTools({ connection, toolPrefix })
+			: await buildDirectTools(connection);
+
 const capabilityToolBuilders = {
 	"google-calendar": async (_connection, adapters) =>
 		adapters.googleCalendar
@@ -18,18 +24,21 @@ const capabilityToolBuilders = {
 			: {},
 	"google-drive": async (_connection, adapters) =>
 		adapters.googleDrive ? buildGoogleDriveTools(adapters.googleDrive) : {},
-	context7: buildContext7Tools,
-	figma: buildFigmaTools,
-	"jira-mcp": buildJiraMcpTools,
-	linear: buildLinearTools,
-	notion: buildNotionTools,
-	posthog: buildPostHogTools,
+	context7: buildRemoteMcpCapabilityTools("context7", buildContext7Tools),
+	figma: buildRemoteMcpCapabilityTools("figma", buildFigmaTools),
+	"jira-mcp": buildRemoteMcpCapabilityTools("jira", buildJiraMcpTools),
+	linear: buildRemoteMcpCapabilityTools("linear", buildLinearTools),
+	notion: buildRemoteMcpCapabilityTools("notion", buildNotionTools),
+	posthog: buildRemoteMcpCapabilityTools("posthog", buildPostHogTools),
 	"yandex-calendar": async (_connection, adapters) =>
 		adapters.yandexCalendar
 			? buildYandexCalendarTools(adapters.yandexCalendar)
 			: {},
-	"yandex-tracker": buildYandexTrackerTools,
-	zoom: buildZoomMcpTools,
+	"yandex-tracker": async (connection, adapters) =>
+		adapters.yandexTracker
+			? adapters.yandexTracker.buildTools(connection)
+			: buildYandexTrackerTools(connection),
+	zoom: buildRemoteMcpCapabilityTools("zoom", buildZoomMcpTools),
 };
 
 export const graneriCapabilityRegistry = Object.fromEntries(

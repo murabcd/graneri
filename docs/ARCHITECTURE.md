@@ -200,7 +200,16 @@ The workspace tool catalog is the canonical policy and assembly boundary for
 both hosted-web and Convex-produced tool sets. It owns inventory deduplication,
 failure isolation, available-versus-selected scope, source guidance, meeting
 tool inclusion, and capability assembly; web and Convex supply narrow
-credential-bearing adapters. Connection inventory failures and individual
+runtime-specific adapters. The hosted web runtime loads only sanitized source
+descriptors. Remote MCP and Yandex Tracker discovery and execution cross back
+through authenticated public Convex actions that validate ownership and return
+only tool inventories or tool results; those actions are rate-limited per
+authenticated principal and resolve or refresh the credential-bearing
+connection through internal Convex functions. Raw OAuth tokens, API tokens,
+passwords, and connection headers must never be returned by a public Convex
+function. Durable Convex runs may use the same credentials directly through
+internal functions without crossing a public boundary.
+Connection inventory failures and individual
 provider discovery failures are isolated so one unavailable app does not remove
 healthy providers or prevent a non-tool answer. Remote MCP discovery runs in
 parallel, has a bounded timeout and inventory size, and uses a bounded

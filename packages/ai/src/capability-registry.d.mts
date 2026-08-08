@@ -13,6 +13,13 @@ import type { PostHogMcpToolConnection } from "./posthog-tools.mjs";
 import type { YandexTrackerToolConnection } from "./yandex-tracker-tools.mjs";
 import type { ZoomMcpToolConnection } from "./zoom-mcp-tools.mjs";
 
+export type WorkspaceToolConnectionDescriptor = {
+	id: string;
+	provider: AppSourceProvider;
+	title: string;
+	preview: string;
+};
+
 export type YandexCalendarToolConnection = {
 	sourceId: string;
 	provider: "yandex-calendar";
@@ -38,6 +45,7 @@ export type GoogleDriveToolConnection = {
 };
 
 export type WorkspaceToolConnection =
+	| WorkspaceToolConnectionDescriptor
 	| Context7McpToolConnection
 	| FigmaMcpToolConnection
 	| JiraMcpToolConnection
@@ -69,6 +77,15 @@ export type GraneriCapabilityAdapters = {
 		getFile(args: { fileId: string }): Promise<unknown>;
 	};
 	yandexCalendar?: CalendarToolAdapter;
+	yandexTracker?: {
+		buildTools(connection: AppSourceInstructionConnection): ToolSet;
+	};
+	remoteMcp?: {
+		buildTools(args: {
+			connection: AppSourceInstructionConnection;
+			toolPrefix: string;
+		}): Promise<ToolSet>;
+	};
 };
 
 export type GraneriCapability = AppCapabilityMetadata & {

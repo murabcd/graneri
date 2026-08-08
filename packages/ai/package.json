@@ -179,6 +179,10 @@
       "types": "./src/workspace-tool-catalog.d.mts",
       "import": "./src/workspace-tool-catalog.mjs"
     },
+    "./yandex-tracker-tools": {
+      "types": "./src/yandex-tracker-tools.d.mts",
+      "import": "./src/yandex-tracker-tools.mjs"
+    },
     "./zoom-mcp-tools": {
       "types": "./src/zoom-mcp-tools.d.mts",
       "import": "./src/zoom-mcp-tools.mjs"
