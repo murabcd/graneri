@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { SharedNotePage } from "../src/components/note/shared-note-page";
 
@@ -51,5 +51,24 @@ describe("SharedNotePage", () => {
 		).not.toBeNull();
 		expect(screen.getByRole("button", { name: "Introduction" })).not.toBeNull();
 		expect(screen.getByRole("button", { name: "Next steps" })).not.toBeNull();
+	});
+
+	it("scrolls the shared page viewport when a heading is selected", async () => {
+		const scrollTo = vi.fn();
+		const { container } = render(<SharedNotePage note={sharedNote} />);
+		const viewport = container.querySelector<HTMLDivElement>(
+			'[data-slot="scroll-area-viewport"]',
+		);
+		if (!(viewport instanceof HTMLDivElement)) {
+			throw new Error("Shared note scroll viewport was not rendered");
+		}
+		viewport.scrollTo = scrollTo;
+
+		fireEvent.click(await screen.findByRole("button", { name: "Next steps" }));
+
+		expect(scrollTo).toHaveBeenCalledWith({
+			behavior: "smooth",
+			top: 0,
+		});
 	});
 });

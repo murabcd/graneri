@@ -6,6 +6,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
+import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { cn } from "@workspace/ui/lib/utils";
 import { FileText } from "lucide-react";
@@ -44,13 +45,14 @@ export type SharedNotePageProps = {
 };
 
 export function SharedNotePage({ note }: SharedNotePageProps) {
+	const scrollParentRef = React.useRef<HTMLDivElement>(null);
 	const {
 		anchors: tableOfContents,
 		getScrollParent: getTableOfContentsScrollParent,
 		handleSelect: handleTableOfContentsSelect,
 		handleUpdate: handleTableOfContentsUpdate,
 		sync: syncTableOfContents,
-	} = useNoteTableOfContents();
+	} = useNoteTableOfContents({ scrollParentRef });
 	const editor = useEditor({
 		extensions: createNoteEditorExtensions({
 			onTableOfContentsUpdate: handleTableOfContentsUpdate,
@@ -80,12 +82,12 @@ export function SharedNotePage({ note }: SharedNotePageProps) {
 		syncTableOfContents(editor);
 	}, [editor, note?.content, syncTableOfContents]);
 
-	if (note === undefined) {
-		return <SharedNotePageShell fullHeight />;
-	}
+	let content: React.ReactNode;
 
-	if (note === null) {
-		return (
+	if (note === undefined) {
+		content = <SharedNotePageShell fullHeight />;
+	} else if (note === null) {
+		content = (
 			<div className="flex min-h-svh items-center justify-center px-4 pb-6 md:px-6">
 				<Empty className="max-w-xl">
 					<EmptyHeader>
@@ -100,39 +102,49 @@ export function SharedNotePage({ note }: SharedNotePageProps) {
 				</Empty>
 			</div>
 		);
+	} else {
+		content = (
+			<SharedNotePageShell>
+				<div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-between gap-6">
+					<div className="flex-1 pt-4 md:pt-8">
+						<div className="shared-note-page-content flex flex-col gap-6">
+							<Textarea
+								value={note.title}
+								readOnly
+								placeholder="New note"
+								aria-label="Note title"
+								rows={1}
+								className="note-title min-h-0 flex-1 resize-none overflow-hidden rounded-none border-0 !bg-transparent p-0 text-2xl font-medium leading-tight tracking-tight shadow-none placeholder:text-muted-foreground/70 focus-visible:border-transparent focus-visible:ring-0 dark:!bg-transparent md:text-3xl"
+							/>
+
+							{editor ? (
+								<Tiptap editor={editor}>
+									<Tiptap.Content
+										className={cn(
+											"min-h-[320px] text-base text-foreground",
+											"[&_.ProseMirror]:min-h-[320px]",
+										)}
+									/>
+								</Tiptap>
+							) : null}
+						</div>
+					</div>
+				</div>
+				<NoteTableOfContents
+					anchors={tableOfContents}
+					onSelect={handleTableOfContentsSelect}
+				/>
+			</SharedNotePageShell>
+		);
 	}
 
 	return (
-		<SharedNotePageShell>
-			<div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-between gap-6">
-				<div className="flex-1 pt-4 md:pt-8">
-					<div className="shared-note-page-content flex flex-col gap-6">
-						<Textarea
-							value={note.title}
-							readOnly
-							placeholder="New note"
-							aria-label="Note title"
-							rows={1}
-							className="note-title min-h-0 flex-1 resize-none overflow-hidden rounded-none border-0 !bg-transparent p-0 text-2xl font-medium leading-tight tracking-tight shadow-none placeholder:text-muted-foreground/70 focus-visible:border-transparent focus-visible:ring-0 dark:!bg-transparent md:text-3xl"
-						/>
-
-						{editor ? (
-							<Tiptap editor={editor}>
-								<Tiptap.Content
-									className={cn(
-										"min-h-[320px] text-base text-foreground",
-										"[&_.ProseMirror]:min-h-[320px]",
-									)}
-								/>
-							</Tiptap>
-						) : null}
-					</div>
-				</div>
-			</div>
-			<NoteTableOfContents
-				anchors={tableOfContents}
-				onSelect={handleTableOfContentsSelect}
-			/>
-		</SharedNotePageShell>
+		<ScrollArea
+			className="h-svh"
+			viewportClassName="overscroll-contain"
+			viewportRef={scrollParentRef}
+		>
+			{content}
+		</ScrollArea>
 	);
 }

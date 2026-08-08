@@ -18,7 +18,6 @@ import {
 } from "@workspace/ui/components/card";
 import { Field } from "@workspace/ui/components/field";
 import { GraneriMark } from "@workspace/ui/components/graneri-mark";
-import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { cn } from "@workspace/ui/lib/utils";
 import confetti from "canvas-confetti";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
@@ -312,11 +311,7 @@ function MainApp() {
 	const controller = useAppBootstrapState();
 
 	if (controller.sharedNoteShareId) {
-		return (
-			<ScrollArea className="h-svh" viewportClassName="overscroll-contain">
-				<SharedNotePageEntry note={controller.sharedNote} />
-			</ScrollArea>
-		);
+		return <SharedNotePageEntry note={controller.sharedNote} />;
 	}
 
 	if (
