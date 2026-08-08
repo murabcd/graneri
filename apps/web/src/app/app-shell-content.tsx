@@ -17,7 +17,7 @@ import { HomeView, SharedView } from "@/app/home-shared-views";
 import { ProjectView } from "@/app/project-view";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { AutomationsPageEntry } from "@/components/automations/automations-page-entry";
-import { CalendarPage } from "@/components/calendar/calendar-page";
+import { CalendarPageEntry } from "@/components/calendar/calendar-page-entry";
 import { ChatPageEntry } from "@/components/chat/chat-page-entry";
 import type { NoteEditorActionsStore } from "@/components/note/note-editor-actions-store";
 import { NotePageEntry } from "@/components/note/note-page-entry";
@@ -179,7 +179,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 
 	if (view.kind === "calendar") {
 		return (
-			<CalendarPage
+			<CalendarPageEntry
 				accountId={view.accountId}
 				isDesktopMac={view.isDesktopMac}
 				onOpenCalendarEventNote={view.onOpenCalendarEventNote}
