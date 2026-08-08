@@ -24,6 +24,7 @@ export const createAssistantRunJob = async (
 	run: Doc<"assistantRuns">,
 	args: {
 		authorName: string;
+		googleAuthUserId: string | null;
 		job: AssistantRunJob;
 	},
 ) => {
@@ -45,6 +46,7 @@ export const createAssistantRunJob = async (
 		ownerTokenIdentifier: run.ownerTokenIdentifier,
 		runId: run._id,
 		authorName: args.authorName,
+		googleAuthUserId: args.googleAuthUserId,
 		job: args.job,
 		execution: {
 			assistantMessageId: run.assistantMessageId,

@@ -110,7 +110,7 @@ test("Notion settings support endpoint-only connections", async () => {
 	});
 });
 
-test("selected chat sources include token-backed MCP OAuth connections", async () => {
+test("chat sources include every connected token-backed MCP OAuth connection", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const [posthogConnectionId, notionConnectionId, zoomConnectionId] =
 		await t.run(async (ctx) => {
@@ -147,42 +147,76 @@ test("selected chat sources include token-backed MCP OAuth connections", async (
 			]);
 		});
 
-	const selected = await asOwner.query(api.appConnections.getSelectedForChat, {
+	const selected = await asOwner.query(api.appConnections.getForChat, {
 		workspaceId,
-		sourceIds: [
-			`app:${posthogConnectionId}`,
-			`app:${notionConnectionId}`,
-			`app:${zoomConnectionId}`,
-		],
+	});
+
+	expect(selected).toEqual(
+		expect.arrayContaining([
+			{
+				sourceId: `app:${posthogConnectionId}`,
+				provider: "posthog",
+				displayName: "PostHog Cloud",
+				baseUrl: "https://us.posthog.com/mcp",
+				env: { "X-Team": "growth" },
+				oauthClientId: "client-id",
+				oauthAccessToken: "access-token",
+			},
+			{
+				sourceId: `app:${notionConnectionId}`,
+				provider: "notion",
+				displayName: "Notion",
+				baseUrl: "https://mcp.notion.com/mcp",
+				env: { "X-Team": "growth" },
+				oauthClientId: "client-id",
+				oauthAccessToken: "access-token",
+			},
+			{
+				sourceId: `app:${zoomConnectionId}`,
+				provider: "zoom",
+				displayName: "Zoom",
+				baseUrl: "https://mcp.zoom.us/mcp/zoom/streamable",
+				env: { "X-Team": "growth" },
+				oauthClientId: "client-id",
+				oauthAccessToken: "access-token",
+			},
+		]),
+	);
+	expect(selected).toHaveLength(3);
+});
+
+test("chat tools include a connected Yandex Calendar", async () => {
+	const { t, workspaceId } = await createWorkspace();
+	const connectionId = await t.run((ctx) =>
+		ctx.db.insert("appConnections", {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			workspaceId,
+			provider: "yandex-calendar",
+			status: "connected",
+			displayName: "Yandex Calendar",
+			email: "owner@example.com",
+			password: "app-password",
+			serverAddress: "https://caldav.yandex.ru",
+			calendarHomePath: "/calendars/owner@example.com/",
+			createdAt: 1_000,
+			updatedAt: 1_000,
+		}),
+	);
+
+	const selected = await t.query(internal.appConnections.getForChatInternal, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
 	});
 
 	expect(selected).toEqual([
 		{
-			sourceId: `app:${posthogConnectionId}`,
-			provider: "posthog",
-			displayName: "PostHog Cloud",
-			baseUrl: "https://us.posthog.com/mcp",
-			env: { "X-Team": "growth" },
-			oauthClientId: "client-id",
-			oauthAccessToken: "access-token",
-		},
-		{
-			sourceId: `app:${notionConnectionId}`,
-			provider: "notion",
-			displayName: "Notion",
-			baseUrl: "https://mcp.notion.com/mcp",
-			env: { "X-Team": "growth" },
-			oauthClientId: "client-id",
-			oauthAccessToken: "access-token",
-		},
-		{
-			sourceId: `app:${zoomConnectionId}`,
-			provider: "zoom",
-			displayName: "Zoom",
-			baseUrl: "https://mcp.zoom.us/mcp/zoom/streamable",
-			env: { "X-Team": "growth" },
-			oauthClientId: "client-id",
-			oauthAccessToken: "access-token",
+			sourceId: `app:${connectionId}`,
+			provider: "yandex-calendar",
+			displayName: "Yandex Calendar",
+			email: "owner@example.com",
+			password: "app-password",
+			serverAddress: "https://caldav.yandex.ru",
+			calendarHomePath: "/calendars/owner@example.com/",
 		},
 	]);
 });

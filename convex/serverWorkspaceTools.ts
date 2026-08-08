@@ -1,6 +1,6 @@
 "use node";
 
-import { getSelectedAppSourceIds } from "@workspace/ai/capability-metadata";
+import { selectAppSourceConnections } from "@workspace/ai/capability-metadata";
 import {
 	buildCapabilityToolSet,
 	type WorkspaceToolConnection,
@@ -9,38 +9,67 @@ import { buildMeetingTools } from "@workspace/ai/meeting-tools";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
-import { listYandexUpcomingEvents } from "./yandexCalendar";
+import type { AppToolScope } from "./assistantRunJobModel";
+import { createCalendarCapabilityAdapter } from "./calendar";
+import {
+	getGoogleAccessToken,
+	getGoogleAuthContextForUser,
+} from "./googleAuth";
+import {
+	getAvailableGoogleToolSources,
+	getGoogleDriveFile,
+	searchGoogleDriveFiles,
+} from "./googleTools";
 
-const buildYandexCalendarAdapter =
-	() =>
-	(connection: {
-		displayName: string;
-		email: string;
-		password: string;
-		serverAddress: string;
-		calendarHomePath: string;
-	}) => ({
-		listUpcomingEvents: async ({ lookaheadMs }: { lookaheadMs: number }) => {
-			const now = Date.now();
-			const result = await listYandexUpcomingEvents({
-				connection,
-				now,
-				timeMin: now,
-				timeMax: now + lookaheadMs,
-			});
+const hasConnection = (
+	connections: WorkspaceToolConnection[],
+	provider: WorkspaceToolConnection["provider"],
+) => connections.some((connection) => connection.provider === provider);
 
-			return {
-				connection: connection.displayName,
-				events: result.events,
-			};
+const loadGoogleToolConnections = async (
+	ctx: ActionCtx,
+	args: {
+		googleAuthUserId: string | null;
+		ownerTokenIdentifier: string;
+		workspaceId: Id<"workspaces">;
+	},
+) => {
+	if (!args.googleAuthUserId) {
+		return { authContext: null, connections: [] };
+	}
+
+	const preferences = await ctx.runQuery(
+		internal.calendarPreferences.getForOwner,
+		{
+			ownerTokenIdentifier: args.ownerTokenIdentifier,
+			workspaceId: args.workspaceId,
 		},
+	);
+	if (!preferences.showGoogleCalendar && !preferences.showGoogleDrive) {
+		return { authContext: null, connections: [] };
+	}
+
+	const authContext = getGoogleAuthContextForUser(ctx, args.googleAuthUserId);
+	const tokens = await getGoogleAccessToken(authContext);
+	if (!tokens) {
+		return { authContext: null, connections: [] };
+	}
+
+	const connections: WorkspaceToolConnection[] = getAvailableGoogleToolSources({
+		preferences,
+		scopes: tokens.scopes,
 	});
+
+	return { authContext, connections };
+};
 
 export const buildServerWorkspaceTools = async (
 	ctx: ActionCtx,
 	args: {
 		ownerTokenIdentifier: string;
 		workspaceId: Id<"workspaces">;
+		googleAuthUserId: string | null;
+		appToolScope: AppToolScope;
 		selectedSourceIds: string[];
 	},
 ) => {
@@ -58,25 +87,98 @@ export const buildServerWorkspaceTools = async (
 				},
 			),
 	});
-	const sourceIds = getSelectedAppSourceIds(args.selectedSourceIds);
-	if (sourceIds.length === 0) {
+	if (args.appToolScope === "disabled") {
 		return {
-			connections: [] as WorkspaceToolConnection[],
+			selectedConnections: [],
 			tools: meetingTools,
 		};
 	}
 
-	const connections = (await ctx.runAction(
-		internal.appConnectionActions.getSelectedForChatInternalWithFreshTokens,
-		{
-			ownerTokenIdentifier: args.ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			sourceIds,
-		},
-	)) as WorkspaceToolConnection[];
-	const tools = await buildCapabilityToolSet(connections, {
-		yandexCalendar: buildYandexCalendarAdapter(),
+	const [serverResult, googleResult] = await Promise.allSettled([
+		ctx.runAction(
+			internal.appConnectionActions.getForChatInternalWithFreshTokens,
+			{
+				ownerTokenIdentifier: args.ownerTokenIdentifier,
+				workspaceId: args.workspaceId,
+			},
+		),
+		loadGoogleToolConnections(ctx, args),
+	]);
+	if (serverResult.status === "rejected") {
+		console.error(
+			"Connected chat sources could not be loaded for a durable run.",
+			serverResult.reason,
+		);
+	}
+	if (googleResult.status === "rejected") {
+		console.error(
+			"Google chat sources could not be loaded for a durable run.",
+			googleResult.reason,
+		);
+	}
+	const serverConnections =
+		serverResult.status === "fulfilled" ? serverResult.value : [];
+	const google =
+		googleResult.status === "fulfilled"
+			? googleResult.value
+			: { authContext: null, connections: [] };
+	const connections: WorkspaceToolConnection[] = [
+		...serverConnections,
+		...google.connections,
+	];
+	const selectedConnections = selectAppSourceConnections(
+		connections,
+		args.selectedSourceIds,
+	);
+	const toolConnections =
+		args.appToolScope === "available" ? connections : selectedConnections;
+	const yandexCalendarConnection = toolConnections.find(
+		(connection) => connection.provider === "yandex-calendar",
+	);
+	const tools = await buildCapabilityToolSet(toolConnections, {
+		...(google.authContext && hasConnection(toolConnections, "google-calendar")
+			? {
+					googleCalendar: createCalendarCapabilityAdapter({
+						ctx,
+						providerInput: {
+							provider: "google",
+							googleAuthContext: google.authContext,
+						},
+					}),
+				}
+			: {}),
+		...(google.authContext && hasConnection(toolConnections, "google-drive")
+			? {
+					googleDrive: {
+						searchFiles: async ({ query, limit }) =>
+							await searchGoogleDriveFiles({
+								authContext: google.authContext,
+								query,
+								limit,
+							}),
+						getFile: async ({ fileId }) =>
+							await getGoogleDriveFile({
+								authContext: google.authContext,
+								fileId,
+							}),
+					},
+				}
+			: {}),
+		...(yandexCalendarConnection
+			? {
+					yandexCalendar: createCalendarCapabilityAdapter({
+						ctx,
+						providerInput: {
+							provider: "yandex",
+							connection: yandexCalendarConnection,
+						},
+					}),
+				}
+			: {}),
 	});
 
-	return { connections, tools: { ...meetingTools, ...tools } };
+	return {
+		selectedConnections,
+		tools: { ...meetingTools, ...tools },
+	};
 };

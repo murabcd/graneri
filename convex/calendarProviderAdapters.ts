@@ -69,13 +69,17 @@ const emptyCalendarResult = (): CalendarEventsFetchResult => ({
 
 export const createGoogleCalendarProviderAdapter = ({
 	ctx,
+	googleAuthContext,
 }: {
 	ctx: ActionCtx;
+	googleAuthContext?: GoogleAuthContext;
 }): CalendarProviderAdapter => {
 	let googleAuthContextPromise: Promise<GoogleAuthContext> | undefined;
 
 	const getGoogleContext = () => {
-		googleAuthContextPromise ??= getGoogleAuthContext(ctx);
+		googleAuthContextPromise ??= googleAuthContext
+			? Promise.resolve(googleAuthContext)
+			: getGoogleAuthContext(ctx);
 		return googleAuthContextPromise;
 	};
 
@@ -137,14 +141,19 @@ export const createGoogleCalendarProviderAdapter = ({
 	};
 };
 
+type YandexCalendarConnectionSource =
+	| { connection: YandexCalendarConnection }
+	| {
+			ownerTokenIdentifier?: string;
+			workspaceId: Id<"workspaces">;
+	  };
+
 export const createYandexCalendarProviderAdapter = ({
 	ctx,
-	ownerTokenIdentifier,
-	workspaceId,
+	source,
 }: {
 	ctx: ActionCtx;
-	ownerTokenIdentifier?: string;
-	workspaceId: Id<"workspaces">;
+	source: YandexCalendarConnectionSource;
 }): CalendarProviderAdapter => {
 	let yandexConnectionPromise:
 		| Promise<YandexCalendarConnection | null>
@@ -152,8 +161,12 @@ export const createYandexCalendarProviderAdapter = ({
 
 	const getYandexConnection = () => {
 		yandexConnectionPromise ??= (async () => {
+			if ("connection" in source) {
+				return source.connection;
+			}
+
 			const resolvedOwnerTokenIdentifier =
-				ownerTokenIdentifier ??
+				source.ownerTokenIdentifier ??
 				(await ctx.auth.getUserIdentity())?.tokenIdentifier;
 
 			if (!resolvedOwnerTokenIdentifier) {
@@ -164,7 +177,7 @@ export const createYandexCalendarProviderAdapter = ({
 				internal.appConnections.getYandexCalendarCredentials,
 				{
 					ownerTokenIdentifier: resolvedOwnerTokenIdentifier,
-					workspaceId,
+					workspaceId: source.workspaceId,
 				},
 			);
 		})();
@@ -259,14 +272,20 @@ export const createWorkspaceCalendarProviderAdapters = ({
 	google: createGoogleCalendarProviderAdapter({ ctx }),
 	yandex: createYandexCalendarProviderAdapter({
 		ctx,
-		ownerTokenIdentifier,
-		workspaceId,
+		source: { ownerTokenIdentifier, workspaceId },
 	}),
 });
 
 export type CalendarToolProviderInput =
-	| { provider: "google" }
-	| { provider: "yandex"; workspaceId: Id<"workspaces"> };
+	| { provider: "google"; googleAuthContext?: GoogleAuthContext }
+	| {
+			provider: "yandex";
+			connection: YandexCalendarConnection;
+	  }
+	| {
+			provider: "yandex";
+			workspaceId: Id<"workspaces">;
+	  };
 
 export const createCalendarToolProviderAdapter = ({
 	ctx,
@@ -276,8 +295,14 @@ export const createCalendarToolProviderAdapter = ({
 	input: CalendarToolProviderInput;
 }) =>
 	input.provider === "google"
-		? createGoogleCalendarProviderAdapter({ ctx })
+		? createGoogleCalendarProviderAdapter({
+				ctx,
+				googleAuthContext: input.googleAuthContext,
+			})
 		: createYandexCalendarProviderAdapter({
 				ctx,
-				workspaceId: input.workspaceId,
+				source:
+					"connection" in input
+						? { connection: input.connection }
+						: { workspaceId: input.workspaceId },
 			});

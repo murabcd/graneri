@@ -427,6 +427,7 @@ test("runNow reserves a manual automation run before the action executes", async
 	expect(assistantRuntime.job?.execution.workflowId).toEqual(
 		expect.any(String),
 	);
+	expect(assistantRuntime.job?.googleAuthUserId).toBeNull();
 });
 
 test("runNow does not start while the automation chat has an active assistant run", async () => {

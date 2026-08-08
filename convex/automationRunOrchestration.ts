@@ -210,6 +210,7 @@ const startAutomationAssistantRun = async (
 	);
 	await createAssistantRunJob(ctx, assistantRun, {
 		authorName: args.automation.authorName ?? "Graneri automation",
+		googleAuthUserId: null,
 		job: {
 			messagesJson: JSON.stringify(messages),
 			instructions: buildAutomationInstructions({
@@ -220,6 +221,7 @@ const startAutomationAssistantRun = async (
 			webSearchEnabled: args.automation.webSearchEnabled ?? false,
 			chartGenerationRequested: false,
 			imageGenerationRequested: false,
+			appToolScope: args.automation.appsEnabled ? "selected" : "disabled",
 			shouldGenerateChatTitle: false,
 			selectedSourceIds: (args.automation.appSources ?? []).map(
 				(source) => source.id,

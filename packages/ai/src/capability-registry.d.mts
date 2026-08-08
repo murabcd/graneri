@@ -1,8 +1,8 @@
 import type { ToolSet } from "ai";
 import type {
+	AppCapabilityMetadata,
 	AppSourceInstructionConnection,
 	AppSourceProvider,
-	CapabilityMetadata,
 } from "./capability-metadata.mjs";
 import type { Context7McpToolConnection } from "./context7-tools.mjs";
 import type { FigmaMcpToolConnection } from "./figma-tools.mjs";
@@ -50,31 +50,28 @@ export type WorkspaceToolConnection =
 	| GoogleDriveToolConnection
 	| ZoomMcpToolConnection;
 
+export type CalendarToolAdapter = {
+	listEvents(args: {
+		limit?: number;
+		meetingsOnly?: boolean;
+	}): Promise<unknown>;
+	searchEvents(args: {
+		query: string;
+		limit?: number;
+		meetingsOnly?: boolean;
+	}): Promise<unknown>;
+};
+
 export type GraneriCapabilityAdapters = {
-	googleCalendar?: {
-		listEvents(args: {
-			limit?: number;
-			meetingsOnly?: boolean;
-		}): Promise<unknown>;
-		searchEvents(args: {
-			query: string;
-			limit?: number;
-			meetingsOnly?: boolean;
-		}): Promise<unknown>;
-	};
+	googleCalendar?: CalendarToolAdapter;
 	googleDrive?: {
 		searchFiles(args: { query: string; limit?: number }): Promise<unknown>;
 		getFile(args: { fileId: string }): Promise<unknown>;
 	};
-	yandexCalendar?: (connection: YandexCalendarToolConnection) => {
-		listUpcomingEvents(args: { lookaheadMs: number }): Promise<{
-			connection: string;
-			events: unknown[];
-		}>;
-	};
+	yandexCalendar?: CalendarToolAdapter;
 };
 
-export type GraneriCapability = CapabilityMetadata & {
+export type GraneriCapability = AppCapabilityMetadata & {
 	buildTools: (
 		connection: AppSourceInstructionConnection,
 		adapters?: GraneriCapabilityAdapters,

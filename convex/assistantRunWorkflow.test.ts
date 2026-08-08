@@ -28,6 +28,7 @@ const backgroundJob = {
 	webSearchEnabled: false,
 	chartGenerationRequested: false,
 	imageGenerationRequested: false,
+	appToolScope: "disabled" as const,
 	shouldGenerateChatTitle: false,
 	selectedSourceIds: [],
 	defaultTimezone: "UTC",
@@ -148,6 +149,7 @@ test("background runs start with durable workflow ownership", async () => {
 		completedStepCount: 0,
 		usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
 	});
+	expect(job?.googleAuthUserId).toBe(ownerIdentity.subject);
 	expect(job?.execution.workflowId).toEqual(expect.any(String));
 });
 

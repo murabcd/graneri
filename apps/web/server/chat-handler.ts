@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
 	getSelectedNoteSourceIds,
-	loadSelectedAppSourceConnections,
+	loadAvailableChatToolConnections,
 } from "@workspace/ai/capability-metadata";
 import { createChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
 import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
@@ -143,34 +143,25 @@ const getNotesContext = async ({
 	return buildHostedNotesContext(notes);
 };
 
-const getSelectedAppConnections = async ({
+const getAppConnections = async ({
 	convexToken,
-	selectedSourceIds,
 	workspaceId,
-}: Pick<
-	ChatRequestBody,
-	"convexToken" | "selectedSourceIds" | "workspaceId"
->) => {
+}: Pick<ChatRequestBody, "convexToken" | "workspaceId">) => {
 	if (!convexToken || !workspaceId) {
 		return [];
 	}
 
 	const client = new ConvexHttpClient(getConvexUrl(), { auth: convexToken });
 
-	return await loadSelectedAppSourceConnections({
-		selectedSourceIds,
+	return await loadAvailableChatToolConnections({
 		listGoogleSources: async () =>
 			await client.action(api.googleTools.listAvailableSources, {
 				workspaceId: workspaceId as Id<"workspaces">,
 			}),
-		getAppConnections: async (sourceIds) =>
-			await client.action(
-				api.appConnectionActions.getSelectedForChatWithFreshTokens,
-				{
-					workspaceId: workspaceId as Id<"workspaces">,
-					sourceIds,
-				},
-			),
+		getAppConnections: async () =>
+			await client.action(api.appConnectionActions.getForChatWithFreshTokens, {
+				workspaceId: workspaceId as Id<"workspaces">,
+			}),
 	});
 };
 
@@ -597,7 +588,7 @@ export const handleChatRequest = async (
 		options: { tolerateMissing?: boolean } = {},
 	) =>
 		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(operation, options);
-	let selectedAppConnections: HostedChatRunContext["selectedAppConnections"];
+	let appConnections: HostedChatRunContext["appConnections"];
 	let localFolderRoots: HostedChatRunContext["localFolderRoots"];
 	let agent: HostedChatRunContext["agent"];
 	let finalizedToolSet: HostedChatRunContext["finalizedToolSet"];
@@ -675,7 +666,7 @@ export const handleChatRequest = async (
 			finalizedToolSet,
 			instructions,
 			localFolderRoots,
-			selectedAppConnections,
+			appConnections,
 		} = await preparedAssistantRunInput.complete({
 			appsEnabled,
 			automationActions: createHostedChatAutomationActions({
@@ -696,10 +687,9 @@ export const handleChatRequest = async (
 					mentions,
 					workspaceId,
 				}),
-			getSelectedAppConnections: (args) =>
-				getSelectedAppConnections({
+			getAppConnections: () =>
+				getAppConnections({
 					convexToken,
-					selectedSourceIds: args.selectedSourceIds,
 					workspaceId,
 				}),
 			getSelectedRecipe: (args) =>
@@ -801,7 +791,7 @@ export const handleChatRequest = async (
 			acceptedSteerTurnId = runId;
 		},
 		shouldGenerateChatTitle,
-		selectedAppConnections,
+		appConnections,
 		selectedSourceIds: appsEnabled ? (selectedSourceIds ?? []) : [],
 		steeredUserMessages,
 		supersedeActiveRun,

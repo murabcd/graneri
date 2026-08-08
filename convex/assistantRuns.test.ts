@@ -169,6 +169,7 @@ const backgroundJob = {
 	webSearchEnabled: false,
 	chartGenerationRequested: false,
 	imageGenerationRequested: false,
+	appToolScope: "disabled" as const,
 	shouldGenerateChatTitle: false,
 	selectedSourceIds: [],
 	defaultTimezone: "UTC",

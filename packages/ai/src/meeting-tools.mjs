@@ -4,9 +4,9 @@ import { toolUiMetadata } from "./tool-ui-metadata.mjs";
 
 export const buildMeetingToolDefinitions = ({ searchMeetings }) => [
 	defineAiTool({
-		name: "search_meetings",
+		name: "search_meeting_notes",
 		description:
-			"Search Graneri calendar-linked meeting notes by person name, email, company name, or business email domain. Use this whenever the user asks for meetings with someone or a company, their next linked meeting, relationship history, or a summary from a dated meeting. Results can include past and future linked meetings and include note text plus schedule details. If hasMore or searchableTextTruncated is true, call again with a narrower ISO date window before claiming a complete history or summary.",
+			"Search saved Graneri meeting notes by person name, email, company name, or business email domain. Use this for relationship history, previous meeting notes, or a summary from a dated meeting. This is not the authoritative source for current or future schedules; when a connected calendar tool is available, use that provider's list or search tool for upcoming events. If hasMore or searchableTextTruncated is true, call again with a narrower ISO date window before claiming a complete history or summary.",
 		inputSchema: z.object({
 			query: z.string().min(1).max(320),
 			from: z.string().min(1).optional(),
@@ -19,7 +19,7 @@ export const buildMeetingToolDefinitions = ({ searchMeetings }) => [
 			provider: "graneri-meetings",
 			requiresConnection: false,
 		},
-		ui: toolUiMetadata.search_meetings,
+		ui: toolUiMetadata.search_meeting_notes,
 		execute: async (input) => await searchMeetings(input),
 	}),
 ];

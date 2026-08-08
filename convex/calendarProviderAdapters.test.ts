@@ -144,11 +144,31 @@ describe("calendar provider adapters", () => {
 		expect(runQuery).not.toHaveBeenCalled();
 	});
 
+	it("uses a trusted Google context supplied by a durable run", async () => {
+		const { ctx } = createActionContext();
+		const adapter = createGoogleCalendarProviderAdapter({
+			ctx,
+			googleAuthContext,
+		});
+
+		await adapter.listEvents({
+			eventLimit: 12,
+			minimumEndAt: 1_700_000_000_000,
+			timeMax: 1_700_086_400_000,
+			timeMin: 1_700_000_000_000,
+		});
+
+		expect(getGoogleAuthContext).not.toHaveBeenCalled();
+		expect(fetchGoogleCalendarEvents).toHaveBeenCalledWith(
+			expect.objectContaining({ authContext: googleAuthContext }),
+		);
+	});
+
 	it("loads one Yandex connection and reuses it across operations", async () => {
 		const { ctx, getUserIdentity, runQuery } = createActionContext();
 		const adapter = createYandexCalendarProviderAdapter({
 			ctx,
-			workspaceId,
+			source: { workspaceId },
 		});
 
 		await adapter.listEvents({
@@ -186,8 +206,7 @@ describe("calendar provider adapters", () => {
 		const { ctx } = createActionContext({ connection: null });
 		const adapter = createYandexCalendarProviderAdapter({
 			ctx,
-			ownerTokenIdentifier: "owner-token",
-			workspaceId,
+			source: { ownerTokenIdentifier: "owner-token", workspaceId },
 		});
 
 		await expect(

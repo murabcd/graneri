@@ -67,7 +67,7 @@ const createCompletionInput = (): CompletionInput => ({
 	defaultTimezone: "UTC",
 	getActiveStreamSession: () => null,
 	getNotesContext: async () => "",
-	getSelectedAppConnections: async () => [],
+	getAppConnections: async () => [],
 	getSelectedRecipe: async () => null,
 	getStoredNoteContext: async () => "",
 	getUserProfileContext: async () => null,

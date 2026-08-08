@@ -109,7 +109,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	sendJson,
 	setAcceptedSteerTurnId,
 	shouldGenerateChatTitle,
-	selectedAppConnections,
+	appConnections,
 	selectedSourceIds,
 	steeredUserMessages,
 	supersedeActiveRun,
@@ -147,7 +147,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	sendJson: SendJson;
 	setAcceptedSteerTurnId: (runId: Id<"assistantRuns"> | null) => void;
 	shouldGenerateChatTitle: boolean;
-	selectedAppConnections: HostedRunContext["selectedAppConnections"];
+	appConnections: HostedRunContext["appConnections"];
 	selectedSourceIds: string[];
 	steeredUserMessages: UIMessage[];
 	supersedeActiveRun?: boolean;
@@ -401,6 +401,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 								coreToolPolicyState.chartGenerationRequested,
 							imageGenerationRequested:
 								coreToolPolicyState.imageGenerationRequested,
+							appToolScope: appsEnabled ? "available" : "disabled",
 							shouldGenerateChatTitle,
 							selectedSourceIds: appsEnabled ? selectedSourceIds : [],
 							defaultTimezone,
@@ -447,7 +448,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 		wideEvent.tool_count = finalizedToolSet.toolCount;
 		wideEvent.deferred_tool_count = finalizedToolSet.deferredToolCount;
 		wideEvent.local_folder_root_count = 0;
-		wideEvent.app_connection_count = selectedAppConnections.length;
+		wideEvent.app_connection_count = appConnections.length;
 		wideEvent.outcome = "success";
 		wideEvent.status_code = 200;
 		if (pendingQueuedAcceptanceHeaders) {
@@ -654,7 +655,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	wideEvent.tool_count = finalizedToolSet.toolCount;
 	wideEvent.deferred_tool_count = finalizedToolSet.deferredToolCount;
 	wideEvent.local_folder_root_count = localFolderRoots.length;
-	wideEvent.app_connection_count = selectedAppConnections.length;
+	wideEvent.app_connection_count = appConnections.length;
 	if (pendingQueuedAcceptanceHeaders) {
 		for (const [header, value] of Object.entries(
 			pendingQueuedAcceptanceHeaders,

@@ -1,4 +1,13 @@
 import { createMCPClient } from "@ai-sdk/mcp";
+import { dynamicTool, jsonSchema } from "ai";
+
+const REMOTE_MCP_DISCOVERY_TIMEOUT_MS = 5_000;
+const REMOTE_MCP_DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000;
+const REMOTE_MCP_DISCOVERY_CACHE_LIMIT = 100;
+const REMOTE_MCP_TOOL_LIMIT = 256;
+const REMOTE_MCP_INVENTORY_CHARACTER_LIMIT = 2_000_000;
+const remoteMcpDiscoveryCache = new Map();
+const remoteMcpDiscoveryPromises = new Map();
 
 const withRemoteMcpClient = async (connection, callback) => {
 	const headers = {};
@@ -78,6 +87,34 @@ const getRemoteMcpToolUiMetadata = (connection) => ({
 	subtitleKeys: REMOTE_MCP_SUBTITLE_KEYS,
 });
 
+const remoteMcpToolOutputForModel = ({ output }) => {
+	if (!Array.isArray(output?.content)) {
+		return { type: "json", value: output };
+	}
+
+	return {
+		type: "content",
+		value: output.content.map((part) => {
+			if (part?.type === "text" && typeof part.text === "string") {
+				return { type: "text", text: part.text };
+			}
+			if (
+				part?.type === "image" &&
+				typeof part.data === "string" &&
+				typeof part.mimeType === "string"
+			) {
+				return {
+					type: "file",
+					mediaType: part.mimeType,
+					data: { type: "data", data: part.data },
+				};
+			}
+
+			return { type: "text", text: JSON.stringify(part) };
+		}),
+	};
+};
+
 const executeRemoteMcpTool = async (connection, definition, args, options) =>
 	await withRemoteMcpClient(connection, async (client) => {
 		const tools = client.toolsFromDefinitions({ tools: [definition] });
@@ -92,52 +129,160 @@ const executeRemoteMcpTool = async (connection, definition, args, options) =>
 		return await tool.execute(args, options);
 	});
 
+const getRemoteMcpDiscoveryCacheKey = (connection) =>
+	connection.sourceId
+		? `${connection.provider}:${connection.sourceId}:${connection.baseUrl}`
+		: null;
+
+const readCachedRemoteMcpDefinitions = (connection) => {
+	const cacheKey = getRemoteMcpDiscoveryCacheKey(connection);
+	if (!cacheKey) {
+		return null;
+	}
+
+	const cached = remoteMcpDiscoveryCache.get(cacheKey);
+	if (!cached || cached.expiresAt <= Date.now()) {
+		remoteMcpDiscoveryCache.delete(cacheKey);
+		return null;
+	}
+
+	remoteMcpDiscoveryCache.delete(cacheKey);
+	remoteMcpDiscoveryCache.set(cacheKey, cached);
+	return cached.definitions;
+};
+
+const cacheRemoteMcpDefinitions = (connection, definitions) => {
+	const cacheKey = getRemoteMcpDiscoveryCacheKey(connection);
+	if (!cacheKey) {
+		return;
+	}
+
+	remoteMcpDiscoveryCache.delete(cacheKey);
+	remoteMcpDiscoveryCache.set(cacheKey, {
+		definitions,
+		expiresAt: Date.now() + REMOTE_MCP_DISCOVERY_CACHE_TTL_MS,
+	});
+
+	while (remoteMcpDiscoveryCache.size > REMOTE_MCP_DISCOVERY_CACHE_LIMIT) {
+		const oldestCacheKey = remoteMcpDiscoveryCache.keys().next().value;
+		if (!oldestCacheKey) {
+			break;
+		}
+		remoteMcpDiscoveryCache.delete(oldestCacheKey);
+	}
+};
+
+const listRemoteMcpDefinitions = async (client) =>
+	await client.listTools({
+		options: {
+			timeout: REMOTE_MCP_DISCOVERY_TIMEOUT_MS,
+			maxTotalTimeout: REMOTE_MCP_DISCOVERY_TIMEOUT_MS,
+		},
+	});
+
+const validateRemoteMcpDefinitions = (connection, definitions) => {
+	if (!Array.isArray(definitions?.tools)) {
+		throw new Error(
+			`${connection.displayName} returned an invalid MCP tool inventory.`,
+		);
+	}
+	if (definitions.tools.length > REMOTE_MCP_TOOL_LIMIT) {
+		throw new Error(
+			`${connection.displayName} exposes more than ${REMOTE_MCP_TOOL_LIMIT} MCP tools.`,
+		);
+	}
+	if (
+		JSON.stringify(definitions).length > REMOTE_MCP_INVENTORY_CHARACTER_LIMIT
+	) {
+		throw new Error(
+			`${connection.displayName} returned an oversized MCP tool inventory.`,
+		);
+	}
+
+	return definitions;
+};
+
+const discoverRemoteMcpDefinitions = async (connection) => {
+	const cached = readCachedRemoteMcpDefinitions(connection);
+	if (cached) {
+		return cached;
+	}
+
+	const cacheKey = getRemoteMcpDiscoveryCacheKey(connection);
+	const pendingDiscovery = cacheKey
+		? remoteMcpDiscoveryPromises.get(cacheKey)
+		: null;
+	if (pendingDiscovery) {
+		return await pendingDiscovery;
+	}
+
+	const discovery = withRemoteMcpClient(connection, async (client) =>
+		validateRemoteMcpDefinitions(
+			connection,
+			await listRemoteMcpDefinitions(client),
+		),
+	).then((definitions) => {
+		cacheRemoteMcpDefinitions(connection, definitions);
+		return definitions;
+	});
+	if (cacheKey) {
+		remoteMcpDiscoveryPromises.set(cacheKey, discovery);
+	}
+
+	try {
+		return await discovery;
+	} finally {
+		if (cacheKey && remoteMcpDiscoveryPromises.get(cacheKey) === discovery) {
+			remoteMcpDiscoveryPromises.delete(cacheKey);
+		}
+	}
+};
+
 export const validateRemoteMcpConnection = async (connection) =>
 	await withRemoteMcpClient(connection, async (client) => {
-		const result = await client.listTools();
-		return Array.isArray(result?.tools) ? result.tools : [];
+		const result = validateRemoteMcpDefinitions(
+			connection,
+			await listRemoteMcpDefinitions(client),
+		);
+		return result.tools;
 	});
 
-export const buildRemoteMcpTools = async (connection) =>
-	await withRemoteMcpClient(connection, async (client) => {
-		const definitions = await client.listTools();
-		const discoveredTools = client.toolsFromDefinitions(definitions);
-		const tools = {};
+export const buildRemoteMcpTools = async (connection) => {
+	const definitions = await discoverRemoteMcpDefinitions(connection);
+	const tools = {};
 
-		for (const definition of definitions.tools) {
-			const discoveredTool = discoveredTools[definition.name];
+	for (const definition of definitions.tools) {
+		const toolName = makeUniqueToolName(
+			connection.toolPrefix ?? connection.provider,
+			definition.name,
+			tools,
+		);
+		const title = definition.title ?? definition.annotations?.title;
 
-			if (!discoveredTool) {
-				continue;
-			}
-
-			const toolName = makeUniqueToolName(
-				connection.toolPrefix ?? connection.provider,
-				definition.name,
-				tools,
-			);
-
-			tools[toolName] = {
-				...discoveredTool,
-				description: discoveredTool.description ?? definition.description,
-				metadata: {
-					...(discoveredTool.metadata ?? {}),
-					provider: connection.provider,
-					source: "mcp",
-					mcpToolName: definition.name,
-					ui: getRemoteMcpToolUiMetadata(connection),
+		tools[toolName] = dynamicTool({
+			description: definition.description,
+			...(title ? { title } : {}),
+			inputSchema: jsonSchema({
+				...definition.inputSchema,
+				properties: definition.inputSchema.properties ?? {},
+				additionalProperties: false,
+			}),
+			metadata: {
+				provider: connection.provider,
+				source: "mcp",
+				mcpToolName: definition.name,
+				ui: getRemoteMcpToolUiMetadata(connection),
+			},
+			providerOptions: {
+				openai: {
+					deferLoading: true,
 				},
-				providerOptions: {
-					...(discoveredTool.providerOptions ?? {}),
-					openai: {
-						...(discoveredTool.providerOptions?.openai ?? {}),
-						deferLoading: true,
-					},
-				},
-				execute: async (args, options) =>
-					await executeRemoteMcpTool(connection, definition, args, options),
-			};
-		}
+			},
+			execute: async (args, options) =>
+				await executeRemoteMcpTool(connection, definition, args, options),
+			toModelOutput: remoteMcpToolOutputForModel,
+		});
+	}
 
-		return tools;
-	});
+	return tools;
+};

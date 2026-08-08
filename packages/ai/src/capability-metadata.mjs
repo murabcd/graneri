@@ -7,11 +7,6 @@ export const DEFAULT_NOTION_MCP_ENDPOINT = "https://mcp.notion.com/mcp";
 export const DEFAULT_POSTHOG_MCP_ENDPOINT = "https://mcp.posthog.com/mcp";
 export const DEFAULT_ZOOM_MCP_ENDPOINT =
 	"https://mcp.zoom.us/mcp/zoom/streamable";
-const GOOGLE_APP_SOURCE_IDS = new Set([
-	"app:google-calendar",
-	"app:google-drive",
-]);
-
 const getConnectionDisplayName = (connection, capability) =>
 	connection.displayName ??
 	connection.title ??
@@ -27,6 +22,10 @@ export const capabilityMetadataDefinitions = [
 		displayName: "Google Calendar",
 		sourceKind: "app",
 		settingsGroup: "Productivity",
+		toolNamespace: {
+			name: "google_calendar",
+			description: "Read connected Google Calendar schedules and events.",
+		},
 		sourceInstruction: () =>
 			"The selected app source for this chat is Google Calendar. Treat it as the preferred source for meeting schedules, event timing, attendee context, and calendar availability.",
 	},
@@ -35,6 +34,10 @@ export const capabilityMetadataDefinitions = [
 		displayName: "Google Drive",
 		sourceKind: "app",
 		settingsGroup: "Productivity",
+		toolNamespace: {
+			name: "google_drive",
+			description: "Search and read connected Google Drive files.",
+		},
 		sourceInstruction: () =>
 			"The selected app source for this chat is Google Drive. Treat it as the preferred source for connected Google docs, spreadsheets, presentations, and file metadata. Only read-only Drive tools are available in this chat.",
 	},
@@ -48,6 +51,11 @@ export const capabilityMetadataDefinitions = [
 		},
 		settingsGroup: "Knowledge",
 		toolPrefix: "context7_",
+		toolNamespace: {
+			name: "context7",
+			description:
+				"Find current library, framework, SDK, and API documentation.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -68,6 +76,10 @@ export const capabilityMetadataDefinitions = [
 		},
 		settingsGroup: "Design",
 		toolPrefix: "figma_",
+		toolNamespace: {
+			name: "figma",
+			description: "Read connected Figma design files and design context.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -87,6 +99,10 @@ export const capabilityMetadataDefinitions = [
 		},
 		settingsGroup: "Tracking",
 		toolPrefix: "jira_",
+		toolNamespace: {
+			name: "jira",
+			description: "Search and read connected Jira work and project context.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -107,6 +123,10 @@ export const capabilityMetadataDefinitions = [
 		},
 		settingsGroup: "Tracking",
 		toolPrefix: "linear_",
+		toolNamespace: {
+			name: "linear",
+			description: "Search and read connected Linear work and project context.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -126,6 +146,10 @@ export const capabilityMetadataDefinitions = [
 		},
 		settingsGroup: "Knowledge",
 		toolPrefix: "notion_",
+		toolNamespace: {
+			name: "notion",
+			description: "Search and read connected Notion workspace content.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -145,6 +169,10 @@ export const capabilityMetadataDefinitions = [
 		},
 		settingsGroup: "Analytics",
 		toolPrefix: "posthog_",
+		toolNamespace: {
+			name: "posthog",
+			description: "Read connected PostHog analytics and product data.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -159,6 +187,10 @@ export const capabilityMetadataDefinitions = [
 		sourceKind: "app",
 		connection: { usage: "chat" },
 		settingsGroup: "Productivity",
+		toolNamespace: {
+			name: "yandex_calendar",
+			description: "Read connected Yandex Calendar schedules and events.",
+		},
 		sourceInstruction: () =>
 			"The selected app source for this chat is Yandex Calendar. Treat it as the preferred source for meeting schedules, event timing, attendee context, and calendar availability.",
 	},
@@ -168,6 +200,10 @@ export const capabilityMetadataDefinitions = [
 		sourceKind: "app",
 		connection: { usage: "chat" },
 		settingsGroup: "Tracking",
+		toolNamespace: {
+			name: "yandex_tracker",
+			description: "Search and read connected Yandex Tracker work.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -187,6 +223,10 @@ export const capabilityMetadataDefinitions = [
 		},
 		settingsGroup: "Meetings",
 		toolPrefix: "zoom_",
+		toolNamespace: {
+			name: "zoom",
+			description: "Search and read connected Zoom meeting content.",
+		},
 		sourceInstruction: (connection, capability) =>
 			withDisplayName(
 				connection,
@@ -317,33 +357,59 @@ export const getSelectedAppSourceIds = (selectedSourceIds) =>
 export const getSelectedNoteSourceIds = ({ mentions }) =>
 	Array.from(new Set(mentions ?? [])).filter(Boolean);
 
-export const loadSelectedAppSourceConnections = async ({
+const getAppSourceConnectionId = (connection) => {
+	const connectionId = connection.sourceId ?? connection.id;
+
+	if (!connectionId) {
+		throw new Error(
+			`Connected capability ${connection.provider} is missing its source identity.`,
+		);
+	}
+
+	return connectionId;
+};
+
+export const selectAppSourceConnections = (connections, selectedSourceIds) => {
+	const selectedIds = new Set(getSelectedAppSourceIds(selectedSourceIds));
+
+	return connections.filter((connection) =>
+		selectedIds.has(getAppSourceConnectionId(connection)),
+	);
+};
+
+export const loadAvailableChatToolConnections = async ({
 	getAppConnections,
 	listGoogleSources,
-	selectedSourceIds,
 }) => {
-	const allSelectedSourceIds = selectedSourceIds ?? [];
-
-	if (allSelectedSourceIds.length === 0) {
-		return [];
+	const [googleResult, appConnectionResult] = await Promise.allSettled([
+		listGoogleSources(),
+		getAppConnections(),
+	]);
+	if (googleResult.status === "rejected") {
+		console.error(
+			"Google chat sources could not be loaded.",
+			googleResult.reason,
+		);
 	}
-
-	const sourceIds = getSelectedAppSourceIds(selectedSourceIds);
-	const appConnectionSourceIds = sourceIds.filter(
-		(sourceId) => !GOOGLE_APP_SOURCE_IDS.has(sourceId),
-	);
-	const googleSources = listGoogleSources ? await listGoogleSources() : [];
-	const selectedGoogleSources = googleSources.filter((source) =>
-		allSelectedSourceIds.includes(source.id),
-	);
-
-	if (appConnectionSourceIds.length === 0 || !getAppConnections) {
-		return selectedGoogleSources;
+	if (appConnectionResult.status === "rejected") {
+		console.error(
+			"Connected chat sources could not be loaded.",
+			appConnectionResult.reason,
+		);
 	}
+	const googleSources =
+		googleResult.status === "fulfilled" ? googleResult.value : [];
+	const appConnections =
+		appConnectionResult.status === "fulfilled" ? appConnectionResult.value : [];
 
-	const appConnections = await getAppConnections(appConnectionSourceIds);
-
-	return [...appConnections, ...selectedGoogleSources];
+	return Array.from(
+		new Map(
+			[...appConnections, ...googleSources].map((connection) => [
+				getAppSourceConnectionId(connection),
+				connection,
+			]),
+		).values(),
+	);
 };
 
 export const buildSelectedAppSourceInstructions = (connections) =>

@@ -11,7 +11,10 @@ import {
 	remoteMcpConnectionDefaults,
 	tokenRequiredChatSourceAppConnectionProviders,
 } from "../src/capability-metadata.mjs";
-import { graneriCapabilityRegistry } from "../src/capability-registry.mjs";
+import {
+	buildCapabilityToolSet,
+	graneriCapabilityRegistry,
+} from "../src/capability-registry.mjs";
 
 describe("capability metadata", () => {
 	it("defines labels for every app connection provider", () => {
@@ -42,9 +45,12 @@ describe("capability metadata", () => {
 
 	it("registers tools and settings for every app capability", () => {
 		for (const provider of appSourceProviders) {
-			expect(graneriCapabilityRegistry[provider]?.buildTools).toEqual(
-				expect.any(Function),
-			);
+			const capability = graneriCapabilityRegistry[provider];
+			expect(capability?.buildTools).toEqual(expect.any(Function));
+			expect(capability?.toolNamespace).toEqual({
+				name: expect.any(String),
+				description: expect.any(String),
+			});
 			expect(getCapabilitySettings(provider)).toEqual({
 				group: expect.any(String),
 				name: expect.any(String),
@@ -58,6 +64,35 @@ describe("capability metadata", () => {
 		expect(() => getCapabilitySettings("unknown")).toThrow(
 			"Unknown connected capability: unknown",
 		);
+	});
+
+	it("adds OpenAI tool-search namespaces to connected app tools", async () => {
+		const tools = await buildCapabilityToolSet(
+			[
+				{
+					id: "app:google-calendar",
+					provider: "google-calendar",
+					title: "Google Calendar",
+					preview: "Google account",
+				},
+			],
+			{
+				googleCalendar: {
+					listEvents: async () => [],
+					searchEvents: async () => [],
+				},
+			},
+		);
+
+		expect(
+			tools.google_calendar_search_events?.providerOptions?.openai,
+		).toMatchObject({
+			deferLoading: true,
+			namespace: {
+				name: "google_calendar",
+				description: expect.any(String),
+			},
+		});
 	});
 
 	it("keeps sync-only Jira out of chat app connection sources", () => {

@@ -180,13 +180,36 @@ prompt construction, active-turn input preparation, branch preparation,
 tool-loop setup, message persistence payloads, and active-stream persistence
 behavior; the hosted web route provides Convex reads and writes, request
 transport, and desktop-local tool declarations through small adapter callbacks.
-The read-only `search_meetings` tool is part of every authenticated workspace
+The read-only `search_meeting_notes` tool is part of every authenticated workspace
 tool set, independent of connected-app selection. Both web and durable Convex
 producers call the same owner/workspace-checked relationship query, which reads
 only non-archived calendar-linked notes through person/company association
-indexes and returns bounded note text plus event schedule details. This is
-stored meeting knowledge; live events that do not yet have a linked note remain
-the responsibility of the selected Google or Yandex Calendar capability.
+indexes and returns bounded note text plus event schedule details. Its name and
+description deliberately reserve it for stored meeting knowledge. When apps are
+enabled, interactive chat builds its deferred tool catalog from every connected
+and enabled workspace app; a source mention adds provider-specific prompt
+guidance but never narrows that catalog. OpenAI Tool Search decides which
+deferred tools to load, using the capability registry's provider namespaces.
+When apps are disabled, no connected-app tool enters the run. Calendar
+capabilities own current and future schedules, including attendee-name lookups.
+Automations retain an explicit selected-source scope: they may use only the app
+connections stored on that automation rather than every connection in the
+workspace.
+
+The capability registry is the canonical assembly boundary for both hosted-web
+and Convex-produced tool sets. Connection inventory failures and individual
+provider discovery failures are isolated so one unavailable app does not remove
+healthy providers or prevent a non-tool answer. Remote MCP discovery runs in
+parallel, has a bounded timeout and inventory size, and uses a bounded
+short-lived process cache;
+tool execution still reconnects with server-held credentials and never moves
+tokens into model context or durable Assistant Run jobs. Interactive durable
+runs retain only the authenticated Better Auth user id alongside the job. A
+Convex action uses that trusted server-side identity to request the user's
+current Google token from Better Auth when a Google tool is enabled; the token
+itself remains outside job state. Automations do not inherit an interactive
+user identity and remain restricted to their explicitly selected server-owned
+connections.
 The route-facing hosted Assistant Run interface exposes intention-level preparation:
 `createHostedChatTurnInput` couples the durable Follow-up adapter to its turn
 controller, while `prepareHostedAssistantRunInput` owns branch resolution,

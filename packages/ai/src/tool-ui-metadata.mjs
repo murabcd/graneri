@@ -74,11 +74,11 @@ export const toolUiMetadata = {
 		complete: "Built chart",
 		subtitleKeys: ["title", "chartType"],
 	},
-	search_meetings: {
+	search_meeting_notes: {
 		groupKey: "search",
 		icon: "calendar",
-		running: "Searching meetings",
-		complete: "Searched meetings",
+		running: "Searching meeting notes",
+		complete: "Searched meeting notes",
 		subtitleKeys: ["query"],
 	},
 	google_calendar_list_events: {

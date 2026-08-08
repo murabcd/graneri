@@ -16,10 +16,17 @@ export const GOOGLE_DRIVE_SCOPE =
 
 type BetterAuthInstance = ReturnType<typeof createAuth>;
 
-export type GoogleAuthContext = {
-	auth: BetterAuthInstance;
-	headers: Headers;
-};
+export type GoogleAuthContext =
+	| {
+			auth: BetterAuthInstance;
+			headers: Headers;
+			userId?: never;
+	  }
+	| {
+			auth: BetterAuthInstance;
+			headers?: never;
+			userId: string;
+	  };
 
 export type GoogleAccessTokenResult = {
 	accessToken: string;
@@ -53,16 +60,39 @@ export const getGoogleAuthContext = async (
 	return await authComponent.getAuth(createAuth, ctx);
 };
 
+export const getGoogleAuthContextForUser = (
+	ctx: GenericActionCtx<DataModel>,
+	userId: string,
+): GoogleAuthContext => {
+	if (!userId) {
+		throw new Error("Google auth user id is required.");
+	}
+
+	return {
+		auth: createAuth(ctx),
+		userId,
+	};
+};
+
+const getGoogleTokenRequest = (authContext: GoogleAuthContext) =>
+	"userId" in authContext
+		? {
+				body: { providerId: "google", userId: authContext.userId },
+			}
+		: {
+				body: { providerId: "google" },
+				headers: authContext.headers,
+			};
+
 export const getGoogleAccessToken = async (
 	authContext: GoogleAuthContext,
 ): Promise<GoogleAccessTokenResult | null> => {
-	const { auth, headers } = authContext;
+	const { auth } = authContext;
 
 	try {
-		const tokens = await auth.api.getAccessToken({
-			body: { providerId: "google" },
-			headers,
-		});
+		const tokens = await auth.api.getAccessToken(
+			getGoogleTokenRequest(authContext),
+		);
 
 		if (!tokens?.accessToken) {
 			return null;
@@ -80,13 +110,12 @@ export const getGoogleAccessToken = async (
 export const refreshGoogleAccessToken = async (
 	authContext: GoogleAuthContext,
 ): Promise<GoogleAccessTokenResult | null> => {
-	const { auth, headers } = authContext;
+	const { auth } = authContext;
 
 	try {
-		const tokens = await auth.api.refreshToken({
-			body: { providerId: "google" },
-			headers,
-		});
+		const tokens = await auth.api.refreshToken(
+			getGoogleTokenRequest(authContext),
+		);
 
 		if (!tokens?.accessToken) {
 			return null;

@@ -738,6 +738,7 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		runId: v.id("assistantRuns"),
 		authorName: v.string(),
+		googleAuthUserId: v.union(v.string(), v.null()),
 		job: assistantRunJobValidator,
 		execution: assistantRunExecutionValidator,
 		createdAt: v.number(),

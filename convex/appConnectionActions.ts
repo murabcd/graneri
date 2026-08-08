@@ -1338,10 +1338,9 @@ export const connectZoom = action({
 	},
 });
 
-export const getSelectedForChatWithFreshTokens = action({
+export const getForChatWithFreshTokens = action({
 	args: {
 		workspaceId: v.id("workspaces"),
-		sourceIds: v.array(v.string()),
 	},
 	returns: v.array(chatToolConnectionValidator),
 	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
@@ -1351,22 +1350,17 @@ export const getSelectedForChatWithFreshTokens = action({
 			identity.tokenIdentifier,
 			args.workspaceId,
 		);
-		return await ctx.runQuery(
-			internal.appConnections.getSelectedForChatInternal,
-			{
-				ownerTokenIdentifier: identity.tokenIdentifier,
-				workspaceId: args.workspaceId,
-				sourceIds: args.sourceIds,
-			},
-		);
+		return await ctx.runQuery(internal.appConnections.getForChatInternal, {
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
 	},
 });
 
-export const getSelectedForChatInternalWithFreshTokens = internalAction({
+export const getForChatInternalWithFreshTokens = internalAction({
 	args: {
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
-		sourceIds: v.array(v.string()),
 	},
 	returns: v.array(chatToolConnectionValidator),
 	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
@@ -1375,14 +1369,10 @@ export const getSelectedForChatInternalWithFreshTokens = internalAction({
 			args.ownerTokenIdentifier,
 			args.workspaceId,
 		);
-		return await ctx.runQuery(
-			internal.appConnections.getSelectedForChatInternal,
-			{
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-				sourceIds: args.sourceIds,
-			},
-		);
+		return await ctx.runQuery(internal.appConnections.getForChatInternal, {
+			ownerTokenIdentifier: args.ownerTokenIdentifier,
+			workspaceId: args.workspaceId,
+		});
 	},
 });
 

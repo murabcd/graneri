@@ -1,5 +1,8 @@
 import { buildChatAutomationContext } from "./automation-tools.mjs";
-import { buildSelectedAppSourceInstructions } from "./capability-metadata.mjs";
+import {
+	buildSelectedAppSourceInstructions,
+	selectAppSourceConnections,
+} from "./capability-metadata.mjs";
 import { buildCoreChatToolPolicy } from "./chat-tool-policy.mjs";
 import { buildConvexWorkspaceToolSet } from "./convex-workspace-tools.mjs";
 import { buildHostedChatRunPlan } from "./hosted-chat-run-plan.mjs";
@@ -69,7 +72,7 @@ export const buildHostedChatRunContext = async ({
 	defaultTimezone,
 	getActiveStreamSession,
 	getNotesContext,
-	getSelectedAppConnections,
+	getAppConnections,
 	getSelectedRecipe,
 	getStoredNoteContext,
 	getUserProfileContext,
@@ -96,17 +99,19 @@ export const buildHostedChatRunContext = async ({
 	const selectedRecipe = await getSelectedRecipe({ recipeSlug, workspaceId });
 	const recipeContext = getHostedChatRecipeContext(selectedRecipe);
 	const userProfileContext = await getUserProfileContext();
-	const selectedAppConnections = appsEnabled
-		? await getSelectedAppConnections({
-				selectedSourceIds,
-				workspaceId,
-			})
+	const appConnections = appsEnabled
+		? await getAppConnections({ workspaceId })
 		: [];
+	const selectedAppConnections = selectAppSourceConnections(
+		appConnections,
+		selectedSourceIds,
+	);
 	const selectedAppSourceInstructions = buildSelectedAppSourceInstructions(
 		selectedAppConnections,
 	);
 	logLatency("context.sources_loaded", {
-		appConnectionCount: selectedAppConnections.length,
+		appConnectionCount: appConnections.length,
+		selectedAppConnectionCount: selectedAppConnections.length,
 		hasAttachedNoteContext: attachedNoteContext.length > 0,
 		hasNotesContext: notesContext.length > 0,
 		hasRecipeContext: recipeContext.length > 0,
@@ -114,7 +119,7 @@ export const buildHostedChatRunContext = async ({
 	});
 
 	const appTools = await buildConvexWorkspaceToolSet({
-		connections: selectedAppConnections,
+		connections: appConnections,
 		convexClient,
 		workspaceId,
 	});
@@ -186,6 +191,6 @@ export const buildHostedChatRunContext = async ({
 		...runPlan,
 		coreToolPolicyState: coreToolPolicy.state,
 		localFolderRoots,
-		selectedAppConnections,
+		appConnections,
 	};
 };

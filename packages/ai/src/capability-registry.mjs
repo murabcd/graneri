@@ -11,85 +11,6 @@ import { buildYandexCalendarTools } from "./yandex-calendar-tools.mjs";
 import { buildYandexTrackerTools } from "./yandex-tracker-tools.mjs";
 import { buildZoomMcpTools } from "./zoom-mcp-tools.mjs";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const YANDEX_CALENDAR_LOOKAHEAD_MS = 30 * DAY_MS;
-
-const normalizeYandexCalendarEvents = (
-	events,
-	{ limit, meetingsOnly, query } = {},
-) => {
-	const normalizedQuery =
-		typeof query === "string" ? query.trim().toLowerCase() : "";
-
-	return events
-		.filter((event) => {
-			if (meetingsOnly && !event.isMeeting) {
-				return false;
-			}
-
-			if (!normalizedQuery) {
-				return true;
-			}
-
-			return [
-				event.title,
-				event.calendarName,
-				event.location,
-				event.meetingUrl,
-				event.description,
-				...event.attendees.flatMap((attendee) => [
-					attendee.displayName,
-					attendee.email,
-				]),
-			]
-				.filter(Boolean)
-				.join(" ")
-				.toLowerCase()
-				.includes(normalizedQuery);
-		})
-		.slice(0, Math.max(1, Math.min(limit ?? 10, 25)));
-};
-
-const buildYandexCalendarSources = (events) =>
-	events
-		.map((event) =>
-			event.meetingUrl
-				? {
-						type: "url",
-						url: event.meetingUrl,
-						title: event.title || event.calendarName,
-					}
-				: null,
-		)
-		.filter(Boolean);
-
-const fetchYandexCalendarEvents = async (adapter, args = {}) => {
-	const result = await adapter.listUpcomingEvents({
-		lookaheadMs: YANDEX_CALENDAR_LOOKAHEAD_MS,
-	});
-	const events = normalizeYandexCalendarEvents(result.events, args);
-
-	return {
-		connection: result.connection,
-		events,
-		sources: buildYandexCalendarSources(events),
-	};
-};
-
-const buildYandexCalendarToolAdapter = (adapter) => ({
-	listEvents: async ({ limit, meetingsOnly }) =>
-		await fetchYandexCalendarEvents(adapter, {
-			limit,
-			meetingsOnly,
-		}),
-	searchEvents: async ({ query, limit, meetingsOnly }) =>
-		await fetchYandexCalendarEvents(adapter, {
-			query,
-			limit,
-			meetingsOnly,
-		}),
-});
-
 const capabilityToolBuilders = {
 	"google-calendar": async (_connection, adapters) =>
 		adapters.googleCalendar
@@ -103,11 +24,9 @@ const capabilityToolBuilders = {
 	linear: buildLinearTools,
 	notion: buildNotionTools,
 	posthog: buildPostHogTools,
-	"yandex-calendar": async (connection, adapters) =>
+	"yandex-calendar": async (_connection, adapters) =>
 		adapters.yandexCalendar
-			? buildYandexCalendarTools(
-					buildYandexCalendarToolAdapter(adapters.yandexCalendar(connection)),
-				)
+			? buildYandexCalendarTools(adapters.yandexCalendar)
 			: {},
 	"yandex-tracker": buildYandexTrackerTools,
 	zoom: buildZoomMcpTools,
@@ -132,6 +51,23 @@ export const graneriCapabilityRegistry = Object.fromEntries(
 export const getGraneriCapability = (provider) =>
 	graneriCapabilityRegistry[provider] ?? null;
 
+const withCapabilityNamespace = (tools, capability) =>
+	Object.fromEntries(
+		Object.entries(tools).map(([toolName, tool]) => [
+			toolName,
+			{
+				...tool,
+				providerOptions: {
+					...(tool.providerOptions ?? {}),
+					openai: {
+						...(tool.providerOptions?.openai ?? {}),
+						namespace: capability.toolNamespace,
+					},
+				},
+			},
+		]),
+	);
+
 export const buildCapabilityToolSet = async (connections, adapters = {}) => {
 	const toolSets = await Promise.all(
 		connections.map(async (connection) => {
@@ -141,7 +77,16 @@ export const buildCapabilityToolSet = async (connections, adapters = {}) => {
 				return {};
 			}
 
-			return await capability.buildTools(connection, adapters);
+			try {
+				const tools = await capability.buildTools(connection, adapters);
+				return withCapabilityNamespace(tools, capability);
+			} catch (error) {
+				console.error(
+					`Connected capability ${connection.provider} could not load its tools.`,
+					error,
+				);
+				return {};
+			}
 		}),
 	);
 

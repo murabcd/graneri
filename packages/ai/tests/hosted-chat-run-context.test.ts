@@ -92,7 +92,7 @@ describe("hosted chat run context", () => {
 			defaultTimezone: "UTC",
 			getActiveStreamSession: () => null,
 			getNotesContext: async () => "notes",
-			getSelectedAppConnections: async () => {
+			getAppConnections: async () => {
 				throw new Error(
 					"app connections should not load when apps are disabled",
 				);
@@ -122,7 +122,7 @@ describe("hosted chat run context", () => {
 		expect(context.localFolderRoots).toEqual([
 			{ id: "folder-1", name: "Project", path: "/tmp/project" },
 		]);
-		expect(context.selectedAppConnections).toHaveLength(0);
+		expect(context.appConnections).toHaveLength(0);
 		expect(context.coreToolPolicyState).toEqual({
 			chartGenerationRequested: false,
 			imageGenerationEnabled: false,
@@ -143,7 +143,7 @@ describe("hosted chat run context", () => {
 				"pause_automation",
 				"resume_automation",
 				"run_automation_now",
-				"search_meetings",
+				"search_meeting_notes",
 				"update_automation",
 			]),
 		);
@@ -170,7 +170,7 @@ describe("hosted chat run context", () => {
 			defaultTimezone: "UTC",
 			getActiveStreamSession: () => null,
 			getNotesContext: async () => "",
-			getSelectedAppConnections: async () => [],
+			getAppConnections: async () => [],
 			getSelectedRecipe: async () => null,
 			getStoredNoteContext: async () => "",
 			getUserProfileContext: async () => null,
@@ -196,6 +196,61 @@ describe("hosted chat run context", () => {
 		]);
 		expect(context.instructions).toContain("Project");
 		expect(context.tools.read_local_file?.execute).toBeUndefined();
+	});
+
+	it("keeps every connected app searchable while mentions only add guidance", async () => {
+		const context = await buildHostedChatRunContext({
+			appsEnabled: true,
+			chatAttachmentsApi: {},
+			chatId: "chat-1",
+			compactionSummary: null,
+			convexClient: {
+				action: async () => null,
+				query: async () => null,
+				mutation: async () => null,
+			},
+			defaultModel: "gpt-5",
+			defaultReasoningEffort: "medium",
+			defaultTimezone: "UTC",
+			getActiveStreamSession: () => null,
+			getAppConnections: async () => [
+				{
+					id: "app:google-calendar",
+					provider: "google-calendar",
+					title: "Google Calendar",
+					preview: "Google account",
+				},
+				{
+					id: "app:google-drive",
+					provider: "google-drive",
+					title: "Google Drive",
+					preview: "Google account",
+				},
+			],
+			getNotesContext: async () => "",
+			getSelectedRecipe: async () => null,
+			getStoredNoteContext: async () => "",
+			getUserProfileContext: async () => null,
+			logLatency: () => {},
+			message: {
+				id: "message-1",
+				role: "user",
+				parts: [{ type: "text", text: "Use Google Calendar" }],
+			},
+			resolveLocalFolderRoots: () => [],
+			selectedSourceIds: ["app:google-calendar"],
+			workspaceId: "workspace-1",
+		});
+
+		expect(context.appConnections).toHaveLength(2);
+		expect(context.tools.google_calendar_search_events).toBeDefined();
+		expect(context.tools.google_drive_search_files).toBeDefined();
+		expect(context.instructions).toContain(
+			"selected app source for this chat is Google Calendar",
+		);
+		expect(context.instructions).not.toContain(
+			"selected app source for this chat is Google Drive",
+		);
 	});
 });
 

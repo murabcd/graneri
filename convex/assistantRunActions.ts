@@ -277,16 +277,16 @@ export const runStep = internalAction({
 				throw new Error("OPENAI_API_KEY is not configured in Convex.");
 			}
 
-			const { connections, tools: appTools } = await buildServerWorkspaceTools(
-				ctx,
-				{
+			const { selectedConnections, tools: appTools } =
+				await buildServerWorkspaceTools(ctx, {
 					ownerTokenIdentifier: context.ownerTokenIdentifier,
 					workspaceId: context.workspaceId,
+					googleAuthUserId: context.googleAuthUserId,
+					appToolScope: context.job.appToolScope,
 					selectedSourceIds: context.job.selectedSourceIds,
-				},
-			);
+				});
 			const automationContext = buildChatAutomationContext({
-				appConnections: connections,
+				appConnections: selectedConnections,
 				automationActions: createAssistantRunAutomationActions(ctx, {
 					ownerTokenIdentifier: context.ownerTokenIdentifier,
 					authorName: context.authorName,

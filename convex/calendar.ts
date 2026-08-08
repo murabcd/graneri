@@ -12,6 +12,7 @@ import {
 	createWorkspaceCalendarProviderAdapters,
 } from "./calendarProviderAdapters";
 import { createCalendarProviderModule } from "./calendarProviderModule";
+import { runCalendarToolQuery } from "./calendarToolQuery";
 import type {
 	CalendarEventsFetchResult,
 	CalendarProvider,
@@ -31,9 +32,6 @@ import { createResourceAccess } from "./domain";
 const UPCOMING_EVENTS_LIMIT = 12;
 const CALENDAR_EVENTS_LIMIT = 250;
 const CALENDAR_VIEW_MAX_WINDOW_MS = 62 * 24 * 60 * 60 * 1000;
-const CALENDAR_TOOL_EVENT_LIMIT = 10;
-const CALENDAR_TOOL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
-const CALENDAR_TOOL_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
 const { requireIdentity: requireCalendarIdentity } =
 	createResourceAccess("calendars");
 type UpcomingEventsResponse =
@@ -487,101 +485,12 @@ export const removeCalendarEvent = action({
 	},
 });
 
-const getCalendarToolWindow = () => {
-	const now = Date.now();
-
-	return {
-		now,
-		timeMin: now - CALENDAR_TOOL_LOOKBACK_MS,
-		timeMax: now + CALENDAR_TOOL_LOOKAHEAD_MS,
-	};
-};
-
-const buildCalendarToolSources = (events: UpcomingCalendarEvent[]) => {
-	const seen = new Set<string>();
-
-	return events.flatMap((event) => {
-		if (!event.htmlLink || seen.has(event.htmlLink)) {
-			return [];
-		}
-
-		seen.add(event.htmlLink);
-
-		return [
-			{
-				type: "url" as const,
-				url: event.htmlLink,
-				title: event.title,
-			},
-		];
-	});
-};
-
-const matchesCalendarSearchQuery = (
-	event: UpcomingCalendarEvent,
-	query: string,
-) => {
-	const normalizedQuery = query.trim().toLowerCase();
-
-	if (!normalizedQuery) {
-		return true;
-	}
-
-	return [
-		event.title,
-		event.calendarName,
-		event.location ?? "",
-		event.meetingUrl ?? "",
-		...event.attendees.flatMap((attendee) => [
-			attendee.displayName ?? "",
-			attendee.email,
-		]),
-	]
-		.join(" ")
-		.toLowerCase()
-		.includes(normalizedQuery);
-};
-
-const toCalendarToolResponse = ({
-	connection,
-	events,
-	limit,
-	meetingsOnly,
-	query,
-}: {
-	connection: string;
-	events: UpcomingCalendarEvent[];
-	limit?: number;
-	meetingsOnly?: boolean;
-	query?: string;
-}) => {
-	const limitedEvents = sortCalendarEvents(
-		events.filter((event) => {
-			if (meetingsOnly && !event.isMeeting) {
-				return false;
-			}
-
-			if (query && !matchesCalendarSearchQuery(event, query)) {
-				return false;
-			}
-
-			return true;
-		}),
-	).slice(0, Math.max(1, Math.min(limit ?? CALENDAR_TOOL_EVENT_LIMIT, 25)));
-
-	return {
-		connection,
-		events: limitedEvents,
-		sources: buildCalendarToolSources(limitedEvents),
-	};
-};
-
 const CALENDAR_PROVIDER_LABELS: Record<CalendarProvider, string> = {
 	google: "Google Calendar",
 	yandex: "Yandex Calendar",
 };
 
-const getCalendarToolResponse = async ({
+export const getCalendarToolResponse = async ({
 	ctx,
 	limit,
 	meetingsOnly,
@@ -594,26 +503,58 @@ const getCalendarToolResponse = async ({
 	providerInput: CalendarToolProviderInput;
 	query?: string;
 }) => {
-	const { now, timeMin, timeMax } = getCalendarToolWindow();
 	const providerAdapter = createCalendarToolProviderAdapter({
 		ctx,
 		input: providerInput,
 	});
-	const result = await providerAdapter.listEvents({
-		eventLimit: UPCOMING_EVENTS_LIMIT,
-		minimumEndAt: now,
-		timeMax,
-		timeMin,
-	});
 
-	return toCalendarToolResponse({
+	return await runCalendarToolQuery({
+		adapter: providerAdapter,
 		connection: CALENDAR_PROVIDER_LABELS[providerInput.provider],
-		events: result.events,
 		limit,
 		meetingsOnly,
+		now: Date.now(),
 		query,
 	});
 };
+
+export const createCalendarCapabilityAdapter = ({
+	ctx,
+	providerInput,
+}: {
+	ctx: ActionCtx;
+	providerInput: CalendarToolProviderInput;
+}) => ({
+	listEvents: async ({
+		limit,
+		meetingsOnly,
+	}: {
+		limit?: number;
+		meetingsOnly?: boolean;
+	}) =>
+		await getCalendarToolResponse({
+			ctx,
+			limit,
+			meetingsOnly,
+			providerInput,
+		}),
+	searchEvents: async ({
+		query,
+		limit,
+		meetingsOnly,
+	}: {
+		query: string;
+		limit?: number;
+		meetingsOnly?: boolean;
+	}) =>
+		await getCalendarToolResponse({
+			ctx,
+			query,
+			limit,
+			meetingsOnly,
+			providerInput,
+		}),
+});
 
 export const listGoogleCalendarEventsForTool = action({
 	args: {

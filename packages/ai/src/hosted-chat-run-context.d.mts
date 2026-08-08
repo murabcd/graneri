@@ -48,8 +48,7 @@ export declare const buildHostedChatRunContext: (args: {
 	defaultTimezone: string;
 	getActiveStreamSession: () => HostedActiveStreamSession | null;
 	getNotesContext: () => Promise<string>;
-	getSelectedAppConnections: (args: {
-		selectedSourceIds: string[];
+	getAppConnections: (args: {
 		workspaceId: string;
 	}) => Promise<AppConnection[]>;
 	getSelectedRecipe: (args: {
@@ -96,7 +95,7 @@ export declare const buildHostedChatRunContext: (args: {
 		hasToolSearch: boolean;
 	};
 	localFolderRoots: LocalFolderRoot[];
-	selectedAppConnections: AppConnection[];
+	appConnections: AppConnection[];
 	instructions: string;
 	tools: ToolSet;
 }>;

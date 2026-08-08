@@ -6,12 +6,21 @@ import {
 	serviceTierValidator,
 } from "./assistantRunModel";
 
+export const appToolScopeValidator = v.union(
+	v.literal("disabled"),
+	v.literal("available"),
+	v.literal("selected"),
+);
+
+export type AppToolScope = Infer<typeof appToolScopeValidator>;
+
 export const assistantRunJobValidator = v.object({
 	messagesJson: v.string(),
 	instructions: v.string(),
 	webSearchEnabled: v.boolean(),
 	chartGenerationRequested: v.boolean(),
 	imageGenerationRequested: v.boolean(),
+	appToolScope: appToolScopeValidator,
 	shouldGenerateChatTitle: v.optional(v.boolean()),
 	selectedSourceIds: v.array(v.string()),
 	defaultTimezone: v.string(),

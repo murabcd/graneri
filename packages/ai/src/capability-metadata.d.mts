@@ -51,9 +51,11 @@ export type CapabilitySettingsGroup =
 	| "Productivity"
 	| "Tracking";
 
-export type AppSourceInstructionConnection = {
-	id?: string;
-	sourceId?: string;
+type AppSourceConnectionIdentity =
+	| { id: string; sourceId?: string }
+	| { id?: string; sourceId: string };
+
+export type AppSourceInstructionConnection = AppSourceConnectionIdentity & {
 	title?: string;
 	displayName?: string;
 	provider: AppSourceProvider | string;
@@ -72,10 +74,22 @@ export type CapabilityMetadata = {
 	settingsGroup: CapabilitySettingsGroup;
 	settingsName?: string;
 	toolPrefix?: string;
+	toolNamespace?: {
+		name: string;
+		description: string;
+	};
 	sourceInstruction?: (
 		connection: AppSourceInstructionConnection,
 		capability: CapabilityMetadata,
 	) => string;
+};
+
+export type AppCapabilityMetadata = CapabilityMetadata & {
+	sourceKind: "app";
+	toolNamespace: {
+		name: string;
+		description: string;
+	};
 };
 
 export declare const APP_SOURCE_PREFIX: "app:";
@@ -144,13 +158,16 @@ export declare function getSelectedNoteSourceIds(args: {
 	mentions?: string[];
 }): string[];
 
-export declare function loadSelectedAppSourceConnections<
+export declare function selectAppSourceConnections<
+	Connection extends AppSourceInstructionConnection,
+>(connections: Connection[], selectedSourceIds?: string[]): Connection[];
+
+export declare function loadAvailableChatToolConnections<
 	GoogleConnection extends AppSourceInstructionConnection,
 	AppConnection extends AppSourceInstructionConnection,
 >(args: {
-	selectedSourceIds?: string[];
-	listGoogleSources?: () => Promise<GoogleConnection[]>;
-	getAppConnections?: (sourceIds: string[]) => Promise<AppConnection[]>;
+	listGoogleSources: () => Promise<GoogleConnection[]>;
+	getAppConnections: () => Promise<AppConnection[]>;
 }): Promise<Array<GoogleConnection | AppConnection>>;
 
 export declare function buildSelectedAppSourceInstructions(

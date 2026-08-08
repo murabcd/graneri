@@ -65,6 +65,7 @@ export const start = mutation({
 		await createAssistantRunStream(ctx, run);
 		await createAssistantRunJob(ctx, run, {
 			authorName,
+			googleAuthUserId: identity.subject,
 			job: args.job,
 		});
 		await scheduleAssistantRunExecution(ctx, run);

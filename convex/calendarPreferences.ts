@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 
 const calendarPreferencesValidator = v.object({
@@ -28,6 +33,14 @@ const getCalendarPreferencesRecord = async (
 		)
 		.unique();
 
+const toCalendarPreferences = (
+	preferences: Awaited<ReturnType<typeof getCalendarPreferencesRecord>>,
+) => ({
+	showGoogleCalendar: preferences?.showGoogleCalendar ?? false,
+	showGoogleDrive: preferences?.showGoogleDrive ?? false,
+	showYandexCalendar: preferences?.showYandexCalendar ?? false,
+});
+
 export const get = query({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -35,18 +48,35 @@ export const get = query({
 	returns: calendarPreferencesValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		const preferences = await getCalendarPreferencesRecord(
 			ctx,
 			identity.tokenIdentifier,
 			args.workspaceId,
 		);
 
-		return {
-			showGoogleCalendar: preferences?.showGoogleCalendar ?? false,
-			showGoogleDrive: preferences?.showGoogleDrive ?? false,
-			showYandexCalendar: preferences?.showYandexCalendar ?? false,
-		};
+		return toCalendarPreferences(preferences);
+	},
+});
+
+export const getForOwner = internalQuery({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: calendarPreferencesValidator,
+	handler: async (ctx, args) => {
+		const preferences = await getCalendarPreferencesRecord(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.workspaceId,
+		);
+
+		return toCalendarPreferences(preferences);
 	},
 });
 
@@ -60,7 +90,11 @@ export const update = mutation({
 	returns: calendarPreferencesValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		const existing = await getCalendarPreferencesRecord(
 			ctx,
 			identity.tokenIdentifier,
@@ -112,12 +146,13 @@ const deleteCalendarPreferencesBatchForOwner = async (
 		)
 		.take(REMOVE_ALL_CALENDAR_PREFERENCES_BATCH_SIZE);
 
-	await Promise.all(preferences.map((preference) => ctx.db.delete(preference._id)));
+	await Promise.all(
+		preferences.map((preference) => ctx.db.delete(preference._id)),
+	);
 
 	return {
 		deletedCount: preferences.length,
-		hasMore:
-			preferences.length === REMOVE_ALL_CALENDAR_PREFERENCES_BATCH_SIZE,
+		hasMore: preferences.length === REMOVE_ALL_CALENDAR_PREFERENCES_BATCH_SIZE,
 	};
 };
 
@@ -146,7 +181,7 @@ export const enableYandexCalendarPreferenceForWorkspace = async (
 	ctx: MutationCtx,
 	args: {
 		ownerTokenIdentifier: string;
-		workspaceId: Id<"workspaces">,
+		workspaceId: Id<"workspaces">;
 	},
 ): Promise<{
 	showGoogleCalendar: boolean;
@@ -214,9 +249,13 @@ export const removeAllForOwner = internalMutation({
 		);
 
 		if (result.hasMore) {
-			await ctx.scheduler.runAfter(0, internal.calendarPreferences.removeAllForOwner, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-			});
+			await ctx.scheduler.runAfter(
+				0,
+				internal.calendarPreferences.removeAllForOwner,
+				{
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+				},
+			);
 		}
 
 		return null;

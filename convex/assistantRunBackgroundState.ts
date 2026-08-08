@@ -35,6 +35,7 @@ const backgroundRunContextValidator = v.union(
 	v.object({
 		ownerTokenIdentifier: v.string(),
 		authorName: v.string(),
+		googleAuthUserId: v.union(v.string(), v.null()),
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		assistantMessageId: v.string(),
@@ -185,6 +186,7 @@ export const getRunnableContext = internalQuery({
 		return {
 			ownerTokenIdentifier: run.ownerTokenIdentifier,
 			authorName: runJob.authorName,
+			googleAuthUserId: runJob.googleAuthUserId,
 			workspaceId: run.workspaceId,
 			chatId: chat.chatId,
 			assistantMessageId: run.assistantMessageId,

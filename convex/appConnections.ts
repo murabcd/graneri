@@ -904,26 +904,23 @@ const normalizeConnectionId = (
 	);
 };
 
-const getSelectedChatToolConnections = async (
+const getChatToolConnections = async (
 	ctx: QueryCtx,
 	ownerTokenIdentifier: string,
 	workspaceId: Id<"workspaces">,
-	sourceIds: string[],
 ): Promise<ChatToolConnection[]> => {
-	const normalizedIds = sourceIds
-		.map((sourceId) => normalizeConnectionId(ctx, sourceId))
-		.filter(
-			(id, index, values): id is Id<"appConnections"> =>
-				Boolean(id) && values.indexOf(id) === index,
-		);
-
-	if (normalizedIds.length === 0) {
-		return [];
-	}
-
-	const connections = await Promise.all(
-		normalizedIds.map((id) => ctx.db.get(id)),
-	);
+	const connections = await ctx.db
+		.query("appConnections")
+		.withIndex(
+			"by_ownerTokenIdentifier_and_workspaceId_and_status_and_updatedAt",
+			(q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+					.eq("workspaceId", workspaceId)
+					.eq("status", "connected"),
+		)
+		.order("desc")
+		.take(20);
 
 	return connections
 		.map((connection) =>
@@ -1507,10 +1504,9 @@ export const updateMcpOAuthTokens = internalMutation({
 	},
 });
 
-export const getSelectedForChat = query({
+export const getForChat = query({
 	args: {
 		workspaceId: v.id("workspaces"),
-		sourceIds: v.array(v.string()),
 	},
 	returns: v.array(chatToolConnectionValidator),
 	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
@@ -1520,28 +1516,25 @@ export const getSelectedForChat = query({
 			identity.tokenIdentifier,
 			args.workspaceId,
 		);
-		return await getSelectedChatToolConnections(
+		return await getChatToolConnections(
 			ctx,
 			identity.tokenIdentifier,
 			args.workspaceId,
-			args.sourceIds,
 		);
 	},
 });
 
-export const getSelectedForChatInternal = internalQuery({
+export const getForChatInternal = internalQuery({
 	args: {
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
-		sourceIds: v.array(v.string()),
 	},
 	returns: v.array(chatToolConnectionValidator),
 	handler: async (ctx, args): Promise<ChatToolConnection[]> => {
-		return await getSelectedChatToolConnections(
+		return await getChatToolConnections(
 			ctx,
 			args.ownerTokenIdentifier,
 			args.workspaceId,
-			args.sourceIds,
 		);
 	},
 });

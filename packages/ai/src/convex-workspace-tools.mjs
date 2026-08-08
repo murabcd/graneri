@@ -82,22 +82,31 @@ export const buildConvexWorkspaceToolSet = async ({
 		convexClient &&
 		canUseWorkspaceTools
 			? {
-					yandexCalendar: () => ({
-						listUpcomingEvents: async () => {
-							const result = await convexClient.action(
+					yandexCalendar: {
+						listEvents: async ({ limit, meetingsOnly }) =>
+							await convexClient.action(
 								api.calendar.listYandexCalendarEventsForTool,
 								{
 									workspaceId,
-									limit: 25,
+									...(typeof limit === "number" ? { limit } : {}),
+									...(typeof meetingsOnly === "boolean"
+										? { meetingsOnly }
+										: {}),
 								},
-							);
-
-							return {
-								connection: result.connection,
-								events: result.events,
-							};
-						},
-					}),
+							),
+						searchEvents: async ({ query, limit, meetingsOnly }) =>
+							await convexClient.action(
+								api.calendar.searchYandexCalendarEventsForTool,
+								{
+									workspaceId,
+									query,
+									...(typeof limit === "number" ? { limit } : {}),
+									...(typeof meetingsOnly === "boolean"
+										? { meetingsOnly }
+										: {}),
+								},
+							),
+					},
 				}
 			: {}),
 	});

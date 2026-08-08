@@ -1,6 +1,6 @@
 "use node";
 
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { api } from "./_generated/api";
 import { action } from "./_generated/server";
 import {
@@ -14,8 +14,8 @@ import {
 	refreshGoogleAccessToken,
 } from "./googleAuth";
 
-const GOOGLE_CALENDAR_SOURCE_ID = "app:google-calendar";
-const GOOGLE_DRIVE_SOURCE_ID = "app:google-drive";
+export const GOOGLE_CALENDAR_SOURCE_ID = "app:google-calendar";
+export const GOOGLE_DRIVE_SOURCE_ID = "app:google-drive";
 const GOOGLE_DRIVE_FILE_EXCERPT_LIMIT = 12000;
 
 const googleToolSourceValidator = v.object({
@@ -24,6 +24,8 @@ const googleToolSourceValidator = v.object({
 	preview: v.string(),
 	provider: v.union(v.literal("google-calendar"), v.literal("google-drive")),
 });
+
+type GoogleToolSource = Infer<typeof googleToolSourceValidator>;
 
 const googleDriveFileValidator = v.object({
 	id: v.string(),
@@ -211,6 +213,42 @@ const buildDriveSources = (
 	});
 };
 
+export const getAvailableGoogleToolSources = ({
+	preferences,
+	scopes,
+}: {
+	preferences: {
+		showGoogleCalendar: boolean;
+		showGoogleDrive: boolean;
+	};
+	scopes: string[];
+}): GoogleToolSource[] => {
+	const sources: GoogleToolSource[] = [];
+
+	if (
+		preferences.showGoogleCalendar &&
+		scopes.includes(GOOGLE_CALENDAR_SCOPE)
+	) {
+		sources.push({
+			id: GOOGLE_CALENDAR_SOURCE_ID,
+			title: "Google Calendar",
+			preview: "Google account",
+			provider: "google-calendar",
+		});
+	}
+
+	if (preferences.showGoogleDrive && scopes.includes(GOOGLE_DRIVE_SCOPE)) {
+		sources.push({
+			id: GOOGLE_DRIVE_SOURCE_ID,
+			title: "Google Drive",
+			preview: "Google account",
+			provider: "google-drive",
+		});
+	}
+
+	return sources;
+};
+
 export const listAvailableSources = action({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -231,32 +269,61 @@ export const listAvailableSources = action({
 		} = await ctx.runQuery(api.calendarPreferences.get, {
 			workspaceId: args.workspaceId,
 		});
-		const sources = [];
-
-		if (
-			preferences.showGoogleCalendar &&
-			tokens.scopes.includes(GOOGLE_CALENDAR_SCOPE)
-		) {
-			sources.push({
-				id: GOOGLE_CALENDAR_SOURCE_ID,
-				title: "Google Calendar",
-				preview: "Google account",
-				provider: "google-calendar" as const,
-			});
-		}
-
-		if (preferences.showGoogleDrive && tokens.scopes.includes(GOOGLE_DRIVE_SCOPE)) {
-			sources.push({
-				id: GOOGLE_DRIVE_SOURCE_ID,
-				title: "Google Drive",
-				preview: "Google account",
-				provider: "google-drive" as const,
-			});
-		}
-
-		return sources;
+		return getAvailableGoogleToolSources({
+			preferences,
+			scopes: tokens.scopes,
+		});
 	},
 });
+
+export const searchGoogleDriveFiles = async ({
+	authContext,
+	query,
+	limit,
+}: {
+	authContext: GoogleAuthContext;
+	query: string;
+	limit?: number;
+}) => {
+	const tokens = await getGoogleAccessToken(authContext);
+
+	if (!tokens?.accessToken || !tokens.scopes.includes(GOOGLE_DRIVE_SCOPE)) {
+		return {
+			connection: "Google Drive",
+			files: [],
+			sources: [],
+		};
+	}
+
+	const url = new URL("https://www.googleapis.com/drive/v3/files");
+	url.searchParams.set("includeItemsFromAllDrives", "true");
+	url.searchParams.set("supportsAllDrives", "true");
+	url.searchParams.set(
+		"fields",
+		"files(id,name,mimeType,modifiedTime,webViewLink,webContentLink,owners(displayName,emailAddress))",
+	);
+	url.searchParams.set("orderBy", "modifiedTime desc");
+	url.searchParams.set(
+		"pageSize",
+		String(Math.max(1, Math.min(limit ?? 5, 10))),
+	);
+	url.searchParams.set("q", buildDriveSearchQuery(query));
+
+	const response = await fetchGoogleJsonWithRetry<GoogleDriveListResponse>(
+		authContext,
+		tokens,
+		url,
+	);
+	const files = (response.files ?? [])
+		.map((file) => normalizeDriveFile(file))
+		.filter((file): file is NonNullable<typeof file> => Boolean(file));
+
+	return {
+		connection: "Google Drive",
+		files,
+		sources: buildDriveSources(files),
+	};
+};
 
 export const searchGoogleDriveFilesForTool = action({
 	args: {
@@ -265,47 +332,90 @@ export const searchGoogleDriveFilesForTool = action({
 	},
 	returns: googleDriveToolResponseValidator,
 	handler: async (ctx, args) => {
-		const authContext = await getGoogleAuthContext(ctx);
-		const tokens = await getGoogleAccessToken(authContext);
-
-		if (!tokens?.accessToken || !tokens.scopes.includes(GOOGLE_DRIVE_SCOPE)) {
-			return {
-				connection: "Google Drive",
-				files: [],
-				sources: [],
-			};
-		}
-
-		const url = new URL("https://www.googleapis.com/drive/v3/files");
-		url.searchParams.set("includeItemsFromAllDrives", "true");
-		url.searchParams.set("supportsAllDrives", "true");
-		url.searchParams.set(
-			"fields",
-			"files(id,name,mimeType,modifiedTime,webViewLink,webContentLink,owners(displayName,emailAddress))",
-		);
-		url.searchParams.set("orderBy", "modifiedTime desc");
-		url.searchParams.set(
-			"pageSize",
-			String(Math.max(1, Math.min(args.limit ?? 5, 10))),
-		);
-		url.searchParams.set("q", buildDriveSearchQuery(args.query));
-
-		const response = await fetchGoogleJsonWithRetry<GoogleDriveListResponse>(
-			authContext,
-			tokens,
-			url,
-		);
-		const files = (response.files ?? [])
-			.map((file) => normalizeDriveFile(file))
-			.filter((file): file is NonNullable<typeof file> => Boolean(file));
-
-		return {
-			connection: "Google Drive",
-			files,
-			sources: buildDriveSources(files),
-		};
+		return await searchGoogleDriveFiles({
+			authContext: await getGoogleAuthContext(ctx),
+			query: args.query,
+			limit: args.limit,
+		});
 	},
 });
+
+export const getGoogleDriveFile = async ({
+	authContext,
+	fileId,
+}: {
+	authContext: GoogleAuthContext;
+	fileId: string;
+}) => {
+	const tokens = await getGoogleAccessToken(authContext);
+
+	if (!tokens?.accessToken || !tokens.scopes.includes(GOOGLE_DRIVE_SCOPE)) {
+		return {
+			connection: "Google Drive",
+			files: [],
+			sources: [],
+		};
+	}
+
+	const metadataUrl = new URL(
+		`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`,
+	);
+	metadataUrl.searchParams.set(
+		"fields",
+		"id,name,mimeType,modifiedTime,webViewLink,webContentLink,owners(displayName,emailAddress)",
+	);
+	metadataUrl.searchParams.set("supportsAllDrives", "true");
+	const file = await fetchGoogleJsonWithRetry<GoogleDriveFileResponse>(
+		authContext,
+		tokens,
+		metadataUrl,
+	);
+
+	let excerpt: string | undefined;
+
+	if (isGoogleDocument(file.mimeType)) {
+		const exportMimeType = getGoogleDocumentExportMimeType(file.mimeType);
+
+		if (exportMimeType) {
+			const exportUrl = new URL(
+				`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export`,
+			);
+			exportUrl.searchParams.set("mimeType", exportMimeType);
+			excerpt = (
+				await fetchGoogleTextWithRetry({
+					authContext,
+					initialTokens: tokens,
+					url: exportUrl,
+				})
+			)
+				.trim()
+				.slice(0, GOOGLE_DRIVE_FILE_EXCERPT_LIMIT);
+		}
+	} else if (isTextLikeMimeType(file.mimeType)) {
+		const mediaUrl = new URL(
+			`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`,
+		);
+		mediaUrl.searchParams.set("alt", "media");
+		mediaUrl.searchParams.set("supportsAllDrives", "true");
+		excerpt = (
+			await fetchGoogleTextWithRetry({
+				authContext,
+				initialTokens: tokens,
+				url: mediaUrl,
+			})
+		)
+			.trim()
+			.slice(0, GOOGLE_DRIVE_FILE_EXCERPT_LIMIT);
+	}
+
+	const normalizedFile = normalizeDriveFile(file, excerpt);
+
+	return {
+		connection: "Google Drive",
+		files: normalizedFile ? [normalizedFile] : [],
+		sources: normalizedFile ? buildDriveSources([normalizedFile]) : [],
+	};
+};
 
 export const getGoogleDriveFileForTool = action({
 	args: {
@@ -313,74 +423,9 @@ export const getGoogleDriveFileForTool = action({
 	},
 	returns: googleDriveToolResponseValidator,
 	handler: async (ctx, args) => {
-		const authContext = await getGoogleAuthContext(ctx);
-		const tokens = await getGoogleAccessToken(authContext);
-
-		if (!tokens?.accessToken || !tokens.scopes.includes(GOOGLE_DRIVE_SCOPE)) {
-			return {
-				connection: "Google Drive",
-				files: [],
-				sources: [],
-			};
-		}
-
-		const metadataUrl = new URL(
-			`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(args.fileId)}`,
-		);
-		metadataUrl.searchParams.set(
-			"fields",
-			"id,name,mimeType,modifiedTime,webViewLink,webContentLink,owners(displayName,emailAddress)",
-		);
-		metadataUrl.searchParams.set("supportsAllDrives", "true");
-		const file = await fetchGoogleJsonWithRetry<GoogleDriveFileResponse>(
-			authContext,
-			tokens,
-			metadataUrl,
-		);
-
-		let excerpt: string | undefined;
-
-		if (isGoogleDocument(file.mimeType)) {
-			const exportMimeType = getGoogleDocumentExportMimeType(file.mimeType);
-
-			if (exportMimeType) {
-				const exportUrl = new URL(
-					`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(args.fileId)}/export`,
-				);
-				exportUrl.searchParams.set("mimeType", exportMimeType);
-				excerpt = (
-					await fetchGoogleTextWithRetry({
-						authContext,
-						initialTokens: tokens,
-						url: exportUrl,
-					})
-				)
-					.trim()
-					.slice(0, GOOGLE_DRIVE_FILE_EXCERPT_LIMIT);
-			}
-		} else if (isTextLikeMimeType(file.mimeType)) {
-			const mediaUrl = new URL(
-				`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(args.fileId)}`,
-			);
-			mediaUrl.searchParams.set("alt", "media");
-			mediaUrl.searchParams.set("supportsAllDrives", "true");
-			excerpt = (
-				await fetchGoogleTextWithRetry({
-					authContext,
-					initialTokens: tokens,
-					url: mediaUrl,
-				})
-			)
-				.trim()
-				.slice(0, GOOGLE_DRIVE_FILE_EXCERPT_LIMIT);
-		}
-
-		const normalizedFile = normalizeDriveFile(file, excerpt);
-
-		return {
-			connection: "Google Drive",
-			files: normalizedFile ? [normalizedFile] : [],
-			sources: normalizedFile ? buildDriveSources([normalizedFile]) : [],
-		};
+		return await getGoogleDriveFile({
+			authContext: await getGoogleAuthContext(ctx),
+			fileId: args.fileId,
+		});
 	},
 });
