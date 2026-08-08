@@ -71,9 +71,17 @@ export class NoteTranscriptCaptureSession {
 	private persistedUtteranceIds = new Set<string>();
 	private queuedUtterances: TranscriptUtterance[] = [];
 	private sessionStartPromise: Promise<Id<"transcriptSessions">> | null = null;
+	private speechListening = false;
 	private systemAudioModePersistedFor: Id<"transcriptSessions"> | null = null;
 	private utterances: TranscriptUtterance[] = [];
 	listeningStartedAt: number | null = null;
+
+	constructor({ isSpeechListening = false } = {}) {
+		this.speechListening = isSpeechListening;
+		if (isSpeechListening) {
+			this.listeningStartedAt = Date.now();
+		}
+	}
 
 	get activeTranscriptSessionId() {
 		return this.activeSessionId;
@@ -95,6 +103,10 @@ export class NoteTranscriptCaptureSession {
 		return this.hasRestoredDraft;
 	}
 
+	get isSpeechListening() {
+		return this.speechListening;
+	}
+
 	reset() {
 		this.lifecycleGeneration += 1;
 		this.activeSessionId = null;
@@ -107,9 +119,19 @@ export class NoteTranscriptCaptureSession {
 		this.persistedUtteranceIds.clear();
 		this.queuedUtterances = [];
 		this.sessionStartPromise = null;
+		this.speechListening = false;
 		this.systemAudioModePersistedFor = null;
 		this.utterances = [];
 		this.listeningStartedAt = null;
+	}
+
+	observeSpeechListening(isSpeechListening: boolean) {
+		if (this.speechListening === isSpeechListening) {
+			return null;
+		}
+
+		this.speechListening = isSpeechListening;
+		return isSpeechListening ? ("started" as const) : ("stopped" as const);
 	}
 
 	beginDraftRestore() {
@@ -194,10 +216,12 @@ export class NoteTranscriptCaptureSession {
 	}
 
 	markListeningStarted(now: number) {
+		this.speechListening = true;
 		this.listeningStartedAt = now;
 	}
 
 	markListeningStopped() {
+		this.speechListening = false;
 		const completedSessionId = this.activeSessionId;
 		this.activeSessionId = null;
 		this.lastCompletedSessionId = completedSessionId;

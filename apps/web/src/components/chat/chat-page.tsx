@@ -441,6 +441,7 @@ const useChatPageController = ({
 		isChatRequestPending,
 		isChatUiPending,
 		isPreparingRequest,
+		isQueuedMessageEditCurrent,
 		latestRequestBodyRef,
 		pendingToolApproval,
 		onQueuedFollowUpsReorder,
@@ -672,9 +673,16 @@ const useChatPageController = ({
 					}),
 				});
 
+				if (!finishQueuedMessageEdit(updatedQueuedMessage)) {
+					return;
+				}
+
 				latestRequestBodyRef.current = requestBody;
-				finishQueuedMessageEdit(updatedQueuedMessage);
-				setEditingMessageId(null);
+				setEditingMessageId((currentEditingMessageId) =>
+					currentEditingMessageId === queuedMessageEditDraft.message._id
+						? null
+						: currentEditingMessageId,
+				);
 				clearDraft();
 				setAttachedFiles([]);
 				return;
@@ -748,6 +756,12 @@ const useChatPageController = ({
 			if (optimisticMessageId) {
 				rollbackOptimisticMessage(optimisticMessageId);
 			}
+			if (
+				queuedMessageEditDraft &&
+				!isQueuedMessageEditCurrent(queuedMessageEditDraft.message._id)
+			) {
+				return;
+			}
 			setEditingMessageId(editingMessageId);
 			setDraft(draftText);
 			setDraftMetadata(mentions.length > 0 ? { mentions } : null);
@@ -770,6 +784,7 @@ const useChatPageController = ({
 		isAiRequestPending,
 		isAutomationRunning,
 		isChatRequestPending,
+		isQueuedMessageEditCurrent,
 		latestRequestBodyRef,
 		localFolderStorageScope,
 		mentions,

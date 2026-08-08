@@ -634,6 +634,7 @@ const useNoteComposerController = ({
 		isAiRequestPending,
 		isChatUiPending,
 		isPreparingRequest,
+		isQueuedMessageEditCurrent,
 		latestRequestBodyRef,
 		pendingToolApproval,
 		onQueuedFollowUpsReorder,
@@ -1261,9 +1262,16 @@ const useNoteComposerController = ({
 					}),
 				});
 
+				if (!finishQueuedMessageEdit(updatedQueuedMessage)) {
+					return;
+				}
+
 				latestRequestBodyRef.current = requestBody;
-				finishQueuedMessageEdit(updatedQueuedMessage);
-				setEditingMessageId(null);
+				setEditingMessageId((currentEditingMessageId) =>
+					currentEditingMessageId === queuedMessageEditDraft.message._id
+						? null
+						: currentEditingMessageId,
+				);
 				clearDraft();
 				setAttachedFiles([]);
 				resetTextareaHeight();
@@ -1347,6 +1355,12 @@ const useNoteComposerController = ({
 			if (optimisticMessageId) {
 				rollbackOptimisticMessage(optimisticMessageId);
 			}
+			if (
+				queuedMessageEditDraft &&
+				!isQueuedMessageEditCurrent(queuedMessageEditDraft.message._id)
+			) {
+				return;
+			}
 			setEditingMessageId(editingMessageId);
 			setMessage(submittedDraftText);
 			setAttachedFiles(attachedFiles);
@@ -1370,6 +1384,7 @@ const useNoteComposerController = ({
 		finishQueuedMessageEdit,
 		isAiRequestPending,
 		isPreparingRequest,
+		isQueuedMessageEditCurrent,
 		getDraftSnapshot,
 		latestRequestBodyRef,
 		localFolderStorageScope,

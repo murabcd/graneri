@@ -27,6 +27,20 @@ const createStartArgs = (repository: ReturnType<typeof createRepository>) => ({
 	terminalizeIfStopWonStartRace: vi.fn(async () => false),
 });
 
+it("owns listening transitions without repeating state changes", () => {
+	const captureSession = new NoteTranscriptCaptureSession();
+
+	expect(captureSession.observeSpeechListening(true)).toBe("started");
+	expect(captureSession.isSpeechListening).toBe(true);
+	expect(captureSession.observeSpeechListening(true)).toBeNull();
+	expect(captureSession.observeSpeechListening(false)).toBe("stopped");
+	expect(captureSession.isSpeechListening).toBe(false);
+	expect(captureSession.observeSpeechListening(false)).toBeNull();
+
+	captureSession.reset();
+	expect(captureSession.observeSpeechListening(true)).toBe("started");
+});
+
 it("deduplicates concurrent starts and flushes utterances recorded while starting", async () => {
 	let resolveStart: ((value: Id<"transcriptSessions">) => void) | null = null;
 	const repository = createRepository();

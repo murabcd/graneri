@@ -285,4 +285,62 @@ describe("useQueuedFollowUpControls", () => {
 
 		expect(queuedMessages).toEqual([]);
 	});
+
+	it("does not let an older queued edit completion clear a newer edit", () => {
+		const firstQueuedMessage = createQueuedMessage({
+			id: "queued-1",
+			messageId: "queued-message-1",
+			text: "First edit",
+		});
+		const secondQueuedMessage = createQueuedMessage({
+			id: "queued-2",
+			messageId: "queued-message-2",
+			text: "Second edit",
+		});
+		let queuedMessages = [firstQueuedMessage, secondQueuedMessage];
+		const setQueuedMessages = vi.fn(
+			(
+				updater: (messages: QueuedFollowUpMessage[]) => QueuedFollowUpMessage[],
+			) => {
+				queuedMessages = updater(queuedMessages);
+			},
+		);
+
+		const { result } = renderHook(() =>
+			useQueuedFollowUpControls({
+				activeRun: { _id: runId },
+				chatId: "chat-1",
+				contextLabel: "chat",
+				latestRequestBodyRef: { current: null },
+				localMessageIds: new Set(),
+				onEditMessage: vi.fn(),
+				queuedMessages,
+				sendMessage: vi.fn(),
+				setQueuedMessages,
+				workspaceId,
+			}),
+		);
+
+		act(() => {
+			result.current.queuedFollowUps[0]?.onEdit();
+		});
+		const finishFirstEdit = result.current.finishQueuedMessageEdit;
+
+		act(() => {
+			result.current.queuedFollowUps[0]?.onEdit();
+		});
+
+		const updatedFirstMessage = {
+			...firstQueuedMessage,
+			text: "Updated first edit",
+		};
+		let didFinishFirstEdit = true;
+		act(() => {
+			didFinishFirstEdit = finishFirstEdit(updatedFirstMessage);
+		});
+
+		expect(didFinishFirstEdit).toBe(false);
+		expect(result.current.editDraft?.message._id).toBe(secondQueuedMessage._id);
+		expect(queuedMessages).toEqual([updatedFirstMessage]);
+	});
 });

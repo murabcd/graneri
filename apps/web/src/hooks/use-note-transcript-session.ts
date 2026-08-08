@@ -4,6 +4,7 @@ import {
 } from "@workspace/platform/desktop";
 import * as React from "react";
 import { useNoteTranscriptScope } from "@/hooks/use-note-transcript-scope";
+import type { TranscriptSessionRepository } from "@/hooks/use-transcript-session-repository";
 import { useTranscriptSessionStopController } from "@/hooks/use-transcript-session-stop-controller";
 import { logError } from "@/lib/logger";
 import { NoteTranscriptCaptureSession } from "@/lib/note-transcript-capture-session";
@@ -45,6 +46,47 @@ type UseNoteTranscriptSessionArgs = {
 	transcriptionLanguage?: string | null;
 };
 
+type ScopedTranscriptState = {
+	activeTranscriptSessionId: Id<"transcriptSessions"> | null;
+	captureSession: NoteTranscriptCaptureSession;
+	completeSession: TranscriptSessionRepository["completeSession"];
+	isTranscriptDraftReady: boolean;
+	pendingGenerateTranscript: string;
+	retiredScope: {
+		captureSession: NoteTranscriptCaptureSession;
+		completeSession: TranscriptSessionRepository["completeSession"];
+	} | null;
+	scopeKey: string;
+	transcriptUtterances: TranscriptUtterance[];
+};
+
+const createScopedTranscriptState = ({
+	completeSession,
+	isSpeechListening,
+	retiredScope = null,
+	scopeKey,
+}: {
+	completeSession: TranscriptSessionRepository["completeSession"];
+	isSpeechListening: boolean;
+	retiredScope?: ScopedTranscriptState["retiredScope"];
+	scopeKey: string;
+}): ScopedTranscriptState => {
+	const captureSession = new NoteTranscriptCaptureSession({
+		isSpeechListening,
+	});
+
+	return {
+		activeTranscriptSessionId: null,
+		captureSession,
+		completeSession,
+		isTranscriptDraftReady: false,
+		pendingGenerateTranscript: "",
+		retiredScope,
+		scopeKey,
+		transcriptUtterances: [],
+	};
+};
+
 export const useNoteTranscriptSession = ({
 	autoStartTranscription,
 	autoStartTranscriptionRequestId,
@@ -55,15 +97,6 @@ export const useNoteTranscriptSession = ({
 	stopTranscriptionWhenMeetingEnds,
 	transcriptionLanguage,
 }: UseNoteTranscriptSessionArgs) => {
-	const [transcriptUtterances, setTranscriptUtterances] = React.useState<
-		TranscriptUtterance[]
-	>([]);
-	const [pendingGenerateTranscript, setPendingGenerateTranscript] =
-		React.useState("");
-	const [isTranscriptDraftReady, setIsTranscriptDraftReady] =
-		React.useState(false);
-	const [activeTranscriptSessionId, setActiveTranscriptSessionId] =
-		React.useState<Id<"transcriptSessions"> | null>(null);
 	const [isGeneratingNotes, setIsGeneratingNotes] = React.useState(false);
 	const [generatedTranscriptSession, setGeneratedTranscriptSession] =
 		React.useState<{
@@ -73,7 +106,6 @@ export const useNoteTranscriptSession = ({
 	const [pendingAutoStartKey, setPendingAutoStartKey] = React.useState<
 		string | null
 	>(null);
-	const previousSpeechListeningRef = React.useRef(false);
 	const lastQueuedAutoStartKeyRef = React.useRef<string | null>(null);
 	const hasHandledAutoStartRef = React.useRef(false);
 	const transcriptionAutoStopStateRef =
@@ -83,13 +115,6 @@ export const useNoteTranscriptSession = ({
 			new TranscriptionAutoStopController();
 	}
 	const transcriptionAutoStopState = transcriptionAutoStopStateRef.current;
-	const captureSessionRef = React.useRef<NoteTranscriptCaptureSession | null>(
-		null,
-	);
-	if (captureSessionRef.current === null) {
-		captureSessionRef.current = new NoteTranscriptCaptureSession();
-	}
-	const captureSession = captureSessionRef.current;
 	const [initialLastAudioActivityAt] = React.useState(Date.now);
 	const lastAudioActivityAtRef = React.useRef<number | null>(
 		initialLastAudioActivityAt,
@@ -114,7 +139,47 @@ export const useNoteTranscriptSession = ({
 		// Stored history loading is an input to transcript scope hydration.
 		shouldLoadStoredTranscriptHistory,
 	});
-	const previousTranscriptDraftKeyRef = React.useRef(captureTranscriptDraftKey);
+	const completeCaptureTranscriptSession =
+		captureTranscriptSessionRepository.completeSession;
+	const [scopedTranscriptState, setScopedTranscriptState] =
+		React.useState<ScopedTranscriptState>(() =>
+			createScopedTranscriptState({
+				completeSession: completeCaptureTranscriptSession,
+				isSpeechListening,
+				scopeKey: captureTranscriptDraftKey,
+			}),
+		);
+	if (scopedTranscriptState.scopeKey !== captureTranscriptDraftKey) {
+		setScopedTranscriptState(
+			createScopedTranscriptState({
+				completeSession: completeCaptureTranscriptSession,
+				isSpeechListening,
+				retiredScope: {
+					captureSession: scopedTranscriptState.captureSession,
+					completeSession: scopedTranscriptState.completeSession,
+				},
+				scopeKey: captureTranscriptDraftKey,
+			}),
+		);
+	}
+	const {
+		activeTranscriptSessionId,
+		captureSession,
+		isTranscriptDraftReady,
+		pendingGenerateTranscript,
+		transcriptUtterances,
+	} = scopedTranscriptState;
+	const retiredTranscriptScope = scopedTranscriptState.retiredScope;
+	const updateScopedTranscriptState = React.useCallback(
+		(update: (state: ScopedTranscriptState) => ScopedTranscriptState) => {
+			setScopedTranscriptState((currentState) =>
+				currentState.scopeKey === captureTranscriptDraftKey
+					? update(currentState)
+					: currentState,
+			);
+		},
+		[captureTranscriptDraftKey],
+	);
 	const generatedTranscriptSessionId =
 		generatedTranscriptSession?.draftKey === captureTranscriptDraftKey
 			? generatedTranscriptSession.sessionId
@@ -224,9 +289,7 @@ export const useNoteTranscriptSession = ({
 	);
 	const isTranscriptSessionReady = resolveTranscriptSessionReady({
 		hasLocalCaptureTranscript,
-		isDraftReady:
-			previousTranscriptDraftKeyRef.current === captureTranscriptDraftKey &&
-			isTranscriptDraftReady,
+		isDraftReady: isTranscriptDraftReady,
 		isSummaryLoading:
 			captureTranscriptSessionRepository.isLatestTranscriptSessionSummaryLoading,
 		isViewingCaptureScope,
@@ -337,28 +400,6 @@ export const useNoteTranscriptSession = ({
 		transcriptionAutoStopState,
 	]);
 
-	const resetTranscriptSessionState = React.useCallback(
-		({ clearDraft = false }: { clearDraft?: boolean } = {}) => {
-			setTranscriptUtterances([]);
-			setPendingGenerateTranscript("");
-			setIsTranscriptDraftReady(false);
-			setActiveTranscriptSessionId(null);
-			previousSpeechListeningRef.current = false;
-			captureSession.reset();
-
-			if (clearDraft) {
-				void captureTranscriptSessionRepository.clearDraft(
-					captureTranscriptDraftKey,
-				);
-			}
-		},
-		[
-			captureSession,
-			captureTranscriptDraftKey,
-			captureTranscriptSessionRepository,
-		],
-	);
-
 	const restoreTranscriptDraft = React.useCallback(
 		(draft: {
 			pendingGenerateTranscript: string;
@@ -366,10 +407,13 @@ export const useNoteTranscriptSession = ({
 			utterances: TranscriptUtterance[];
 		}) => {
 			const restoredDraft = captureSession.restoreDraft(draft);
-			setTranscriptUtterances(restoredDraft.utterances);
-			setPendingGenerateTranscript(restoredDraft.pendingGenerateTranscript);
+			updateScopedTranscriptState((currentState) => ({
+				...currentState,
+				pendingGenerateTranscript: restoredDraft.pendingGenerateTranscript,
+				transcriptUtterances: restoredDraft.utterances,
+			}));
 		},
-		[captureSession],
+		[captureSession, updateScopedTranscriptState],
 	);
 
 	const hydrateStoredTranscriptSession = React.useCallback(
@@ -391,31 +435,43 @@ export const useNoteTranscriptSession = ({
 				latestServerTranscript,
 				latestSession,
 			});
-			setTranscriptUtterances(hydration.utterances);
-			setPendingGenerateTranscript(hydration.pendingGenerateTranscript);
+			updateScopedTranscriptState((currentState) => ({
+				...currentState,
+				pendingGenerateTranscript: hydration.pendingGenerateTranscript,
+				transcriptUtterances: hydration.utterances,
+			}));
 		},
-		[captureSession],
+		[captureSession, updateScopedTranscriptState],
 	);
 
 	const markSpeechListeningStarted = React.useCallback(() => {
 		const now = Date.now();
 		captureSession.markListeningStarted(now);
-		setPendingGenerateTranscript("");
+		updateScopedTranscriptState((currentState) => ({
+			...currentState,
+			pendingGenerateTranscript: "",
+		}));
 		transcriptionAutoStopState.resetRequest();
 		lastAudioActivityAtRef.current = now;
-	}, [captureSession, transcriptionAutoStopState]);
+	}, [captureSession, transcriptionAutoStopState, updateScopedTranscriptState]);
 
 	const markSpeechListeningStopped = React.useCallback(() => {
 		transcriptionAutoStopState.reset();
 		const { completedSessionId, completedTranscript } =
 			captureSession.markListeningStopped();
 		if (completedTranscript) {
-			setPendingGenerateTranscript(completedTranscript);
+			updateScopedTranscriptState((currentState) => ({
+				...currentState,
+				pendingGenerateTranscript: completedTranscript,
+			}));
 		}
 
-		setActiveTranscriptSessionId(null);
+		updateScopedTranscriptState((currentState) => ({
+			...currentState,
+			activeTranscriptSessionId: null,
+		}));
 		return completedSessionId;
-	}, [captureSession, transcriptionAutoStopState]);
+	}, [captureSession, transcriptionAutoStopState, updateScopedTranscriptState]);
 
 	const ensureTranscriptSession = React.useCallback(async () => {
 		try {
@@ -432,7 +488,10 @@ export const useNoteTranscriptSession = ({
 				terminalizeIfStopWonStartRace:
 					transcriptSessionStopController.terminalizeIfStopWonStartRace,
 			});
-			setActiveTranscriptSessionId(captureSession.activeTranscriptSessionId);
+			updateScopedTranscriptState((currentState) => ({
+				...currentState,
+				activeTranscriptSessionId: captureSession.activeTranscriptSessionId,
+			}));
 			return sessionId;
 		} catch (error) {
 			logError({
@@ -450,43 +509,42 @@ export const useNoteTranscriptSession = ({
 		transcriptionLanguage,
 		captureTranscriptSessionRepository,
 		transcriptSessionStopController,
+		updateScopedTranscriptState,
 	]);
 
 	React.useEffect(() => {
-		if (previousTranscriptDraftKeyRef.current === captureTranscriptDraftKey) {
+		if (!retiredTranscriptScope) {
 			return;
 		}
 
-		const activeSessionId = activeTranscriptSessionId;
-
-		if (activeSessionId) {
-			void captureTranscriptSessionRepository
-				.completeSession({
-					sessionId: activeSessionId,
-				})
-				.catch((error) => {
-					logError({
-						event: "client.error",
-						error: error,
-						message:
-							"Failed to complete transcript session while switching notes",
-					});
-				});
+		const activeSessionId =
+			retiredTranscriptScope.captureSession.activeTranscriptSessionId;
+		retiredTranscriptScope.captureSession.reset();
+		if (!activeSessionId) {
+			return;
 		}
 
-		previousTranscriptDraftKeyRef.current = captureTranscriptDraftKey;
-		resetTranscriptSessionState();
-	}, [
-		activeTranscriptSessionId,
-		captureTranscriptDraftKey,
-		captureTranscriptSessionRepository,
-		resetTranscriptSessionState,
-	]);
+		void retiredTranscriptScope
+			.completeSession({
+				sessionId: activeSessionId,
+			})
+			.catch((error) => {
+				logError({
+					event: "client.error",
+					error: error,
+					message:
+						"Failed to complete transcript session while switching notes",
+				});
+			});
+	}, [retiredTranscriptScope]);
 
 	React.useEffect(() => {
 		let isCancelled = false;
 		captureSession.beginDraftRestore();
-		setIsTranscriptDraftReady(false);
+		updateScopedTranscriptState((currentState) => ({
+			...currentState,
+			isTranscriptDraftReady: false,
+		}));
 		void captureTranscriptSessionRepository
 			.loadDraft(captureTranscriptDraftKey)
 			.then((draft) => {
@@ -499,7 +557,10 @@ export const useNoteTranscriptSession = ({
 			.finally(() => {
 				if (!isCancelled) {
 					captureSession.finishDraftRestore();
-					setIsTranscriptDraftReady(true);
+					updateScopedTranscriptState((currentState) => ({
+						...currentState,
+						isTranscriptDraftReady: true,
+					}));
 				}
 			});
 
@@ -511,6 +572,7 @@ export const useNoteTranscriptSession = ({
 		captureTranscriptDraftKey,
 		captureTranscriptSessionRepository.loadDraft,
 		restoreTranscriptDraft,
+		updateScopedTranscriptState,
 	]);
 
 	React.useEffect(() => {
@@ -524,8 +586,7 @@ export const useNoteTranscriptSession = ({
 			latestSessionSummary?.updatedAt ?? latestSession?.updatedAt ?? null;
 		const shouldHydrateFromServer = captureSession.shouldHydrateStoredSession({
 			isDraftReady: isTranscriptDraftReady,
-			isSpeechListening:
-				previousSpeechListeningRef.current || isSpeechListening,
+			isSpeechListening: captureSession.isSpeechListening || isSpeechListening,
 			latestServerTranscript,
 			latestSession: latestSession ?? null,
 			latestSessionUpdatedAt,
@@ -589,37 +650,6 @@ export const useNoteTranscriptSession = ({
 
 		void ensureTranscriptSession();
 	}, [ensureTranscriptSession, isSpeechListening]);
-
-	React.useEffect(() => {
-		if (isSpeechListening && !previousSpeechListeningRef.current) {
-			markSpeechListeningStarted();
-		}
-
-		if (!isSpeechListening && previousSpeechListeningRef.current) {
-			const completedSessionId = markSpeechListeningStopped();
-
-			if (completedSessionId) {
-				void captureTranscriptSessionRepository
-					.completeSession({
-						sessionId: completedSessionId,
-					})
-					.catch((error) => {
-						logError({
-							event: "client.error",
-							error: error,
-							message: "Failed to complete transcript session",
-						});
-					});
-			}
-		}
-
-		previousSpeechListeningRef.current = isSpeechListening;
-	}, [
-		captureTranscriptSessionRepository,
-		isSpeechListening,
-		markSpeechListeningStarted,
-		markSpeechListeningStopped,
-	]);
 
 	React.useEffect(() => {
 		if (liveTranscriptEntries.some((entry) => entry.text.trim().length > 0)) {
@@ -769,8 +799,11 @@ export const useNoteTranscriptSession = ({
 					targetTranscriptDraftKey,
 				);
 				if (isViewingCaptureScope) {
-					setPendingGenerateTranscript("");
-					setActiveTranscriptSessionId(null);
+					updateScopedTranscriptState((currentState) => ({
+						...currentState,
+						activeTranscriptSessionId: null,
+						pendingGenerateTranscript: "",
+					}));
 					captureSession.clearAfterGeneration();
 				}
 			} catch (error) {
@@ -800,14 +833,18 @@ export const useNoteTranscriptSession = ({
 		onEnhanceTranscript,
 		pendingGenerateTranscript,
 		transcriptionLanguage,
+		updateScopedTranscriptState,
 	]);
 
 	const handleTranscriptUtterance = React.useCallback(
 		(utterance: TranscriptUtterance) => {
 			lastAudioActivityAtRef.current = Date.now();
 			const recordedUtterance = captureSession.recordUtterance(utterance);
-			setTranscriptUtterances(recordedUtterance.utterances);
-			setPendingGenerateTranscript(recordedUtterance.transcript);
+			updateScopedTranscriptState((currentState) => ({
+				...currentState,
+				pendingGenerateTranscript: recordedUtterance.transcript,
+				transcriptUtterances: recordedUtterance.utterances,
+			}));
 
 			const activeSessionId = recordedUtterance.activeSessionId;
 			if (activeSessionId) {
@@ -827,23 +864,60 @@ export const useNoteTranscriptSession = ({
 				return;
 			}
 		},
-		[captureSession, captureTranscriptSessionRepository],
+		[
+			captureSession,
+			captureTranscriptSessionRepository,
+			updateScopedTranscriptState,
+		],
 	);
 
 	React.useEffect(() => {
 		return transcriptionSessionManager.store.subscribeToEvents((event) => {
+			const snapshot = transcriptionSessionManager.store.getSnapshot();
 			if (
-				transcriptionSessionManager.store.getSnapshot().scopeKey !==
-				captureScopeKey
+				event.type === "session.state_patch" &&
+				event.patch.isListening !== undefined
 			) {
-				return;
+				const nextIsSpeechListening =
+					snapshot.scopeKey === captureScopeKey && snapshot.isListening;
+				const listeningTransition = captureSession.observeSpeechListening(
+					nextIsSpeechListening,
+				);
+				if (listeningTransition === "started") {
+					markSpeechListeningStarted();
+				}
+
+				if (listeningTransition === "stopped") {
+					const completedSessionId = markSpeechListeningStopped();
+					if (completedSessionId) {
+						void completeCaptureTranscriptSession({
+							sessionId: completedSessionId,
+						}).catch((error) => {
+							logError({
+								event: "client.error",
+								error: error,
+								message: "Failed to complete transcript session",
+							});
+						});
+					}
+				}
 			}
 
-			if (event.type === "session.utterance_committed") {
+			if (
+				snapshot.scopeKey === captureScopeKey &&
+				event.type === "session.utterance_committed"
+			) {
 				handleTranscriptUtterance(event.utterance);
 			}
 		});
-	}, [captureScopeKey, handleTranscriptUtterance]);
+	}, [
+		captureScopeKey,
+		captureSession,
+		completeCaptureTranscriptSession,
+		handleTranscriptUtterance,
+		markSpeechListeningStarted,
+		markSpeechListeningStopped,
+	]);
 
 	return {
 		activeTranscriptSessionId,

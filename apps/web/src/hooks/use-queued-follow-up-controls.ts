@@ -78,6 +78,7 @@ export const useQueuedFollowUpControls = ({
 	const [deletingId, setDeletingId] = React.useState<string | null>(null);
 	const [editDraft, setEditDraft] =
 		React.useState<QueuedMessageEditDraft | null>(null);
+	const editingIdRef = React.useRef<string | null>(null);
 	const sendingNowIdsRef = React.useRef<Set<string> | null>(null);
 	if (sendingNowIdsRef.current === null) {
 		sendingNowIdsRef.current = new Set();
@@ -92,6 +93,7 @@ export const useQueuedFollowUpControls = ({
 			return;
 		}
 
+		editingIdRef.current = null;
 		setQueuedMessages((messages) =>
 			restoreQueuedMessageAtIndex(messages, editDraft),
 		);
@@ -102,7 +104,7 @@ export const useQueuedFollowUpControls = ({
 	const finishQueuedMessageEdit = React.useCallback(
 		(updatedQueuedMessage: QueuedFollowUpMessage) => {
 			if (!editDraft) {
-				return;
+				return false;
 			}
 
 			setQueuedMessages((messages) => {
@@ -112,10 +114,27 @@ export const useQueuedFollowUpControls = ({
 				nextMessages.splice(editDraft.index, 0, updatedQueuedMessage);
 				return nextMessages;
 			});
-			setEditDraft(null);
-			setEditingId(null);
+
+			if (editingIdRef.current !== updatedQueuedMessage._id) {
+				return false;
+			}
+
+			editingIdRef.current = null;
+			setEditDraft((currentDraft) =>
+				currentDraft?.message._id === updatedQueuedMessage._id
+					? null
+					: currentDraft,
+			);
+			setEditingId((currentEditingId) =>
+				currentEditingId === updatedQueuedMessage._id ? null : currentEditingId,
+			);
+			return true;
 		},
 		[editDraft, setQueuedMessages],
+	);
+	const isQueuedMessageEditCurrent = React.useCallback(
+		(queuedMessageId: string) => editingIdRef.current === queuedMessageId,
+		[],
 	);
 
 	const handleSendNow = React.useCallback(
@@ -220,6 +239,7 @@ export const useQueuedFollowUpControls = ({
 			}
 
 			const queuedMessage = queuedMessages[queuedMessageIndex];
+			editingIdRef.current = queuedMessage._id;
 			setEditingId(queuedMessage._id);
 			setEditDraft({
 				index: queuedMessageIndex,
@@ -368,6 +388,7 @@ export const useQueuedFollowUpControls = ({
 	return {
 		editDraft,
 		finishQueuedMessageEdit,
+		isQueuedMessageEditCurrent,
 		onQueuedFollowUpsReorder: handleReorder,
 		queuedFollowUps,
 		restoreEditedQueuedMessage,
