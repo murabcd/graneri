@@ -121,7 +121,7 @@ export function SidebarCollapsibleGroup({
 			onOpenChange={handleOpenChange}
 			className="group/collapsible"
 		>
-			<SidebarGroup className={className}>
+			<SidebarGroup className={cn("py-1", className)}>
 				<div className="group/header">
 					<SidebarGroupLabel asChild>
 						<CollapsibleTrigger

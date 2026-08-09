@@ -3,11 +3,6 @@ import {
 	openDesktopExternalUrl,
 } from "@workspace/platform/desktop";
 import {
-	Avatar,
-	AvatarFallback,
-	AvatarImage,
-} from "@workspace/ui/components/avatar";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
@@ -34,8 +29,9 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import type { AppUser } from "@/app/app-types";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
-import { getAvatarSrc } from "@/lib/avatar";
+import { SidebarIdentity } from "@/components/sidebar/sidebar-identity";
 import { resolveLatestDesktopDownloadUrl } from "@/lib/desktop-release";
 
 export function NavUser({
@@ -46,11 +42,7 @@ export function NavUser({
 	onSignOut,
 	signingOut,
 }: {
-	user: {
-		name: string;
-		email: string;
-		avatar: string;
-	};
+	user: Pick<AppUser, "avatar" | "name">;
 	onRecipesOpen: () => void;
 	onTemplatesOpen: () => void;
 	onSettingsOpen: () => void;
@@ -62,13 +54,6 @@ export function NavUser({
 	const [preparingDesktopDownload, setPreparingDesktopDownload] =
 		React.useState(false);
 	const desktopDownloadInFlightRef = React.useRef(false);
-	const initials = user.name
-		.split(" ")
-		.map((part) => part[0])
-		.join("")
-		.slice(0, 2)
-		.toUpperCase();
-	const avatarSrc = getAvatarSrc(user);
 	const isDarkTheme =
 		theme === "dark" ||
 		(theme === "system" && document.documentElement.classList.contains("dark"));
@@ -107,13 +92,7 @@ export function NavUser({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<SidebarMenuButton className="group/user-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-							<Avatar className="size-5 rounded-md">
-								<AvatarImage src={avatarSrc} alt={user.name} />
-								<AvatarFallback className="rounded-md text-[8px]">
-									{initials}
-								</AvatarFallback>
-							</Avatar>
-							<span className="truncate font-medium">{user.name}</span>
+							<SidebarIdentity avatar={user.avatar} name={user.name} />
 							<ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-colors group-hover/user-trigger:text-sidebar-accent-foreground" />
 						</SidebarMenuButton>
 					</DropdownMenuTrigger>
@@ -127,15 +106,7 @@ export function NavUser({
 							className="gap-2 px-2 py-1.5"
 							onClick={onSettingsOpen}
 						>
-							<Avatar className="size-5 rounded-md">
-								<AvatarImage src={avatarSrc} alt={user.name} />
-								<AvatarFallback className="rounded-md text-[8px]">
-									{initials}
-								</AvatarFallback>
-							</Avatar>
-							<span className="min-w-0 flex-1 truncate font-medium">
-								{user.name}
-							</span>
+							<SidebarIdentity avatar={user.avatar} name={user.name} />
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuGroup>

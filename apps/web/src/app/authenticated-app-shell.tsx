@@ -1464,7 +1464,7 @@ function AppShellHeader({
 	return (
 		<header
 			className={cn(
-				"sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between bg-background/95 px-4 backdrop-blur transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-6",
+				"sticky top-0 z-20 flex h-12 shrink-0 items-center justify-between bg-background/95 px-4 backdrop-blur transition-[width,height] ease-linear md:px-6",
 				isDesktopMac && DESKTOP_MAIN_HEADER_CLASS,
 			)}
 		>

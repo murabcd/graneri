@@ -142,7 +142,7 @@ export function HomeView({
 			<div
 				className={cn(
 					"flex w-full min-w-0 max-w-5xl flex-col gap-6",
-					isDesktopMac ? "pt-2 md:pt-4" : "pt-0",
+					isDesktopMac ? "pt-2.5" : "pt-0",
 				)}
 			>
 				<section className="mx-auto w-full min-w-0 space-y-6 md:max-w-xl">

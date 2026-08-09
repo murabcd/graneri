@@ -1,8 +1,3 @@
-import {
-	Avatar,
-	AvatarFallback,
-	AvatarImage,
-} from "@workspace/ui/components/avatar";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Dialog,
@@ -27,18 +22,10 @@ import {
 import { ChevronsUpDown, LoaderCircle, Plus } from "lucide-react";
 import * as React from "react";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
+import { SidebarIdentity } from "@/components/sidebar/sidebar-identity";
 import { WorkspaceComposer } from "@/components/workspaces/workspace-composer";
-import { getAvatarSrc } from "@/lib/avatar";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-
-const getWorkspaceInitials = (workspaceName: string) =>
-	workspaceName
-		.split(" ")
-		.map((part) => part[0])
-		.join("")
-		.slice(0, 2)
-		.toUpperCase();
 
 export function WorkspaceSwitcher({
 	workspaces,
@@ -65,11 +52,6 @@ export function WorkspaceSwitcher({
 		return null;
 	}
 
-	const activeWorkspaceAvatarSrc =
-		activeWorkspace.iconUrl ??
-		getAvatarSrc({
-			name: activeWorkspace.name,
-		});
 	const handleCreateWorkspace = () => {
 		startWorkspaceCreation(async () => {
 			try {
@@ -104,23 +86,15 @@ export function WorkspaceSwitcher({
 
 	return (
 		<>
-			<SidebarMenu className="py-2">
+			<SidebarMenu>
 				<SidebarMenuItem>
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 						<DropdownMenuTrigger asChild>
 							<SidebarMenuButton className="group/workspace-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-								<Avatar className="size-5 rounded-md">
-									<AvatarImage
-										src={activeWorkspaceAvatarSrc}
-										alt={activeWorkspace.name}
-									/>
-									<AvatarFallback className="rounded-md text-[8px]">
-										{getWorkspaceInitials(activeWorkspace.name)}
-									</AvatarFallback>
-								</Avatar>
-								<span className="truncate font-medium">
-									{activeWorkspace.name}
-								</span>
+								<SidebarIdentity
+									avatar={activeWorkspace.iconUrl}
+									name={activeWorkspace.name}
+								/>
 								<ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-colors group-hover/workspace-trigger:text-sidebar-accent-foreground" />
 							</SidebarMenuButton>
 						</DropdownMenuTrigger>
@@ -130,38 +104,24 @@ export function WorkspaceSwitcher({
 							align="start"
 							sideOffset={4}
 						>
-							{workspaces.map((workspace, index) => {
-								const workspaceAvatarSrc =
-									workspace.iconUrl ??
-									getAvatarSrc({
-										name: workspace.name,
-									});
-
-								return (
-									<DropdownMenuItem
-										key={workspace._id}
-										onClick={() => onSelect(workspace._id)}
-										className="group/workspace-item h-8 gap-2 px-2"
-									>
-										<Avatar className="size-5 rounded-md">
-											<AvatarImage
-												src={workspaceAvatarSrc}
-												alt={workspace.name}
-											/>
-											<AvatarFallback className="rounded-md text-[8px]">
-												{getWorkspaceInitials(workspace.name)}
-											</AvatarFallback>
-										</Avatar>
-										{workspace.name}
-										{index < 9 ? (
-											<ShortcutHint
-												keyLabel={String(index + 1)}
-												className="border border-border/60 bg-muted px-1.5 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/workspace-item:opacity-100 group-focus-visible/workspace-item:opacity-100"
-											/>
-										) : null}
-									</DropdownMenuItem>
-								);
-							})}
+							{workspaces.map((workspace, index) => (
+								<DropdownMenuItem
+									key={workspace._id}
+									onClick={() => onSelect(workspace._id)}
+									className="group/workspace-item h-8 gap-2 px-2"
+								>
+									<SidebarIdentity
+										avatar={workspace.iconUrl}
+										name={workspace.name}
+									/>
+									{index < 9 ? (
+										<ShortcutHint
+											keyLabel={String(index + 1)}
+											className="border border-border/60 bg-muted px-1.5 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/workspace-item:opacity-100 group-focus-visible/workspace-item:opacity-100"
+										/>
+									) : null}
+								</DropdownMenuItem>
+							))}
 							<DropdownMenuSeparator />
 							<DropdownMenuItem
 								className="h-8 gap-2 px-2"

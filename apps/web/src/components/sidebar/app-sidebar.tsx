@@ -10,7 +10,7 @@ import {
 import { useQuery } from "convex/react";
 import { FileText, MessageCircle } from "lucide-react";
 import * as React from "react";
-import type { AppView, NavigableAppView } from "@/app/app-types";
+import type { AppUser, AppView, NavigableAppView } from "@/app/app-types";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { InboxSheet } from "@/components/inbox/inbox-sheet";
 import { NavMain, NavPlatform } from "@/components/nav/nav-main";
@@ -42,12 +42,6 @@ import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 
 type NoteNavigationSource = "notes" | "projects" | "starred";
 
-type AppSidebarUser = {
-	name: string;
-	email: string;
-	avatar: string;
-};
-
 type SidebarInboxItem = NonNullable<
 	ReturnType<typeof useAppSidebarModel>["inboxItems"]
 >[number];
@@ -57,7 +51,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 	activeWorkspaceId: Id<"workspaces"> | null;
 	currentView: AppView;
 	inboxOpen: boolean;
-	user: AppSidebarUser;
+	user: AppUser;
 	chats: Array<Doc<"chats">> | undefined;
 	activeStreamingChatIds?: ReadonlySet<string>;
 	automations: AutomationListItem[] | undefined;
@@ -672,7 +666,7 @@ const AppSidebarFooterSection = React.memo(function AppSidebarFooterSection({
 	onTrashOpenChange: (open: boolean) => void;
 	signingOut: boolean;
 	trashOpen: boolean;
-	user: AppSidebarUser;
+	user: Pick<AppUser, "avatar" | "name">;
 }) {
 	return (
 		<SidebarFooter>
@@ -713,7 +707,7 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 	return (
 		<SidebarHeader
 			data-app-region={desktopSafeTop ? "drag" : undefined}
-			className={desktopSafeTop ? "relative pt-8" : undefined}
+			className={desktopSafeTop ? "relative gap-1 pb-0 pt-8" : "gap-1 pb-0"}
 		>
 			{desktopSafeTop ? <SidebarHistoryControls /> : null}
 			<div
@@ -729,10 +723,9 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 					onCreateWorkspace={onWorkspaceCreate}
 				/>
 			</div>
-			{desktopSafeTop ? <div aria-hidden="true" className="h-3" /> : null}
 			<div data-app-region={desktopSafeTop ? "no-drag" : undefined}>
 				<NavMain
-					className="px-0"
+					className="px-0 py-1"
 					items={navItems}
 					onCreateNote={onCreateNote}
 					onSearchOpen={onSearchOpen}
@@ -859,7 +852,7 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	});
 
 	return (
-		<SidebarContent viewportClassName="scroll-fade-b">
+		<SidebarContent viewportClassName="scroll-fade-b [--scroll-fade-reveal:2rem]">
 			<NavPlatform
 				items={navItems}
 				onViewChange={onViewChange}
@@ -950,11 +943,7 @@ const AppSidebarDialogs = React.memo(function AppSidebarDialogs({
 	templatesOpen: boolean;
 	recipesOpen: boolean;
 	searchOpen: boolean;
-	user: {
-		name: string;
-		email: string;
-		avatar: string;
-	};
+	user: AppUser;
 	workspaces: Array<WorkspaceRecord>;
 }) {
 	const handleSearchOpenChange = React.useCallback(
@@ -1066,11 +1055,7 @@ const AppSidebarInboxSheet = React.memo(function AppSidebarInboxSheet({
 	onInboxOpenChange: (open: boolean) => void;
 	onMarkInboxItemsRead: (itemIds: string[]) => void;
 	sidebarState: "expanded" | "collapsed";
-	user: {
-		name: string;
-		email: string;
-		avatar: string;
-	};
+	user: AppUser;
 }) {
 	const handleMarkAllRead = React.useCallback(() => {
 		if (!inboxItems) {
