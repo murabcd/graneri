@@ -106,21 +106,15 @@ export function NavUser({
 			<SidebarMenuItem>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<SidebarMenuButton
-							size="lg"
-							className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-						>
-							<Avatar className="size-8 rounded-lg">
+						<SidebarMenuButton className="group/user-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+							<Avatar className="size-5 rounded-md">
 								<AvatarImage src={avatarSrc} alt={user.name} />
-								<AvatarFallback className="rounded-lg">
+								<AvatarFallback className="rounded-md text-[8px]">
 									{initials}
 								</AvatarFallback>
 							</Avatar>
-							<div className="grid flex-1 text-left text-sm leading-tight">
-								<span className="truncate font-medium">{user.name}</span>
-								<span className="truncate text-xs">{user.email}</span>
-							</div>
-							<ChevronsUpDown className="ml-auto size-4" />
+							<span className="truncate font-medium">{user.name}</span>
+							<ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-colors group-hover/user-trigger:text-sidebar-accent-foreground" />
 						</SidebarMenuButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
@@ -129,6 +123,21 @@ export function NavUser({
 						align="end"
 						sideOffset={4}
 					>
+						<DropdownMenuItem
+							className="gap-2 px-2 py-1.5"
+							onClick={onSettingsOpen}
+						>
+							<Avatar className="size-5 rounded-md">
+								<AvatarImage src={avatarSrc} alt={user.name} />
+								<AvatarFallback className="rounded-md text-[8px]">
+									{initials}
+								</AvatarFallback>
+							</Avatar>
+							<span className="min-w-0 flex-1 truncate font-medium">
+								{user.name}
+							</span>
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
 						<DropdownMenuGroup>
 							<DropdownMenuItem
 								onClick={() => setTheme(nextTheme)}

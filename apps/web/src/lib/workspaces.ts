@@ -1,17 +1,9 @@
-import type { Id } from "../../../../convex/_generated/dataModel";
+import type { FunctionReturnType } from "convex/server";
+import type { api } from "../../../../convex/_generated/api";
 
-export type WorkspaceRecord = {
-	_id: Id<"workspaces">;
-	_creationTime: number;
-	ownerTokenIdentifier: string;
-	name: string;
-	normalizedName: string;
-	icon?: string;
-	iconStorageId?: Id<"_storage">;
-	iconUrl: string | null;
-	createdAt: number;
-	updatedAt: number;
-};
+export type WorkspaceRecord = FunctionReturnType<
+	typeof api.workspaces.list
+>[number];
 
 export const getSuggestedWorkspaceName = (name: string | null | undefined) => {
 	const trimmedName = name?.trim();

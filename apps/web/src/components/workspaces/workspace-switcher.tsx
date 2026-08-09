@@ -104,29 +104,24 @@ export function WorkspaceSwitcher({
 
 	return (
 		<>
-			<SidebarMenu>
+			<SidebarMenu className="py-2">
 				<SidebarMenuItem>
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 						<DropdownMenuTrigger asChild>
-							<SidebarMenuButton
-								size="lg"
-								className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-							>
-								<Avatar className="size-8 rounded-lg">
+							<SidebarMenuButton className="group/workspace-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+								<Avatar className="size-5 rounded-md">
 									<AvatarImage
 										src={activeWorkspaceAvatarSrc}
 										alt={activeWorkspace.name}
 									/>
-									<AvatarFallback className="rounded-lg">
+									<AvatarFallback className="rounded-md text-[8px]">
 										{getWorkspaceInitials(activeWorkspace.name)}
 									</AvatarFallback>
 								</Avatar>
-								<div className="grid flex-1 text-left text-sm leading-tight">
-									<span className="truncate font-medium">
-										{activeWorkspace.name}
-									</span>
-								</div>
-								<ChevronsUpDown className="ml-auto" />
+								<span className="truncate font-medium">
+									{activeWorkspace.name}
+								</span>
+								<ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-colors group-hover/workspace-trigger:text-sidebar-accent-foreground" />
 							</SidebarMenuButton>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent
@@ -148,12 +143,12 @@ export function WorkspaceSwitcher({
 										onClick={() => onSelect(workspace._id)}
 										className="group/workspace-item h-8 gap-2 px-2"
 									>
-										<Avatar className="size-6 rounded-md">
+										<Avatar className="size-5 rounded-md">
 											<AvatarImage
 												src={workspaceAvatarSrc}
 												alt={workspace.name}
 											/>
-											<AvatarFallback className="rounded-md text-[10px]">
+											<AvatarFallback className="rounded-md text-[8px]">
 												{getWorkspaceInitials(workspace.name)}
 											</AvatarFallback>
 										</Avatar>
