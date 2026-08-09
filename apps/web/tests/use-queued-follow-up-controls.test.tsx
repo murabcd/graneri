@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useQueuedFollowUpControls } from "../src/hooks/use-queued-follow-up-controls";
 import type { QueuedFollowUpMessage } from "../src/lib/chat-queued-followups";
+import type { ChatRequestContext } from "../src/lib/chat-request-preparation";
 
 const tokenMocks = vi.hoisted(() => ({
 	getCachedConvexToken: vi.fn(),
@@ -60,7 +61,7 @@ describe("useQueuedFollowUpControls", () => {
 		const sendMessage = vi.fn().mockRejectedValue(new Error("send failed"));
 		tokenMocks.getCachedConvexToken.mockResolvedValue("fresh-token");
 		const latestRequestBodyRef = {
-			current: null as Record<string, unknown> | null,
+			current: null as ChatRequestContext | null,
 		};
 
 		const { result } = renderHook(() =>

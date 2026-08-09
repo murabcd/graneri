@@ -18,7 +18,7 @@ const postChatRequest = async ({
 	isSteerRoute,
 	path = "/api/chat",
 }: {
-	body: Record<string, unknown>;
+	body: object;
 	isSteerRoute?: boolean;
 	path?: string;
 }) => {

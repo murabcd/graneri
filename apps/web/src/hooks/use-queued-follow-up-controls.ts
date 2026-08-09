@@ -4,6 +4,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import type { QueuedFollowUpBarItem } from "@/components/chat/chat-queued-follow-up-bar";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
+import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import { logError } from "@/lib/logger";
 import {
@@ -56,7 +57,7 @@ export const useQueuedFollowUpControls = ({
 	activeRun: AttachableRun;
 	chatId: string;
 	contextLabel: string;
-	latestRequestBodyRef: React.MutableRefObject<Record<string, unknown> | null>;
+	latestRequestBodyRef: React.MutableRefObject<ChatRequestContext | null>;
 	localMessageIds: ReadonlySet<string>;
 	onSteerStart?: () => (() => void) | undefined;
 	onEditMessage: (message: QueuedFollowUpMessage) => void;

@@ -1,3 +1,5 @@
+import type { ToolSet } from "ai";
+
 export declare const DEFAULT_FIGMA_MCP_ENDPOINT: string;
 
 export type FigmaMcpToolConnection = {
@@ -24,4 +26,4 @@ export declare const validateFigmaMcpConnection: (
 
 export declare const buildFigmaTools: (
 	connection: FigmaMcpToolConnection,
-) => Promise<Record<string, unknown>>;
+) => Promise<ToolSet>;

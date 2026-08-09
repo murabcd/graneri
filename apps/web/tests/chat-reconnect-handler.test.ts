@@ -12,7 +12,7 @@ vi.mock("convex/browser", () => ({
 	ConvexHttpClient: class {
 		mutation = (
 			functionReference: FunctionReference<"mutation">,
-			args: Record<string, unknown>,
+			args: object,
 		) => convexMock.mutation(getFunctionName(functionReference), args);
 		query = convexMock.query;
 	},

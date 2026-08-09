@@ -1,9 +1,9 @@
 export type AuthSession = {
-	session: Record<string, unknown> & {
+	session: {
 		id?: string | null;
 		token?: string | null;
 	};
-	user: Record<string, unknown> & {
+	user: {
 		email?: string | null;
 		id?: string | null;
 		image?: string | null;

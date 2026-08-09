@@ -16,18 +16,23 @@ import {
 	getHostedApiUrl,
 } from "@/lib/runtime-config";
 
+type ChatTransportRoutingBody = {
+	replayQueuedMessageId?: string;
+	steerQueuedMessageId?: string;
+};
+
 export const getWorkspaceChatSendApi = ({
 	body,
 	chatApiUrl,
 	chatSteerApiUrl,
 }: {
-	body: Record<string, unknown> | undefined;
+	body: ChatTransportRoutingBody | undefined;
 	chatApiUrl: string;
 	chatSteerApiUrl: string;
 }) =>
 	typeof body?.steerQueuedMessageId === "string" ? chatSteerApiUrl : chatApiUrl;
 
-const isServerOwnedQueuedSend = (body: Record<string, unknown> | undefined) =>
+const isServerOwnedQueuedSend = (body: ChatTransportRoutingBody | undefined) =>
 	typeof body?.replayQueuedMessageId === "string" ||
 	typeof body?.steerQueuedMessageId === "string";
 
@@ -100,7 +105,7 @@ export const prepareWorkspaceChatSendBody = ({
 	trigger,
 	workspaceId,
 }: {
-	body: Record<string, unknown> | undefined;
+	body: ChatTransportRoutingBody | undefined;
 	id: string;
 	message: unknown;
 	messageId: string | undefined;

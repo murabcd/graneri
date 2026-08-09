@@ -143,7 +143,7 @@ export const createGoogleCalendar = async ({
 	calendarListEntryUrl.searchParams.set("colorRgbFormat", "true");
 
 	try {
-		await fetchGoogleJsonWithRetry<Record<string, unknown>>(
+		await fetchGoogleJsonWithRetry<unknown>(
 			authContext,
 			googleTokens,
 			calendarListEntryUrl,
@@ -207,7 +207,7 @@ export const updateGoogleCalendar = async ({
 		const calendarUrl = new URL(
 			`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}`,
 		);
-		await fetchGoogleJsonWithRetry<Record<string, unknown>>(
+		await fetchGoogleJsonWithRetry<unknown>(
 			authContext,
 			googleTokens,
 			calendarUrl,
@@ -220,7 +220,7 @@ export const updateGoogleCalendar = async ({
 	}
 
 	try {
-		await fetchGoogleJsonWithRetry<Record<string, unknown>>(
+		await fetchGoogleJsonWithRetry<unknown>(
 			authContext,
 			googleTokens,
 			calendarListEntryUrl,
@@ -243,7 +243,7 @@ export const updateGoogleCalendar = async ({
 			`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}`,
 		);
 		try {
-			await fetchGoogleJsonWithRetry<Record<string, unknown>>(
+			await fetchGoogleJsonWithRetry<unknown>(
 				authContext,
 				googleTokens,
 				calendarUrl,
@@ -370,7 +370,7 @@ export const removeGoogleCalendar = async ({
 		);
 		moveUrl.searchParams.set("destination", destinationCalendarId);
 		moveUrl.searchParams.set("sendUpdates", "all");
-		await fetchGoogleJsonWithRetry<Record<string, unknown>>(
+		await fetchGoogleJsonWithRetry<unknown>(
 			authContext,
 			googleTokens,
 			moveUrl,

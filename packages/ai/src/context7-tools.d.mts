@@ -1,3 +1,5 @@
+import type { ToolSet } from "ai";
+
 export declare const DEFAULT_CONTEXT7_MCP_ENDPOINT: string;
 
 export type Context7McpToolConnection = {
@@ -20,4 +22,4 @@ export declare const validateContext7McpConnection: (
 
 export declare const buildContext7Tools: (
 	connection: Context7McpToolConnection,
-) => Promise<Record<string, unknown>>;
+) => Promise<ToolSet>;

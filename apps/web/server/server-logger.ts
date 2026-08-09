@@ -1,17 +1,69 @@
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
+import type { getHostedChatSteerTelemetry } from "@workspace/ai/hosted-chat-runtime";
 import pino from "pino";
 
-export type ServerWideEvent = Record<string, unknown> & {
+type HostedChatSteerTelemetry = NonNullable<
+	ReturnType<typeof getHostedChatSteerTelemetry>
+>;
+
+export type ServerWideEvent = {
+	active_run_id?: string | null;
+	app_connection_count?: number;
+	apps_enabled?: boolean;
+	assistant_message_id?: string;
+	assistant_run_id?: string;
+	chat_id?: string | null;
+	continue_run_id?: string | null;
+	deferred_tool_count?: number;
 	duration_ms?: number;
-	errors?: Array<Record<string, unknown>>;
+	error_code?: string;
+	error_message?: string | null;
+	errors?: object[];
 	event: string;
+	generated_description_length?: number;
+	generated_section_count?: number;
+	has_current_description?: boolean;
+	has_note_context?: boolean;
+	has_recipe?: boolean;
+	has_speaker?: boolean;
+	has_title?: boolean;
+	is_steer_route?: boolean;
+	language?: string | null;
+	local_folder_count?: number;
+	local_folder_root_count?: number;
 	method?: string;
+	mention_count?: number;
+	model?: string | null;
+	note_count?: number;
+	note_text_length?: number;
+	openai_processing_ms?: string | null;
+	openai_request_id?: string | null;
+	openai_status_code?: number;
 	outcome?: "error" | "success";
 	path?: string;
+	project_name_length?: number;
+	raw_notes_length?: number;
+	reasoning_effort?: string | null;
+	replay_queued_message_id?: string | null;
+	request_id?: string;
+	requested_model?: string | null;
+	selected_source_count?: number;
+	service_tier?: string | null;
+	source?: string | null;
 	status_code?: number;
+	steer_queued_message_id?: string | null;
+	template_name?: string | null;
+	template_section_count?: number;
+	template_slug?: string | null;
 	timestamp: string;
-};
+	tool_count?: number;
+	transcript_length?: number;
+	transcription_language?: string | null;
+	trigger?: string | null;
+	web_search_enabled?: boolean;
+	workspace_id?: string | null;
+} & Partial<HostedChatSteerTelemetry>;
 
 export type ServerWideEventLevel = "error" | "info";
 
@@ -56,13 +108,13 @@ export const createServerWideEvent = ({
 	timestamp: new Date().toISOString(),
 });
 
-export const recordServerError = ({
-	details = {},
+export const recordServerError = <TDetails extends object = object>({
+	details,
 	error,
 	event,
 	operation,
 }: {
-	details?: Record<string, unknown>;
+	details?: TDetails;
 	error: unknown;
 	event: ServerWideEvent;
 	operation: string;
@@ -70,7 +122,7 @@ export const recordServerError = ({
 	event.errors ??= [];
 	event.errors.push({
 		operation,
-		...details,
+		...(details ?? {}),
 		error: serializeError(error),
 	});
 };

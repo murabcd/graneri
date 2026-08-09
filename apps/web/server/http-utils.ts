@@ -19,7 +19,7 @@ export const readJsonBody = async <TBody>(request: IncomingMessage) => {
 export const sendJson = (
 	response: ServerResponse,
 	statusCode: number,
-	payload: Record<string, unknown>,
+	payload: object,
 	headers?: Record<string, string> | null,
 ) => {
 	response.statusCode = statusCode;

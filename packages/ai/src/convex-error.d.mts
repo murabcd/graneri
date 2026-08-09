@@ -1,6 +1,11 @@
+export type ConvexErrorData = {
+	code?: unknown;
+	retryAfterMs?: unknown;
+};
+
 export declare const getConvexErrorData: (
 	error: unknown,
-) => Record<string, unknown> | null;
+) => ConvexErrorData | null;
 
 export declare const isConvexErrorCode: (
 	error: unknown,

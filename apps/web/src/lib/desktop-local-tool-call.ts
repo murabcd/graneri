@@ -26,9 +26,13 @@ type LocalToolCall = {
 
 type LocalToolRequestOptions =
 	| {
-			body: Record<string, unknown>;
+			body: DesktopLocalToolRequestBody;
 	  }
 	| undefined;
+
+type DesktopLocalToolRequestBody = {
+	localFolders?: DesktopLocalFolder[];
+};
 
 const isDesktopLocalToolName = (toolName: string) =>
 	localToolNames.has(toolName);
@@ -45,7 +49,7 @@ export const isDesktopLocalFolderArray = (
 	);
 
 const getRequestLocalFolders = (
-	requestBody: Record<string, unknown> | null,
+	requestBody: DesktopLocalToolRequestBody | null,
 ) => {
 	if (!requestBody) {
 		throw new Error(
@@ -112,7 +116,7 @@ const submitDesktopLocalToolCall = async ({
 	toolCall,
 }: {
 	addToolOutputRef: RefObject<ChatAddToolOutputFunction<UIMessage> | null>;
-	requestBody: Record<string, unknown> | null;
+	requestBody: DesktopLocalToolRequestBody | null;
 	requestOptions: LocalToolRequestOptions;
 	toolCall: LocalToolCall;
 }) => {
@@ -157,7 +161,7 @@ export const createDesktopLocalToolCallHandler =
 		latestRequestBodyRef,
 	}: {
 		addToolOutputRef: RefObject<ChatAddToolOutputFunction<UIMessage> | null>;
-		latestRequestBodyRef: RefObject<Record<string, unknown> | null>;
+		latestRequestBodyRef: RefObject<DesktopLocalToolRequestBody | null>;
 	}): ChatOnToolCallCallback<UIMessage> =>
 	({ toolCall }) => {
 		if (toolCall.dynamic) {

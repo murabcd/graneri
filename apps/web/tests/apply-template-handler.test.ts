@@ -42,7 +42,7 @@ afterEach(() => {
 	}
 });
 
-const createRequest = (body: Record<string, unknown>) =>
+const createRequest = (body: object) =>
 	({
 		async *[Symbol.asyncIterator]() {
 			yield Buffer.from(JSON.stringify(body));

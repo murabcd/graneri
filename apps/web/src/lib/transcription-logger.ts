@@ -6,19 +6,15 @@ type TranscriptionLoggerContext = {
 };
 
 export type TranscriptionLogger = {
-	info: (event: string, details?: Record<string, unknown>) => void;
-	error: (event: string, details?: Record<string, unknown>) => void;
+	info: (event: string, details?: object) => void;
+	error: (event: string, details?: object) => void;
 };
 
 export const createTranscriptionLogger = ({
 	sessionId,
 	scopeKey,
 }: TranscriptionLoggerContext): TranscriptionLogger => {
-	const write = (
-		level: "error" | "info",
-		event: string,
-		details?: Record<string, unknown>,
-	) => {
+	const write = (level: "error" | "info", event: string, details?: object) => {
 		const payload = {
 			event: `transcription.${event}`,
 			scopeKey,

@@ -47,16 +47,15 @@ export const getDesktopMeta = async () => {
 
 export const supportsDesktopTranscriptionController = () => {
 	const bridge = getDesktopBridge();
-	const candidate = bridge as Record<string, unknown> | null;
 
 	return Boolean(
-		candidate &&
-			typeof candidate.getTranscriptionSessionState === "function" &&
-			typeof candidate.configureTranscriptionSession === "function" &&
-			typeof candidate.startTranscriptionSession === "function" &&
-			typeof candidate.stopTranscriptionSession === "function" &&
-			typeof candidate.onTranscriptionSessionState === "function" &&
-			typeof candidate.onTranscriptionSessionEvent === "function",
+		bridge &&
+			typeof bridge.getTranscriptionSessionState === "function" &&
+			typeof bridge.configureTranscriptionSession === "function" &&
+			typeof bridge.startTranscriptionSession === "function" &&
+			typeof bridge.stopTranscriptionSession === "function" &&
+			typeof bridge.onTranscriptionSessionState === "function" &&
+			typeof bridge.onTranscriptionSessionEvent === "function",
 	);
 };
 

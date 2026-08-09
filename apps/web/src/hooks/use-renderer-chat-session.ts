@@ -18,6 +18,7 @@ import {
 	normalizeChatMessages,
 } from "@/lib/chat-message-state";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
+import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getUIMessageSeedKey } from "@/lib/chat-snapshot";
 import { CHAT_STREAM_UI_THROTTLE_MS } from "@/lib/chat-streaming-performance";
 import { removeChatMessageById } from "@/lib/chat-submit-session";
@@ -69,9 +70,7 @@ export const useRendererChatSession = ({
 	const attachableActiveRun =
 		activeRun && activeRun.status !== "stopping" ? activeRun : null;
 	const transport = useWorkspaceChatTransport(workspaceId);
-	const latestRequestBodyRef = React.useRef<Record<string, unknown> | null>(
-		null,
-	);
+	const latestRequestBodyRef = React.useRef<ChatRequestContext | null>(null);
 	const addToolOutputRef =
 		React.useRef<ChatAddToolOutputFunction<UIMessage> | null>(null);
 	const [activeSteerHandoffStreamingMessageIds, setActiveSteerHandoffIds] =
@@ -246,7 +245,7 @@ export const useRendererChatSession = ({
 		}: {
 			approval: ToolApprovalRequest;
 			approved: boolean;
-			requestBody: Record<string, unknown>;
+			requestBody: ChatRequestContext;
 		}) => {
 			if (!displayActiveRun) {
 				throw new Error("Tool approval requires an active assistant run.");

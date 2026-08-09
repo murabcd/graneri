@@ -182,12 +182,9 @@ const getSelectedRecipe = async ({
 	}
 
 	const client = new ConvexHttpClient(getConvexUrl(), { auth: convexToken });
-	const recipes: Array<{ slug: string }> = await client.query(
-		api.recipes.list,
-		{
-			workspaceId: workspaceId as Id<"workspaces">,
-		},
-	);
+	const recipes = await client.query(api.recipes.list, {
+		workspaceId: workspaceId as Id<"workspaces">,
+	});
 
 	const selectedRecipe = recipes.find((recipe) => recipe.slug === recipeSlug);
 	if (!selectedRecipe) {

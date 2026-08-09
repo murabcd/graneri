@@ -183,7 +183,7 @@ export const handleApplyTemplateRequest = async (
 	response.setHeader("Cache-Control", "no-cache, no-transform");
 	response.flushHeaders?.();
 
-	const writeEvent = (payload: Record<string, unknown>) => {
+	const writeEvent = (payload: object) => {
 		response.write(`${JSON.stringify(payload)}\n`);
 	};
 

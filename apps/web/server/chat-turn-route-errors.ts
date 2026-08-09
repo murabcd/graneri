@@ -4,7 +4,7 @@ import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 type SendJson = (
 	response: ServerResponse,
 	statusCode: number,
-	payload: Record<string, unknown>,
+	payload: object,
 	headers?: Record<string, string> | null,
 ) => void;
 

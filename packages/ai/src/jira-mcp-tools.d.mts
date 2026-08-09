@@ -1,3 +1,5 @@
+import type { ToolSet } from "ai";
+
 export declare const DEFAULT_JIRA_MCP_ENDPOINT: string;
 
 export type JiraMcpToolConnection = {
@@ -18,4 +20,4 @@ export declare function validateJiraMcpConnection(
 
 export declare function buildJiraMcpTools(
 	connection: JiraMcpToolConnection,
-): Promise<Record<string, unknown>>;
+): Promise<ToolSet>;

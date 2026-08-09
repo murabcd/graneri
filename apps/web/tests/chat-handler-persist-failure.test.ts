@@ -26,15 +26,12 @@ vi.mock("convex/browser", () => ({
 	ConvexHttpClient: class {
 		mutation = (
 			functionReference: FunctionReference<"mutation">,
-			args: Record<string, unknown>,
+			args: object,
 		) =>
 			getFunctionName(functionReference) === "aiAccess:authorizeChatTurn"
 				? convexMock.authorizeChatTurn(functionReference, args)
 				: convexMock.mutation(functionReference, args);
-		query = (
-			functionReference: FunctionReference<"query">,
-			args: Record<string, unknown>,
-		) =>
+		query = (functionReference: FunctionReference<"query">, args: object) =>
 			getFunctionName(functionReference) ===
 			"chatContextCompactions:getPreparationState"
 				? convexMock.contextState(functionReference, args)
@@ -79,7 +76,7 @@ afterEach(() => {
 });
 
 const postChatRequest = async (
-	body: Record<string, unknown>,
+	body: object,
 	options: { includeHeaders?: boolean; isSteerRoute?: boolean } = {},
 ) => {
 	const server = createServer((request, response) => {
@@ -141,7 +138,7 @@ const postChatRequest = async (
 	}
 };
 
-const postChatStopRequest = async (body: Record<string, unknown>) => {
+const postChatStopRequest = async (body: object) => {
 	const server = createServer((request, response) => {
 		void handleChatStopRequest(request, response).catch((error: unknown) => {
 			response.statusCode = 500;

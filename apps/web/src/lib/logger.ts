@@ -2,8 +2,9 @@ import pino from "pino";
 
 export type LogLevel = "error" | "info";
 
-export type LogEvent = Record<string, unknown> & {
+export type LogEvent = {
 	event: string;
+	message?: string;
 };
 
 const getEnvironmentContext = () => ({
@@ -52,7 +53,7 @@ const toEventName = (message: string, fallback: string) => {
 	return isFailure ? `${base}_failed` : base;
 };
 
-const normalizeEvent = (event: LogEvent): LogEvent => {
+const normalizeEvent = <TEvent extends LogEvent>(event: TEvent) => {
 	if (
 		(event.event === "client.error" || event.event === "client.info") &&
 		typeof event.message === "string"
@@ -66,14 +67,12 @@ const normalizeEvent = (event: LogEvent): LogEvent => {
 	return event;
 };
 
-export const logInfo = (event: LogEvent) => {
+export const logInfo = <TEvent extends LogEvent>(event: TEvent) => {
 	logger.info(normalizeEvent(event));
 };
 
-export const logError = (
-	event: LogEvent & {
-		error?: unknown;
-	},
+export const logError = <TEvent extends LogEvent & { error?: unknown }>(
+	event: TEvent,
 ) => {
 	const { error, ...details } = normalizeEvent(event);
 

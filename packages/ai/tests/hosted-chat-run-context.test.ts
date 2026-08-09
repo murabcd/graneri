@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildChatAutomationContext } from "../src/automation-tools.mjs";
+import {
+	type AutomationToolInput,
+	buildChatAutomationContext,
+} from "../src/automation-tools.mjs";
 import { prepareHostedAssistantRunInput } from "../src/hosted-assistant-run-input.mjs";
 import {
 	buildHostedChatRunContext,
@@ -330,11 +333,11 @@ describe("chat automation tools", () => {
 	it("creates one-time monitoring automations with an explicit destination", async () => {
 		const createInputs: unknown[] = [];
 		const context = createAutomationContext({
-			createAutomation: async (input: unknown) => {
+			createAutomation: async (input: AutomationToolInput) => {
 				createInputs.push(input);
 				return {
 					...automation,
-					...(input as Record<string, unknown>),
+					...input,
 				};
 			},
 		});
@@ -366,11 +369,13 @@ describe("chat automation tools", () => {
 	it("updates automations while preserving unspecified fields", async () => {
 		const updateInputs: unknown[] = [];
 		const context = createAutomationContext({
-			updateAutomation: async (input: unknown) => {
+			updateAutomation: async (
+				input: AutomationToolInput & { automationId: string },
+			) => {
 				updateInputs.push(input);
 				return {
 					...automation,
-					...(input as Record<string, unknown>),
+					...input,
 				};
 			},
 		});

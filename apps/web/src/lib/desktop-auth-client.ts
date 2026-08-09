@@ -1,5 +1,6 @@
 import { getDesktopBridge } from "@workspace/platform/desktop";
 import * as React from "react";
+import { z } from "zod";
 import type {
 	AuthSession,
 	GraneriAuthClient,
@@ -128,6 +129,19 @@ type DesktopAuthErrorShape = {
 	statusText: string;
 };
 
+const desktopSessionSchema = z.object({
+	session: z.object({
+		id: z.string().nullable().optional(),
+		token: z.string().nullable().optional(),
+	}),
+	user: z.object({
+		email: z.string().nullable().optional(),
+		id: z.string().nullable().optional(),
+		image: z.string().nullable().optional(),
+		name: z.string().nullable().optional(),
+	}),
+});
+
 const normalizeHeaders = (
 	headers?: HeadersInit,
 ): Record<string, string> | undefined => {
@@ -165,16 +179,10 @@ const getBearerToken = (headers?: HeadersInit) => {
 	return match?.[1]?.trim() || null;
 };
 
-const isDesktopSessionData = (
-	value: unknown,
-): value is {
-	session: Record<string, unknown>;
-	user: Record<string, unknown>;
-} =>
-	typeof value === "object" &&
-	value !== null &&
-	"session" in value &&
-	"user" in value;
+const parseDesktopSessionData = (value: unknown): AuthSession | null => {
+	const result = desktopSessionSchema.safeParse(value);
+	return result.success ? result.data : null;
+};
 
 const notifyListeners = () => {
 	for (const listener of listeners) {
@@ -359,7 +367,7 @@ const refreshDesktopSession = async ({
 		throw: true,
 	})
 		.then((data: unknown) => {
-			const nextData = isDesktopSessionData(data) ? data : null;
+			const nextData = parseDesktopSessionData(data);
 
 			applySessionData(nextData, generation);
 
@@ -576,13 +584,14 @@ export const desktopAuthClient = {
 					body: { token },
 				});
 
-				if (isDesktopSessionData(data)) {
+				const sessionData = parseDesktopSessionData(data);
+				if (sessionData) {
 					invalidateSessionRefreshes();
-					applySessionData(data);
+					applySessionData(sessionData);
 				}
 
 				return {
-					data: isDesktopSessionData(data) ? data : null,
+					data: sessionData,
 					error: null,
 				};
 			},

@@ -14,7 +14,7 @@ import type { ActionCtx } from "./_generated/server";
 
 const jsonResponse = (
 	status: number,
-	payload: Record<string, unknown>,
+	payload: object,
 	headers?: Record<string, string>,
 ) =>
 	new Response(JSON.stringify(payload), {

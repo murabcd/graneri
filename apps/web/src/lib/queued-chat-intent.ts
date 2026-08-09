@@ -1,5 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 import { fromQueuedUserMessage } from "@/lib/chat-queue";
+import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
@@ -10,7 +11,7 @@ type PreparedQueuedMessage = Awaited<ReturnType<typeof fromQueuedUserMessage>>;
 
 export type QueuedChatSendMessage = (
 	message: PreparedQueuedMessage["message"],
-	options: { body: Record<string, unknown> },
+	options: { body: ChatRequestContext },
 ) => Promise<unknown>;
 
 type PrepareQueuedIntentArgs = {
@@ -74,7 +75,7 @@ type DrainQueuedChatMessageArgs = {
 	queuedMessageCount: number;
 	resolveConvexToken: () => Promise<string | null>;
 	sendMessage: QueuedChatSendMessage;
-	setLatestRequestBody: (body: Record<string, unknown>) => void;
+	setLatestRequestBody: (body: ChatRequestContext) => void;
 	workspaceId: Id<"workspaces">;
 };
 

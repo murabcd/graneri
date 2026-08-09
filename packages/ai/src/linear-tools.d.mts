@@ -1,3 +1,5 @@
+import type { ToolSet } from "ai";
+
 export declare const DEFAULT_LINEAR_MCP_ENDPOINT: string;
 
 export type LinearMcpToolConnection = {
@@ -24,4 +26,4 @@ export declare const validateLinearMcpConnection: (
 
 export declare const buildLinearTools: (
 	connection: LinearMcpToolConnection,
-) => Promise<Record<string, unknown>>;
+) => Promise<ToolSet>;

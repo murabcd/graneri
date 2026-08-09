@@ -47,7 +47,7 @@ const createRequest = ({
 	body,
 }: {
 	authorization?: string;
-	body: Record<string, unknown>;
+	body: object;
 }) =>
 	({
 		async *[Symbol.asyncIterator]() {

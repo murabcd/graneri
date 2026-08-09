@@ -17,6 +17,13 @@ type ChatRequestBase = {
 	timezone: string;
 };
 
+export type ChatRequestContext = {
+	continueRunId?: string;
+	localFolders?: DesktopLocalFolder[];
+	replayQueuedMessageId?: string;
+	steerQueuedMessageId?: string;
+};
+
 export type WorkspaceChatRequestBody = ChatRequestBase & {
 	mentions: string[];
 	selectedSourceIds: string[];

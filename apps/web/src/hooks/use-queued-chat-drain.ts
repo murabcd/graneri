@@ -12,6 +12,7 @@ import {
 	updateQueuedFollowUpsCache,
 	writeQueuedFollowUpsCache,
 } from "@/lib/chat-queued-followups";
+import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import { logError } from "@/lib/logger";
 import {
@@ -39,7 +40,7 @@ export const useQueuedChatDrain = ({
 	chatId: string;
 	contextLabel: string;
 	isBlocked: boolean;
-	latestRequestBodyRef: React.MutableRefObject<Record<string, unknown> | null>;
+	latestRequestBodyRef: React.MutableRefObject<ChatRequestContext | null>;
 	localMessageIds: ReadonlySet<string>;
 	sendMessage: QueuedChatSendMessage;
 	workspaceId: Id<"workspaces"> | null | undefined;

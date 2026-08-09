@@ -24,7 +24,8 @@ const getDiscussionActivityTitle = (isReply: boolean) =>
 const getThreadInboxExternalId = (threadId: Id<"noteCommentThreads">) =>
 	`note-comment-thread:${threadId}`;
 
-const getInboxNoteTitle = (note: Doc<"notes">) => note.title.trim() || "Untitled";
+const getInboxNoteTitle = (note: Doc<"notes">) =>
+	note.title.trim() || "Untitled";
 
 const syncThreadInboxItem = async (
 	ctx: MutationCtx,
@@ -131,7 +132,8 @@ const noteCommentThreadDetailValidator = v.object({
 	comments: v.array(noteCommentValidator),
 });
 
-const clampExcerpt = (value: string) => value.trim().slice(0, MAX_THREAD_EXCERPT_LENGTH);
+const clampExcerpt = (value: string) =>
+	value.trim().slice(0, MAX_THREAD_EXCERPT_LENGTH);
 
 const normalizeCommentBody = (value: string) => {
 	const normalized = value.trim();
@@ -155,9 +157,7 @@ const normalizeCommentBody = (value: string) => {
 
 const resolveThreadCreatorName = async (
 	ctx: MutationCtx | QueryCtx,
-	thread: {
-		_id: Id<"noteCommentThreads">;
-	} & Record<string, unknown>,
+	thread: Doc<"noteCommentThreads">,
 ) => {
 	const createdByName = thread.createdByName;
 
@@ -175,9 +175,7 @@ const resolveThreadCreatorName = async (
 
 const resolveLatestCommentIsReply = async (
 	ctx: MutationCtx | QueryCtx,
-	thread: {
-		_id: Id<"noteCommentThreads">;
-	} & Record<string, unknown>,
+	thread: Doc<"noteCommentThreads">,
 ) => {
 	const latestCommentIsReply = thread.latestCommentIsReply;
 
@@ -196,31 +194,12 @@ const resolveLatestCommentIsReply = async (
 
 const normalizeThreadSummary = async (
 	ctx: MutationCtx | QueryCtx,
-	thread: {
-		_id: Id<"noteCommentThreads">;
-		_creationTime: number;
-		ownerTokenIdentifier: string;
-		workspaceId: Id<"workspaces">;
-		noteId: Id<"notes">;
-		excerpt: string;
-		isResolved: boolean;
-		isRead: boolean;
-		isMutedReplies?: boolean;
-		readAt?: number;
-		resolvedAt?: number;
-		resolvedByName?: string;
-		commentCount: number;
-		latestCommentPreview: string;
-		latestCommentIsReply?: boolean;
-		createdAt: number;
-		updatedAt: number;
-		lastCommentAt: number;
-	} & Record<string, unknown>,
+	thread: Doc<"noteCommentThreads">,
 ) => ({
-		...thread,
-		createdByName: await resolveThreadCreatorName(ctx, thread),
-		latestCommentIsReply: await resolveLatestCommentIsReply(ctx, thread),
-	});
+	...thread,
+	createdByName: await resolveThreadCreatorName(ctx, thread),
+	latestCommentIsReply: await resolveLatestCommentIsReply(ctx, thread),
+});
 
 const requireOwnedThread = async (
 	ctx: MutationCtx | QueryCtx,
@@ -469,7 +448,11 @@ export const listThreads = query({
 	returns: v.array(noteCommentThreadSummaryValidator),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 
 		if (!args.view || args.view === "all") {
@@ -516,7 +499,11 @@ export const getThread = query({
 	returns: v.union(noteCommentThreadDetailValidator, v.null()),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 		const thread = await ctx.db.get(args.threadId);
 
@@ -531,7 +518,9 @@ export const getThread = query({
 
 		const comments = await ctx.db
 			.query("noteComments")
-			.withIndex("by_threadId_and_createdAt", (q) => q.eq("threadId", args.threadId))
+			.withIndex("by_threadId_and_createdAt", (q) =>
+				q.eq("threadId", args.threadId),
+			)
 			.take(200);
 
 		return {
@@ -551,7 +540,11 @@ export const createThread = mutation({
 	returns: v.id("noteCommentThreads"),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		const note = await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 
 		const body = normalizeCommentBody(args.body);
@@ -622,7 +615,11 @@ export const addComment = mutation({
 	returns: v.id("noteComments"),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		const note = await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 		const thread = await requireOwnedThread(ctx, {
 			workspaceId: args.workspaceId,
@@ -688,7 +685,11 @@ export const setResolved = mutation({
 	returns: noteCommentThreadSummaryValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 		const thread = await requireOwnedThread(ctx, {
 			workspaceId: args.workspaceId,
@@ -715,7 +716,7 @@ export const setResolved = mutation({
 			});
 		}
 
-	return await normalizeThreadSummary(ctx, nextThread);
+		return await normalizeThreadSummary(ctx, nextThread);
 	},
 });
 
@@ -764,7 +765,11 @@ export const updateComment = mutation({
 	returns: v.id("noteComments"),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		const note = await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 		const thread = await requireOwnedThread(ctx, {
 			workspaceId: args.workspaceId,
@@ -790,7 +795,9 @@ export const updateComment = mutation({
 
 		const latestComment = await ctx.db
 			.query("noteComments")
-			.withIndex("by_threadId_and_createdAt", (q) => q.eq("threadId", thread._id))
+			.withIndex("by_threadId_and_createdAt", (q) =>
+				q.eq("threadId", thread._id),
+			)
 			.order("desc")
 			.first();
 
@@ -829,7 +836,11 @@ export const deleteComment = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		const note = await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 		const thread = await requireOwnedThread(ctx, {
 			workspaceId: args.workspaceId,
@@ -847,7 +858,9 @@ export const deleteComment = mutation({
 
 		const threadComments = await ctx.db
 			.query("noteComments")
-			.withIndex("by_threadId_and_createdAt", (q) => q.eq("threadId", thread._id))
+			.withIndex("by_threadId_and_createdAt", (q) =>
+				q.eq("threadId", thread._id),
+			)
 			.take(thread.commentCount);
 
 		const directReplies = threadComments.filter(
@@ -877,11 +890,15 @@ export const deleteComment = mutation({
 
 		const firstRemainingComment = await ctx.db
 			.query("noteComments")
-			.withIndex("by_threadId_and_createdAt", (q) => q.eq("threadId", thread._id))
+			.withIndex("by_threadId_and_createdAt", (q) =>
+				q.eq("threadId", thread._id),
+			)
 			.first();
 		const latestRemainingComment = await ctx.db
 			.query("noteComments")
-			.withIndex("by_threadId_and_createdAt", (q) => q.eq("threadId", thread._id))
+			.withIndex("by_threadId_and_createdAt", (q) =>
+				q.eq("threadId", thread._id),
+			)
 			.order("desc")
 			.first();
 
@@ -932,7 +949,11 @@ export const toggleMuteReplies = mutation({
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 		const thread = await requireOwnedThread(ctx, {
 			workspaceId: args.workspaceId,
@@ -959,7 +980,11 @@ export const deleteThread = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 		await requireOwnedNote(ctx, args.noteId, args.workspaceId);
 		const thread = await requireOwnedThread(ctx, {
 			workspaceId: args.workspaceId,
@@ -1057,7 +1082,11 @@ export const removeForNote = internalMutation({
 		}
 
 		if (threads.length === REMOVE_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.noteComments.removeForNote, args);
+			await ctx.scheduler.runAfter(
+				0,
+				internal.noteComments.removeForNote,
+				args,
+			);
 		}
 
 		return null;
@@ -1083,10 +1112,14 @@ export const removeAllForWorkspace = internalMutation({
 		);
 
 		if (hasMoreComments || hasMoreThreads) {
-			await ctx.scheduler.runAfter(0, internal.noteComments.removeAllForWorkspace, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
+			await ctx.scheduler.runAfter(
+				0,
+				internal.noteComments.removeAllForWorkspace,
+				{
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+				},
+			);
 		}
 
 		return null;

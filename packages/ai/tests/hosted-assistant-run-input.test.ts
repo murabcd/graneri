@@ -79,7 +79,7 @@ const createCompletionInput = (): CompletionInput => ({
 describe("hosted Assistant Run input", () => {
 	it("branches before loading and compacting the final active history", async () => {
 		const events: string[] = [];
-		const latency: Array<[string, Record<string, unknown> | undefined]> = [];
+		const latency: Array<[string, object | undefined]> = [];
 		const original = storedMessage({
 			id: "user-1",
 			role: "user",

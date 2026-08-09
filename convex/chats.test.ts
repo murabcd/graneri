@@ -1032,22 +1032,16 @@ test("an interrupted run can continue with a new assistant message", async () =>
 		"Steer",
 		"Second answer.",
 	]);
-	expect(
-		JSON.parse(state.messages[1]?.metadataJson ?? "{}") as Record<
-			string,
-			unknown
-		>,
-	).toEqual({ interrupted: true });
+	expect(JSON.parse(state.messages[1]?.metadataJson ?? "{}")).toEqual({
+		interrupted: true,
+	});
 	const uiMessages = await readChatMessages(asOwner, workspaceId, chatId);
 	const interruptedUiMessage = uiMessages.find(
 		(message) => message.id === run.assistantMessageId,
 	);
-	expect(
-		JSON.parse(interruptedUiMessage?.metadataJson ?? "{}") as Record<
-			string,
-			unknown
-		>,
-	).toEqual({ interrupted: true });
+	expect(JSON.parse(interruptedUiMessage?.metadataJson ?? "{}")).toEqual({
+		interrupted: true,
+	});
 
 	const events = await asOwner.query(
 		api.assistantRunEvents.listRunEventsAfter,

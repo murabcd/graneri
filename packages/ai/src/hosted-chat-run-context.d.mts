@@ -1,7 +1,9 @@
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { ToolLoopAgent, ToolSet, UIMessage } from "ai";
 import type { AutomationActions } from "./automation-tools.mjs";
+import type { WorkspaceToolConnection } from "./capability-registry.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
+import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
 import type { ServiceTier } from "./models.mjs";
 
 type LogLatencyDetails = Record<
@@ -21,11 +23,7 @@ type LocalFolderRoot = {
 	path: string;
 };
 
-type AppConnection = Record<string, unknown>;
-
-type Recipe = Record<string, unknown> | null;
-
-type ChatAttachmentsApi = Record<string, unknown>;
+type Recipe = { name: string; prompt: string } | null;
 
 export declare const getHostedChatLocalFolderReferencePaths: (
 	localFolders?: LocalFolderReference[],
@@ -50,7 +48,7 @@ export declare const buildHostedChatRunContext: (args: {
 	getNotesContext: () => Promise<string>;
 	getAppConnections: (args: {
 		workspaceId: string;
-	}) => Promise<AppConnection[]>;
+	}) => Promise<WorkspaceToolConnection[]>;
 	getSelectedRecipe: (args: {
 		recipeSlug?: string | null;
 		workspaceId: string;
@@ -95,7 +93,7 @@ export declare const buildHostedChatRunContext: (args: {
 		hasToolSearch: boolean;
 	};
 	localFolderRoots: LocalFolderRoot[];
-	appConnections: AppConnection[];
+	appConnections: WorkspaceToolConnection[];
 	instructions: string;
 	tools: ToolSet;
 }>;
