@@ -17,7 +17,6 @@ const createWorkspace = async () => {
 			ownerTokenIdentifier,
 			name: "Retirement workspace",
 			normalizedName: "retirement-workspace",
-			role: "startup-generalist",
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		}),

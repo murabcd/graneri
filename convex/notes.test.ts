@@ -28,7 +28,6 @@ const createWorkspaceAndNote = async () => {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt,
 			updatedAt: createdAt,
 		});
@@ -71,7 +70,6 @@ const createWorkspace = async () => {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		}),

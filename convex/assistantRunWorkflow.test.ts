@@ -46,7 +46,6 @@ const createBackgroundRun = async () => {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		}),

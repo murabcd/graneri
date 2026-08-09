@@ -28,13 +28,6 @@ import {
 	calendarEventSnapshotValidator,
 } from "./calendarValidators";
 
-const workspaceRoleValidator = v.union(
-	v.literal("startup-generalist"),
-	v.literal("investing"),
-	v.literal("recruiting"),
-	v.literal("customer-facing"),
-);
-
 const transcriptSessionStatusValidator = v.union(
 	v.literal("capturing"),
 	v.literal("stopping"),
@@ -247,7 +240,6 @@ export default defineSchema({
 		normalizedName: v.string(),
 		icon: v.optional(v.string()),
 		iconStorageId: v.optional(v.id("_storage")),
-		role: workspaceRoleValidator,
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})

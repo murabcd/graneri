@@ -29,7 +29,7 @@ import * as React from "react";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
 import { WorkspaceComposer } from "@/components/workspaces/workspace-composer";
 import { getAvatarSrc } from "@/lib/avatar";
-import { getWorkspaceRoleOption, type WorkspaceRecord } from "@/lib/workspaces";
+import type { WorkspaceRecord } from "@/lib/workspaces";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const getWorkspaceInitials = (workspaceName: string) =>
@@ -65,7 +65,6 @@ export function WorkspaceSwitcher({
 		return null;
 	}
 
-	const activeWorkspaceMeta = getWorkspaceRoleOption(activeWorkspace.role);
 	const activeWorkspaceAvatarSrc =
 		activeWorkspace.iconUrl ??
 		getAvatarSrc({
@@ -125,9 +124,6 @@ export function WorkspaceSwitcher({
 								<div className="grid flex-1 text-left text-sm leading-tight">
 									<span className="truncate font-medium">
 										{activeWorkspace.name}
-									</span>
-									<span className="truncate text-xs">
-										{activeWorkspaceMeta.summary}
 									</span>
 								</div>
 								<ChevronsUpDown className="ml-auto" />

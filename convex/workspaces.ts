@@ -12,13 +12,6 @@ import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import { seedDefaultRecipesForWorkspace } from "./recipes";
 import { seedDefaultTemplatesForWorkspace } from "./templates";
 
-const workspaceRoleValidator = v.union(
-	v.literal("startup-generalist"),
-	v.literal("investing"),
-	v.literal("recruiting"),
-	v.literal("customer-facing"),
-);
-
 const workspaceFields = {
 	_id: v.id("workspaces"),
 	_creationTime: v.number(),
@@ -27,7 +20,6 @@ const workspaceFields = {
 	normalizedName: v.string(),
 	icon: v.optional(v.string()),
 	iconStorageId: v.optional(v.id("_storage")),
-	role: workspaceRoleValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
 };
@@ -133,7 +125,6 @@ export const create = mutation({
 		name: v.string(),
 		icon: v.optional(v.string()),
 		iconStorageId: v.optional(v.id("_storage")),
-		role: v.optional(workspaceRoleValidator),
 	},
 	returns: workspaceResponseValidator,
 	handler: async (ctx, args) => {
@@ -179,7 +170,6 @@ export const create = mutation({
 			normalizedName,
 			icon: args.icon,
 			iconStorageId: args.iconStorageId,
-			role: args.role ?? "startup-generalist",
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -216,7 +206,6 @@ export const update = mutation({
 		name: v.optional(v.string()),
 		icon: v.optional(v.string()),
 		iconStorageId: v.optional(v.id("_storage")),
-		role: v.optional(workspaceRoleValidator),
 	},
 	returns: workspaceResponseValidator,
 	handler: async (ctx, args) => {
@@ -246,7 +235,6 @@ export const update = mutation({
 			});
 		}
 
-		const nextRole = args.role ?? existingWorkspace.role;
 		const nextNormalizedName = toNormalizedWorkspaceKey(nextName);
 		const nextIcon = args.icon ?? existingWorkspace.icon;
 		const nextIconStorageId =
@@ -255,7 +243,6 @@ export const update = mutation({
 		const hasIconChange = nextIcon !== existingWorkspace.icon;
 		const hasIconStorageChange =
 			nextIconStorageId !== existingWorkspace.iconStorageId;
-		const hasRoleChange = nextRole !== existingWorkspace.role;
 
 		if (hasNameChange) {
 			const duplicateWorkspace = await ctx.db
@@ -278,12 +265,7 @@ export const update = mutation({
 			}
 		}
 
-		if (
-			!hasNameChange &&
-			!hasIconChange &&
-			!hasIconStorageChange &&
-			!hasRoleChange
-		) {
+		if (!hasNameChange && !hasIconChange && !hasIconStorageChange) {
 			return await toWorkspaceResponse(ctx, existingWorkspace);
 		}
 
@@ -299,7 +281,6 @@ export const update = mutation({
 			normalizedName: nextNormalizedName,
 			icon: nextIcon,
 			iconStorageId: nextIconStorageId,
-			role: nextRole,
 			updatedAt: Date.now(),
 		});
 

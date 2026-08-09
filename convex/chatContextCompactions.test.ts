@@ -19,7 +19,6 @@ test("context compaction advances a verified chat message boundary", async () =>
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
@@ -246,7 +245,6 @@ test("context compaction activity is cancelled or expires without a completed ma
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});

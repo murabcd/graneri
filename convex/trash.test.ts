@@ -39,7 +39,6 @@ test("trash cleanup removes expired archived items without touching recent trash
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Cleanup workspace",
 			normalizedName: "cleanup-workspace",
-			role: "startup-generalist",
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
@@ -47,7 +46,6 @@ test("trash cleanup removes expired archived items without touching recent trash
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Other workspace",
 			normalizedName: "other-workspace",
-			role: "startup-generalist",
 			createdAt: 2_000,
 			updatedAt: 2_000,
 		});

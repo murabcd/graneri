@@ -28,7 +28,6 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -241,7 +240,6 @@ test("transcript sessions read hot state only from transcriptSessionStates", asy
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -324,7 +322,6 @@ test("transcript session summaries only reflect the latest session for a note", 
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -409,7 +406,6 @@ test("jira webhook activity is stored off the credential-bearing connection row"
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: now,
 			updatedAt: now,
 		});

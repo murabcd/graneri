@@ -43,7 +43,6 @@ const createFixture = async () => {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			name: "Workspace",
 			normalizedName: "workspace",
-			role: "startup-generalist",
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 		}),

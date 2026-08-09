@@ -113,7 +113,6 @@ describe("settings dialog cancel actions", () => {
 					ownerTokenIdentifier: "owner-1",
 					name: "Graneri",
 					normalizedName: "graneri",
-					role: "startup-generalist",
 					createdAt: 0,
 					updatedAt: 0,
 					iconStorageId: null,
