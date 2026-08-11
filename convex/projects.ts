@@ -5,6 +5,12 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import {
+	DEFAULT_PROJECT_COLOR,
+	DEFAULT_PROJECT_ICON,
+	projectColorValidator,
+	projectIconValidator,
+} from "./projectAppearance";
+import {
 	assertSidebarReorderInputSize,
 	assertSidebarStoredReorderSize,
 	MAX_SIDEBAR_REORDER_ITEMS,
@@ -18,6 +24,8 @@ const projectFields = {
 	name: v.string(),
 	description: v.string(),
 	normalizedName: v.string(),
+	icon: projectIconValidator,
+	color: projectColorValidator,
 	isStarred: v.boolean(),
 	sortOrder: v.number(),
 	starredSortOrder: v.number(),
@@ -143,6 +151,62 @@ const validateProjectDescription = (description: string) => {
 			message: `Description cannot be longer than ${MAX_PROJECT_DESCRIPTION_LENGTH} characters.`,
 		});
 	}
+};
+
+const updateProjectIdentityRecord = async (
+	ctx: MutationCtx,
+	project: Doc<"projects">,
+	identity: Pick<Doc<"projects">, "color" | "icon" | "name">,
+) => {
+	const name = normalizeProjectName(identity.name);
+	validateProjectName(name);
+
+	const normalizedName = toNormalizedProjectKey(name);
+	if (
+		project.name === name &&
+		project.normalizedName === normalizedName &&
+		project.icon === identity.icon &&
+		project.color === identity.color
+	) {
+		return withProjectDefaults(project);
+	}
+
+	if (project.normalizedName !== normalizedName) {
+		const existing = await ctx.db
+			.query("projects")
+			.withIndex("by_owner_ws_normalizedName", (q) =>
+				q
+					.eq("ownerTokenIdentifier", project.ownerTokenIdentifier)
+					.eq("workspaceId", project.workspaceId)
+					.eq("normalizedName", normalizedName),
+			)
+			.unique();
+
+		if (existing && existing._id !== project._id) {
+			throw new ConvexError({
+				code: "PROJECT_ALREADY_EXISTS",
+				message: "A project with that name already exists.",
+			});
+		}
+	}
+
+	await ctx.db.patch(project._id, {
+		name,
+		normalizedName,
+		icon: identity.icon,
+		color: identity.color,
+		updatedAt: Date.now(),
+	});
+
+	const updatedProject = await ctx.db.get(project._id);
+	if (!updatedProject) {
+		throw new ConvexError({
+			code: "PROJECT_NOT_FOUND",
+			message: "Project not found.",
+		});
+	}
+
+	return withProjectDefaults(updatedProject);
 };
 
 const clearProjectNotes = async (
@@ -300,6 +364,8 @@ export const create = mutation({
 			name,
 			description: "",
 			normalizedName,
+			icon: DEFAULT_PROJECT_ICON,
+			color: DEFAULT_PROJECT_COLOR,
 			isStarred: false,
 			sortOrder: now,
 			starredSortOrder: now,
@@ -403,48 +469,29 @@ export const rename = mutation({
 	},
 	returns: projectValidator,
 	handler: async (ctx, args) => {
-		const identity = await requireIdentity(ctx);
 		const project = await requireOwnedProject(ctx, args.id, args.workspaceId);
-		const name = normalizeProjectName(args.name);
-		validateProjectName(name);
 
-		const normalizedName = toNormalizedProjectKey(name);
-		if (project.name === name && project.normalizedName === normalizedName) {
-			return withProjectDefaults(project);
-		}
-
-		const existing = await ctx.db
-			.query("projects")
-			.withIndex("by_owner_ws_normalizedName", (q) =>
-				q
-					.eq("ownerTokenIdentifier", identity.tokenIdentifier)
-					.eq("workspaceId", args.workspaceId)
-					.eq("normalizedName", normalizedName),
-			)
-			.unique();
-
-		if (existing && existing._id !== project._id) {
-			throw new ConvexError({
-				code: "PROJECT_ALREADY_EXISTS",
-				message: "A project with that name already exists.",
-			});
-		}
-
-		await ctx.db.patch(project._id, {
-			name,
-			normalizedName,
-			updatedAt: Date.now(),
+		return await updateProjectIdentityRecord(ctx, project, {
+			name: args.name,
+			icon: project.icon,
+			color: project.color,
 		});
+	},
+});
 
-		const updatedProject = await ctx.db.get(project._id);
-		if (!updatedProject) {
-			throw new ConvexError({
-				code: "PROJECT_NOT_FOUND",
-				message: "Project not found.",
-			});
-		}
+export const updateIdentity = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		id: v.id("projects"),
+		name: v.string(),
+		icon: projectIconValidator,
+		color: projectColorValidator,
+	},
+	returns: projectValidator,
+	handler: async (ctx, args) => {
+		const project = await requireOwnedProject(ctx, args.id, args.workspaceId);
 
-		return withProjectDefaults(updatedProject);
+		return await updateProjectIdentityRecord(ctx, project, args);
 	},
 });
 

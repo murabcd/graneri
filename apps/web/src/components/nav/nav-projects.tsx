@@ -58,8 +58,6 @@ import {
 	ChevronsUp,
 	Clock3,
 	FileText,
-	FolderClosed,
-	FolderOpen,
 	HandGrab,
 	LoaderCircle,
 	MoreHorizontal,
@@ -74,21 +72,19 @@ import * as React from "react";
 import { toast } from "sonner";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { NoteActionsMenu } from "@/components/note/note-actions-menu";
-import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
+import {
+	ProjectIcon,
+	ProjectIdentityInput,
+} from "@/components/projects/project-appearance-picker";
 import { ProjectComposer } from "@/components/projects/project-composer";
-import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
+import {
+	type ProjectIdentityEditorController,
+	useProjectIdentityEditor,
+} from "@/components/projects/use-project-identity-editor";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
-import {
-	optimisticRenameProject,
-	optimisticUpdateProjectList,
-} from "@/lib/optimistic-projects";
-import {
-	getProjectNameValidationError,
-	MAX_PROJECT_NAME_LENGTH,
-	normalizeProjectName,
-} from "@/lib/project-name";
+import { optimisticUpdateProjectList } from "@/lib/optimistic-projects";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import {
@@ -190,26 +186,18 @@ type ProjectItemState = {
 	confirmOpen: boolean;
 	menuOpen: boolean;
 	moveNotesConfirmOpen: boolean;
-	renameOpen: boolean;
-	renameValue: string;
 };
 
 type ProjectItemAction =
 	| { type: "setConfirmOpen"; value: boolean }
 	| { type: "setMenuOpen"; value: boolean }
-	| { type: "setMoveNotesConfirmOpen"; value: boolean }
-	| { type: "setRenameOpen"; value: boolean }
-	| { type: "setRenameValue"; value: string }
-	| { type: "openRename"; value: string }
-	| { type: "closeRename"; value: string };
+	| { type: "setMoveNotesConfirmOpen"; value: boolean };
 
-const createProjectItemState = (projectName: string): ProjectItemState => ({
+const initialProjectItemState: ProjectItemState = {
 	confirmOpen: false,
 	menuOpen: false,
 	moveNotesConfirmOpen: false,
-	renameOpen: false,
-	renameValue: projectName,
-});
+};
 
 function projectItemReducer(
 	state: ProjectItemState,
@@ -230,29 +218,6 @@ function projectItemReducer(
 			return {
 				...state,
 				moveNotesConfirmOpen: action.value,
-			};
-		case "setRenameOpen":
-			return {
-				...state,
-				renameOpen: action.value,
-			};
-		case "setRenameValue":
-			return {
-				...state,
-				renameValue: action.value,
-			};
-		case "openRename":
-			return {
-				...state,
-				menuOpen: false,
-				renameOpen: true,
-				renameValue: action.value,
-			};
-		case "closeRename":
-			return {
-				...state,
-				renameOpen: false,
-				renameValue: action.value,
 			};
 		default:
 			return state;
@@ -706,31 +671,12 @@ export function ProjectSidebarItem({
 	const hasNotes = notes.length > 0;
 	const [state, dispatch] = React.useReducer(
 		projectItemReducer,
-		project.name,
-		createProjectItemState,
+		initialProjectItemState,
 	);
-	const renameInputRef = React.useRef<HTMLInputElement>(null);
-	const openRenamePopover = React.useCallback((value: string) => {
-		dispatch({ type: "openRename", value });
-	}, []);
-	const {
-		completePopoverOpen: handleMenuCloseAutoFocus,
-		preparePopoverOpen,
-		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
-	} = useDropdownPopoverHandoff(openRenamePopover);
-	const [isRenaming, setIsRenaming] = React.useReducer(
-		(_current: boolean, next: boolean) => next,
-		false,
-	);
+	const identityEditor = useProjectIdentityEditor({ project, workspaceId });
 	const [isRemoving, setIsRemoving] = React.useState(false);
 	const [isMovingNotesToTrash, setIsMovingNotesToTrash] = React.useState(false);
 	const isUpdatingStarRef = React.useRef(false);
-	const renameValue = state.renameOpen ? state.renameValue : project.name;
-	const renameProject = useMutation(api.projects.rename).withOptimisticUpdate(
-		(localStore, args) => {
-			optimisticRenameProject(localStore, args.workspaceId, args.id, args.name);
-		},
-	);
 	const removeProject = useMutation(api.projects.remove).withOptimisticUpdate(
 		(localStore, args) => {
 			optimisticUpdateProjectList(localStore, args.workspaceId, (projects) =>
@@ -759,76 +705,6 @@ export function ProjectSidebarItem({
 	).withOptimisticUpdate((localStore, args) => {
 		optimisticMoveProjectNotesToTrash(localStore, args.workspaceId, args.id);
 	});
-
-	const handleRename = React.useCallback(async () => {
-		if (!workspaceId || isRenaming) {
-			return;
-		}
-
-		const nextName = normalizeProjectName(
-			state.renameOpen ? state.renameValue : project.name,
-		);
-		const validationError = getProjectNameValidationError(nextName);
-		if (validationError) {
-			toast.error(validationError);
-			return;
-		}
-
-		if (nextName === project.name) {
-			dispatch({ type: "closeRename", value: nextName });
-			return;
-		}
-
-		setIsRenaming(true);
-
-		try {
-			await renameProject({
-				workspaceId,
-				id: project._id,
-				name: nextName,
-			});
-			dispatch({ type: "closeRename", value: nextName });
-			toast.success("Project renamed");
-		} catch (error) {
-			logError({
-				event: "client.error",
-				error: error,
-				message: "Failed to rename project",
-			});
-			toast.error("Failed to rename project");
-		} finally {
-			setIsRenaming(false);
-		}
-	}, [
-		isRenaming,
-		project._id,
-		project.name,
-		renameProject,
-		state.renameOpen,
-		state.renameValue,
-		workspaceId,
-	]);
-
-	const handleRenameOpenChange = React.useCallback(
-		(nextOpen: boolean) => {
-			if (nextOpen) {
-				dispatch({ type: "setRenameOpen", value: true });
-				return;
-			}
-
-			void handleRename();
-		},
-		[handleRename],
-	);
-
-	const handleRenameCancel = React.useCallback(() => {
-		dispatch({ type: "closeRename", value: project.name });
-	}, [project.name]);
-
-	const handleStartRename = React.useCallback(() => {
-		preparePopoverOpen(project.name);
-		dispatch({ type: "setMenuOpen", value: false });
-	}, [preparePopoverOpen, project.name]);
 
 	const handleToggleStar = React.useCallback(async () => {
 		if (!workspaceId || isUpdatingStarRef.current) {
@@ -928,19 +804,12 @@ export function ProjectSidebarItem({
 			onOpenChange={onOpenChange}
 			onPrefetchNote={onPrefetchNote}
 			onProjectSelect={onProjectSelect}
-			onMenuCloseAutoFocus={handleMenuCloseAutoFocus}
-			onRename={handleRename}
-			onRenameCancel={handleRenameCancel}
-			onRenameOpenChange={handleRenameOpenChange}
-			onStartRename={handleStartRename}
 			onToggleStar={handleToggleStar}
 			open={open}
-			preventMenuCloseAutoFocusRef={preventMenuCloseAutoFocusRef}
 			project={project}
 			projectRowActions={projectRowActions}
 			recordingNoteId={recordingNoteId}
-			renameInputRef={renameInputRef}
-			renameValue={renameValue}
+			identityEditor={identityEditor}
 			sortable={sortable}
 			state={state}
 			workspaceId={workspaceId}
@@ -964,38 +833,24 @@ function ProjectSidebarItemView({
 	onOpenChange,
 	onPrefetchNote,
 	onProjectSelect,
-	onMenuCloseAutoFocus,
-	onRename,
-	onRenameCancel,
-	onRenameOpenChange,
-	onStartRename,
 	onToggleStar,
 	open,
-	preventMenuCloseAutoFocusRef,
 	project,
 	projectRowActions,
 	recordingNoteId,
-	renameInputRef,
-	renameValue,
+	identityEditor,
 	sortable,
 	state,
 	workspaceId,
 }: ProjectSidebarItemProps & {
 	dispatch: React.Dispatch<ProjectItemAction>;
 	hasNotes: boolean;
+	identityEditor: ProjectIdentityEditorController;
 	isMovingNotesToTrash: boolean;
 	isRemoving: boolean;
-	onMenuCloseAutoFocus: () => void;
 	onDeleteProject: () => Promise<void>;
 	onMoveNotesToTrash: () => Promise<void>;
-	onRename: () => Promise<void>;
-	onRenameCancel: () => void;
-	onRenameOpenChange: (open: boolean) => void;
-	onStartRename: () => void;
 	onToggleStar: () => Promise<void>;
-	preventMenuCloseAutoFocusRef: React.RefObject<boolean>;
-	renameInputRef: React.RefObject<HTMLInputElement | null>;
-	renameValue: string;
 	state: ProjectItemState;
 }) {
 	return (
@@ -1011,16 +866,13 @@ function ProjectSidebarItemView({
 					}
 				>
 					<ProjectSidebarRow
+						identityEditor={identityEditor}
 						projectName={project.name}
 						hasNotes={hasNotes}
 						isStarred={project.isStarred ?? false}
 						workspaceId={workspaceId}
 						isOpen={open}
 						menuOpen={state.menuOpen}
-						renameOpen={state.renameOpen}
-						renameValue={renameValue}
-						renameInputRef={renameInputRef}
-						preventMenuCloseAutoFocusRef={preventMenuCloseAutoFocusRef}
 						sortableButtonProps={sortable?.buttonProps}
 						onMenuOpenChange={(nextOpen) =>
 							dispatch({ type: "setMenuOpen", value: nextOpen })
@@ -1028,21 +880,15 @@ function ProjectSidebarItemView({
 						onOpen={() => onOpenChange(true)}
 						onToggleOpen={() => onOpenChange(!open)}
 						onSelectProject={() => onProjectSelect(project._id)}
-						onMenuCloseAutoFocus={onMenuCloseAutoFocus}
-						onRenameOpenChange={onRenameOpenChange}
-						onStartRename={onStartRename}
+						onStartRename={() => {
+							identityEditor.start();
+							dispatch({ type: "setMenuOpen", value: false });
+						}}
 						onToggleStar={onToggleStar}
 						onMoveNotesToTrash={() => {
 							dispatch({ type: "setMenuOpen", value: false });
 							dispatch({ type: "setMoveNotesConfirmOpen", value: true });
 						}}
-						onRenameValueChange={(value) =>
-							dispatch({ type: "setRenameValue", value })
-						}
-						onRenameCommit={() => {
-							void onRename();
-						}}
-						onRenameCancel={onRenameCancel}
 						onDeleteSelect={() => {
 							dispatch({ type: "setMenuOpen", value: false });
 							dispatch({ type: "setConfirmOpen", value: true });
@@ -1130,60 +976,47 @@ function ProjectSidebarItemDialogs({
 }
 
 function ProjectSidebarRow({
+	identityEditor,
 	projectName,
 	hasNotes,
 	isStarred,
 	workspaceId,
 	isOpen,
 	menuOpen,
-	renameOpen,
-	renameValue,
-	renameInputRef,
-	preventMenuCloseAutoFocusRef,
 	sortableButtonProps,
 	onMenuOpenChange,
 	onOpen,
 	onToggleOpen,
 	onSelectProject,
-	onMenuCloseAutoFocus,
-	onRenameOpenChange,
 	onStartRename,
 	onToggleStar,
 	onMoveNotesToTrash,
-	onRenameValueChange,
-	onRenameCommit,
-	onRenameCancel,
 	onDeleteSelect,
 	rowActions,
 }: {
+	identityEditor: ProjectIdentityEditorController;
 	projectName: string;
 	hasNotes: boolean;
 	isStarred: boolean;
 	workspaceId: Id<"workspaces"> | null;
 	isOpen: boolean;
 	menuOpen: boolean;
-	renameOpen: boolean;
-	renameValue: string;
-	renameInputRef: React.RefObject<HTMLInputElement | null>;
-	preventMenuCloseAutoFocusRef: React.MutableRefObject<boolean>;
 	sortableButtonProps?: React.HTMLAttributes<HTMLButtonElement>;
 	onMenuOpenChange: (open: boolean) => void;
 	onOpen: () => void;
 	onToggleOpen: () => void;
 	onSelectProject: () => void;
-	onMenuCloseAutoFocus: () => void;
-	onRenameOpenChange: (open: boolean) => void;
 	onStartRename: () => void;
 	onToggleStar: () => void;
 	onMoveNotesToTrash: () => void;
-	onRenameValueChange: (value: string) => void;
-	onRenameCommit: () => void;
-	onRenameCancel: () => void;
 	onDeleteSelect: () => void;
 	rowActions: React.ReactNode;
 }) {
 	return (
-		<Popover open={renameOpen} onOpenChange={onRenameOpenChange}>
+		<Popover
+			open={identityEditor.open}
+			onOpenChange={identityEditor.onOpenChange}
+		>
 			<PopoverAnchor asChild>
 				<div className="group/project-row relative" data-hover-scroll-title-row>
 					<SidebarMenuButton
@@ -1209,7 +1042,10 @@ function ProjectSidebarRow({
 							}}
 						>
 							<span className="absolute inset-0 flex items-center justify-center opacity-100 transition-opacity group-hover/menu-button:opacity-0">
-								{isOpen ? <FolderOpen /> : <FolderClosed />}
+								<ProjectIcon
+									{...identityEditor.previewAppearance}
+									open={isOpen}
+								/>
 							</span>
 							<ChevronRight
 								className={
@@ -1227,8 +1063,10 @@ function ProjectSidebarRow({
 						isStarred={isStarred}
 						workspaceId={workspaceId}
 						menuOpen={menuOpen}
-						preventMenuCloseAutoFocusRef={preventMenuCloseAutoFocusRef}
-						onMenuCloseAutoFocus={onMenuCloseAutoFocus}
+						preventMenuCloseAutoFocusRef={
+							identityEditor.preventMenuCloseAutoFocusRef
+						}
+						onMenuCloseAutoFocus={identityEditor.completeMenuClose}
 						onMenuOpenChange={onMenuOpenChange}
 						onStartRename={onStartRename}
 						onToggleStar={onToggleStar}
@@ -1242,11 +1080,11 @@ function ProjectSidebarRow({
 				align="start"
 				side="bottom"
 				sideOffset={8}
-				className="w-85 rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
+				className="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					requestAnimationFrame(() => {
-						const input = renameInputRef.current;
+						const input = identityEditor.inputRef.current;
 						if (!input) {
 							return;
 						}
@@ -1256,19 +1094,17 @@ function ProjectSidebarRow({
 					});
 				}}
 			>
-				<div className="flex items-center gap-2">
-					<NoteTitleEditInput
-						focusOnMount
-						commitOnBlur={false}
-						inputRef={renameInputRef}
-						value={renameValue}
-						placeholder="Project name"
-						maxLength={MAX_PROJECT_NAME_LENGTH}
-						onValueChange={onRenameValueChange}
-						onCommit={onRenameCommit}
-						onCancel={onRenameCancel}
-					/>
-				</div>
+				<ProjectIdentityInput
+					inputRef={identityEditor.inputRef}
+					appearance={identityEditor.draft}
+					name={identityEditor.draft.name}
+					onAppearanceChange={identityEditor.setAppearance}
+					onNameChange={identityEditor.setName}
+					onCommit={() => {
+						void identityEditor.commit();
+					}}
+					onCancel={identityEditor.cancel}
+				/>
 			</PopoverContent>
 		</Popover>
 	);

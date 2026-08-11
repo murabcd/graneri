@@ -1,62 +1,25 @@
 import type { UpcomingCalendarEvent } from "@/app/app-types";
+import { APP_COLOR_PALETTE } from "@/lib/color-palette";
 
-export const CALENDAR_COLOR_OPTIONS = [
-	{
-		label: "Blue",
-		providerColor: "#3b82f6",
-		value: "var(--color-blue-500)",
-	},
-	{
-		label: "Violet",
-		providerColor: "#8b5cf6",
-		value: "var(--color-violet-500)",
-	},
-	{
-		label: "Amber",
-		providerColor: "#f59e0b",
-		value: "var(--color-amber-500)",
-	},
-	{
-		label: "Green",
-		providerColor: "#10b981",
-		value: "var(--color-emerald-500)",
-	},
-	{
-		label: "Rose",
-		providerColor: "#f43f5e",
-		value: "var(--color-rose-500)",
-	},
-	{
-		label: "Cyan",
-		providerColor: "#06b6d4",
-		value: "var(--color-cyan-500)",
-	},
-	{
-		label: "Orange",
-		providerColor: "#f97316",
-		value: "var(--color-orange-500)",
-	},
-	{
-		label: "Teal",
-		providerColor: "#14b8a6",
-		value: "var(--color-teal-500)",
-	},
-	{
-		label: "Pink",
-		providerColor: "#ec4899",
-		value: "var(--color-pink-500)",
-	},
-	{
-		label: "Indigo",
-		providerColor: "#6366f1",
-		value: "var(--color-indigo-500)",
-	},
-	{
-		label: "Sky",
-		providerColor: "#0ea5e9",
-		value: "var(--color-sky-500)",
-	},
+const CALENDAR_COLOR_NAMES = [
+	"blue",
+	"violet",
+	"amber",
+	"emerald",
+	"rose",
+	"cyan",
+	"orange",
+	"teal",
+	"pink",
+	"indigo",
+	"sky",
 ] as const;
+
+export const CALENDAR_COLOR_OPTIONS = CALENDAR_COLOR_NAMES.map((name) => ({
+	label: APP_COLOR_PALETTE[name].label,
+	providerColor: APP_COLOR_PALETTE[name].providerColor,
+	value: APP_COLOR_PALETTE[name].cssValue,
+}));
 
 export type CalendarProvider = "google" | "yandex";
 export type CalendarRemovalMode = "delete" | "none" | "unsubscribe";

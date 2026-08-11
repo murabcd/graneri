@@ -96,6 +96,7 @@ import type * as oauthCallbackHtml from "../oauthCallbackHtml.js";
 import type * as onboarding from "../onboarding.js";
 import type * as people from "../people.js";
 import type * as peopleDomain from "../peopleDomain.js";
+import type * as projectAppearance from "../projectAppearance.js";
 import type * as projectDescriptions from "../projectDescriptions.js";
 import type * as projects from "../projects.js";
 import type * as recipes from "../recipes.js";
@@ -215,6 +216,7 @@ declare const fullApi: ApiFromModules<{
   onboarding: typeof onboarding;
   people: typeof people;
   peopleDomain: typeof peopleDomain;
+  projectAppearance: typeof projectAppearance;
   projectDescriptions: typeof projectDescriptions;
   projects: typeof projects;
   recipes: typeof recipes;

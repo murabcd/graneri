@@ -99,6 +99,8 @@ test("projects.reorder rejects oversized project lists instead of partially reor
 					name: `Project ${index}`,
 					description: "",
 					normalizedName: `project ${index}`,
+					icon: "folder",
+					color: "default",
 					isStarred: false,
 					sortOrder: index,
 					starredSortOrder: index,
@@ -150,7 +152,7 @@ test("projects.create rejects duplicate names in the same workspace", async () =
 	).rejects.toBeInstanceOf(Error);
 });
 
-test("projects.rename updates the project and preserves workspace uniqueness", async () => {
+test("projects.updateIdentity stores its name, icon, and color", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	const project = await asOwner.mutation(api.projects.create, {
@@ -162,13 +164,19 @@ test("projects.rename updates the project and preserves workspace uniqueness", a
 		name: "Research",
 	});
 
-	const renamed = await asOwner.mutation(api.projects.rename, {
+	const updated = await asOwner.mutation(api.projects.updateIdentity, {
 		workspaceId,
 		id: project._id,
 		name: "  Founding Team  ",
+		icon: "terminal",
+		color: "blue",
 	});
 
-	expect(renamed.name).toBe("Founding Team");
+	expect(updated).toMatchObject({
+		name: "Founding Team",
+		icon: "terminal",
+		color: "blue",
+	});
 
 	const projects = await asOwner.query(api.projects.list, {
 		workspaceId,
@@ -177,6 +185,38 @@ test("projects.rename updates the project and preserves workspace uniqueness", a
 		"Founding Team",
 		"Research",
 	]);
+});
+
+test("projects.rename preserves appearance and workspace uniqueness", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+
+	const project = await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Product",
+	});
+	await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Research",
+	});
+	await asOwner.mutation(api.projects.updateIdentity, {
+		workspaceId,
+		id: project._id,
+		name: project.name,
+		icon: "terminal",
+		color: "blue",
+	});
+
+	const renamed = await asOwner.mutation(api.projects.rename, {
+		workspaceId,
+		id: project._id,
+		name: "  Founding Team  ",
+	});
+
+	expect(renamed).toMatchObject({
+		name: "Founding Team",
+		icon: "terminal",
+		color: "blue",
+	});
 
 	await expect(
 		asOwner

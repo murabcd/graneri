@@ -27,6 +27,10 @@ import {
 	calendarAttendeeResponseStatusValidator,
 	calendarEventSnapshotValidator,
 } from "./calendarValidators";
+import {
+	projectColorValidator,
+	projectIconValidator,
+} from "./projectAppearance";
 
 const transcriptSessionStatusValidator = v.union(
 	v.literal("capturing"),
@@ -258,6 +262,8 @@ export default defineSchema({
 		name: v.string(),
 		description: v.string(),
 		normalizedName: v.string(),
+		icon: projectIconValidator,
+		color: projectColorValidator,
 		isStarred: v.optional(v.boolean()),
 		sortOrder: v.number(),
 		starredSortOrder: v.number(),

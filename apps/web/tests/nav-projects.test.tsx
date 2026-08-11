@@ -9,7 +9,8 @@ import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { ProjectSidebarItem } from "../src/components/nav/nav-projects";
 import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
 
-const { useMutationMock, useQueryMock } = vi.hoisted(() => ({
+const { mutationMock, useMutationMock, useQueryMock } = vi.hoisted(() => ({
+	mutationMock: vi.fn(),
 	useMutationMock: vi.fn(),
 	useQueryMock: vi.fn(),
 }));
@@ -25,6 +26,8 @@ const project = {
 	_id: projectId,
 	_creationTime: 1,
 	createdAt: 1,
+	color: "default",
+	icon: "folder",
 	name: "Research activities",
 	normalizedName: "research activities",
 	sortOrder: 0,
@@ -75,13 +78,12 @@ describe("ProjectSidebarItem", () => {
 			getFunctionName(reference) === "notes:get" ? note : [],
 		);
 		useMutationMock.mockImplementation(() => {
-			const mutation = vi.fn();
 			(
-				mutation as typeof mutation & {
-					withOptimisticUpdate: () => typeof mutation;
+				mutationMock as typeof mutationMock & {
+					withOptimisticUpdate: () => typeof mutationMock;
 				}
-			).withOptimisticUpdate = () => mutation;
-			return mutation;
+			).withOptimisticUpdate = () => mutationMock;
+			return mutationMock;
 		});
 	});
 
@@ -113,6 +115,18 @@ describe("ProjectSidebarItem", () => {
 		expect(onProjectSelect).toHaveBeenCalledWith(projectId);
 	});
 
+	it.each([
+		{ open: false, iconClassName: "lucide-folder-closed" },
+		{ open: true, iconClassName: "lucide-folder-open" },
+	])("uses the matching folder icon when open is $open", ({
+		open,
+		iconClassName,
+	}) => {
+		const { container } = renderProjectSidebarItem({ open });
+
+		expect(container.querySelector(`.${iconClassName}`)).not.toBeNull();
+	});
+
 	it("closes a project rename popover on the first outside click", async () => {
 		const user = userEvent.setup();
 
@@ -129,6 +143,53 @@ describe("ProjectSidebarItem", () => {
 		await user.click(screen.getByRole("button", { name: "Outside" }));
 
 		expect(screen.queryByPlaceholderText("Project name")).toBeNull();
+	});
+
+	it("updates a project's icon and color from the name editor", async () => {
+		const user = userEvent.setup();
+		mutationMock.mockResolvedValue({
+			...project,
+			icon: "terminal",
+			color: "blue",
+		});
+
+		renderProjectSidebarItem();
+
+		await user.click(
+			screen.getByRole("button", {
+				name: "Open actions for Research activities",
+			}),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Rename" }));
+		await user.click(
+			screen.getByRole("button", {
+				name: "Change icon and color for Research activities",
+			}),
+		);
+		expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+		expect(
+			screen
+				.getByRole("radio", { name: "Use Folder" })
+				.querySelector(".lucide-folder-closed"),
+		).not.toBeNull();
+		await user.click(screen.getByRole("radio", { name: "Use Blue" }));
+		await user.click(screen.getByRole("radio", { name: "Use Terminal" }));
+		const projectButton = screen.getByRole("button", {
+			name: "Research activities",
+		});
+		const previewIcon = projectButton.querySelector(".lucide-square-terminal");
+		expect(previewIcon).not.toBeNull();
+		expect(previewIcon?.classList.contains("text-blue-500")).toBe(true);
+		await user.click(screen.getByRole("textbox", { name: "Project name" }));
+		await user.keyboard("{Enter}");
+
+		expect(mutationMock).toHaveBeenCalledWith({
+			workspaceId,
+			id: projectId,
+			name: "Research activities",
+			icon: "terminal",
+			color: "blue",
+		});
 	});
 
 	it("closes a nested note rename popover on the first outside click", async () => {

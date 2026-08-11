@@ -30,6 +30,8 @@ const createProject = ({
 		_id: projectId(id),
 		_creationTime: creationTime,
 		createdAt,
+		color: "default",
+		icon: "folder",
 		name,
 		normalizedName: toNormalizedProjectKey(name),
 		sortOrder,

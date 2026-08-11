@@ -47,6 +47,8 @@ const project = {
 	sortOrder: 0,
 	starredSortOrder: 0,
 	createdAt: 1,
+	color: "default",
+	icon: "folder",
 	updatedAt: 1,
 } as Doc<"projects">;
 function renderProjectDescriptionEditor({

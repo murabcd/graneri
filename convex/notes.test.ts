@@ -404,6 +404,8 @@ test("notes.setProject assigns and clears a project without dropping note metada
 			name: "Product",
 			description: "",
 			normalizedName: "product",
+			icon: "folder",
+			color: "default",
 			isStarred: false,
 			sortOrder: 3_000,
 			starredSortOrder: 0,

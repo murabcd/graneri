@@ -42,6 +42,38 @@ export const optimisticUpdateProjectList = (
 	);
 };
 
+export const optimisticUpdateProjectIdentity = ({
+	localStore,
+	workspaceId,
+	projectId,
+	name,
+	icon,
+	color,
+}: {
+	localStore: OptimisticLocalStore;
+	workspaceId: WorkspaceId;
+	projectId: Id<"projects">;
+	name: string;
+	icon: Doc<"projects">["icon"];
+	color: Doc<"projects">["color"];
+}) => {
+	const normalizedName = normalizeProjectName(name);
+
+	optimisticUpdateProjectList(localStore, workspaceId, (projects) =>
+		projects.map((project) =>
+			project._id === projectId
+				? {
+						...project,
+						name: normalizedName,
+						normalizedName: toNormalizedProjectKey(normalizedName),
+						icon,
+						color,
+					}
+				: project,
+		),
+	);
+};
+
 export const optimisticRenameProject = (
 	localStore: OptimisticLocalStore,
 	workspaceId: WorkspaceId,
