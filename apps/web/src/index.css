@@ -119,6 +119,16 @@ body {
 }
 
 [data-hover-scroll-title-row]:hover
+	.hover-scroll-title-viewport[data-overflowing="true"][data-keep-fade-on-hover="true"] {
+	-webkit-mask-image: linear-gradient(
+		to right,
+		#000 calc(100% - 1rem),
+		transparent
+	);
+	mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
+}
+
+[data-hover-scroll-title-row]:hover
 	.hover-scroll-title-viewport[data-overflowing="true"]
 	.hover-scroll-title-track {
 	transform: translateX(calc(-1 * var(--hover-title-scroll-distance)));

@@ -36,4 +36,15 @@ describe("HoverScrollTitle", () => {
 		expect(viewport?.hasAttribute("data-overflowing")).toBe(false);
 		expect(track.getAttribute("style")).toBeNull();
 	});
+
+	it("marks titles that keep their edge fade while hovered", () => {
+		render(
+			<HoverScrollTitle keepFadeOnHover>Long sidebar title</HoverScrollTitle>,
+		);
+
+		expect(
+			screen.getByText("Long sidebar title").parentElement?.dataset
+				.keepFadeOnHover,
+		).toBe("true");
+	});
 });

@@ -32,9 +32,11 @@ const observeResize = (element: Element, listener: () => void) => {
 export function HoverScrollTitle({
 	children,
 	className,
+	keepFadeOnHover = false,
 }: {
 	children: React.ReactNode;
 	className?: string;
+	keepFadeOnHover?: boolean;
 }) {
 	const viewportRef = React.useRef<HTMLSpanElement>(null);
 	const trackRef = React.useRef<HTMLSpanElement>(null);
@@ -93,6 +95,7 @@ export function HoverScrollTitle({
 				className,
 			)}
 			data-overflowing={scrollMetrics !== null || undefined}
+			data-keep-fade-on-hover={keepFadeOnHover || undefined}
 			draggable={false}
 		>
 			<span
