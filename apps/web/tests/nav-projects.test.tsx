@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
@@ -6,7 +12,10 @@ import { getFunctionName } from "convex/server";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import { ProjectSidebarItem } from "../src/components/nav/nav-projects";
+import {
+	NavProjects,
+	ProjectSidebarItem,
+} from "../src/components/nav/nav-projects";
 import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
 
 const { mutationMock, useMutationMock, useQueryMock } = vi.hoisted(() => ({
@@ -72,26 +81,44 @@ const renderProjectSidebarItem = (
 		</TooltipProvider>,
 	);
 
+const renderNavProjects = () =>
+	render(
+		<TooltipProvider>
+			<SidebarProvider>
+				<NavProjects
+					projects={[]}
+					notes={[]}
+					currentNoteId={null}
+					workspaceId={workspaceId}
+					onPrefetchNote={vi.fn()}
+					onNoteSelect={vi.fn()}
+					onProjectSelect={vi.fn()}
+					onCreateNoteInsideProject={vi.fn()}
+				/>
+			</SidebarProvider>
+		</TooltipProvider>,
+	);
+
+beforeEach(() => {
+	useQueryMock.mockImplementation((reference: never) =>
+		getFunctionName(reference) === "notes:get" ? note : [],
+	);
+	useMutationMock.mockImplementation(() => {
+		(
+			mutationMock as typeof mutationMock & {
+				withOptimisticUpdate: () => typeof mutationMock;
+			}
+		).withOptimisticUpdate = () => mutationMock;
+		return mutationMock;
+	});
+});
+
+afterEach(() => {
+	cleanup();
+	vi.clearAllMocks();
+});
+
 describe("ProjectSidebarItem", () => {
-	beforeEach(() => {
-		useQueryMock.mockImplementation((reference: never) =>
-			getFunctionName(reference) === "notes:get" ? note : [],
-		);
-		useMutationMock.mockImplementation(() => {
-			(
-				mutationMock as typeof mutationMock & {
-					withOptimisticUpdate: () => typeof mutationMock;
-				}
-			).withOptimisticUpdate = () => mutationMock;
-			return mutationMock;
-		});
-	});
-
-	afterEach(() => {
-		cleanup();
-		vi.clearAllMocks();
-	});
-
 	it.each([
 		{ open: false },
 		{ open: true },
@@ -211,5 +238,26 @@ describe("ProjectSidebarItem", () => {
 		await user.click(screen.getByRole("button", { name: "Outside" }));
 
 		expect(screen.queryByPlaceholderText("New note")).toBeNull();
+	});
+});
+
+describe("NavProjects", () => {
+	it("creates a project when Enter is pressed in the name field", async () => {
+		const user = userEvent.setup();
+		mutationMock.mockResolvedValue(project);
+		renderNavProjects();
+
+		await user.click(screen.getByRole("button", { name: "Add project" }));
+		await user.type(
+			screen.getByRole("textbox", { name: "Project name" }),
+			"Launch{Enter}",
+		);
+
+		await waitFor(() =>
+			expect(mutationMock).toHaveBeenCalledWith({
+				workspaceId,
+				name: "Launch",
+			}),
+		);
 	});
 });

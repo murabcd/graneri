@@ -74,7 +74,7 @@ export function CalendarNewCalendarDialog({
 	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
-		if (!name.trim() || !selectedProvider) {
+		if (isCreating || !name.trim() || !selectedProvider) {
 			return;
 		}
 

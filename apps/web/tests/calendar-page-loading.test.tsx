@@ -275,7 +275,8 @@ describe("CalendarPage loading", () => {
 		await user.clear(nameInput);
 		await user.type(nameInput, "Roadmap");
 		await user.click(screen.getByRole("radio", { name: "Green" }));
-		await user.click(screen.getByRole("button", { name: "Save changes" }));
+		nameInput.focus();
+		await user.keyboard("{Enter}");
 
 		await waitFor(() =>
 			expect(updateCalendar).toHaveBeenCalledWith({
@@ -644,9 +645,8 @@ describe("CalendarPage loading", () => {
 		await user.click(screen.getByRole("menuitem", { name: "New calendar" }));
 		await user.type(
 			screen.getByRole("textbox", { name: "Name" }),
-			"Side projects",
+			"Side projects{Enter}",
 		);
-		await user.click(screen.getByRole("button", { name: "Create" }));
 
 		await waitFor(() =>
 			expect(createCalendar).toHaveBeenCalledWith({

@@ -8,18 +8,10 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-import { Button } from "@workspace/ui/components/button";
 import {
 	Collapsible,
 	CollapsibleContent,
 } from "@workspace/ui/components/collapsible";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@workspace/ui/components/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -59,7 +51,6 @@ import {
 	Clock3,
 	FileText,
 	HandGrab,
-	LoaderCircle,
 	MoreHorizontal,
 	Pencil,
 	Plus,
@@ -72,11 +63,11 @@ import * as React from "react";
 import { toast } from "sonner";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { NoteActionsMenu } from "@/components/note/note-actions-menu";
+import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import {
 	ProjectIcon,
 	ProjectIdentityInput,
 } from "@/components/projects/project-appearance-picker";
-import { ProjectComposer } from "@/components/projects/project-composer";
 import {
 	type ProjectIdentityEditorController,
 	useProjectIdentityEditor,
@@ -328,7 +319,7 @@ export function NavProjects({
 	}, [autoRevealActiveNoteProject, currentNoteId, visibleProjectEntries]);
 
 	const handleCreateProject = React.useCallback(() => {
-		if (!workspaceId) {
+		if (!workspaceId || isCreatingProject || name.trim().length < 1) {
 			return;
 		}
 
@@ -350,7 +341,7 @@ export function NavProjects({
 				});
 			}
 		});
-	}, [createProject, name, workspaceId]);
+	}, [createProject, isCreatingProject, name, workspaceId]);
 
 	const handleProjectReorder = React.useCallback(
 		(projectIds: Array<Id<"projects">>) => {
@@ -478,48 +469,17 @@ export function NavProjects({
 					/>
 				)}
 			</SidebarCollapsibleGroup>
-			<Dialog
+			<CreateProjectDialog
 				open={createOpen}
 				onOpenChange={(open) =>
 					dispatch({ type: "setCreateOpen", value: open })
 				}
-			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Create a project</DialogTitle>
-						<DialogDescription>
-							Projects group notes in the sidebar without changing what a note
-							is.
-						</DialogDescription>
-					</DialogHeader>
-					<ProjectComposer
-						name={name}
-						onNameChange={(value) => dispatch({ type: "setName", value })}
-						error={createError}
-						nameInputId="project-dialog-name"
-					/>
-					<div className="flex items-center justify-end gap-2">
-						<Button
-							variant="ghost"
-							onClick={() => dispatch({ type: "setCreateOpen", value: false })}
-						>
-							Cancel
-						</Button>
-						<Button
-							onClick={handleCreateProject}
-							disabled={isCreatingProject || name.trim().length < 1}
-						>
-							{isCreatingProject ? (
-								<LoaderCircle
-									data-icon="inline-start"
-									className="animate-spin"
-								/>
-							) : null}
-							Create project
-						</Button>
-					</div>
-				</DialogContent>
-			</Dialog>
+				name={name}
+				error={createError}
+				isCreating={isCreatingProject}
+				onNameChange={(value) => dispatch({ type: "setName", value })}
+				onSubmit={handleCreateProject}
+			/>
 		</>
 	);
 }

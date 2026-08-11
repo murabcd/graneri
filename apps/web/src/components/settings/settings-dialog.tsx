@@ -97,7 +97,7 @@ import {
 import { toast } from "sonner";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { AppearanceSettings } from "@/components/settings/appearance-settings";
-import { ConnectionDialogFooter } from "@/components/settings/connection-dialog-footer";
+import { ConnectionDialogForm } from "@/components/settings/connection-dialog-form";
 import { getErrorMessageWithoutTrailingPeriod as getToastErrorMessage } from "@/components/settings/connection-error-message";
 import {
 	calendarSettingsReducer,
@@ -724,46 +724,55 @@ function YandexCalendarDialog({
 						meetings.
 					</DialogDescription>
 				</DialogHeader>
-				<FieldGroup className="gap-4">
-					<Field>
-						<Label
-							htmlFor="yandex-calendar-email"
-							className={SETTINGS_LABEL_CLASSNAME}
-						>
-							Email
-						</Label>
-						<Input
-							id="yandex-calendar-email"
-							type="email"
-							value={formState.email}
-							onChange={(event) => onEmailChange(event.target.value)}
-							placeholder="name@yandex.ru"
-						/>
-					</Field>
-					<Field>
-						<Label
-							htmlFor="yandex-calendar-password"
-							className={SETTINGS_LABEL_CLASSNAME}
-						>
-							App password
-						</Label>
-						<Input
-							id="yandex-calendar-password"
-							type="password"
-							value={formState.password}
-							onChange={(event) => onPasswordChange(event.target.value)}
-							placeholder="Paste your Yandex app password"
-						/>
-					</Field>
-				</FieldGroup>
-				<ConnectionDialogFooter
+				<ConnectionDialogForm
 					onCancel={() => onOpenChange(false)}
 					onConnect={onConnect}
-					onDisable={onDisable}
+					destructiveAction={
+						onDisable
+							? {
+									label: "Uninstall",
+									onClick: onDisable,
+									pendingLabel: "Uninstalling",
+								}
+							: undefined
+					}
 					isFormValid={isFormValid}
 					isSaving={isSaving}
 					isDisabling={isDisabling}
-				/>
+				>
+					<FieldGroup className="gap-4">
+						<Field>
+							<Label
+								htmlFor="yandex-calendar-email"
+								className={SETTINGS_LABEL_CLASSNAME}
+							>
+								Email
+							</Label>
+							<Input
+								id="yandex-calendar-email"
+								type="email"
+								value={formState.email}
+								onChange={(event) => onEmailChange(event.target.value)}
+								placeholder="name@yandex.ru"
+							/>
+						</Field>
+						<Field>
+							<Label
+								htmlFor="yandex-calendar-password"
+								className={SETTINGS_LABEL_CLASSNAME}
+							>
+								App password
+							</Label>
+							<Input
+								id="yandex-calendar-password"
+								type="password"
+								value={formState.password}
+								onChange={(event) => onPasswordChange(event.target.value)}
+								placeholder="Paste your Yandex app password"
+							/>
+						</Field>
+					</FieldGroup>
+				</ConnectionDialogForm>
 			</DialogContent>
 		</Dialog>
 	);
@@ -1350,74 +1359,83 @@ function YandexTrackerDialog({
 						connection.
 					</DialogDescription>
 				</DialogHeader>
-				<FieldGroup className="gap-4">
-					<Field>
-						<FieldContent>
-							<Label className={SETTINGS_LABEL_CLASSNAME}>
-								Organization type
-							</Label>
-						</FieldContent>
-						<Select
-							value={formState.orgType}
-							onValueChange={(value) =>
-								onOrgTypeChange(value as YandexTrackerOrgType)
-							}
-						>
-							<SelectTrigger
-								size="sm"
-								className="w-full cursor-pointer justify-between"
-								aria-label="Select Yandex Tracker organization type"
-							>
-								<span>
-									{formState.orgType === "x-org-id"
-										? "Yandex 360"
-										: "Yandex Cloud"}
-								</span>
-							</SelectTrigger>
-							<SelectContent align="end">
-								<SelectItem value="x-org-id">Yandex 360</SelectItem>
-								<SelectItem value="x-cloud-org-id">Yandex Cloud</SelectItem>
-							</SelectContent>
-						</Select>
-					</Field>
-					<Field>
-						<Label
-							htmlFor="yandex-tracker-org-id"
-							className={SETTINGS_LABEL_CLASSNAME}
-						>
-							Organization ID
-						</Label>
-						<Input
-							id="yandex-tracker-org-id"
-							value={formState.orgId}
-							onChange={(event) => onOrgIdChange(event.target.value)}
-							placeholder="1234567"
-						/>
-					</Field>
-					<Field>
-						<Label
-							htmlFor="yandex-tracker-token"
-							className={SETTINGS_LABEL_CLASSNAME}
-						>
-							OAuth token
-						</Label>
-						<Input
-							id="yandex-tracker-token"
-							type="password"
-							value={formState.token}
-							onChange={(event) => onTokenChange(event.target.value)}
-							placeholder="y0_AgAAAA..."
-						/>
-					</Field>
-				</FieldGroup>
-				<ConnectionDialogFooter
+				<ConnectionDialogForm
 					onCancel={() => onOpenChange(false)}
 					onConnect={onConnect}
-					onDisable={onDisable}
+					destructiveAction={
+						onDisable
+							? {
+									label: "Uninstall",
+									onClick: onDisable,
+									pendingLabel: "Uninstalling",
+								}
+							: undefined
+					}
 					isFormValid={isFormValid}
 					isSaving={isSaving}
 					isDisabling={isDisabling}
-				/>
+				>
+					<FieldGroup className="gap-4">
+						<Field>
+							<FieldContent>
+								<Label className={SETTINGS_LABEL_CLASSNAME}>
+									Organization type
+								</Label>
+							</FieldContent>
+							<Select
+								value={formState.orgType}
+								onValueChange={(value) =>
+									onOrgTypeChange(value as YandexTrackerOrgType)
+								}
+							>
+								<SelectTrigger
+									size="sm"
+									className="w-full cursor-pointer justify-between"
+									aria-label="Select Yandex Tracker organization type"
+								>
+									<span>
+										{formState.orgType === "x-org-id"
+											? "Yandex 360"
+											: "Yandex Cloud"}
+									</span>
+								</SelectTrigger>
+								<SelectContent align="end">
+									<SelectItem value="x-org-id">Yandex 360</SelectItem>
+									<SelectItem value="x-cloud-org-id">Yandex Cloud</SelectItem>
+								</SelectContent>
+							</Select>
+						</Field>
+						<Field>
+							<Label
+								htmlFor="yandex-tracker-org-id"
+								className={SETTINGS_LABEL_CLASSNAME}
+							>
+								Organization ID
+							</Label>
+							<Input
+								id="yandex-tracker-org-id"
+								value={formState.orgId}
+								onChange={(event) => onOrgIdChange(event.target.value)}
+								placeholder="1234567"
+							/>
+						</Field>
+						<Field>
+							<Label
+								htmlFor="yandex-tracker-token"
+								className={SETTINGS_LABEL_CLASSNAME}
+							>
+								OAuth token
+							</Label>
+							<Input
+								id="yandex-tracker-token"
+								type="password"
+								value={formState.token}
+								onChange={(event) => onTokenChange(event.target.value)}
+								placeholder="y0_AgAAAA..."
+							/>
+						</Field>
+					</FieldGroup>
+				</ConnectionDialogForm>
 			</DialogContent>
 		</Dialog>
 	);
@@ -1465,108 +1483,83 @@ function JiraDialog({
 						Enter the Jira API credentials Graneri should use for mention sync.
 					</DialogDescription>
 				</DialogHeader>
-				<FieldGroup className="gap-4">
-					<Field>
-						<Label htmlFor="jira-base-url" className={SETTINGS_LABEL_CLASSNAME}>
-							Jira URL
-						</Label>
-						<Input
-							id="jira-base-url"
-							value={formState.baseUrl}
-							onChange={(event) => onBaseUrlChange(event.target.value)}
-							placeholder="https://your-team.atlassian.net"
-						/>
-					</Field>
-					<Field>
-						<Label htmlFor="jira-email" className={SETTINGS_LABEL_CLASSNAME}>
-							Email
-						</Label>
-						<Input
-							id="jira-email"
-							type="email"
-							value={formState.email}
-							onChange={(event) => onEmailChange(event.target.value)}
-							placeholder="name@company.com"
-						/>
-					</Field>
-					<Field>
-						<Label htmlFor="jira-token" className={SETTINGS_LABEL_CLASSNAME}>
-							API token
-						</Label>
-						<Input
-							id="jira-token"
-							type="password"
-							value={formState.token}
-							onChange={(event) => onTokenChange(event.target.value)}
-							placeholder="ATATT..."
-						/>
-					</Field>
-				</FieldGroup>
-				{showSyncSettings ? (
-					<Collapsible className="mt-4">
-						<CollapsibleTrigger asChild>
-							<Button
-								type="button"
-								variant="ghost"
-								className={SETTINGS_COLLAPSIBLE_TRIGGER_CLASSNAME}
+				<ConnectionDialogForm
+					onCancel={() => onOpenChange(false)}
+					onConnect={onConnect}
+					destructiveAction={
+						onDisable
+							? {
+									label: "Disable",
+									onClick: onDisable,
+									pendingLabel: "Disabling",
+								}
+							: undefined
+					}
+					isFormValid={canConnect}
+					isSaving={isSaving}
+					isDisabling={isDisabling}
+				>
+					<FieldGroup className="gap-4">
+						<Field>
+							<Label
+								htmlFor="jira-base-url"
+								className={SETTINGS_LABEL_CLASSNAME}
 							>
-								Sync settings
-								<ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
-							</Button>
-						</CollapsibleTrigger>
-						<CollapsibleContent className="pt-4">
-							<JiraSyncSection
-								onCopyWebhookUrl={onCopyWebhookUrl}
-								webhookUrl={webhookUrl}
+								Jira URL
+							</Label>
+							<Input
+								id="jira-base-url"
+								value={formState.baseUrl}
+								onChange={(event) => onBaseUrlChange(event.target.value)}
+								placeholder="https://your-team.atlassian.net"
 							/>
-						</CollapsibleContent>
-					</Collapsible>
-				) : null}
-				<div className="flex items-center justify-between gap-2 pt-2">
-					{onDisable ? (
-						<Button
-							type="button"
-							variant="destructive"
-							onClick={onDisable}
-							disabled={isSaving || isDisabling}
-						>
-							{isDisabling ? (
-								<>
-									<LoaderCircle className="animate-spin" />
-									Disabling
-								</>
-							) : (
-								"Disable"
-							)}
-						</Button>
-					) : (
-						<span />
-					)}
-					<div className="flex justify-end gap-2">
-						<Button
-							type="button"
-							variant="ghost"
-							onClick={() => onOpenChange(false)}
-							disabled={isSaving || isDisabling}
-						>
-							Cancel
-						</Button>
-						<Button
-							type="button"
-							onClick={onConnect}
-							disabled={!canConnect || isSaving || isDisabling}
-						>
-							{isSaving ? (
-								<>
-									<LoaderCircle className="animate-spin" />
-									Connecting
-								</>
-							) : (
-								"Connect"
-							)}
-						</Button>
-					</div>
-				</div>
+						</Field>
+						<Field>
+							<Label htmlFor="jira-email" className={SETTINGS_LABEL_CLASSNAME}>
+								Email
+							</Label>
+							<Input
+								id="jira-email"
+								type="email"
+								value={formState.email}
+								onChange={(event) => onEmailChange(event.target.value)}
+								placeholder="name@company.com"
+							/>
+						</Field>
+						<Field>
+							<Label htmlFor="jira-token" className={SETTINGS_LABEL_CLASSNAME}>
+								API token
+							</Label>
+							<Input
+								id="jira-token"
+								type="password"
+								value={formState.token}
+								onChange={(event) => onTokenChange(event.target.value)}
+								placeholder="ATATT..."
+							/>
+						</Field>
+					</FieldGroup>
+					{showSyncSettings ? (
+						<Collapsible className="mt-4">
+							<CollapsibleTrigger asChild>
+								<Button
+									type="button"
+									variant="ghost"
+									className={SETTINGS_COLLAPSIBLE_TRIGGER_CLASSNAME}
+								>
+									Sync settings
+									<ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
+								</Button>
+							</CollapsibleTrigger>
+							<CollapsibleContent className="pt-4">
+								<JiraSyncSection
+									onCopyWebhookUrl={onCopyWebhookUrl}
+									webhookUrl={webhookUrl}
+								/>
+							</CollapsibleContent>
+						</Collapsible>
+					) : null}
+				</ConnectionDialogForm>
 			</DialogContent>
 		</Dialog>
 	);

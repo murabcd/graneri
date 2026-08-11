@@ -53,6 +53,10 @@ export function WorkspaceSwitcher({
 	}
 
 	const handleCreateWorkspace = () => {
+		if (isCreatingWorkspace || name.trim().length < 2) {
+			return;
+		}
+
 		startWorkspaceCreation(async () => {
 			try {
 				setCreateError(null);
@@ -144,29 +148,41 @@ export function WorkspaceSwitcher({
 							Add another workspace to keep your notes and context organized.
 						</DialogDescription>
 					</DialogHeader>
-					<WorkspaceComposer
-						name={name}
-						onNameChange={setName}
-						error={createError}
-						nameInputId="workspace-dialog-name"
-					/>
-					<div className="flex items-center justify-end gap-2">
-						<Button variant="ghost" onClick={() => setCreateOpen(false)}>
-							Cancel
-						</Button>
-						<Button
-							onClick={handleCreateWorkspace}
-							disabled={isCreatingWorkspace || name.trim().length < 2}
-						>
-							{isCreatingWorkspace ? (
-								<LoaderCircle
-									data-icon="inline-start"
-									className="animate-spin"
-								/>
-							) : null}
-							Create workspace
-						</Button>
-					</div>
+					<form
+						className="contents"
+						onSubmit={(event) => {
+							event.preventDefault();
+							handleCreateWorkspace();
+						}}
+					>
+						<WorkspaceComposer
+							name={name}
+							onNameChange={setName}
+							error={createError}
+							nameInputId="workspace-dialog-name"
+						/>
+						<div className="flex items-center justify-end gap-2">
+							<Button
+								type="button"
+								variant="ghost"
+								onClick={() => setCreateOpen(false)}
+							>
+								Cancel
+							</Button>
+							<Button
+								type="submit"
+								disabled={isCreatingWorkspace || name.trim().length < 2}
+							>
+								{isCreatingWorkspace ? (
+									<LoaderCircle
+										data-icon="inline-start"
+										className="animate-spin"
+									/>
+								) : null}
+								Create
+							</Button>
+						</div>
+					</form>
 				</DialogContent>
 			</Dialog>
 		</>

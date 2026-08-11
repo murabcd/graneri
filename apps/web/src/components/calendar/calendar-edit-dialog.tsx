@@ -45,7 +45,7 @@ export function CalendarEditDialog({
 
 	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (!calendar || !name.trim()) {
+		if (isSaving || !calendar || !name.trim()) {
 			return;
 		}
 
@@ -97,7 +97,7 @@ export function CalendarEditDialog({
 							Cancel
 						</Button>
 						<Button type="submit" disabled={!name.trim() || isSaving}>
-							{isSaving ? "Saving…" : "Save changes"}
+							{isSaving ? "Saving…" : "Save"}
 						</Button>
 					</div>
 				</form>

@@ -154,7 +154,7 @@ describe("CalendarPage event management", () => {
 		const title = await screen.findByRole("textbox", { name: "Title" });
 		await user.clear(title);
 		await user.type(title, "Updated planning");
-		await user.click(screen.getByRole("button", { name: "Save changes" }));
+		await user.click(screen.getByRole("button", { name: "Save" }));
 
 		await waitFor(() =>
 			expect(updateCalendarEvent).toHaveBeenCalledWith(
@@ -221,7 +221,7 @@ describe("CalendarPage event management", () => {
 		).not.toBeNull();
 		await user.keyboard("{ArrowDown}{Enter}");
 		expect(calendarSelect.textContent).toContain("Personal");
-		await user.click(screen.getByRole("button", { name: "Save changes" }));
+		await user.click(screen.getByRole("button", { name: "Save" }));
 
 		await waitFor(() =>
 			expect(updateCalendarEvent).toHaveBeenCalledWith(
@@ -329,7 +329,7 @@ describe("CalendarPage event management", () => {
 		expect(
 			(
 				screen.getByRole("button", {
-					name: "Save changes",
+					name: "Save",
 				}) as HTMLButtonElement
 			).disabled,
 		).toBe(true);
@@ -381,7 +381,7 @@ describe("CalendarPage event management", () => {
 		);
 		expect(removeGuestButton).not.toBeNull();
 		await user.click(removeGuestButton as HTMLElement);
-		await user.click(screen.getByRole("button", { name: "Save changes" }));
+		await user.click(screen.getByRole("button", { name: "Save" }));
 
 		await waitFor(() =>
 			expect(updateCalendarEvent).toHaveBeenCalledWith(

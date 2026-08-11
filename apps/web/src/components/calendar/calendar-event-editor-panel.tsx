@@ -200,7 +200,7 @@ export function CalendarEventEditorPanel({
 									? "Saving…"
 									: "Creating…"
 								: event
-									? "Save changes"
+									? "Save"
 									: "Create"}
 						</Button>
 					</div>

@@ -1049,7 +1049,16 @@ function WorkspaceOnboardingScreen({
 				title="Create workspace"
 				description="Set up your first workspace to continue."
 			>
-				<form>
+				<form
+					onSubmit={(event) => {
+						event.preventDefault();
+						if (isSubmitting || name.trim().length < 2) {
+							return;
+						}
+
+						onSubmit();
+					}}
+				>
 					<div className="flex flex-col gap-5">
 						<WorkspaceComposer
 							name={name}
@@ -1059,8 +1068,8 @@ function WorkspaceOnboardingScreen({
 						/>
 						<Field>
 							<Button
+								type="submit"
 								className="w-full"
-								onClick={onSubmit}
 								disabled={isSubmitting || name.trim().length < 2}
 							>
 								Create workspace
