@@ -965,10 +965,7 @@ function NoteProjectMoveSubmenu({
 						/>
 						<CommandList className="max-h-60">
 							<CommandEmpty>No projects found.</CommandEmpty>
-							<CommandGroup
-								heading="Main"
-								className="p-1 **:[[cmdk-group-heading]]:py-1"
-							>
+							<CommandGroup className="p-1">
 								<CommandItem
 									value="notes top level"
 									className="relative w-full cursor-pointer gap-2 py-1.5 pr-8"

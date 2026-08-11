@@ -265,6 +265,8 @@ describe("ProjectSidebarItem", () => {
 		);
 		await user.click(screen.getByRole("menuitem", { name: "Move to" }));
 
+		expect(screen.queryByText("Main")).toBeNull();
+		expect(screen.getByRole("option", { name: "Notes" })).toBeTruthy();
 		const destination = await screen.findByRole("option", {
 			name: "Research activities",
 		});
