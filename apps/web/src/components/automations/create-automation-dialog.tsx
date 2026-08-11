@@ -62,6 +62,7 @@ import {
 import {
 	COMPOSER_MENTION_PICKER_ITEM_CLASS,
 	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
+	ComposerMentionPickerItemLabel,
 	ComposerMentionPickerSurface,
 	ComposerMentionPickerViewport,
 } from "@/components/composer-mention-picker-surface";
@@ -74,7 +75,10 @@ import {
 	storeReasoningEffort,
 } from "@/lib/ai/reasoning-effort";
 import { getStoredServiceTier, storeServiceTier } from "@/lib/ai/service-tier";
-import { getAppSourceLabel } from "@/lib/chat-source-display";
+import {
+	getAppSourceDescription,
+	getAppSourceLabel,
+} from "@/lib/chat-source-display";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
 import {
@@ -1112,9 +1116,10 @@ function AutomationMentionPicker({
 												className="size-4"
 											/>
 										</div>
-										<div className="min-w-0 flex-1 truncate">
-											{getAppSourceLabel(source.provider)}
-										</div>
+										<ComposerMentionPickerItemLabel
+											label={getAppSourceLabel(source.provider)}
+											description={getAppSourceDescription(source.provider)}
+										/>
 									</button>
 								);
 							})}

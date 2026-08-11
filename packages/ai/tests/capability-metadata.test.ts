@@ -6,6 +6,7 @@ import {
 	capabilityMetadataDefinitions,
 	chatSourceAppConnectionProviders,
 	getCapabilitySettings,
+	getChatAppSourceDescription,
 	isMcpSdkOAuthConnectionProvider,
 	mcpSdkOAuthConnectionProviders,
 	remoteMcpConnectionDefaults,
@@ -31,6 +32,8 @@ describe("capability metadata", () => {
 
 		expect(new Set(ids).size).toBe(ids.length);
 		for (const capability of capabilityMetadataDefinitions) {
+			expect(capability.sourceDescription).toEqual(expect.any(String));
+			expect(capability.sourceDescription.length).toBeGreaterThan(0);
 			expect(appSourceProviders.includes(capability.id)).toBe(
 				capability.sourceKind === "app",
 			);
@@ -41,6 +44,9 @@ describe("capability metadata", () => {
 				capability.connection?.usage === "chat",
 			);
 		}
+		expect(getChatAppSourceDescription("context7")).toBe(
+			"Up-to-date library and API documentation",
+		);
 	});
 
 	it("registers tools and settings for every app capability", () => {

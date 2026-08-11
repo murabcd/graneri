@@ -56,6 +56,7 @@ import {
 	COMPOSER_MENTION_PICKER_ICON_CLASS,
 	COMPOSER_MENTION_PICKER_ITEM_CLASS,
 	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
+	ComposerMentionPickerItemLabel,
 	ComposerMentionPickerSurface,
 	ComposerMentionPickerViewport,
 } from "@/components/composer-mention-picker-surface";
@@ -70,6 +71,7 @@ import {
 } from "@/lib/chat-composer-mentions";
 import {
 	type ChatAppSourceProvider,
+	getAppSourceDescription,
 	getAppSourceLabel,
 } from "@/lib/chat-source-display";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
@@ -1111,9 +1113,10 @@ function MentionPicker({
 												className="size-4"
 											/>
 										</div>
-										<div className="min-w-0 flex-1 truncate">
-											{getAppSourceLabel(source.provider)}
-										</div>
+										<ComposerMentionPickerItemLabel
+											label={getAppSourceLabel(source.provider)}
+											description={getAppSourceDescription(source.provider)}
+										/>
 									</button>
 								);
 							})}

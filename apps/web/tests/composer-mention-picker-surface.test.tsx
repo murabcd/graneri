@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	ComposerMentionPickerItemLabel,
 	ComposerMentionPickerSurface,
 	ComposerMentionPickerViewport,
 } from "@/components/composer-mention-picker-surface";
@@ -18,7 +19,12 @@ describe("ComposerMentionPickerSurface", () => {
 				position={{ bottom: 180, left: 383.5, width: 576 }}
 			>
 				<ComposerMentionPickerViewport>
-					<button type="button">Yandex Calendar</button>
+					<button type="button">
+						<ComposerMentionPickerItemLabel
+							label="Yandex Calendar"
+							description="Schedules, events, and availability"
+						/>
+					</button>
 				</ComposerMentionPickerViewport>
 			</ComposerMentionPickerSurface>,
 		);
@@ -30,9 +36,13 @@ describe("ComposerMentionPickerSurface", () => {
 		expect(picker.style.bottom).toBe("180px");
 		expect(picker.style.left).toBe("383.5px");
 		expect(picker.style.width).toBe("576px");
-		expect(screen.getByRole("button", { name: "Yandex Calendar" })).toBe(
+		expect(screen.getByRole("button", { name: /Yandex Calendar/ })).toBe(
 			picker.firstElementChild?.firstElementChild,
 		);
+		const description = screen.getByText("Schedules, events, and availability");
+		expect(description.classList.contains("truncate")).toBe(true);
+		expect(description.classList.contains("text-xs")).toBe(true);
+		expect(description.classList.contains("text-muted-foreground")).toBe(true);
 	});
 
 	it("preserves editor focus when the picker handles pointer input", () => {

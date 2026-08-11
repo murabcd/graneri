@@ -64,6 +64,7 @@ export type AppSourceInstructionConnection = AppSourceConnectionIdentity & {
 export type CapabilityMetadata = {
 	id: ChatAppSourceProvider;
 	displayName: string;
+	sourceDescription: string;
 	sourceKind: "app" | "sync";
 	connection?: {
 		usage: "chat" | "sync";
@@ -114,6 +115,9 @@ export declare function isChatAppSourceProvider(
 	value: unknown,
 ): value is ChatAppSourceProvider;
 export declare function getChatAppSourceLabel(
+	provider: ChatAppSourceProvider,
+): string;
+export declare function getChatAppSourceDescription(
 	provider: ChatAppSourceProvider,
 ): string;
 export declare const appConnectionProviders: readonly AppConnectionProvider[];

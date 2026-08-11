@@ -20,6 +20,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "google-calendar",
 		displayName: "Google Calendar",
+		sourceDescription: "Schedules, events, and availability",
 		sourceKind: "app",
 		settingsGroup: "Productivity",
 		toolNamespace: {
@@ -32,6 +33,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "google-drive",
 		displayName: "Google Drive",
+		sourceDescription: "Docs, sheets, slides, and files",
 		sourceKind: "app",
 		settingsGroup: "Productivity",
 		toolNamespace: {
@@ -44,6 +46,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "context7",
 		displayName: "Context7",
+		sourceDescription: "Up-to-date library and API documentation",
 		sourceKind: "app",
 		connection: {
 			usage: "chat",
@@ -67,6 +70,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "figma",
 		displayName: "Figma",
+		sourceDescription: "Design files, components, and variables",
 		sourceKind: "app",
 		connection: {
 			usage: "chat",
@@ -91,6 +95,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "jira-mcp",
 		displayName: "Jira",
+		sourceDescription: "Issues, projects, and team activity",
 		sourceKind: "app",
 		connection: {
 			usage: "chat",
@@ -114,6 +119,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "linear",
 		displayName: "Linear",
+		sourceDescription: "Issues, projects, and roadmaps",
 		sourceKind: "app",
 		connection: {
 			usage: "chat",
@@ -138,6 +144,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "notion",
 		displayName: "Notion",
+		sourceDescription: "Pages, docs, and databases",
 		sourceKind: "app",
 		connection: {
 			usage: "chat",
@@ -161,6 +168,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "posthog",
 		displayName: "PostHog",
+		sourceDescription: "Product analytics and insights",
 		sourceKind: "app",
 		connection: {
 			usage: "chat",
@@ -184,6 +192,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "yandex-calendar",
 		displayName: "Yandex Calendar",
+		sourceDescription: "Schedules, events, and availability",
 		sourceKind: "app",
 		connection: { usage: "chat" },
 		settingsGroup: "Productivity",
@@ -197,6 +206,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "yandex-tracker",
 		displayName: "Yandex Tracker",
+		sourceDescription: "Issues, projects, and team activity",
 		sourceKind: "app",
 		connection: { usage: "chat" },
 		settingsGroup: "Tracking",
@@ -215,6 +225,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "zoom",
 		displayName: "Zoom",
+		sourceDescription: "Transcripts, recordings, and summaries",
 		sourceKind: "app",
 		connection: {
 			usage: "chat",
@@ -238,6 +249,7 @@ export const capabilityMetadataDefinitions = [
 	{
 		id: "jira",
 		displayName: "Jira",
+		sourceDescription: "Issues and project activity",
 		sourceKind: "sync",
 		connection: { usage: "sync" },
 		settingsGroup: "Tracking",
@@ -280,6 +292,9 @@ export const isChatAppSourceProvider = (value) =>
 
 export const getChatAppSourceLabel = (provider) =>
 	chatAppSourceLabels[provider];
+
+export const getChatAppSourceDescription = (provider) =>
+	capabilityMetadataRegistry[provider].sourceDescription;
 
 export const appConnectionProviders = capabilityMetadataDefinitions
 	.filter((capability) => capability.connection)

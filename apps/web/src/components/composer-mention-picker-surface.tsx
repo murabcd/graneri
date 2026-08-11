@@ -58,3 +58,20 @@ export function ComposerMentionPickerViewport({
 }) {
 	return <div className="max-h-72 overflow-y-auto p-1">{children}</div>;
 }
+
+export function ComposerMentionPickerItemLabel({
+	description,
+	label,
+}: {
+	description: string;
+	label: string;
+}) {
+	return (
+		<div className="flex min-w-0 flex-1 items-baseline gap-2">
+			<span className="shrink-0">{label}</span>
+			<span className="truncate text-xs text-muted-foreground">
+				{description}
+			</span>
+		</div>
+	);
+}
