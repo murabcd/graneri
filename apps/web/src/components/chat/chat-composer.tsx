@@ -33,7 +33,6 @@ import {
 	Square,
 } from "lucide-react";
 import * as React from "react";
-import { createPortal } from "react-dom";
 import {
 	FileAttachmentButton,
 	FileAttachmentChips,
@@ -54,6 +53,13 @@ import {
 	type ServiceTier,
 } from "@/components/chat/model-picker";
 import {
+	COMPOSER_MENTION_PICKER_ICON_CLASS,
+	COMPOSER_MENTION_PICKER_ITEM_CLASS,
+	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
+	ComposerMentionPickerSurface,
+	ComposerMentionPickerViewport,
+} from "@/components/composer-mention-picker-surface";
+import {
 	areChatComposerMentionsEqual,
 	type ChatComposerMention,
 	type ChatRecipeReceipt,
@@ -66,17 +72,10 @@ import {
 	type ChatAppSourceProvider,
 	getAppSourceLabel,
 } from "@/lib/chat-source-display";
-import {
-	COMPOSER_MENTION_PICKER_ICON_CLASS,
-	COMPOSER_MENTION_PICKER_ITEM_CLASS,
-	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
-	COMPOSER_MENTION_PICKER_SURFACE_CLASS,
-	COMPOSER_MENTION_PICKER_VIEWPORT_CLASS,
-} from "@/lib/composer-mention-picker-styles";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
 import { getRecipeIcon } from "@/lib/recipes";
 import {
-	getMentionAnchorRect,
+	getMentionPickerAnchorRect,
 	getMentionPickerPosition,
 	getMentionProvider,
 	INLINE_MENTION_CLASS,
@@ -706,7 +705,7 @@ function ChatComposerTextEditor({
 							setDocumentSearchTerm(() => query);
 							selectMentionIndex(0);
 							requestAnimationFrame(() => {
-								const rect = getMentionAnchorRect(editor, range);
+								const rect = getMentionPickerAnchorRect(editor);
 								setMentionPickerPosition(
 									getMentionPickerPosition({
 										rect,
@@ -1034,25 +1033,13 @@ function MentionPicker({
 	onAddRecipe: (recipeSlug: string) => void;
 	onAddTool: (sourceId: string) => void;
 }) {
-	if (!open || !position) {
-		return null;
-	}
-
-	return createPortal(
-		<div
-			role="listbox"
-			aria-label="Mention suggestions"
-			className={COMPOSER_MENTION_PICKER_SURFACE_CLASS}
-			style={{
-				top: position.top,
-				left: position.left,
-			}}
-			onPointerDown={(event) => {
-				event.preventDefault();
-				event.stopPropagation();
-			}}
+	return (
+		<ComposerMentionPickerSurface
+			ariaLabel="Mention suggestions"
+			open={open}
+			position={position}
 		>
-			<div className={COMPOSER_MENTION_PICKER_VIEWPORT_CLASS}>
+			<ComposerMentionPickerViewport>
 				{recipes.length > 0 ? (
 					<div>
 						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
@@ -1095,7 +1082,7 @@ function MentionPicker({
 				{appSources.length > 0 ? (
 					<div className={recipes.length > 0 ? "mt-1" : undefined}>
 						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Tools
+							Plugins
 						</div>
 						<div>
 							{appSources.map((source, index) => {
@@ -1208,9 +1195,8 @@ function MentionPicker({
 						</div>
 					</div>
 				) : null}
-			</div>
-		</div>,
-		document.body,
+			</ComposerMentionPickerViewport>
+		</ComposerMentionPickerSurface>
 	);
 }
 

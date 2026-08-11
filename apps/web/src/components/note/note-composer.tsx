@@ -73,7 +73,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 // Composer focus and optimistic message paths need committed DOM before the next imperative line.
-import { createPortal, flushSync } from "react-dom";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import {
 	FileAttachmentButton,
@@ -98,6 +98,13 @@ import {
 	type ReasoningEffort,
 	type ServiceTier,
 } from "@/components/chat/model-picker";
+import {
+	COMPOSER_MENTION_PICKER_ICON_CLASS,
+	COMPOSER_MENTION_PICKER_ITEM_CLASS,
+	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
+	ComposerMentionPickerSurface,
+	ComposerMentionPickerViewport,
+} from "@/components/composer-mention-picker-surface";
 import {
 	COMPOSER_DOCK_BOTTOM_OFFSET,
 	COMPOSER_OVERLAY_FOOTER_PADDING,
@@ -133,13 +140,6 @@ import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { regenerateChatTurn, submitChatTurn } from "@/lib/chat-submit-session";
 import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
-import {
-	COMPOSER_MENTION_PICKER_ICON_CLASS,
-	COMPOSER_MENTION_PICKER_ITEM_CLASS,
-	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
-	COMPOSER_MENTION_PICKER_SURFACE_CLASS,
-	COMPOSER_MENTION_PICKER_VIEWPORT_CLASS,
-} from "@/lib/composer-mention-picker-styles";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import {
@@ -159,7 +159,7 @@ import {
 	shouldSendFromKeyboardEvent,
 } from "@/lib/send-shortcut";
 import {
-	getMentionAnchorRect,
+	getMentionPickerAnchorRect,
 	getMentionPickerPosition,
 	INLINE_MENTION_CLASS,
 	type MentionPickerPosition,
@@ -208,10 +208,6 @@ import {
 import { NOTE_POPOVER_SCROLLER_BUTTON_CLASS } from "./note-popover-scroll";
 
 type NoteChatPresentation = "inline" | "floating" | "sidebar";
-const noteRecipePickerListboxProps = {
-	role: "listbox" as const,
-	"aria-label": "Recipe suggestions",
-};
 const NOTE_CHAT_FLOATING_WIDTH = "min(28rem, calc(100vw - 2rem))";
 const NOTE_CHAT_PANEL_DOCK_OFFSET =
 	COMPOSER_DOCK_BOTTOM_OFFSET - COMPOSER_OVERLAY_FOOTER_PADDING;
@@ -2506,7 +2502,7 @@ function ChatInlinePopoverFooter({
 								return;
 							}
 
-							const rect = getMentionAnchorRect(editor, range);
+							const rect = getMentionPickerAnchorRect(editor);
 							const normalizedQuery = query.trim().toLowerCase();
 							const nextRecipes = normalizedQuery
 								? recipes.filter((recipe) =>
@@ -2981,24 +2977,13 @@ function NoteRecipeMentionPicker({
 	emptyStateMessage: string;
 	onSelectRecipe: (recipeSlug: RecipeSlug) => void;
 }) {
-	if (!open || !position) {
-		return null;
-	}
-
-	return createPortal(
-		<div
-			{...noteRecipePickerListboxProps}
-			className={COMPOSER_MENTION_PICKER_SURFACE_CLASS}
-			style={{
-				top: position.top,
-				left: position.left,
-			}}
-			onPointerDown={(event) => {
-				event.preventDefault();
-				event.stopPropagation();
-			}}
+	return (
+		<ComposerMentionPickerSurface
+			ariaLabel="Recipe suggestions"
+			open={open}
+			position={position}
 		>
-			<div className={COMPOSER_MENTION_PICKER_VIEWPORT_CLASS}>
+			<ComposerMentionPickerViewport>
 				{isRecipeLoading ? <div className="py-6" aria-hidden="true" /> : null}
 				{!isRecipeLoading && recipes.length === 0 ? (
 					<div className="py-6 text-center text-sm text-muted-foreground">
@@ -3044,9 +3029,8 @@ function NoteRecipeMentionPicker({
 						</div>
 					</div>
 				) : null}
-			</div>
-		</div>,
-		document.body,
+			</ComposerMentionPickerViewport>
+		</ComposerMentionPickerSurface>
 	);
 }
 

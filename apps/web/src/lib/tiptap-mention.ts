@@ -1,4 +1,4 @@
-import type { Editor, Range } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import Mention from "@tiptap/extension-mention";
 import type { DOMOutputSpec } from "@tiptap/pm/model";
 import {
@@ -35,9 +35,23 @@ export const TypedMention = Mention.extend({
 });
 
 export type MentionPickerPosition = {
-	top: number;
 	left: number;
-};
+	width: number;
+} & (
+	| {
+			top: number;
+			bottom?: never;
+	  }
+	| {
+			bottom: number;
+			top?: never;
+	  }
+);
+
+export type MentionPickerAnchorRect = Pick<
+	DOMRect,
+	"bottom" | "left" | "top" | "width"
+>;
 
 export const INLINE_MENTION_CLASS =
 	"inline cursor-pointer align-baseline whitespace-nowrap text-inherit";
@@ -150,7 +164,7 @@ const MENTION_PICKER_HEADER_HEIGHT = 28;
 const MENTION_PICKER_ROW_HEIGHT = 32;
 const MENTION_PICKER_VERTICAL_PADDING = 8;
 const MENTION_PICKER_MIN_SECTIONED_HEIGHT = 168;
-const MENTION_PICKER_WIDTH = 224;
+const MENTION_PICKER_ANCHOR_GAP = 8;
 
 const getMentionPickerEstimatedHeight = ({
 	itemCount,
@@ -171,26 +185,22 @@ const getMentionPickerEstimatedHeight = ({
 		),
 	);
 
-export const getMentionAnchorRect = (editor: Editor, range: Range) => {
-	const triggerRect = editor.view.coordsAtPos(Math.max(0, range.from));
-	const selection = editor.view.dom.ownerDocument.getSelection();
-	const selectionRange =
-		selection &&
-		selection.rangeCount > 0 &&
-		selection.anchorNode &&
-		editor.view.dom.contains(selection.anchorNode)
-			? selection.getRangeAt(0)
-			: null;
-	const selectionRect = selectionRange?.getBoundingClientRect();
-	const caretRect =
-		selectionRect && (selectionRect.width > 0 || selectionRect.height > 0)
-			? selectionRect
-			: editor.view.coordsAtPos(Math.max(0, range.to));
+export const getMentionPickerAnchorRect = (
+	editor: Editor,
+): MentionPickerAnchorRect => {
+	const inputGroup = editor.view.dom.closest<HTMLElement>(
+		'[data-slot="input-group"]',
+	);
+	if (!inputGroup) {
+		throw new Error("Mention editors must be rendered inside an input group.");
+	}
 
+	const rect = inputGroup.getBoundingClientRect();
 	return {
-		bottom: caretRect.bottom,
-		left: triggerRect.left,
-		top: caretRect.top,
+		bottom: rect.bottom,
+		left: rect.left,
+		top: rect.top,
+		width: rect.width,
 	};
 };
 
@@ -199,11 +209,11 @@ export const getMentionPickerPosition = ({
 	itemCount,
 	minSectionedHeight = false,
 }: {
-	rect: Pick<DOMRect, "bottom" | "left" | "top">;
+	rect: MentionPickerAnchorRect;
 	itemCount: number;
 	minSectionedHeight?: boolean;
 }): MentionPickerPosition => {
-	const preferredTop = rect.bottom + 8;
+	const preferredTop = rect.bottom + MENTION_PICKER_ANCHOR_GAP;
 	const estimatedHeight = getMentionPickerEstimatedHeight({
 		itemCount,
 		minSectionedHeight,
@@ -211,15 +221,20 @@ export const getMentionPickerPosition = ({
 	const hasRoomBelow =
 		preferredTop + estimatedHeight <=
 		window.innerHeight - MENTION_PICKER_VIEWPORT_MARGIN;
-	const top = hasRoomBelow
-		? preferredTop
-		: Math.max(MENTION_PICKER_VIEWPORT_MARGIN, rect.top - estimatedHeight - 8);
+	const width = Math.min(
+		rect.width,
+		window.innerWidth - MENTION_PICKER_VIEWPORT_MARGIN * 2,
+	);
+	const left = Math.min(
+		Math.max(MENTION_PICKER_VIEWPORT_MARGIN, rect.left),
+		window.innerWidth - width - MENTION_PICKER_VIEWPORT_MARGIN,
+	);
 
-	return {
-		top,
-		left: Math.min(
-			Math.max(MENTION_PICKER_VIEWPORT_MARGIN, rect.left),
-			window.innerWidth - MENTION_PICKER_WIDTH - MENTION_PICKER_VIEWPORT_MARGIN,
-		),
-	};
+	return hasRoomBelow
+		? { top: preferredTop, left, width }
+		: {
+				bottom: window.innerHeight - rect.top + MENTION_PICKER_ANCHOR_GAP,
+				left,
+				width,
+			};
 };

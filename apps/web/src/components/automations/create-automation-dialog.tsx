@@ -37,7 +37,6 @@ import { cn } from "@workspace/ui/lib/utils";
 import { useQuery } from "convex/react";
 import { FileText, Globe, LoaderCircle, Plus, Settings2 } from "lucide-react";
 import * as React from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import {
@@ -60,6 +59,12 @@ import {
 	type ReasoningEffort,
 	type ServiceTier,
 } from "@/components/chat/model-picker";
+import {
+	COMPOSER_MENTION_PICKER_ITEM_CLASS,
+	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
+	ComposerMentionPickerSurface,
+	ComposerMentionPickerViewport,
+} from "@/components/composer-mention-picker-surface";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { type AppSource, useAppSources } from "@/hooks/use-app-sources";
 import { getStoredChatModel, storeChatModel } from "@/lib/ai/chat-model";
@@ -73,10 +78,11 @@ import { getAppSourceLabel } from "@/lib/chat-source-display";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
 import {
-	getMentionAnchorRect,
+	getMentionPickerAnchorRect,
 	getMentionPickerPosition,
 	getMentionProvider,
 	INLINE_MENTION_CLASS,
+	type MentionPickerAnchorRect,
 	type MentionPickerPosition,
 	renderInlineMentionHTML,
 	TypedMention,
@@ -110,11 +116,6 @@ type AutomationMentionPickerItem =
 			type: "note";
 			source: AutomationNoteSource;
 	  };
-
-const automationMentionPickerListboxProps = {
-	role: "listbox" as const,
-	"aria-label": "Mention suggestions",
-};
 
 type AutomationDialogState = {
 	schedulePickerOpen: boolean;
@@ -679,10 +680,9 @@ function AutomationPromptEditor({
 }) {
 	const editorRef = React.useRef<Editor | null>(null);
 	const mentionRangeRef = React.useRef<NoteMentionRange | null>(null);
-	const mentionTriggerRectRef = React.useRef<Pick<
-		DOMRect,
-		"bottom" | "left" | "top"
-	> | null>(null);
+	const mentionTriggerRectRef = React.useRef<MentionPickerAnchorRect | null>(
+		null,
+	);
 	const allNoteSourcesRef = React.useRef(noteSources);
 	const allAppSourcesRef = React.useRef(appSources);
 	const visibleNoteSourcesRef = React.useRef<AutomationNoteSource[]>([]);
@@ -890,7 +890,7 @@ function AutomationPromptEditor({
 							setSearchTerm(() => query);
 							selectIndex(0);
 							requestAnimationFrame(() => {
-								const rect = getMentionAnchorRect(editor, range);
+								const rect = getMentionPickerAnchorRect(editor);
 								mentionTriggerRectRef.current = rect;
 								setPosition(
 									getMentionPickerPosition({
@@ -1073,25 +1073,17 @@ function AutomationMentionPicker({
 	shouldSearchNotes: boolean;
 	onSelectItem: (item: AutomationMentionPickerItem) => void;
 }) {
-	if (!open || !position) {
-		return null;
-	}
-
-	return createPortal(
-		<div
-			{...automationMentionPickerListboxProps}
-			className="fixed z-[70] flex w-56 flex-col rounded-lg bg-popover p-0 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 pointer-events-auto"
-			style={{ top: position.top, left: position.left }}
-			onPointerDown={(event) => {
-				event.preventDefault();
-				event.stopPropagation();
-			}}
+	return (
+		<ComposerMentionPickerSurface
+			ariaLabel="Mention suggestions"
+			open={open}
+			position={position}
 		>
-			<div className="max-h-72 overflow-y-auto p-1">
+			<ComposerMentionPickerViewport>
 				{appSources.length > 0 ? (
 					<div>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-							Tools
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
+							Plugins
 						</div>
 						<div>
 							{appSources.map((source, index) => {
@@ -1108,7 +1100,7 @@ function AutomationMentionPicker({
 											onSelectItem({ type: "tool", source });
 										}}
 										className={cn(
-											"flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground",
+											COMPOSER_MENTION_PICKER_ITEM_CLASS,
 											selected
 												? "bg-accent text-accent-foreground"
 												: "text-popover-foreground",
@@ -1131,7 +1123,7 @@ function AutomationMentionPicker({
 				) : null}
 				{!shouldSearchNotes ? (
 					<div className={appSources.length > 0 ? "mt-1" : undefined}>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
 							Notes
 						</div>
 						<div className="px-2 pt-0.5 pb-2 text-xs text-muted-foreground">
@@ -1144,7 +1136,7 @@ function AutomationMentionPicker({
 				) : null}
 				{shouldSearchNotes && !isNotesLoading && items.length === 0 ? (
 					<div>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
 							Notes
 						</div>
 						<div className="px-2 py-6 text-center text-sm text-muted-foreground">
@@ -1154,7 +1146,7 @@ function AutomationMentionPicker({
 				) : null}
 				{shouldSearchNotes && noteSources.length > 0 ? (
 					<div className={appSources.length > 0 ? "mt-1" : undefined}>
-						<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
 							Notes
 						</div>
 						<div>
@@ -1173,7 +1165,7 @@ function AutomationMentionPicker({
 											onSelectItem({ type: "note", source });
 										}}
 										className={cn(
-											"flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground",
+											COMPOSER_MENTION_PICKER_ITEM_CLASS,
 											selected
 												? "bg-accent text-accent-foreground"
 												: "text-popover-foreground",
@@ -1191,9 +1183,8 @@ function AutomationMentionPicker({
 						</div>
 					</div>
 				) : null}
-			</div>
-		</div>,
-		document.body,
+			</ComposerMentionPickerViewport>
+		</ComposerMentionPickerSurface>
 	);
 }
 
