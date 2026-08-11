@@ -51,7 +51,6 @@ import {
 	Check,
 	CornerUpRight,
 	FileText,
-	FolderClosed,
 	Globe,
 	History,
 	Link2,
@@ -63,6 +62,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { ProjectIcon } from "@/components/projects/project-appearance-picker";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
 import { logError } from "@/lib/logger";
@@ -1003,7 +1003,7 @@ function NoteProjectMoveSubmenu({
 												void onSetProject(project._id);
 											}}
 										>
-											<FolderClosed />
+											<ProjectIcon icon={project.icon} color={project.color} />
 											<span className="truncate">{project.name}</span>
 											{note?.projectId === project._id ? (
 												<span className="absolute right-2 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center">

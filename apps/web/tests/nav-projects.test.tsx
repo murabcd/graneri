@@ -239,6 +239,43 @@ describe("ProjectSidebarItem", () => {
 
 		expect(screen.queryByPlaceholderText("New note")).toBeNull();
 	});
+
+	it("uses each project's icon and color in the move destination menu", async () => {
+		const user = userEvent.setup();
+		const appearanceProject: Doc<"projects"> = {
+			...project,
+			icon: "flask",
+			color: "orange",
+		};
+		useQueryMock.mockImplementation((reference: never) => {
+			const functionName = getFunctionName(reference);
+			if (functionName === "notes:get") {
+				return note;
+			}
+			if (functionName === "projects:list") {
+				return [appearanceProject];
+			}
+			return [];
+		});
+
+		renderProjectSidebarItem({ notes: [note], open: true });
+
+		await user.click(
+			screen.getByRole("button", { name: "Open actions for Nested note" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Move to" }));
+
+		const destination = await screen.findByRole("option", {
+			name: "Research activities",
+		});
+		await user.hover(destination);
+		const icon = destination.querySelector(".lucide-flask-conical");
+		expect(icon).not.toBeNull();
+		expect(icon?.classList.contains("text-orange-500")).toBe(true);
+		expect((icon as SVGElement | null)?.style.color).toBe(
+			"var(--color-orange-500)",
+		);
+	});
 });
 
 describe("NavProjects", () => {

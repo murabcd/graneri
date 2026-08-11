@@ -206,6 +206,7 @@ export function ProjectIcon({
 	color,
 	open = false,
 	className,
+	style,
 	...props
 }: ProjectAppearance &
 	React.ComponentProps<LucideIcon> & {
@@ -217,6 +218,7 @@ export function ProjectIcon({
 	return (
 		<Icon
 			className={cn(PROJECT_COLOR_OPTIONS[color].iconClassName, className)}
+			style={{ color: PROJECT_COLOR_OPTIONS[color].swatchColor, ...style }}
 			{...props}
 		/>
 	);
