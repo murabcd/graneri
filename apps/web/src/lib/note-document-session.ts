@@ -19,7 +19,7 @@ type NoteDocumentContext<TWorkspaceId, TNoteId> = {
 	remote: RemoteNoteDocument<TNoteId> | null | undefined;
 };
 
-type NoteDocumentSessionDependencies<TWorkspaceId, TNoteId> = {
+type NoteDocumentSessionDependencies<TWorkspaceId, TNoteId, TCommitMetadata> = {
 	emptyDocument: NoteDocument;
 	readDocument: () => NoteDocument;
 	applyDocument: (document: NoteDocument) => void;
@@ -37,6 +37,7 @@ type NoteDocumentSessionDependencies<TWorkspaceId, TNoteId> = {
 		workspaceId: TWorkspaceId;
 		noteId: TNoteId;
 		document: NoteDocument;
+		commitMetadata: TCommitMetadata | undefined;
 	}) => Promise<void>;
 	onSaveError: (error: unknown) => void;
 	onDraftError: (error: unknown) => void;
@@ -50,25 +51,26 @@ type NoteDocumentSessionDependencies<TWorkspaceId, TNoteId> = {
 	maxDebounceMs?: number;
 };
 
-type SaveRequest<TWorkspaceId, TNoteId> = {
+type SaveRequest<TWorkspaceId, TNoteId, TCommitMetadata> = {
 	workspaceId: TWorkspaceId;
 	noteId: TNoteId;
 	requestId: number;
 	snapshot: string;
 	document: NoteDocument;
+	commitMetadata: TCommitMetadata | undefined;
 };
 
-type DocumentState<TWorkspaceId, TNoteId> = {
+type DocumentState<TWorkspaceId, TNoteId, TCommitMetadata> = {
 	workspaceId: TWorkspaceId | null;
 	noteId: TNoteId;
 	hydrated: boolean;
 	lastSavedSnapshot: string | null;
 	firstUnsavedAt: number | null;
 	latestRequestId: number;
-	pending: SaveRequest<TWorkspaceId, TNoteId> | null;
-	queued: SaveRequest<TWorkspaceId, TNoteId> | null;
+	pending: SaveRequest<TWorkspaceId, TNoteId, TCommitMetadata> | null;
+	queued: SaveRequest<TWorkspaceId, TNoteId, TCommitMetadata> | null;
 	inFlight: Promise<void> | null;
-	queuedDraft: SaveRequest<TWorkspaceId, TNoteId> | null;
+	queuedDraft: SaveRequest<TWorkspaceId, TNoteId, TCommitMetadata> | null;
 	draftInFlight: Promise<void> | null;
 	failedSaves: Map<number, unknown>;
 	timer: ReturnType<typeof setTimeout> | null;
@@ -83,7 +85,11 @@ const cloneDocument = (document: NoteDocument): NoteDocument => ({
 	searchableText: document.searchableText,
 });
 
-export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
+export const createNoteDocumentSession = <
+	TWorkspaceId,
+	TNoteId,
+	TCommitMetadata = never,
+>({
 	emptyDocument,
 	readDocument,
 	applyDocument,
@@ -98,8 +104,11 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 	clearTimer = clearTimeout,
 	debounceMs = 2_000,
 	maxDebounceMs = 10_000,
-}: NoteDocumentSessionDependencies<TWorkspaceId, TNoteId>) => {
-	const documents = new Map<TNoteId, DocumentState<TWorkspaceId, TNoteId>>();
+}: NoteDocumentSessionDependencies<TWorkspaceId, TNoteId, TCommitMetadata>) => {
+	const documents = new Map<
+		TNoteId,
+		DocumentState<TWorkspaceId, TNoteId, TCommitMetadata>
+	>();
 	let currentNoteId: TNoteId | null = null;
 	let contextVersion = 0;
 
@@ -112,7 +121,9 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 		}
 	};
 
-	const clearSaveTimer = (state: DocumentState<TWorkspaceId, TNoteId>) => {
+	const clearSaveTimer = (
+		state: DocumentState<TWorkspaceId, TNoteId, TCommitMetadata>,
+	) => {
 		if (state.timer === null) {
 			return;
 		}
@@ -128,7 +139,7 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 			return existing;
 		}
 
-		const state: DocumentState<TWorkspaceId, TNoteId> = {
+		const state: DocumentState<TWorkspaceId, TNoteId, TCommitMetadata> = {
 			workspaceId,
 			noteId,
 			hydrated: false,
@@ -148,8 +159,8 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 	};
 
 	const persistDraft = (
-		state: DocumentState<TWorkspaceId, TNoteId>,
-		request: SaveRequest<TWorkspaceId, TNoteId>,
+		state: DocumentState<TWorkspaceId, TNoteId, TCommitMetadata>,
+		request: SaveRequest<TWorkspaceId, TNoteId, TCommitMetadata>,
 	): Promise<void> => {
 		if (state.draftInFlight) {
 			state.queuedDraft = request;
@@ -176,8 +187,8 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 	};
 
 	const flushRequest = async (
-		state: DocumentState<TWorkspaceId, TNoteId>,
-		request: SaveRequest<TWorkspaceId, TNoteId>,
+		state: DocumentState<TWorkspaceId, TNoteId, TCommitMetadata>,
+		request: SaveRequest<TWorkspaceId, TNoteId, TCommitMetadata>,
 	): Promise<void> => {
 		if (request.requestId !== state.latestRequestId) {
 			return;
@@ -197,6 +208,7 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 					workspaceId: request.workspaceId,
 					noteId: request.noteId,
 					document: request.document,
+					commitMetadata: request.commitMetadata,
 				});
 				state.failedSaves.delete(request.requestId);
 				state.lastSavedSnapshot = request.snapshot;
@@ -220,7 +232,8 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 				if (
 					queued &&
 					queued.requestId === state.latestRequestId &&
-					queued.snapshot !== state.lastSavedSnapshot
+					(queued.snapshot !== state.lastSavedSnapshot ||
+						queued.commitMetadata !== undefined)
 				) {
 					await flushRequest(state, queued);
 				}
@@ -232,8 +245,9 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 	};
 
 	const createSaveRequest = (
-		state: DocumentState<TWorkspaceId, TNoteId>,
+		state: DocumentState<TWorkspaceId, TNoteId, TCommitMetadata>,
 		document: NoteDocument,
+		commitMetadata?: TCommitMetadata,
 	) => {
 		if (state.workspaceId === null) {
 			return null;
@@ -246,11 +260,12 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 			requestId: state.latestRequestId,
 			snapshot: snapshotDocument(document),
 			document: cloneDocument(document),
+			commitMetadata,
 		};
 	};
 
 	const scheduleSave = (
-		state: DocumentState<TWorkspaceId, TNoteId>,
+		state: DocumentState<TWorkspaceId, TNoteId, TCommitMetadata>,
 		document: NoteDocument,
 	) => {
 		const snapshot = snapshotDocument(document);
@@ -407,7 +422,10 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 		await state.inFlight;
 	}
 
-	const saveNow = async (document: NoteDocument) => {
+	const saveNow = async (
+		document: NoteDocument,
+		commitMetadata?: TCommitMetadata,
+	) => {
 		if (currentNoteId === null) {
 			throw new Error("Cannot save a note document without an active note.");
 		}
@@ -420,7 +438,7 @@ export const createNoteDocumentSession = <TWorkspaceId, TNoteId>({
 		}
 
 		clearSaveTimer(state);
-		const request = createSaveRequest(state, document);
+		const request = createSaveRequest(state, document, commitMetadata);
 		if (!request) {
 			throw new Error(
 				"Cannot save a note document without an active workspace.",

@@ -5,6 +5,16 @@ import {
 	type StoredNoteDocumentDraft,
 } from "../src/lib/note-document-session";
 
+type NoteCommitMetadata = {
+	templateSlug: string | null;
+};
+
+const createTestNoteDocumentSession = createNoteDocumentSession<
+	string,
+	string,
+	NoteCommitMetadata
+>;
+
 const emptyDocument: NoteDocument = {
 	title: "",
 	content: '{"type":"doc","content":[]}',
@@ -47,6 +57,7 @@ const createHarness = ({
 		workspaceId: string;
 		noteId: string;
 		document: NoteDocument;
+		commitMetadata: NoteCommitMetadata | undefined;
 	}) => Promise<void>;
 } = {}) => {
 	let currentDocument = emptyDocument;
@@ -56,10 +67,14 @@ const createHarness = ({
 	const applied: NoteDocument[] = [];
 	const removedDrafts: string[] = [];
 	const savedDrafts: Array<{ noteId: string; document: NoteDocument }> = [];
-	const remoteSaves: Array<{ noteId: string; document: NoteDocument }> = [];
+	const remoteSaves: Array<{
+		noteId: string;
+		document: NoteDocument;
+		commitMetadata: NoteCommitMetadata | undefined;
+	}> = [];
 	const saveErrors: unknown[] = [];
 
-	const session = createNoteDocumentSession<string, string>({
+	const session = createTestNoteDocumentSession({
 		emptyDocument,
 		readDocument: () => currentDocument,
 		applyDocument: (nextDocument) => {
@@ -78,7 +93,11 @@ const createHarness = ({
 			removedDrafts.push(noteId);
 		},
 		saveRemote: async (input) => {
-			remoteSaves.push({ noteId: input.noteId, document: input.document });
+			remoteSaves.push({
+				noteId: input.noteId,
+				document: input.document,
+				commitMetadata: input.commitMetadata,
+			});
 			await saveRemote?.(input);
 		},
 		onSaveError: (error) => saveErrors.push(error),
@@ -247,6 +266,44 @@ describe("note document session", () => {
 		expect(
 			saveRemote.mock.calls.map(([input]) => input.document.title),
 		).toEqual(["first edit", "latest edit"]);
+	});
+
+	it("supersedes an in-flight autosave with one metadata-aware generated commit", async () => {
+		const autosave = deferred<void>();
+		const saveRemote = vi
+			.fn<
+				(input: {
+					workspaceId: string;
+					noteId: string;
+					document: NoteDocument;
+					commitMetadata: NoteCommitMetadata | undefined;
+				}) => Promise<void>
+			>()
+			.mockImplementationOnce(() => autosave.promise)
+			.mockResolvedValue(undefined);
+		const harness = createHarness({ saveRemote });
+		await harness.session.synchronize({
+			workspaceId: "workspace",
+			noteId: "note",
+			remote: remoteDocument("note", "saved", 1),
+		});
+
+		const firstSave = harness.session.saveNow(document("recording draft"));
+		await vi.waitFor(() => expect(saveRemote).toHaveBeenCalledTimes(1));
+		const generatedSave = harness.session.saveNow(document("generated title"), {
+			templateSlug: "enhanced",
+		});
+
+		autosave.resolve();
+		await Promise.all([firstSave, generatedSave]);
+
+		expect(saveRemote).toHaveBeenCalledTimes(2);
+		expect(
+			saveRemote.mock.calls.map(([input]) => input.document.title),
+		).toEqual(["recording draft", "generated title"]);
+		expect(saveRemote.mock.calls[1]?.[0].commitMetadata).toEqual({
+			templateSlug: "enhanced",
+		});
 	});
 
 	it("keeps save identity correct when switching notes during an in-flight save", async () => {

@@ -8,6 +8,7 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { useIsMobile } from "@workspace/ui/hooks/use-mobile";
 import { cn } from "@workspace/ui/lib/utils";
 import { useConvex, useMutation } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -75,6 +76,7 @@ import { NoteSelectionMenu } from "./note-selection-menu";
 import { NoteTableOfContents } from "./note-table-of-contents";
 import { writeRichTextToClipboard } from "./share-note";
 import { useNoteTableOfContents } from "./use-note-table-of-contents";
+import { useNoteTitleSynchronization } from "./use-note-title-synchronization";
 
 type CssHighlightRegistry = {
 	set: (name: string, highlight: Highlight) => void;
@@ -102,6 +104,10 @@ type NotePageCurrentUser = {
 	avatar: string;
 };
 
+type NoteDocumentCommitMetadata = Required<
+	Pick<FunctionArgs<typeof api.notes.save>, "templateSlug">
+>;
+
 const useNotePageController = ({
 	noteId,
 	note,
@@ -122,7 +128,12 @@ const useNotePageController = ({
 	onOpenComments?: () => void;
 }) => {
 	const activeWorkspaceId = useActiveWorkspaceId();
-	const [title, setTitle] = React.useState("");
+	const { applyDocumentTitle, setTitle, title } = useNoteTitleSynchronization({
+		externalTitle,
+		isNoteResolved: note !== undefined,
+		noteId,
+		onTitleChange,
+	});
 	const [content, setContent] = React.useState(EMPTY_DOCUMENT_STRING);
 	const [searchableText, setSearchableText] = React.useState("");
 	const {
@@ -159,14 +170,12 @@ const useNotePageController = ({
 	});
 	const applyDraftState = React.useCallback(
 		(nextDraft: { title: string; content: string; searchableText: string }) => {
-			setTitle(nextDraft.title);
-			onTitleChange?.(nextDraft.title);
+			applyDocumentTitle(nextDraft.title);
 			setContent(nextDraft.content);
 			setSearchableText(nextDraft.searchableText);
 		},
-		[onTitleChange],
+		[applyDocumentTitle],
 	);
-	const suppressNextTitleChangeRef = React.useRef(false);
 	const publishedEditorActionsRef = React.useRef<{
 		noteId: Id<"notes">;
 		canCopyMarkdown: boolean;
@@ -243,7 +252,11 @@ const useNotePageController = ({
 	}, [saveNote]);
 
 	const [documentSession] = React.useState(() =>
-		createNoteDocumentSession<Id<"workspaces">, Id<"notes">>({
+		createNoteDocumentSession<
+			Id<"workspaces">,
+			Id<"notes">,
+			NoteDocumentCommitMetadata
+		>({
 			emptyDocument: {
 				title: "",
 				content: EMPTY_DOCUMENT_STRING,
@@ -256,11 +269,12 @@ const useNotePageController = ({
 			saveDraft: ({ noteId, workspaceId, document }) =>
 				saveNoteDraft({ noteId, workspaceId, payload: document }),
 			removeDraft: removeNoteDraft,
-			saveRemote: async ({ noteId, workspaceId, document }) => {
+			saveRemote: async ({ noteId, workspaceId, document, commitMetadata }) => {
 				await saveNoteRef.current({
 					workspaceId,
 					id: noteId,
 					...document,
+					...(commitMetadata ?? {}),
 				});
 			},
 			onSaveError: (error) => {
@@ -350,34 +364,6 @@ const useNotePageController = ({
 			documentSession.dispose();
 		};
 	}, [documentSession]);
-
-	React.useEffect(() => {
-		if (suppressNextTitleChangeRef.current) {
-			suppressNextTitleChangeRef.current = false;
-			return;
-		}
-
-		const timeout = window.setTimeout(() => {
-			onTitleChange?.(title);
-		}, 150);
-
-		return () => {
-			window.clearTimeout(timeout);
-		};
-	}, [onTitleChange, title]);
-
-	React.useEffect(() => {
-		if (!noteId || note === undefined || externalTitle === undefined) {
-			return;
-		}
-
-		if (externalTitle === latestEditorStateRef.current.title) {
-			return;
-		}
-
-		suppressNextTitleChangeRef.current = true;
-		setTitle(externalTitle);
-	}, [externalTitle, note, noteId]);
 
 	React.useEffect(() => {
 		void title;
@@ -513,6 +499,35 @@ const useNotePageController = ({
 		editor.chain().focus("start").run();
 	}, [editor]);
 
+	const commitStructuredNote = React.useCallback(
+		async ({
+			document,
+			searchableText: nextSearchableText,
+			templateSlug,
+			title: nextTitle,
+		}: {
+			document: JSONContent;
+			searchableText: string;
+			templateSlug: string;
+			title: string;
+		}) => {
+			const nextContent = JSON.stringify(document);
+			await documentSession.saveNow(
+				{
+					title: nextTitle,
+					content: nextContent,
+					searchableText: nextSearchableText,
+				},
+				{ templateSlug },
+			);
+			setEditorDocument(document);
+			applyDocumentTitle(nextTitle);
+			setContent(nextContent);
+			setSearchableText(nextSearchableText);
+		},
+		[applyDocumentTitle, documentSession, setEditorDocument],
+	);
+
 	const applyTemplate = React.useCallback(
 		async (template: NoteTemplate) => {
 			if (!editor || !noteId) {
@@ -590,20 +605,12 @@ const useNotePageController = ({
 					nextSearchableText = structuredNoteToSearchableText(finalNote);
 				}
 
-				const nextContent = JSON.stringify(nextDocument);
-				await saveNote({
-					workspaceId: activeWorkspaceId,
-					id: nextNoteIdRef.current ?? noteId,
-					title: nextTitle,
-					content: nextContent,
+				await commitStructuredNote({
+					document: nextDocument,
 					searchableText: nextSearchableText,
 					templateSlug: template.slug,
+					title: nextTitle,
 				});
-
-				setEditorDocument(nextDocument);
-				setTitle(nextTitle);
-				setContent(nextContent);
-				setSearchableText(nextSearchableText);
 				toast.success(`Rewrote note with ${template.name}`);
 
 				return true;
@@ -620,11 +627,10 @@ const useNotePageController = ({
 		},
 		[
 			activeWorkspaceId,
+			commitStructuredNote,
 			convex,
 			editor,
 			noteId,
-			saveNote,
-			setEditorDocument,
 			shouldPreserveStructuredNoteTitle,
 		],
 	);
@@ -714,7 +720,6 @@ const useNotePageController = ({
 					transcriptionLanguage,
 				});
 				const nextDocument = structuredNoteToDocument(enhancedNote);
-				const nextContent = JSON.stringify(nextDocument);
 				const nextSearchableText = structuredNoteToSearchableText(enhancedNote);
 				const nextTitle = shouldPreserveStructuredNoteTitle
 					? title
@@ -723,18 +728,12 @@ const useNotePageController = ({
 				if (!nextNoteId) {
 					return;
 				}
-				await saveNote({
-					workspaceId: activeWorkspaceId,
-					id: nextNoteId,
-					title: nextTitle,
-					content: nextContent,
+				await commitStructuredNote({
+					document: nextDocument,
 					searchableText: nextSearchableText,
 					templateSlug: "enhanced",
+					title: nextTitle,
 				});
-				setEditorDocument(nextDocument);
-				setTitle(nextTitle);
-				setContent(nextContent);
-				setSearchableText(nextSearchableText);
 				toast.success("Structured notes ready");
 			} catch (error) {
 				showActionError("Failed to enhance transcript", error);
@@ -743,11 +742,10 @@ const useNotePageController = ({
 		},
 		[
 			activeWorkspaceId,
+			commitStructuredNote,
 			noteId,
 			editor,
-			saveNote,
 			searchableText,
-			setEditorDocument,
 			shouldPreserveStructuredNoteTitle,
 			title,
 		],

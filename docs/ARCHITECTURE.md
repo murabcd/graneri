@@ -824,7 +824,11 @@ as the authoritative source for language and facts, so template changes do not
 compound a previous generated rewrite. The complete rewrite is structurally
 validated before note content is emitted. Generated content and its template
 slug are then committed in one `notes.save` mutation, so a failed generation or
-save leaves the existing note and template selection intact.
+save leaves the existing note and template selection intact. Renderer generation
+and template rewrites enter that mutation through the same note document session
+as autosave; commit metadata carries the template slug so one serializer owns
+ordering for every document write. Note UI code must not bypass the document
+session with a competing direct save.
 Project description generation reads its note context through the
 project-scoped `projectDescriptions.getContext` query. The query uses the
 project note index to return at most 20 non-archived notes ordered by most recent
