@@ -1,5 +1,12 @@
 import * as React from "react";
 
+type NoteTitleDraft = {
+	externalTitle?: string;
+	noteId: string | null;
+	shouldNotify: boolean;
+	title: string;
+};
+
 export const useNoteTitleSynchronization = ({
 	externalTitle,
 	isNoteResolved,
@@ -11,29 +18,47 @@ export const useNoteTitleSynchronization = ({
 	noteId: string | null;
 	onTitleChange?: (title: string) => void;
 }) => {
-	const [title, setTitleState] = React.useState("");
-	const latestTitleRef = React.useRef("");
-	const suppressNextTitleChangeRef = React.useRef(false);
+	const resolvedExternalTitle =
+		noteId && isNoteResolved ? externalTitle : undefined;
+	const [titleDraft, setTitleDraft] = React.useState<NoteTitleDraft | null>(
+		null,
+	);
+	const isCurrentDraft =
+		titleDraft?.noteId === noteId &&
+		titleDraft.externalTitle === resolvedExternalTitle;
+	const title = isCurrentDraft
+		? titleDraft.title
+		: (resolvedExternalTitle ?? "");
 
-	const setTitle = React.useCallback((nextTitle: string) => {
-		latestTitleRef.current = nextTitle;
-		setTitleState(nextTitle);
-	}, []);
+	const setTitle = React.useCallback(
+		(nextTitle: string) => {
+			setTitleDraft({
+				externalTitle: resolvedExternalTitle,
+				noteId,
+				shouldNotify: true,
+				title: nextTitle,
+			});
+		},
+		[noteId, resolvedExternalTitle],
+	);
 
 	const applyDocumentTitle = React.useCallback(
 		(nextTitle: string) => {
-			if (nextTitle !== latestTitleRef.current) {
-				suppressNextTitleChangeRef.current = true;
-				setTitle(nextTitle);
+			if (nextTitle !== title) {
+				setTitleDraft({
+					externalTitle: resolvedExternalTitle,
+					noteId,
+					shouldNotify: false,
+					title: nextTitle,
+				});
 			}
 			onTitleChange?.(nextTitle);
 		},
-		[onTitleChange, setTitle],
+		[noteId, onTitleChange, resolvedExternalTitle, title],
 	);
 
 	React.useEffect(() => {
-		if (suppressNextTitleChangeRef.current) {
-			suppressNextTitleChangeRef.current = false;
+		if (!isCurrentDraft || !titleDraft?.shouldNotify) {
 			return;
 		}
 
@@ -44,20 +69,7 @@ export const useNoteTitleSynchronization = ({
 		return () => {
 			window.clearTimeout(timeout);
 		};
-	}, [onTitleChange, title]);
-
-	React.useEffect(() => {
-		if (!noteId || !isNoteResolved || externalTitle === undefined) {
-			return;
-		}
-
-		if (externalTitle === latestTitleRef.current) {
-			return;
-		}
-
-		suppressNextTitleChangeRef.current = true;
-		setTitle(externalTitle);
-	}, [externalTitle, isNoteResolved, noteId, setTitle]);
+	}, [isCurrentDraft, onTitleChange, title, titleDraft]);
 
 	return {
 		applyDocumentTitle,

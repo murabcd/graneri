@@ -224,7 +224,7 @@ export function ProjectIcon({
 	);
 }
 
-export function ProjectAppearancePicker({
+function ProjectAppearancePicker({
 	appearance,
 	projectName,
 	onAppearanceChange,

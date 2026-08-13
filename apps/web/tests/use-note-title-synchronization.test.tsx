@@ -1,8 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useNoteTitleSynchronization } from "../src/components/note/use-note-title-synchronization";
 
 describe("useNoteTitleSynchronization", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("keeps a committed generated title through note content updates", () => {
 		const onTitleChange = vi.fn();
 		const { rerender, result } = renderHook(
@@ -48,5 +52,29 @@ describe("useNoteTitleSynchronization", () => {
 
 		expect(result.current.title).toBe("Breadcrumb rename");
 		expect(onTitleChange).not.toHaveBeenCalled();
+	});
+
+	it("debounces a local title edit", () => {
+		vi.useFakeTimers();
+		const onTitleChange = vi.fn();
+		const { result } = renderHook(() =>
+			useNoteTitleSynchronization({
+				externalTitle: "Initial title",
+				isNoteResolved: true,
+				noteId: "note",
+				onTitleChange,
+			}),
+		);
+
+		act(() => {
+			result.current.setTitle("Edited title");
+		});
+		expect(onTitleChange).not.toHaveBeenCalled();
+
+		act(() => {
+			vi.advanceTimersByTime(150);
+		});
+		expect(onTitleChange).toHaveBeenCalledOnce();
+		expect(onTitleChange).toHaveBeenCalledWith("Edited title");
 	});
 });

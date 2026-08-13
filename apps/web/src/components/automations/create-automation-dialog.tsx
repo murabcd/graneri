@@ -12,33 +12,16 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@workspace/ui/components/dialog";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
 import {
 	InputGroup,
 	InputGroupAddon,
-	InputGroupButton,
 } from "@workspace/ui/components/input-group";
-import { Switch } from "@workspace/ui/components/switch";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@workspace/ui/components/tooltip";
-import { cn } from "@workspace/ui/lib/utils";
 import { useQuery } from "convex/react";
-import { FileText, Globe, LoaderCircle, Plus, Settings2 } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { AppSourceIcon } from "@/components/app-source-icon";
 import {
 	type AutomationNoteSource,
 	type AutomationPromptMention,
@@ -59,13 +42,6 @@ import {
 	type ReasoningEffort,
 	type ServiceTier,
 } from "@/components/chat/model-picker";
-import {
-	COMPOSER_MENTION_PICKER_ITEM_CLASS,
-	COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS,
-	ComposerMentionPickerItemLabel,
-	ComposerMentionPickerSurface,
-	ComposerMentionPickerViewport,
-} from "@/components/composer-mention-picker-surface";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { type AppSource, useAppSources } from "@/hooks/use-app-sources";
 import { getStoredChatModel, storeChatModel } from "@/lib/ai/chat-model";
@@ -75,10 +51,7 @@ import {
 	storeReasoningEffort,
 } from "@/lib/ai/reasoning-effort";
 import { getStoredServiceTier, storeServiceTier } from "@/lib/ai/service-tier";
-import {
-	getAppSourceDescription,
-	getAppSourceLabel,
-} from "@/lib/chat-source-display";
+import { getAppSourceLabel } from "@/lib/chat-source-display";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
 import {
@@ -93,6 +66,11 @@ import {
 } from "@/lib/tiptap-mention";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { AppSourcesPicker } from "./automation-app-sources-picker";
+import {
+	AutomationMentionPicker,
+	type AutomationMentionPickerItem,
+} from "./automation-mention-picker";
 import {
 	type AutomationScheduleDraft,
 	createAutomationScheduleDraft,
@@ -110,16 +88,6 @@ export type CreateAutomationDialogProps = {
 	initialAutomation?: AutomationDraft | null;
 	initialTitle?: string;
 };
-
-type AutomationMentionPickerItem =
-	| {
-			type: "tool";
-			source: AppSource;
-	  }
-	| {
-			type: "note";
-			source: AutomationNoteSource;
-	  };
 
 type AutomationDialogState = {
 	schedulePickerOpen: boolean;
@@ -1050,211 +1018,4 @@ function handleAutomationMentionPickerKeyDown({
 	event.preventDefault();
 	onSelectItem(selectedItem);
 	return true;
-}
-
-// Private portal tied to the composer suggestion refs; extracting it would not create a reusable API.
-// react-doctor-disable-next-line react-doctor/no-multi-comp -- private portal is an implementation slot of AutomationPromptEditor and has no independent feature API.
-function AutomationMentionPicker({
-	open,
-	position,
-	appSources,
-	noteSources,
-	items,
-	selectedIndex,
-	onSelectedIndexChange,
-	isNotesLoading,
-	shouldSearchNotes,
-	onSelectItem,
-}: {
-	open: boolean;
-	position: MentionPickerPosition | null;
-	appSources: AppSource[];
-	noteSources: AutomationNoteSource[];
-	items: AutomationMentionPickerItem[];
-	selectedIndex: number;
-	onSelectedIndexChange: (index: number) => void;
-	isNotesLoading: boolean;
-	shouldSearchNotes: boolean;
-	onSelectItem: (item: AutomationMentionPickerItem) => void;
-}) {
-	return (
-		<ComposerMentionPickerSurface
-			ariaLabel="Mention suggestions"
-			open={open}
-			position={position}
-		>
-			<ComposerMentionPickerViewport>
-				{appSources.length > 0 ? (
-					<div>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Plugins
-						</div>
-						<div>
-							{appSources.map((source, index) => {
-								const selected = index === selectedIndex;
-
-								return (
-									<button
-										key={source.id}
-										type="button"
-										onMouseEnter={() => onSelectedIndexChange(index)}
-										onPointerDown={(event) => {
-											event.preventDefault();
-											event.stopPropagation();
-											onSelectItem({ type: "tool", source });
-										}}
-										className={cn(
-											COMPOSER_MENTION_PICKER_ITEM_CLASS,
-											selected
-												? "bg-accent text-accent-foreground"
-												: "text-popover-foreground",
-										)}
-									>
-										<div className="flex size-4 shrink-0 items-center justify-center">
-											<AppSourceIcon
-												provider={source.provider}
-												className="size-4"
-											/>
-										</div>
-										<ComposerMentionPickerItemLabel
-											label={getAppSourceLabel(source.provider)}
-											description={getAppSourceDescription(source.provider)}
-										/>
-									</button>
-								);
-							})}
-						</div>
-					</div>
-				) : null}
-				{!shouldSearchNotes ? (
-					<div className={appSources.length > 0 ? "mt-1" : undefined}>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Notes
-						</div>
-						<div className="px-2 pt-0.5 pb-2 text-xs text-muted-foreground">
-							Type to search for notes
-						</div>
-					</div>
-				) : null}
-				{shouldSearchNotes && isNotesLoading ? (
-					<div className="px-2 py-6" aria-hidden="true" />
-				) : null}
-				{shouldSearchNotes && !isNotesLoading && items.length === 0 ? (
-					<div>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Notes
-						</div>
-						<div className="px-2 py-6 text-center text-sm text-muted-foreground">
-							No results found.
-						</div>
-					</div>
-				) : null}
-				{shouldSearchNotes && noteSources.length > 0 ? (
-					<div className={appSources.length > 0 ? "mt-1" : undefined}>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Notes
-						</div>
-						<div>
-							{noteSources.map((source, index) => {
-								const itemIndex = appSources.length + index;
-								const selected = itemIndex === selectedIndex;
-
-								return (
-									<button
-										key={source.id}
-										type="button"
-										onMouseEnter={() => onSelectedIndexChange(itemIndex)}
-										onPointerDown={(event) => {
-											event.preventDefault();
-											event.stopPropagation();
-											onSelectItem({ type: "note", source });
-										}}
-										className={cn(
-											COMPOSER_MENTION_PICKER_ITEM_CLASS,
-											selected
-												? "bg-accent text-accent-foreground"
-												: "text-popover-foreground",
-										)}
-									>
-										<div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-											<FileText className="size-4" />
-										</div>
-										<div className="min-w-0 flex-1 truncate">
-											{source.title}
-										</div>
-									</button>
-								);
-							})}
-						</div>
-					</div>
-				) : null}
-			</ComposerMentionPickerViewport>
-		</ComposerMentionPickerSurface>
-	);
-}
-
-// Private picker slot for this composer; its props are the composer state boundary.
-// react-doctor-disable-next-line react-doctor/no-multi-comp -- private scope-picker slot shares the dialog controller contract and is not a reusable component boundary.
-function AppSourcesPicker({
-	open,
-	onOpenChange,
-	webSearchEnabled,
-	onWebSearchEnabledChange,
-	onOpenConnectionsSettings,
-}: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	webSearchEnabled: boolean;
-	onWebSearchEnabledChange: (value: boolean) => void;
-	onOpenConnectionsSettings: () => void;
-}) {
-	return (
-		<DropdownMenu open={open} onOpenChange={onOpenChange}>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<DropdownMenuTrigger asChild>
-						<InputGroupButton
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							className="group/automation-picker rounded-full text-muted-foreground"
-							aria-label="Select scope"
-						>
-							<Settings2 className="size-4 shrink-0 text-muted-foreground group-hover/automation-picker:text-foreground group-focus-visible/automation-picker:text-foreground group-data-[state=open]/automation-picker:text-foreground" />
-						</InputGroupButton>
-					</DropdownMenuTrigger>
-				</TooltipTrigger>
-				<TooltipContent>Select scope</TooltipContent>
-			</Tooltip>
-			<DropdownMenuContent side="bottom" align="start" className="w-64">
-				<DropdownMenuGroup>
-					<DropdownMenuItem
-						asChild
-						onSelect={(event) => event.preventDefault()}
-					>
-						<label htmlFor="automation-web-search">
-							<Globe className="text-foreground" /> Web search
-							<Switch
-								id="automation-web-search"
-								className="ml-auto"
-								checked={webSearchEnabled}
-								onCheckedChange={onWebSearchEnabledChange}
-							/>
-						</label>
-					</DropdownMenuItem>
-				</DropdownMenuGroup>
-				<DropdownMenuSeparator />
-				<DropdownMenuGroup>
-					<DropdownMenuItem
-						aria-label="Connect apps"
-						onClick={onOpenConnectionsSettings}
-					>
-						<Plus aria-hidden="true" />
-						<span aria-hidden="true">Connect plugins</span>
-						<span className="sr-only">Connect apps</span>
-					</DropdownMenuItem>
-				</DropdownMenuGroup>
-			</DropdownMenuContent>
-		</DropdownMenu>
-	);
 }
