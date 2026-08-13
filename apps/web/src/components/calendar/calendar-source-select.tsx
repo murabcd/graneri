@@ -79,7 +79,23 @@ export function CalendarSourceSelect({
 					<ChevronDown data-icon="inline-end" />
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="w-52">
+			<DropdownMenuContent
+				align="end"
+				className="w-52"
+				onClickCapture={(event) => {
+					if (
+						!calendarActionsOpen ||
+						!(event.target instanceof Element) ||
+						event.target.closest('[data-slot="dropdown-menu-sub-content"]')
+					) {
+						return;
+					}
+
+					event.preventDefault();
+					event.stopPropagation();
+					setOpenCalendarActionsId(null);
+				}}
+			>
 				<DropdownMenuGroup>
 					{calendars.map((calendar) => {
 						const hasActions =

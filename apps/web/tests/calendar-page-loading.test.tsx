@@ -293,6 +293,16 @@ describe("CalendarPage loading", () => {
 		expect(personalCalendar.getAttribute("aria-disabled")).toBe("true");
 		expect(personalActions.getAttribute("aria-disabled")).toBe("true");
 		expect(newCalendar.getAttribute("aria-disabled")).toBe("true");
+
+		fireEvent.click(personalCalendar);
+
+		await waitFor(() =>
+			expect(screen.queryByRole("menuitem", { name: "Edit" })).toBeNull(),
+		);
+		expect(personalCalendar.getAttribute("aria-disabled")).toBeNull();
+		expect(personalCalendar.getAttribute("aria-checked")).toBe("true");
+
+		fireEvent.click(actions);
 		fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
 
 		await screen.findByRole("heading", { name: "Edit calendar" });
