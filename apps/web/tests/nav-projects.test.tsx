@@ -171,7 +171,7 @@ describe("ProjectSidebarItem", () => {
 		).toBe("true");
 	});
 
-	it("closes a project rename popover on the first outside click", async () => {
+	it("locks the underlying app while editing a project", async () => {
 		const user = userEvent.setup();
 
 		renderProjectSidebarItem();
@@ -183,10 +183,17 @@ describe("ProjectSidebarItem", () => {
 		);
 		await user.click(screen.getByRole("menuitem", { name: "Rename" }));
 		expect(screen.getByPlaceholderText("Project name")).toBeTruthy();
+		expect(document.body.dataset.scrollLocked).toBe("1");
+		expect(document.body.style.pointerEvents).toBe("none");
+		expect(screen.queryByRole("button", { name: "Outside" })).toBeNull();
 
-		await user.click(screen.getByRole("button", { name: "Outside" }));
+		await user.keyboard("{Escape}");
 
-		expect(screen.queryByPlaceholderText("Project name")).toBeNull();
+		await waitFor(() => {
+			expect(screen.queryByPlaceholderText("Project name")).toBeNull();
+			expect(document.body.dataset.scrollLocked).toBeUndefined();
+			expect(document.body.style.pointerEvents).toBe("");
+		});
 	});
 
 	it("updates a project's icon and color from the name editor", async () => {
@@ -197,7 +204,7 @@ describe("ProjectSidebarItem", () => {
 			color: "blue",
 		});
 
-		renderProjectSidebarItem();
+		const { container } = renderProjectSidebarItem();
 
 		await user.click(
 			screen.getByRole("button", {
@@ -210,6 +217,7 @@ describe("ProjectSidebarItem", () => {
 				name: "Change icon and color for Research activities",
 			}),
 		);
+		expect(document.body.dataset.scrollLocked).toBe("1");
 		expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
 		expect(
 			screen
@@ -218,10 +226,11 @@ describe("ProjectSidebarItem", () => {
 		).not.toBeNull();
 		await user.click(screen.getByRole("radio", { name: "Use Blue" }));
 		await user.click(screen.getByRole("radio", { name: "Use Terminal" }));
-		const projectButton = screen.getByRole("button", {
-			name: "Research activities",
-		});
-		const previewIcon = projectButton.querySelector(".lucide-square-terminal");
+		const projectButton = container.querySelector<HTMLButtonElement>(
+			'[data-sidebar="menu-button"]',
+		);
+		expect(projectButton).not.toBeNull();
+		const previewIcon = projectButton?.querySelector(".lucide-square-terminal");
 		expect(previewIcon).not.toBeNull();
 		expect(previewIcon?.classList.contains("text-blue-500")).toBe(true);
 		await user.click(screen.getByRole("textbox", { name: "Project name" }));

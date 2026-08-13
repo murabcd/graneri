@@ -972,6 +972,7 @@ function ProjectSidebarRow({
 }) {
 	return (
 		<Popover
+			modal
 			open={identityEditor.open}
 			onOpenChange={identityEditor.onOpenChange}
 		>
