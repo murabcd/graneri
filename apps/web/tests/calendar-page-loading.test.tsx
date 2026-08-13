@@ -250,12 +250,33 @@ describe("CalendarPage loading", () => {
 
 	it("edits a provider calendar from its hover actions", async () => {
 		const user = userEvent.setup();
+		listCalendarEvents.mockResolvedValue({
+			...readyCalendar,
+			calendars: [
+				...readyCalendar.calendars,
+				{
+					...readyCalendar.calendars[0],
+					color: "#10b981",
+					id: "personal",
+					name: "Personal",
+				},
+			],
+		});
 		renderCalendarPage(workspaceId);
 		await screen.findByText("Planning");
 
 		await user.click(screen.getByRole("button", { name: "Calendars" }));
 		const actions = screen.getByRole("menuitem", {
 			name: "Actions for Work",
+		});
+		const personalCalendar = screen.getByRole("menuitemcheckbox", {
+			name: "Personal",
+		});
+		const personalActions = screen.getByRole("menuitem", {
+			name: "Actions for Personal",
+		});
+		const newCalendar = screen.getByRole("menuitem", {
+			name: "New calendar",
 		});
 		expect(actions.className).toContain("hover:bg-accent");
 		await user.hover(actions);
@@ -269,6 +290,9 @@ describe("CalendarPage loading", () => {
 		expect(
 			await screen.findByRole("menuitem", { name: "Edit" }),
 		).not.toBeNull();
+		expect(personalCalendar.getAttribute("aria-disabled")).toBe("true");
+		expect(personalActions.getAttribute("aria-disabled")).toBe("true");
+		expect(newCalendar.getAttribute("aria-disabled")).toBe("true");
 		fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
 
 		await screen.findByRole("heading", { name: "Edit calendar" });

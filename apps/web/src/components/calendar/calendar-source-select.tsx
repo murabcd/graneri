@@ -62,6 +62,7 @@ export function CalendarSourceSelect({
 		},
 		[],
 	);
+	const calendarActionsOpen = openCalendarActionsId !== null;
 
 	return (
 		<DropdownMenu open={open} onOpenChange={handleOpenChange}>
@@ -85,6 +86,9 @@ export function CalendarSourceSelect({
 							calendar.canEdit ||
 							calendar.canSetDefault ||
 							calendar.removalMode !== "none";
+						const actionsAvailable =
+							openCalendarActionsId === null ||
+							openCalendarActionsId === calendar.id;
 
 						return (
 							<div
@@ -93,9 +97,11 @@ export function CalendarSourceSelect({
 							>
 								<DropdownMenuCheckboxItem
 									checked={selectedCalendarIds.has(calendar.id)}
+									disabled={calendarActionsOpen}
 									className={cn(
-										"min-w-0 flex-1 pr-8 pl-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:right-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:left-auto",
+										"min-w-0 flex-1 pr-8 pl-2 data-[disabled]:opacity-100 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:right-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:left-auto",
 										hasActions &&
+											actionsAvailable &&
 											"group-focus-within/calendar:[&_[data-slot=dropdown-menu-checkbox-item-indicator]]:opacity-0 group-hover/calendar:[&_[data-slot=dropdown-menu-checkbox-item-indicator]]:opacity-0",
 									)}
 									onSelect={(event) => event.preventDefault()}
@@ -117,7 +123,12 @@ export function CalendarSourceSelect({
 									>
 										<DropdownMenuSubTrigger
 											aria-label={`Actions for ${calendar.name}`}
-											className="pointer-events-none absolute right-2 size-5 justify-center p-0 opacity-0 transition-[color,background-color,opacity] hover:bg-accent hover:text-accent-foreground group-focus-within/calendar:pointer-events-auto group-focus-within/calendar:opacity-100 group-hover/calendar:pointer-events-auto group-hover/calendar:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 [&>svg:last-child]:hidden"
+											disabled={!actionsAvailable}
+											className={cn(
+												"absolute right-2 size-5 justify-center p-0 opacity-0 transition-[color,background-color,opacity] hover:bg-accent hover:text-accent-foreground data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 [&>svg:last-child]:hidden",
+												actionsAvailable &&
+													"pointer-events-none group-focus-within/calendar:pointer-events-auto group-focus-within/calendar:opacity-100 group-hover/calendar:pointer-events-auto group-hover/calendar:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100",
+											)}
 											onClick={(event) => {
 												event.preventDefault();
 												event.stopPropagation();
@@ -181,7 +192,11 @@ export function CalendarSourceSelect({
 					<>
 						<DropdownMenuSeparator />
 						<DropdownMenuGroup>
-							<DropdownMenuItem onSelect={onCreateCalendar}>
+							<DropdownMenuItem
+								disabled={calendarActionsOpen}
+								className="data-[disabled]:opacity-100"
+								onSelect={onCreateCalendar}
+							>
 								<Plus />
 								New calendar
 							</DropdownMenuItem>
