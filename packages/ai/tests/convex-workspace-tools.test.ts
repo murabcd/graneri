@@ -1,4 +1,4 @@
-import type { ConvexHttpClient } from "convex/browser";
+import { ConvexHttpClient } from "convex/browser";
 import { getFunctionName } from "convex/server";
 import { describe, expect, it, vi } from "vitest";
 import { buildConvexWorkspaceToolSet } from "../src/convex-workspace-tools.mjs";
@@ -30,10 +30,10 @@ describe("hosted Convex workspace tools", () => {
 				`Unexpected action ${functionName}: ${JSON.stringify(args)}`,
 			);
 		});
-		const convexClient = {
-			action,
-			query: vi.fn(),
-		} as unknown as ConvexHttpClient;
+		const convexClient = Object.assign(
+			new ConvexHttpClient("https://example.convex.cloud"),
+			{ action, query: vi.fn() },
+		);
 		const workspaceId = "workspace-id" as never;
 		const catalog = await buildConvexWorkspaceToolSet({
 			connections: [
@@ -81,10 +81,10 @@ describe("hosted Convex workspace tools", () => {
 			}
 			throw new Error(`Unexpected action ${functionName}`);
 		});
-		const convexClient = {
-			action,
-			query: vi.fn(),
-		} as unknown as ConvexHttpClient;
+		const convexClient = Object.assign(
+			new ConvexHttpClient("https://example.convex.cloud"),
+			{ action, query: vi.fn() },
+		);
 		const workspaceId = "workspace-id" as never;
 		const catalog = await buildConvexWorkspaceToolSet({
 			connections: [

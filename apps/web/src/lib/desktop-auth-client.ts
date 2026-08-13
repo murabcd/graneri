@@ -123,7 +123,7 @@ type UpdateUserArgs = {
 	name?: string;
 };
 
-type DesktopAuthErrorShape = {
+type DesktopAuthErrorPayload = {
 	message: string;
 	status: number;
 	statusText: string;
@@ -190,10 +190,10 @@ const notifyListeners = () => {
 	}
 };
 
-const toDesktopAuthErrorShape = (
+const toDesktopAuthErrorPayload = (
 	error: unknown,
 	fallbackMessage: string,
-): DesktopAuthErrorShape => {
+): DesktopAuthErrorPayload => {
 	const nextError = error instanceof Error ? error : new Error(fallbackMessage);
 
 	return {
@@ -246,7 +246,10 @@ const getFreshSessionRefreshResult = (): SessionRefreshResult | null => {
 	return {
 		data: sessionState.data,
 		error: sessionState.error
-			? toDesktopAuthErrorShape(sessionState.error, "Failed to fetch session.")
+			? toDesktopAuthErrorPayload(
+					sessionState.error,
+					"Failed to fetch session.",
+				)
 			: null,
 	};
 };
@@ -379,7 +382,7 @@ const refreshDesktopSession = async ({
 		.catch((error: unknown) => {
 			const nextError =
 				error instanceof Error ? error : new Error("Failed to fetch session.");
-			const errorShape = toDesktopAuthErrorShape(
+			const errorPayload = toDesktopAuthErrorPayload(
 				error,
 				"Failed to fetch session.",
 			);
@@ -396,7 +399,7 @@ const refreshDesktopSession = async ({
 
 			return {
 				data: null,
-				error: errorShape,
+				error: errorPayload,
 			};
 		})
 		.finally(() => {
@@ -478,7 +481,7 @@ export const desktopAuthClient = {
 		} catch (error) {
 			return {
 				data: null,
-				error: toDesktopAuthErrorShape(error, "Failed to update user."),
+				error: toDesktopAuthErrorPayload(error, "Failed to update user."),
 			};
 		}
 	},

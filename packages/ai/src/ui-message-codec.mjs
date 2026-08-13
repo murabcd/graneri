@@ -135,10 +135,12 @@ const decodeStoredUiMessageValue = (message) => ({
 	id: message.id,
 	role: requireStoredMessageRole(message.role),
 	parts: parseUiMessagePartsJson(message.partsJson),
-	...(message.metadataJson === undefined
-		? {}
-		: { metadata: parseUiMessageMetadataJson(message.metadataJson) }),
-	...(message.createdAt === undefined ? {} : { createdAt: message.createdAt }),
+	...(message.metadataJson !== undefined && {
+		metadata: parseUiMessageMetadataJson(message.metadataJson),
+	}),
+	...(message.createdAt !== undefined && {
+		createdAt: message.createdAt,
+	}),
 });
 
 export const decodeTrustedStoredUiMessage = decodeStoredUiMessageValue;
@@ -163,9 +165,9 @@ export const decodeStoredUiMessage = async (message) => {
 	}
 	return {
 		...validated,
-		...(message.createdAt === undefined
-			? {}
-			: { createdAt: message.createdAt }),
+		...(message.createdAt !== undefined && {
+			createdAt: message.createdAt,
+		}),
 	};
 };
 

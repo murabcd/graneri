@@ -83,10 +83,13 @@ const emptyResult = {
 	events: [],
 };
 
-const googleAuthContext = {
+const googleAuthContextFixture = {
 	auth: {},
 	headers: new Headers(),
-} as unknown as GoogleAuthContext;
+};
+// SAFETY: Calendar adapter tests only pass this opaque auth context through to
+// the mocked Google provider methods.
+const googleAuthContext = googleAuthContextFixture as GoogleAuthContext;
 
 const yandexConnection = {
 	calendarHomePath: "/calendars/owner/",
@@ -102,13 +105,38 @@ const createActionContext = ({
 	connection?: typeof yandexConnection | null;
 } = {}) => {
 	const getUserIdentity = vi.fn(async () => ({
+		issuer: "https://issuer.example",
+		subject: "owner-subject",
 		tokenIdentifier: "owner-token",
 	}));
 	const runQuery = vi.fn(async () => connection);
-	const ctx = {
+	const actionContextFixture = {
 		auth: { getUserIdentity },
+		meta: {
+			getDeploymentMetadata: vi.fn(),
+			getFunctionMetadata: vi.fn(),
+			getRequestMetadata: vi.fn(),
+		},
+		runAction: vi.fn(),
+		runMutation: vi.fn(),
 		runQuery,
-	} as unknown as ActionCtx;
+		scheduler: {
+			cancel: vi.fn(),
+			runAfter: vi.fn(),
+			runAt: vi.fn(),
+		},
+		storage: {
+			delete: vi.fn(),
+			generateUploadUrl: vi.fn(),
+			get: vi.fn(),
+			getMetadata: vi.fn(),
+			getUrl: vi.fn(),
+			store: vi.fn(),
+		},
+		vectorSearch: vi.fn(),
+	};
+	// SAFETY: The adapter path under test only uses auth and runQuery.
+	const ctx = actionContextFixture as ActionCtx;
 
 	return { ctx, getUserIdentity, runQuery };
 };

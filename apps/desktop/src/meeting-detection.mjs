@@ -143,13 +143,10 @@ export const createMeetingDetection = ({
 		latestMeetingDetectionState = {
 			...nextMeetingDetectionState,
 			...createMeetingSignalStatePatch(meetingSignal),
-			...(promptCalendarEvent
-				? {
-						calendarEvent:
-							createMeetingSignalCalendarEvent(promptCalendarEvent),
-					}
-				: {}),
-			...(promptSourceName ? { sourceName: promptSourceName } : {}),
+			...(promptCalendarEvent && {
+				calendarEvent: createMeetingSignalCalendarEvent(promptCalendarEvent),
+			}),
+			...(promptSourceName && { sourceName: promptSourceName }),
 			hasMeetingSignal: Boolean(meetingSignal),
 		};
 
@@ -639,12 +636,10 @@ export const createMeetingDetection = ({
 
 					microphoneSourceName = sourceName;
 					syncMeetingDetectionState({
-						...(event.type === "ready"
-							? {
-									dismissedUntil:
-										latestMeetingDetectionState.dismissedUntil ?? null,
-								}
-							: {}),
+						...(event.type === "ready" && {
+							dismissedUntil:
+								latestMeetingDetectionState.dismissedUntil ?? null,
+						}),
 						activeMicApps,
 						isMicrophoneActive: isActive,
 					});

@@ -15,7 +15,7 @@ import {
 } from "../src/lib/note-template-stream.js";
 import { parseTranscriptionLanguageInput } from "../src/lib/transcription-languages.js";
 import { admitHostedOpenAiRequest } from "./hosted-openai-admission.js";
-import { readJsonBody, sendJson } from "./http-utils.js";
+import { type JsonObject, readJsonBody, sendJson } from "./http-utils.js";
 import {
 	createServerWideEvent,
 	createServerWideEventEmitter,
@@ -183,7 +183,7 @@ export const handleApplyTemplateRequest = async (
 	response.setHeader("Cache-Control", "no-cache, no-transform");
 	response.flushHeaders?.();
 
-	const writeEvent = (payload: object) => {
+	const writeEvent = (payload: JsonObject) => {
 		response.write(`${JSON.stringify(payload)}\n`);
 	};
 

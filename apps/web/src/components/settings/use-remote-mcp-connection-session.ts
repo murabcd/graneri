@@ -65,12 +65,10 @@ const createFormState = (
 	name: connection?.displayName ?? defaultDisplayName,
 	baseUrl: connection?.endpoint ?? defaultFormState.baseUrl,
 	envVars: [],
-	...(defaultFormState.oauthClientId !== undefined
-		? {
-				oauthClientId: connection?.oauthClientId ?? "",
-				oauthClientSecret: "",
-			}
-		: {}),
+	...(defaultFormState.oauthClientId !== undefined && {
+		oauthClientId: connection?.oauthClientId ?? "",
+		oauthClientSecret: "",
+	}),
 });
 
 export const useRemoteMcpConnectionSession = ({

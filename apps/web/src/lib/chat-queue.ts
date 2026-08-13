@@ -102,7 +102,7 @@ const sanitizeQueuedRequestBody = (
 		selectedSourceIds: requestBody.selectedSourceIds,
 		timezone: requestBody.timezone,
 		webSearchEnabled: requestBody.webSearchEnabled,
-		...(durableNoteContext ? { noteContext: durableNoteContext } : {}),
+		...(durableNoteContext && { noteContext: durableNoteContext }),
 	};
 };
 

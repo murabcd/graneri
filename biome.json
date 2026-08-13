@@ -9,9 +9,93 @@
     "ignoreUnknown": false
   },
   "plugins": [
+    {
+      "path": "./tools/biome/no-chained-type-assertions.grit",
+      "includes": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "!**/_generated/**"
+      ]
+    },
+    {
+      "path": "./tools/biome/no-conditional-empty-object-spread.grit",
+      "includes": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "!**/_generated/**"
+      ]
+    },
     "./tools/biome/no-generic-unknown-record.grit",
-    "./tools/biome/no-is-record-function.grit",
+    "./tools/biome/no-generic-record-functions.grit",
     "./tools/biome/no-local-vitest-mocks.grit",
+    {
+      "path": "./tools/biome/no-object-parameters.grit",
+      "includes": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "!**/_generated/**"
+      ]
+    },
+    {
+      "path": "./tools/biome/no-reflect-apply.grit",
+      "includes": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "!**/_generated/**"
+      ]
+    },
+    {
+      "path": "./tools/biome/no-reflect-get.grit",
+      "includes": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "!**/_generated/**"
+      ]
+    },
+    {
+      "path": "./tools/biome/no-shape-symbol-names.grit",
+      "includes": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "!**/_generated/**"
+      ]
+    },
+    {
+      "path": "./tools/biome/no-unknown-type-aliases.grit",
+      "includes": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.jsx",
+        "!**/_generated/**"
+      ]
+    },
     "./tools/biome/no-vitest-global-mutation.grit"
   ],
   "formatter": {

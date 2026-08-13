@@ -85,12 +85,10 @@ const run = (cmd, args) =>
 			env: {
 				...process.env,
 				CLANG_MODULE_CACHE_PATH: clangModuleCacheDir,
-				...(isCargoBuild
-					? {
-							PKG_CONFIG_LIBDIR: emptyPkgConfigDir,
-							PKG_CONFIG_PATH: emptyPkgConfigDir,
-						}
-					: {}),
+				...(isCargoBuild && {
+					PKG_CONFIG_LIBDIR: emptyPkgConfigDir,
+					PKG_CONFIG_PATH: emptyPkgConfigDir,
+				}),
 				TMPDIR: tmpDir,
 				XDG_CACHE_HOME: cacheRootDir,
 			},

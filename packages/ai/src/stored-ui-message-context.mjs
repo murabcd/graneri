@@ -70,9 +70,9 @@ export const projectStoredUiMessagesForAssistantRun = (messages) =>
 					{
 						id: decoded.id,
 						role: decoded.role,
-						...(decoded.metadata === undefined
-							? {}
-							: { metadata: decoded.metadata }),
+						...(decoded.metadata !== undefined && {
+							metadata: decoded.metadata,
+						}),
 						parts: content.map((text) => ({ type: "text", text })),
 					},
 				];

@@ -535,13 +535,13 @@ export const handleJiraWebhookRequest = async (
 		workspaceId: connection.workspaceId,
 		externalId,
 		issueKey,
-		...(issueSummary ? { issueSummary } : {}),
+		...(issueSummary && { issueSummary }),
 		title,
 		preview,
 		url: toIssueCommentUrl(connection.baseUrl, issueKey, commentId),
 		occurredAt: receivedAt,
-		...(actorDisplayName ? { actorDisplayName } : {}),
-		...(actorAvatarUrl ? { actorAvatarUrl } : {}),
+		...(actorDisplayName && { actorDisplayName }),
+		...(actorAvatarUrl && { actorAvatarUrl }),
 	});
 	await ctx.runMutation(internal.appConnections.recordJiraWebhookActivity, {
 		connectionId: connection.connectionId,

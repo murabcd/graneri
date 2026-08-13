@@ -90,7 +90,8 @@ test("completed responses become terminal before title generation", async () => 
 	const titlePromise = new Promise<string>((resolve) => {
 		resolveTitle = resolve;
 	});
-	const step = {
+	const workflowStepFixture = {
+		awaitEvent: vi.fn(),
 		runAction: vi.fn(async () => {
 			actionCallCount += 1;
 			if (actionCallCount === 1) {
@@ -115,7 +116,14 @@ test("completed responses become terminal before title generation", async () => 
 			events.push("apply-title");
 			return true;
 		}),
-	} as unknown as WorkflowCtx;
+		runQuery: vi.fn(),
+		runWorkflow: vi.fn(),
+		sleep: vi.fn(),
+		workflowId: "workflow-id" as WorkflowCtx["workflowId"],
+	};
+	// SAFETY: The workflow only calls the two step methods implemented by this
+	// deterministic fixture.
+	const step = workflowStepFixture as WorkflowCtx;
 
 	const workflow = runAssistantWorkflow(step, {
 		runId: "assistant-run" as Id<"assistantRuns">,

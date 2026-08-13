@@ -1,7 +1,8 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage } from "node:http";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleRealtimeTranscriptionSessionRequest } from "../server/realtime-transcription-session-handler";
+import { createTestServerResponse } from "./server-response-test-fixture";
 
 const previousConvexUrl = process.env.CONVEX_URL;
 const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
@@ -37,22 +38,10 @@ afterEach(() => {
 	}
 });
 
-const createResponse = () => {
-	const setHeader = vi.fn();
-	const end = vi.fn();
-	const response = {
-		end,
-		setHeader,
-		statusCode: 0,
-	} as unknown as ServerResponse;
-
-	return { end, response, setHeader };
-};
-
 describe("realtime transcription session handler", () => {
 	it("rejects anonymous session creation before contacting OpenAI", async () => {
 		const request = { headers: {} } as IncomingMessage;
-		const { end, response, setHeader } = createResponse();
+		const { end, response, setHeader } = createTestServerResponse();
 
 		await handleRealtimeTranscriptionSessionRequest(request, response);
 
@@ -74,7 +63,7 @@ describe("realtime transcription session handler", () => {
 		const request = {
 			headers: { authorization: "Bearer invalid-token" },
 		} as IncomingMessage;
-		const { end, response } = createResponse();
+		const { end, response } = createTestServerResponse();
 
 		await handleRealtimeTranscriptionSessionRequest(request, response);
 
@@ -90,7 +79,7 @@ describe("realtime transcription session handler", () => {
 		const request = {
 			headers: { authorization: "Bearer valid-token" },
 		} as IncomingMessage;
-		const { end, response } = createResponse();
+		const { end, response } = createTestServerResponse();
 
 		await handleRealtimeTranscriptionSessionRequest(request, response);
 
@@ -112,7 +101,7 @@ describe("realtime transcription session handler", () => {
 		const request = {
 			headers: { authorization: "Bearer valid-token" },
 		} as IncomingMessage;
-		const { end, response, setHeader } = createResponse();
+		const { end, response, setHeader } = createTestServerResponse();
 
 		await handleRealtimeTranscriptionSessionRequest(request, response);
 
@@ -137,7 +126,7 @@ describe("realtime transcription session handler", () => {
 			},
 			headers: { authorization: "Bearer valid-token" },
 		} as IncomingMessage;
-		const { end, response } = createResponse();
+		const { end, response } = createTestServerResponse();
 
 		await handleRealtimeTranscriptionSessionRequest(request, response);
 
@@ -167,7 +156,7 @@ describe("realtime transcription session handler", () => {
 			},
 			headers: { authorization: "Bearer valid-token" },
 		} as IncomingMessage;
-		const { response } = createResponse();
+		const { response } = createTestServerResponse();
 
 		await handleRealtimeTranscriptionSessionRequest(request, response);
 

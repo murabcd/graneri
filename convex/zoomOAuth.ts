@@ -130,7 +130,7 @@ export const handleZoomOAuthCallbackRequest = async (
 
 		await validateZoomMcpConnection({
 			baseUrl: pendingState.baseUrl,
-			...(env ? { env } : {}),
+			...(env && { env }),
 			oauthClientId: pendingState.oauthClientId,
 			oauthAccessToken: tokens.accessToken,
 		});
@@ -140,16 +140,14 @@ export const handleZoomOAuthCallbackRequest = async (
 			workspaceId: pendingState.workspaceId,
 			displayName: pendingState.displayName,
 			baseUrl: pendingState.baseUrl,
-			...(env ? { env } : {}),
+			...(env && { env }),
 			oauthClientId: pendingState.oauthClientId,
 			oauthClientSecret: pendingState.oauthClientSecret,
 			oauthAccessToken: tokens.accessToken,
-			...(tokens.refreshToken
-				? { oauthRefreshToken: tokens.refreshToken }
-				: {}),
-			...(tokens.expiresIn
-				? { tokenExpiresAt: Date.now() + tokens.expiresIn * 1000 }
-				: {}),
+			...(tokens.refreshToken && { oauthRefreshToken: tokens.refreshToken }),
+			...(tokens.expiresIn && {
+				tokenExpiresAt: Date.now() + tokens.expiresIn * 1000,
+			}),
 		});
 	} catch (connectionError) {
 		console.error("Failed to complete Zoom OAuth connection", connectionError);

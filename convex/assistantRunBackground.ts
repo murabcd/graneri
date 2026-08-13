@@ -27,13 +27,13 @@ export const start = mutation({
 		try {
 			parseUiMessagesJson(args.job.messagesJson);
 		} catch (error) {
-			const isInvalidMessagesShape =
+			const hasInvalidMessagesPayload =
 				error instanceof Error &&
 				"code" in error &&
 				error.code === "invalid_messages_shape";
 			throw new ConvexError({
 				code: "INVALID_ASSISTANT_RUN_JOB",
-				message: isInvalidMessagesShape
+				message: hasInvalidMessagesPayload
 					? "Assistant run messages must be an array."
 					: "Assistant run messages must be valid JSON.",
 			});

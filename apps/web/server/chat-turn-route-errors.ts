@@ -1,10 +1,11 @@
 import type { ServerResponse } from "node:http";
+import type { JsonObject } from "./http-utils.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 
 type SendJson = (
 	response: ServerResponse,
 	statusCode: number,
-	payload: object,
+	payload: JsonObject,
 	headers?: Record<string, string> | null,
 ) => void;
 
@@ -105,7 +106,7 @@ export const createHostedChatTurnRouteErrorResponder = ({
 		emitWideEvent("error");
 		sendJson(response, turnError.statusCode, {
 			error: turnError.error,
-			...(turnError.errorCode ? { errorCode: turnError.errorCode } : {}),
+			...(turnError.errorCode && { errorCode: turnError.errorCode }),
 		});
 		return true;
 	};

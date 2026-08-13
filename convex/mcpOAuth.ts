@@ -76,7 +76,7 @@ const getMcpSdkClientMetadata = (redirectUri: string) => ({
 
 const toMcpSdkClientInformation = (client: McpSdkOAuthClient) => ({
 	client_id: client.clientId,
-	...(client.clientSecret ? { client_secret: client.clientSecret } : {}),
+	...(client.clientSecret && { client_secret: client.clientSecret }),
 });
 
 const toMcpSdkTokenResult = (
@@ -136,9 +136,9 @@ export const startMcpSdkOAuth = async ({
 			saveClientInformation: (clientInformation) => {
 				currentClient = {
 					clientId: clientInformation.client_id,
-					...(clientInformation.client_secret
-						? { clientSecret: clientInformation.client_secret }
-						: {}),
+					...(clientInformation.client_secret && {
+						clientSecret: clientInformation.client_secret,
+					}),
 				};
 			},
 			state: () => {
@@ -416,9 +416,9 @@ export const handleMcpOAuthCallbackRequest = async (
 					redirectUri,
 					client: {
 						clientId: pendingState.oauthClientId,
-						...(pendingState.oauthClientSecret
-							? { clientSecret: pendingState.oauthClientSecret }
-							: {}),
+						...(pendingState.oauthClientSecret && {
+							clientSecret: pendingState.oauthClientSecret,
+						}),
 					},
 					code,
 					codeVerifier,
@@ -433,9 +433,9 @@ export const handleMcpOAuthCallbackRequest = async (
 
 			return await exchangeMcpOAuthCode({
 				clientId: pendingState.oauthClientId,
-				...(pendingState.oauthClientSecret
-					? { clientSecret: pendingState.oauthClientSecret }
-					: {}),
+				...(pendingState.oauthClientSecret && {
+					clientSecret: pendingState.oauthClientSecret,
+				}),
 				code,
 				codeVerifier,
 				redirectUri,
@@ -451,7 +451,7 @@ export const handleMcpOAuthCallbackRequest = async (
 			provider,
 			displayName,
 			baseUrl: pendingState.baseUrl,
-			...(env ? { env } : {}),
+			...(env && { env }),
 			oauthClientId: pendingState.oauthClientId,
 			oauthAccessToken: tokens.accessToken,
 		});
@@ -461,18 +461,16 @@ export const handleMcpOAuthCallbackRequest = async (
 			workspaceId: pendingState.workspaceId,
 			displayName: pendingState.displayName,
 			baseUrl: pendingState.baseUrl,
-			...(env ? { env } : {}),
+			...(env && { env }),
 			oauthClientId: pendingState.oauthClientId,
-			...(pendingState.oauthClientSecret
-				? { oauthClientSecret: pendingState.oauthClientSecret }
-				: {}),
+			...(pendingState.oauthClientSecret && {
+				oauthClientSecret: pendingState.oauthClientSecret,
+			}),
 			oauthAccessToken: tokens.accessToken,
-			...(tokens.refreshToken
-				? { oauthRefreshToken: tokens.refreshToken }
-				: {}),
-			...(tokens.expiresIn
-				? { tokenExpiresAt: Date.now() + tokens.expiresIn * 1000 }
-				: {}),
+			...(tokens.refreshToken && { oauthRefreshToken: tokens.refreshToken }),
+			...(tokens.expiresIn && {
+				tokenExpiresAt: Date.now() + tokens.expiresIn * 1000,
+			}),
 		});
 	} catch (connectionError) {
 		console.error(

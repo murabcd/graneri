@@ -486,11 +486,10 @@ export const transitionAutomationRun = async (
 			isCompleted,
 			nextRunAt,
 			scheduledFunctionId,
-			...(transition.type === "complete" && transition.resultText
-				? {
-						lastObservedResult: transition.resultText,
-					}
-				: {}),
+			...(transition.type === "complete" &&
+				transition.resultText && {
+					lastObservedResult: transition.resultText,
+				}),
 			updatedAt: now,
 		});
 	}

@@ -720,7 +720,9 @@ export class TranscriptionController {
 				committed: true,
 				endedAt: event.endedAt ?? null,
 				previousItemId: event.previousItemId,
-				...(event.startedAt == null ? {} : { startedAt: event.startedAt }),
+				...(event.startedAt != null && {
+					startedAt: event.startedAt,
+				}),
 			});
 			this.emitOrderedTurns(event.speaker);
 			return;

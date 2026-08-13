@@ -1,5 +1,9 @@
 import { createServer } from "node:http";
-import { type FunctionReference, getFunctionName } from "convex/server";
+import {
+	type FunctionReference,
+	getFunctionName,
+	type OptionalRestArgs,
+} from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleChatReconnectRequest } from "../server/chat-handler";
 
@@ -10,10 +14,10 @@ const convexMock = vi.hoisted(() => ({
 
 vi.mock("convex/browser", () => ({
 	ConvexHttpClient: class {
-		mutation = (
-			functionReference: FunctionReference<"mutation">,
-			args: object,
-		) => convexMock.mutation(getFunctionName(functionReference), args);
+		mutation = <Mutation extends FunctionReference<"mutation">>(
+			functionReference: Mutation,
+			...args: OptionalRestArgs<Mutation>
+		) => convexMock.mutation(getFunctionName(functionReference), args[0]);
 		query = convexMock.query;
 	},
 }));

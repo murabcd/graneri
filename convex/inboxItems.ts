@@ -48,14 +48,12 @@ const getInboxItemByExternalId = async (
 ) =>
 	await ctx.db
 		.query("inboxItems")
-		.withIndex(
-			"by_owner_ws_provider_externalId",
-			(q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", workspaceId)
-					.eq("provider", provider)
-					.eq("externalId", externalId),
+		.withIndex("by_owner_ws_provider_externalId", (q) =>
+			q
+				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+				.eq("workspaceId", workspaceId)
+				.eq("provider", provider)
+				.eq("externalId", externalId),
 		)
 		.unique();
 
@@ -79,39 +77,33 @@ export const list = query({
 			view === "archived"
 				? await ctx.db
 						.query("inboxItems")
-						.withIndex(
-							"by_owner_ws_arch_occurredAt",
-							(q) =>
-								q
-									.eq("ownerTokenIdentifier", identity.tokenIdentifier)
-									.eq("workspaceId", args.workspaceId)
-									.eq("isArchived", true),
+						.withIndex("by_owner_ws_arch_occurredAt", (q) =>
+							q
+								.eq("ownerTokenIdentifier", identity.tokenIdentifier)
+								.eq("workspaceId", args.workspaceId)
+								.eq("isArchived", true),
 						)
 						.order("desc")
 						.take(50)
 				: view === "unread"
 					? await ctx.db
 							.query("inboxItems")
-							.withIndex(
-								"by_owner_ws_arch_read_occurredAt",
-								(q) =>
-									q
-										.eq("ownerTokenIdentifier", identity.tokenIdentifier)
-										.eq("workspaceId", args.workspaceId)
-										.eq("isArchived", false)
-										.eq("isRead", false),
+							.withIndex("by_owner_ws_arch_read_occurredAt", (q) =>
+								q
+									.eq("ownerTokenIdentifier", identity.tokenIdentifier)
+									.eq("workspaceId", args.workspaceId)
+									.eq("isArchived", false)
+									.eq("isRead", false),
 							)
 							.order("desc")
 							.take(50)
 					: await ctx.db
 							.query("inboxItems")
-							.withIndex(
-								"by_owner_ws_arch_occurredAt",
-								(q) =>
-									q
-										.eq("ownerTokenIdentifier", identity.tokenIdentifier)
-										.eq("workspaceId", args.workspaceId)
-										.eq("isArchived", false),
+							.withIndex("by_owner_ws_arch_occurredAt", (q) =>
+								q
+									.eq("ownerTokenIdentifier", identity.tokenIdentifier)
+									.eq("workspaceId", args.workspaceId)
+									.eq("isArchived", false),
 							)
 							.order("desc")
 							.take(50);
@@ -204,7 +196,11 @@ export const markAllRead = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 
 		await ctx.runMutation(internal.inboxItems.markAllReadForWorkspace, {
 			ownerTokenIdentifier: identity.tokenIdentifier,
@@ -221,7 +217,11 @@ export const archiveRead = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 
 		await ctx.runMutation(internal.inboxItems.archiveReadForWorkspace, {
 			ownerTokenIdentifier: identity.tokenIdentifier,
@@ -238,7 +238,11 @@ export const clearArchived = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
-		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, args.workspaceId);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
 
 		await ctx.runMutation(internal.inboxItems.clearArchivedForWorkspace, {
 			ownerTokenIdentifier: identity.tokenIdentifier,
@@ -282,10 +286,14 @@ export const markAllReadForWorkspace = internalMutation({
 		);
 
 		if (items.length === BULK_INBOX_ITEMS_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.inboxItems.markAllReadForWorkspace, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
+			await ctx.scheduler.runAfter(
+				0,
+				internal.inboxItems.markAllReadForWorkspace,
+				{
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+				},
+			);
 		}
 
 		return null;
@@ -326,10 +334,14 @@ export const archiveReadForWorkspace = internalMutation({
 		);
 
 		if (items.length === BULK_INBOX_ITEMS_BATCH_SIZE) {
-			await ctx.scheduler.runAfter(0, internal.inboxItems.archiveReadForWorkspace, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
+			await ctx.scheduler.runAfter(
+				0,
+				internal.inboxItems.archiveReadForWorkspace,
+				{
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+				},
+			);
 		}
 
 		return null;
@@ -426,17 +438,15 @@ export const upsertJiraMention = internalMutation({
 			kind: "jira-mention",
 			externalId: args.externalId,
 			issueKey: args.issueKey,
-			...(args.issueSummary ? { issueSummary: args.issueSummary } : {}),
+			...(args.issueSummary && { issueSummary: args.issueSummary }),
 			title: args.title,
 			preview: args.preview,
 			url: args.url,
 			occurredAt: args.occurredAt,
 			isRead: false,
 			isArchived: false,
-			...(args.actorDisplayName
-				? { actorDisplayName: args.actorDisplayName }
-				: {}),
-			...(args.actorAvatarUrl ? { actorAvatarUrl: args.actorAvatarUrl } : {}),
+			...(args.actorDisplayName && { actorDisplayName: args.actorDisplayName }),
+			...(args.actorAvatarUrl && { actorAvatarUrl: args.actorAvatarUrl }),
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -476,14 +486,12 @@ export const upsertNoteComment = internalMutation({
 				preview: args.preview,
 				url: args.url,
 				occurredAt: args.occurredAt,
-				...(args.markUnread === false
-					? {}
-					: {
-							isRead: false,
-							readAt: undefined,
-							isArchived: false,
-							archivedAt: undefined,
-						}),
+				...(args.markUnread !== false && {
+					isRead: false,
+					readAt: undefined,
+					isArchived: false,
+					archivedAt: undefined,
+				}),
 				updatedAt: now,
 				actorDisplayName: args.actorDisplayName,
 				actorAvatarUrl: undefined,
@@ -505,10 +513,8 @@ export const upsertNoteComment = internalMutation({
 			occurredAt: args.occurredAt,
 			isRead: args.markUnread === false,
 			isArchived: false,
-			...(args.markUnread === false ? { readAt: now } : {}),
-			...(args.actorDisplayName
-				? { actorDisplayName: args.actorDisplayName }
-				: {}),
+			...(args.markUnread === false && { readAt: now }),
+			...(args.actorDisplayName && { actorDisplayName: args.actorDisplayName }),
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -573,7 +579,9 @@ const deleteInboxItemsBatchForWorkspace = async (
 	const items = await ctx.db
 		.query("inboxItems")
 		.withIndex("by_owner_ws_upd", (q) =>
-			q.eq("ownerTokenIdentifier", ownerTokenIdentifier).eq("workspaceId", workspaceId),
+			q
+				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+				.eq("workspaceId", workspaceId),
 		)
 		.take(REMOVE_ALL_INBOX_ITEMS_BATCH_SIZE);
 
@@ -618,10 +626,14 @@ export const removeAllForWorkspace = internalMutation({
 		);
 
 		if (result.hasMore) {
-			await ctx.scheduler.runAfter(0, internal.inboxItems.removeAllForWorkspace, {
-				ownerTokenIdentifier: args.ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-			});
+			await ctx.scheduler.runAfter(
+				0,
+				internal.inboxItems.removeAllForWorkspace,
+				{
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+				},
+			);
 		}
 
 		return null;

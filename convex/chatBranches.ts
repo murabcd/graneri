@@ -82,9 +82,9 @@ export const branchFromMessage = mutation({
 			workspaceId: args.workspaceId,
 			chatId: chat._id,
 			forkedFromMessageId: targetMessageId,
-			...(previousMessage
-				? { retainedThroughMessageId: previousMessage.messageId }
-				: {}),
+			...(previousMessage && {
+				retainedThroughMessageId: previousMessage.messageId,
+			}),
 			messageCount: messagesToBranch.length,
 			preview: normalizeChatPreview(messagesToBranch.at(-1)?.text),
 			createdAt: now,

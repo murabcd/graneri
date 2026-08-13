@@ -7,13 +7,18 @@ import {
 	hostedChatSteerQueuedMessageIdsHeader,
 	hostedChatSteerTurnIdHeader,
 } from "@workspace/ai/hosted-chat-runtime";
-import { type FunctionReference, getFunctionName } from "convex/server";
+import {
+	type FunctionReference,
+	getFunctionName,
+	type OptionalRestArgs,
+} from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultChatModel } from "@/lib/ai/models";
 import {
 	handleChatRequest,
 	handleChatStopRequest,
 } from "../server/chat-handler";
+import type { JsonObject } from "../server/http-utils";
 
 const convexMock = vi.hoisted(() => ({
 	authorizeChatTurn: vi.fn(),
@@ -24,18 +29,21 @@ const convexMock = vi.hoisted(() => ({
 
 vi.mock("convex/browser", () => ({
 	ConvexHttpClient: class {
-		mutation = (
-			functionReference: FunctionReference<"mutation">,
-			args: object,
+		mutation = <Mutation extends FunctionReference<"mutation">>(
+			functionReference: Mutation,
+			...args: OptionalRestArgs<Mutation>
 		) =>
 			getFunctionName(functionReference) === "aiAccess:authorizeChatTurn"
-				? convexMock.authorizeChatTurn(functionReference, args)
-				: convexMock.mutation(functionReference, args);
-		query = (functionReference: FunctionReference<"query">, args: object) =>
+				? convexMock.authorizeChatTurn(functionReference, args[0])
+				: convexMock.mutation(functionReference, args[0]);
+		query = <Query extends FunctionReference<"query">>(
+			functionReference: Query,
+			...args: OptionalRestArgs<Query>
+		) =>
 			getFunctionName(functionReference) ===
 			"chatContextCompactions:getPreparationState"
-				? convexMock.contextState(functionReference, args)
-				: convexMock.query(functionReference, args);
+				? convexMock.contextState(functionReference, args[0])
+				: convexMock.query(functionReference, args[0]);
 	},
 }));
 
@@ -76,7 +84,7 @@ afterEach(() => {
 });
 
 const postChatRequest = async (
-	body: object,
+	body: JsonObject,
 	options: { includeHeaders?: boolean; isSteerRoute?: boolean } = {},
 ) => {
 	const server = createServer((request, response) => {
@@ -138,7 +146,7 @@ const postChatRequest = async (
 	}
 };
 
-const postChatStopRequest = async (body: object) => {
+const postChatStopRequest = async (body: JsonObject) => {
 	const server = createServer((request, response) => {
 		void handleChatStopRequest(request, response).catch((error: unknown) => {
 			response.statusCode = 500;

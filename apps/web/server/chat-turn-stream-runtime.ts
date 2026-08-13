@@ -25,6 +25,7 @@ import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 import type { AttachableAssistantRun } from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
+import type { JsonObject } from "./http-utils.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 import { pipeUiMessageStreamToServerResponse } from "./ui-message-response-stream.js";
 
@@ -51,7 +52,7 @@ type HostedRunContext = Awaited<
 type SendJson = (
 	response: ServerResponse,
 	statusCode: number,
-	payload: object,
+	payload: JsonObject,
 	headers?: Record<string, string> | null,
 ) => void;
 
@@ -432,7 +433,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 					wideEvent.status_code,
 					{
 						error: routeError?.error ?? "Failed to start hosted assistant run.",
-						...(routeError ? { errorCode: routeError.errorCode } : {}),
+						...(routeError && { errorCode: routeError.errorCode }),
 					},
 					pendingQueuedAcceptanceHeaders,
 				);

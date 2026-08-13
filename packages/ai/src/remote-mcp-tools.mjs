@@ -58,7 +58,7 @@ const withRemoteMcpClient = async (connection, callback) => {
 		transport: {
 			type: "http",
 			url: connection.baseUrl,
-			...(Object.keys(headers).length > 0 ? { headers } : {}),
+			...(Object.keys(headers).length > 0 && { headers }),
 			redirect: "error",
 		},
 		clientName: "graneri",
@@ -322,7 +322,7 @@ const buildRemoteMcpToolsFromDefinitions = (
 
 		tools[toolName] = dynamicTool({
 			description: definition.description,
-			...(title ? { title } : {}),
+			...(title && { title }),
 			inputSchema: jsonSchema({
 				...definition.inputSchema,
 				properties: definition.inputSchema.properties ?? {},

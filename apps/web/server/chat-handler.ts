@@ -636,7 +636,7 @@ export const handleChatRequest = async (
 				emitWideEvent("error");
 				sendJson(response, routeError?.statusCode ?? 500, {
 					error: routeError?.error ?? "Failed to prepare edited chat branch.",
-					...(routeError ? { errorCode: routeError.errorCode } : {}),
+					...(routeError && { errorCode: routeError.errorCode }),
 				});
 				return true;
 			},

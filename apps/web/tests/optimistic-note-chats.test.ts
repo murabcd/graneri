@@ -1,5 +1,11 @@
 import type { OptimisticLocalStore } from "convex/browser";
-import { getFunctionName } from "convex/server";
+import {
+	type FunctionArgs,
+	type FunctionReference,
+	type FunctionReturnType,
+	getFunctionName,
+	type OptionalRestArgs,
+} from "convex/server";
 import { describe, expect, it } from "vitest";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -10,12 +16,15 @@ import {
 } from "../src/lib/optimistic-note-chats";
 
 class FakeOptimisticLocalStore implements OptimisticLocalStore {
-	private readonly queryIds = new WeakMap<object, number>();
+	private readonly queryIds = new WeakMap<FunctionReference<"query">, number>();
 	private readonly values = new Map<string, unknown>();
 	private nextQueryId = 0;
 
-	private getStoreKey(query: object, args: unknown) {
-		const functionName = getFunctionName(query as never);
+	private getStoreKey<Query extends FunctionReference<"query">>(
+		query: Query,
+		args: FunctionArgs<Query> | undefined,
+	) {
+		const functionName = getFunctionName(query);
 
 		if (functionName) {
 			return `${functionName}:${JSON.stringify(args)}`;
@@ -32,19 +41,33 @@ class FakeOptimisticLocalStore implements OptimisticLocalStore {
 		return `${queryId}:${JSON.stringify(args)}`;
 	}
 
-	seed<QueryValue>(query: object, args: unknown, value: QueryValue) {
+	seed<Query extends FunctionReference<"query">>(
+		query: Query,
+		args: FunctionArgs<Query>,
+		value: FunctionReturnType<Query>,
+	) {
 		this.values.set(this.getStoreKey(query, args), value);
 	}
 
-	getQuery(query: object, args?: unknown) {
-		return this.values.get(this.getStoreKey(query, args));
+	getQuery<Query extends FunctionReference<"query">>(
+		query: Query,
+		...args: OptionalRestArgs<Query>
+	) {
+		return this.values.get(this.getStoreKey(query, args[0])) as
+			| FunctionReturnType<Query>
+			| undefined;
 	}
 
-	getAllQueries() {
+	getAllQueries<Query extends FunctionReference<"query">>(query: Query) {
+		void query;
 		return [];
 	}
 
-	setQuery(query: object, args: unknown, value: unknown) {
+	setQuery<Query extends FunctionReference<"query">>(
+		query: Query,
+		args: FunctionArgs<Query>,
+		value: FunctionReturnType<Query> | undefined,
+	) {
 		this.values.set(this.getStoreKey(query, args), value);
 	}
 }

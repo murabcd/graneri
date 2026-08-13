@@ -119,7 +119,7 @@ export const renderInlineMentionHTML = ({
 				"data-type": "mention",
 				"data-mention-type": "tool",
 				"data-mention-id": id,
-				...(provider ? { "data-mention-provider": provider } : {}),
+				...(provider && { "data-mention-provider": provider }),
 				class: "inline-tool-mention",
 			},
 			[
@@ -127,7 +127,7 @@ export const renderInlineMentionHTML = ({
 				{
 					"aria-hidden": "true",
 					class: "inline-tool-mention-icon",
-					...(provider ? { "data-provider": provider } : {}),
+					...(provider && { "data-provider": provider }),
 				},
 				getInlineToolMentionIconHTML(provider),
 			],

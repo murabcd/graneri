@@ -223,7 +223,7 @@ export const startActivity = mutation({
 			workspaceId: args.workspaceId,
 			chatId: chat._id,
 			kind: "running" as const,
-			...(state?.checkpoint ? { checkpoint: state.checkpoint } : {}),
+			...(state?.checkpoint && { checkpoint: state.checkpoint }),
 			activityId: args.activityId,
 			anchorMessageId: args.anchorMessageId,
 			startedAt: now,

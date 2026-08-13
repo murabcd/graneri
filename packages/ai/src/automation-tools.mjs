@@ -518,56 +518,46 @@ export const buildChatAutomationContext = ({
 				defaultTimezone,
 				webSearchEnabled,
 			}),
-			...(automationActions.listAutomations
-				? {
-						list_automations: createListAutomationsTool({
-							listAutomations: automationActions.listAutomations,
-						}),
-					}
-				: {}),
-			...(automationActions.getAutomation
-				? {
-						get_automation: createGetAutomationTool({
-							getAutomation: automationActions.getAutomation,
-						}),
-					}
-				: {}),
-			...(automationActions.getAutomation && automationActions.updateAutomation
-				? {
-						update_automation: createUpdateAutomationTool({
-							appSources,
-							defaultTimezone,
-							getAutomation: automationActions.getAutomation,
-							updateAutomation: automationActions.updateAutomation,
-						}),
-					}
-				: {}),
-			...(automationActions.getAutomation && automationActions.togglePaused
-				? {
-						pause_automation: createPauseAutomationTool({
-							getAutomation: automationActions.getAutomation,
-							togglePaused: automationActions.togglePaused,
-						}),
-						resume_automation: createResumeAutomationTool({
-							getAutomation: automationActions.getAutomation,
-							togglePaused: automationActions.togglePaused,
-						}),
-					}
-				: {}),
-			...(automationActions.runAutomationNow
-				? {
-						run_automation_now: createRunAutomationNowTool({
-							runAutomationNow: automationActions.runAutomationNow,
-						}),
-					}
-				: {}),
-			...(automationActions.deleteAutomation
-				? {
-						delete_automation: createDeleteAutomationTool({
-							deleteAutomation: automationActions.deleteAutomation,
-						}),
-					}
-				: {}),
+			...(automationActions.listAutomations && {
+				list_automations: createListAutomationsTool({
+					listAutomations: automationActions.listAutomations,
+				}),
+			}),
+			...(automationActions.getAutomation && {
+				get_automation: createGetAutomationTool({
+					getAutomation: automationActions.getAutomation,
+				}),
+			}),
+			...(automationActions.getAutomation &&
+				automationActions.updateAutomation && {
+					update_automation: createUpdateAutomationTool({
+						appSources,
+						defaultTimezone,
+						getAutomation: automationActions.getAutomation,
+						updateAutomation: automationActions.updateAutomation,
+					}),
+				}),
+			...(automationActions.getAutomation &&
+				automationActions.togglePaused && {
+					pause_automation: createPauseAutomationTool({
+						getAutomation: automationActions.getAutomation,
+						togglePaused: automationActions.togglePaused,
+					}),
+					resume_automation: createResumeAutomationTool({
+						getAutomation: automationActions.getAutomation,
+						togglePaused: automationActions.togglePaused,
+					}),
+				}),
+			...(automationActions.runAutomationNow && {
+				run_automation_now: createRunAutomationNowTool({
+					runAutomationNow: automationActions.runAutomationNow,
+				}),
+			}),
+			...(automationActions.deleteAutomation && {
+				delete_automation: createDeleteAutomationTool({
+					deleteAutomation: automationActions.deleteAutomation,
+				}),
+			}),
 		},
 	};
 };

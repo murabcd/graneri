@@ -59,10 +59,10 @@ export const buildRemoteMcpConnectArgs = <TWorkspaceId extends string>({
 	env: getNonEmptyRemoteMcpEnvRecord(formState.envVars, {
 		requireValue: requireEnvValue,
 	}),
-	...(formState.oauthClientId?.trim()
-		? { oauthClientId: formState.oauthClientId.trim() }
-		: {}),
-	...(formState.oauthClientSecret?.trim()
-		? { oauthClientSecret: formState.oauthClientSecret.trim() }
-		: {}),
+	...(formState.oauthClientId?.trim() && {
+		oauthClientId: formState.oauthClientId.trim(),
+	}),
+	...(formState.oauthClientSecret?.trim() && {
+		oauthClientSecret: formState.oauthClientSecret.trim(),
+	}),
 });

@@ -228,7 +228,9 @@ export const updateGoogleCalendar = async ({
 				body: JSON.stringify({
 					backgroundColor: color,
 					foregroundColor: "#ffffff",
-					...(calendar.accessRole === "owner" ? {} : { summaryOverride: name }),
+					...(calendar.accessRole !== "owner" && {
+						summaryOverride: name,
+					}),
 				}),
 				headers: { "Content-Type": "application/json; charset=utf-8" },
 				method: "PATCH",

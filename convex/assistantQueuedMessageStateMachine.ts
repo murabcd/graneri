@@ -530,7 +530,7 @@ export const acceptClaimedFollowUps = async <Result>(
 					: "Queued message was not accepted for replay.",
 				ownerTokenIdentifier: args.ownerTokenIdentifier,
 				queuedMessageId,
-				...(args.mode === "steer" ? { runId: args.runId } : {}),
+				...(args.mode === "steer" && { runId: args.runId }),
 				workspaceId: args.workspaceId,
 			}),
 		),

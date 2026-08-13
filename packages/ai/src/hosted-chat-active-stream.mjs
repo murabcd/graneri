@@ -151,10 +151,10 @@ export class HostedActiveChatStreamPersister {
 						workspaceId: this.#workspaceId,
 						chatId: this.#chatId,
 						runId: this.#runId,
-						...(delta ? { delta } : {}),
-						...(parts === null
-							? {}
-							: { partsJson: stringifyToolPayload(parts) }),
+						...(delta && { delta }),
+						...(parts !== null && {
+							partsJson: stringifyToolPayload(parts),
+						}),
 					});
 					return undefined;
 				})

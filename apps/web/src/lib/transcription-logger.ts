@@ -5,16 +5,24 @@ type TranscriptionLoggerContext = {
 	scopeKey: string | null;
 };
 
+export type TranscriptionLogDetails = Readonly<
+	Record<string, boolean | null | number | string | undefined>
+>;
+
 export type TranscriptionLogger = {
-	info: (event: string, details?: object) => void;
-	error: (event: string, details?: object) => void;
+	info: (event: string, details?: TranscriptionLogDetails) => void;
+	error: (event: string, details?: TranscriptionLogDetails) => void;
 };
 
 export const createTranscriptionLogger = ({
 	sessionId,
 	scopeKey,
 }: TranscriptionLoggerContext): TranscriptionLogger => {
-	const write = (level: "error" | "info", event: string, details?: object) => {
+	const write = (
+		level: "error" | "info",
+		event: string,
+		details?: TranscriptionLogDetails,
+	) => {
 		const payload = {
 			event: `transcription.${event}`,
 			scopeKey,

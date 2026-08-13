@@ -57,17 +57,17 @@ const createHostedAssistantExecutionStream = async ({
 	await createUiStream({
 		agent,
 		uiMessages: messages,
-		...(abortSignal ? { abortSignal } : {}),
+		...(abortSignal && { abortSignal }),
 		originalMessages: messages,
 		generateMessageId: () => assistantMessageId,
 		sendReasoning: true,
 		sendSources: true,
-		...(timeout ? { timeout } : {}),
+		...(timeout && { timeout }),
 		onEnd: (result) => {
 			onOutcome(getHostedAssistantExecutionOutcome(result));
 		},
-		...(onStepEnd ? { onStepEnd } : {}),
-		...(onError ? { onError } : {}),
+		...(onStepEnd && { onStepEnd }),
+		...(onError && { onError }),
 	});
 
 const consumeHostedAssistantExecutionStream = async ({ onMessage, stream }) => {
@@ -112,10 +112,10 @@ export const startHostedAssistantExecution = async ({
 		agent,
 		assistantMessageId,
 		messages,
-		...(abortSignal ? { abortSignal } : {}),
-		...(createUiStream ? { createUiStream } : {}),
-		...(onStepEnd ? { onStepEnd } : {}),
-		...(timeout ? { timeout } : {}),
+		...(abortSignal && { abortSignal }),
+		...(createUiStream && { createUiStream }),
+		...(onStepEnd && { onStepEnd }),
+		...(timeout && { timeout }),
 		onError: () => "Something went wrong.",
 		onOutcome: (outcome) => {
 			finishedOutcome = outcome;

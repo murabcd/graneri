@@ -77,6 +77,35 @@ export type RealtimeTranscriptionTransport = {
 
 export type RealtimeTranscriptionSource = "microphone" | "systemAudio";
 
+type RealtimeDataChannel = {
+	addEventListener: (
+		event: "message",
+		listener: (event: MessageEvent) => void,
+	) => void;
+};
+
+type RealtimePeerConnection = {
+	connectionState: RTCPeerConnectionState;
+	addEventListener: (
+		event: "connectionstatechange",
+		listener: () => void,
+	) => void;
+	removeEventListener: (
+		event: "connectionstatechange",
+		listener: () => void,
+	) => void;
+	addTrack: (track: MediaStreamTrack, stream: MediaStream) => unknown;
+	close: () => void;
+	createDataChannel: (label: string) => RealtimeDataChannel;
+	createOffer: () => Promise<RTCSessionDescriptionInit>;
+	setLocalDescription: (
+		description: RTCSessionDescriptionInit,
+	) => Promise<void>;
+	setRemoteDescription: (
+		description: RTCSessionDescriptionInit,
+	) => Promise<void>;
+};
+
 const createRealtimeSession = async (
 	lang?: string,
 	source?: RealtimeTranscriptionSource,
@@ -97,9 +126,9 @@ const createRealtimeSession = async (
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				...(language ? { lang: language } : {}),
-				...(source ? { source } : {}),
-				...(speaker ? { speaker } : {}),
+				...(language && { lang: language }),
+				...(source && { source }),
+				...(speaker && { speaker }),
 				transport: "webrtc",
 			}),
 		},
@@ -129,7 +158,7 @@ const createRealtimeSession = async (
 };
 
 const waitForConnectedPeer = async (
-	peerConnection: RTCPeerConnection,
+	peerConnection: RealtimePeerConnection,
 	logger: TranscriptionLogger,
 ) =>
 	await new Promise<void>((resolve, reject) => {
@@ -181,6 +210,7 @@ export const connectRealtimeTranscriptionTransport = async ({
 	onInterrupted,
 	source,
 	speaker,
+	createPeerConnection = () => new RTCPeerConnection(),
 }: {
 	stream: MediaStream;
 	lang?: string;
@@ -189,10 +219,11 @@ export const connectRealtimeTranscriptionTransport = async ({
 	onInterrupted: (message: string) => void;
 	source: RealtimeTranscriptionSource;
 	speaker: TranscriptSpeaker;
+	createPeerConnection?: () => RealtimePeerConnection;
 }): Promise<RealtimeTranscriptionTransport> => {
 	const [{ clientSecret }, peerConnection] = await Promise.all([
 		createRealtimeSession(lang, source, speaker),
-		Promise.resolve(new RTCPeerConnection()),
+		Promise.resolve(createPeerConnection()),
 	]);
 	let hasClosed = false;
 	let disconnectTimeoutId: number | null = null;

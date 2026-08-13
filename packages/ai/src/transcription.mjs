@@ -229,7 +229,7 @@ export const createRealtimeTranscriptionSession = ({
 			transcription: {
 				model: REALTIME_TRANSCRIPTION_MODEL,
 				delay: REALTIME_TRANSCRIPTION_DELAY,
-				...(language ? { languages: [language] } : {}),
+				...(language && { languages: [language] }),
 			},
 			turn_detection: transport === "websocket" ? null : { type: "server_vad" },
 		},

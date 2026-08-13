@@ -159,10 +159,10 @@ export async function admitHostedOpenAiRequest({
 	}
 
 	return {
-		...(admission.admissionReservationId
-			? { admissionReservationId: admission.admissionReservationId }
-			: {}),
-		...(apiKey ? { apiKey } : {}),
+		...(admission.admissionReservationId && {
+			admissionReservationId: admission.admissionReservationId,
+		}),
+		...(apiKey && { apiKey }),
 		safetyIdentifier: admission.safetyIdentifier,
 	};
 }

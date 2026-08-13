@@ -410,7 +410,7 @@ export const createCombinedAudioCaptureController = ({
 							});
 						}
 						emitMicrophoneCaptureEvent({
-							...(capturedAt !== undefined ? { capturedAt } : {}),
+							...(capturedAt !== undefined && { capturedAt }),
 							pcm16: microphonePcm16,
 							type: "chunk",
 						});
@@ -427,7 +427,7 @@ export const createCombinedAudioCaptureController = ({
 							});
 						}
 						emitSystemAudioCaptureEvent({
-							...(capturedAt !== undefined ? { capturedAt } : {}),
+							...(capturedAt !== undefined && { capturedAt }),
 							pcm16: systemAudioPcm16,
 							type: "chunk",
 						});

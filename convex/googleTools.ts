@@ -109,7 +109,7 @@ const normalizeDriveFile = (
 		owners: (file.owners ?? [])
 			.map((owner) => owner.displayName ?? owner.emailAddress ?? null)
 			.filter((owner): owner is string => Boolean(owner)),
-		...(excerpt ? { excerpt } : {}),
+		...(excerpt && { excerpt }),
 	};
 };
 

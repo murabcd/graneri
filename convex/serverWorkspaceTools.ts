@@ -1,6 +1,7 @@
 "use node";
 
 import type {
+	GraneriCapabilityAdapters,
 	WorkspaceToolConnection,
 	YandexCalendarToolConnection,
 } from "@workspace/ai/capability-registry";
@@ -89,9 +90,9 @@ export const buildServerWorkspaceTools = async (
 					ownerTokenIdentifier: args.ownerTokenIdentifier,
 					workspaceId: args.workspaceId,
 					query,
-					...(from ? { from } : {}),
-					...(to ? { to } : {}),
-					...(typeof limit === "number" ? { limit } : {}),
+					...(from && { from }),
+					...(to && { to }),
+					...(typeof limit === "number" && { limit }),
 				},
 			),
 	});
@@ -126,52 +127,49 @@ export const buildServerWorkspaceTools = async (
 		isYandexCalendarToolConnection,
 	);
 	const activeGoogleAuthContext = googleAuthContext;
+	const googleCalendarAdapter: GraneriCapabilityAdapters["googleCalendar"] =
+		activeGoogleAuthContext && hasConnection(connections, "google-calendar")
+			? createCalendarCapabilityAdapter({
+					ctx,
+					providerInput: {
+						provider: "google",
+						googleAuthContext: activeGoogleAuthContext,
+					},
+				})
+			: undefined;
+	const googleDriveAdapter: GraneriCapabilityAdapters["googleDrive"] =
+		activeGoogleAuthContext && hasConnection(connections, "google-drive")
+			? {
+					searchFiles: async ({ query, limit }) =>
+						await searchGoogleDriveFiles({
+							authContext: activeGoogleAuthContext,
+							query,
+							limit,
+						}),
+					getFile: async ({ fileId }) =>
+						await getGoogleDriveFile({
+							authContext: activeGoogleAuthContext,
+							fileId,
+						}),
+				}
+			: undefined;
 	const catalog = await buildWorkspaceToolCatalog({
 		connections,
 		meetingTools,
 		scope: args.appToolScope,
 		selectedSourceIds: args.selectedSourceIds,
 		adapters: {
-			...(activeGoogleAuthContext &&
-			hasConnection(connections, "google-calendar")
-				? {
-						googleCalendar: createCalendarCapabilityAdapter({
-							ctx,
-							providerInput: {
-								provider: "google",
-								googleAuthContext: activeGoogleAuthContext,
-							},
-						}),
-					}
-				: {}),
-			...(activeGoogleAuthContext && hasConnection(connections, "google-drive")
-				? {
-						googleDrive: {
-							searchFiles: async ({ query, limit }) =>
-								await searchGoogleDriveFiles({
-									authContext: activeGoogleAuthContext,
-									query,
-									limit,
-								}),
-							getFile: async ({ fileId }) =>
-								await getGoogleDriveFile({
-									authContext: activeGoogleAuthContext,
-									fileId,
-								}),
-						},
-					}
-				: {}),
-			...(yandexCalendarConnection
-				? {
-						yandexCalendar: createCalendarCapabilityAdapter({
-							ctx,
-							providerInput: {
-								provider: "yandex",
-								connection: yandexCalendarConnection,
-							},
-						}),
-					}
-				: {}),
+			...(googleCalendarAdapter && { googleCalendar: googleCalendarAdapter }),
+			...(googleDriveAdapter && { googleDrive: googleDriveAdapter }),
+			...(yandexCalendarConnection && {
+				yandexCalendar: createCalendarCapabilityAdapter({
+					ctx,
+					providerInput: {
+						provider: "yandex",
+						connection: yandexCalendarConnection,
+					},
+				}),
+			}),
 		},
 	});
 

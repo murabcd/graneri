@@ -1,11 +1,26 @@
-import type { ServerResponse } from "node:http";
 import {
 	JsonToSseTransformStream,
 	UI_MESSAGE_STREAM_HEADERS,
 	type UIMessageChunk,
 } from "ai";
 
-const waitForResponseDrain = (response: ServerResponse) =>
+type UiMessageResponseEvent = "close" | "drain" | "error";
+
+export type UiMessageServerResponse = {
+	destroyed: boolean;
+	writableEnded: boolean;
+	end: () => unknown;
+	hasHeader: (name: string) => boolean;
+	off: (event: UiMessageResponseEvent, listener: () => void) => unknown;
+	once: (event: UiMessageResponseEvent, listener: () => void) => unknown;
+	setHeader: (
+		name: string,
+		value: number | string | readonly string[],
+	) => unknown;
+	write: (value: Uint8Array) => boolean;
+};
+
+const waitForResponseDrain = (response: UiMessageServerResponse) =>
 	new Promise<boolean>((resolve) => {
 		if (response.destroyed || response.writableEnded) {
 			resolve(false);
@@ -30,7 +45,7 @@ const waitForResponseDrain = (response: ServerResponse) =>
 		response.once("error", handleClose);
 	});
 
-const applyUiMessageStreamHeaders = (response: ServerResponse) => {
+const applyUiMessageStreamHeaders = (response: UiMessageServerResponse) => {
 	for (const [name, value] of Object.entries(UI_MESSAGE_STREAM_HEADERS)) {
 		if (!response.hasHeader(name)) {
 			response.setHeader(name, value);
@@ -42,7 +57,7 @@ export const pipeUiMessageStreamToServerResponse = ({
 	response,
 	stream,
 }: {
-	response: ServerResponse;
+	response: UiMessageServerResponse;
 	stream: ReadableStream<UIMessageChunk>;
 }) => {
 	applyUiMessageStreamHeaders(response);

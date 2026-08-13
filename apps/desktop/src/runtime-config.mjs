@@ -83,7 +83,7 @@ const createRuntimeConfig = (value) => {
 const toPublicRuntimeConfig = (value) => ({
 	convexUrl: value.convexUrl,
 	convexSiteUrl: value.convexSiteUrl,
-	...(value.localApiOrigin ? { localApiOrigin: value.localApiOrigin } : {}),
+	...(value.localApiOrigin && { localApiOrigin: value.localApiOrigin }),
 });
 
 const resolveRuntimeConfig = async () => {

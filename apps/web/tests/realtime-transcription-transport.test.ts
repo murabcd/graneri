@@ -5,13 +5,20 @@ vi.mock("../src/lib/convex-token", () => ({
 	getCachedConvexToken: vi.fn(async () => "test-convex-token"),
 }));
 
-const createMockStream = () =>
-	({
-		getTracks: () => [{ stop: vi.fn() }],
-	}) as unknown as MediaStream;
+const createMockStream = () => {
+	// SAFETY: The transport only reads MediaStreamTrack identity and never calls
+	// browser-native track methods in this contract test.
+	const track = { stop: vi.fn() } as MediaStreamTrack;
+	const stream = { getTracks: () => [track] } satisfies Pick<
+		MediaStream,
+		"getTracks"
+	>;
+
+	// SAFETY: getTracks is the complete MediaStream surface used by the transport.
+	return stream as MediaStream;
+};
 
 const originalFetch = globalThis.fetch;
-const originalRTCPeerConnection = globalThis.RTCPeerConnection;
 const originalWindow = globalThis.window;
 
 class MockDataChannel {
@@ -61,7 +68,6 @@ class MockPeerConnection {
 describe("connectRealtimeTranscriptionTransport", () => {
 	afterEach(() => {
 		globalThis.fetch = originalFetch;
-		globalThis.RTCPeerConnection = originalRTCPeerConnection;
 		globalThis.window = originalWindow;
 		vi.restoreAllMocks();
 	});
@@ -84,11 +90,10 @@ describe("connectRealtimeTranscriptionTransport", () => {
 			);
 
 		globalThis.fetch = fetchMock as typeof fetch;
-		globalThis.RTCPeerConnection =
-			MockPeerConnection as unknown as typeof RTCPeerConnection;
 		globalThis.window = globalThis as typeof globalThis & Window;
 
 		const transport = await connectRealtimeTranscriptionTransport({
+			createPeerConnection: () => new MockPeerConnection(),
 			lang: "en",
 			logger: {
 				debug: vi.fn(),

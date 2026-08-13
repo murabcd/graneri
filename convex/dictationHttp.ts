@@ -9,12 +9,17 @@ import {
 	MAX_DICTATION_AUDIO_BYTES,
 } from "@workspace/ai/dictation-policy";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
+import type { FunctionReturnType } from "convex/server";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 
+type DictationHttpPayload =
+	| { error: string }
+	| FunctionReturnType<typeof internal.dictationActions.transcribeStoredAudio>;
+
 const jsonResponse = (
 	status: number,
-	payload: object,
+	payload: DictationHttpPayload,
 	headers?: Record<string, string>,
 ) =>
 	new Response(JSON.stringify(payload), {

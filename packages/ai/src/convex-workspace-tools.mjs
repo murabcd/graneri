@@ -28,147 +28,132 @@ export const buildConvexWorkspaceToolSet = async ({
 						{
 							workspaceId,
 							query,
-							...(from ? { from } : {}),
-							...(to ? { to } : {}),
-							...(typeof limit === "number" ? { limit } : {}),
+							...(from && { from }),
+							...(to && { to }),
+							...(typeof limit === "number" && { limit }),
 						},
 					),
 			})
 		: {};
 	const adapters = {
 		...(hasConnection(connections, "google-calendar") &&
-		convexClient &&
-		canUseWorkspaceTools
-			? {
-					googleCalendar: {
-						listEvents: async ({ limit, meetingsOnly }) =>
-							await convexClient.action(
-								api.calendar.listGoogleCalendarEventsForTool,
-								{
-									...(typeof limit === "number" ? { limit } : {}),
-									...(typeof meetingsOnly === "boolean"
-										? { meetingsOnly }
-										: {}),
-								},
-							),
-						searchEvents: async ({ query, limit, meetingsOnly }) =>
-							await convexClient.action(
-								api.calendar.searchGoogleCalendarEventsForTool,
-								{
-									query: query ?? "",
-									...(typeof limit === "number" ? { limit } : {}),
-									...(typeof meetingsOnly === "boolean"
-										? { meetingsOnly }
-										: {}),
-								},
-							),
-					},
-				}
-			: {}),
-		...(hasConnection(connections, "google-drive") && convexClient
-			? {
-					googleDrive: {
-						searchFiles: async ({ query, limit }) =>
-							await convexClient.action(
-								api.googleTools.searchGoogleDriveFilesForTool,
-								{
-									query,
-									...(typeof limit === "number" ? { limit } : {}),
-								},
-							),
-						getFile: async ({ fileId }) =>
-							await convexClient.action(
-								api.googleTools.getGoogleDriveFileForTool,
-								{
-									fileId,
-								},
-							),
-					},
-				}
-			: {}),
+			convexClient &&
+			canUseWorkspaceTools && {
+				googleCalendar: {
+					listEvents: async ({ limit, meetingsOnly }) =>
+						await convexClient.action(
+							api.calendar.listGoogleCalendarEventsForTool,
+							{
+								...(typeof limit === "number" && { limit }),
+								...(typeof meetingsOnly === "boolean" && { meetingsOnly }),
+							},
+						),
+					searchEvents: async ({ query, limit, meetingsOnly }) =>
+						await convexClient.action(
+							api.calendar.searchGoogleCalendarEventsForTool,
+							{
+								query: query ?? "",
+								...(typeof limit === "number" && { limit }),
+								...(typeof meetingsOnly === "boolean" && { meetingsOnly }),
+							},
+						),
+				},
+			}),
+		...(hasConnection(connections, "google-drive") &&
+			convexClient && {
+				googleDrive: {
+					searchFiles: async ({ query, limit }) =>
+						await convexClient.action(
+							api.googleTools.searchGoogleDriveFilesForTool,
+							{
+								query,
+								...(typeof limit === "number" && { limit }),
+							},
+						),
+					getFile: async ({ fileId }) =>
+						await convexClient.action(
+							api.googleTools.getGoogleDriveFileForTool,
+							{
+								fileId,
+							},
+						),
+				},
+			}),
 		...(hasConnection(connections, "yandex-calendar") &&
-		convexClient &&
-		canUseWorkspaceTools
-			? {
-					yandexCalendar: {
-						listEvents: async ({ limit, meetingsOnly }) =>
-							await convexClient.action(
-								api.calendar.listYandexCalendarEventsForTool,
-								{
-									workspaceId,
-									...(typeof limit === "number" ? { limit } : {}),
-									...(typeof meetingsOnly === "boolean"
-										? { meetingsOnly }
-										: {}),
-								},
-							),
-						searchEvents: async ({ query, limit, meetingsOnly }) =>
-							await convexClient.action(
-								api.calendar.searchYandexCalendarEventsForTool,
-								{
-									workspaceId,
-									query,
-									...(typeof limit === "number" ? { limit } : {}),
-									...(typeof meetingsOnly === "boolean"
-										? { meetingsOnly }
-										: {}),
-								},
-							),
-					},
-				}
-			: {}),
-		...(convexClient && canUseWorkspaceTools
-			? {
-					remoteMcp: {
-						buildTools: async ({ connection, toolPrefix }) => {
-							const sourceId = getWorkspaceToolConnectionId(connection);
-							return await buildRemoteMcpProxyTools(
-								{
-									sourceId,
-									provider: connection.provider,
-									displayName:
-										getWorkspaceToolConnectionDisplayName(connection),
-									toolPrefix,
-								},
-								{
-									listTools: async () =>
-										await convexClient.action(
-											api.connectedAppTools.listRemoteMcpTools,
-											{ workspaceId, sourceId },
-										),
-									executeTool: async ({ inputJson, toolName }) =>
-										await convexClient.action(
-											api.connectedAppTools.executeRemoteMcpTool,
-											{
-												workspaceId,
-												sourceId,
-												inputJson,
-												toolName,
-											},
-										),
-								},
-							);
-						},
-					},
-					yandexTracker: {
-						buildTools: (connection) => {
-							const sourceId = getWorkspaceToolConnectionId(connection);
-							return buildYandexTrackerProxyTools({
-								searchIssues: async ({ query, limit }) =>
+			convexClient &&
+			canUseWorkspaceTools && {
+				yandexCalendar: {
+					listEvents: async ({ limit, meetingsOnly }) =>
+						await convexClient.action(
+							api.calendar.listYandexCalendarEventsForTool,
+							{
+								workspaceId,
+								...(typeof limit === "number" && { limit }),
+								...(typeof meetingsOnly === "boolean" && { meetingsOnly }),
+							},
+						),
+					searchEvents: async ({ query, limit, meetingsOnly }) =>
+						await convexClient.action(
+							api.calendar.searchYandexCalendarEventsForTool,
+							{
+								workspaceId,
+								query,
+								...(typeof limit === "number" && { limit }),
+								...(typeof meetingsOnly === "boolean" && { meetingsOnly }),
+							},
+						),
+				},
+			}),
+		...(convexClient &&
+			canUseWorkspaceTools && {
+				remoteMcp: {
+					buildTools: async ({ connection, toolPrefix }) => {
+						const sourceId = getWorkspaceToolConnectionId(connection);
+						return await buildRemoteMcpProxyTools(
+							{
+								sourceId,
+								provider: connection.provider,
+								displayName: getWorkspaceToolConnectionDisplayName(connection),
+								toolPrefix,
+							},
+							{
+								listTools: async () =>
 									await convexClient.action(
-										api.connectedAppTools.searchYandexTrackerIssuesForTool,
-										{ workspaceId, sourceId, query, limit },
+										api.connectedAppTools.listRemoteMcpTools,
+										{ workspaceId, sourceId },
 									),
-								getIssue: async ({ issueKey }) =>
+								executeTool: async ({ inputJson, toolName }) =>
 									await convexClient.action(
-										api.connectedAppTools.getYandexTrackerIssueForTool,
-										{ workspaceId, sourceId, issueKey },
+										api.connectedAppTools.executeRemoteMcpTool,
+										{
+											workspaceId,
+											sourceId,
+											inputJson,
+											toolName,
+										},
 									),
-							});
-						},
+							},
+						);
 					},
-				}
-			: {}),
+				},
+				yandexTracker: {
+					buildTools: (connection) => {
+						const sourceId = getWorkspaceToolConnectionId(connection);
+						return buildYandexTrackerProxyTools({
+							searchIssues: async ({ query, limit }) =>
+								await convexClient.action(
+									api.connectedAppTools.searchYandexTrackerIssuesForTool,
+									{ workspaceId, sourceId, query, limit },
+								),
+							getIssue: async ({ issueKey }) =>
+								await convexClient.action(
+									api.connectedAppTools.getYandexTrackerIssueForTool,
+									{ workspaceId, sourceId, issueKey },
+								),
+						});
+					},
+				},
+			}),
 	};
 
 	return await buildWorkspaceToolCatalog({

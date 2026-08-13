@@ -132,9 +132,9 @@ export const fetchYandexDav = async ({
 				connection.email,
 				connection.password,
 			),
-			...(method === "PROPFIND" || method === "REPORT"
-				? { Depth: depth ?? "0" }
-				: {}),
+			...((method === "PROPFIND" || method === "REPORT") && {
+				Depth: depth ?? "0",
+			}),
 			"Content-Type": contentType,
 			...headers,
 		},

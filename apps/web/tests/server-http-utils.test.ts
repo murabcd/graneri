@@ -1,7 +1,8 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { readJsonBody, sendJson } from "../server/http-utils";
+import { createTestServerResponse } from "./server-response-test-fixture";
 
 const createRequest = (body: string) =>
 	Readable.from(body ? [Buffer.from(body)] : []) as IncomingMessage;
@@ -9,15 +10,15 @@ const createRequest = (body: string) =>
 const createResponse = () => {
 	const headers = new Map<string, string>();
 	let body = "";
-	const response = {
-		statusCode: 0,
-		setHeader: (name: string, value: string) => {
-			headers.set(name, value);
-		},
-		end: (value: string) => {
-			body = value;
-		},
-	} as unknown as ServerResponse;
+	const { response } = createTestServerResponse();
+	response.setHeader = (name: string, value: string) => {
+		headers.set(name, value);
+		return response;
+	};
+	response.end = (value: string) => {
+		body = value;
+		return response;
+	};
 
 	return {
 		get body() {

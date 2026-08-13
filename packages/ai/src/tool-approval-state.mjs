@@ -55,9 +55,9 @@ const getToolApprovals = (message, state) => {
 			toolCallId,
 			toolName,
 			...(state === "approval-responded" &&
-			typeof part.approval.approved === "boolean"
-				? { approved: part.approval.approved }
-				: {}),
+				typeof part.approval.approved === "boolean" && {
+					approved: part.approval.approved,
+				}),
 		});
 	}
 
@@ -135,7 +135,7 @@ export const createCanonicalToolApprovalResponse = ({
 		id: storedMessage.id,
 		role: "assistant",
 		parts,
-		...(metadata === undefined ? {} : { metadata }),
+		...(metadata !== undefined && { metadata }),
 	};
 };
 

@@ -26,13 +26,11 @@ export const defineAiTool = ({
 			description,
 			inputSchema,
 			metadata: {
-				...(policy.requiresApproval
-					? {
-							[GRANERI_TOOL_METADATA_KEY]: {
-								requiresApproval: true,
-							},
-						}
-					: {}),
+				...(policy.requiresApproval && {
+					[GRANERI_TOOL_METADATA_KEY]: {
+						requiresApproval: true,
+					},
+				}),
 				ui,
 			},
 			providerOptions: {

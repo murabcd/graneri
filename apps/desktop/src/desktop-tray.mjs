@@ -123,7 +123,7 @@ export const createDesktopTray = ({
 
 			traySettings = {
 				...defaultTraySettings,
-				...(parsed && typeof parsed === "object" ? parsed : {}),
+				...(parsed && typeof parsed === "object" && parsed),
 			};
 		} catch (error) {
 			if (

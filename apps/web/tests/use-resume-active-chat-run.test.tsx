@@ -1,19 +1,20 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useResumeActiveChatRun } from "@/hooks/use-resume-active-chat-run";
+import {
+	type ResumableActiveRun,
+	useResumeActiveChatRun,
+} from "@/hooks/use-resume-active-chat-run";
 import type { Id } from "../../../convex/_generated/dataModel";
-
-type ActiveRun = Parameters<typeof useResumeActiveChatRun>[0]["activeRun"];
 
 const createActiveRun = (
 	status: "running" | "waiting_for_user",
 	producer: "convex" | "web" = "web",
 ) =>
 	({
-		_id: "run_1",
+		_id: "run_1" as Id<"assistantRuns">,
 		producer,
 		status,
-	}) as unknown as ActiveRun;
+	}) satisfies ResumableActiveRun;
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -23,7 +24,7 @@ describe("useResumeActiveChatRun", () => {
 	it("does not reconnect while a run is waiting for user input", async () => {
 		const resumeStream = vi.fn().mockResolvedValue(undefined);
 		const { rerender } = renderHook(
-			({ activeRun }: { activeRun: ActiveRun }) =>
+			({ activeRun }: { activeRun: ResumableActiveRun }) =>
 				useResumeActiveChatRun({
 					activeRun,
 					chatId: "chat_1",
@@ -42,7 +43,7 @@ describe("useResumeActiveChatRun", () => {
 	it("allows the same run to reconnect again after waiting for user input", async () => {
 		const resumeStream = vi.fn().mockResolvedValue(undefined);
 		const { rerender } = renderHook(
-			({ activeRun }: { activeRun: ActiveRun }) =>
+			({ activeRun }: { activeRun: ResumableActiveRun }) =>
 				useResumeActiveChatRun({
 					activeRun,
 					chatId: "chat_1",

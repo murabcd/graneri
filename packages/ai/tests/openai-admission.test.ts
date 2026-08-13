@@ -5,7 +5,7 @@ import { authorizeOpenAiRequest } from "../src/openai-admission.mjs";
 const createConvexError = (code: string, retryAfterMs?: number) => ({
 	data: {
 		code,
-		...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+		...(retryAfterMs !== undefined && { retryAfterMs }),
 	},
 });
 

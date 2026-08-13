@@ -47,9 +47,10 @@ export const getHostedChatSteerAcceptanceHeaders = ({
 	[hostedChatSteerAcceptedHeader]: "true",
 	[hostedChatSteerTurnIdHeader]: turnId,
 	[hostedChatSteerQueuedMessageIdHeader]: queuedMessageId,
-	...(Array.isArray(queuedMessageIds) && queuedMessageIds.length > 0
-		? { [hostedChatSteerQueuedMessageIdsHeader]: queuedMessageIds.join(",") }
-		: {}),
+	...(Array.isArray(queuedMessageIds) &&
+		queuedMessageIds.length > 0 && {
+			[hostedChatSteerQueuedMessageIdsHeader]: queuedMessageIds.join(","),
+		}),
 });
 
 export const getHostedChatReplayAcceptanceHeaders = ({ queuedMessageId }) => ({

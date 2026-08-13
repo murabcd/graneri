@@ -280,12 +280,12 @@ const refreshZoomTokensForWorkspace = async (
 					ownerTokenIdentifier: connection.ownerTokenIdentifier,
 					workspaceId: connection.workspaceId,
 					oauthAccessToken: tokens.accessToken,
-					...(tokens.refreshToken
-						? { oauthRefreshToken: tokens.refreshToken }
-						: {}),
-					...(tokens.expiresIn
-						? { tokenExpiresAt: Date.now() + tokens.expiresIn * 1000 }
-						: {}),
+					...(tokens.refreshToken && {
+						oauthRefreshToken: tokens.refreshToken,
+					}),
+					...(tokens.expiresIn && {
+						tokenExpiresAt: Date.now() + tokens.expiresIn * 1000,
+					}),
 				});
 			}),
 	);
@@ -550,9 +550,9 @@ const refreshMcpTokensForWorkspace = async (
 							redirectUri: getMcpOAuthRedirectUri(provider),
 							client: {
 								clientId: connection.oauthClientId,
-								...(connection.oauthClientSecret
-									? { clientSecret: connection.oauthClientSecret }
-									: {}),
+								...(connection.oauthClientSecret && {
+									clientSecret: connection.oauthClientSecret,
+								}),
 							},
 							refreshToken: connection.oauthRefreshToken,
 							displayName,
@@ -560,9 +560,9 @@ const refreshMcpTokensForWorkspace = async (
 					: await refreshMcpOAuthToken({
 							baseUrl: connection.baseUrl,
 							clientId: connection.oauthClientId,
-							...(connection.oauthClientSecret
-								? { clientSecret: connection.oauthClientSecret }
-								: {}),
+							...(connection.oauthClientSecret && {
+								clientSecret: connection.oauthClientSecret,
+							}),
 							refreshToken: connection.oauthRefreshToken,
 							displayName,
 						});
@@ -573,12 +573,12 @@ const refreshMcpTokensForWorkspace = async (
 					workspaceId: connection.workspaceId,
 					provider,
 					oauthAccessToken: tokens.accessToken,
-					...(tokens.refreshToken
-						? { oauthRefreshToken: tokens.refreshToken }
-						: {}),
-					...(tokens.expiresIn
-						? { tokenExpiresAt: Date.now() + tokens.expiresIn * 1000 }
-						: {}),
+					...(tokens.refreshToken && {
+						oauthRefreshToken: tokens.refreshToken,
+					}),
+					...(tokens.expiresIn && {
+						tokenExpiresAt: Date.now() + tokens.expiresIn * 1000,
+					}),
 				});
 			}),
 	);
@@ -770,7 +770,7 @@ const getRequestedMcpOAuthClient = ({
 
 	return {
 		clientId,
-		...(clientSecret ? { clientSecret } : {}),
+		...(clientSecret && { clientSecret }),
 	};
 };
 
@@ -801,9 +801,9 @@ const persistMcpSdkOAuthState = async ({
 		workspaceId,
 		displayName,
 		baseUrl,
-		...(Object.keys(env).length > 0 ? { env } : {}),
+		...(Object.keys(env).length > 0 && { env }),
 		oauthClientId: client.clientId,
-		...(client.clientSecret ? { oauthClientSecret: client.clientSecret } : {}),
+		...(client.clientSecret && { oauthClientSecret: client.clientSecret }),
 		codeVerifier: oauthStart.codeVerifier,
 		state: oauthStart.state,
 		expiresAt: Date.now() + MCP_OAUTH_STATE_TTL_MS,
@@ -1083,7 +1083,7 @@ export const connectJira = action({
 			baseUrl,
 			email,
 			token,
-			...(accountId ? { accountId } : {}),
+			...(accountId && { accountId }),
 		});
 	},
 });
@@ -1293,11 +1293,9 @@ export const connectNotion = action({
 			workspaceId: args.workspaceId,
 			displayName,
 			baseUrl,
-			...(Object.keys(env).length > 0 ? { env } : {}),
+			...(Object.keys(env).length > 0 && { env }),
 			oauthClientId: client.clientId,
-			...(client.clientSecret
-				? { oauthClientSecret: client.clientSecret }
-				: {}),
+			...(client.clientSecret && { oauthClientSecret: client.clientSecret }),
 			oauthTokenEndpoint: metadata.tokenEndpoint,
 			codeVerifier,
 			state,
@@ -1477,7 +1475,7 @@ export const prepareJiraMentionSync = action({
 		await ctx.runMutation(internal.appConnections.ensureJiraSyncMetadata, {
 			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
-			...(accountId ? { accountId } : {}),
+			...(accountId && { accountId }),
 		});
 
 		return null;

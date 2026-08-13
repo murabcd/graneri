@@ -102,18 +102,16 @@ export const getOpenAiModelProviderOptions = (
 
 	return {
 		openai: {
-			...(isReasoningModel
-				? {
-						...(normalizedReasoningEffort === "none"
-							? {}
-							: { reasoningSummary: "auto" }),
-						reasoningEffort: normalizedReasoningEffort,
-					}
-				: {}),
-			...(normalizedServiceTier === DEFAULT_SERVICE_TIER
-				? {}
-				: { serviceTier: normalizedServiceTier }),
-			...(safetyIdentifier ? { safetyIdentifier } : {}),
+			...(isReasoningModel && {
+				...(normalizedReasoningEffort !== "none" && {
+					reasoningSummary: "auto",
+				}),
+				reasoningEffort: normalizedReasoningEffort,
+			}),
+			...(normalizedServiceTier !== DEFAULT_SERVICE_TIER && {
+				serviceTier: normalizedServiceTier,
+			}),
+			...(safetyIdentifier && { safetyIdentifier }),
 		},
 	};
 };

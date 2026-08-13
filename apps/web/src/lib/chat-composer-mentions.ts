@@ -42,7 +42,7 @@ const getMentionNode = (mention: ChatComposerMention): JSONContent => ({
 		id: mention.id,
 		label: mention.label,
 		type: mention.type,
-		...(mention.type === "tool" ? { provider: mention.provider } : {}),
+		...(mention.type === "tool" && { provider: mention.provider }),
 	},
 });
 
@@ -67,7 +67,7 @@ export const createChatComposerDocument = (
 	const finishParagraph = () => {
 		paragraphs.push({
 			type: "paragraph",
-			...(paragraphContent.length > 0 ? { content: paragraphContent } : {}),
+			...(paragraphContent.length > 0 && { content: paragraphContent }),
 		});
 		paragraphContent = [];
 	};

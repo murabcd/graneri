@@ -1598,7 +1598,7 @@ const useNoteComposerController = ({
 						resetTextareaHeight();
 					},
 					regenerate,
-					...(canStop ? { stopActiveRun: stopCurrentStream } : {}),
+					...(canStop && { stopActiveRun: stopCurrentStream }),
 				});
 			} catch (error) {
 				logError({

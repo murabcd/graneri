@@ -852,14 +852,12 @@ const createToolConnections = (
 						onUninstall: () => void onDisable(),
 					}
 				: { status: "available" },
-		...(presentation !== "plain"
-			? {
-					buttonDisabled: session.isSaving || !controller.hasAuthenticatedUser,
-					buttonIcon: session.isSaving ? (
-						<LoaderCircle className="animate-spin" />
-					) : null,
-				}
-			: {}),
+		...(presentation !== "plain" && {
+			buttonDisabled: session.isSaving || !controller.hasAuthenticatedUser,
+			buttonIcon: session.isSaving ? (
+				<LoaderCircle className="animate-spin" />
+			) : null,
+		}),
 		onConfigure: () => session.handleOpenChange(true),
 	});
 

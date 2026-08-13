@@ -310,31 +310,26 @@ export const runStep = internalAction({
 			};
 			const enabledTools = guardExecutableTools(
 				{
-					...(context.job.webSearchEnabled
-						? {
-								web_search: openai.tools.webSearch({
-									searchContextSize: "medium",
-									userLocation: {
-										type: "approximate" as const,
-										country: "US" as const,
-									},
-								}),
-							}
-						: {}),
-					...(context.job.chartGenerationRequested
-						? { generate_chart: createChartGenerationTool() }
-						: {}),
-					...(context.job.imageGenerationRequested
-						? {
-								generate_image: createImageGenerationTool({
-									uploadGeneratedImage:
-										createAssistantRunGeneratedImageUploader({
-											requireActiveRun,
-											storage: ctx.storage,
-										}),
-								}),
-							}
-						: {}),
+					...(context.job.webSearchEnabled && {
+						web_search: openai.tools.webSearch({
+							searchContextSize: "medium",
+							userLocation: {
+								type: "approximate" as const,
+								country: "US" as const,
+							},
+						}),
+					}),
+					...(context.job.chartGenerationRequested && {
+						generate_chart: createChartGenerationTool(),
+					}),
+					...(context.job.imageGenerationRequested && {
+						generate_image: createImageGenerationTool({
+							uploadGeneratedImage: createAssistantRunGeneratedImageUploader({
+								requireActiveRun,
+								storage: ctx.storage,
+							}),
+						}),
+					}),
 					...automationContext.tools,
 					...appTools,
 				},

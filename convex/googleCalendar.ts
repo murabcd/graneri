@@ -668,9 +668,9 @@ const getUpdatedGoogleAttendees = (
 
 		return {
 			email,
-			...(existing?.responseStatus
-				? { responseStatus: existing.responseStatus }
-				: {}),
+			...(existing?.responseStatus && {
+				responseStatus: existing.responseStatus,
+			}),
 		};
 	});
 };

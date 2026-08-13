@@ -42,7 +42,7 @@ const markHistoryState = (
 	index: number,
 	state: unknown,
 ): GraneriHistoryState => ({
-	...(state !== null && typeof state === "object" ? state : {}),
+	...(state !== null && typeof state === "object" && state),
 	__graneriNavigationIndex: index,
 });
 

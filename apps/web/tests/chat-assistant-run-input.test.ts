@@ -1,6 +1,6 @@
 import type { ChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
 import type { prepareHostedAssistantRunInput } from "@workspace/ai/hosted-chat-turn";
-import type { ConvexHttpClient } from "convex/browser";
+import { ConvexHttpClient } from "convex/browser";
 import { type FunctionReference, getFunctionName } from "convex/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -45,6 +45,10 @@ describe("prepareServerAssistantRunInput", () => {
 				return null;
 			},
 		);
+		const convexClient = Object.assign(
+			new ConvexHttpClient("https://example.convex.cloud"),
+			{ mutation, query },
+		);
 		hostedChatTurnMock.prepareAssistantRunInput.mockImplementation(
 			async (args: AssistantRunInputArgs) => {
 				await args.getMessagesSnapshot({
@@ -75,7 +79,7 @@ describe("prepareServerAssistantRunInput", () => {
 				attachableRunId: "run-1" as Id<"assistantRuns">,
 				chatId: "chat-1",
 				continueRunId: "run-1" as Id<"assistantRuns">,
-				convexClient: { mutation, query } as unknown as ConvexHttpClient,
+				convexClient,
 				logLatency: vi.fn() as ChatLatencyLogger,
 				message: {
 					id: "current-user-message",

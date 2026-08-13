@@ -633,9 +633,9 @@ const useChatPageController = ({
 				? {
 						recipe: submission.recipe,
 						recipeOnly: submission.recipeOnly,
-						...(submission.mentionPositions.length > 0
-							? { mentionPositions: submission.mentionPositions }
-							: {}),
+						...(submission.mentionPositions.length > 0 && {
+							mentionPositions: submission.mentionPositions,
+						}),
 					}
 				: submission.mentionPositions.length > 0
 					? { mentionPositions: submission.mentionPositions }
@@ -982,7 +982,7 @@ const useChatPageController = ({
 						clearDraft();
 					},
 					regenerate,
-					...(canStop ? { stopActiveRun: stopCurrentStream } : {}),
+					...(canStop && { stopActiveRun: stopCurrentStream }),
 				});
 			} catch (error) {
 				logError({

@@ -1,5 +1,15 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+export type JsonValue =
+	| boolean
+	| null
+	| number
+	| string
+	| JsonValue[]
+	| { [key: string]: JsonValue };
+
+export type JsonObject = { [key: string]: JsonValue | undefined };
+
 export const readJsonBody = async <TBody>(request: IncomingMessage) => {
 	const chunks: Uint8Array[] = [];
 
@@ -19,7 +29,7 @@ export const readJsonBody = async <TBody>(request: IncomingMessage) => {
 export const sendJson = (
 	response: ServerResponse,
 	statusCode: number,
-	payload: object,
+	payload: JsonObject,
 	headers?: Record<string, string> | null,
 ) => {
 	response.statusCode = statusCode;

@@ -101,13 +101,13 @@ export const updateAssistantRunStream = async (
 		try {
 			parseUiMessagePartsJson(args.partsJson);
 		} catch (error) {
-			const isInvalidPartsShape =
+			const hasInvalidPartsPayload =
 				error instanceof Error &&
 				"code" in error &&
 				error.code === "invalid_parts_shape";
 			throw new ConvexError({
 				code: "INVALID_ACTIVE_STREAM_PARTS",
-				message: isInvalidPartsShape
+				message: hasInvalidPartsPayload
 					? "Active stream parts must be an array."
 					: "Active stream parts must be valid JSON.",
 			});

@@ -1,8 +1,10 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage } from "node:http";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import type * as AiModule from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleApplyTemplateRequest } from "../server/apply-template-handler";
+import type { JsonObject } from "../server/http-utils";
+import { createTestServerResponse } from "./server-response-test-fixture";
 
 const previousConvexUrl = process.env.CONVEX_URL;
 const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
@@ -42,28 +44,13 @@ afterEach(() => {
 	}
 });
 
-const createRequest = (body: object) =>
+const createRequest = (body: JsonObject) =>
 	({
 		async *[Symbol.asyncIterator]() {
 			yield Buffer.from(JSON.stringify(body));
 		},
 		headers: { authorization: "Bearer valid-token" },
 	}) as IncomingMessage;
-
-const createResponse = () => {
-	const chunks: string[] = [];
-	const response = {
-		end: vi.fn(),
-		flushHeaders: vi.fn(),
-		setHeader: vi.fn(),
-		statusCode: 0,
-		write: vi.fn((chunk: string) => {
-			chunks.push(chunk);
-			return true;
-		}),
-	} as unknown as ServerResponse;
-	return { chunks, response };
-};
 
 describe("apply template handler", () => {
 	it("uses the stored transcript language and emits only validated output", async () => {
@@ -77,7 +64,7 @@ describe("apply template handler", () => {
 			"- Owners confirmed the next steps",
 		].join("\n");
 		aiMocks.generateText.mockResolvedValue({ text: rewrittenText });
-		const { chunks, response } = createResponse();
+		const { chunks, response } = createTestServerResponse();
 
 		await handleApplyTemplateRequest(
 			createRequest({

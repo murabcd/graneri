@@ -25,7 +25,7 @@ export const buildHostedChatAgentToolSet = ({
 	const agentTools =
 		finalizedToolSet.hasTools || hasAdditionalAgentTools
 			? {
-					...(finalizedToolSet.hasTools ? finalizedToolSet.tools : {}),
+					...(finalizedToolSet.hasTools && finalizedToolSet.tools),
 					...(additionalAgentTools ?? {}),
 				}
 			: undefined;
@@ -59,7 +59,7 @@ export const createHostedChatAgent = ({
 		providerOptions,
 		instructions,
 		tools: agentTools ?? (emptyToolsWhenNone ? {} : undefined),
-		...(toolApproval ? { toolApproval } : {}),
+		...(toolApproval && { toolApproval }),
 		prepareStep,
 		stopWhen,
 	});

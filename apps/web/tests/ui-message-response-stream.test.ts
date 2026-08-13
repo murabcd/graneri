@@ -1,5 +1,4 @@
 import { EventEmitter } from "node:events";
-import type { ServerResponse } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { pipeUiMessageStreamToServerResponse } from "../server/ui-message-response-stream";
 
@@ -55,7 +54,7 @@ describe("UI message response stream", () => {
 			},
 		});
 		const completion = pipeUiMessageStreamToServerResponse({
-			response: testResponse as unknown as ServerResponse,
+			response: testResponse,
 			stream,
 		});
 		await flushMicrotasks();
@@ -83,7 +82,7 @@ describe("UI message response stream", () => {
 			{ highWaterMark: 0 },
 		);
 		const completion = pipeUiMessageStreamToServerResponse({
-			response: testResponse as unknown as ServerResponse,
+			response: testResponse,
 			stream,
 		});
 		await flushMicrotasks();

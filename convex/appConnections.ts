@@ -628,7 +628,7 @@ const toMcpOAuthChatToolConnection = (
 		displayName: connection.displayName,
 		baseUrl: connection.baseUrl,
 		...parseConnectionEnv(connection),
-		...(connection.accountId ? { oauthClientId: connection.accountId } : {}),
+		...(connection.accountId && { oauthClientId: connection.accountId }),
 		oauthAccessToken: connection.token,
 	};
 };
@@ -731,7 +731,7 @@ const toEndpointConnectionSettings = <
 		status: connection.status,
 		displayName: connection.displayName,
 		endpoint: connection.baseUrl,
-		...(connection.accountId ? { oauthClientId: connection.accountId } : {}),
+		...(connection.accountId && { oauthClientId: connection.accountId }),
 	} as Extract<EndpointConnectionSettings, { provider: TProvider }>;
 };
 
@@ -800,12 +800,12 @@ const upsertConnectionActivity = async (
 		connectionId: connection._id,
 		ownerTokenIdentifier: connection.ownerTokenIdentifier,
 		workspaceId: connection.workspaceId,
-		...(patch.lastWebhookReceivedAt
-			? { lastWebhookReceivedAt: patch.lastWebhookReceivedAt }
-			: {}),
-		...(patch.lastMentionSyncAt
-			? { lastMentionSyncAt: patch.lastMentionSyncAt }
-			: {}),
+		...(patch.lastWebhookReceivedAt && {
+			lastWebhookReceivedAt: patch.lastWebhookReceivedAt,
+		}),
+		...(patch.lastMentionSyncAt && {
+			lastMentionSyncAt: patch.lastMentionSyncAt,
+		}),
 		createdAt: now,
 		updatedAt: now,
 	});
@@ -1136,16 +1136,16 @@ export const getJira = query({
 			displayName: connection.displayName,
 			baseUrl: connection.baseUrl,
 			email: connection.email,
-			...(connection.accountId ? { accountId: connection.accountId } : {}),
-			...(connection.webhookSecret
-				? { webhookSecret: connection.webhookSecret }
-				: {}),
-			...(activity.lastWebhookReceivedAt
-				? { lastWebhookReceivedAt: activity.lastWebhookReceivedAt }
-				: {}),
-			...(activity.lastMentionSyncAt
-				? { lastMentionSyncAt: activity.lastMentionSyncAt }
-				: {}),
+			...(connection.accountId && { accountId: connection.accountId }),
+			...(connection.webhookSecret && {
+				webhookSecret: connection.webhookSecret,
+			}),
+			...(activity.lastWebhookReceivedAt && {
+				lastWebhookReceivedAt: activity.lastWebhookReceivedAt,
+			}),
+			...(activity.lastMentionSyncAt && {
+				lastMentionSyncAt: activity.lastMentionSyncAt,
+			}),
 		};
 	},
 });
@@ -1301,7 +1301,7 @@ export const getOwnedJiraConnectionInternal = internalQuery({
 			baseUrl: connection.baseUrl,
 			email: connection.email,
 			token: connection.token,
-			...(connection.accountId ? { accountId: connection.accountId } : {}),
+			...(connection.accountId && { accountId: connection.accountId }),
 		};
 	},
 });
@@ -1341,7 +1341,7 @@ export const getJiraWebhookConnection = internalQuery({
 			baseUrl: connection.baseUrl,
 			email: connection.email,
 			token: connection.token,
-			...(connection.accountId ? { accountId: connection.accountId } : {}),
+			...(connection.accountId && { accountId: connection.accountId }),
 		};
 	},
 });
@@ -1380,9 +1380,9 @@ export const getZoomOAuthConnectionsForWorkspace = internalQuery({
 				oauthClientId: connection.accountId as string,
 				oauthClientSecret: connection.oauthClientSecret as string,
 				oauthRefreshToken: connection.oauthRefreshToken as string,
-				...(connection.tokenExpiresAt
-					? { tokenExpiresAt: connection.tokenExpiresAt }
-					: {}),
+				...(connection.tokenExpiresAt && {
+					tokenExpiresAt: connection.tokenExpiresAt,
+				}),
 			}));
 	},
 });
@@ -1420,13 +1420,13 @@ export const getMcpOAuthConnectionsForWorkspace = internalQuery({
 				provider: args.provider,
 				baseUrl: connection.baseUrl as string,
 				oauthClientId: connection.accountId as string,
-				...(connection.oauthClientSecret
-					? { oauthClientSecret: connection.oauthClientSecret }
-					: {}),
+				...(connection.oauthClientSecret && {
+					oauthClientSecret: connection.oauthClientSecret,
+				}),
 				oauthRefreshToken: connection.oauthRefreshToken as string,
-				...(connection.tokenExpiresAt
-					? { tokenExpiresAt: connection.tokenExpiresAt }
-					: {}),
+				...(connection.tokenExpiresAt && {
+					tokenExpiresAt: connection.tokenExpiresAt,
+				}),
 			}));
 	},
 });
@@ -1455,10 +1455,10 @@ export const updateZoomOAuthTokens = internalMutation({
 
 		await ctx.db.patch(connection._id, {
 			token: args.oauthAccessToken,
-			...(args.oauthRefreshToken
-				? { oauthRefreshToken: args.oauthRefreshToken }
-				: {}),
-			...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
+			...(args.oauthRefreshToken && {
+				oauthRefreshToken: args.oauthRefreshToken,
+			}),
+			...(args.tokenExpiresAt && { tokenExpiresAt: args.tokenExpiresAt }),
 			updatedAt: Date.now(),
 		});
 
@@ -1491,10 +1491,10 @@ export const updateMcpOAuthTokens = internalMutation({
 
 		await ctx.db.patch(connection._id, {
 			token: args.oauthAccessToken,
-			...(args.oauthRefreshToken
-				? { oauthRefreshToken: args.oauthRefreshToken }
-				: {}),
-			...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
+			...(args.oauthRefreshToken && {
+				oauthRefreshToken: args.oauthRefreshToken,
+			}),
+			...(args.tokenExpiresAt && { tokenExpiresAt: args.tokenExpiresAt }),
 			updatedAt: Date.now(),
 		});
 
@@ -1802,9 +1802,9 @@ export const recordJiraWebhookActivity = internalMutation({
 
 		await upsertConnectionActivity(ctx, connection, {
 			lastWebhookReceivedAt: args.lastWebhookReceivedAt,
-			...(args.lastMentionSyncAt
-				? { lastMentionSyncAt: args.lastMentionSyncAt }
-				: {}),
+			...(args.lastMentionSyncAt && {
+				lastMentionSyncAt: args.lastMentionSyncAt,
+			}),
 		});
 
 		if (args.accountId && connection.accountId !== args.accountId) {
@@ -1876,13 +1876,13 @@ export const upsertJira = internalMutation({
 				baseUrl,
 				email,
 				webhookSecret,
-				...(activity.lastWebhookReceivedAt
-					? { lastWebhookReceivedAt: activity.lastWebhookReceivedAt }
-					: {}),
-				...(activity.lastMentionSyncAt
-					? { lastMentionSyncAt: activity.lastMentionSyncAt }
-					: {}),
-				...(accountId ? { accountId } : {}),
+				...(activity.lastWebhookReceivedAt && {
+					lastWebhookReceivedAt: activity.lastWebhookReceivedAt,
+				}),
+				...(activity.lastMentionSyncAt && {
+					lastMentionSyncAt: activity.lastMentionSyncAt,
+				}),
+				...(accountId && { accountId }),
 			};
 		}
 
@@ -1897,7 +1897,7 @@ export const upsertJira = internalMutation({
 			email,
 			token,
 			webhookSecret,
-			...(accountId ? { accountId } : {}),
+			...(accountId && { accountId }),
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -1910,7 +1910,7 @@ export const upsertJira = internalMutation({
 			baseUrl,
 			email,
 			webhookSecret,
-			...(accountId ? { accountId } : {}),
+			...(accountId && { accountId }),
 		};
 	},
 });
@@ -1995,16 +1995,16 @@ const createMcpOAuthConnectionInsert = <
 	status: "connected" as const,
 	displayName: values.displayName,
 	baseUrl: values.baseUrl,
-	...(values.envJson ? { envJson: values.envJson } : {}),
+	...(values.envJson && { envJson: values.envJson }),
 	accountId: values.oauthClientId,
-	...(values.oauthClientSecret
-		? { oauthClientSecret: values.oauthClientSecret }
-		: {}),
+	...(values.oauthClientSecret && {
+		oauthClientSecret: values.oauthClientSecret,
+	}),
 	token: args.oauthAccessToken,
-	...(values.oauthRefreshToken
-		? { oauthRefreshToken: values.oauthRefreshToken }
-		: {}),
-	...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
+	...(values.oauthRefreshToken && {
+		oauthRefreshToken: values.oauthRefreshToken,
+	}),
+	...(args.tokenExpiresAt && { tokenExpiresAt: args.tokenExpiresAt }),
 	createdAt: values.now,
 	updatedAt: values.now,
 });
@@ -2039,9 +2039,9 @@ const upsertPreservedSecretMcpOAuthConnection = async <
 			baseUrl,
 			envJson,
 			accountId: oauthClientId,
-			...(oauthClientSecret ? { oauthClientSecret } : {}),
+			...(oauthClientSecret && { oauthClientSecret }),
 			token: args.oauthAccessToken,
-			...(oauthRefreshToken ? { oauthRefreshToken } : {}),
+			...(oauthRefreshToken && { oauthRefreshToken }),
 			tokenExpiresAt: args.tokenExpiresAt,
 			updatedAt: now,
 		});
@@ -2152,7 +2152,7 @@ export const upsertZoom = internalMutation({
 				status: "connected" as const,
 				displayName,
 				endpoint: baseUrl,
-				...(oauthClientId ? { oauthClientId } : {}),
+				...(oauthClientId && { oauthClientId }),
 			};
 		}
 
@@ -2163,12 +2163,12 @@ export const upsertZoom = internalMutation({
 			status: "connected",
 			displayName,
 			baseUrl,
-			...(envJson ? { envJson } : {}),
-			...(oauthClientId ? { accountId: oauthClientId } : {}),
-			...(oauthClientSecret ? { oauthClientSecret } : {}),
+			...(envJson && { envJson }),
+			...(oauthClientId && { accountId: oauthClientId }),
+			...(oauthClientSecret && { oauthClientSecret }),
 			token: args.oauthAccessToken,
-			...(oauthRefreshToken ? { oauthRefreshToken } : {}),
-			...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
+			...(oauthRefreshToken && { oauthRefreshToken }),
+			...(args.tokenExpiresAt && { tokenExpiresAt: args.tokenExpiresAt }),
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -2179,7 +2179,7 @@ export const upsertZoom = internalMutation({
 			status: "connected" as const,
 			displayName,
 			endpoint: baseUrl,
-			...(oauthClientId ? { oauthClientId } : {}),
+			...(oauthClientId && { oauthClientId }),
 		};
 	},
 });
@@ -2245,7 +2245,7 @@ const upsertRemoteHeaderMcpConnection = async (
 		status: "connected",
 		displayName,
 		baseUrl,
-		...(envJson ? { envJson } : {}),
+		...(envJson && { envJson }),
 		createdAt: now,
 		updatedAt: now,
 	});
@@ -2290,7 +2290,7 @@ const upsertMcpOAuthConnection = async <TProvider extends "figma" | "linear">(
 			accountId: oauthClientId,
 			oauthClientSecret,
 			token: args.oauthAccessToken,
-			...(oauthRefreshToken ? { oauthRefreshToken } : {}),
+			...(oauthRefreshToken && { oauthRefreshToken }),
 			tokenExpiresAt: args.tokenExpiresAt,
 			updatedAt: now,
 		});
@@ -2406,15 +2406,15 @@ export const createMcpOAuthState = internalMutation({
 				args.displayName.trim() ||
 				getDefaultAppConnectionDisplayName(args.provider),
 			baseUrl: args.baseUrl.trim(),
-			...(args.env ? { envJson: JSON.stringify(args.env) } : {}),
+			...(args.env && { envJson: JSON.stringify(args.env) }),
 			oauthClientId: args.oauthClientId.trim(),
-			...(args.oauthClientSecret
-				? { oauthClientSecret: args.oauthClientSecret.trim() }
-				: {}),
-			...(args.oauthTokenEndpoint
-				? { oauthTokenEndpoint: args.oauthTokenEndpoint.trim() }
-				: {}),
-			...(args.codeVerifier ? { codeVerifier: args.codeVerifier } : {}),
+			...(args.oauthClientSecret && {
+				oauthClientSecret: args.oauthClientSecret.trim(),
+			}),
+			...(args.oauthTokenEndpoint && {
+				oauthTokenEndpoint: args.oauthTokenEndpoint.trim(),
+			}),
+			...(args.codeVerifier && { codeVerifier: args.codeVerifier }),
 			expiresAt: args.expiresAt,
 			createdAt: now,
 		});
@@ -2464,15 +2464,15 @@ export const consumeMcpOAuthState = internalMutation({
 			workspaceId: state.workspaceId,
 			displayName: state.displayName,
 			baseUrl: state.baseUrl,
-			...(state.envJson ? { envJson: state.envJson } : {}),
+			...(state.envJson && { envJson: state.envJson }),
 			oauthClientId: state.oauthClientId,
-			...(state.oauthClientSecret
-				? { oauthClientSecret: state.oauthClientSecret }
-				: {}),
-			...(state.oauthTokenEndpoint
-				? { oauthTokenEndpoint: state.oauthTokenEndpoint }
-				: {}),
-			...(state.codeVerifier ? { codeVerifier: state.codeVerifier } : {}),
+			...(state.oauthClientSecret && {
+				oauthClientSecret: state.oauthClientSecret,
+			}),
+			...(state.oauthTokenEndpoint && {
+				oauthTokenEndpoint: state.oauthTokenEndpoint,
+			}),
+			...(state.codeVerifier && { codeVerifier: state.codeVerifier }),
 			expiresAt: state.expiresAt,
 		};
 	},

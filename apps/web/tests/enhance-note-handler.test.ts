@@ -1,8 +1,10 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage } from "node:http";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import type * as AiModule from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleEnhanceNoteRequest } from "../server/enhance-note-handler";
+import type { JsonObject } from "../server/http-utils";
+import { createTestServerResponse } from "./server-response-test-fixture";
 
 const previousConvexUrl = process.env.CONVEX_URL;
 const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
@@ -47,7 +49,7 @@ const createRequest = ({
 	body,
 }: {
 	authorization?: string;
-	body: object;
+	body: JsonObject;
 }) =>
 	({
 		async *[Symbol.asyncIterator]() {
@@ -56,19 +58,9 @@ const createRequest = ({
 		headers: authorization ? { authorization } : {},
 	}) as IncomingMessage;
 
-const createResponse = () => {
-	const end = vi.fn();
-	const response = {
-		end,
-		setHeader: vi.fn(),
-		statusCode: 0,
-	} as unknown as ServerResponse;
-	return { end, response };
-};
-
 describe("enhance note handler", () => {
 	it("rejects anonymous generation before contacting OpenAI", async () => {
-		const { end, response } = createResponse();
+		const { end, response } = createTestServerResponse();
 
 		await handleEnhanceNoteRequest(
 			createRequest({ body: { noteText: "Reviewed progress" } }),
@@ -94,7 +86,7 @@ describe("enhance note handler", () => {
 				title: "Weekly sync",
 			},
 		});
-		const { response } = createResponse();
+		const { response } = createTestServerResponse();
 
 		await handleEnhanceNoteRequest(
 			createRequest({
@@ -126,7 +118,7 @@ describe("enhance note handler", () => {
 		convexMocks.mutation.mockResolvedValue({
 			tokenIdentifier: "https://issuer.example|private-user-id",
 		});
-		const { end, response } = createResponse();
+		const { end, response } = createTestServerResponse();
 
 		await handleEnhanceNoteRequest(
 			createRequest({

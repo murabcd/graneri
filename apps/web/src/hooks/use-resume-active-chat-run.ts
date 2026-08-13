@@ -4,9 +4,14 @@ import { logError } from "@/lib/logger";
 import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-type AttachableRun =
-	| FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
-	| undefined;
+type AttachableRun = NonNullable<
+	FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
+>;
+
+export type ResumableActiveRun = Pick<
+	AttachableRun,
+	"_id" | "producer" | "status"
+>;
 
 const resumeRunPromises = new Map<string, Promise<void>>();
 
@@ -17,7 +22,7 @@ export const useResumeActiveChatRun = ({
 	resumeStream,
 	workspaceId,
 }: {
-	activeRun: AttachableRun;
+	activeRun: ResumableActiveRun | null | undefined;
 	chatId: string;
 	enabled?: boolean;
 	resumeStream: () => Promise<void>;

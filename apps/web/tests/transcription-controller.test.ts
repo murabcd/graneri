@@ -59,13 +59,17 @@ const createMockTrack = () => ({
 });
 
 const createMockStream = () => {
-	const track = createMockTrack();
+	// SAFETY: The controller tests supply the exact MediaStreamTrack methods used
+	// by the production controller.
+	const track = createMockTrack() as MediaStreamTrack;
+	const stream = {
+		getAudioTracks: () => [track],
+		getTracks: () => [track],
+	} satisfies Pick<MediaStream, "getAudioTracks" | "getTracks">;
 
 	return {
-		stream: {
-			getAudioTracks: () => [track],
-			getTracks: () => [track],
-		} as unknown as MediaStream,
+		// SAFETY: These are the complete MediaStream methods used by the controller.
+		stream: stream as MediaStream,
 		track,
 	};
 };

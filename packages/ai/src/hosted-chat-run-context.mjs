@@ -30,9 +30,8 @@ const buildClientLocalFolderRoots = (localFolders) =>
 			}
 
 			return {
-				...(typeof folder.id === "string" && folder.id.length > 0
-					? { id: folder.id }
-					: {}),
+				...(typeof folder.id === "string" &&
+					folder.id.length > 0 && { id: folder.id }),
 				name:
 					typeof folder.name === "string" && folder.name.trim().length > 0
 						? folder.name.trim()
