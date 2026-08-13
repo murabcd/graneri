@@ -60,7 +60,6 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
-import { NoteActionsMenu } from "@/components/note/note-actions-menu";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import {
 	ProjectIcon,
@@ -71,7 +70,6 @@ import {
 	useProjectIdentityEditor,
 } from "@/components/projects/use-project-identity-editor";
 import { logError } from "@/lib/logger";
-import { getNoteDisplayTitle } from "@/lib/note-title";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
 import { optimisticUpdateProjectList } from "@/lib/optimistic-projects";
 import { api } from "../../../../../convex/_generated/api";
@@ -84,12 +82,12 @@ import {
 	type ProjectWithNotes,
 	sortProjectEntries,
 } from "./nav-projects-state";
-import { NoteRenameAnchor } from "./note-rename-anchor";
 import {
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME,
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME,
 	SidebarCollapsibleGroup,
 } from "./sidebar-collapsible-group";
+import { SidebarNoteRow } from "./sidebar-note-row";
 import { SidebarSortMenu } from "./sidebar-sort-menu";
 import {
 	SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME,
@@ -979,7 +977,7 @@ function ProjectSidebarRow({
 			<PopoverAnchor asChild>
 				<div className="group/project-row relative" data-hover-scroll-title-row>
 					<SidebarMenuButton
-						className="transition-[width,height,background-color,color,transform] group-has-data-[sidebar=menu-action]/project-row:pr-2 group-hover/project-row:pr-14! group-has-data-[state=open]/project-row:pr-14!"
+						className="group-has-data-[sidebar=menu-action]/project-row:pr-2 group-hover/project-row:pr-14! group-has-data-[state=open]/project-row:pr-14!"
 						aria-expanded={isOpen}
 						onClick={(event) => {
 							if (event.defaultPrevented) {
@@ -1223,7 +1221,7 @@ function ProjectSidebarContent({
 				{hasNotes ? (
 					<SidebarMenuSub className="mr-0 translate-x-0 pr-0">
 						{visibleNotes.map((note) => (
-							<ProjectNoteItem
+							<SidebarNoteRow
 								key={note._id}
 								note={note}
 								currentNoteId={currentNoteId}
@@ -1333,82 +1331,6 @@ function ProjectMoveNotesToTrashDialog({
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>
-	);
-}
-
-function ProjectNoteItem({
-	note,
-	currentNoteId,
-	currentNoteTitle,
-	recordingNoteId,
-	onPrefetchNote,
-	onNoteSelect,
-	onNoteTitleChange,
-	onNoteTrashed,
-}: {
-	note: Doc<"notes">;
-	currentNoteId: Id<"notes"> | null;
-	currentNoteTitle?: string;
-	recordingNoteId: Id<"notes"> | null;
-	onPrefetchNote: (noteId: Id<"notes">) => void;
-	onNoteSelect: (noteId: Id<"notes">) => void;
-	onNoteTitleChange?: (title: string) => void;
-	onNoteTrashed?: (noteId: Id<"notes">) => void;
-}) {
-	const isActive = note._id === currentNoteId;
-	const isRecording = note._id === recordingNoteId;
-	const title =
-		isActive && currentNoteTitle?.trim() ? currentNoteTitle : note.title;
-	const displayTitle = getNoteDisplayTitle(title);
-	const renameAnchor = React.useMemo(
-		() => (
-			<NoteRenameAnchor
-				displayTitle={displayTitle}
-				isActive={isActive}
-				isRecording={isRecording}
-				noteId={note._id}
-				onNoteSelect={onNoteSelect}
-				onPrefetchNote={onPrefetchNote}
-			/>
-		),
-		[
-			displayTitle,
-			isActive,
-			isRecording,
-			note._id,
-			onNoteSelect,
-			onPrefetchNote,
-		],
-	);
-
-	return (
-		<SidebarMenuItem
-			className="group/note-row list-none"
-			data-hover-scroll-title-row
-		>
-			<NoteActionsMenu
-				noteId={note._id}
-				onMoveToTrash={onNoteTrashed}
-				align="start"
-				side="right"
-				renameAnchor={renameAnchor}
-				renamePopoverAlign="start"
-				renamePopoverSide="bottom"
-				renamePopoverSideOffset={6}
-				renamePopoverClassName="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
-				onRenamePreviewChange={isActive ? onNoteTitleChange : undefined}
-				onRenamePreviewReset={
-					isActive ? () => onNoteTitleChange?.(note.title) : undefined
-				}
-			>
-				<SidebarMenuAction
-					className="pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/note-row:pointer-events-auto group-hover/note-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:text-sidebar-accent-foreground data-[state=open]:opacity-100"
-					aria-label={`Open actions for ${displayTitle}`}
-				>
-					<MoreHorizontal />
-				</SidebarMenuAction>
-			</NoteActionsMenu>
-		</SidebarMenuItem>
 	);
 }
 

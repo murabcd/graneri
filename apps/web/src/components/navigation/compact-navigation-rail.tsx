@@ -16,7 +16,7 @@ type CompactNavigationRailProps<TItem extends CompactNavigationRailItem> = {
 };
 
 const MAX_MARKER_DISTANCE = 3;
-const DEFAULT_MARKER_WIDTH_CLASS = "w-[7px]";
+const COMPACT_MARKER_WIDTH_CLASS = "w-[7px]";
 const PREVIEW_OFFSET = 8;
 
 const getMarkerWidthClass = (distance: number) => {
@@ -36,7 +36,7 @@ const getMarkerWidthClass = (distance: number) => {
 		return "w-[12px]";
 	}
 
-	return "w-[7px]";
+	return COMPACT_MARKER_WIDTH_CLASS;
 };
 
 const escapeSelectorValue = (value: string) =>
@@ -198,7 +198,7 @@ export function CompactNavigationRail<TItem extends CompactNavigationRailItem>({
 									"h-0.5 rounded-full bg-muted-foreground/40 transition-[width,background-color,opacity] duration-150 group-focus-visible/navigation-row:bg-foreground group-focus-visible/navigation-row:opacity-100 motion-reduce:transition-none",
 									selectedItem
 										? getMarkerWidthClass(distance)
-										: DEFAULT_MARKER_WIDTH_CLASS,
+										: COMPACT_MARKER_WIDTH_CLASS,
 									shouldEmphasize ? "opacity-100" : "opacity-60",
 									isActive && scrubbedItemId !== item.id
 										? "bg-foreground/60"

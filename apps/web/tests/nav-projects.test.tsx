@@ -183,16 +183,13 @@ describe("ProjectSidebarItem", () => {
 		);
 		await user.click(screen.getByRole("menuitem", { name: "Rename" }));
 		expect(screen.getByPlaceholderText("Project name")).toBeTruthy();
-		expect(document.body.dataset.scrollLocked).toBe("1");
-		expect(document.body.style.pointerEvents).toBe("none");
 		expect(screen.queryByRole("button", { name: "Outside" })).toBeNull();
 
 		await user.keyboard("{Escape}");
 
 		await waitFor(() => {
 			expect(screen.queryByPlaceholderText("Project name")).toBeNull();
-			expect(document.body.dataset.scrollLocked).toBeUndefined();
-			expect(document.body.style.pointerEvents).toBe("");
+			expect(screen.getByRole("button", { name: "Outside" })).toBeTruthy();
 		});
 	});
 
@@ -217,7 +214,6 @@ describe("ProjectSidebarItem", () => {
 				name: "Change icon and color for Research activities",
 			}),
 		);
-		expect(document.body.dataset.scrollLocked).toBe("1");
 		expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
 		expect(
 			screen

@@ -1,6 +1,5 @@
 import {
 	SidebarMenu,
-	SidebarMenuAction,
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@workspace/ui/components/sidebar";
@@ -17,10 +16,9 @@ import {
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME,
 	SidebarCollapsibleGroup,
 } from "@/components/nav/sidebar-collapsible-group";
-import { NoteActionsMenu } from "@/components/note/note-actions-menu";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
-import { NoteRenameAnchor } from "./note-rename-anchor";
+import { SidebarNoteRow } from "./sidebar-note-row";
 import { SidebarSortMenu } from "./sidebar-sort-menu";
 import {
 	getSidebarSortOptions,
@@ -222,55 +220,19 @@ function SidebarNotesList({
 }) {
 	return (
 		<SidebarMenu>
-			{notes.map((note) => {
-				const isActive = note._id === currentNoteId;
-				const isRecording = note._id === recordingNoteId;
-				const title =
-					isActive && currentNoteTitle?.trim() ? currentNoteTitle : note.title;
-				const displayTitle = getNoteDisplayTitle(title);
-				const renameAnchor = (
-					<NoteRenameAnchor
-						displayTitle={displayTitle}
-						isActive={isActive}
-						isRecording={isRecording}
-						noteId={note._id}
-						onNoteSelect={onNoteSelect}
-						onPrefetchNote={onPrefetchNote}
-					/>
-				);
-
-				return (
-					<SidebarMenuItem
-						key={note._id}
-						className="group/note-row"
-						data-hover-scroll-title-row
-					>
-						<NoteActionsMenu
-							noteId={note._id}
-							onMoveToTrash={onNoteTrashed}
-							align="start"
-							side="right"
-							// renameAnchor is an intentional popover anchor slot; NoteActionsMenu is not memoized.
-							renameAnchor={renameAnchor}
-							renamePopoverAlign="start"
-							renamePopoverSide="bottom"
-							renamePopoverSideOffset={6}
-							renamePopoverClassName="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
-							onRenamePreviewChange={isActive ? onNoteTitleChange : undefined}
-							onRenamePreviewReset={
-								isActive ? () => onNoteTitleChange?.(note.title) : undefined
-							}
-						>
-							<SidebarMenuAction
-								className="pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/note-row:pointer-events-auto group-hover/note-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:text-sidebar-accent-foreground data-[state=open]:opacity-100"
-								aria-label={`Open actions for ${displayTitle}`}
-							>
-								<MoreHorizontal />
-							</SidebarMenuAction>
-						</NoteActionsMenu>
-					</SidebarMenuItem>
-				);
-			})}
+			{notes.map((note) => (
+				<SidebarNoteRow
+					key={note._id}
+					note={note}
+					currentNoteId={currentNoteId}
+					currentNoteTitle={currentNoteTitle}
+					recordingNoteId={recordingNoteId}
+					onPrefetchNote={onPrefetchNote}
+					onNoteSelect={onNoteSelect}
+					onNoteTitleChange={onNoteTitleChange}
+					onNoteTrashed={onNoteTrashed}
+				/>
+			))}
 		</SidebarMenu>
 	);
 }
