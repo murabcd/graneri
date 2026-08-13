@@ -1081,7 +1081,7 @@ function ProjectAddNoteButton({
 			<TooltipTrigger asChild>
 				<SidebarMenuAction
 					className="right-1 pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/project-row:pointer-events-auto group-hover/project-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
-					aria-label={`Add a note inside ${projectName}`}
+					aria-label={`Add note inside ${projectName}`}
 					disabled={!workspaceId}
 					onPointerDown={(event) => {
 						event.stopPropagation();
@@ -1095,7 +1095,7 @@ function ProjectAddNoteButton({
 					<Plus />
 				</SidebarMenuAction>
 			</TooltipTrigger>
-			<TooltipContent side="right">Add a note inside</TooltipContent>
+			<TooltipContent side="right">Add note inside</TooltipContent>
 		</Tooltip>
 	);
 }

@@ -2051,7 +2051,7 @@ function NoteChatHeader({
 				isDesktopSidebarHeader
 					? desktopSafeTop
 						? "h-10 px-2 py-0"
-						: "h-16 px-4 py-0"
+						: "h-12 px-4 py-0"
 					: sidebarCompact
 						? "p-2"
 						: "px-4 py-4",
@@ -3427,7 +3427,7 @@ function NoteComposerChatPanelContent({
 			) : (
 				<div
 					className={cn(
-						controller.isSidebarPresentation ? "px-2 pb-[6px]" : "px-4 pb-4",
+						controller.isSidebarPresentation ? "px-2 pb-2" : "px-4 pb-4",
 					)}
 				>
 					{chatFooter}

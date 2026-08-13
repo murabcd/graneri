@@ -1179,7 +1179,7 @@ function CommentsSheetPanel({
 				data-app-region={!isMobile && open ? "no-drag" : undefined}
 				className={cn(
 					"flex w-full items-center justify-between",
-					!isMobile && (desktopSafeTop ? "h-10 px-2" : "h-16 px-4"),
+					!isMobile && (desktopSafeTop ? "h-10 px-2" : "h-12 px-4"),
 					isMobile && "px-4 py-3",
 				)}
 			>

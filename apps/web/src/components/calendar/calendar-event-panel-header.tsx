@@ -29,7 +29,7 @@ export function CalendarEventPanelHeader({
 		<div
 			className={cn(
 				"flex shrink-0 items-center justify-between",
-				desktopSafeTop ? "h-10 px-2" : "h-16 px-4",
+				desktopSafeTop ? "h-10 px-2" : isMobile ? "h-16 px-4" : "h-12 px-4",
 			)}
 		>
 			<h2 className="min-w-0 truncate text-sm">{title}</h2>

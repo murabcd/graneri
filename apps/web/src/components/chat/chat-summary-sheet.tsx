@@ -540,7 +540,7 @@ function ChatSummaryPanel({
 			<div
 				className={cn(
 					"flex shrink-0 items-center justify-between",
-					!isMobile && desktopSafeTop ? "h-10 px-2" : "h-16 px-4",
+					isMobile ? "h-16 px-4" : desktopSafeTop ? "h-10 px-2" : "h-12 px-4",
 				)}
 			>
 				<SummaryTabRail
