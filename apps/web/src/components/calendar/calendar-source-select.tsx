@@ -117,7 +117,7 @@ export function CalendarSourceSelect({
 									>
 										<DropdownMenuSubTrigger
 											aria-label={`Actions for ${calendar.name}`}
-											className="pointer-events-none absolute right-2 size-5 justify-center p-0 opacity-0 transition-opacity group-focus-within/calendar:pointer-events-auto group-focus-within/calendar:opacity-100 group-hover/calendar:pointer-events-auto group-hover/calendar:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 [&>svg:last-child]:hidden"
+											className="pointer-events-none absolute right-2 size-5 justify-center p-0 opacity-0 transition-[color,background-color,opacity] hover:bg-accent hover:text-accent-foreground group-focus-within/calendar:pointer-events-auto group-focus-within/calendar:opacity-100 group-hover/calendar:pointer-events-auto group-hover/calendar:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 [&>svg:last-child]:hidden"
 											onClick={(event) => {
 												event.preventDefault();
 												event.stopPropagation();

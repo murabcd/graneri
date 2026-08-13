@@ -257,6 +257,7 @@ describe("CalendarPage loading", () => {
 		const actions = screen.getByRole("menuitem", {
 			name: "Actions for Work",
 		});
+		expect(actions.className).toContain("hover:bg-accent");
 		await user.hover(actions);
 		await act(
 			async () =>
