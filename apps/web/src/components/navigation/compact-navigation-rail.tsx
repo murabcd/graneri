@@ -16,7 +16,7 @@ type CompactNavigationRailProps<TItem extends CompactNavigationRailItem> = {
 };
 
 const MAX_MARKER_DISTANCE = 3;
-const DEFAULT_MARKER_WIDTH_CLASS = "w-4";
+const DEFAULT_MARKER_WIDTH_CLASS = "w-[7px]";
 const PREVIEW_OFFSET = 8;
 
 const getMarkerWidthClass = (distance: number) => {
