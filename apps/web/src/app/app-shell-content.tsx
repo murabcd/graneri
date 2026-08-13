@@ -131,19 +131,6 @@ export const AppShellContent = React.memo(function AppShellContent({
 	view: AppShellContentView;
 }) {
 	const noteViewScrollRef = React.useRef<HTMLDivElement | null>(null);
-	const noteScrollResetKey =
-		view.kind === "note" ? (view.currentNoteId ?? "new") : null;
-
-	React.useEffect(() => {
-		if (noteScrollResetKey === null) {
-			return;
-		}
-
-		noteViewScrollRef.current?.scrollTo({
-			top: 0,
-			behavior: "auto",
-		});
-	}, [noteScrollResetKey]);
 
 	if (view.kind === "resolving") {
 		return <div className="flex flex-1" aria-hidden="true" />;
@@ -155,7 +142,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 
 	if (view.kind === "home") {
 		return (
-			<ContentScrollArea variant="list">
+			<ContentScrollArea key="home" variant="list">
 				<HomeView
 					currentDate={view.currentDate}
 					currentDayOfMonth={view.currentDayOfMonth}
@@ -190,7 +177,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 
 	if (view.kind === "shared") {
 		return (
-			<ContentScrollArea variant="list">
+			<ContentScrollArea key="shared" variant="list">
 				<SharedView
 					sharedNotes={view.sharedNotes}
 					currentNoteId={view.currentNoteId}
@@ -206,7 +193,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 
 	if (view.kind === "project") {
 		return (
-			<ContentScrollArea variant="list">
+			<ContentScrollArea key={`project:${view.project._id}`} variant="list">
 				<ProjectView
 					project={view.project}
 					notes={view.notes}
@@ -224,7 +211,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 
 	if (view.kind === "automation") {
 		return (
-			<ContentScrollArea>
+			<ContentScrollArea key="automation">
 				<AutomationsPageEntry
 					automations={view.automations}
 					isDesktopMac={view.isDesktopMac}
@@ -241,7 +228,10 @@ export const AppShellContent = React.memo(function AppShellContent({
 
 	if (view.kind === "note") {
 		return (
-			<ContentScrollArea viewportRef={noteViewScrollRef}>
+			<ContentScrollArea
+				key={`note:${view.currentNoteId ?? "new"}`}
+				viewportRef={noteViewScrollRef}
+			>
 				<NotePageEntry
 					key={view.currentNoteId ?? "new"}
 					autoStartTranscription={view.shouldAutoStartNoteCapture}
