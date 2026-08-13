@@ -240,7 +240,11 @@ function SidebarNotesList({
 				);
 
 				return (
-					<SidebarMenuItem key={note._id} data-hover-scroll-title-row>
+					<SidebarMenuItem
+						key={note._id}
+						className="group/note-row"
+						data-hover-scroll-title-row
+					>
 						<NoteActionsMenu
 							noteId={note._id}
 							onMoveToTrash={onNoteTrashed}
@@ -258,7 +262,7 @@ function SidebarNotesList({
 							}
 						>
 							<SidebarMenuAction
-								className="pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/menu-item:pointer-events-auto group-hover/menu-item:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+								className="pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/note-row:pointer-events-auto group-hover/note-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 								aria-label={`Open actions for ${displayTitle}`}
 							>
 								<MoreHorizontal />

@@ -154,6 +154,23 @@ describe("ProjectSidebarItem", () => {
 		expect(container.querySelector(`.${iconClassName}`)).not.toBeNull();
 	});
 
+	it("does not reserve project action space until hover", () => {
+		renderProjectSidebarItem();
+
+		const projectButton = screen.getByRole("button", {
+			name: "Research activities",
+		});
+		expect(projectButton.classList).toContain(
+			"group-has-data-[sidebar=menu-action]/project-row:pr-2",
+		);
+		expect(projectButton.classList).toContain("group-hover/project-row:pr-14!");
+		expect(
+			projectButton
+				.querySelector(".hover-scroll-title-viewport")
+				?.getAttribute("data-keep-fade-on-hover"),
+		).toBe("true");
+	});
+
 	it("closes a project rename popover on the first outside click", async () => {
 		const user = userEvent.setup();
 
@@ -238,6 +255,27 @@ describe("ProjectSidebarItem", () => {
 		await user.click(screen.getByRole("button", { name: "Outside" }));
 
 		expect(screen.queryByPlaceholderText("New note")).toBeNull();
+	});
+
+	it("does not reserve nested note action space until hover", () => {
+		renderProjectSidebarItem({
+			notes: [note],
+			open: true,
+		});
+
+		const noteButton = screen.getByRole("button", { name: "Nested note" });
+		expect(noteButton.classList).toContain(
+			"group-has-data-[sidebar=menu-action]/note-row:pr-2",
+		);
+		expect(noteButton.classList).toContain("group-hover/note-row:pr-8!");
+		expect(noteButton.closest("[data-sidebar=menu-item]")?.classList).toContain(
+			"group/note-row",
+		);
+		expect(
+			noteButton
+				.querySelector(".hover-scroll-title-viewport")
+				?.getAttribute("data-keep-fade-on-hover"),
+		).toBe("true");
 	});
 
 	it("uses each project's icon and color in the move destination menu", async () => {

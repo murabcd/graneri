@@ -19,7 +19,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import { Icons } from "@workspace/ui/components/icons";
 import {
 	Popover,
 	PopoverAnchor,
@@ -49,7 +48,6 @@ import {
 	ChevronsDown,
 	ChevronsUp,
 	Clock3,
-	FileText,
 	HandGrab,
 	MoreHorizontal,
 	Pencil,
@@ -86,6 +84,7 @@ import {
 	type ProjectWithNotes,
 	sortProjectEntries,
 } from "./nav-projects-state";
+import { NoteRenameAnchor } from "./note-rename-anchor";
 import {
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME,
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME,
@@ -108,7 +107,6 @@ const SIDEBAR_PROJECT_SKELETON_IDS = [
 	"sidebar-project-skeleton-2",
 ] as const;
 const MAX_VISIBLE_PROJECT_NOTES = 5;
-const SidebarRecordingSpinner = Icons.sidebarRecordingSpinner;
 
 const getProjectSortOptions = (
 	selectedValue: ProjectListSort,
@@ -980,7 +978,7 @@ function ProjectSidebarRow({
 			<PopoverAnchor asChild>
 				<div className="group/project-row relative" data-hover-scroll-title-row>
 					<SidebarMenuButton
-						className="pr-14"
+						className="transition-[width,height,background-color,color,transform] group-has-data-[sidebar=menu-action]/project-row:pr-2 group-hover/project-row:pr-14! group-has-data-[state=open]/project-row:pr-14!"
 						aria-expanded={isOpen}
 						onClick={(event) => {
 							if (event.defaultPrevented) {
@@ -1015,7 +1013,7 @@ function ProjectSidebarRow({
 								}
 							/>
 						</span>
-						<HoverScrollTitle>{projectName}</HoverScrollTitle>
+						<HoverScrollTitle keepFadeOnHover>{projectName}</HoverScrollTitle>
 					</SidebarMenuButton>
 					<ProjectActionsMenu
 						projectName={projectName}
@@ -1363,16 +1361,14 @@ function ProjectNoteItem({
 	const displayTitle = getNoteDisplayTitle(title);
 	const renameAnchor = React.useMemo(
 		() => (
-			<SidebarMenuButton
+			<NoteRenameAnchor
+				displayTitle={displayTitle}
 				isActive={isActive}
-				onFocus={() => onPrefetchNote(note._id)}
-				onMouseEnter={() => onPrefetchNote(note._id)}
-				onPointerDown={() => onPrefetchNote(note._id)}
-				onClick={() => onNoteSelect(note._id)}
-			>
-				{isRecording ? <SidebarRecordingSpinner /> : <FileText />}
-				<HoverScrollTitle>{displayTitle}</HoverScrollTitle>
-			</SidebarMenuButton>
+				isRecording={isRecording}
+				noteId={note._id}
+				onNoteSelect={onNoteSelect}
+				onPrefetchNote={onPrefetchNote}
+			/>
 		),
 		[
 			displayTitle,
@@ -1386,7 +1382,7 @@ function ProjectNoteItem({
 
 	return (
 		<SidebarMenuItem
-			className="group/project-note-item list-none"
+			className="group/note-row list-none"
 			data-hover-scroll-title-row
 		>
 			<NoteActionsMenu
@@ -1405,7 +1401,7 @@ function ProjectNoteItem({
 				}
 			>
 				<SidebarMenuAction
-					className="pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/project-note-item:pointer-events-auto group-hover/project-note-item:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:text-sidebar-accent-foreground data-[state=open]:opacity-100"
+					className="pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/note-row:pointer-events-auto group-hover/note-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 					aria-label={`Open actions for ${displayTitle}`}
 				>
 					<MoreHorizontal />

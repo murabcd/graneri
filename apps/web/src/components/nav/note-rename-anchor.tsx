@@ -23,7 +23,7 @@ export function NoteRenameAnchor({
 }) {
 	return (
 		<SidebarMenuButton
-			className="transition-[width,height,background-color,color,transform] group-has-data-[sidebar=menu-action]/menu-item:pr-2 group-hover/menu-item:pr-8! group-has-data-[state=open]/menu-item:pr-8!"
+			className="transition-[width,height,background-color,color,transform] group-has-data-[sidebar=menu-action]/note-row:pr-2 group-hover/note-row:pr-8! group-has-data-[state=open]/note-row:pr-8!"
 			isActive={isActive}
 			onFocus={() => onPrefetchNote(noteId)}
 			onMouseEnter={() => onPrefetchNote(noteId)}
