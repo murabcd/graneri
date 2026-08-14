@@ -6,6 +6,7 @@
   "compilerOptions": {
     /* These settings are not required by Convex and can be modified. */
     "allowJs": true,
+    "incremental": true,
     "strict": true,
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -19,7 +20,8 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo"
   },
   "include": ["./**/*"],
   "exclude": ["./_generated"]
