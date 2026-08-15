@@ -264,7 +264,7 @@ export const createNoteSlashCommand = ({
 					editor: this.editor,
 					pluginKey: new PluginKey("noteSlashCommand"),
 					char: "/",
-					startOfLine: true,
+					startOfLine: false,
 					decorationClass: "note-slash-command",
 					items: ({ query }) => {
 						const normalizedQuery = query.trim().toLocaleLowerCase();

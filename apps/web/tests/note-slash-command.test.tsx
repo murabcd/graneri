@@ -151,6 +151,29 @@ describe("note slash command", () => {
 		});
 	});
 
+	it("opens after existing paragraph text separated by whitespace", async () => {
+		const { editor } = await renderSlashCommandHarness();
+		act(() => {
+			editor.commands.setContent("<p>Existing text</p>");
+			editor
+				.chain()
+				.setTextSelection(editor.state.doc.content.size - 1)
+				.insertContent(" /h2")
+				.run();
+		});
+
+		expect(
+			await screen.findByRole("option", { name: "Heading 2" }),
+		).toBeTruthy();
+		selectActiveSlashCommand(editor);
+
+		expect(editor.getJSON().content?.[0]).toMatchObject({
+			type: "heading",
+			attrs: { level: 2 },
+			content: [{ type: "text", text: "Existing text " }],
+		});
+	});
+
 	it("inserts a three-column Tiptap table", async () => {
 		const { editor } = await renderSlashCommandHarness();
 		openSlashCommands(editor, "table");
