@@ -4,6 +4,10 @@ import { authComponent, createAuth } from "./auth";
 import { handleDictationTranscriptionUploadRequest } from "./dictationHttp";
 import { handleJiraWebhookRequest } from "./jiraWebhook";
 import { handleMcpOAuthCallbackRequest } from "./mcpOAuth";
+import {
+	handleNoteImageOptionsRequest,
+	handleNoteImageUploadRequest,
+} from "./noteImageHttp";
 import { handleZoomOAuthCallbackRequest } from "./zoomOAuth";
 
 const http = httpRouter();
@@ -16,6 +20,20 @@ http.route({
 	handler: httpAction(
 		async (ctx, request) =>
 			await handleDictationTranscriptionUploadRequest(ctx, request),
+	),
+});
+
+http.route({
+	path: "/api/note-images",
+	method: "OPTIONS",
+	handler: httpAction(async () => handleNoteImageOptionsRequest()),
+});
+
+http.route({
+	path: "/api/note-images",
+	method: "POST",
+	handler: httpAction(
+		async (ctx, request) => await handleNoteImageUploadRequest(ctx, request),
 	),
 });
 

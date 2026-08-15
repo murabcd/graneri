@@ -4,6 +4,12 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
+	createCalendarNoteRelationships,
+	getCalendarEventKey,
+	removeCalendarNoteRelationships,
+	setCalendarNoteRelationshipsArchived,
+} from "./calendarNoteRelationships";
+import {
 	calendarEventSnapshotValidator,
 	upcomingCalendarEventValidator,
 } from "./calendarValidators";
@@ -12,13 +18,13 @@ import {
 	getAuthorName,
 	requireOwnedWorkspace,
 } from "./domain";
-import { requireOwnedProject } from "./projects";
 import {
-	createCalendarNoteRelationships,
-	getCalendarEventKey,
-	removeCalendarNoteRelationships,
-	setCalendarNoteRelationshipsArchived,
-} from "./calendarNoteRelationships";
+	removeAllNoteImages,
+	removeNoteImageReferences,
+	syncNoteImageReferences,
+	syncStoredNoteImageReferences,
+} from "./noteImageReferences";
+import { requireOwnedProject } from "./projects";
 
 const noteVisibilityValidator = v.union(
 	v.literal("private"),
@@ -228,11 +234,13 @@ const pruneNoteRevisions = async ({
 	ownerTokenIdentifier,
 	workspaceId,
 	noteId,
+	preserveRevisionId,
 }: {
 	ctx: MutationCtx;
 	ownerTokenIdentifier: string;
 	workspaceId: Id<"workspaces">;
 	noteId: Id<"notes">;
+	preserveRevisionId?: Id<"noteRevisions">;
 }) => {
 	const revisions = await ctx.db
 		.query("noteRevisions")
@@ -245,23 +253,33 @@ const pruneNoteRevisions = async ({
 		.order("desc")
 		.take(MAX_NOTE_REVISIONS + 1);
 
-	await Promise.all(
-		revisions
-			.slice(MAX_NOTE_REVISIONS)
-			.map((revision) => ctx.db.delete(revision._id)),
-	);
+	const revisionsToPrune = [...revisions]
+		.reverse()
+		.filter((revision) => revision._id !== preserveRevisionId)
+		.slice(0, Math.max(0, revisions.length - MAX_NOTE_REVISIONS));
+
+	for (const revision of revisionsToPrune) {
+		await removeNoteImageReferences({
+			ctx,
+			noteId,
+			revisionId: revision._id,
+		});
+		await ctx.db.delete(revision._id);
+	}
 };
 
 const createNoteRevision = async ({
 	ctx,
 	note,
 	now,
+	preserveRevisionId,
 }: {
 	ctx: MutationCtx;
 	note: Doc<"notes">;
 	now: number;
+	preserveRevisionId?: Id<"noteRevisions">;
 }) => {
-	await ctx.db.insert("noteRevisions", {
+	const revisionId = await ctx.db.insert("noteRevisions", {
 		ownerTokenIdentifier: note.ownerTokenIdentifier,
 		workspaceId: note.workspaceId,
 		noteId: note._id,
@@ -271,12 +289,19 @@ const createNoteRevision = async ({
 		searchableText: note.searchableText,
 		createdAt: now,
 	});
+	await syncNoteImageReferences({
+		ctx,
+		note,
+		revisionId,
+		content: note.content,
+	});
 
 	await pruneNoteRevisions({
 		ctx,
 		ownerTokenIdentifier: note.ownerTokenIdentifier,
 		workspaceId: note.workspaceId,
 		noteId: note._id,
+		preserveRevisionId,
 	});
 };
 
@@ -326,7 +351,14 @@ const removeNoteRevisions = async ({
 		)
 		.take(MAX_NOTE_REVISIONS);
 
-	await Promise.all(revisions.map((revision) => ctx.db.delete(revision._id)));
+	for (const revision of revisions) {
+		await removeNoteImageReferences({
+			ctx,
+			noteId,
+			revisionId: revision._id,
+		});
+		await ctx.db.delete(revision._id);
+	}
 };
 
 const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
@@ -349,6 +381,12 @@ const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
 		ownerTokenIdentifier: note.ownerTokenIdentifier,
 		noteId: note._id,
 	});
+	await removeNoteImageReferences({
+		ctx,
+		noteId: note._id,
+		revisionId: null,
+	});
+	await removeAllNoteImages(ctx, note);
 	await removeCalendarNoteRelationships(ctx, note);
 	await ctx.db.delete(note._id);
 };
@@ -570,7 +608,12 @@ export const restoreVersion = mutation({
 
 		const now = Date.now();
 
-		await createNoteRevision({ ctx, note, now });
+		await createNoteRevision({
+			ctx,
+			note,
+			now,
+			preserveRevisionId: revision._id,
+		});
 		await ctx.db.patch(args.id, {
 			authorName: note.authorName ?? getAuthorName(identity),
 			title: revision.title,
@@ -579,6 +622,12 @@ export const restoreVersion = mutation({
 			isArchived: false,
 			archivedAt: undefined,
 			updatedAt: now,
+		});
+		await syncNoteImageReferences({
+			ctx,
+			note,
+			revisionId: null,
+			content: revision.content,
 		});
 
 		return args.id;
@@ -785,6 +834,11 @@ export const createFromCalendarEvent = mutation({
 			workspaceId: args.workspaceId,
 		});
 		await ctx.db.patch(noteId, { calendarEvent: calendarEventSnapshot });
+		await syncStoredNoteImageReferences({
+			ctx,
+			noteId,
+			content: args.content,
+		});
 
 		return noteId;
 	},
@@ -833,6 +887,12 @@ export const save = mutation({
 				note: existing,
 				now,
 			});
+			await syncNoteImageReferences({
+				ctx,
+				note: existing,
+				revisionId: null,
+				content: args.content,
+			});
 
 			await ctx.db.patch(args.id, {
 				authorName: existing.authorName ?? authorName,
@@ -878,7 +938,7 @@ export const save = mutation({
 			return args.id;
 		}
 
-		return await ctx.db.insert("notes", {
+		const noteId = await ctx.db.insert("notes", {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			projectId: undefined,
@@ -897,6 +957,13 @@ export const save = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
+		await syncStoredNoteImageReferences({
+			ctx,
+			noteId,
+			content: args.content,
+		});
+
+		return noteId;
 	},
 });
 

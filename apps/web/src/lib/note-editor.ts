@@ -1,5 +1,8 @@
 import type { JSONContent } from "@tiptap/core";
+import FileHandler from "@tiptap/extension-file-handler";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
 import Placeholder from "@tiptap/extension-placeholder";
+import { TableKit } from "@tiptap/extension-table";
 import {
 	type TableOfContentData,
 	TableOfContents,
@@ -11,6 +14,9 @@ import { Node as PMNode, Slice } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { NoteComment } from "./note-comment-extension";
+import { NoteImage } from "./note-image-extension";
+import { NOTE_IMAGE_MIME_TYPES } from "./note-image-upload";
+import { createNoteSlashCommand } from "./note-slash-command";
 
 export const EMPTY_DOCUMENT: JSONContent = {
 	type: "doc",
@@ -19,7 +25,7 @@ export const EMPTY_DOCUMENT: JSONContent = {
 
 export const EMPTY_DOCUMENT_STRING = JSON.stringify(EMPTY_DOCUMENT);
 
-const PLACEHOLDER_TEXT = "Write notes...";
+const PLACEHOLDER_TEXT = "Press / for commands";
 const BULLET_SYMBOL_PATTERN = /^(\s*)[•◦▪‣·]\s+/u;
 const MARKDOWN_LIST_PATTERN = /^\s*(?:[-+*]|\d+\.)\s+/;
 const MARKDOWN_HEADING_PATTERN = /^\s{0,3}#{1,6}\s+/;
@@ -141,11 +147,22 @@ const normalizeNoteDocument = (document: JSONContent): JSONContent => {
 		return document;
 	}
 
-	return {
+	return stripUnownedImages({
 		...document,
 		content: normalizeTopLevelNoteContentNodes(document.content),
-	};
+	});
 };
+
+const stripUnownedImages = (node: JSONContent): JSONContent => ({
+	...node,
+	content: node.content?.flatMap((child) =>
+		child.type === "image" &&
+		(typeof child.attrs?.noteImageId !== "string" ||
+			child.attrs.noteImageId.length === 0)
+			? []
+			: [stripUnownedImages(child)],
+	),
+});
 
 export const normalizePastedPlainText = (text: string) => {
 	const lines = text.replace(/\r/g, "").split("\n");
@@ -200,6 +217,9 @@ type NoteEditorExtensionsOptions = {
 	onTableOfContentsUpdate?: (anchors: TableOfContentData) => void;
 	getTableOfContentsScrollParent?: () => HTMLElement | Window;
 	onCommentThreadClick?: (threadId: string) => void;
+	onImagePaste?: (files: File[]) => void;
+	onImageDrop?: (files: File[], position: number) => void;
+	onSelectImageCommand?: () => void;
 };
 
 export const createNoteEditorExtensions = (
@@ -208,9 +228,44 @@ export const createNoteEditorExtensions = (
 	StarterKit.configure({
 		underline: false,
 	}),
+	TaskList,
+	TaskItem.configure({
+		nested: true,
+		a11y: {
+			checkboxLabel: (_node, checked) =>
+				checked ? "Mark task as incomplete" : "Mark task as complete",
+		},
+	}),
+	TableKit.configure({
+		table: {
+			renderWrapper: true,
+		},
+	}),
 	NoteComment.configure({
 		onThreadClick: options.onCommentThreadClick,
 	}),
+	NoteImage,
+	...(options.onImagePaste || options.onImageDrop
+		? [
+				FileHandler.configure({
+					allowedMimeTypes: [...NOTE_IMAGE_MIME_TYPES],
+					onPaste: options.onImagePaste
+						? (_editor, files) => options.onImagePaste?.(files)
+						: undefined,
+					onDrop: options.onImageDrop
+						? (_editor, files, position) =>
+								options.onImageDrop?.(files, position)
+						: undefined,
+				}),
+			]
+		: []),
+	...(options.onSelectImageCommand
+		? [
+				createNoteSlashCommand({
+					onSelectImage: options.onSelectImageCommand,
+				}),
+			]
+		: []),
 	TableOfContents.configure({
 		anchorTypes: ["heading"],
 		onUpdate: options.onTableOfContentsUpdate,

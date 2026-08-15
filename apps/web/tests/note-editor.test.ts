@@ -1,7 +1,8 @@
-import { getSchema } from "@tiptap/core";
+import { Editor, getSchema } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 import {
 	createNoteEditorExtensions,
+	EMPTY_DOCUMENT,
 	looksLikeMarkdown,
 	normalizePastedPlainText,
 	parseStoredNoteContent,
@@ -11,6 +12,20 @@ import {
 const schema = getSchema(createNoteEditorExtensions());
 
 describe("note editor markdown bridge", () => {
+	it("shows the slash-command hint in an empty editor", () => {
+		const editor = new Editor({
+			content: EMPTY_DOCUMENT,
+			extensions: createNoteEditorExtensions(),
+		});
+
+		expect(
+			editor.view.dom
+				.querySelector("p.is-editor-empty")
+				?.getAttribute("data-placeholder"),
+		).toBe("Press / for commands");
+		editor.destroy();
+	});
+
 	it("parses markdown note content into tiptap json", () => {
 		const parsed = parseStoredNoteContent(
 			"# Summary\n\n- shipped ~~markdown~~\n- kept autosave\n\n```ts\nconst ready = true\n```",
@@ -53,6 +68,46 @@ describe("note editor markdown bridge", () => {
 		expect(parseStoredNoteContent(JSON.stringify(document), schema)).toEqual(
 			document,
 		);
+	});
+
+	it("keeps uploaded Convex images and rejects unowned image nodes", () => {
+		const uploadedImage = {
+			type: "image",
+			attrs: {
+				noteImageId: "image_1",
+				src: "https://example.test/image.png",
+				alt: "Diagram",
+			},
+		};
+		const document = {
+			type: "doc",
+			content: [
+				uploadedImage,
+				{
+					type: "image",
+					attrs: { src: "https://untrusted.test/hotlink.png" },
+				},
+			],
+		};
+
+		expect(parseStoredNoteContent(JSON.stringify(document), schema)).toEqual({
+			type: "doc",
+			content: [
+				{
+					...uploadedImage,
+					attrs: expect.objectContaining(uploadedImage.attrs),
+				},
+			],
+		});
+	});
+
+	it("does not turn remote markdown images into note attachments", () => {
+		const parsed = parseStoredNoteContent(
+			"Before\n\n![remote](https://example.test/image.png)\n\nAfter",
+			schema,
+		);
+
+		expect(parsed.content?.some((node) => node.type === "image")).toBe(false);
 	});
 
 	it("upgrades legacy bold-paragraph section titles into headings", () => {

@@ -68,6 +68,14 @@ export function getChatApiUrl() {
 	return getHostedApiUrl("chat");
 }
 
+export function getConvexSiteUrl() {
+	if (!runtimeConfigSnapshot) {
+		throw new Error("Runtime configuration has not been loaded.");
+	}
+
+	return runtimeConfigSnapshot.convexSiteUrl;
+}
+
 export function getLocalFolderToolApiUrl() {
 	return runtimeConfigSnapshot?.localApiOrigin
 		? `${runtimeConfigSnapshot.localApiOrigin}/api/local-folder-tool`

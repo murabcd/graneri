@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -474,4 +474,314 @@ test("notes.remove deletes note comments and threads", async () => {
 	expect(relatedRows.note).toBeNull();
 	expect(relatedRows.comments).toHaveLength(0);
 	expect(relatedRows.threads).toHaveLength(0);
+});
+
+const createImageDocument = (noteImageId: Id<"noteImages">, url: string) =>
+	JSON.stringify({
+		type: "doc",
+		content: [
+			{
+				type: "image",
+				attrs: { noteImageId, src: url, alt: "Diagram" },
+			},
+		],
+	});
+
+test("note images stay alive through revisions and are deleted with the note", async () => {
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date("2026-04-10T18:00:00.000Z"));
+	const { asOwner, noteId, t, workspaceId } = await createWorkspaceAndNote();
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(new Blob(["image"], { type: "image/png" })),
+	);
+	const uploaded = await t.mutation(internal.noteImages.registerUploadedImage, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+		noteId,
+		storageId,
+		fileName: "diagram.png",
+		contentType: "image/png",
+		size: 5,
+	});
+	const imageContent = createImageDocument(uploaded.noteImageId, uploaded.url);
+
+	await asOwner.mutation(api.notes.save, {
+		workspaceId,
+		id: noteId,
+		title: "With image",
+		content: imageContent,
+		searchableText: "",
+	});
+	vi.advanceTimersByTime(31_000);
+	await asOwner.mutation(api.notes.save, {
+		workspaceId,
+		id: noteId,
+		title: "Without image",
+		content: JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }),
+		searchableText: "",
+	});
+
+	const storedAfterRemoval = await t.run(async (ctx) => ({
+		image: await ctx.db.get(uploaded.noteImageId),
+		references: await ctx.db
+			.query("noteImageReferences")
+			.withIndex("by_noteImageId", (query) =>
+				query.eq("noteImageId", uploaded.noteImageId),
+			)
+			.collect(),
+		storage: await ctx.db.system.get(storageId),
+	}));
+	expect(storedAfterRemoval.image).not.toBeNull();
+	expect(storedAfterRemoval.storage).not.toBeNull();
+	expect(storedAfterRemoval.references).toHaveLength(1);
+	expect(storedAfterRemoval.references[0]?.revisionId).not.toBeNull();
+	const versions = await asOwner.query(api.notes.listVersions, {
+		workspaceId,
+		id: noteId,
+	});
+	const imageRevision = versions.find(
+		(version) => !version.isCurrent && version.content === imageContent,
+	);
+	if (!imageRevision || imageRevision.id === "current") {
+		throw new Error("Expected the image revision to be retained.");
+	}
+	await asOwner.mutation(api.notes.restoreVersion, {
+		workspaceId,
+		id: noteId,
+		revisionId: imageRevision.id,
+	});
+	const restored = await asOwner.query(api.notes.get, {
+		workspaceId,
+		id: noteId,
+	});
+	const referencesAfterRestore = await t.run((ctx) =>
+		ctx.db
+			.query("noteImageReferences")
+			.withIndex("by_noteImageId", (query) =>
+				query.eq("noteImageId", uploaded.noteImageId),
+			)
+			.collect(),
+	);
+	expect(restored?.content).toBe(imageContent);
+	expect(referencesAfterRestore).toHaveLength(2);
+	expect(
+		referencesAfterRestore.some((reference) => reference.revisionId === null),
+	).toBe(true);
+
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: noteId });
+	const storedAfterNoteRemoval = await t.run(async (ctx) => ({
+		image: await ctx.db.get(uploaded.noteImageId),
+		references: await ctx.db
+			.query("noteImageReferences")
+			.withIndex("by_noteImageId", (query) =>
+				query.eq("noteImageId", uploaded.noteImageId),
+			)
+			.collect(),
+		storage: await ctx.db.system.get(storageId),
+	}));
+	expect(storedAfterNoteRemoval).toEqual({
+		image: null,
+		references: [],
+		storage: null,
+	});
+});
+
+test("restoring the oldest retained revision preserves its images while pruning", async () => {
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date("2026-04-10T18:00:00.000Z"));
+	const { asOwner, noteId, t, workspaceId } = await createWorkspaceAndNote();
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(new Blob(["image"], { type: "image/png" })),
+	);
+	const uploaded = await t.mutation(internal.noteImages.registerUploadedImage, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+		noteId,
+		storageId,
+		fileName: "oldest.png",
+		contentType: "image/png",
+		size: 5,
+	});
+	const imageContent = createImageDocument(uploaded.noteImageId, uploaded.url);
+	const oldestRevisionId = await t.run(async (ctx) => {
+		const note = await ctx.db.get(noteId);
+		if (!note) {
+			throw new Error("Expected note to exist");
+		}
+		const revisionId = await ctx.db.insert("noteRevisions", {
+			ownerTokenIdentifier: note.ownerTokenIdentifier,
+			workspaceId,
+			noteId,
+			authorName: note.authorName ?? "",
+			title: "Oldest image revision",
+			content: imageContent,
+			searchableText: "",
+			createdAt: 1,
+		});
+		await ctx.db.insert("noteImageReferences", {
+			noteId,
+			revisionId,
+			noteImageId: uploaded.noteImageId,
+		});
+
+		for (let index = 1; index < 50; index += 1) {
+			await ctx.db.insert("noteRevisions", {
+				ownerTokenIdentifier: note.ownerTokenIdentifier,
+				workspaceId,
+				noteId,
+				authorName: note.authorName ?? "",
+				title: `Revision ${index}`,
+				content: JSON.stringify({
+					type: "doc",
+					content: [{ type: "paragraph" }],
+				}),
+				searchableText: "",
+				createdAt: index + 1,
+			});
+		}
+
+		return revisionId;
+	});
+
+	await asOwner.mutation(api.notes.restoreVersion, {
+		workspaceId,
+		id: noteId,
+		revisionId: oldestRevisionId,
+	});
+
+	const stored = await t.run(async (ctx) => ({
+		image: await ctx.db.get(uploaded.noteImageId),
+		note: await ctx.db.get(noteId),
+		references: await ctx.db
+			.query("noteImageReferences")
+			.withIndex("by_noteImageId", (query) =>
+				query.eq("noteImageId", uploaded.noteImageId),
+			)
+			.collect(),
+		revisionCount: (
+			await ctx.db
+				.query("noteRevisions")
+				.withIndex("by_ownerTokenIdentifier_and_noteId", (query) =>
+					query
+						.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
+						.eq("noteId", noteId),
+				)
+				.collect()
+		).length,
+		storage: await ctx.db.system.get(storageId),
+	}));
+
+	expect(stored.note?.content).toBe(imageContent);
+	expect(stored.image).not.toBeNull();
+	expect(stored.storage).not.toBeNull();
+	expect(stored.revisionCount).toBe(50);
+	expect(stored.references).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ revisionId: oldestRevisionId }),
+			expect.objectContaining({ revisionId: null }),
+		]),
+	);
+});
+
+test("pending note images are deleted when they never reach a saved document", async () => {
+	vi.useFakeTimers();
+	const { noteId, t, workspaceId } = await createWorkspaceAndNote();
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(new Blob(["image"], { type: "image/png" })),
+	);
+	const uploaded = await t.mutation(internal.noteImages.registerUploadedImage, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+		noteId,
+		storageId,
+		fileName: "unused.png",
+		contentType: "image/png",
+		size: 5,
+	});
+
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+	expect(await t.run((ctx) => ctx.db.get(uploaded.noteImageId))).toBeNull();
+	expect(await t.run((ctx) => ctx.db.system.get(storageId))).toBeNull();
+});
+
+test("notes reject image ids owned by another note", async () => {
+	const { asOwner, noteId, t, workspaceId } = await createWorkspaceAndNote();
+	const otherNoteId = await asOwner.mutation(api.notes.create, {
+		workspaceId,
+		projectId: null,
+	});
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(new Blob(["image"], { type: "image/png" })),
+	);
+	const uploaded = await t.mutation(internal.noteImages.registerUploadedImage, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+		noteId: otherNoteId,
+		storageId,
+		fileName: "other.png",
+		contentType: "image/png",
+		size: 5,
+	});
+
+	await expect(
+		asOwner.mutation(api.notes.save, {
+			workspaceId,
+			id: noteId,
+			title: "Wrong image",
+			content: createImageDocument(uploaded.noteImageId, uploaded.url),
+			searchableText: "",
+		}),
+	).rejects.toThrow("does not belong to the note");
+});
+
+test("notes reject external sources attached to a valid note image id", async () => {
+	const { asOwner, noteId, t, workspaceId } = await createWorkspaceAndNote();
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(new Blob(["image"], { type: "image/png" })),
+	);
+	const uploaded = await t.mutation(internal.noteImages.registerUploadedImage, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+		noteId,
+		storageId,
+		fileName: "diagram.png",
+		contentType: "image/png",
+		size: 5,
+	});
+
+	await expect(
+		asOwner.mutation(api.notes.save, {
+			workspaceId,
+			id: noteId,
+			title: "External source",
+			content: createImageDocument(
+				uploaded.noteImageId,
+				"https://tracker.test/image.png",
+			),
+			searchableText: "",
+		}),
+	).rejects.toThrow("does not use its Convex storage URL");
+});
+
+test("notes reject unowned images on first save", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspaceAndNote();
+
+	await expect(
+		asOwner.mutation(api.notes.save, {
+			workspaceId,
+			title: "Unsafe image",
+			content: JSON.stringify({
+				type: "doc",
+				content: [
+					{
+						type: "image",
+						attrs: { src: "https://tracker.test/image.png" },
+					},
+				],
+			}),
+			searchableText: "",
+		}),
+	).rejects.toThrow("must be uploaded before they are saved");
+	expect(await t.run((ctx) => ctx.db.query("notes").collect())).toHaveLength(1);
 });

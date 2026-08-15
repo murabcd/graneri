@@ -488,6 +488,26 @@ export default defineSchema({
 			"ownerTokenIdentifier",
 			"noteId",
 		]),
+	noteImages: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		noteId: v.id("notes"),
+		storageId: v.id("_storage"),
+		fileName: v.string(),
+		contentType: v.string(),
+		size: v.number(),
+		createdAt: v.number(),
+	}).index("by_ownerTokenIdentifier_and_noteId", [
+		"ownerTokenIdentifier",
+		"noteId",
+	]),
+	noteImageReferences: defineTable({
+		noteId: v.id("notes"),
+		revisionId: v.union(v.id("noteRevisions"), v.null()),
+		noteImageId: v.id("noteImages"),
+	})
+		.index("by_noteId_and_revisionId", ["noteId", "revisionId"])
+		.index("by_noteImageId", ["noteImageId"]),
 	noteCommentThreads: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

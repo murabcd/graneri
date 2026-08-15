@@ -18,19 +18,13 @@ import {
 	Check,
 	ChevronDown,
 	Code2,
-	Heading1,
-	Heading2,
-	Heading3,
 	Italic,
-	List,
-	ListOrdered,
 	MessageSquareText,
-	Pilcrow,
-	Quote,
 	Strikethrough,
 	Underline,
 } from "lucide-react";
 import * as React from "react";
+import { NOTE_BLOCK_STYLE_OPTIONS } from "@/lib/note-block-style";
 
 const hasTextSelection = (editor: Editor) => {
 	const { empty, from, to } = editor.state.selection;
@@ -72,102 +66,6 @@ function NoteSelectionMenuTooltip({
 	);
 }
 
-type BlockStyleOption = {
-	id:
-		| "paragraph"
-		| "heading1"
-		| "heading2"
-		| "heading3"
-		| "bulletList"
-		| "orderedList"
-		| "blockquote"
-		| "codeBlock";
-	label: string;
-	icon: React.ComponentType<{ className?: string }>;
-	isActive: (editor: Editor) => boolean;
-	apply: (editor: Editor) => void;
-};
-
-const BLOCK_STYLE_OPTIONS: BlockStyleOption[] = [
-	{
-		id: "paragraph",
-		label: "Text",
-		icon: Pilcrow,
-		isActive: (editor) =>
-			!editor.isActive("heading") &&
-			!editor.isActive("bulletList") &&
-			!editor.isActive("orderedList") &&
-			!editor.isActive("blockquote") &&
-			!editor.isActive("codeBlock"),
-		apply: (editor) => {
-			editor.chain().focus().clearNodes().run();
-		},
-	},
-	{
-		id: "heading1",
-		label: "Heading 1",
-		icon: Heading1,
-		isActive: (editor) => editor.isActive("heading", { level: 1 }),
-		apply: (editor) => {
-			editor.chain().focus().clearNodes().setHeading({ level: 1 }).run();
-		},
-	},
-	{
-		id: "heading2",
-		label: "Heading 2",
-		icon: Heading2,
-		isActive: (editor) => editor.isActive("heading", { level: 2 }),
-		apply: (editor) => {
-			editor.chain().focus().clearNodes().setHeading({ level: 2 }).run();
-		},
-	},
-	{
-		id: "heading3",
-		label: "Heading 3",
-		icon: Heading3,
-		isActive: (editor) => editor.isActive("heading", { level: 3 }),
-		apply: (editor) => {
-			editor.chain().focus().clearNodes().setHeading({ level: 3 }).run();
-		},
-	},
-	{
-		id: "bulletList",
-		label: "Bulleted list",
-		icon: List,
-		isActive: (editor) => editor.isActive("bulletList"),
-		apply: (editor) => {
-			editor.chain().focus().toggleBulletList().run();
-		},
-	},
-	{
-		id: "orderedList",
-		label: "Numbered list",
-		icon: ListOrdered,
-		isActive: (editor) => editor.isActive("orderedList"),
-		apply: (editor) => {
-			editor.chain().focus().toggleOrderedList().run();
-		},
-	},
-	{
-		id: "blockquote",
-		label: "Blockquote",
-		icon: Quote,
-		isActive: (editor) => editor.isActive("blockquote"),
-		apply: (editor) => {
-			editor.chain().focus().toggleBlockquote().run();
-		},
-	},
-	{
-		id: "codeBlock",
-		label: "Code block",
-		icon: Code2,
-		isActive: (editor) => editor.isActive("codeBlock"),
-		apply: (editor) => {
-			editor.chain().focus().toggleCodeBlock().run();
-		},
-	},
-];
-
 const preventEditorBlur = (event: React.MouseEvent<HTMLElement>) => {
 	event.preventDefault();
 };
@@ -184,8 +82,8 @@ export function NoteSelectionMenu({ onComment }: { onComment: () => void }) {
 	);
 	const editorState = useTiptapState(({ editor: currentEditor }) => ({
 		activeBlockStyleId:
-			BLOCK_STYLE_OPTIONS.find((option) => option.isActive(currentEditor))
-				?.id ?? BLOCK_STYLE_OPTIONS[0].id,
+			NOTE_BLOCK_STYLE_OPTIONS.find((option) => option.isActive(currentEditor))
+				?.id ?? NOTE_BLOCK_STYLE_OPTIONS[0].id,
 		isBold: currentEditor.isActive("bold"),
 		isItalic: currentEditor.isActive("italic"),
 		isUnderline: currentEditor.isActive("underline"),
@@ -194,9 +92,9 @@ export function NoteSelectionMenu({ onComment }: { onComment: () => void }) {
 	}));
 
 	const activeBlockStyle =
-		BLOCK_STYLE_OPTIONS.find(
+		NOTE_BLOCK_STYLE_OPTIONS.find(
 			(option) => option.id === editorState.activeBlockStyleId,
-		) ?? BLOCK_STYLE_OPTIONS[0];
+		) ?? NOTE_BLOCK_STYLE_OPTIONS[0];
 	const dismissBlockSelectionMenu = React.useCallback(() => {
 		const collapsePosition = editor.state.selection.to;
 
@@ -293,7 +191,7 @@ export function NoteSelectionMenu({ onComment }: { onComment: () => void }) {
 							blockMenuCloseReasonRef.current = null;
 						}}
 					>
-						{BLOCK_STYLE_OPTIONS.map((option) => {
+						{NOTE_BLOCK_STYLE_OPTIONS.map((option) => {
 							const Icon = option.icon;
 							const isActive = option.isActive(editor);
 

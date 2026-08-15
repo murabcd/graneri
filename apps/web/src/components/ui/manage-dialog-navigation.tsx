@@ -10,6 +10,7 @@ import { Button } from "@workspace/ui/components/button";
 import {
 	Sidebar,
 	SidebarContent,
+	SidebarFooter,
 	SidebarGroup,
 	SidebarGroupContent,
 	SidebarMenu,
@@ -47,67 +48,63 @@ export function ManageDialogSidebarNav({
 }) {
 	return (
 		<Sidebar collapsible="none" className="hidden md:flex">
-			<SidebarContent viewportClassName="flex h-full min-h-full min-w-0 flex-col gap-0 [&>div]:!flex [&>div]:h-full [&>div]:min-h-full [&>div]:min-w-0 [&>div]:w-full [&>div]:flex-col">
-				<section className="flex h-full min-h-full flex-1 flex-col">
-					<SidebarGroup className="pb-0">
-						<SidebarGroupContent>
-							<SidebarMenu>
-								{items.map((item) => {
-									const Icon = item.icon;
+			<SidebarContent viewportClassName="scroll-fade-b [--scroll-fade-reveal:2rem]">
+				<SidebarGroup className="pb-0">
+					<SidebarGroupContent>
+						<SidebarMenu>
+							{items.map((item) => {
+								const Icon = item.icon;
 
-									return (
-										<SidebarMenuItem key={item.id}>
-											<SidebarMenuButton
-												asChild
-												isActive={activeItemId === item.id}
-											>
-												<button type="button" onClick={() => onSelect(item.id)}>
-													<Icon />
-													<span>{item.label}</span>
-												</button>
-											</SidebarMenuButton>
+								return (
+									<SidebarMenuItem key={item.id}>
+										<SidebarMenuButton
+											asChild
+											isActive={activeItemId === item.id}
+										>
+											<button type="button" onClick={() => onSelect(item.id)}>
+												<Icon />
+												<span>{item.label}</span>
+											</button>
+										</SidebarMenuButton>
+									</SidebarMenuItem>
+								);
+							})}
+							{isLoading
+								? ["version-skeleton-1", "version-skeleton-2"].map((id) => (
+										<SidebarMenuItem key={id}>
+											<SidebarMenuSkeleton showIcon />
 										</SidebarMenuItem>
-									);
-								})}
-								{isLoading
-									? ["version-skeleton-1", "version-skeleton-2"].map((id) => (
-											<SidebarMenuItem key={id}>
-												<SidebarMenuSkeleton showIcon />
-											</SidebarMenuItem>
-										))
-									: null}
-							</SidebarMenu>
-						</SidebarGroupContent>
-					</SidebarGroup>
-					{footerAction ? (
-						<div className="mt-auto p-2 pt-1">
-							<SidebarMenu>
-								<SidebarMenuItem>
-									{(() => {
-										const Icon = footerAction.icon;
-
-										return (
-											<SidebarMenuButton
-												type="button"
-												onClick={footerAction.onClick}
-												disabled={footerAction.disabled}
-												className="h-8 gap-2 px-2"
-											>
-												<div className="flex size-6 items-center justify-center rounded-md bg-transparent">
-													<Icon className="size-4" />
-												</div>
-												<span className="font-medium">
-													{footerAction.label}
-												</span>
-											</SidebarMenuButton>
-										);
-									})()}
-								</SidebarMenuItem>
-							</SidebarMenu>
-						</div>
-					) : null}
-				</section>
+									))
+								: null}
+						</SidebarMenu>
+					</SidebarGroupContent>
+				</SidebarGroup>
 			</SidebarContent>
+			{footerAction ? (
+				<SidebarFooter className="shrink-0 pt-1">
+					<SidebarMenu>
+						<SidebarMenuItem>
+							{(() => {
+								const Icon = footerAction.icon;
+
+								return (
+									<SidebarMenuButton
+										type="button"
+										onClick={footerAction.onClick}
+										disabled={footerAction.disabled}
+										className="h-8 gap-2 px-2"
+									>
+										<div className="flex size-6 items-center justify-center rounded-md bg-transparent">
+											<Icon className="size-4" />
+										</div>
+										<span className="font-medium">{footerAction.label}</span>
+									</SidebarMenuButton>
+								);
+							})()}
+						</SidebarMenuItem>
+					</SidebarMenu>
+				</SidebarFooter>
+			) : null}
 		</Sidebar>
 	);
 }

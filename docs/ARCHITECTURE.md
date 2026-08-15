@@ -31,6 +31,17 @@ draft recovery, remote reconciliation, debounced saves, per-note in-flight save
 serialization, and flush-on-navigation behavior. The note page remains a view
 adapter: it projects session documents into Tiptap and must not rebuild save or
 draft ordering with local effects and refs.
+The note editor's `/` command menu uses Tiptap's open-source suggestion,
+list/task, table, horizontal-rule, and image extensions for block styling and
+insertion. Image picker, paste, and drop behavior also use the open-source
+file-handler extension. Authenticated binary upload
+goes directly to the Convex `/api/note-images` HTTP action; there is no Tiptap
+cloud or Vercel Blob storage path. The Tiptap node persists both its display URL
+and the canonical `noteImageId`, plus display-only alignment, caption, and width
+attributes. Graneri owns the free image toolbar and caption node view; Tiptap's
+open-source resizable node view owns drag geometry. Image replacement reuses the
+same Convex uploader and updates the selected node in place, while the normal
+note document session remains the only writer of note content.
 The application navigation session is the authoritative renderer boundary for
 URL-derived route state, settings history restoration, desktop and popstate
 synchronization, pinned-inbox behavior, transient note-capture intent, and
@@ -652,6 +663,13 @@ continuation scheduling for note-, workspace-, owner-, and trash-scoped
 removal. Note and chat feature modules expose record-specific retirement
 adapters, but callers must enter through the resource-retirement boundary and
 must not reproduce record ordering or retry loops.
+Convex File Storage is the sole owner of note image bytes. `noteImages` binds
+each blob to its server-derived owner, workspace, and note; current documents
+and retained `noteRevisions` hold explicit `noteImageReferences`. Every note
+save validates those ids and synchronizes the current reference set, revision
+creation and pruning synchronize revision references, and permanent note
+retirement removes all remaining bytes. An uploaded image that never reaches a
+saved document is removed by its scheduled one-hour pending-upload cleanup.
 Automation execution state is owned by
 `convex/automationRunStateMachine.ts`. Run reservation, active-run checks,
 terminal transitions, and chat-linked pause/resume/move consequences

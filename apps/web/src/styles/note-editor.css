@@ -248,6 +248,46 @@
 	border-top: 1px solid var(--border);
 }
 
+:where(.note-tiptap.ProseMirror) :where(.tableWrapper) {
+	margin: 1.25rem 0;
+	overflow-x: auto;
+}
+
+:where(.note-tiptap.ProseMirror) :where(table) {
+	width: 100%;
+	min-width: 28rem;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th) {
+	position: relative;
+	min-width: 4rem;
+	border: 1px solid var(--border);
+	padding: 0.5rem 0.625rem;
+	vertical-align: top;
+}
+
+:where(.note-tiptap.ProseMirror) :where(th) {
+	background: var(--muted);
+	font-weight: 600;
+	text-align: left;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th) > :last-child {
+	margin-bottom: 0;
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(td.selectedCell, th.selectedCell)::after {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	background: color-mix(in oklab, var(--accent) 55%, transparent);
+	content: "";
+	pointer-events: none;
+}
+
 :where(.note-tiptap.ProseMirror) :where(a) {
 	color: var(--primary);
 	text-decoration: underline;
@@ -275,6 +315,10 @@
 	user-select: none;
 }
 
+.note-tiptap.ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+	accent-color: var(--primary);
+}
+
 .note-tiptap.ProseMirror ul[data-type="taskList"] li > div {
 	flex: 1 1 auto;
 }
@@ -292,4 +336,120 @@
 	float: left;
 	height: 0;
 	pointer-events: none;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-node) {
+	display: flex;
+	width: fit-content;
+	max-width: 100%;
+	flex-direction: column;
+	margin: 1.25rem 0;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-node[data-align="center"]) {
+	margin-right: auto;
+	margin-left: auto;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-node[data-align="right"]) {
+	margin-left: auto;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-resize-container),
+:where(.note-tiptap.ProseMirror) :where(.note-image-resize-wrapper) {
+	max-width: 100%;
+}
+
+:where(.note-tiptap.ProseMirror) :where(img[data-note-image-id]) {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	border-radius: var(--radius-lg);
+}
+
+.note-tiptap.ProseMirror .note-image-node.ProseMirror-selectednode {
+	outline: none;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-resize-handle) {
+	z-index: 1;
+	width: 1.25rem;
+	cursor: ew-resize;
+}
+
+:where(.note-tiptap.ProseMirror[contenteditable="false"])
+	:where(.note-image-resize-handle) {
+	display: none;
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-image-resize-handle[data-resize-handle="left"]) {
+	transform: translateX(calc(-50% - 0.5rem));
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-image-resize-handle[data-resize-handle="right"]) {
+	transform: translateX(calc(50% + 0.5rem));
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-resize-handle)::after {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 0.375rem;
+	height: 4rem;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--border) 80%, transparent);
+	content: "";
+	opacity: 0;
+	transform: translate(-50%, -50%);
+	transition:
+		background-color 150ms ease,
+		opacity 150ms ease;
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-image-node:hover, .note-image-node.ProseMirror-selectednode)
+	:where(.note-image-resize-handle)::after {
+	opacity: 1;
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-image-resize-container.is-resizing)
+	:where(.note-image-resize-handle)::after {
+	background: color-mix(in oklab, var(--foreground) 40%, transparent);
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-caption) {
+	width: 100%;
+	border: 0;
+	background: transparent;
+	padding: 0.625rem 0.75rem 0;
+	color: var(--muted-foreground);
+	font: inherit;
+	text-align: center;
+	outline: none;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-image-caption)::placeholder {
+	color: var(--muted-foreground);
+	opacity: 0.7;
+}
+
+.note-image-menu {
+	display: flex;
+	align-items: center;
+	gap: 0.125rem;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--background);
+	box-shadow: 0 10px 30px color-mix(in oklab, black 10%, transparent);
+	padding: 0.25rem;
+}
+
+.note-image-menu-separator {
+	width: 1px;
+	height: 1.25rem;
+	margin: 0 0.25rem;
+	background: var(--border);
 }

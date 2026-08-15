@@ -17,6 +17,7 @@ import { MarkdownStreamEntry } from "@/components/chat/markdown-stream-entry";
 import {
 	COMPOSER_DOCK_FADE_CLASS,
 	COMPOSER_DOCK_WRAPPER_CLASS,
+	NOTE_EDITOR_BOTTOM_SCROLL_INSET,
 } from "@/components/layout/composer-dock";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
@@ -70,11 +71,17 @@ import {
 } from "./note-comments-sheet";
 import { NoteComposer } from "./note-composer";
 import type { NoteEditorActionsStore } from "./note-editor-actions-store";
+import { NoteImageMenu } from "./note-image-menu";
 import { NOTE_PAGE_VIEWPORT_MIN_HEIGHT_CLASS } from "./note-layout";
 import { OPEN_NOTE_COMMENTS_EVENT } from "./note-page-events";
 import { NoteSelectionMenu } from "./note-selection-menu";
 import { NoteTableOfContents } from "./note-table-of-contents";
 import { writeRichTextToClipboard } from "./share-note";
+import {
+	type NoteImagePickerIntent,
+	NoteImageUploadInput,
+	useNoteImageUpload,
+} from "./use-note-image-upload";
 import { useNoteTableOfContents } from "./use-note-table-of-contents";
 import { useNoteTitleSynchronization } from "./use-note-title-synchronization";
 
@@ -187,12 +194,21 @@ const useNotePageController = ({
 	const shouldPreserveStructuredNoteTitle = Boolean(note?.calendarEvent);
 	const convex = useConvex();
 	const saveNote = useMutation(api.notes.save);
+	const imageUpload = useNoteImageUpload({ activeWorkspaceId, noteId });
 
 	const editor = useEditor({
 		extensions: createNoteEditorExtensions({
 			onTableOfContentsUpdate: handleTableOfContentsUpdate,
 			getTableOfContentsScrollParent,
 			onCommentThreadClick,
+			onImagePaste: (files) => {
+				void imageUpload.uploadImages(files, { kind: "insert" });
+			},
+			onImageDrop: (files, position) => {
+				void imageUpload.uploadImages(files, { kind: "insert" }, position);
+			},
+			onSelectImageCommand: () =>
+				imageUpload.openImagePicker({ kind: "insert" }),
 		}),
 		immediatelyRender: false,
 		editorProps: {
@@ -209,6 +225,10 @@ const useNotePageController = ({
 			setSearchableText(editor.getText());
 		},
 	});
+	React.useEffect(() => {
+		imageUpload.setEditor(editor);
+		return () => imageUpload.setEditor(null);
+	}, [editor, imageUpload.setEditor]);
 
 	const setEditorDocument = React.useCallback(
 		(nextDocument: JSONContent) => {
@@ -753,10 +773,13 @@ const useNotePageController = ({
 
 	return {
 		appendChatResponseToNote,
+		activeImageUploadCount: imageUpload.activeUploadCount,
 		content,
 		editor,
 		focusEditor,
 		handleEnhanceTranscript,
+		imageInputRef: imageUpload.imageInputRef,
+		openImagePicker: imageUpload.openImagePicker,
 		getNoteContext: React.useCallback(
 			() => ({
 				noteId: nextNoteIdRef.current ?? noteId,
@@ -775,6 +798,7 @@ const useNotePageController = ({
 		titleTextareaRef,
 		tableOfContents,
 		handleTableOfContentsSelect,
+		uploadSelectedImages: imageUpload.uploadSelectedImages,
 	};
 };
 
@@ -810,6 +834,10 @@ type NotePageEditorPaneProps = {
 		anchor: TableOfContentDataItem,
 		behavior?: ScrollBehavior,
 	) => void;
+	activeImageUploadCount: number;
+	imageInputRef: React.RefObject<HTMLInputElement | null>;
+	openImagePicker: (intent: NoteImagePickerIntent) => void;
+	uploadSelectedImages: (files: File[]) => Promise<void>;
 };
 
 type NotePageCommentPanelState = {
@@ -1082,6 +1110,10 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 	onOpenCommentComposer,
 	isDesktopMac,
 	handleTableOfContentsSelect,
+	activeImageUploadCount,
+	imageInputRef,
+	openImagePicker,
+	uploadSelectedImages,
 }: NotePageEditorPaneProps) {
 	return (
 		<div className="relative flex min-h-0 w-full max-w-5xl flex-1 flex-col pt-2 md:pt-4">
@@ -1098,7 +1130,10 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 							"mx-auto flex w-full max-w-xl flex-1 flex-col",
 						)}
 					>
-						<div className="flex-1 pt-4 pb-36 md:pt-8 md:pb-40">
+						<div
+							className="flex-1 pt-4 md:pt-8"
+							style={{ paddingBottom: NOTE_EDITOR_BOTTOM_SCROLL_INSET }}
+						>
 							<div className="flex flex-col gap-6">
 								<div>
 									<Textarea
@@ -1119,6 +1154,13 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 										className="note-title min-h-0 flex-1 resize-none overflow-hidden rounded-none border-0 !bg-transparent p-0 text-2xl font-medium leading-tight tracking-tight shadow-none placeholder:text-muted-foreground/70 focus-visible:border-transparent focus-visible:ring-0 dark:!bg-transparent md:text-3xl"
 									/>
 								</div>
+								<NoteImageUploadInput
+									disabled={!editor || activeImageUploadCount > 0}
+									inputRef={imageInputRef}
+									onSelect={(files) => {
+										void uploadSelectedImages(files);
+									}}
+								/>
 
 								{editor ? (
 									<Tiptap editor={editor}>
@@ -1133,6 +1175,11 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 										/>
 
 										<NoteSelectionMenu onComment={onOpenCommentComposer} />
+										<NoteImageMenu
+											onReplace={(position) =>
+												openImagePicker({ kind: "replace", position })
+											}
+										/>
 									</Tiptap>
 								) : null}
 								{templateApplyState.isRunning ? (
@@ -1254,6 +1301,10 @@ function NotePageContent({
 				onOpenCommentComposer={onOpenCommentComposer}
 				isDesktopMac={isDesktopMac}
 				handleTableOfContentsSelect={controller.handleTableOfContentsSelect}
+				activeImageUploadCount={controller.activeImageUploadCount}
+				imageInputRef={controller.imageInputRef}
+				openImagePicker={controller.openImagePicker}
+				uploadSelectedImages={controller.uploadSelectedImages}
 			/>
 
 			<NoteCommentsSheet
