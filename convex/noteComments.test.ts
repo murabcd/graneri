@@ -402,12 +402,13 @@ test("noteComments.deleteComment keeps the thread and refreshes inbox activity",
 		threadId,
 	});
 
-	await asOwner.mutation(api.noteComments.deleteComment, {
+	const threadDeleted = await asOwner.mutation(api.noteComments.deleteComment, {
 		workspaceId,
 		noteId,
 		threadId,
 		commentId: latestReplyId,
 	});
+	expect(threadDeleted).toBe(false);
 
 	const thread = await asOwner.query(api.noteComments.getThread, {
 		workspaceId,
@@ -428,6 +429,41 @@ test("noteComments.deleteComment keeps the thread and refreshes inbox activity",
 		isRead: true,
 	});
 	expect(inboxItems).toEqual([]);
+});
+
+test("noteComments.deleteComment reports when it deletes the last comment's thread", async () => {
+	const { asOwner, noteId, workspaceId } = await createWorkspaceAndNote();
+	const threadId = await asOwner.mutation(api.noteComments.createThread, {
+		workspaceId,
+		noteId,
+		excerpt: "Review this section",
+		body: "Root comment",
+	});
+	const thread = await asOwner.query(api.noteComments.getThread, {
+		workspaceId,
+		noteId,
+		threadId,
+	});
+	const commentId = thread?.comments[0]?._id;
+	if (!commentId) {
+		throw new Error("Expected the thread's root comment.");
+	}
+
+	const threadDeleted = await asOwner.mutation(api.noteComments.deleteComment, {
+		workspaceId,
+		noteId,
+		threadId,
+		commentId,
+	});
+
+	expect(threadDeleted).toBe(true);
+	expect(
+		await asOwner.query(api.noteComments.getThread, {
+			workspaceId,
+			noteId,
+			threadId,
+		}),
+	).toBeNull();
 });
 
 test("noteComments.deleteThread removes the thread and its comments", async () => {
@@ -631,13 +667,17 @@ test("noteComments.updateComment preserves inbox read state", async () => {
 	});
 
 	expect(thread).not.toBeNull();
+	const commentId = thread?.comments[0]?._id;
+	if (!commentId) {
+		throw new Error("Expected the thread's root comment.");
+	}
 
 	vi.setSystemTime(new Date("2026-04-12T10:05:00.000Z"));
 	await asOwner.mutation(api.noteComments.updateComment, {
 		workspaceId,
 		noteId,
 		threadId,
-		commentId: thread!.comments[0]!._id,
+		commentId,
 		body: "Edited comment",
 	});
 

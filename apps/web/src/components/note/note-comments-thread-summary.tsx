@@ -25,7 +25,9 @@ import {
 	MoreHorizontal,
 	Trash2,
 } from "lucide-react";
+import * as React from "react";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import { NoteCommentsDeleteDialog } from "./note-comments-delete-dialog";
 import {
 	type CommentViewer,
 	formatCommentTimestamp,
@@ -67,6 +69,7 @@ export function NoteCommentsThreadSummary({
 	handleOpenThread: (thread: ThreadSummary) => void;
 	handlePrefetchThread: (threadId: Id<"noteCommentThreads">) => void;
 }) {
+	const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 	const threadAuthor = resolveAuthorIdentity({
 		name: thread.createdByName,
 		currentUser,
@@ -201,7 +204,11 @@ export function NoteCommentsThreadSummary({
 								<MoreHorizontal className="size-4" />
 							</Button>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="min-w-40">
+						<DropdownMenuContent
+							align="end"
+							className="min-w-40"
+							data-note-comments-preserve-expanded-thread
+						>
 							<DropdownMenuItem
 								className="cursor-pointer"
 								onSelect={() =>
@@ -241,7 +248,7 @@ export function NoteCommentsThreadSummary({
 							<DropdownMenuItem
 								variant="destructive"
 								className="cursor-pointer"
-								onSelect={() => handleDeleteThread(thread._id)}
+								onSelect={() => setDeleteDialogOpen(true)}
 							>
 								<Trash2 className="size-4" />
 								<span>Delete</span>
@@ -250,6 +257,12 @@ export function NoteCommentsThreadSummary({
 					</DropdownMenu>
 				</div>
 			</div>
+			<NoteCommentsDeleteDialog
+				description="This action cannot be undone. This will permanently delete this discussion and all of its replies."
+				open={deleteDialogOpen}
+				onOpenChange={setDeleteDialogOpen}
+				onConfirm={() => handleDeleteThread(thread._id)}
+			/>
 		</div>
 	);
 }

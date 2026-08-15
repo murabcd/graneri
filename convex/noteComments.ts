@@ -811,7 +811,7 @@ export const deleteComment = mutation({
 		threadId: v.id("noteCommentThreads"),
 		commentId: v.id("noteComments"),
 	},
-	returns: v.null(),
+	returns: v.boolean(),
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
 		await requireOwnedWorkspace(
@@ -863,7 +863,7 @@ export const deleteComment = mutation({
 				workspaceId: args.workspaceId,
 				externalId: getThreadInboxExternalId(thread._id),
 			});
-			return null;
+			return true;
 		}
 
 		const firstRemainingComment = await ctx.db
@@ -918,7 +918,7 @@ export const deleteComment = mutation({
 			markUnread: false,
 		});
 
-		return null;
+		return false;
 	},
 });
 

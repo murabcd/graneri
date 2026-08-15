@@ -17,7 +17,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
 import {
@@ -65,9 +64,7 @@ import {
 	MessageSquareMore,
 	Minus,
 	MoreHorizontal,
-	PencilLine,
 	SlidersHorizontal,
-	Trash2,
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -91,6 +88,7 @@ import {
 	useDockedPanelInset,
 	useDockedPanelOverlayWidth,
 } from "@/components/layout/use-docked-panel-widths";
+import { NoteCommentActionsMenu } from "@/components/note/note-comment-actions-menu";
 import { getDesktopCommentsPanelPinnedStorageKey } from "@/components/note/note-comments-panel-state";
 import { NoteCommentsThreadSummary } from "@/components/note/note-comments-thread-summary";
 import {
@@ -410,53 +408,19 @@ function ThreadCommentNodeItem({
 											: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
 									)}
 								>
-									<DropdownMenu
-										modal
-										open={commentActionsOpenId === item.comment._id}
-										onOpenChange={(nextOpen) =>
-											setCommentActionsOpenId(
-												nextOpen ? item.comment._id : null,
-											)
-										}
-									>
-										<DropdownMenuTrigger asChild>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon-sm"
-												className="size-6 cursor-pointer rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-												aria-label="Comment actions"
-											>
-												<MoreHorizontal className="size-4" />
-											</Button>
-										</DropdownMenuTrigger>
-										<DropdownMenuContent
-											align="end"
-											className="min-w-36"
-											onCloseAutoFocus={(event) => event.preventDefault()}
-										>
-											{canManageComment ? (
-												<DropdownMenuItem
-													className="cursor-pointer"
-													onSelect={() => handleStartEditComment(item.comment)}
-												>
-													<PencilLine className="size-4" />
-													<span>Edit</span>
-												</DropdownMenuItem>
-											) : null}
-											{canManageComment ? <DropdownMenuSeparator /> : null}
-											{canManageComment ? (
-												<DropdownMenuItem
-													variant="destructive"
-													className="cursor-pointer"
-													onSelect={() => handleDeleteComment(item.comment)}
-												>
-													<Trash2 className="size-4" />
-													<span>Delete</span>
-												</DropdownMenuItem>
-											) : null}
-										</DropdownMenuContent>
-									</DropdownMenu>
+									{canManageComment ? (
+										<NoteCommentActionsMenu
+											comment={item.comment}
+											open={commentActionsOpenId === item.comment._id}
+											onOpenChange={(nextOpen) =>
+												setCommentActionsOpenId(
+													nextOpen ? item.comment._id : null,
+												)
+											}
+											onEdit={handleStartEditComment}
+											onDelete={handleDeleteComment}
+										/>
+									) : null}
 								</div>
 							</div>
 						</div>
@@ -878,7 +842,7 @@ const CommentsSheetBody = React.memo(function CommentsSheetBody({
 			if (
 				!(target instanceof Element) ||
 				target.closest(
-					'[data-note-comment-thread-row], [data-note-comment-thread-id], [data-slot="dropdown-menu-content"]',
+					"[data-note-comment-thread-row], [data-note-comment-thread-id], [data-note-comments-preserve-expanded-thread]",
 				)
 			) {
 				return;
@@ -1851,12 +1815,9 @@ function useNoteCommentsSheetController({
 				threadId: comment.threadId,
 				commentId: comment._id,
 			})
-				.then(() => {
-					if (
-						resolvedExpandedThread &&
-						resolvedExpandedThread._id === comment.threadId &&
-						resolvedExpandedThread.comments.length === 1
-					) {
+				.then((threadDeleted) => {
+					if (threadDeleted) {
+						removeThreadMarks(comment.threadId);
 						handleCollapseExpandedThread();
 					}
 
@@ -1878,7 +1839,7 @@ function useNoteCommentsSheetController({
 			editingCommentId,
 			handleCollapseExpandedThread,
 			noteId,
-			resolvedExpandedThread,
+			removeThreadMarks,
 			workspaceId,
 		],
 	);
