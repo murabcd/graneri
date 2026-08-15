@@ -216,6 +216,18 @@ const useNotePageController = ({
 				class:
 					"note-tiptap min-h-[240px] border border-transparent bg-transparent p-0 text-base outline-none",
 			},
+			scrollThreshold: {
+				top: 0,
+				right: 0,
+				bottom: NOTE_EDITOR_BOTTOM_SCROLL_INSET,
+				left: 0,
+			},
+			scrollMargin: {
+				top: 5,
+				right: 5,
+				bottom: NOTE_EDITOR_BOTTOM_SCROLL_INSET,
+				left: 5,
+			},
 			handlePaste: (view, event) => handleMarkdownPaste(view, event),
 			transformPasted: (slice, view) =>
 				normalizePastedSlice(slice, view.state.schema),
