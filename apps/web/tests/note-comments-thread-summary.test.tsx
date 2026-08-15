@@ -36,15 +36,19 @@ const thread = {
 
 function ThreadSummaryHarness({
 	handleDeleteThread,
+	handleToggleResolvedThread = vi.fn(),
+	isResolved = false,
 }: {
 	handleDeleteThread: (id: Id<"noteCommentThreads">) => void;
+	handleToggleResolvedThread?: (thread: Doc<"noteCommentThreads">) => void;
+	isResolved?: boolean;
 }) {
 	const [threadActionsOpenId, setThreadActionsOpenId] =
 		useState<Id<"noteCommentThreads"> | null>(null);
 
 	return (
 		<NoteCommentsThreadSummary
-			thread={thread}
+			thread={{ ...thread, isResolved }}
 			currentUser={{ name: "Murad", email: null, avatar: null }}
 			isRead={false}
 			isActive={false}
@@ -55,6 +59,7 @@ function ThreadSummaryHarness({
 			handleMarkThreadUnread={vi.fn()}
 			handleCopyThreadLink={vi.fn().mockResolvedValue(undefined)}
 			handleToggleMuteThread={vi.fn()}
+			handleToggleResolvedThread={handleToggleResolvedThread}
 			handleDeleteThread={handleDeleteThread}
 			handleOpenThread={vi.fn()}
 			handlePrefetchThread={vi.fn()}
@@ -66,6 +71,32 @@ describe("note comments thread summary", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
+	});
+
+	it.each([
+		{ isResolved: false, label: "Resolve discussion" },
+		{ isResolved: true, label: "Reopen discussion" },
+	])("offers $label from the discussion menu", async ({
+		isResolved,
+		label,
+	}) => {
+		const user = userEvent.setup();
+		const handleToggleResolvedThread = vi.fn();
+		render(
+			<ThreadSummaryHarness
+				handleDeleteThread={vi.fn()}
+				handleToggleResolvedThread={handleToggleResolvedThread}
+				isResolved={isResolved}
+			/>,
+		);
+
+		await user.click(screen.getByRole("button", { name: "Comment actions" }));
+		await user.click(screen.getByRole("menuitem", { name: label }));
+
+		expect(handleToggleResolvedThread).toHaveBeenCalledOnce();
+		expect(handleToggleResolvedThread).toHaveBeenCalledWith(
+			expect.objectContaining({ _id: threadId, isResolved }),
+		);
 	});
 
 	it("confirms destructive discussion deletion", async () => {

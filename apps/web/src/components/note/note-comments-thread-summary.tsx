@@ -21,8 +21,10 @@ import {
 	Check,
 	CornerDownRight,
 	Link2,
+	MessageCircleCheck,
 	MessageSquareDot,
 	MoreHorizontal,
+	RotateCcw,
 	Trash2,
 } from "lucide-react";
 import * as React from "react";
@@ -50,6 +52,7 @@ export function NoteCommentsThreadSummary({
 	handleMarkThreadUnread,
 	handleCopyThreadLink,
 	handleToggleMuteThread,
+	handleToggleResolvedThread,
 	handleDeleteThread,
 	handleOpenThread,
 	handlePrefetchThread,
@@ -65,6 +68,7 @@ export function NoteCommentsThreadSummary({
 	handleMarkThreadUnread: (threadId: Id<"noteCommentThreads">) => void;
 	handleCopyThreadLink: (threadId: Id<"noteCommentThreads">) => Promise<void>;
 	handleToggleMuteThread: (thread: ThreadSummary) => void;
+	handleToggleResolvedThread: (thread: ThreadSummary) => void;
 	handleDeleteThread: (threadId: Id<"noteCommentThreads">) => void;
 	handleOpenThread: (thread: ThreadSummary) => void;
 	handlePrefetchThread: (threadId: Id<"noteCommentThreads">) => void;
@@ -242,6 +246,21 @@ export function NoteCommentsThreadSummary({
 								)}
 								<span>
 									{thread.isMutedReplies ? "Unmute replies" : "Mute replies"}
+								</span>
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								className="cursor-pointer"
+								onSelect={() => handleToggleResolvedThread(thread)}
+							>
+								{thread.isResolved ? (
+									<RotateCcw className="size-4" />
+								) : (
+									<MessageCircleCheck className="size-4" />
+								)}
+								<span>
+									{thread.isResolved
+										? "Reopen discussion"
+										: "Resolve discussion"}
 								</span>
 							</DropdownMenuItem>
 							<DropdownMenuSeparator />

@@ -26,13 +26,6 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
-import {
-	InputGroup,
-	InputGroupAddon,
-	InputGroupButton,
-	InputGroupInput,
-	InputGroupTextarea,
-} from "@workspace/ui/components/input-group";
 import { Kbd } from "@workspace/ui/components/kbd";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import {
@@ -57,10 +50,12 @@ import {
 } from "@workspace/ui/lib/panel-dimensions";
 import { cn } from "@workspace/ui/lib/utils";
 import { useConvex, useMutation, useQuery } from "convex/react";
+import type { LucideIcon } from "lucide-react";
 import {
-	ArrowUp,
 	Check,
-	LoaderCircle,
+	MessageCircle,
+	MessageCircleCheck,
+	MessageCircleMore,
 	MessageSquareMore,
 	Minus,
 	MoreHorizontal,
@@ -89,6 +84,7 @@ import {
 	useDockedPanelOverlayWidth,
 } from "@/components/layout/use-docked-panel-widths";
 import { NoteCommentActionsMenu } from "@/components/note/note-comment-actions-menu";
+import { NoteCommentComposerField } from "@/components/note/note-comment-composer-field";
 import { getDesktopCommentsPanelPinnedStorageKey } from "@/components/note/note-comments-panel-state";
 import { NoteCommentsThreadSummary } from "@/components/note/note-comments-thread-summary";
 import {
@@ -116,6 +112,12 @@ const COMMENTS_PANEL_STORAGE_KEY_DESKTOP =
 	"graneri.note-comments-panel-width.desktop";
 const COMMENTS_PANEL_STORAGE_KEY_MOBILE =
 	"graneri.note-comments-panel-width.mobile";
+
+const THREAD_VIEW_ICONS = {
+	all: MessageCircle,
+	open: MessageCircleMore,
+	resolved: MessageCircleCheck,
+} satisfies Record<ThreadView, LucideIcon>;
 const INITIAL_VISIBLE_THREAD_COMMENTS = 2;
 const THREAD_COMMENT_PAGE_SIZE = 4;
 
@@ -159,131 +161,6 @@ const collectVisibleThreadOrder = (editor: Editor | null) => {
 
 	return orderedThreadIds;
 };
-
-function CommentComposerField({
-	value,
-	onChange,
-	onSubmit,
-	shouldFocusOnMount = false,
-	singleLine = false,
-	isSubmitting,
-	ariaLabel,
-	sendAriaLabel,
-	placeholder,
-}: {
-	value: string;
-	onChange: (value: string) => void;
-	onSubmit: () => void;
-	shouldFocusOnMount?: boolean;
-	singleLine?: boolean;
-	isSubmitting: boolean;
-	ariaLabel: string;
-	sendAriaLabel: string;
-	placeholder: string;
-}) {
-	const containerRef = React.useRef<HTMLDivElement | null>(null);
-
-	React.useEffect(() => {
-		if (!shouldFocusOnMount) {
-			return;
-		}
-
-		const focusComposerControl = () => {
-			const control = containerRef.current?.querySelector(
-				'[data-slot="input-group-control"]',
-			);
-
-			if (
-				!(
-					control instanceof HTMLInputElement ||
-					control instanceof HTMLTextAreaElement
-				)
-			) {
-				return;
-			}
-
-			control.focus({ preventScroll: true });
-			const cursorPosition = control.value.length;
-			control.setSelectionRange(cursorPosition, cursorPosition);
-		};
-
-		const frameId = window.requestAnimationFrame(focusComposerControl);
-		const immediateTimeoutId = window.setTimeout(focusComposerControl, 0);
-		const delayedTimeoutId = window.setTimeout(focusComposerControl, 50);
-
-		return () => {
-			window.cancelAnimationFrame(frameId);
-			window.clearTimeout(immediateTimeoutId);
-			window.clearTimeout(delayedTimeoutId);
-		};
-	}, [shouldFocusOnMount]);
-
-	return (
-		<div ref={containerRef}>
-			<InputGroup
-				className={cn(
-					"overflow-hidden rounded-lg border-input/30 bg-background bg-clip-padding shadow-sm has-disabled:bg-background has-disabled:opacity-100 dark:bg-input/30 dark:has-disabled:bg-input/30",
-					singleLine ? "h-12 min-h-0" : "min-h-[96px]",
-				)}
-			>
-				{singleLine ? (
-					<InputGroupInput
-						value={value}
-						onChange={(event) => onChange(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key !== "Enter" || event.shiftKey) {
-								return;
-							}
-
-							event.preventDefault();
-							onSubmit();
-						}}
-						placeholder={placeholder}
-						aria-label={ariaLabel}
-						className="h-full px-4 text-base font-normal placeholder:font-normal placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-					/>
-				) : (
-					<InputGroupTextarea
-						value={value}
-						onChange={(event) => onChange(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key !== "Enter" || event.shiftKey) {
-								return;
-							}
-
-							event.preventDefault();
-							onSubmit();
-						}}
-						rows={1}
-						placeholder={placeholder}
-						aria-label={ariaLabel}
-						className="min-h-[40px] max-h-52 overflow-y-auto px-4 pt-2 pb-0 text-base font-normal placeholder:font-normal placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-					/>
-				)}
-				<InputGroupAddon
-					align={singleLine ? "inline-end" : "block-end"}
-					className={singleLine ? "gap-1 pr-2" : "gap-1 px-4 pb-2.5"}
-				>
-					<InputGroupButton
-						type="button"
-						variant="default"
-						size="icon-sm"
-						className={cn(singleLine ? "rounded-full" : "ml-auto rounded-full")}
-						aria-label={sendAriaLabel}
-						onClick={onSubmit}
-						disabled={isSubmitting || value.trim().length === 0}
-					>
-						{isSubmitting ? (
-							<LoaderCircle className="size-4 animate-spin" />
-						) : (
-							<ArrowUp className="size-4" />
-						)}
-					</InputGroupButton>
-				</InputGroupAddon>
-			</InputGroup>
-		</div>
-	);
-}
 
 function CommentComposerDismissButton({
 	label,
@@ -431,13 +308,13 @@ function ThreadCommentNodeItem({
 									onClick={handleCancelEdit}
 									showShortcut
 								/>
-								<CommentComposerField
+								<NoteCommentComposerField
 									key={`${item.comment._id}:edit`}
 									value={editBody}
 									onChange={setEditBody}
 									onSubmit={handleSaveEdit}
 									shouldFocusOnMount
-									singleLine
+									variant="single-line"
 									isSubmitting={isReplySubmitting}
 									ariaLabel="Edit comment"
 									sendAriaLabel="Save comment"
@@ -471,6 +348,7 @@ function DiscussionThreadRow({
 	handleMarkThreadUnread,
 	handleCopyThreadLink,
 	handleToggleMuteThread,
+	handleToggleResolvedThread,
 	handleDeleteThread,
 	handleOpenThread,
 	handlePrefetchThread,
@@ -500,6 +378,7 @@ function DiscussionThreadRow({
 	handleMarkThreadUnread: (threadId: Id<"noteCommentThreads">) => void;
 	handleCopyThreadLink: (threadId: Id<"noteCommentThreads">) => Promise<void>;
 	handleToggleMuteThread: (thread: ThreadSummary) => void;
+	handleToggleResolvedThread: (thread: ThreadSummary) => void;
 	handleDeleteThread: (threadId: Id<"noteCommentThreads">) => void;
 	handleOpenThread: (thread: ThreadSummary) => void;
 	handlePrefetchThread: (threadId: Id<"noteCommentThreads">) => void;
@@ -549,6 +428,7 @@ function DiscussionThreadRow({
 				handleMarkThreadUnread={handleMarkThreadUnread}
 				handleCopyThreadLink={handleCopyThreadLink}
 				handleToggleMuteThread={handleToggleMuteThread}
+				handleToggleResolvedThread={handleToggleResolvedThread}
 				handleDeleteThread={handleDeleteThread}
 				handleOpenThread={handleOpenThread}
 				handlePrefetchThread={handlePrefetchThread}
@@ -739,13 +619,13 @@ function ExpandedDiscussionThread({
 
 			{expandedDetail.isResolved || isEditingComment ? null : (
 				<div className="mt-4">
-					<CommentComposerField
+					<NoteCommentComposerField
 						key={`${expandedDetail._id}:reply`}
 						value={replyBody}
 						onChange={setReplyBody}
 						onSubmit={handleReply}
 						shouldFocusOnMount
-						singleLine
+						variant="auto-grow"
 						isSubmitting={isReplySubmitting}
 						ariaLabel="Reply to thread"
 						sendAriaLabel="Send reply"
@@ -776,6 +656,7 @@ type CommentsSheetBodyProps = {
 	handleMarkThreadUnread: (threadId: Id<"noteCommentThreads">) => void;
 	handleCopyThreadLink: (threadId: Id<"noteCommentThreads">) => Promise<void>;
 	handleToggleMuteThread: (thread: ThreadSummary) => void;
+	handleToggleResolvedThread: (thread: ThreadSummary) => void;
 	handleDeleteThread: (threadId: Id<"noteCommentThreads">) => void;
 	handleOpenThread: (thread: ThreadSummary) => void;
 	handlePrefetchThread: (threadId: Id<"noteCommentThreads">) => void;
@@ -813,6 +694,7 @@ const CommentsSheetBody = React.memo(function CommentsSheetBody({
 	handleMarkThreadUnread,
 	handleCopyThreadLink,
 	handleToggleMuteThread,
+	handleToggleResolvedThread,
 	handleDeleteThread,
 	handleOpenThread,
 	handlePrefetchThread,
@@ -889,6 +771,7 @@ const CommentsSheetBody = React.memo(function CommentsSheetBody({
 							handleMarkThreadUnread={handleMarkThreadUnread}
 							handleCopyThreadLink={handleCopyThreadLink}
 							handleToggleMuteThread={handleToggleMuteThread}
+							handleToggleResolvedThread={handleToggleResolvedThread}
 							handleDeleteThread={handleDeleteThread}
 							handleOpenThread={handleOpenThread}
 							handlePrefetchThread={handlePrefetchThread}
@@ -910,12 +793,13 @@ const CommentsSheetBody = React.memo(function CommentsSheetBody({
 							<p className="mb-4 whitespace-pre-wrap text-sm text-muted-foreground">
 								{pendingSelection.text}
 							</p>
-							<CommentComposerField
+							<NoteCommentComposerField
 								key={`${pendingSelection.from}:${pendingSelection.to}:${pendingSelection.text}`}
 								value={draftBody}
 								onChange={setDraftBody}
 								onSubmit={handleCreateThread}
 								shouldFocusOnMount
+								variant="auto-grow"
 								isSubmitting={isCreating}
 								ariaLabel="New comment"
 								sendAriaLabel="Send comment"
@@ -1030,17 +914,22 @@ function CommentsSheetPanel({
 							</TooltipContent>
 						</Tooltip>
 						<DropdownMenuContent align="end" className="min-w-44">
-							{THREAD_VIEW_OPTIONS.map((option) => (
-								<DropdownMenuItem
-									key={option.value}
-									onSelect={() => setView(option.value)}
-								>
-									<span>{option.label}</span>
-									{view === option.value ? (
-										<Check className="ml-auto size-4 text-foreground" />
-									) : null}
-								</DropdownMenuItem>
-							))}
+							{THREAD_VIEW_OPTIONS.map((option) => {
+								const ThreadViewIcon = THREAD_VIEW_ICONS[option.value];
+
+								return (
+									<DropdownMenuItem
+										key={option.value}
+										onSelect={() => setView(option.value)}
+									>
+										<ThreadViewIcon className="size-4 text-muted-foreground" />
+										<span>{option.label}</span>
+										{view === option.value ? (
+											<Check className="ml-auto size-4 text-foreground" />
+										) : null}
+									</DropdownMenuItem>
+								);
+							})}
 						</DropdownMenuContent>
 					</DropdownMenu>
 					{!isMobile ? (
@@ -1256,6 +1145,7 @@ function useNoteCommentsSheetController({
 	const updateComment = useMutation(api.noteComments.updateComment);
 	const deleteComment = useMutation(api.noteComments.deleteComment);
 	const toggleMuteReplies = useMutation(api.noteComments.toggleMuteReplies);
+	const setResolvedThread = useMutation(api.noteComments.setResolved);
 	const deleteThread = useMutation(api.noteComments.deleteThread);
 
 	const visibleThreads = React.useMemo(() => {
@@ -1463,9 +1353,9 @@ function useNoteCommentsSheetController({
 			visibleThreads &&
 			!visibleThreads.some((thread) => thread._id === expandedThreadId)
 		) {
-			collapseExpandedThread();
+			handleCollapseExpandedThread();
 		}
-	}, [collapseExpandedThread, expandedThreadId, visibleThreads]);
+	}, [expandedThreadId, handleCollapseExpandedThread, visibleThreads]);
 
 	React.useEffect(() => {
 		if (lastSyncedActiveThreadIdRef.current === activeThreadId) {
@@ -1889,6 +1779,40 @@ function useNoteCommentsSheetController({
 		[noteId, toggleMuteReplies, workspaceId],
 	);
 
+	const handleToggleResolvedThread = React.useCallback(
+		(thread: ThreadSummary) => {
+			if (!workspaceId || !noteId) {
+				return;
+			}
+
+			const resolved = !thread.isResolved;
+			setUiState({ threadActionsOpenId: null });
+
+			void setResolvedThread({
+				workspaceId,
+				noteId,
+				threadId: thread._id,
+				resolved,
+			})
+				.then(() => {
+					toast.success(
+						resolved ? "Discussion resolved" : "Discussion reopened",
+					);
+				})
+				.catch((error) => {
+					toast.error(
+						getErrorMessage(
+							error,
+							resolved
+								? "Failed to resolve discussion"
+								: "Failed to reopen discussion",
+						),
+					);
+				});
+		},
+		[noteId, setResolvedThread, workspaceId],
+	);
+
 	const handleDeleteThread = React.useCallback(
 		(threadId: Id<"noteCommentThreads">) => {
 			if (!workspaceId || !noteId) {
@@ -1971,6 +1895,7 @@ function useNoteCommentsSheetController({
 			handleMarkThreadUnread={handleMarkThreadUnread}
 			handleCopyThreadLink={handleCopyThreadLink}
 			handleToggleMuteThread={handleToggleMuteThread}
+			handleToggleResolvedThread={handleToggleResolvedThread}
 			handleDeleteThread={handleDeleteThread}
 			handleOpenThread={handleOpenThread}
 			handlePrefetchThread={prefetchThreadDetail}
