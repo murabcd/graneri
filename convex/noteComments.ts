@@ -14,6 +14,7 @@ const { requireIdentity } = createResourceAccess("notes");
 
 const MAX_THREAD_EXCERPT_LENGTH = 280;
 const MAX_COMMENT_BODY_LENGTH = 2_000;
+const MAX_REPLY_AUTHOR_NAMES = 3;
 const REMOVE_BATCH_SIZE = 100;
 const NOTE_COMMENT_INBOX_PROVIDER = "notes" as const;
 const COMMENTED_IN_TITLE = "commented in";
@@ -118,6 +119,7 @@ const noteCommentThreadFields = {
 	resolvedAt: v.optional(v.number()),
 	resolvedByName: v.optional(v.string()),
 	commentCount: v.number(),
+	replyAuthorNames: v.array(v.string()),
 	latestCommentPreview: v.string(),
 	latestCommentIsReply: v.boolean(),
 	createdAt: v.number(),
@@ -155,51 +157,29 @@ const normalizeCommentBody = (value: string) => {
 	return normalized;
 };
 
-const resolveThreadCreatorName = async (
-	ctx: MutationCtx | QueryCtx,
-	thread: Doc<"noteCommentThreads">,
-) => {
-	const createdByName = thread.createdByName;
+const addRecentReplyAuthor = (replyAuthorNames: string[], authorName: string) =>
+	[authorName, ...replyAuthorNames.filter((name) => name !== authorName)].slice(
+		0,
+		MAX_REPLY_AUTHOR_NAMES,
+	);
 
-	if (typeof createdByName === "string" && createdByName.trim().length > 0) {
-		return createdByName;
+const getRecentReplyAuthorNames = (comments: Doc<"noteComments">[]) => {
+	const names: string[] = [];
+
+	for (let index = comments.length - 1; index >= 0; index -= 1) {
+		const authorName = comments[index]?.authorName;
+		if (!authorName || names.includes(authorName)) {
+			continue;
+		}
+
+		names.push(authorName);
+		if (names.length === MAX_REPLY_AUTHOR_NAMES) {
+			break;
+		}
 	}
 
-	const firstComment = await ctx.db
-		.query("noteComments")
-		.withIndex("by_threadId_and_createdAt", (q) => q.eq("threadId", thread._id))
-		.first();
-
-	return firstComment?.authorName || "Unknown";
+	return names;
 };
-
-const resolveLatestCommentIsReply = async (
-	ctx: MutationCtx | QueryCtx,
-	thread: Doc<"noteCommentThreads">,
-) => {
-	const latestCommentIsReply = thread.latestCommentIsReply;
-
-	if (typeof latestCommentIsReply === "boolean") {
-		return latestCommentIsReply;
-	}
-
-	const latestComment = await ctx.db
-		.query("noteComments")
-		.withIndex("by_threadId_and_createdAt", (q) => q.eq("threadId", thread._id))
-		.order("desc")
-		.first();
-
-	return Boolean(latestComment?.parentCommentId);
-};
-
-const normalizeThreadSummary = async (
-	ctx: MutationCtx | QueryCtx,
-	thread: Doc<"noteCommentThreads">,
-) => ({
-	...thread,
-	createdByName: await resolveThreadCreatorName(ctx, thread),
-	latestCommentIsReply: await resolveLatestCommentIsReply(ctx, thread),
-});
 
 const requireOwnedThread = async (
 	ctx: MutationCtx | QueryCtx,
@@ -467,9 +447,7 @@ export const listThreads = query({
 				.order("desc")
 				.take(200);
 
-			return await Promise.all(
-				threads.map((thread) => normalizeThreadSummary(ctx, thread)),
-			);
+			return threads;
 		}
 
 		const threads = await ctx.db
@@ -484,9 +462,7 @@ export const listThreads = query({
 			.order("desc")
 			.take(200);
 
-		return await Promise.all(
-			threads.map((thread) => normalizeThreadSummary(ctx, thread)),
-		);
+		return threads;
 	},
 });
 
@@ -523,10 +499,7 @@ export const getThread = query({
 			)
 			.take(200);
 
-		return {
-			...(await normalizeThreadSummary(ctx, thread)),
-			comments,
-		};
+		return { ...thread, comments };
 	},
 });
 
@@ -570,6 +543,7 @@ export const createThread = mutation({
 			isMutedReplies: false,
 			readAt: undefined,
 			commentCount: 1,
+			replyAuthorNames: [],
 			latestCommentPreview: body,
 			latestCommentIsReply: false,
 			createdAt: now,
@@ -633,21 +607,25 @@ export const addComment = mutation({
 			threadId: thread._id,
 			parentCommentId: args.parentCommentId,
 		});
+		const authorName = getAuthorName(identity);
 		const commentId = await ctx.db.insert("noteComments", {
 			threadId: thread._id,
 			parentCommentId,
 			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
 			noteId: args.noteId,
-			authorName: getAuthorName(identity),
+			authorName,
 			body,
 			createdAt: now,
 			updatedAt: now,
 		});
 
 		await ctx.db.patch(thread._id, {
-			createdByName: await resolveThreadCreatorName(ctx, thread),
 			commentCount: thread.commentCount + 1,
+			replyAuthorNames: addRecentReplyAuthor(
+				thread.replyAuthorNames,
+				authorName,
+			),
 			latestCommentPreview: body,
 			latestCommentIsReply: true,
 			isResolved: false,
@@ -716,7 +694,7 @@ export const setResolved = mutation({
 			});
 		}
 
-		return await normalizeThreadSummary(ctx, nextThread);
+		return nextThread;
 	},
 });
 
@@ -910,9 +888,13 @@ export const deleteComment = mutation({
 		}
 
 		const now = Date.now();
+		const remainingComments = threadComments.filter(
+			(threadComment) => threadComment._id !== comment._id,
+		);
 		await ctx.db.patch(thread._id, {
 			createdByName: firstRemainingComment.authorName,
 			commentCount: remainingCommentCount,
+			replyAuthorNames: getRecentReplyAuthorNames(remainingComments.slice(1)),
 			latestCommentPreview: latestRemainingComment.body,
 			latestCommentIsReply: Boolean(latestRemainingComment.parentCommentId),
 			updatedAt: now,

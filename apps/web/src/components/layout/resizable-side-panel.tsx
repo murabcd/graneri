@@ -485,6 +485,7 @@ function ResizeHandleButton({
 				isResizing && orientation === "horizontal" && "cursor-row-resize",
 			)}
 			onPointerDown={onPointerDown}
+			onClick={(event) => event.stopPropagation()}
 			onKeyDown={onKeyDown}
 		>
 			<ResizeHandleGrip orientation={orientation} active={isResizing} />

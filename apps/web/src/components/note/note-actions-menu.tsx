@@ -223,7 +223,8 @@ export function NoteStarButton({
 					variant="ghost"
 					size="icon"
 					className={cn(
-						"text-muted-foreground hover:text-foreground",
+						"text-muted-foreground hover:text-foreground focus-visible:text-foreground",
+						isStarred && "text-foreground",
 						className,
 					)}
 					aria-label={

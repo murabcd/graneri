@@ -54,7 +54,6 @@ import {
 	ArrowDown,
 	Clock,
 	Copy,
-	MessageSquareText,
 	MoreHorizontal,
 	Pencil,
 	Plus,
@@ -102,11 +101,11 @@ import {
 	NoteActionsMenu,
 	NoteStarButton,
 } from "@/components/note/note-actions-menu";
+import { NoteCommentsButton } from "@/components/note/note-comments-button";
 import {
 	type NoteEditorActions,
 	NoteEditorActionsStore,
 } from "@/components/note/note-editor-actions-store";
-import { OPEN_NOTE_COMMENTS_EVENT } from "@/components/note/note-page-events";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
@@ -1803,28 +1802,11 @@ function AppShellHeaderActions({
 				/>
 			) : null}
 			<NoteStarButton noteId={currentNoteId} className="size-7" />
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						data-app-region={isDesktopMac ? "no-drag" : undefined}
-						aria-label="Open comments"
-						onClick={() => {
-							if (currentNoteCommentsOpener) {
-								currentNoteCommentsOpener();
-								return;
-							}
-
-							window.dispatchEvent(new Event(OPEN_NOTE_COMMENTS_EVENT));
-						}}
-					>
-						<MessageSquareText className="size-4" />
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent>Open comments</TooltipContent>
-			</Tooltip>
+			<NoteCommentsButton
+				noteId={currentNoteId}
+				isDesktopMac={isDesktopMac}
+				onOpen={currentNoteCommentsOpener}
+			/>
 			<NoteHeaderActionsMenu
 				noteId={currentNoteId}
 				noteTitle={currentNoteTitle}

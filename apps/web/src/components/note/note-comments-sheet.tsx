@@ -60,12 +60,8 @@ import { cn } from "@workspace/ui/lib/utils";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import {
 	ArrowUp,
-	Bell,
-	BellOff,
 	Check,
-	Link2,
 	LoaderCircle,
-	MessageSquareDot,
 	MessageSquareMore,
 	Minus,
 	MoreHorizontal,
@@ -96,6 +92,7 @@ import {
 	useDockedPanelOverlayWidth,
 } from "@/components/layout/use-docked-panel-widths";
 import { getDesktopCommentsPanelPinnedStorageKey } from "@/components/note/note-comments-panel-state";
+import { NoteCommentsThreadSummary } from "@/components/note/note-comments-thread-summary";
 import {
 	buildCommentTree,
 	type CommentViewer,
@@ -103,7 +100,6 @@ import {
 	type FlattenedThreadComment,
 	flattenCommentTree,
 	formatCommentTimestamp,
-	formatDiscussionTitle,
 	getAvatarLabel,
 	INITIAL_COMMENTS_UI_STATE,
 	resolveAuthorIdentity,
@@ -572,16 +568,14 @@ function DiscussionThreadRow({
 			: expandedThread && expandedThread._id === thread._id
 				? expandedThread
 				: null;
-	const threadAuthor = resolveAuthorIdentity({
-		name: thread.createdByName,
-		currentUser,
-	});
-
 	return (
-		<div className={cn(!isExpanded && !isEditComposerOpen && "border-b")}>
-			<DiscussionThreadSummary
+		<div
+			data-note-comment-thread-row={thread._id}
+			className={cn(!isExpanded && !isEditComposerOpen && "border-b")}
+		>
+			<NoteCommentsThreadSummary
 				thread={thread}
-				threadAuthor={threadAuthor}
+				currentUser={currentUser}
 				isRead={isRead}
 				isActive={isActive}
 				isExpanded={isExpanded}
@@ -622,196 +616,6 @@ function DiscussionThreadRow({
 					/>
 				) : null
 			) : null}
-		</div>
-	);
-}
-
-function DiscussionThreadSummary({
-	thread,
-	threadAuthor,
-	isRead,
-	isActive,
-	isExpanded,
-	threadActionsOpenId,
-	setThreadActionsOpenId,
-	handleMarkThreadRead,
-	handleMarkThreadUnread,
-	handleCopyThreadLink,
-	handleToggleMuteThread,
-	handleDeleteThread,
-	handleOpenThread,
-	handlePrefetchThread,
-}: {
-	thread: ThreadSummary;
-	threadAuthor: ReturnType<typeof resolveAuthorIdentity>;
-	isRead: boolean;
-	isActive: boolean;
-	isExpanded: boolean;
-	threadActionsOpenId: Id<"noteCommentThreads"> | null;
-	setThreadActionsOpenId: (threadId: Id<"noteCommentThreads"> | null) => void;
-	handleMarkThreadRead: (thread: ThreadSummary) => void;
-	handleMarkThreadUnread: (threadId: Id<"noteCommentThreads">) => void;
-	handleCopyThreadLink: (threadId: Id<"noteCommentThreads">) => Promise<void>;
-	handleToggleMuteThread: (thread: ThreadSummary) => void;
-	handleDeleteThread: (threadId: Id<"noteCommentThreads">) => void;
-	handleOpenThread: (thread: ThreadSummary) => void;
-	handlePrefetchThread: (threadId: Id<"noteCommentThreads">) => void;
-}) {
-	return (
-		<div
-			className={cn(
-				"group transition-colors hover:bg-accent/20",
-				isActive && "bg-accent/10",
-			)}
-		>
-			<div className="flex items-start gap-3 p-3">
-				<button
-					type="button"
-					className={cn(
-						"min-w-0 flex-1 cursor-pointer rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-						isRead && "opacity-50",
-					)}
-					aria-expanded={isExpanded}
-					aria-label={formatDiscussionTitle(
-						threadAuthor.name,
-						thread.latestCommentIsReply ?? false,
-					)}
-					onFocus={() => handlePrefetchThread(thread._id)}
-					onClick={() => handleOpenThread(thread)}
-					onPointerEnter={() => handlePrefetchThread(thread._id)}
-				>
-					<div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1">
-						<div className="flex pt-0.5">
-							<Avatar className="size-4">
-								<AvatarImage
-									src={threadAuthor.avatarSrc ?? undefined}
-									alt={threadAuthor.name}
-								/>
-								<AvatarFallback className="text-[9px] font-medium">
-									{getAvatarLabel(threadAuthor.name)}
-								</AvatarFallback>
-							</Avatar>
-						</div>
-						<div className="min-w-0">
-							<p className="truncate text-sm font-medium">
-								{formatDiscussionTitle(
-									threadAuthor.name,
-									thread.latestCommentIsReply ?? false,
-								)}
-							</p>
-						</div>
-						<div className="col-start-2 min-w-0">
-							<p className="truncate text-xs leading-4 text-muted-foreground">
-								{thread.excerpt}
-							</p>
-						</div>
-						{isExpanded ? null : (
-							<div className="col-start-2 min-w-0">
-								<p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
-									{thread.latestCommentPreview}
-								</p>
-							</div>
-						)}
-					</div>
-					{isExpanded ? null : (
-						<div className="pl-6 pt-3">
-							<Button
-								asChild
-								type={undefined}
-								variant="outline"
-								size="sm"
-								className="pointer-events-none text-xs"
-							>
-								<span>Reply</span>
-							</Button>
-						</div>
-					)}
-				</button>
-				<div className="relative flex min-w-[3.75rem] shrink-0 items-start justify-end pt-0.5">
-					<span
-						className={cn(
-							"pointer-events-none text-xs text-muted-foreground transition-opacity duration-150",
-							threadActionsOpenId === thread._id
-								? "opacity-0"
-								: isRead
-									? "opacity-50 group-hover:opacity-0 group-focus-within:opacity-0"
-									: "opacity-100 group-hover:opacity-0 group-focus-within:opacity-0",
-						)}
-					>
-						{formatCommentTimestamp(thread.lastCommentAt)}
-					</span>
-					<DropdownMenu
-						modal
-						open={threadActionsOpenId === thread._id}
-						onOpenChange={(nextOpen) =>
-							setThreadActionsOpenId(nextOpen ? thread._id : null)
-						}
-					>
-						<DropdownMenuTrigger asChild>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								className={cn(
-									"absolute top-0 right-0 z-10 h-6 w-6 cursor-pointer rounded-md text-muted-foreground transition-[opacity,color,background-color] duration-150 hover:bg-accent hover:text-foreground",
-									threadActionsOpenId === thread._id
-										? "opacity-100"
-										: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-								)}
-								aria-label="Comment actions"
-							>
-								<MoreHorizontal className="size-4" />
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="min-w-40">
-							<DropdownMenuItem
-								className="cursor-pointer"
-								onSelect={() =>
-									isRead
-										? handleMarkThreadUnread(thread._id)
-										: handleMarkThreadRead(thread)
-								}
-							>
-								{isRead ? (
-									<MessageSquareDot className="size-4" />
-								) : (
-									<Check className="size-4" />
-								)}
-								<span>{isRead ? "Mark as unread" : "Mark as read"}</span>
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								className="cursor-pointer"
-								onSelect={() => void handleCopyThreadLink(thread._id)}
-							>
-								<Link2 className="size-4" />
-								<span>Copy link</span>
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								className="cursor-pointer"
-								onSelect={() => handleToggleMuteThread(thread)}
-							>
-								{thread.isMutedReplies ? (
-									<Bell className="size-4" />
-								) : (
-									<BellOff className="size-4" />
-								)}
-								<span>
-									{thread.isMutedReplies ? "Unmute replies" : "Mute replies"}
-								</span>
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								variant="destructive"
-								className="cursor-pointer"
-								onSelect={() => handleDeleteThread(thread._id)}
-							>
-								<Trash2 className="size-4" />
-								<span>Delete</span>
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				</div>
-			</div>
 		</div>
 	);
 }
@@ -1023,6 +827,7 @@ type CommentsSheetBodyProps = {
 	handleReply: () => void;
 	handleStartEditComment: (comment: ThreadComment) => void;
 	handleDeleteComment: (comment: ThreadComment) => void;
+	handleCollapseExpandedThread: () => void;
 };
 
 const CommentsSheetBody = React.memo(function CommentsSheetBody({
@@ -1059,8 +864,32 @@ const CommentsSheetBody = React.memo(function CommentsSheetBody({
 	handleReply,
 	handleStartEditComment,
 	handleDeleteComment,
+	handleCollapseExpandedThread,
 }: CommentsSheetBodyProps) {
 	const threadList = visibleThreads ?? [];
+
+	React.useEffect(() => {
+		if (!expandedThreadId) {
+			return;
+		}
+
+		const handleDocumentClick = (event: MouseEvent) => {
+			const target = event.target;
+			if (
+				!(target instanceof Element) ||
+				target.closest(
+					'[data-note-comment-thread-row], [data-note-comment-thread-id], [data-slot="dropdown-menu-content"]',
+				)
+			) {
+				return;
+			}
+
+			handleCollapseExpandedThread();
+		};
+
+		document.addEventListener("click", handleDocumentClick);
+		return () => document.removeEventListener("click", handleDocumentClick);
+	}, [expandedThreadId, handleCollapseExpandedThread]);
 
 	return (
 		<ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
@@ -1407,6 +1236,10 @@ function useNoteCommentsSheetController({
 	const collapseExpandedThread = React.useCallback(() => {
 		setUiState({ expandedThreadId: null });
 	}, []);
+	const handleCollapseExpandedThread = React.useCallback(() => {
+		collapseExpandedThread();
+		onActiveThreadIdChange(null);
+	}, [collapseExpandedThread, onActiveThreadIdChange]);
 	const syncEditingThreadStarterComment = React.useCallback(
 		(thread: ThreadDetail) => {
 			const starterComment =
@@ -1897,12 +1730,8 @@ function useNoteCommentsSheetController({
 		(thread: ThreadSummary) => {
 			onPendingSelectionChange(null);
 			if (expandedThreadId === thread._id) {
-				setUiState({
-					expandedThreadId: null,
-					replyBody: "",
-				});
+				handleCollapseExpandedThread();
 				handleMarkThreadRead(thread);
-				onActiveThreadIdChange(null);
 				return;
 			}
 
@@ -1915,6 +1744,7 @@ function useNoteCommentsSheetController({
 		},
 		[
 			expandedThreadId,
+			handleCollapseExpandedThread,
 			handleMarkThreadRead,
 			onActiveThreadIdChange,
 			onPendingSelectionChange,
@@ -2027,8 +1857,7 @@ function useNoteCommentsSheetController({
 						resolvedExpandedThread._id === comment.threadId &&
 						resolvedExpandedThread.comments.length === 1
 					) {
-						setUiState({ expandedThreadId: null });
-						onActiveThreadIdChange(null);
+						handleCollapseExpandedThread();
 					}
 
 					if (editingCommentId === comment._id) {
@@ -2047,8 +1876,8 @@ function useNoteCommentsSheetController({
 		[
 			deleteComment,
 			editingCommentId,
+			handleCollapseExpandedThread,
 			noteId,
-			onActiveThreadIdChange,
 			resolvedExpandedThread,
 			workspaceId,
 		],
@@ -2201,6 +2030,7 @@ function useNoteCommentsSheetController({
 			handleReply={handleReply}
 			handleStartEditComment={handleStartEditComment}
 			handleDeleteComment={handleDeleteComment}
+			handleCollapseExpandedThread={handleCollapseExpandedThread}
 		/>
 	);
 

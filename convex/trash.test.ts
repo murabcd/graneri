@@ -106,6 +106,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			isRead: false,
 			isMutedReplies: false,
 			commentCount: 1,
+			replyAuthorNames: [],
 			latestCommentPreview: "Expired comment",
 			latestCommentIsReply: false,
 			createdAt: 4_500,
@@ -246,19 +247,22 @@ test("trash cleanup removes expired archived items without touching recent trash
 			updatedAt: 5_000,
 			lastMessageAt: 5_000,
 		});
-		const expiredRecentlyUpdatedStandaloneChatId = await ctx.db.insert("chats", {
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId: cleanupWorkspaceId,
-			chatId: "expired-recently-updated-standalone-chat",
-			starredSortOrder: 0,
-			title: "Expired recently updated standalone chat",
-			preview: "Expired recently updated standalone chat",
-			isArchived: true,
-			archivedAt: 5_000,
-			createdAt: 1_000,
-			updatedAt: 15_000,
-			lastMessageAt: 15_000,
-		});
+		const expiredRecentlyUpdatedStandaloneChatId = await ctx.db.insert(
+			"chats",
+			{
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				workspaceId: cleanupWorkspaceId,
+				chatId: "expired-recently-updated-standalone-chat",
+				starredSortOrder: 0,
+				title: "Expired recently updated standalone chat",
+				preview: "Expired recently updated standalone chat",
+				isArchived: true,
+				archivedAt: 5_000,
+				createdAt: 1_000,
+				updatedAt: 15_000,
+				lastMessageAt: 15_000,
+			},
+		);
 		await ctx.db.insert("chatMessages", {
 			chatId: recentStandaloneChatId,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
@@ -324,7 +328,9 @@ test("trash cleanup removes expired archived items without touching recent trash
 
 		return {
 			expiredNote: await ctx.db.get(expiredNoteId),
-			expiredRecentlyUpdatedNote: await ctx.db.get(expiredRecentlyUpdatedNoteId),
+			expiredRecentlyUpdatedNote: await ctx.db.get(
+				expiredRecentlyUpdatedNoteId,
+			),
 			recentNote: await ctx.db.get(recentNoteId),
 			recentOldUpdatedNote: await ctx.db.get(recentOldUpdatedNoteId),
 			expiredLinkedChat: await ctx.db.get(expiredLinkedChatId),

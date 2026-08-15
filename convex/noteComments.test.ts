@@ -1,6 +1,7 @@
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -57,6 +58,7 @@ const createWorkspaceAndNote = async () => {
 	return {
 		asOwner,
 		noteId,
+		t,
 		workspaceId,
 	};
 };
@@ -96,6 +98,7 @@ test("noteComments.createThread stores the thread and first comment", async () =
 		isResolved: false,
 		isRead: false,
 		commentCount: 1,
+		replyAuthorNames: [],
 		latestCommentPreview: "Can you clarify the decision here?",
 		latestCommentIsReply: false,
 	});
@@ -152,6 +155,7 @@ test("noteComments.addComment reopens a resolved thread", async () => {
 		isResolved: false,
 		isRead: false,
 		commentCount: 2,
+		replyAuthorNames: ["Owner"],
 		latestCommentPreview: "Added more context.",
 		latestCommentIsReply: true,
 	});
@@ -219,11 +223,14 @@ test("noteComments.markRead does not reorder threads", async () => {
 		body: "Second body",
 	});
 
-	const threadsBeforeMarkRead = await asOwner.query(api.noteComments.listThreads, {
-		workspaceId,
-		noteId,
-		view: "all",
-	});
+	const threadsBeforeMarkRead = await asOwner.query(
+		api.noteComments.listThreads,
+		{
+			workspaceId,
+			noteId,
+			view: "all",
+		},
+	);
 
 	expect(threadsBeforeMarkRead.map((thread) => thread._id)).toEqual([
 		secondThreadId,
@@ -237,11 +244,14 @@ test("noteComments.markRead does not reorder threads", async () => {
 		threadId: firstThreadId,
 	});
 
-	const threadsAfterMarkRead = await asOwner.query(api.noteComments.listThreads, {
-		workspaceId,
-		noteId,
-		view: "all",
-	});
+	const threadsAfterMarkRead = await asOwner.query(
+		api.noteComments.listThreads,
+		{
+			workspaceId,
+			noteId,
+			view: "all",
+		},
+	);
 
 	expect(threadsAfterMarkRead.map((thread) => thread._id)).toEqual([
 		secondThreadId,
@@ -301,6 +311,61 @@ test("noteComments.addComment chains replies to the latest comment by default", 
 		body: "Second reply",
 		parentCommentId: firstReplyId,
 	});
+	expect(thread?.replyAuthorNames).toEqual(["Owner"]);
+});
+
+test("noteComments.addComment keeps the three most recent reply authors", async () => {
+	const { asOwner, noteId, t, workspaceId } = await createWorkspaceAndNote();
+	const threadId = await asOwner.mutation(api.noteComments.createThread, {
+		workspaceId,
+		noteId,
+		excerpt: "Review this section",
+		body: "Root comment",
+	});
+	const replyAuthors = ["Owner", "Grace", "Linus", "Ada", "Grace"];
+	let latestReplyId: Id<"noteComments"> | null = null;
+
+	for (const name of replyAuthors) {
+		latestReplyId = await t
+			.withIdentity({ ...ownerIdentity, name })
+			.mutation(api.noteComments.addComment, {
+				workspaceId,
+				noteId,
+				threadId,
+				body: `${name} reply`,
+			});
+	}
+
+	const thread = await asOwner.query(api.noteComments.getThread, {
+		workspaceId,
+		noteId,
+		threadId,
+	});
+
+	expect(thread?.replyAuthorNames).toEqual(["Grace", "Ada", "Linus"]);
+
+	if (!latestReplyId) {
+		throw new Error("Expected the latest reply to exist.");
+	}
+
+	await asOwner.mutation(api.noteComments.deleteComment, {
+		workspaceId,
+		noteId,
+		threadId,
+		commentId: latestReplyId,
+	});
+
+	const threadAfterDelete = await asOwner.query(api.noteComments.getThread, {
+		workspaceId,
+		noteId,
+		threadId,
+	});
+
+	expect(threadAfterDelete?.replyAuthorNames).toEqual([
+		"Ada",
+		"Linus",
+		"Grace",
+	]);
 });
 
 test("noteComments.deleteComment keeps the thread and refreshes inbox activity", async () => {
@@ -357,6 +422,7 @@ test("noteComments.deleteComment keeps the thread and refreshes inbox activity",
 	expect(thread).not.toBeNull();
 	expect(thread).toMatchObject({
 		commentCount: 2,
+		replyAuthorNames: ["Owner"],
 		latestCommentPreview: "First reply",
 		latestCommentIsReply: true,
 		isRead: true,
