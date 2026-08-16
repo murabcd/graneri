@@ -177,7 +177,10 @@ describe("note slash command", () => {
 	it("inserts a three-column Tiptap table", async () => {
 		const { editor } = await renderSlashCommandHarness();
 		openSlashCommands(editor, "table");
-		expect(await screen.findByRole("option", { name: "Table" })).toBeTruthy();
+		const tableOption = await screen.findByRole("option", { name: "Table" });
+		expect(tableOption.getAttribute("aria-haspopup")).toBeNull();
+		fireEvent.mouseEnter(tableOption);
+		expect(screen.queryByRole("group", { name: "Table size" })).toBeNull();
 
 		selectActiveSlashCommand(editor);
 
@@ -185,7 +188,7 @@ describe("note slash command", () => {
 		expect(table?.type).toBe("table");
 		expect(table?.content).toHaveLength(3);
 		expect(table?.content?.[0]?.content).toHaveLength(3);
-		expect(table?.content?.[0]?.content?.[0]?.type).toBe("tableHeader");
+		expect(table?.content?.[0]?.content?.[0]?.type).toBe("tableCell");
 	});
 
 	it("inserts the StarterKit separator", async () => {

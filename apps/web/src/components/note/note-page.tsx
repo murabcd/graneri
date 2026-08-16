@@ -75,6 +75,7 @@ import { NoteImageMenu } from "./note-image-menu";
 import { NOTE_PAGE_VIEWPORT_MIN_HEIGHT_CLASS } from "./note-layout";
 import { OPEN_NOTE_COMMENTS_EVENT } from "./note-page-events";
 import { NoteSelectionMenu } from "./note-selection-menu";
+import { NoteTableMenu } from "./note-table-menu";
 import { NoteTableOfContents } from "./note-table-of-contents";
 import { writeRichTextToClipboard } from "./share-note";
 import {
@@ -1192,6 +1193,7 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 												openImagePicker({ kind: "replace", position })
 											}
 										/>
+										<NoteTableMenu />
 									</Tiptap>
 								) : null}
 								{templateApplyState.isRunning ? (

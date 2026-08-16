@@ -17,6 +17,8 @@ import { NoteComment } from "./note-comment-extension";
 import { NoteImage } from "./note-image-extension";
 import { NOTE_IMAGE_MIME_TYPES } from "./note-image-upload";
 import { createNoteSlashCommand } from "./note-slash-command";
+import { NOTE_TABLE_RESIZE_HANDLE_WIDTH, NoteTableView } from "./note-table";
+import { NoteTableCell, NoteTableHeader } from "./note-table-cell";
 
 export const EMPTY_DOCUMENT: JSONContent = {
 	type: "doc",
@@ -238,9 +240,18 @@ export const createNoteEditorExtensions = (
 	}),
 	TableKit.configure({
 		table: {
+			cellMinWidth: 80,
+			handleWidth: NOTE_TABLE_RESIZE_HANDLE_WIDTH,
+			lastColumnResizable: true,
 			renderWrapper: true,
+			resizable: true,
+			View: NoteTableView,
 		},
+		tableCell: false,
+		tableHeader: false,
 	}),
+	NoteTableCell,
+	NoteTableHeader,
 	NoteComment.configure({
 		onThreadClick: options.onCommentThreadClick,
 	}),

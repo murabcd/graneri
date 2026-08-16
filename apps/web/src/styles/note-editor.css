@@ -249,8 +249,19 @@
 }
 
 :where(.note-tiptap.ProseMirror) :where(.tableWrapper) {
+	position: relative;
 	margin: 1.25rem 0;
+	overflow: visible;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-scroll) {
 	overflow-x: auto;
+	padding: 1px;
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-table-scroll[data-note-table-column-dragging]) {
+	overflow-x: visible;
 }
 
 :where(.note-tiptap.ProseMirror) :where(table) {
@@ -274,7 +285,88 @@
 	text-align: left;
 }
 
-:where(.note-tiptap.ProseMirror) :where(td, th) > :last-child {
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-align="left"] {
+	text-align: left;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-align="center"] {
+	text-align: center;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-align="right"] {
+	text-align: right;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background] {
+	background: color-mix(
+		in oklab,
+		var(--note-table-color) var(--note-table-color-strength, 16%),
+		var(--background)
+	);
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="gray"],
+.note-table-color-swatch[data-color="gray"] {
+	--note-table-color: var(--foreground);
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="brown"],
+.note-table-color-swatch[data-color="brown"] {
+	--note-table-color: #9a6b4f;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="orange"],
+.note-table-color-swatch[data-color="orange"] {
+	--note-table-color: #f59e0b;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="yellow"],
+.note-table-color-swatch[data-color="yellow"] {
+	--note-table-color: #eab308;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="green"],
+.note-table-color-swatch[data-color="green"] {
+	--note-table-color: #22c55e;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="blue"],
+.note-table-color-swatch[data-color="blue"] {
+	--note-table-color: #3b82f6;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="purple"],
+.note-table-color-swatch[data-color="purple"] {
+	--note-table-color: #8b5cf6;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="pink"],
+.note-table-color-swatch[data-color="pink"] {
+	--note-table-color: #ec4899;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="red"],
+.note-table-color-swatch[data-color="red"] {
+	--note-table-color: #ef4444;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="gray"] {
+	--note-table-color-strength: 7%;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="brown"],
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="yellow"] {
+	--note-table-color-strength: 18%;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th)[data-cell-background="orange"] {
+	--note-table-color-strength: 20%;
+}
+
+:where(.note-tiptap.ProseMirror) :where(td, th) > :last-child,
+:where(.note-tiptap.ProseMirror)
+	:where(td, th)
+	> :has(+ .column-resize-handle) {
 	margin-bottom: 0;
 }
 
@@ -283,9 +375,191 @@
 	position: absolute;
 	inset: 0;
 	z-index: 1;
-	background: color-mix(in oklab, var(--accent) 55%, transparent);
+	background: color-mix(in oklab, var(--primary) 8%, transparent);
 	content: "";
 	pointer-events: none;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.column-resize-handle) {
+	position: absolute;
+	top: 0;
+	right: -3px;
+	bottom: 0;
+	z-index: 2;
+	width: 7px;
+	cursor: col-resize;
+	pointer-events: none;
+}
+
+.note-tiptap.ProseMirror.resize-cursor,
+.note-tiptap.ProseMirror.resize-cursor * {
+	cursor: col-resize;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-add) {
+	position: absolute;
+	z-index: 3;
+	display: grid;
+	place-items: center;
+	border: 0;
+	border-radius: 4px;
+	background: color-mix(in oklab, var(--foreground) 5%, transparent);
+	color: color-mix(in oklab, var(--foreground) 48%, transparent);
+	opacity: 0;
+	cursor: pointer;
+	pointer-events: none;
+	touch-action: none;
+	user-select: none;
+	transition:
+		opacity 120ms ease,
+		background-color 120ms ease,
+		color 120ms ease;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-add)::before,
+:where(.note-tiptap.ProseMirror) :where(.note-table-add)::after {
+	position: absolute;
+	width: 8px;
+	height: 1px;
+	background: currentColor;
+	content: "";
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-add)::after {
+	transform: rotate(90deg);
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-add-column) {
+	width: 12px;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-add-row) {
+	height: 12px;
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-table-add[data-note-table-visible]) {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-add:hover) {
+	background: color-mix(in oklab, var(--foreground) 10%, transparent);
+	color: var(--foreground);
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-table-add-row[data-note-table-dragging]) {
+	cursor: ns-resize;
+}
+
+:where(.note-tiptap.ProseMirror)
+	:where(.note-table-add-column[data-note-table-dragging]) {
+	cursor: ew-resize;
+}
+
+:where(.note-tiptap.ProseMirror) :where(.note-table-add:focus-visible) {
+	opacity: 1;
+	outline: 2px solid var(--ring);
+	outline-offset: -2px;
+	pointer-events: auto;
+}
+
+.note-table-handle {
+	position: fixed;
+	z-index: 40;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 0;
+	border-radius: 4px;
+	background: color-mix(in oklab, var(--foreground) 5%, transparent);
+	color: color-mix(in oklab, var(--foreground) 48%, transparent);
+	cursor: pointer;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease;
+}
+
+.note-table-handle:hover,
+.note-table-handle[data-state="open"] {
+	background: color-mix(in oklab, var(--foreground) 10%, transparent);
+	color: var(--foreground);
+}
+
+.note-table-handle:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+
+.note-table-handle svg {
+	width: 0.75rem;
+	height: 0.75rem;
+}
+
+.note-table-cell-selection-handle {
+	position: fixed;
+	z-index: 41;
+	display: grid;
+	width: 1rem;
+	height: 1rem;
+	place-items: center;
+	border: 0;
+	border-radius: 4px;
+	background: color-mix(in oklab, var(--foreground) 5%, transparent);
+	color: color-mix(in oklab, var(--foreground) 48%, transparent);
+	cursor: pointer;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease;
+}
+
+.note-table-cell-selection-handle:hover,
+.note-table-cell-selection-handle[data-state="open"] {
+	background: color-mix(in oklab, var(--foreground) 10%, transparent);
+	color: var(--foreground);
+}
+
+.note-table-cell-selection-handle:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+
+.note-table-cell-selection-dots {
+	width: 0.5rem;
+	height: 0.5rem;
+	background-image: radial-gradient(
+		circle,
+		currentColor 1px,
+		transparent 1.25px
+	);
+	background-size: 0.25rem 0.25rem;
+}
+
+.note-table-handle-row svg {
+	transform: rotate(90deg);
+}
+
+:where(.note-tiptap.ProseMirror[contenteditable="false"])
+	:where(.column-resize-handle, .note-table-add) {
+	display: none;
+}
+
+.note-table-color-swatch {
+	width: 1rem;
+	height: 1rem;
+	flex: 0 0 auto;
+	border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
+	border-radius: 999px;
+	background: var(--background);
+}
+
+.note-table-color-swatch[data-color="gray"] {
+	background: color-mix(in oklab, var(--foreground) 12%, var(--background));
+}
+
+.note-table-color-swatch:not([data-color="default"], [data-color="gray"]) {
+	background: var(--note-table-color);
 }
 
 :where(.note-tiptap.ProseMirror) :where(a) {
