@@ -136,6 +136,7 @@ import {
 	createNoteCaptureRequestId,
 	getNoteCaptureRequestIdForAutoStart,
 } from "@/lib/note-capture-request";
+import { serializeMarkdownToNoteContent } from "@/lib/note-editor";
 import type { NoteTemplate } from "@/lib/note-templates";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { WorkspaceRecord } from "@/lib/workspaces";
@@ -967,14 +968,15 @@ const useAppShellState = ({
 
 			creatingNoteRef.current = true;
 			const nextTitle = title.trim() || "New note";
-			const nextContent = content.trim();
+			const searchableText = content.trim();
+			const nextContent = serializeMarkdownToNoteContent(searchableText);
 
 			try {
 				const noteId = await saveNote({
 					workspaceId: resolvedActiveWorkspaceId,
 					title: nextTitle,
 					content: nextContent,
-					searchableText: nextContent,
+					searchableText,
 				});
 				setCurrentNoteTitleOverride({
 					noteId,

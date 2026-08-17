@@ -5,8 +5,10 @@ import {
 	EMPTY_DOCUMENT,
 	looksLikeMarkdown,
 	normalizePastedPlainText,
+	parseMarkdownToDocument,
 	parseStoredNoteContent,
 	serializeDocumentToMarkdown,
+	serializeMarkdownToNoteContent,
 } from "../src/lib/note-editor";
 
 const schema = getSchema(createNoteEditorExtensions());
@@ -26,11 +28,11 @@ describe("note editor markdown bridge", () => {
 		editor.destroy();
 	});
 
-	it("parses markdown note content into tiptap json", () => {
-		const parsed = parseStoredNoteContent(
+	it("parses explicitly imported markdown into tiptap json", () => {
+		const parsed = parseMarkdownToDocument(
 			"# Summary\n\n- shipped ~~markdown~~\n- kept autosave\n\n```ts\nconst ready = true\n```",
 			schema,
-		);
+		).toJSON();
 
 		expect(parsed).toMatchObject({
 			type: "doc",
@@ -70,7 +72,7 @@ describe("note editor markdown bridge", () => {
 		);
 	});
 
-	it("keeps uploaded Convex images and rejects unowned image nodes", () => {
+	it("keeps uploaded Convex images in canonical stored documents", () => {
 		const uploadedImage = {
 			type: "image",
 			attrs: {
@@ -81,13 +83,7 @@ describe("note editor markdown bridge", () => {
 		};
 		const document = {
 			type: "doc",
-			content: [
-				uploadedImage,
-				{
-					type: "image",
-					attrs: { src: "https://untrusted.test/hotlink.png" },
-				},
-			],
+			content: [uploadedImage],
 		};
 
 		expect(parseStoredNoteContent(JSON.stringify(document), schema)).toEqual({
@@ -101,53 +97,55 @@ describe("note editor markdown bridge", () => {
 		});
 	});
 
+	it("rejects non-canonical stored content instead of repairing it", () => {
+		expect(() => parseStoredNoteContent("# Legacy markdown", schema)).toThrow();
+		expect(() =>
+			parseStoredNoteContent(
+				JSON.stringify({
+					type: "doc",
+					content: [
+						{
+							type: "image",
+							attrs: { src: "https://untrusted.test/hotlink.png" },
+						},
+					],
+				}),
+				schema,
+			),
+		).toThrow("must identify an uploaded image");
+	});
+
 	it("does not turn remote markdown images into note attachments", () => {
-		const parsed = parseStoredNoteContent(
+		const parsed = parseMarkdownToDocument(
 			"Before\n\n![remote](https://example.test/image.png)\n\nAfter",
 			schema,
-		);
+		).toJSON();
 
 		expect(parsed.content?.some((node) => node.type === "image")).toBe(false);
 	});
 
-	it("upgrades legacy bold-paragraph section titles into headings", () => {
-		const parsed = parseStoredNoteContent(
-			JSON.stringify({
-				type: "doc",
-				content: [
-					{
-						type: "paragraph",
-						content: [
-							{
-								type: "text",
-								text: "Context",
-								marks: [{ type: "bold" }],
-							},
-						],
-					},
-					{
-						type: "bulletList",
-						content: [
-							{
-								type: "listItem",
-								content: [
-									{
-										type: "paragraph",
-										content: [{ type: "text", text: "First item" }],
-									},
-								],
-							},
-						],
-					},
-				],
-			}),
+	it("normalizes imported bold section titles into headings", () => {
+		const parsed = parseMarkdownToDocument(
+			"**Context**\n\n- First item",
 			schema,
-		);
+		).toJSON();
 
 		expect(parsed.content?.[0]).toMatchObject({
 			type: "heading",
 			attrs: { level: 2 },
 			content: [{ type: "text", text: "Context" }],
+		});
+	});
+
+	it("serializes chat markdown into canonical stored content", () => {
+		const storedContent = serializeMarkdownToNoteContent("## Result\n\n- Done");
+
+		expect(parseStoredNoteContent(storedContent, schema)).toMatchObject({
+			type: "doc",
+			content: [
+				{ type: "heading", attrs: { level: 2 } },
+				{ type: "bulletList" },
+			],
 		});
 	});
 

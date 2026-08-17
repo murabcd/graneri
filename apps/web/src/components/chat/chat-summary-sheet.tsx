@@ -99,6 +99,7 @@ import {
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import {
 	createNoteEditorExtensions,
+	parseMarkdownToDocument,
 	parseStoredNoteContent,
 } from "@/lib/note-editor";
 import type { ChatSummaryOpenSourceRequest } from "./chat-summary-events";
@@ -970,10 +971,9 @@ function ReadOnlyNoteContent({
 		}
 
 		editor.commands.setContent(
-			parseStoredNoteContent(
-				content?.trim() ? content : fallbackText,
-				editor.state.schema,
-			),
+			content?.trim()
+				? parseStoredNoteContent(content, editor.state.schema)
+				: parseMarkdownToDocument(fallbackText, editor.state.schema),
 			{
 				emitUpdate: false,
 			},

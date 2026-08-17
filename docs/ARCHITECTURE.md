@@ -30,7 +30,11 @@ The note document session is the authoritative module for note hydration, local
 draft recovery, remote reconciliation, debounced saves, per-note in-flight save
 serialization, and flush-on-navigation behavior. The note page remains a view
 adapter: it projects session documents into Tiptap and must not rebuild save or
-draft ordering with local effects and refs.
+draft ordering with local effects and refs. Persisted note content has one
+fail-closed format: canonical Tiptap document JSON. Markdown paste, import, and
+chat-response capture are explicit ingestion paths that convert to that format
+before saving; stored-content readers do not repair Markdown, malformed JSON,
+unowned images, or legacy document shapes.
 The note editor's `/` command menu uses Tiptap's open-source suggestion,
 list/task, table, horizontal-rule, and image extensions for block styling and
 insertion. Image picker, paste, and drop behavior also use the open-source
@@ -666,7 +670,11 @@ must not reproduce record ordering or retry loops.
 Convex File Storage is the sole owner of note image bytes. `noteImages` binds
 each blob to its server-derived owner, workspace, and note; current documents
 and retained `noteRevisions` hold explicit `noteImageReferences`. Every note
-save validates those ids and synchronizes the current reference set, revision
+save enters through `convex/noteDocument.ts`, which parses and validates the
+canonical document once, then supplies the same derived image references and
+comment anchors to the transactional save. Malformed documents and invalid
+table geometry fail before note state is changed. Every save validates image
+ids and synchronizes the current reference set, revision
 creation and pruning synchronize revision references, and permanent note
 retirement removes all remaining bytes. An uploaded image that never reaches a
 saved document is removed by its scheduled one-hour pending-upload cleanup.

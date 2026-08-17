@@ -90,6 +90,7 @@ import type * as jiraWebhook from "../jiraWebhook.js";
 import type * as mcpOAuth from "../mcpOAuth.js";
 import type * as meetingRelationships from "../meetingRelationships.js";
 import type * as noteComments from "../noteComments.js";
+import type * as noteDocument from "../noteDocument.js";
 import type * as noteImageHttp from "../noteImageHttp.js";
 import type * as noteImageReferences from "../noteImageReferences.js";
 import type * as noteImages from "../noteImages.js";
@@ -213,6 +214,7 @@ declare const fullApi: ApiFromModules<{
   mcpOAuth: typeof mcpOAuth;
   meetingRelationships: typeof meetingRelationships;
   noteComments: typeof noteComments;
+  noteDocument: typeof noteDocument;
   noteImageHttp: typeof noteImageHttp;
   noteImageReferences: typeof noteImageReferences;
   noteImages: typeof noteImages;

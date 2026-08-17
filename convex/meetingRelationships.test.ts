@@ -115,7 +115,15 @@ const createCalendarNote = async ({
 	await asOwner.mutation(api.notes.createFromCalendarEvent, {
 		workspaceId,
 		calendarEvent: event,
-		content: `content:${event.id}`,
+		content: JSON.stringify({
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: `content:${event.id}` }],
+				},
+			],
+		}),
 		searchableText: `Notes for ${event.title}`,
 	});
 

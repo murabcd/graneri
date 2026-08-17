@@ -1,4 +1,4 @@
-import type { JSONContent } from "@tiptap/core";
+import { getSchema, type JSONContent } from "@tiptap/core";
 import FileHandler from "@tiptap/extension-file-handler";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -33,6 +33,7 @@ const MARKDOWN_LIST_PATTERN = /^\s*(?:[-+*]|\d+\.)\s+/;
 const MARKDOWN_HEADING_PATTERN = /^\s{0,3}#{1,6}\s+/;
 
 const markdownManagerBySchema = new WeakMap<Schema, MarkdownManager>();
+let defaultNoteSchema: Schema | null = null;
 
 const isTextNode = (
 	node: JSONContent | undefined,
@@ -144,7 +145,7 @@ const normalizeTopLevelNoteContentNodes = (
 	});
 };
 
-const normalizeNoteDocument = (document: JSONContent): JSONContent => {
+const normalizeImportedNoteDocument = (document: JSONContent): JSONContent => {
 	if (document.type !== "doc") {
 		return document;
 	}
@@ -206,7 +207,7 @@ export const normalizePastedPlainText = (text: string) => {
 };
 
 export const normalizePastedSlice = (slice: Slice, schema: Schema) => {
-	const normalizedDocument = normalizeNoteDocument({
+	const normalizedDocument = normalizeImportedNoteDocument({
 		type: "doc",
 		content: slice.content.toJSON() as JSONContent[],
 	});
@@ -313,38 +314,49 @@ const getMarkdownManager = (schema: Schema) => {
 	return nextManager;
 };
 
-const validateDocument = (document: JSONContent, schema: Schema) =>
-	schema.nodeFromJSON(document).toJSON() as JSONContent;
+const validateDocument = (document: JSONContent, schema: Schema) => {
+	const node = schema.nodeFromJSON(document);
+	node.check();
+	return node;
+};
+
+const getDefaultNoteSchema = () => {
+	defaultNoteSchema ??= getSchema(createNoteEditorExtensions());
+	return defaultNoteSchema;
+};
 
 export const parseMarkdownToDocument = (markdown: string, schema: Schema) => {
-	const normalizedDocument = normalizeNoteDocument(
+	const normalizedDocument = normalizeImportedNoteDocument(
 		getMarkdownManager(schema).parse(markdown),
 	);
 
-	return PMNode.fromJSON(schema, validateDocument(normalizedDocument, schema));
+	return PMNode.fromJSON(
+		schema,
+		validateDocument(normalizedDocument, schema).toJSON(),
+	);
 };
 
 export const parseStoredNoteContent = (content: string, schema: Schema) => {
-	if (!content.trim()) {
-		return EMPTY_DOCUMENT;
+	const document = validateDocument(JSON.parse(content) as JSONContent, schema);
+	if (document.type.name !== "doc") {
+		throw new Error("Stored note content must be a Tiptap document.");
 	}
-
-	try {
-		const parsed = JSON.parse(content) as JSONContent;
-
-		if (parsed && typeof parsed === "object" && parsed.type === "doc") {
-			return validateDocument(normalizeNoteDocument(parsed), schema);
+	document.descendants((node) => {
+		if (
+			node.type.name === "image" &&
+			(typeof node.attrs.noteImageId !== "string" ||
+				node.attrs.noteImageId.length === 0)
+		) {
+			throw new Error("Stored note images must identify an uploaded image.");
 		}
-	} catch {
-		// Fall through to markdown parsing.
-	}
-
-	try {
-		return parseMarkdownToDocument(content, schema).toJSON() as JSONContent;
-	} catch {
-		return EMPTY_DOCUMENT;
-	}
+	});
+	return document.toJSON() as JSONContent;
 };
+
+export const serializeMarkdownToNoteContent = (markdown: string) =>
+	JSON.stringify(
+		parseMarkdownToDocument(markdown, getDefaultNoteSchema()).toJSON(),
+	);
 
 export const serializeDocumentToMarkdown = (
 	document: ProseMirrorNode,

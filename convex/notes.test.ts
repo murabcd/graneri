@@ -17,6 +17,17 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+const createTextDocument = (text: string) =>
+	JSON.stringify({
+		type: "doc",
+		content: [
+			{
+				type: "paragraph",
+				content: [{ type: "text", text }],
+			},
+		],
+	});
+
 const createWorkspaceAndNote = async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
@@ -39,7 +50,7 @@ const createWorkspaceAndNote = async () => {
 			starredSortOrder: 0,
 			title: "Old title",
 			templateSlug: "enhanced",
-			content: "old-content",
+			content: createTextDocument("old-content"),
 			searchableText: "old text",
 			visibility: "public",
 			shareId: "share-1",
@@ -92,7 +103,7 @@ test("notes.save updates content without dropping existing metadata", async () =
 		workspaceId,
 		id: noteId,
 		title: "Updated title",
-		content: "new-content",
+		content: createTextDocument("new-content"),
 		searchableText: "new text",
 	});
 
@@ -111,7 +122,7 @@ test("notes.save updates content without dropping existing metadata", async () =
 		isStarred: true,
 		title: "Updated title",
 		templateSlug: "enhanced",
-		content: "new-content",
+		content: createTextDocument("new-content"),
 		searchableText: "new text",
 		visibility: "public",
 		shareId: "share-1",
@@ -121,6 +132,45 @@ test("notes.save updates content without dropping existing metadata", async () =
 	expect(note?.updatedAt).toBe(Date.now());
 });
 
+test("notes.save rejects non-canonical content without changing note state", async () => {
+	const { asOwner, noteId, t, workspaceId } = await createWorkspaceAndNote();
+	const noteBeforeSave = await t.run((ctx) => ctx.db.get(noteId));
+
+	await expect(
+		asOwner.mutation(api.notes.save, {
+			workspaceId,
+			id: noteId,
+			title: "Invalid update",
+			content: "# Legacy markdown",
+			searchableText: "Legacy markdown",
+		}),
+	).rejects.toThrow("valid Tiptap JSON");
+
+	const storedState = await t.run(async (ctx) => ({
+		note: await ctx.db.get(noteId),
+		references: await ctx.db
+			.query("noteImageReferences")
+			.withIndex("by_noteId_and_revisionId", (query) =>
+				query.eq("noteId", noteId),
+			)
+			.collect(),
+		revisions: await ctx.db
+			.query("noteRevisions")
+			.withIndex("by_ownerTokenIdentifier_and_noteId", (query) =>
+				query
+					.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
+					.eq("noteId", noteId),
+			)
+			.collect(),
+	}));
+
+	expect(storedState).toEqual({
+		note: noteBeforeSave,
+		references: [],
+		revisions: [],
+	});
+});
+
 test("notes.save commits generated content and its template together", async () => {
 	const { asOwner, noteId, workspaceId } = await createWorkspaceAndNote();
 
@@ -128,7 +178,7 @@ test("notes.save commits generated content and its template together", async () 
 		workspaceId,
 		id: noteId,
 		title: "Weekly sync",
-		content: "weekly-content",
+		content: createTextDocument("weekly-content"),
 		searchableText: "weekly text",
 		templateSlug: "weekly-team-meeting",
 	});
@@ -139,7 +189,7 @@ test("notes.save commits generated content and its template together", async () 
 	});
 
 	expect(note).toMatchObject({
-		content: "weekly-content",
+		content: createTextDocument("weekly-content"),
 		searchableText: "weekly text",
 		templateSlug: "weekly-team-meeting",
 		title: "Weekly sync",
@@ -156,7 +206,7 @@ test("notes.save records version history for changed payloads", async () => {
 		workspaceId,
 		id: noteId,
 		title: "Updated title",
-		content: "new-content",
+		content: createTextDocument("new-content"),
 		searchableText: "new text",
 	});
 
@@ -171,7 +221,7 @@ test("notes.save records version history for changed payloads", async () => {
 		isCurrent: true,
 		authorName: "Existing Author",
 		title: "Updated title",
-		content: "new-content",
+		content: createTextDocument("new-content"),
 		searchableText: "new text",
 		createdAt: Date.now(),
 	});
@@ -179,7 +229,7 @@ test("notes.save records version history for changed payloads", async () => {
 		isCurrent: false,
 		authorName: "Existing Author",
 		title: "Old title",
-		content: "old-content",
+		content: createTextDocument("old-content"),
 		searchableText: "old text",
 		createdAt: Date.now(),
 	});
@@ -195,7 +245,7 @@ test("notes.save groups version history by revision interval", async () => {
 		workspaceId,
 		id: noteId,
 		title: "First autosave",
-		content: "first-content",
+		content: createTextDocument("first-content"),
 		searchableText: "first text",
 	});
 
@@ -205,7 +255,7 @@ test("notes.save groups version history by revision interval", async () => {
 		workspaceId,
 		id: noteId,
 		title: "Second autosave",
-		content: "second-content",
+		content: createTextDocument("second-content"),
 		searchableText: "second text",
 	});
 
@@ -217,7 +267,7 @@ test("notes.save groups version history by revision interval", async () => {
 	expect(versions).toHaveLength(2);
 	expect(versions[1]).toMatchObject({
 		title: "Old title",
-		content: "old-content",
+		content: createTextDocument("old-content"),
 	});
 
 	vi.setSystemTime(new Date("2026-04-10T18:00:31.000Z"));
@@ -226,7 +276,7 @@ test("notes.save groups version history by revision interval", async () => {
 		workspaceId,
 		id: noteId,
 		title: "Third autosave",
-		content: "third-content",
+		content: createTextDocument("third-content"),
 		searchableText: "third text",
 	});
 
@@ -238,7 +288,7 @@ test("notes.save groups version history by revision interval", async () => {
 	expect(versions).toHaveLength(3);
 	expect(versions[1]).toMatchObject({
 		title: "Second autosave",
-		content: "second-content",
+		content: createTextDocument("second-content"),
 	});
 });
 
@@ -252,7 +302,7 @@ test("notes.restoreVersion preserves current note and restores selected revision
 		workspaceId,
 		id: noteId,
 		title: "Updated title",
-		content: "new-content",
+		content: createTextDocument("new-content"),
 		searchableText: "new text",
 	});
 
@@ -279,7 +329,7 @@ test("notes.restoreVersion preserves current note and restores selected revision
 	});
 	expect(note).toMatchObject({
 		title: "Old title",
-		content: "old-content",
+		content: createTextDocument("old-content"),
 		searchableText: "old text",
 	});
 
@@ -290,7 +340,7 @@ test("notes.restoreVersion preserves current note and restores selected revision
 	expect(versionsAfterRestore).toHaveLength(3);
 	expect(versionsAfterRestore[1]).toMatchObject({
 		title: "Updated title",
-		content: "new-content",
+		content: createTextDocument("new-content"),
 		searchableText: "new text",
 	});
 });
@@ -313,7 +363,7 @@ test("notes.save is a no-op when the payload is unchanged", async () => {
 		workspaceId,
 		id: noteId,
 		title: "Old title",
-		content: "old-content",
+		content: createTextDocument("old-content"),
 		searchableText: "old text",
 	});
 
@@ -329,7 +379,7 @@ test("notes.save is a no-op when the payload is unchanged", async () => {
 	expect(noteAfterSave).toMatchObject({
 		_id: noteId,
 		title: "Old title",
-		content: "old-content",
+		content: createTextDocument("old-content"),
 		searchableText: "old text",
 		templateSlug: "enhanced",
 		visibility: "public",

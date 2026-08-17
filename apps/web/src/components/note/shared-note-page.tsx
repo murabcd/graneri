@@ -67,20 +67,21 @@ export function SharedNotePage({ note }: SharedNotePageProps) {
 			},
 		},
 	});
+	const noteContent = note?.content;
 
 	React.useEffect(() => {
-		if (!editor) {
+		if (!editor || !noteContent) {
 			return;
 		}
 
 		editor.commands.setContent(
-			parseStoredNoteContent(note?.content ?? "", editor.state.schema),
+			parseStoredNoteContent(noteContent, editor.state.schema),
 			{
 				emitUpdate: false,
 			},
 		);
 		syncTableOfContents(editor);
-	}, [editor, note?.content, syncTableOfContents]);
+	}, [editor, noteContent, syncTableOfContents]);
 
 	let content: React.ReactNode;
 

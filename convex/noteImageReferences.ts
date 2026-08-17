@@ -1,89 +1,6 @@
 import { ConvexError } from "convex/values";
-import { z } from "zod";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-
-const MAX_IMAGES_PER_NOTE = 50;
-
-type NoteContentNode = {
-	type: string;
-	attrs?: { noteImageId?: unknown; src?: unknown };
-	content?: NoteContentNode[];
-};
-
-const noteContentNodeSchema: z.ZodType<NoteContentNode> = z.lazy(() =>
-	z
-		.object({
-			type: z.string(),
-			attrs: z
-				.object({
-					noteImageId: z.unknown().optional(),
-					src: z.unknown().optional(),
-				})
-				.passthrough()
-				.optional(),
-			content: z.array(noteContentNodeSchema).optional(),
-		})
-		.passthrough(),
-);
-
-const collectImageIds = (
-	node: NoteContentNode,
-	images: Map<string, string>,
-) => {
-	if (node.type === "image") {
-		const noteImageId = node.attrs?.noteImageId;
-		const src = node.attrs?.src;
-		if (
-			typeof noteImageId !== "string" ||
-			!noteImageId.trim() ||
-			typeof src !== "string" ||
-			!src.trim()
-		) {
-			throw new ConvexError({
-				code: "INVALID_NOTE_IMAGE",
-				message: "Note images must be uploaded before they are saved.",
-			});
-		}
-		const existingSrc = images.get(noteImageId);
-		if (existingSrc && existingSrc !== src) {
-			throw new ConvexError({
-				code: "INVALID_NOTE_IMAGE",
-				message: "A note image cannot use multiple sources.",
-			});
-		}
-		images.set(noteImageId, src);
-	}
-
-	for (const child of node.content ?? []) {
-		collectImageIds(child, images);
-	}
-};
-
-export const extractNoteImages = (content: string) => {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(content) as unknown;
-	} catch {
-		return [];
-	}
-
-	const result = noteContentNodeSchema.safeParse(parsed);
-	if (!result.success) {
-		return [];
-	}
-
-	const images = new Map<string, string>();
-	collectImageIds(result.data, images);
-	if (images.size > MAX_IMAGES_PER_NOTE) {
-		throw new ConvexError({
-			code: "TOO_MANY_NOTE_IMAGES",
-			message: `A note can contain up to ${MAX_IMAGES_PER_NOTE} images.`,
-		});
-	}
-
-	return [...images].map(([noteImageId, src]) => ({ noteImageId, src }));
-};
 
 const deleteImageIfUnreferenced = async (
 	ctx: MutationCtx,
@@ -112,16 +29,15 @@ export const syncNoteImageReferences = async ({
 	ctx,
 	note,
 	revisionId,
-	content,
+	images,
 }: {
 	ctx: MutationCtx;
 	note: Doc<"notes">;
 	revisionId: Id<"noteRevisions"> | null;
-	content: string;
+	images: Array<{ noteImageId: string; src: string }>;
 }) => {
-	const rawImages = extractNoteImages(content);
 	const imageIds = await Promise.all(
-		rawImages.map(async ({ noteImageId: rawImageId, src }) => {
+		images.map(async ({ noteImageId: rawImageId, src }) => {
 			const noteImageId = await ctx.db.normalizeId("noteImages", rawImageId);
 			if (!noteImageId) {
 				throw new ConvexError({
@@ -183,28 +99,6 @@ export const syncNoteImageReferences = async ({
 		await ctx.db.delete(reference._id);
 		await deleteImageIfUnreferenced(ctx, reference.noteImageId);
 	}
-};
-
-export const syncStoredNoteImageReferences = async ({
-	ctx,
-	noteId,
-	content,
-}: {
-	ctx: MutationCtx;
-	noteId: Id<"notes">;
-	content: string;
-}) => {
-	const note = await ctx.db.get(noteId);
-	if (!note) {
-		throw new Error("Inserted note is unavailable.");
-	}
-
-	await syncNoteImageReferences({
-		ctx,
-		note,
-		revisionId: null,
-		content,
-	});
 };
 
 export const removeNoteImageReferences = async ({

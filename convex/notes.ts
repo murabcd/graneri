@@ -18,11 +18,10 @@ import {
 	getAuthorName,
 	requireOwnedWorkspace,
 } from "./domain";
+import { parseNoteDocument, syncNoteDocumentState } from "./noteDocument";
 import {
 	removeAllNoteImages,
 	removeNoteImageReferences,
-	syncNoteImageReferences,
-	syncStoredNoteImageReferences,
 } from "./noteImageReferences";
 import { requireOwnedProject } from "./projects";
 
@@ -164,71 +163,6 @@ export const requireOwnedNote = async (
 
 const createShareId = () => crypto.randomUUID().replaceAll("-", "");
 
-const collectNoteCommentAnchors = (
-	value: unknown,
-	anchors: Map<string, string>,
-): void => {
-	if (!value || typeof value !== "object") {
-		return;
-	}
-
-	if (Array.isArray(value)) {
-		for (const item of value) {
-			collectNoteCommentAnchors(item, anchors);
-		}
-		return;
-	}
-
-	const text =
-		"text" in value && typeof value.text === "string" ? value.text : null;
-	const marks =
-		"marks" in value && Array.isArray(value.marks) ? value.marks : null;
-
-	if (text && marks) {
-		for (const mark of marks) {
-			if (
-				!mark ||
-				typeof mark !== "object" ||
-				!("type" in mark) ||
-				mark.type !== "noteComment" ||
-				!("attrs" in mark) ||
-				!mark.attrs ||
-				typeof mark.attrs !== "object" ||
-				!("threadId" in mark.attrs) ||
-				typeof mark.attrs.threadId !== "string"
-			) {
-				continue;
-			}
-
-			const threadId = mark.attrs.threadId.trim();
-			if (!threadId) {
-				continue;
-			}
-
-			const currentText = anchors.get(threadId) ?? "";
-			anchors.set(threadId, `${currentText}${text}`);
-		}
-	}
-
-	for (const nested of Object.values(value)) {
-		collectNoteCommentAnchors(nested, anchors);
-	}
-};
-
-const extractNoteCommentAnchors = (content: string) => {
-	try {
-		const parsed = JSON.parse(content) as unknown;
-		const anchors = new Map<string, string>();
-		collectNoteCommentAnchors(parsed, anchors);
-		return [...anchors.entries()].flatMap(([threadId, excerpt]) => {
-			const trimmedExcerpt = excerpt.trim();
-			return trimmedExcerpt ? [{ threadId, excerpt: trimmedExcerpt }] : [];
-		});
-	} catch {
-		return null;
-	}
-};
-
 const pruneNoteRevisions = async ({
 	ctx,
 	ownerTokenIdentifier,
@@ -289,11 +223,11 @@ const createNoteRevision = async ({
 		searchableText: note.searchableText,
 		createdAt: now,
 	});
-	await syncNoteImageReferences({
+	await syncNoteDocumentState({
 		ctx,
 		note,
 		revisionId,
-		content: note.content,
+		document: parseNoteDocument(note.content),
 	});
 
 	await pruneNoteRevisions({
@@ -607,6 +541,7 @@ export const restoreVersion = mutation({
 		}
 
 		const now = Date.now();
+		const restoredDocument = parseNoteDocument(revision.content);
 
 		await createNoteRevision({
 			ctx,
@@ -617,17 +552,17 @@ export const restoreVersion = mutation({
 		await ctx.db.patch(args.id, {
 			authorName: note.authorName ?? getAuthorName(identity),
 			title: revision.title,
-			content: revision.content,
+			content: restoredDocument.content,
 			searchableText: revision.searchableText,
 			isArchived: false,
 			archivedAt: undefined,
 			updatedAt: now,
 		});
-		await syncNoteImageReferences({
+		await syncNoteDocumentState({
 			ctx,
 			note,
 			revisionId: null,
-			content: revision.content,
+			document: restoredDocument,
 		});
 
 		return args.id;
@@ -806,6 +741,7 @@ export const createFromCalendarEvent = mutation({
 		if (existingNote) {
 			return existingNote._id;
 		}
+		const document = parseNoteDocument(args.content);
 
 		const noteId = await ctx.db.insert("notes", {
 			ownerTokenIdentifier,
@@ -815,7 +751,7 @@ export const createFromCalendarEvent = mutation({
 			isStarred: false,
 			starredSortOrder: now,
 			title: calendarEvent.title.trim(),
-			content: args.content,
+			content: document.content,
 			searchableText: args.searchableText,
 			visibility: "private",
 			shareId: undefined,
@@ -834,11 +770,11 @@ export const createFromCalendarEvent = mutation({
 			workspaceId: args.workspaceId,
 		});
 		await ctx.db.patch(noteId, { calendarEvent: calendarEventSnapshot });
-		await syncStoredNoteImageReferences({
-			ctx,
-			noteId,
-			content: args.content,
-		});
+		const note = await ctx.db.get(noteId);
+		if (!note) {
+			throw new Error("Inserted note is unavailable.");
+		}
+		await syncNoteDocumentState({ ctx, note, revisionId: null, document });
 
 		return noteId;
 	},
@@ -860,6 +796,7 @@ export const save = mutation({
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
 		const authorName = getAuthorName(identity);
 		const now = Date.now();
+		const document = parseNoteDocument(args.content);
 
 		if (args.id) {
 			const existing = ensureOwnedNote({
@@ -874,7 +811,7 @@ export const save = mutation({
 
 			if (
 				existing.title === args.title &&
-				existing.content === args.content &&
+				existing.content === document.content &&
 				existing.searchableText === args.searchableText &&
 				existing.templateSlug === nextTemplateSlug &&
 				!existing.isArchived
@@ -887,11 +824,11 @@ export const save = mutation({
 				note: existing,
 				now,
 			});
-			await syncNoteImageReferences({
+			await syncNoteDocumentState({
 				ctx,
 				note: existing,
 				revisionId: null,
-				content: args.content,
+				document,
 			});
 
 			await ctx.db.patch(args.id, {
@@ -900,7 +837,7 @@ export const save = mutation({
 				starredSortOrder: existing.starredSortOrder,
 				projectId: existing.projectId,
 				title: args.title,
-				content: args.content,
+				content: document.content,
 				searchableText: args.searchableText,
 				visibility: existing.visibility ?? "private",
 				templateSlug: nextTemplateSlug,
@@ -910,30 +847,6 @@ export const save = mutation({
 				archivedAt: undefined,
 				updatedAt: now,
 			});
-
-			const anchors = extractNoteCommentAnchors(args.content);
-			if (anchors) {
-				const normalizedAnchors = (
-					await Promise.all(
-						anchors.map(async ({ threadId, excerpt }) => ({
-							threadId: await ctx.db.normalizeId(
-								"noteCommentThreads",
-								threadId,
-							),
-							excerpt,
-						})),
-					)
-				).flatMap(({ threadId, excerpt }) =>
-					threadId ? [{ threadId, excerpt }] : [],
-				);
-
-				await ctx.runMutation(internal.noteComments.syncAnchorsForNote, {
-					ownerTokenIdentifier,
-					workspaceId: args.workspaceId,
-					noteId: args.id,
-					activeAnchors: normalizedAnchors,
-				});
-			}
 
 			return args.id;
 		}
@@ -946,7 +859,7 @@ export const save = mutation({
 			isStarred: false,
 			starredSortOrder: now,
 			title: args.title,
-			content: args.content,
+			content: document.content,
 			searchableText: args.searchableText,
 			templateSlug: args.templateSlug ?? undefined,
 			visibility: "private",
@@ -957,11 +870,11 @@ export const save = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
-		await syncStoredNoteImageReferences({
-			ctx,
-			noteId,
-			content: args.content,
-		});
+		const note = await ctx.db.get(noteId);
+		if (!note) {
+			throw new Error("Inserted note is unavailable.");
+		}
+		await syncNoteDocumentState({ ctx, note, revisionId: null, document });
 
 		return noteId;
 	},
