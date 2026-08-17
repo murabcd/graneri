@@ -81,7 +81,7 @@ jobs:
             exit 0
           fi
 
-          bunx convex deploy --typecheck disable
+          bunx convex deploy
 
       - name: Validate signing configuration
         env:
