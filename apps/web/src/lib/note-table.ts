@@ -1,3 +1,4 @@
+import type { Editor } from "@tiptap/core";
 import { TableView } from "@tiptap/extension-table";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import {
@@ -9,9 +10,14 @@ import {
 	addColumnAfter,
 	addRowAfter,
 	CellSelection,
+	cellAround,
 	columnResizingPluginKey,
 	deleteColumn,
 	deleteRow,
+	findTable,
+	moveTableColumn,
+	moveTableRow,
+	selectedRect,
 	TableMap,
 } from "@tiptap/pm/tables";
 import { Mapping, type Step } from "@tiptap/pm/transform";
@@ -42,7 +48,7 @@ type TableHtmlAttributes = NonNullable<
 >;
 
 export const NOTE_TABLE_RESIZE_HANDLE_WIDTH = 7;
-export const NOTE_TABLE_CONTROL_GAP = 4;
+const NOTE_TABLE_CONTROL_GAP = 4;
 export const NOTE_TABLE_CONTROL_HIDE_DELAY_MS = 180;
 export const NOTE_TABLE_EXTEND_DRAG_START_PX = 4;
 const NOTE_TABLE_EXTEND_DRAG_MIN_STEP_PX = 32;
@@ -62,7 +68,7 @@ const TABLE_EDGE_COMMANDS: Record<
 	},
 };
 
-export const getTableCellColumnIndex = (
+const getTableCellColumnIndex = (
 	row: HTMLTableRowElement,
 	cell: HTMLTableCellElement,
 ) => {
@@ -76,7 +82,7 @@ export const getTableCellColumnIndex = (
 	return -1;
 };
 
-export const getTableColumnCount = (table: HTMLTableElement) =>
+const getTableColumnCount = (table: HTMLTableElement) =>
 	Array.from(table.rows).reduce(
 		(maximum, row) =>
 			Math.max(
@@ -653,4 +659,526 @@ export class NoteTableView extends TableView {
 			this.#handlePointerDown,
 		);
 	}
+}
+
+export type TableHandleOrientation = "column" | "row";
+export type TableStructureDeleteKind = "columns" | "rows" | "table";
+type TableMenuKind = TableHandleOrientation | "cells";
+
+type TableControlStyle = {
+	height?: number;
+	left: number;
+	top: number;
+	width?: number;
+};
+
+export type TableHandleTarget = {
+	cellPosition: number;
+	columnIndex: number;
+	columnStyle: TableControlStyle;
+	columnCount: number;
+	isHeaderRow: boolean;
+	rowIndex: number;
+	rowStyle: TableControlStyle;
+	rowCount: number;
+	simpleGrid: boolean;
+	wrapper: HTMLElement;
+};
+
+export type TableCellSelectionTarget = {
+	canMerge: boolean;
+	canSplit: boolean;
+	deleteKinds: TableStructureDeleteKind[];
+	style: TableControlStyle;
+	wrapper: HTMLElement;
+};
+
+type NoteTableInteractionSnapshot = {
+	cellSelectionTarget: TableCellSelectionTarget | null;
+	handleTarget: TableHandleTarget | null;
+	openMenu: TableMenuKind | null;
+};
+
+const TABLE_HANDLE_SIZE = 12;
+const TABLE_CELL_SELECTION_HANDLE_SIZE = 16;
+
+const haveEqualStyles = (first: TableControlStyle, second: TableControlStyle) =>
+	first.height === second.height &&
+	first.left === second.left &&
+	first.top === second.top &&
+	first.width === second.width;
+
+const areEqualTableCellSelectionTargets = (
+	first: TableCellSelectionTarget | null,
+	second: TableCellSelectionTarget | null,
+) =>
+	first === second ||
+	(first !== null &&
+		second !== null &&
+		first.wrapper === second.wrapper &&
+		first.canMerge === second.canMerge &&
+		first.canSplit === second.canSplit &&
+		first.deleteKinds.length === second.deleteKinds.length &&
+		first.deleteKinds.every(
+			(kind, index) => kind === second.deleteKinds[index],
+		) &&
+		haveEqualStyles(first.style, second.style));
+
+const areEqualTableHandleTargets = (
+	first: TableHandleTarget | null,
+	second: TableHandleTarget | null,
+) =>
+	first === second ||
+	(first !== null &&
+		second !== null &&
+		first.wrapper === second.wrapper &&
+		first.cellPosition === second.cellPosition &&
+		first.columnIndex === second.columnIndex &&
+		first.columnCount === second.columnCount &&
+		first.isHeaderRow === second.isHeaderRow &&
+		first.rowIndex === second.rowIndex &&
+		first.rowCount === second.rowCount &&
+		first.simpleGrid === second.simpleGrid &&
+		haveEqualStyles(first.columnStyle, second.columnStyle) &&
+		haveEqualStyles(first.rowStyle, second.rowStyle));
+
+const createTableCellSelectionTarget = (
+	editor: Editor,
+): TableCellSelectionTarget | null => {
+	const { selection } = editor.state;
+	if (!(selection instanceof CellSelection)) {
+		return null;
+	}
+
+	let right = Number.NEGATIVE_INFINITY;
+	let top = Number.POSITIVE_INFINITY;
+	let bottom = Number.NEGATIVE_INFINITY;
+	let wrapper: HTMLElement | null = null;
+	let selectedCellCount = 0;
+
+	selection.forEachCell((_cell, position) => {
+		const nodeDom = editor.view.nodeDOM(position);
+		const cell =
+			nodeDom instanceof HTMLTableCellElement
+				? nodeDom
+				: nodeDom instanceof HTMLElement
+					? nodeDom.closest("td, th")
+					: null;
+		if (!(cell instanceof HTMLTableCellElement)) {
+			return;
+		}
+
+		const cellWrapper = cell.closest(".note-table-wrapper");
+		if (!(cellWrapper instanceof HTMLElement)) {
+			return;
+		}
+
+		const rect = cell.getBoundingClientRect();
+		right = Math.max(right, rect.right);
+		top = Math.min(top, rect.top);
+		bottom = Math.max(bottom, rect.bottom);
+		wrapper = cellWrapper;
+		selectedCellCount += 1;
+	});
+
+	if (selectedCellCount === 0 || wrapper === null) {
+		return null;
+	}
+	const rectangle = selectedRect(editor.state);
+	const spansAllColumns =
+		rectangle.left === 0 && rectangle.right === rectangle.map.width;
+	const spansAllRows =
+		rectangle.top === 0 && rectangle.bottom === rectangle.map.height;
+	const selectedRowCount = rectangle.bottom - rectangle.top;
+	const selectedColumnCount = rectangle.right - rectangle.left;
+	const deleteKinds: TableStructureDeleteKind[] = [];
+	if (spansAllColumns && spansAllRows) {
+		deleteKinds.push("table");
+	} else if (spansAllColumns) {
+		deleteKinds.push("rows");
+	} else if (spansAllRows) {
+		deleteKinds.push("columns");
+	} else {
+		if (selectedRowCount >= 2) {
+			deleteKinds.push("rows");
+		}
+		if (selectedColumnCount >= 2) {
+			deleteKinds.push("columns");
+		}
+	}
+
+	return {
+		canMerge: editor.can().mergeCells(),
+		canSplit: editor.can().splitCell(),
+		deleteKinds,
+		style: {
+			left: right - TABLE_CELL_SELECTION_HANDLE_SIZE / 2,
+			top: (top + bottom - TABLE_CELL_SELECTION_HANDLE_SIZE) / 2,
+		},
+		wrapper,
+	};
+};
+
+const createTableHandleTarget = (
+	editor: Editor,
+	cell: HTMLTableCellElement,
+): TableHandleTarget | null => {
+	const row = cell.closest("tr");
+	const table = cell.closest("table");
+	const wrapper = table?.closest(".note-table-wrapper");
+	if (
+		!(row instanceof HTMLTableRowElement) ||
+		!(table instanceof HTMLTableElement) ||
+		!(wrapper instanceof HTMLElement)
+	) {
+		return null;
+	}
+
+	const rowIndex = Array.from(table.rows).indexOf(row);
+	const columnIndex = getTableCellColumnIndex(row, cell);
+	if (rowIndex < 0 || columnIndex < 0) {
+		return null;
+	}
+
+	const $cell = cellAround(
+		editor.state.doc.resolve(editor.view.posAtDOM(cell, 0)),
+	);
+	if (!$cell) {
+		return null;
+	}
+
+	const tableRect = table.getBoundingClientRect();
+	const rowRect = row.getBoundingClientRect();
+	const cellRect = cell.getBoundingClientRect();
+
+	return {
+		cellPosition: $cell.pos,
+		columnIndex,
+		columnCount: getTableColumnCount(table),
+		columnStyle: {
+			height: TABLE_HANDLE_SIZE,
+			left: cellRect.left,
+			top: tableRect.top - TABLE_HANDLE_SIZE - NOTE_TABLE_CONTROL_GAP,
+			width: cellRect.width,
+		},
+		isHeaderRow: Array.from(row.cells).every(
+			(tableCell) => tableCell.tagName === "TH",
+		),
+		rowIndex,
+		rowCount: table.rows.length,
+		rowStyle: {
+			height: rowRect.height,
+			left: tableRect.left - TABLE_HANDLE_SIZE - NOTE_TABLE_CONTROL_GAP,
+			top: rowRect.top,
+			width: TABLE_HANDLE_SIZE,
+		},
+		simpleGrid: Array.from(table.rows).every((tableRow) =>
+			Array.from(tableRow.cells).every(
+				(tableCell) => tableCell.colSpan === 1 && tableCell.rowSpan === 1,
+			),
+		),
+		wrapper,
+	};
+};
+
+const resolveTableCell = (editor: Editor, cellPosition: number) => {
+	const $position = editor.state.doc.resolve(cellPosition);
+	const role = $position.nodeAfter?.type.spec.tableRole;
+	return role === "cell" || role === "header_cell"
+		? $position
+		: cellAround($position);
+};
+
+const selectTableHandle = (
+	editor: Editor,
+	target: TableHandleTarget,
+	orientation: TableHandleOrientation,
+) => {
+	const $cell = resolveTableCell(editor, target.cellPosition);
+	if (!$cell) {
+		return false;
+	}
+
+	const selection =
+		orientation === "row"
+			? CellSelection.rowSelection($cell)
+			: CellSelection.colSelection($cell);
+	editor.view.dispatch(editor.state.tr.setSelection(selection));
+	return true;
+};
+
+const duplicateRow = (editor: Editor, target: TableHandleTarget) => {
+	if (!target.simpleGrid) {
+		return false;
+	}
+
+	const $cell = resolveTableCell(editor, target.cellPosition);
+	const table = $cell ? findTable($cell) : null;
+	const row = table?.node.child(target.rowIndex);
+	if (!table || !row) {
+		return false;
+	}
+
+	let insertOffset = 0;
+	for (let rowIndex = 0; rowIndex <= target.rowIndex; rowIndex += 1) {
+		insertOffset += table.node.child(rowIndex).nodeSize;
+	}
+
+	editor.view.dispatch(
+		editor.state.tr.insert(table.start + insertOffset, row.copy(row.content)),
+	);
+	return true;
+};
+
+const duplicateColumn = (editor: Editor, target: TableHandleTarget) => {
+	if (!target.simpleGrid) {
+		return false;
+	}
+
+	const $cell = resolveTableCell(editor, target.cellPosition);
+	const table = $cell ? findTable($cell) : null;
+	if (!table) {
+		return false;
+	}
+
+	const rows: ProseMirrorNode[] = [];
+	for (let rowIndex = 0; rowIndex < table.node.childCount; rowIndex += 1) {
+		const row = table.node.child(rowIndex);
+		const cells = Array.from({ length: row.childCount }, (_, cellIndex) =>
+			row.child(cellIndex),
+		);
+		const cell = cells[target.columnIndex];
+		if (!cell) {
+			return false;
+		}
+		cells.splice(target.columnIndex + 1, 0, cell.copy(cell.content));
+		rows.push(row.type.create(row.attrs, cells, row.marks));
+	}
+
+	const nextTable = table.node.type.create(
+		table.node.attrs,
+		rows,
+		table.node.marks,
+	);
+	editor.view.dispatch(
+		editor.state.tr.replaceWith(
+			table.pos,
+			table.pos + table.node.nodeSize,
+			nextTable,
+		),
+	);
+	return true;
+};
+
+export class NoteTableInteractionSession {
+	readonly editor: Editor;
+	readonly #listeners = new Set<() => void>();
+	#hideTargetTimer: ReturnType<typeof setTimeout> | null = null;
+	#isListening = false;
+	#snapshot: NoteTableInteractionSnapshot = {
+		cellSelectionTarget: null,
+		handleTarget: null,
+		openMenu: null,
+	};
+
+	constructor(editor: Editor) {
+		this.editor = editor;
+	}
+
+	readonly getSnapshot = () => this.#snapshot;
+
+	readonly subscribe = (listener: () => void) => {
+		this.#listeners.add(listener);
+		if (this.#listeners.size === 1) {
+			this.#startListening();
+		}
+		return () => {
+			this.#listeners.delete(listener);
+			if (this.#listeners.size === 0) {
+				this.#stopListening();
+			}
+		};
+	};
+
+	readonly setOpenMenu = (openMenu: TableMenuKind | null) => {
+		if (
+			(openMenu === "row" || openMenu === "column") &&
+			this.#snapshot.handleTarget
+		) {
+			selectTableHandle(this.editor, this.#snapshot.handleTarget, openMenu);
+		}
+		this.#setSnapshot({ ...this.#snapshot, openMenu });
+	};
+
+	readonly runHandleCommand = (
+		target: TableHandleTarget,
+		orientation: TableHandleOrientation,
+		command: () => boolean,
+	) => {
+		if (!selectTableHandle(this.editor, target, orientation)) {
+			return false;
+		}
+		return command();
+	};
+
+	readonly moveHandle = (
+		target: TableHandleTarget,
+		orientation: TableHandleOrientation,
+		offset: -1 | 1,
+	) => {
+		const isRow = orientation === "row";
+		const index = isRow ? target.rowIndex : target.columnIndex;
+		return this.runHandleCommand(target, orientation, () => {
+			const command = isRow
+				? moveTableRow({
+						from: index,
+						to: index + offset,
+						pos: target.cellPosition,
+					})
+				: moveTableColumn({
+						from: index,
+						to: index + offset,
+						pos: target.cellPosition,
+					});
+			return command(this.editor.state, (transaction) =>
+				this.editor.view.dispatch(transaction),
+			);
+		});
+	};
+
+	readonly duplicateHandle = (
+		target: TableHandleTarget,
+		orientation: TableHandleOrientation,
+	) =>
+		this.runHandleCommand(target, orientation, () =>
+			orientation === "row"
+				? duplicateRow(this.editor, target)
+				: duplicateColumn(this.editor, target),
+		);
+
+	readonly #setSnapshot = (snapshot: NoteTableInteractionSnapshot) => {
+		if (
+			this.#snapshot.openMenu === snapshot.openMenu &&
+			areEqualTableHandleTargets(
+				this.#snapshot.handleTarget,
+				snapshot.handleTarget,
+			) &&
+			areEqualTableCellSelectionTargets(
+				this.#snapshot.cellSelectionTarget,
+				snapshot.cellSelectionTarget,
+			)
+		) {
+			return;
+		}
+		this.#snapshot = snapshot;
+		for (const listener of this.#listeners) {
+			listener();
+		}
+	};
+
+	readonly #updateCellSelectionTarget = () => {
+		this.#setSnapshot({
+			...this.#snapshot,
+			cellSelectionTarget: createTableCellSelectionTarget(this.editor),
+		});
+	};
+
+	readonly #handleSelectionUpdate = () => {
+		this.#setSnapshot({
+			...this.#snapshot,
+			cellSelectionTarget: createTableCellSelectionTarget(this.editor),
+			openMenu:
+				this.#snapshot.openMenu === "cells" ? null : this.#snapshot.openMenu,
+		});
+	};
+
+	readonly #cancelTargetHide = () => {
+		if (this.#hideTargetTimer !== null) {
+			clearTimeout(this.#hideTargetTimer);
+			this.#hideTargetTimer = null;
+		}
+	};
+
+	readonly #scheduleTargetHide = () => {
+		if (this.#hideTargetTimer !== null) {
+			return;
+		}
+		this.#hideTargetTimer = setTimeout(() => {
+			this.#hideTargetTimer = null;
+			this.#setSnapshot({ ...this.#snapshot, handleTarget: null });
+		}, NOTE_TABLE_CONTROL_HIDE_DELAY_MS);
+	};
+
+	readonly #handlePointerMove = (event: PointerEvent) => {
+		const eventTarget = event.target;
+		if (!(eventTarget instanceof Element)) {
+			return;
+		}
+		if (eventTarget.closest("[data-note-table-handle]")) {
+			this.#cancelTargetHide();
+			return;
+		}
+
+		const cell = eventTarget.closest("td, th");
+		if (
+			cell instanceof HTMLTableCellElement &&
+			this.editor.view.dom.contains(cell)
+		) {
+			const handleTarget = createTableHandleTarget(this.editor, cell);
+			if (handleTarget) {
+				this.#cancelTargetHide();
+				this.#setSnapshot({ ...this.#snapshot, handleTarget });
+				return;
+			}
+		}
+
+		if (this.#snapshot.openMenu) {
+			this.#cancelTargetHide();
+		} else {
+			this.#scheduleTargetHide();
+		}
+	};
+
+	readonly #handleScroll = () => {
+		this.#cancelTargetHide();
+		this.#setSnapshot({
+			...this.#snapshot,
+			cellSelectionTarget: createTableCellSelectionTarget(this.editor),
+			handleTarget: null,
+		});
+	};
+
+	readonly #handleResize = () => {
+		this.#setSnapshot({
+			...this.#snapshot,
+			cellSelectionTarget: createTableCellSelectionTarget(this.editor),
+			handleTarget: null,
+		});
+	};
+
+	readonly #startListening = () => {
+		if (this.#isListening || !this.editor.isEditable) {
+			return;
+		}
+		this.#isListening = true;
+		this.#updateCellSelectionTarget();
+		this.editor.on("selectionUpdate", this.#handleSelectionUpdate);
+		this.editor.on("transaction", this.#updateCellSelectionTarget);
+		window.addEventListener("resize", this.#handleResize);
+		document.addEventListener("pointermove", this.#handlePointerMove);
+		document.addEventListener("scroll", this.#handleScroll, true);
+	};
+
+	readonly #stopListening = () => {
+		if (!this.#isListening) {
+			return;
+		}
+		this.#isListening = false;
+		this.#cancelTargetHide();
+		this.editor.off("selectionUpdate", this.#handleSelectionUpdate);
+		this.editor.off("transaction", this.#updateCellSelectionTarget);
+		window.removeEventListener("resize", this.#handleResize);
+		document.removeEventListener("pointermove", this.#handlePointerMove);
+		document.removeEventListener("scroll", this.#handleScroll, true);
+	};
 }

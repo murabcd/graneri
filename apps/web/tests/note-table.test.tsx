@@ -846,4 +846,22 @@ describe("note tables", () => {
 			screen.queryByRole("button", { name: "Add table column" }),
 		).toBeNull();
 	});
+
+	it("clears viewport-relative table handles when the document scrolls", async () => {
+		await renderTable();
+		const firstCell = screen.getAllByRole("cell")[0];
+		if (!firstCell) {
+			throw new Error("Table cell did not render");
+		}
+		fireEvent.pointerMove(firstCell);
+		expect(
+			await screen.findByRole("button", { name: "Row actions" }),
+		).toBeTruthy();
+
+		fireEvent.scroll(document);
+
+		await waitFor(() =>
+			expect(screen.queryByRole("button", { name: "Row actions" })).toBeNull(),
+		);
+	});
 });

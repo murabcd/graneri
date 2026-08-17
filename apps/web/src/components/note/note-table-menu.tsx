@@ -1,9 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import {
-	CellSelection,
-	moveTableColumn,
-	moveTableRow,
-} from "@tiptap/pm/tables";
+import { CellSelection } from "@tiptap/pm/tables";
 import { useTiptap } from "@tiptap/react";
 import {
 	DropdownMenu,
@@ -36,28 +32,18 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { NOTE_TABLE_CONTROL_HIDE_DELAY_MS } from "@/lib/note-table";
+import {
+	NoteTableInteractionSession,
+	type TableCellSelectionTarget,
+	type TableHandleOrientation,
+	type TableHandleTarget,
+	type TableStructureDeleteKind,
+} from "@/lib/note-table";
 import {
 	NOTE_TABLE_CELL_BACKGROUNDS,
 	type NoteTableCellAlignment,
 	type NoteTableCellBackground,
 } from "@/lib/note-table-cell";
-import {
-	areEqualTableCellSelectionTargets,
-	areEqualTableHandleTargets,
-	createTableCellSelectionTarget,
-	createTableHandleTarget,
-	duplicateColumn,
-	duplicateRow,
-	runTableCommand,
-	selectTableHandle,
-	type TableCellSelectionTarget,
-	type TableHandleOrientation,
-	type TableHandleTarget,
-	type TableStructureDeleteKind,
-} from "./note-table-menu-model";
-
-type TableMenuKind = TableHandleOrientation | "cells";
 
 const CELL_BACKGROUND_OPTIONS: Array<{
 	label: string;
@@ -177,6 +163,7 @@ type TableHandleMenuProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	orientation: TableHandleOrientation;
+	session: NoteTableInteractionSession;
 	target: TableHandleTarget;
 };
 
@@ -185,6 +172,7 @@ function TableHandleMenu({
 	onOpenChange,
 	open,
 	orientation,
+	session,
 	target,
 }: TableHandleMenuProps) {
 	const isRow = orientation === "row";
@@ -195,30 +183,18 @@ function TableHandleMenu({
 
 	const execute = React.useCallback(
 		(command: () => boolean) => {
-			const didRun = runTableCommand(editor, target, orientation, command);
+			const didRun = session.runHandleCommand(target, orientation, command);
 			onOpenChange(false);
 			return didRun;
 		},
-		[editor, onOpenChange, orientation, target],
+		[onOpenChange, orientation, session, target],
 	);
 
-	const move = (offset: -1 | 1) =>
-		execute(() => {
-			const command = isRow
-				? moveTableRow({
-						from: index,
-						to: index + offset,
-						pos: target.cellPosition,
-					})
-				: moveTableColumn({
-						from: index,
-						to: index + offset,
-						pos: target.cellPosition,
-					});
-			return command(editor.state, (transaction) =>
-				editor.view.dispatch(transaction),
-			);
-		});
+	const move = (offset: -1 | 1) => {
+		const didRun = session.moveHandle(target, orientation, offset);
+		onOpenChange(false);
+		return didRun;
+	};
 
 	const addBefore = () =>
 		execute(() =>
@@ -230,10 +206,11 @@ function TableHandleMenu({
 		execute(() =>
 			isRow ? editor.commands.addRowAfter() : editor.commands.addColumnAfter(),
 		);
-	const duplicate = () =>
-		execute(() =>
-			isRow ? duplicateRow(editor, target) : duplicateColumn(editor, target),
-		);
+	const duplicate = () => {
+		const didRun = session.duplicateHandle(target, orientation);
+		onOpenChange(false);
+		return didRun;
+	};
 	const remove = () =>
 		execute(() =>
 			isRow ? editor.commands.deleteRow() : editor.commands.deleteColumn(),
@@ -246,15 +223,7 @@ function TableHandleMenu({
 	const currentCellBackground = getSelectedCellBackground(editor);
 
 	return (
-		<DropdownMenu
-			open={open}
-			onOpenChange={(nextOpen) => {
-				if (nextOpen) {
-					selectTableHandle(editor, target, orientation);
-				}
-				onOpenChange(nextOpen);
-			}}
-		>
+		<DropdownMenu open={open} onOpenChange={onOpenChange}>
 			<DropdownMenuTrigger asChild>
 				<button
 					type="button"
@@ -444,114 +413,18 @@ function TableCellSelectionMenu({
 
 export function NoteTableMenu() {
 	const { editor } = useTiptap();
-	const [target, setTarget] = React.useState<TableHandleTarget | null>(null);
-	const [cellSelectionTarget, setCellSelectionTarget] =
-		React.useState<TableCellSelectionTarget | null>(null);
-	const [openMenu, setOpenMenu] = React.useState<TableMenuKind | null>(null);
+	const session = React.useMemo(
+		() => new NoteTableInteractionSession(editor),
+		[editor],
+	);
+	const { cellSelectionTarget, handleTarget, openMenu } =
+		React.useSyncExternalStore(
+			session.subscribe,
+			session.getSnapshot,
+			session.getSnapshot,
+		);
 
-	React.useEffect(() => {
-		if (!editor.isEditable) {
-			return;
-		}
-
-		const updateCellSelectionTarget = () => {
-			const nextTarget = createTableCellSelectionTarget(editor);
-			setCellSelectionTarget((currentTarget) =>
-				areEqualTableCellSelectionTargets(currentTarget, nextTarget)
-					? currentTarget
-					: nextTarget,
-			);
-		};
-		const handleSelectionUpdate = () => {
-			setOpenMenu((currentMenu) =>
-				currentMenu === "cells" ? null : currentMenu,
-			);
-			updateCellSelectionTarget();
-		};
-
-		updateCellSelectionTarget();
-		editor.on("selectionUpdate", handleSelectionUpdate);
-		editor.on("transaction", updateCellSelectionTarget);
-		window.addEventListener("resize", updateCellSelectionTarget);
-		document.addEventListener("scroll", updateCellSelectionTarget, true);
-		return () => {
-			editor.off("selectionUpdate", handleSelectionUpdate);
-			editor.off("transaction", updateCellSelectionTarget);
-			window.removeEventListener("resize", updateCellSelectionTarget);
-			document.removeEventListener("scroll", updateCellSelectionTarget, true);
-		};
-	}, [editor]);
-
-	React.useEffect(() => {
-		if (!editor.isEditable) {
-			return;
-		}
-
-		const editorElement = editor.view.dom;
-		let hideTargetTimer: ReturnType<typeof setTimeout> | null = null;
-		const cancelTargetHide = () => {
-			if (hideTargetTimer !== null) {
-				clearTimeout(hideTargetTimer);
-				hideTargetTimer = null;
-			}
-		};
-		const scheduleTargetHide = () => {
-			if (hideTargetTimer !== null) {
-				return;
-			}
-			hideTargetTimer = setTimeout(() => {
-				hideTargetTimer = null;
-				setTarget(null);
-			}, NOTE_TABLE_CONTROL_HIDE_DELAY_MS);
-		};
-		const handlePointerMove = (event: PointerEvent) => {
-			const eventTarget = event.target;
-			if (!(eventTarget instanceof Element)) {
-				return;
-			}
-			if (eventTarget.closest("[data-note-table-handle]")) {
-				cancelTargetHide();
-				return;
-			}
-
-			const cell = eventTarget.closest("td, th");
-			if (
-				cell instanceof HTMLTableCellElement &&
-				editorElement.contains(cell)
-			) {
-				const nextTarget = createTableHandleTarget(editor, cell);
-				if (nextTarget) {
-					cancelTargetHide();
-					setTarget((currentTarget) =>
-						areEqualTableHandleTargets(currentTarget, nextTarget)
-							? currentTarget
-							: nextTarget,
-					);
-					return;
-				}
-			}
-
-			if (!openMenu) {
-				scheduleTargetHide();
-			} else {
-				cancelTargetHide();
-			}
-		};
-		const handleScroll = () => {
-			cancelTargetHide();
-			setTarget(null);
-		};
-
-		document.addEventListener("pointermove", handlePointerMove);
-		document.addEventListener("scroll", handleScroll, true);
-		return () => {
-			cancelTargetHide();
-			document.removeEventListener("pointermove", handlePointerMove);
-			document.removeEventListener("scroll", handleScroll, true);
-		};
-	}, [editor, openMenu]);
-
-	const visibleTarget = target?.wrapper.isConnected ? target : null;
+	const visibleTarget = handleTarget?.wrapper.isConnected ? handleTarget : null;
 	const visibleCellSelectionTarget = cellSelectionTarget?.wrapper.isConnected
 		? cellSelectionTarget
 		: null;
@@ -566,15 +439,17 @@ export function NoteTableMenu() {
 					<TableHandleMenu
 						editor={editor}
 						open={openMenu === "row"}
-						onOpenChange={(open) => setOpenMenu(open ? "row" : null)}
+						onOpenChange={(open) => session.setOpenMenu(open ? "row" : null)}
 						orientation="row"
+						session={session}
 						target={visibleTarget}
 					/>
 					<TableHandleMenu
 						editor={editor}
 						open={openMenu === "column"}
-						onOpenChange={(open) => setOpenMenu(open ? "column" : null)}
+						onOpenChange={(open) => session.setOpenMenu(open ? "column" : null)}
 						orientation="column"
+						session={session}
 						target={visibleTarget}
 					/>
 				</>
@@ -583,7 +458,7 @@ export function NoteTableMenu() {
 				<TableCellSelectionMenu
 					editor={editor}
 					open={openMenu === "cells"}
-					onOpenChange={(open) => setOpenMenu(open ? "cells" : null)}
+					onOpenChange={(open) => session.setOpenMenu(open ? "cells" : null)}
 					target={visibleCellSelectionTarget}
 				/>
 			) : null}

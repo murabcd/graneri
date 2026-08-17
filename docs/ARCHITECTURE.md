@@ -46,6 +46,12 @@ attributes. Graneri owns the free image toolbar and caption node view; Tiptap's
 open-source resizable node view owns drag geometry. Image replacement reuses the
 same Convex uploader and updates the selected node in place, while the normal
 note document session remains the only writer of note content.
+`apps/web/src/lib/note-table.ts` is the single table-interaction module. It owns
+rendered table geometry, edge-control visibility and drag reversal, column
+resize normalization, menu-target lifecycles, selection preservation, and
+row/column move and duplication semantics. The Tiptap node view and React menu
+portal are rendering adapters over that module; they must not establish
+parallel document listeners, hover timers, geometry models, or command paths.
 The application navigation session is the authoritative renderer boundary for
 URL-derived route state, settings history restoration, desktop and popstate
 synchronization, pinned-inbox behavior, transient note-capture intent, and
