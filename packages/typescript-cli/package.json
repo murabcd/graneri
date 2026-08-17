@@ -5,7 +5,7 @@
   "description": "TypeScript 7 CLI boundary that keeps Vercel's legacy compiler API isolated",
   "type": "module",
   "bin": {
-    "tsc": "./bin/tsc.mjs"
+    "tsc": "./bin/tsc"
   },
   "optionalDependencies": {
     "@typescript/typescript-darwin-arm64": "~7.0.2",

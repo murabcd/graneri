@@ -168,7 +168,7 @@
       "name": "typescript",
       "version": "7.0.2",
       "bin": {
-        "tsc": "./bin/tsc.mjs",
+        "tsc": "./bin/tsc",
       },
       "optionalDependencies": {
         "@typescript/typescript-darwin-arm64": "~7.0.2",
