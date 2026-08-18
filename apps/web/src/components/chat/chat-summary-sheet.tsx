@@ -55,6 +55,7 @@ import {
 	ChevronRight,
 	Clock3,
 	FileText,
+	Minus,
 	Paperclip,
 	Plus,
 	X,
@@ -307,6 +308,13 @@ export function ChatSummarySheet({
 		setIsPinned(nextPinned);
 		writeDesktopChatSummaryPanelPinnedState(nextPinned);
 	}, [isPinned]);
+	const handleClose = React.useCallback(() => {
+		if (!isMobile && isPinned) {
+			togglePinned();
+		}
+
+		onOpenChange(false);
+	}, [isMobile, isPinned, onOpenChange, togglePinned]);
 	useDockedPanelInset({
 		side: "right",
 		isMobile,
@@ -334,6 +342,7 @@ export function ChatSummarySheet({
 			workspaceSources={workspaceSources}
 			openSourceRequest={openSourceRequest}
 			onOpenSummary={() => onOpenChange(true)}
+			onClose={handleClose}
 			onTogglePinned={togglePinned}
 		/>
 	);
@@ -397,6 +406,7 @@ function ChatSummaryPanel({
 	workspaceSources,
 	openSourceRequest,
 	onOpenSummary,
+	onClose,
 	onTogglePinned,
 }: {
 	isMobile: boolean;
@@ -409,6 +419,7 @@ function ChatSummaryPanel({
 	workspaceSources: SummaryWorkspaceSource[];
 	openSourceRequest?: ChatSummaryOpenSourceRequest | null;
 	onOpenSummary: () => void;
+	onClose: () => void;
 	onTogglePinned: () => void;
 }) {
 	const [fileTabs, setFileTabs] = React.useState<
@@ -569,6 +580,27 @@ function ChatSummaryPanel({
 							onTogglePinned={onTogglePinned}
 						/>
 					)}
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Hide summary"
+								onClick={onClose}
+							>
+								<Minus className="size-4" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent
+							side="bottom"
+							align="end"
+							sideOffset={8}
+							className="pointer-events-none select-none"
+						>
+							Hide summary
+						</TooltipContent>
+					</Tooltip>
 				</div>
 			</div>
 			{fileSearchOpen ? (
