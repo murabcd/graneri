@@ -72,12 +72,12 @@ import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import { NoteTitleEditInput } from "./note-title-edit-input";
 import { NoteVersionHistoryDialogEntry } from "./note-version-history-dialog-entry";
 import { optimisticPatchNote } from "./optimistic-patch-note";
-import { optimisticRenameNote } from "./optimistic-rename-note";
 import {
 	buildNoteShareUrl,
 	type NoteVisibility,
 	writeTextToClipboard,
 } from "./share-note";
+import { useNoteTitleEditor } from "./use-note-title-editor";
 
 const ensureNoteHasRequiredFields = <T extends Doc<"notes">>(
 	note: T,
@@ -259,7 +259,6 @@ type NoteActionsMenuProps = {
 	renamePopoverSideOffset?: number;
 	renamePopoverClassName?: string;
 	onRenamePreviewChange?: (title: string) => void;
-	onRenamePreviewReset?: () => void;
 	align?: "start" | "center" | "end";
 	side?: "top" | "right" | "bottom" | "left";
 	showRename?: boolean;
@@ -280,35 +279,28 @@ function useNoteActionsMenu({
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 	const [menuOpen, setMenuOpen] = React.useState(false);
 	const [versionHistoryOpen, setVersionHistoryOpen] = React.useState(false);
-	const [renameOpen, setRenameOpen] = React.useState(false);
-	const [renameValue, setRenameValue] = React.useState("");
-	const openRenamePopover = React.useCallback((value: string) => {
-		setRenameValue(value);
-		setRenameOpen(true);
-	}, []);
-	const {
-		completePopoverOpen: handleMenuCloseAutoFocus,
-		preparePopoverOpen,
-		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
-	} = useDropdownPopoverHandoff(openRenamePopover);
-	const renameInputRef = React.useRef<HTMLInputElement>(null);
 	const [isMovingToTrash, setIsMovingToTrash] = React.useState(false);
-	const [isRenaming, setIsRenaming] = React.useState(false);
 	const [isUpdatingShare, setIsUpdatingShare] = React.useState(false);
 	const [isUpdatingProject, setIsUpdatingProject] = React.useState(false);
 	const { handleToggleStar, isUpdatingStar, note } = useNoteStarControl({
 		noteId,
 	});
+	const titleEditor = useNoteTitleEditor({
+		noteId,
+		onPreviewChange: onRenamePreviewChange,
+		title: note?.title ?? null,
+		workspaceId: activeWorkspaceId,
+	});
+	const {
+		completePopoverOpen: handleMenuCloseAutoFocus,
+		preparePopoverOpen,
+		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
+	} = useDropdownPopoverHandoff(titleEditor.start);
 	const projects = useQuery(
 		api.projects.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
 	);
 	const ensureShareId = useMutation(api.notes.ensureShareId);
-	const renameNote = useMutation(api.notes.rename).withOptimisticUpdate(
-		(localStore, args) => {
-			optimisticRenameNote(localStore, args.workspaceId, args.id, args.title);
-		},
-	);
 	const setProject = useMutation(api.notes.setProject).withOptimisticUpdate(
 		(localStore, args) => {
 			optimisticPatchNote(
@@ -400,65 +392,6 @@ function useNoteActionsMenu({
 			toast.error("Failed to copy link");
 		}
 	}, [activeWorkspaceId, ensureShareId, noteId]);
-
-	const handleRename = React.useCallback(async () => {
-		if (!note || !activeWorkspaceId || isRenaming) {
-			return;
-		}
-
-		const nextTitle = renameValue.trim();
-		const currentTitle = note.title.trim();
-
-		if (nextTitle === currentTitle) {
-			setRenameOpen(false);
-			setRenameValue(nextTitle);
-			return;
-		}
-
-		setIsRenaming(true);
-
-		try {
-			await renameNote({
-				workspaceId: activeWorkspaceId,
-				id: noteId,
-				title: nextTitle,
-			});
-			setRenameOpen(false);
-			setRenameValue(nextTitle);
-			toast.success("Note renamed");
-		} catch (error) {
-			logError({
-				event: "client.error",
-				error: error,
-				message: "Failed to rename note",
-			});
-			toast.error("Failed to rename note");
-		} finally {
-			setIsRenaming(false);
-		}
-	}, [activeWorkspaceId, isRenaming, note, noteId, renameNote, renameValue]);
-
-	const handleRenameValueChange = React.useCallback(
-		(value: string) => {
-			setRenameValue(() => value);
-			if (renameOpen) {
-				onRenamePreviewChange?.(value);
-			}
-		},
-		[onRenamePreviewChange, renameOpen],
-	);
-
-	const handleRenameOpenChange = React.useCallback(
-		(open: boolean) => {
-			if (open) {
-				setRenameOpen(true);
-				return;
-			}
-
-			void handleRename();
-		},
-		[handleRename],
-	);
 
 	const handleSetVisibility = React.useCallback(
 		async (visibility: NoteVisibility) => {
@@ -592,14 +525,9 @@ function useNoteActionsMenu({
 	}, []);
 
 	const handleStartRename = React.useCallback(() => {
-		preparePopoverOpen(note?.title ?? "");
+		preparePopoverOpen();
 		setMenuOpen(false);
-	}, [note?.title, preparePopoverOpen]);
-
-	const handleRenameCancel = React.useCallback(() => {
-		setRenameOpen(false);
-		setRenameValue(note?.title ?? "");
-	}, [note?.title]);
+	}, [preparePopoverOpen]);
 
 	return {
 		confirmOpen,
@@ -608,12 +536,12 @@ function useNoteActionsMenu({
 		setMenuOpen,
 		versionHistoryOpen,
 		setVersionHistoryOpen,
-		renameOpen,
-		renameValue,
-		handleRenameValueChange,
-		renameInputRef,
+		renameOpen: titleEditor.open,
+		renameValue: titleEditor.value,
+		handleRenameValueChange: titleEditor.setValue,
+		renameInputRef: titleEditor.inputRef,
 		isMovingToTrash,
-		isRenaming,
+		isRenaming: titleEditor.isSaving,
 		isUpdatingShare,
 		isUpdatingProject,
 		isUpdatingStar,
@@ -621,7 +549,7 @@ function useNoteActionsMenu({
 		projects,
 		preventMenuCloseAutoFocusRef,
 		handleToggleStar,
-		handleRenameOpenChange,
+		handleRenameOpenChange: titleEditor.onOpenChange,
 		handleSetVisibility,
 		handleSetProject,
 		handleCopyLink,
@@ -630,8 +558,8 @@ function useNoteActionsMenu({
 		handleVersionHistoryOpen,
 		handleStartRename,
 		handleMenuCloseAutoFocus,
-		handleRenameCancel,
-		handleRename,
+		handleRenameCancel: titleEditor.cancel,
+		handleRename: titleEditor.commit,
 	};
 }
 
@@ -645,7 +573,6 @@ export function NoteActionsMenu({
 	renamePopoverSide = "bottom",
 	renamePopoverSideOffset = 8,
 	renamePopoverClassName,
-	onRenamePreviewReset,
 	align = "start",
 	side = "bottom",
 	showRename = true,
@@ -744,10 +671,7 @@ export function NoteActionsMenu({
 			onRename={() => {
 				void handleRename();
 			}}
-			onRenameCancel={() => {
-				handleRenameCancel();
-				onRenamePreviewReset?.();
-			}}
+			onRenameCancel={handleRenameCancel}
 			isRenaming={isRenaming}
 		/>
 	) : null;

@@ -66,9 +66,6 @@ export function SidebarNoteRow({
 				renamePopoverSideOffset={6}
 				renamePopoverClassName="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
 				onRenamePreviewChange={isActive ? onNoteTitleChange : undefined}
-				onRenamePreviewReset={
-					isActive ? () => onNoteTitleChange?.(note.title) : undefined
-				}
 			>
 				<SidebarMenuAction
 					className="pointer-events-none cursor-pointer opacity-0 transition-opacity group-hover/note-row:pointer-events-auto group-hover/note-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:text-sidebar-accent-foreground data-[state=open]:opacity-100"

@@ -262,6 +262,38 @@ describe("ProjectSidebarItem", () => {
 		expect(screen.queryByPlaceholderText("New note")).toBeNull();
 	});
 
+	it("renames a nested note through the canonical note title mutation", async () => {
+		const user = userEvent.setup();
+		const onNoteTitleChange = vi.fn();
+
+		renderProjectSidebarItem({
+			currentNoteId: noteId,
+			currentNoteTitle: note.title,
+			notes: [note],
+			onNoteTitleChange,
+			open: true,
+		});
+
+		await user.click(
+			screen.getByRole("button", {
+				name: "Open actions for Nested note",
+			}),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Rename" }));
+		const input = screen.getByPlaceholderText("New note");
+		await user.clear(input);
+		await user.type(input, "Canonical sidebar note{Enter}");
+
+		expect(mutationMock).toHaveBeenCalledWith({
+			workspaceId,
+			id: noteId,
+			title: "Canonical sidebar note",
+		});
+		expect(onNoteTitleChange).toHaveBeenLastCalledWith(
+			"Canonical sidebar note",
+		);
+	});
+
 	it("does not reserve nested note action space until hover", () => {
 		renderProjectSidebarItem({
 			notes: [note],

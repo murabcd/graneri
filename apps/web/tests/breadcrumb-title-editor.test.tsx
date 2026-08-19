@@ -3,7 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import { ProjectBreadcrumbTitleEditor } from "../src/components/navigation/breadcrumb-title-editor";
+import {
+	NoteBreadcrumbTitleEditor,
+	ProjectBreadcrumbTitleEditor,
+} from "../src/components/navigation/breadcrumb-title-editor";
 
 const { mutationMock, useMutationMock } = vi.hoisted(() => ({
 	mutationMock: vi.fn(),
@@ -15,6 +18,7 @@ vi.mock("convex/react", () => ({
 }));
 
 const workspaceId = "workspace-1" as Id<"workspaces">;
+const noteId = "note-1" as Id<"notes">;
 const projectId = "project-1" as Id<"projects">;
 const project = {
 	_id: projectId,
@@ -34,6 +38,7 @@ const project = {
 } satisfies Doc<"projects">;
 
 beforeEach(() => {
+	vi.clearAllMocks();
 	mutationMock.mockResolvedValue(project);
 	useMutationMock.mockImplementation(() => {
 		(
@@ -42,6 +47,38 @@ beforeEach(() => {
 			}
 		).withOptimisticUpdate = () => mutationMock;
 		return mutationMock;
+	});
+});
+
+describe("NoteBreadcrumbTitleEditor", () => {
+	it("renames through the canonical note title mutation", async () => {
+		const user = userEvent.setup();
+		const onPreviewChange = vi.fn();
+
+		render(
+			<TooltipProvider>
+				<NoteBreadcrumbTitleEditor
+					detailLabel="Research note"
+					isDesktopMac={false}
+					noteId={noteId}
+					onPreviewChange={onPreviewChange}
+					title="Research note"
+					workspaceId={workspaceId}
+				/>
+			</TooltipProvider>,
+		);
+
+		await user.click(screen.getByRole("button", { name: "Research note" }));
+		const input = screen.getByPlaceholderText("New note");
+		await user.clear(input);
+		await user.type(input, "Canonical note{Enter}");
+
+		expect(mutationMock).toHaveBeenCalledWith({
+			workspaceId,
+			id: noteId,
+			title: "Canonical note",
+		});
+		expect(onPreviewChange).toHaveBeenLastCalledWith("Canonical note");
 	});
 });
 

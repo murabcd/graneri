@@ -89,13 +89,11 @@ import { OPEN_CHAT_SUMMARY_EVENT } from "@/components/chat/chat-summary-events";
 import { optimisticPatchChat } from "@/components/chat/optimistic-patch-chat";
 import { AppShellInset } from "@/components/layout/app-shell-inset";
 import {
+	ChatBreadcrumbTitleEditor,
+	NoteBreadcrumbTitleEditor,
 	ProjectBreadcrumbTitleEditor,
-	RenameBreadcrumbTitleEditor,
 } from "@/components/navigation/breadcrumb-title-editor";
-import {
-	type BreadcrumbTitleEditorController,
-	useBreadcrumbTitleEditor,
-} from "@/components/navigation/use-breadcrumb-title-editor";
+import { useBreadcrumbChatTitleEditor } from "@/components/navigation/use-breadcrumb-chat-title-editor";
 import {
 	NoteActionsMenu,
 	NoteStarButton,
@@ -1447,17 +1445,49 @@ function AppShellHeader({
 	const { isMobile, state: sidebarState } = useSidebarShell();
 	const { leftInsetPanelWidth, leftOverlayPanelWidth } = useDockedPanelWidths();
 	const {
-		editor: breadcrumbTitleEditor,
+		editor: breadcrumbChatTitleEditor,
 		openEditor: openBreadcrumbTitleEditor,
-	} = useBreadcrumbTitleEditor({
-		currentChatId,
-		currentChatNoteId,
-		currentChatTitle,
-		currentNoteId,
-		currentNoteTitle,
-		currentView,
-		onNoteTitleChange,
+	} = useBreadcrumbChatTitleEditor({
+		chatId: currentView === "chat" ? currentChatId : null,
+		noteId: currentChatNoteId,
+		title: currentChatTitle,
 	});
+	let breadcrumbTitleEditor: React.ReactNode = null;
+	if (breadcrumbDetailLabel) {
+		switch (currentView) {
+			case "project":
+				breadcrumbTitleEditor = currentProject ? (
+					<ProjectBreadcrumbTitleEditor
+						detailLabel={breadcrumbDetailLabel}
+						isDesktopMac={isDesktopMac}
+						project={currentProject}
+						workspaceId={activeWorkspaceId}
+					/>
+				) : null;
+				break;
+			case "note":
+				breadcrumbTitleEditor = currentNoteId ? (
+					<NoteBreadcrumbTitleEditor
+						detailLabel={breadcrumbDetailLabel}
+						isDesktopMac={isDesktopMac}
+						noteId={currentNoteId}
+						onPreviewChange={onNoteTitleChange}
+						title={currentNoteTitle}
+						workspaceId={activeWorkspaceId}
+					/>
+				) : null;
+				break;
+			case "chat":
+				breadcrumbTitleEditor = breadcrumbChatTitleEditor ? (
+					<ChatBreadcrumbTitleEditor
+						detailLabel={breadcrumbDetailLabel}
+						editor={breadcrumbChatTitleEditor}
+						isDesktopMac={isDesktopMac}
+					/>
+				) : null;
+				break;
+		}
+	}
 
 	return (
 		<header
@@ -1514,8 +1544,6 @@ function AppShellHeader({
 					breadcrumbSectionLabel={breadcrumbSectionLabel}
 					breadcrumbDetailLabel={breadcrumbDetailLabel}
 					isDesktopMac={isDesktopMac}
-					currentProject={currentView === "project" ? currentProject : null}
-					workspaceId={activeWorkspaceId}
 					onBreadcrumbSectionClick={onBreadcrumbSectionClick}
 					titleEditor={breadcrumbTitleEditor}
 					showAutomationIcon={
@@ -1564,8 +1592,6 @@ function AppShellBreadcrumbs({
 	breadcrumbSectionLabel,
 	breadcrumbDetailLabel,
 	isDesktopMac,
-	currentProject,
-	workspaceId,
 	onBreadcrumbSectionClick,
 	titleEditor,
 	showAutomationIcon,
@@ -1574,10 +1600,8 @@ function AppShellBreadcrumbs({
 	breadcrumbSectionLabel: string;
 	breadcrumbDetailLabel: string | null;
 	isDesktopMac: boolean;
-	currentProject: Doc<"projects"> | null;
-	workspaceId: Id<"workspaces"> | null;
 	onBreadcrumbSectionClick: () => void;
-	titleEditor: BreadcrumbTitleEditorController | null;
+	titleEditor: React.ReactNode;
 	showAutomationIcon?: boolean;
 	onAutomationIconClick?: () => void;
 }) {
@@ -1617,22 +1641,9 @@ function AppShellBreadcrumbs({
 						</BreadcrumbItem>
 						<BreadcrumbSeparator className="hidden shrink-0 md:block" />
 						<BreadcrumbItem className="min-w-0 flex-1 overflow-hidden">
-							{titleEditor || currentProject ? (
+							{titleEditor ? (
 								<div className="flex min-w-0 items-center gap-2">
-									{currentProject ? (
-										<ProjectBreadcrumbTitleEditor
-											detailLabel={breadcrumbDetailLabel}
-											isDesktopMac={isDesktopMac}
-											project={currentProject}
-											workspaceId={workspaceId}
-										/>
-									) : titleEditor ? (
-										<RenameBreadcrumbTitleEditor
-											detailLabel={breadcrumbDetailLabel}
-											editor={titleEditor}
-											isDesktopMac={isDesktopMac}
-										/>
-									) : null}
+									{titleEditor}
 									{automationIconButton}
 								</div>
 							) : (

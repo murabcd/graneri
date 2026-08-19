@@ -11,10 +11,11 @@ import {
 } from "@workspace/ui/components/tooltip";
 import * as React from "react";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
+import { useNoteTitleEditor } from "@/components/note/use-note-title-editor";
 import { ProjectIdentityInput } from "@/components/projects/project-appearance-picker";
 import { useProjectIdentityEditor } from "@/components/projects/use-project-identity-editor";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
-import type { BreadcrumbTitleEditorController } from "./use-breadcrumb-title-editor";
+import type { BreadcrumbChatTitleEditorController } from "./use-breadcrumb-chat-title-editor";
 
 function BreadcrumbTitlePopover({
 	detailLabel,
@@ -70,32 +71,80 @@ function BreadcrumbTitlePopover({
 	);
 }
 
-export function RenameBreadcrumbTitleEditor({
+export function ChatBreadcrumbTitleEditor({
 	detailLabel,
 	editor,
 	isDesktopMac,
 }: {
 	detailLabel: string;
-	editor: BreadcrumbTitleEditorController;
+	editor: BreadcrumbChatTitleEditorController;
 	isDesktopMac: boolean;
 }) {
 	return (
 		<BreadcrumbTitlePopover
 			detailLabel={detailLabel}
 			isDesktopMac={isDesktopMac}
-			itemLabel={editor.itemLabel}
-			onOpen={editor.onOpen}
+			itemLabel="chat"
+			onOpen={editor.start}
 			onOpenChange={editor.onOpenChange}
 			open={editor.open}
 		>
 			<NoteTitleEditInput
 				focusOnMount
 				commitOnBlur={false}
-				placeholder={editor.placeholder}
+				placeholder="New chat"
 				value={editor.value}
-				onValueChange={editor.onValueChange}
-				onCommit={editor.onCommit}
-				onCancel={editor.onCancel}
+				onValueChange={editor.setValue}
+				onCommit={() => {
+					void editor.commit();
+				}}
+				onCancel={editor.cancel}
+			/>
+		</BreadcrumbTitlePopover>
+	);
+}
+
+export function NoteBreadcrumbTitleEditor({
+	detailLabel,
+	isDesktopMac,
+	noteId,
+	onPreviewChange,
+	title,
+	workspaceId,
+}: {
+	detailLabel: string;
+	isDesktopMac: boolean;
+	noteId: Id<"notes">;
+	onPreviewChange: (title: string) => void;
+	title: string;
+	workspaceId: Id<"workspaces"> | null;
+}) {
+	const editor = useNoteTitleEditor({
+		noteId,
+		onPreviewChange,
+		title,
+		workspaceId,
+	});
+
+	return (
+		<BreadcrumbTitlePopover
+			detailLabel={detailLabel}
+			isDesktopMac={isDesktopMac}
+			itemLabel="note"
+			onOpen={editor.start}
+			onOpenChange={editor.onOpenChange}
+			open={editor.open}
+		>
+			<NoteTitleEditInput
+				focusOnMount
+				commitOnBlur={false}
+				inputRef={editor.inputRef}
+				value={editor.value}
+				onValueChange={editor.setValue}
+				onCommit={() => {
+					void editor.commit();
+				}}
+				onCancel={editor.cancel}
 			/>
 		</BreadcrumbTitlePopover>
 	);
