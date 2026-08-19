@@ -16,6 +16,7 @@ import {
 	desktopPackageContract,
 } from "./desktop-package-contract.mjs";
 import { nativeRuntimeToolNames } from "./native-runtime-tools.mjs";
+import { stageRuntimePackages } from "./stage-runtime-packages.mjs";
 
 const require = createRequire(import.meta.url);
 const execFileAsync = promisify(execFile);
@@ -101,10 +102,13 @@ const bundleDesktopMain = async () => {
 			"--target=node",
 			"--format=esm",
 			`--outdir=${bundledMainDir}`,
+			"--splitting",
 			"--external",
 			"electron",
 			"--external",
 			"objc-js",
+			"--external",
+			"just-bash",
 			"--sourcemap=none",
 		],
 		{
@@ -130,6 +134,14 @@ const bundleDesktopMain = async () => {
 			await rm(resolve(distDir, entry.name), { force: true });
 		}
 	}
+};
+
+const stageLocalCommandRuntime = async () => {
+	await stageRuntimePackages({
+		destinationNodeModulesPath: resolve(distDir, "node_modules"),
+		packageNames: desktopPackageContract.localCommandRuntimePackages,
+		resolveFrom: resolve(packageRoot, "package.json"),
+	});
 };
 
 const copyMacOSRuntimeNodeModules = async () => {
@@ -240,6 +252,7 @@ await mkdir(distDir, { recursive: true });
 await copyRuntimeSources();
 await bundleDesktopPreload();
 await bundleDesktopMain();
+await stageLocalCommandRuntime();
 await copyNativeRuntimeTools();
 await copyMacOSRuntimeNodeModules();
 await stagePackageApp();

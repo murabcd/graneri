@@ -954,15 +954,22 @@ tool declaration converts those references into multimodal model output for the
 next chat step. Electron neither constructs an OpenAI model nor consumes an
 OpenAI key. Chat attachment reference tracking owns those temporary image bytes
 until the last referencing chat message is removed.
-`run_local_command` executes a real non-interactive shell from one selected
-root. The Electron main process owns the native command executor; the shared AI
-package receives that capability only through an explicit adapter when it builds
-desktop-executed tools. On macOS the executor must enter
-`/usr/bin/sandbox-exec` with a closed-by-default Seatbelt profile that permits
-reads of that root and the minimum system runtime, but grants no user-data reads
-outside the root, filesystem writes, or network access. Command length,
-runtime, and captured output are bounded. If that native sandbox is unavailable,
-execution fails closed; there is no virtual or unsandboxed fallback.
+`run_local_command` executes one cross-platform virtual Bash environment from a
+selected root. The Electron main process creates a fresh `bash-tool`/`just-bash`
+`OverlayFs` environment for every call; the shared AI package receives that
+capability only through an explicit adapter when it builds desktop-executed
+tools. Reads reflect the live selected root, while writes exist only in the
+call's bounded copy-on-write layer and are discarded afterward. The overlay
+blocks reads outside the root and rejects symlink traversal. The shell exposes
+the bounded `just-bash` tool catalog, sandboxed QuickJS and WASM CPython, and
+public-network requests; private, loopback, and link-local network targets are
+denied. Native host executables are not exposed. Command length, execution,
+traversal, file reads, virtual writes, network responses, and captured output
+are bounded. The optional `just-bash` host-global defense monkey patches must
+remain disabled because Electron main owns unrelated timers and process state;
+the capability boundary, virtual filesystem, worker runtimes, and explicit
+limits are the isolation layers. There is no native OS command runner or
+unsandboxed fallback.
 
 Hosted handlers must never claim direct access to the user's Mac filesystem.
 Desktop-local capabilities must fail visibly when the desktop bridge contract is
@@ -1149,10 +1156,13 @@ The desktop build packages generated runtime artifacts only. Packaged Electron
 main code lives in `dist-electron/main/index.js`, and packaged renderer assets
 live in `dist-app`. Packaged windows load renderer assets through `app://ui`.
 Packaged runtime code must not rely on source-tree imports. JavaScript runtime
-dependencies belong in the main-process bundle. The only packaged
-`node_modules` exception is a native module that cannot be bundled: it must be
-declared as a platform-specific optional dependency, staged explicitly with its
-runtime dependencies, and covered by the package contract and verifier.
+dependencies belong in the main-process bundle unless their published runtime
+loads worker, WASM, or adjacent package assets by path. An asset-backed runtime
+must be staged with its ordinary dependency closure beside the bundled importer;
+native optional dependencies are excluded unless Graneri explicitly uses them.
+Native modules that cannot be bundled remain platform-specific optional
+dependencies. Every staged runtime must be covered by the package contract and
+verifier.
 
 The generated package shape is owned by
 `apps/desktop/scripts/desktop-package-contract.mjs`. Build scripts, Electron
@@ -1174,8 +1184,9 @@ prompt construction, run-plan assembly, tool-loop setup, branch preparation,
 save payloads, active-stream persistence, and stream finalization mechanics.
 
 Desktop packages must keep the app runtime in `Contents/Resources/app.asar`.
-Only native helpers and bundled media tools may be unpacked into
-`Contents/Resources/app.asar.unpacked` through targeted `asarUnpack` rules.
+Only native helpers, bundled media tools, and asset-backed worker/WASM runtimes
+may be unpacked into `Contents/Resources/app.asar.unpacked` through targeted
+`asarUnpack` rules.
 Runtime helper resolution must prefer the unpacked mirror before development
 helper paths. Electron currently emits a terminal-only Node `DEP0180` warning
 from its internal ASAR filesystem adapter (`electron/electron#47390`); do not

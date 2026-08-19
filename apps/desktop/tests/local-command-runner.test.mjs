@@ -8,24 +8,16 @@ import {
 	symlink,
 	writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { runLocalCommand } from "../src/local-command-runner.mjs";
 
-test("runs real commands while denying writes, outside reads, symlink escape, and network", {
-	skip: process.platform !== "darwin",
-}, async () => {
+test("runs isolated cross-platform commands over a shared folder", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "graneri-local-command-"));
 	const outsideDirectory = await mkdtemp(
 		join(tmpdir(), "graneri-local-command-outside-"),
 	);
-	const networkServer = createServer((socket) => socket.end());
-	await new Promise((resolve, reject) => {
-		networkServer.once("error", reject);
-		networkServer.listen(0, "127.0.0.1", resolve);
-	});
 
 	try {
 		const rootPath = await realpath(directory);
@@ -43,14 +35,12 @@ test("runs real commands while denying writes, outside reads, symlink escape, an
 				exitCode: readResult.exitCode,
 				sandbox: readResult.sandbox,
 				stdout: readResult.stdout,
-				timedOut: readResult.timedOut,
 				truncated: readResult.truncated,
 			},
 			{
 				exitCode: 0,
-				sandbox: "macos-seatbelt-read-only",
+				sandbox: "just-bash-overlay",
 				stdout: "beta\n",
-				timedOut: false,
 				truncated: false,
 			},
 		);
@@ -60,35 +50,51 @@ test("runs real commands while denying writes, outside reads, symlink escape, an
 			rootPath,
 		});
 		assert.equal(outsideResult.stdout.includes("outside secret"), false);
-		assert.match(outsideResult.stderr, /Operation not permitted/u);
+		assert.match(outsideResult.stderr, /No such file or directory/u);
 
 		const writeResult = await runLocalCommand({
-			command: "printf changed > forbidden.txt",
+			command:
+				"printf changed > notes.txt; printf temporary > virtual.txt; cat notes.txt virtual.txt",
 			rootPath,
 		});
-		assert.notEqual(writeResult.exitCode, 0);
-		await assert.rejects(access(join(directory, "forbidden.txt")));
+		assert.equal(writeResult.exitCode, 0);
+		assert.equal(writeResult.stdout, "changedtemporary");
+		await assert.rejects(access(join(directory, "virtual.txt")));
 
-		const networkAddress = networkServer.address();
-		assert.ok(networkAddress && typeof networkAddress !== "string");
-		const networkResult = await runLocalCommand({
-			command: `nc -z -w 1 127.0.0.1 ${networkAddress.port}`,
+		const languageResult = await runLocalCommand({
+			command:
+				"js-exec -c 'console.log(6 * 7)' && python3 -c 'print(6 * 7)' && sqlite3 :memory: 'select 6 * 7;'",
 			rootPath,
 		});
-		assert.notEqual(networkResult.exitCode, 0);
+		assert.equal(languageResult.exitCode, 0);
+		assert.equal(languageResult.stdout, "42\n42\n42\n");
+
+		const networkResult = await runLocalCommand({
+			command: "curl --fail --silent http://127.0.0.1:1",
+			rootPath,
+		});
+		assert.equal(networkResult.exitCode, 7);
+		assert.equal(networkResult.stdout, "");
 
 		const outputResult = await runLocalCommand({
-			command: "yes x | head -c 25000",
+			command: "seq 1 10000",
 			rootPath,
 		});
 		assert.equal(Buffer.byteLength(outputResult.stdout), 20_000);
 		assert.equal(outputResult.truncated, true);
+
+		const utf8Result = await runLocalCommand({
+			command: "awk 'BEGIN { for (i = 0; i < 6000; i++) printf \"🙂\" }'",
+			rootPath,
+		});
+		assert.equal(utf8Result.stdout.includes("�"), false);
+		assert.equal(Buffer.byteLength(utf8Result.stdout) <= 20_000, true);
+		assert.equal(utf8Result.truncated, true);
 		assert.equal(
 			await readFile(join(directory, "notes.txt"), "utf8"),
 			"alpha\nbeta\n",
 		);
 	} finally {
-		await new Promise((resolve) => networkServer.close(resolve));
 		await rm(directory, { force: true, recursive: true });
 		await rm(outsideDirectory, { force: true, recursive: true });
 	}

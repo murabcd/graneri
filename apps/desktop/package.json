@@ -33,8 +33,10 @@
     "@ai-sdk/mcp": "^2.0.15",
     "@workspace/ai": "workspace:*",
     "archiver": "7.0.1",
+    "bash-tool": "1.3.18",
     "convex": "^1.42.3",
     "electron-updater": "^6.6.2",
+    "just-bash": "3.4.1",
     "pino": "^10.3.1",
     "ws": "^8.18.0",
     "zod": "^4.1.12"

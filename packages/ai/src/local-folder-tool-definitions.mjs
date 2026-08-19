@@ -154,7 +154,7 @@ const localFolderToolCatalog = Object.freeze({
 	run_local_command: {
 		buildConfig: ({ rootSchema }) => ({
 			description:
-				"Run a real non-interactive shell command in one local folder explicitly shared by the desktop user. Use for bounded read-only exploration with system commands such as find, grep, stat, cat, head, tail, wc, sort, uniq, sed, awk, and jq. A macOS Seatbelt sandbox blocks filesystem writes, network access, and reads of user data outside the selected folder.",
+				"Run a cross-platform virtual Bash command in one local folder explicitly shared by the desktop user. Use built-in tools such as find, rg, grep, stat, cat, head, tail, wc, sort, uniq, sed, awk, jq, curl, js-exec, python3, and sqlite3. Commands can read the live shared folder; writes are temporary copy-on-write changes discarded after the call. Reads outside the shared folder, symlink traversal, and private-network access are blocked. Public HTTP(S) requests are allowed. Native host executables are unavailable.",
 			inputSchema: z.object({
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
@@ -164,7 +164,7 @@ const localFolderToolCatalog = Object.freeze({
 					.min(1)
 					.max(MAX_LOCAL_COMMAND_LENGTH)
 					.describe(
-						"Read-only shell command to run from the selected shared folder.",
+						"Virtual Bash command to run from the selected shared folder.",
 					),
 			}),
 		}),
@@ -210,7 +210,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"The user shared local folders from the desktop app. You can inspect only these shared folders through the local folder tools. Do not claim access to other local paths.",
 				"When the user asks about a shared local path, folder contents, local file, screenshot, image, or text transcript file inside a shared folder, use the local folder tools before answering. Do not use connected app tools such as Notion for local filesystem questions unless the user explicitly asks about those connected apps.",
 				"Do not say you cannot access the folder, and do not ask the user to run terminal commands, unless a local folder tool fails or the needed path is outside the shared folders.",
-				"For broad read-only exploration, use run_local_command. It runs real non-interactive shell commands with the selected shared folder as its working directory. The macOS sandbox blocks writes, network access, and reads of user data outside that folder.",
+				"For broad exploration, use run_local_command. It runs cross-platform virtual Bash with the selected shared folder as its working directory. Reads reflect the live shared folder; writes are temporary copy-on-write changes discarded after the call. Reads outside the folder, symlink traversal, private-network access, and native host executables are blocked. Public HTTP(S) requests, sandboxed JavaScript, sandboxed Python, and in-memory SQLite are available.",
 				"Use structured local tools for direct folder listing, bounded text reads, and image inspection. Use read_local_file byte ranges when a text file is larger than one response.",
 				"For local images, use inspect_local_image for a specific image and search_local_images when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"Shared local folders:",

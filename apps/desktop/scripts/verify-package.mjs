@@ -11,6 +11,11 @@ import {
 } from "../../../scripts/release-contract.mjs";
 import { desktopPackageContract } from "./desktop-package-contract.mjs";
 import { nativeRuntimeToolNames } from "./native-runtime-tools.mjs";
+import {
+	isStagedRuntimePackagePath,
+	stagedRuntimePackagePath,
+	verifyStagedRuntimePackageClosure,
+} from "./verify-runtime-packages.mjs";
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = resolve(packageRoot, "../..");
@@ -369,7 +374,9 @@ const scanRuntimeImports = (packagedResources) => {
 		(file) =>
 			file.relativePath.startsWith(
 				desktopPackageContract.runtimeImportDirectory,
-			) && /\.(cjs|js|mjs)$/u.test(file.relativePath),
+			) &&
+			!isStagedRuntimePackagePath(file.relativePath) &&
+			/\.(cjs|js|mjs)$/u.test(file.relativePath),
 	);
 	const builtins = new Set([
 		...builtinModules,
@@ -401,8 +408,17 @@ const scanRuntimeImports = (packagedResources) => {
 
 			const packageName = packageNameFromSpecifier(specifier);
 			const packagedDependencyPath = join("node_modules", packageName);
+			const packagedRuntimeDependencyPath =
+				stagedRuntimePackagePath(packageName);
+			const importsFromRuntimeDirectory = filePath.relativePath.startsWith(
+				`${desktopPackageContract.runtimeDirectory}/`,
+			);
 
-			if (!packagedResources.hasPackagePath(packagedDependencyPath)) {
+			if (
+				!packagedResources.hasPackagePath(packagedDependencyPath) &&
+				(!importsFromRuntimeDirectory ||
+					!packagedResources.hasPackagePath(packagedRuntimeDependencyPath))
+			) {
 				const references = missing.get(packageName) ?? [];
 				references.push(`${filePath.relativePath} -> ${specifier}`);
 				missing.set(packageName, references);
@@ -421,7 +437,11 @@ const scanRuntimeImports = (packagedResources) => {
 	const packagedResources = await loadPackagedResources();
 	const nativeAudioSelfTestResult = await verifyNativeRuntimeTools();
 	const allText = packagedResources.files
-		.filter((file) => /\.(html|js|mjs|cjs|json)$/u.test(file.relativePath))
+		.filter(
+			(file) =>
+				!isStagedRuntimePackagePath(file.relativePath) &&
+				/\.(html|js|mjs|cjs|json)$/u.test(file.relativePath),
+		)
 		.map((file) => file.readText())
 		.join("\n");
 	const packagedFilePaths = new Set(
@@ -446,6 +466,15 @@ const scanRuntimeImports = (packagedResources) => {
 	if (!packagedFilePaths.has("dist-app/theme-init.js")) {
 		throw new Error("Packaged app is missing the external theme initializer.");
 	}
+	for (const runtimeFile of desktopPackageContract.localCommandRuntimeFiles) {
+		if (!packagedFilePaths.has(runtimeFile)) {
+			throw new Error(
+				`Packaged local command runtime is missing: ${runtimeFile}`,
+			);
+		}
+	}
+	const runtimePackageCount =
+		verifyStagedRuntimePackageClosure(packagedResources);
 
 	for (const deployment of forbiddenDeployments) {
 		if (allText.includes(deployment)) {
@@ -524,6 +553,7 @@ const scanRuntimeImports = (packagedResources) => {
 		[
 			"Desktop package verification passed.",
 			`Runtime files checked: ${runtimeFileCount}`,
+			`Runtime packages checked: ${runtimePackageCount}`,
 			expectedDeployment
 				? `Expected Convex deployment: ${expectedDeployment}`
 				: "Expected Convex deployment: not configured",

@@ -1,70 +1,74 @@
-import { spawn } from "node:child_process";
-import { constants } from "node:fs";
-import { access, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
+import { StringDecoder } from "node:string_decoder";
 import { MAX_LOCAL_COMMAND_LENGTH } from "@workspace/ai/local-folder-tool-definitions";
+import { createBashTool } from "bash-tool";
+import { Bash, OverlayFs } from "just-bash";
 
-const SANDBOX_EXECUTABLE = "/usr/bin/sandbox-exec";
-const BASH_EXECUTABLE = "/bin/bash";
 const COMMAND_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT_BYTES = 20_000;
+const MAX_FILE_READ_BYTES = 20_000_000;
+const MAX_VIRTUAL_WRITE_BYTES = 20_000_000;
+const MAX_NETWORK_RESPONSE_BYTES = 5_000_000;
+const MAX_SANDBOX_OUTPUT_BYTES = 250_000;
+const TOOL_PROMPT =
+	"Graneri supplies the model-facing command description and execution limits.";
 
-const MACOS_READ_ONLY_PROFILE = `(version 1)
-(deny default)
-(allow process-exec)
-(allow process-fork)
-(allow signal (target same-sandbox))
-(allow process-info* (target same-sandbox))
-(allow file-read* file-test-existence (subpath (param "READABLE_ROOT")))
-(allow file-read* file-test-existence
-  (subpath "/System")
-  (subpath "/usr/lib")
-  (subpath "/usr/share")
-  (subpath "/usr/bin")
-  (subpath "/usr/sbin")
-  (subpath "/bin")
-  (subpath "/sbin")
-  (subpath "/Library/Apple")
-  (subpath "/private/etc/ssl"))
-(allow file-read* file-test-existence
-  (literal "/")
-  (literal "/dev/null")
-  (literal "/dev/zero")
-  (literal "/dev/random")
-  (literal "/dev/urandom"))
-(allow file-read-data file-test-existence file-write-data (subpath "/dev/fd"))
-(allow file-write-data (literal "/dev/null") (literal "/dev/zero"))
-(allow sysctl-read)
-(allow mach-lookup (global-name "com.apple.system.opendirectoryd.libinfo"))`;
-
-const appendBounded = ({ chunks, chunk, sizeBytes }) => {
-	const remainingBytes = MAX_OUTPUT_BYTES - sizeBytes;
-	if (remainingBytes <= 0) {
-		return { sizeBytes, truncated: chunk.length > 0 };
+const truncateUtf8 = (value) => {
+	const bytes = Buffer.from(value, "utf8");
+	if (bytes.byteLength <= MAX_OUTPUT_BYTES) {
+		return { text: value, truncated: false };
 	}
 
-	const acceptedChunk = chunk.subarray(0, remainingBytes);
-	chunks.push(acceptedChunk);
 	return {
-		sizeBytes: sizeBytes + acceptedChunk.length,
-		truncated: acceptedChunk.length < chunk.length,
+		text: new StringDecoder("utf8").write(bytes.subarray(0, MAX_OUTPUT_BYTES)),
+		truncated: true,
 	};
 };
 
-const killProcessGroup = (child) => {
-	if (!child.pid) {
-		return;
-	}
-	try {
-		process.kill(-child.pid, "SIGKILL");
-	} catch {
-		child.kill("SIGKILL");
-	}
+const createCommandTool = async (rootPath) => {
+	const filesystem = new OverlayFs({
+		allowSymlinks: false,
+		maxFileReadSize: MAX_FILE_READ_BYTES,
+		maxMemoryBytes: MAX_VIRTUAL_WRITE_BYTES,
+		root: rootPath,
+	});
+	const mountPoint = filesystem.getMountPoint();
+	const environment = new Bash({
+		cwd: mountPoint,
+		// Host-global monkey patches are unsafe in Electron's shared main process.
+		defenseInDepth: false,
+		executionLimitProfile: "hardened",
+		executionLimits: {
+			maxExecutionTimeMs: COMMAND_TIMEOUT_MS,
+			maxJsTimeoutMs: COMMAND_TIMEOUT_MS,
+			maxOutputSize: MAX_SANDBOX_OUTPUT_BYTES,
+			maxPythonTimeoutMs: COMMAND_TIMEOUT_MS,
+			maxTraversalDepth: 100,
+			maxTraversalEntries: 10_000,
+			maxTraversalWork: 50_000,
+		},
+		fs: filesystem,
+		javascript: true,
+		network: {
+			dangerouslyAllowFullInternetAccess: true,
+			denyPrivateRanges: true,
+			maxRedirects: 5,
+			maxResponseSize: MAX_NETWORK_RESPONSE_BYTES,
+			timeoutMs: COMMAND_TIMEOUT_MS,
+		},
+		python: true,
+	});
+	const toolkit = await createBashTool({
+		destination: mountPoint,
+		maxOutputLength: MAX_SANDBOX_OUTPUT_BYTES,
+		promptOptions: { toolPrompt: TOOL_PROMPT },
+		sandbox: environment,
+	});
+
+	return toolkit.bash;
 };
 
 export const runLocalCommand = async ({ command, rootPath }) => {
-	if (process.platform !== "darwin") {
-		throw new Error("Local commands require the macOS read-only sandbox.");
-	}
 	if (typeof command !== "string" || !command.trim()) {
 		throw new Error("Command is required.");
 	}
@@ -74,87 +78,29 @@ export const runLocalCommand = async ({ command, rootPath }) => {
 		);
 	}
 
-	await access(SANDBOX_EXECUTABLE, constants.X_OK);
 	const canonicalRootPath = await realpath(rootPath);
 	if (canonicalRootPath !== rootPath) {
 		throw new Error("Shared folder root is no longer canonical.");
 	}
+	const normalizedCommand = command.trim();
+	const tool = await createCommandTool(canonicalRootPath);
+	if (typeof tool.execute !== "function") {
+		throw new Error("Local command execution is unavailable.");
+	}
+	const result = await tool.execute(
+		{ command: normalizedCommand },
+		{ messages: [], toolCallId: "graneri-local-command" },
+	);
 
-	return await new Promise((resolve, reject) => {
-		const child = spawn(
-			SANDBOX_EXECUTABLE,
-			[
-				"-p",
-				MACOS_READ_ONLY_PROFILE,
-				`-DREADABLE_ROOT=${canonicalRootPath}`,
-				"--",
-				BASH_EXECUTABLE,
-				"--noprofile",
-				"--norc",
-				"-c",
-				command.trim(),
-			],
-			{
-				cwd: canonicalRootPath,
-				detached: true,
-				env: {
-					HOME: "/var/empty",
-					LANG: "en_US.UTF-8",
-					LC_ALL: "en_US.UTF-8",
-					PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
-					TMPDIR: "/private/tmp",
-				},
-				stdio: ["ignore", "pipe", "pipe"],
-			},
-		);
-
-		const stdoutChunks = [];
-		const stderrChunks = [];
-		let stdoutBytes = 0;
-		let stderrBytes = 0;
-		let stdoutTruncated = false;
-		let stderrTruncated = false;
-		let timedOut = false;
-		const timeout = setTimeout(() => {
-			timedOut = true;
-			killProcessGroup(child);
-		}, COMMAND_TIMEOUT_MS);
-
-		child.stdout.on("data", (chunk) => {
-			const result = appendBounded({
-				chunk,
-				chunks: stdoutChunks,
-				sizeBytes: stdoutBytes,
-			});
-			stdoutBytes = result.sizeBytes;
-			stdoutTruncated ||= result.truncated;
-		});
-		child.stderr.on("data", (chunk) => {
-			const result = appendBounded({
-				chunk,
-				chunks: stderrChunks,
-				sizeBytes: stderrBytes,
-			});
-			stderrBytes = result.sizeBytes;
-			stderrTruncated ||= result.truncated;
-		});
-		child.once("error", (error) => {
-			clearTimeout(timeout);
-			reject(error);
-		});
-		child.once("close", (exitCode, signal) => {
-			clearTimeout(timeout);
-			resolve({
-				command: command.trim(),
-				cwd: canonicalRootPath,
-				exitCode,
-				sandbox: "macos-seatbelt-read-only",
-				signal,
-				stderr: Buffer.concat(stderrChunks).toString("utf8"),
-				stdout: Buffer.concat(stdoutChunks).toString("utf8"),
-				timedOut,
-				truncated: stdoutTruncated || stderrTruncated,
-			});
-		});
-	});
+	const stdout = truncateUtf8(result.stdout);
+	const stderr = truncateUtf8(result.stderr);
+	return {
+		command: normalizedCommand,
+		cwd: canonicalRootPath,
+		exitCode: result.exitCode,
+		sandbox: "just-bash-overlay",
+		stderr: stderr.text,
+		stdout: stdout.text,
+		truncated: stdout.truncated || stderr.truncated,
+	};
 };

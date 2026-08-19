@@ -37,7 +37,9 @@ describe("local folder tools", () => {
 		expect(context).toContain("screenshot");
 		expect(context).toContain("For local images");
 		expect(context).toContain("run_local_command");
-		expect(context).toContain("blocks writes, network access");
+		expect(context).toContain("temporary copy-on-write changes");
+		expect(context).toContain("private-network access");
+		expect(context).toContain("Public HTTP(S) requests");
 	});
 
 	it("exposes local image inspection and semantic search tools", async () => {
