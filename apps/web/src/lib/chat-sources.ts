@@ -1,10 +1,23 @@
-import { remoteMcpToolPrefixes } from "@workspace/ai/capability-metadata";
-import type { UIMessage } from "ai";
+import {
+	type AppSourceProvider,
+	getAppSourceProviderForToolName,
+} from "@workspace/ai/capability-metadata";
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { z } from "zod";
 
 export type ToolSource = {
 	href: string;
 	title: string;
 };
+
+const toolSourceOutputSchema = z.object({
+	sources: z.array(
+		z.object({
+			title: z.string().nullish(),
+			url: z.string().min(1),
+		}),
+	),
+});
 
 const toDisplayTitle = (url: string, title?: string | null) => {
 	if (typeof title === "string" && title.trim()) {
@@ -18,88 +31,54 @@ const toDisplayTitle = (url: string, title?: string | null) => {
 	}
 };
 
-const tryParseJson = (value: unknown): unknown => {
-	if (typeof value !== "string") {
-		return value;
+const parseToolSourceOutput = (value: unknown) => {
+	let decoded: unknown = value;
+	if (typeof value === "string") {
+		try {
+			decoded = JSON.parse(value);
+		} catch {
+			return null;
+		}
 	}
 
-	try {
-		return JSON.parse(value) as unknown;
-	} catch {
-		return value;
-	}
+	const result = toolSourceOutputSchema.safeParse(decoded);
+	return result.success ? result.data : null;
 };
 
 const collectToolSources = (message: UIMessage): ToolSource[] => {
 	const sources: ToolSource[] = [];
-	const isRemoteMcpToolName = (toolName: string) =>
-		remoteMcpToolPrefixes.some(({ prefix }) => toolName.startsWith(prefix));
 
 	const addSourcesFromToolOutput = (toolName: string, output: unknown) => {
-		if (!output || typeof output !== "object") {
-			return;
-		}
-
 		if (
 			toolName !== "web_search" &&
-			toolName !== "yandex_tracker_search" &&
-			toolName !== "yandex_tracker_get_issue" &&
-			toolName !== "jira_search" &&
-			toolName !== "jira_get_issue" &&
-			!isRemoteMcpToolName(toolName)
+			getAppSourceProviderForToolName(toolName) === null
 		) {
 			return;
 		}
 
-		const resultSources =
-			"sources" in output
-				? (output as { sources?: unknown }).sources
-				: undefined;
-
-		if (!Array.isArray(resultSources)) {
+		const result = parseToolSourceOutput(output);
+		if (!result) {
 			return;
 		}
 
-		for (const source of resultSources) {
-			if (!source || typeof source !== "object") {
-				continue;
-			}
-
-			const url =
-				"url" in source ? (source as { url?: unknown }).url : undefined;
-			const title =
-				"title" in source ? (source as { title?: unknown }).title : undefined;
-
-			if (typeof url === "string" && url) {
-				sources.push({
-					href: url,
-					title: toDisplayTitle(url, typeof title === "string" ? title : null),
-				});
-			}
+		for (const source of result.sources) {
+			sources.push({
+				href: source.url,
+				title: toDisplayTitle(source.url, source.title),
+			});
 		}
 	};
 
 	for (const part of message.parts) {
-		if (!part.type.startsWith("tool-") && part.type !== "dynamic-tool") {
+		if (!isToolUIPart(part)) {
 			continue;
 		}
 
-		const toolName =
-			part.type === "dynamic-tool" &&
-			"toolName" in part &&
-			typeof part.toolName === "string"
-				? part.toolName
-				: part.type.slice("tool-".length);
-
-		if (
-			!("output" in part) ||
-			!("state" in part) ||
-			part.state !== "output-available"
-		) {
+		if (part.state !== "output-available") {
 			continue;
 		}
 
-		addSourcesFromToolOutput(toolName, tryParseJson(part.output));
+		addSourcesFromToolOutput(getToolName(part), part.output);
 	}
 
 	const seen = new Set<string>();
@@ -114,6 +93,24 @@ const collectToolSources = (message: UIMessage): ToolSource[] => {
 		seen.add(key);
 		return true;
 	});
+};
+
+export const collectMessageAppProviders = (
+	message: UIMessage,
+): AppSourceProvider[] => {
+	const providers = message.parts.flatMap((part) => {
+		if (
+			!isToolUIPart(part) ||
+			(part.state !== "output-available" && part.state !== "output-error")
+		) {
+			return [];
+		}
+
+		const provider = getAppSourceProviderForToolName(getToolName(part));
+		return provider ? [provider] : [];
+	});
+
+	return [...new Set(providers)];
 };
 
 export const collectMessageSources = (message: UIMessage): ToolSource[] => {

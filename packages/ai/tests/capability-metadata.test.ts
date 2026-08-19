@@ -5,6 +5,7 @@ import {
 	appSourceProviders,
 	capabilityMetadataDefinitions,
 	chatSourceAppConnectionProviders,
+	getAppSourceProviderForToolName,
 	getCapabilitySettings,
 	getChatAppSourceDescription,
 	isMcpSdkOAuthConnectionProvider,
@@ -156,5 +157,18 @@ describe("capability metadata", () => {
 				endpoint: "https://mcp.zoom.us/mcp/zoom/streamable",
 			},
 		});
+	});
+
+	it("maps every connected-app tool namespace back to its provider", () => {
+		expect(
+			getAppSourceProviderForToolName("google_calendar_search_events"),
+		).toBe("google-calendar");
+		expect(getAppSourceProviderForToolName("google_drive_get_file")).toBe(
+			"google-drive",
+		);
+		expect(getAppSourceProviderForToolName("jira_search")).toBe("jira-mcp");
+		expect(getAppSourceProviderForToolName("notion_fetch_page")).toBe("notion");
+		expect(getAppSourceProviderForToolName("web_search")).toBeNull();
+		expect(getAppSourceProviderForToolName("generate_image")).toBeNull();
 	});
 });

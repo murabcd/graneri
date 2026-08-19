@@ -3,11 +3,6 @@
 import { Tiptap, useEditor } from "@tiptap/react";
 import { Button } from "@workspace/ui/components/button";
 import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@workspace/ui/components/collapsible";
-import {
 	Command,
 	CommandGroup,
 	CommandItem,
@@ -21,11 +16,6 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
-import {
-	HoverCard,
-	HoverCardContent,
-	HoverCardTrigger,
-} from "@workspace/ui/components/hover-card";
 import {
 	Popover,
 	PopoverContent,
@@ -51,18 +41,14 @@ import {
 } from "@workspace/ui/lib/panel-dimensions";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import {
-	ChevronRight,
-	Clock3,
-	FileText,
-	Paperclip,
-	Plus,
-	X,
-} from "lucide-react";
+import { Clock3, FileText, Plus, X } from "lucide-react";
 import * as React from "react";
-import { AppSourceIcon } from "@/components/app-source-icon";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { getAutomationSchedulePeriodLabel } from "@/components/automations/automation-utils";
+import {
+	ChatSummaryOverview,
+	ChatSummarySection,
+} from "@/components/chat/chat-summary-overview";
 import {
 	DESKTOP_DOCKED_PANEL_DEFAULT_WIDTH,
 	DESKTOP_DOCKED_PANEL_MAX_WIDTH,
@@ -89,15 +75,9 @@ import {
 } from "@/components/search/search-command";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
 import {
-	extractFileParts,
-	extractGeneratedArtifacts,
-	getChatMessageMetadata,
-} from "@/lib/chat-message";
-import {
-	CHAT_APP_SOURCE_PROVIDERS,
-	type ChatAppSourceProvider,
-	getAppSourceLabel,
-} from "@/lib/chat-source-display";
+	type ChatSummaryContent,
+	collectChatSummaryContent,
+} from "@/lib/chat-summary-content";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import {
 	createNoteEditorExtensions,
@@ -121,22 +101,6 @@ export type SummaryWorkspaceSource = {
 	updatedAt?: number;
 };
 
-type SummaryArtifact = {
-	filename?: string;
-	mediaType: string;
-	url: string;
-};
-
-type SummarySource =
-	| ({
-			kind: "file";
-	  } & SummaryArtifact)
-	| {
-			id: string;
-			kind: "tool";
-			title: string;
-	  };
-
 type SummaryTab =
 	| { id: "summary"; kind: "summary"; title: "Summary" }
 	| {
@@ -159,73 +123,6 @@ const AUTOMATION_TAB: SummaryTab = {
 	id: "automation",
 	kind: "automation",
 	title: "Automation",
-};
-
-const collectChatSources = (messages: UIMessage[]): SummarySource[] => {
-	const sources = messages.flatMap<SummarySource>((message) => {
-		const fileSources =
-			message.role === "user"
-				? extractFileParts(message).map(
-						(file) =>
-							({
-								filename: file.filename,
-								kind: "file",
-								mediaType: file.mediaType,
-								url: file.url,
-							}) satisfies SummarySource,
-					)
-				: [];
-		const mentionSources = (
-			getChatMessageMetadata(message)?.mentionPositions ?? []
-		).flatMap((mention) =>
-			mention.type === "tool"
-				? [
-						{
-							id: mention.id,
-							kind: "tool",
-							title: mention.label,
-						} satisfies SummarySource,
-					]
-				: [],
-		);
-
-		return [...fileSources, ...mentionSources];
-	});
-	const seen = new Set<string>();
-
-	return sources.filter((source) => {
-		const key = getSummarySourceKey(source);
-
-		if (seen.has(key)) {
-			return false;
-		}
-
-		seen.add(key);
-		return true;
-	});
-};
-
-const collectChatArtifacts = (messages: UIMessage[]): SummaryArtifact[] => {
-	const artifacts = messages.flatMap((message) => {
-		if (message.role !== "assistant") {
-			return [];
-		}
-
-		return [
-			...extractFileParts(message),
-			...extractGeneratedArtifacts(message),
-		];
-	});
-	const seen = new Set<string>();
-
-	return artifacts.filter((artifact) => {
-		if (seen.has(artifact.url)) {
-			return false;
-		}
-
-		seen.add(artifact.url);
-		return true;
-	});
 };
 
 export type ChatSummarySheetProps = {
@@ -269,9 +166,8 @@ export function ChatSummarySheet({
 		sidebarShell?.state === "collapsed"
 			? APP_SIDEBAR_COLLAPSED_WIDTH
 			: APP_SIDEBAR_EXPANDED_WIDTH;
-	const sources = React.useMemo(() => collectChatSources(messages), [messages]);
-	const artifacts = React.useMemo(
-		() => collectChatArtifacts(messages),
+	const content = React.useMemo(
+		() => collectChatSummaryContent(messages),
 		[messages],
 	);
 	const handleClose = React.useCallback(() => {
@@ -303,8 +199,7 @@ export function ChatSummarySheet({
 			automation={automation}
 			chatTitle={chatTitle}
 			desktopSafeTop={desktopSafeTop}
-			artifacts={artifacts}
-			sources={sources}
+			content={content}
 			workspaceSources={workspaceSources}
 			openSourceRequest={openSourceRequest}
 			onOpenSummary={() => onOpenChange(true)}
@@ -324,7 +219,7 @@ export function ChatSummarySheet({
 				>
 					<SheetTitle className="sr-only">Chat summary</SheetTitle>
 					<SheetDescription className="sr-only">
-						View files, artifacts, and sources used in this chat.
+						View files, artifacts, sources, and apps used in this chat.
 					</SheetDescription>
 					<ResizableSidePanelHandle
 						side="right"
@@ -367,8 +262,7 @@ function ChatSummaryPanel({
 	automation,
 	chatTitle,
 	desktopSafeTop,
-	artifacts,
-	sources,
+	content,
 	workspaceSources,
 	openSourceRequest,
 	onOpenSummary,
@@ -380,8 +274,7 @@ function ChatSummaryPanel({
 	automation?: AutomationListItem | null;
 	chatTitle: string;
 	desktopSafeTop: boolean;
-	artifacts: SummaryArtifact[];
-	sources: SummarySource[];
+	content: ChatSummaryContent;
 	workspaceSources: SummaryWorkspaceSource[];
 	openSourceRequest?: ChatSummaryOpenSourceRequest | null;
 	onOpenSummary: () => void;
@@ -566,8 +459,7 @@ function ChatSummaryPanel({
 				activeTab={activeTab}
 				automation={automation}
 				chatTitle={chatTitle}
-				artifacts={artifacts}
-				sources={sources}
+				content={content}
 			/>
 		</div>
 	);
@@ -719,14 +611,12 @@ function SummaryTabContent({
 	activeTab,
 	automation,
 	chatTitle,
-	artifacts,
-	sources,
+	content,
 }: {
 	activeTab: SummaryTab;
 	automation?: AutomationListItem | null;
 	chatTitle: string;
-	artifacts: SummaryArtifact[];
-	sources: SummarySource[];
+	content: ChatSummaryContent;
 }) {
 	if (activeTab.kind === "automation") {
 		return automation ? (
@@ -772,7 +662,7 @@ function SummaryTabContent({
 		);
 	}
 
-	return <SummaryDefaultContent artifacts={artifacts} sources={sources} />;
+	return <ChatSummaryOverview content={content} />;
 }
 
 const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
@@ -901,9 +791,9 @@ function AutomationSummarySection({
 	title: string;
 }) {
 	return (
-		<SummarySection defaultOpen={defaultOpen} title={title}>
+		<ChatSummarySection defaultOpen={defaultOpen} title={title}>
 			<div className="space-y-0.5">{children}</div>
-		</SummarySection>
+		</ChatSummarySection>
 	);
 }
 
@@ -966,221 +856,5 @@ function ReadOnlyNoteContent({
 		<Tiptap editor={editor}>
 			<Tiptap.Content className="text-base text-foreground" />
 		</Tiptap>
-	);
-}
-
-function SummaryDefaultContent({
-	artifacts,
-	sources,
-}: {
-	artifacts: SummaryArtifact[];
-	sources: SummarySource[];
-}) {
-	return (
-		<ScrollArea
-			className="min-h-0 flex-1"
-			reserveScrollbarGap
-			viewportClassName="overflow-x-hidden [&>div]:!block [&>div]:!min-w-0 [&>div]:!w-full"
-		>
-			<div className="flex flex-col gap-2 px-3 py-4">
-				<SummarySection title="Artifacts">
-					{artifacts.length > 0 ? (
-						<div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-							{artifacts.map((artifact) => (
-								<HoverCard key={artifact.url} openDelay={150}>
-									<HoverCardTrigger asChild>
-										<button
-											type="button"
-											title={artifact.filename || "Attached file"}
-											className={cn(
-												"group/artifact flex h-8 w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md px-2 text-sm text-muted-foreground transition-colors",
-												"hover:bg-accent/50 hover:text-foreground",
-											)}
-										>
-											<Paperclip className="size-3.5 shrink-0" />
-											<span className="min-w-0 flex-1 basis-0 truncate">
-												{artifact.filename || "Attached file"}
-											</span>
-										</button>
-									</HoverCardTrigger>
-									<HoverCardContent
-										align="start"
-										side="left"
-										className={
-											artifact.mediaType.startsWith("image/")
-												? "w-auto max-w-80 border-0 bg-transparent p-0 shadow-none ring-0"
-												: "w-64"
-										}
-									>
-										{artifact.mediaType.startsWith("image/") ? (
-											<img
-												src={artifact.url}
-												alt={artifact.filename || "Attached image"}
-												className="block max-h-80 max-w-80 rounded-lg object-contain shadow-md ring-1 ring-foreground/10"
-											/>
-										) : (
-											<div className="flex h-28 items-center justify-center bg-muted/40 text-muted-foreground">
-												<Paperclip className="size-6" />
-											</div>
-										)}
-									</HoverCardContent>
-								</HoverCard>
-							))}
-						</div>
-					) : (
-						<p className="px-2 py-1.5 text-xs text-muted-foreground">
-							View and open files
-						</p>
-					)}
-				</SummarySection>
-				<SummarySection title="Sources">
-					{sources.length > 0 ? (
-						<div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-							{sources.map((source) => (
-								<SummarySourceRow
-									key={getSummarySourceKey(source)}
-									source={source}
-								/>
-							))}
-						</div>
-					) : (
-						<p className="px-2 py-1.5 text-xs text-muted-foreground">
-							No sources yet
-						</p>
-					)}
-				</SummarySection>
-			</div>
-		</ScrollArea>
-	);
-}
-
-function getSummarySourceKey(source: SummarySource) {
-	if (source.kind === "file") {
-		return `${source.kind}:${source.url}`;
-	}
-
-	return `${source.kind}:${source.id}`;
-}
-
-function SummarySourceRow({ source }: { source: SummarySource }) {
-	const className = cn(
-		"group/source flex h-8 w-full min-w-0 max-w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2 text-sm text-muted-foreground transition-colors",
-		"hover:bg-accent/50 hover:text-foreground",
-	);
-
-	if (source.kind === "file") {
-		return (
-			<HoverCard openDelay={150}>
-				<HoverCardTrigger asChild>
-					<button
-						type="button"
-						className={className}
-						title={source.filename || "Attached file"}
-					>
-						<Paperclip className="size-3.5 shrink-0" />
-						<span className="min-w-0 flex-1 basis-0 truncate">
-							{source.filename || "Attached file"}
-						</span>
-					</button>
-				</HoverCardTrigger>
-				<HoverCardContent
-					align="start"
-					side="left"
-					className={
-						source.mediaType.startsWith("image/")
-							? "w-auto max-w-80 border-0 bg-transparent p-0 shadow-none ring-0"
-							: "w-64"
-					}
-				>
-					{source.mediaType.startsWith("image/") ? (
-						<img
-							src={source.url}
-							alt={source.filename || "Attached image"}
-							className="block max-h-80 max-w-80 rounded-lg object-contain shadow-md ring-1 ring-foreground/10"
-						/>
-					) : (
-						<div className="flex h-28 items-center justify-center bg-muted/40 text-muted-foreground">
-							<Paperclip className="size-6" />
-						</div>
-					)}
-				</HoverCardContent>
-			</HoverCard>
-		);
-	}
-
-	if (source.kind === "tool") {
-		return (
-			<div className={className} title={source.title}>
-				<SummaryToolSourceIcon source={source} />
-				<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
-			</div>
-		);
-	}
-}
-
-function SummaryToolSourceIcon({
-	source,
-}: {
-	source: Extract<SummarySource, { kind: "tool" }>;
-}) {
-	const provider = getSummaryToolProvider(source);
-
-	return provider ? (
-		<AppSourceIcon provider={provider} className="size-3.5 shrink-0" />
-	) : null;
-}
-
-function getSummaryToolProvider(
-	source: Extract<SummarySource, { kind: "tool" }>,
-): ChatAppSourceProvider | null {
-	const normalizedId = source.id.replace(/^app:/, "");
-
-	for (const provider of CHAT_APP_SOURCE_PROVIDERS) {
-		if (
-			normalizedId === provider ||
-			source.title.toLowerCase() === getAppSourceLabel(provider).toLowerCase()
-		) {
-			return provider;
-		}
-	}
-
-	return null;
-}
-
-function SummarySection({
-	children,
-	defaultOpen = true,
-	title,
-}: {
-	children: React.ReactNode;
-	defaultOpen?: boolean;
-	title: string;
-}) {
-	const contentId = React.useId();
-
-	return (
-		<Collapsible defaultOpen={defaultOpen} className="group/collapsible">
-			<CollapsibleTrigger
-				aria-controls={contentId}
-				className={cn(
-					"group/label flex h-8 w-full cursor-pointer items-center justify-start gap-1.5 rounded-lg px-3 text-xs font-medium text-sidebar-foreground/60 outline-hidden transition-colors",
-					"hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-				)}
-			>
-				<span>{title}</span>
-				<ChevronRight
-					className={cn(
-						"mt-px size-3 shrink-0 opacity-0 transition-[opacity,transform] group-hover/label:opacity-100 group-focus-visible/label:opacity-100",
-						"group-data-[state=open]/collapsible:rotate-90",
-					)}
-				/>
-			</CollapsibleTrigger>
-			<CollapsibleContent
-				id={contentId}
-				className="min-w-0 overflow-hidden px-1 pb-2"
-			>
-				{children}
-			</CollapsibleContent>
-		</Collapsible>
 	);
 }

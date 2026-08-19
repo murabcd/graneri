@@ -356,6 +356,19 @@ export const remoteMcpToolPrefixes = capabilityMetadataDefinitions
 		label: capability.displayName,
 	}));
 
+const appToolPrefixes = capabilityMetadataDefinitions
+	.filter(
+		(capability) => capability.sourceKind === "app" && capability.toolNamespace,
+	)
+	.map((capability) => ({
+		prefix: capability.toolPrefix ?? `${capability.toolNamespace.name}_`,
+		provider: capability.id,
+	}));
+
+export const getAppSourceProviderForToolName = (toolName) =>
+	appToolPrefixes.find(({ prefix }) => toolName.startsWith(prefix))?.provider ??
+	null;
+
 export const getCapabilityMetadata = (provider) =>
 	capabilityMetadataRegistry[provider] ?? null;
 

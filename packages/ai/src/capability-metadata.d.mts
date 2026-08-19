@@ -148,6 +148,9 @@ export declare const remoteMcpToolPrefixes: readonly {
 	provider: AppSourceProvider;
 	label: string;
 }[];
+export declare function getAppSourceProviderForToolName(
+	toolName: string,
+): AppSourceProvider | null;
 
 export declare function getCapabilityMetadata(
 	provider: string,
