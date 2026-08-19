@@ -1,4 +1,5 @@
 import type { ToolSet } from "ai";
+import type { LocalCommandExecutionResult } from "./local-folder-tool-contract.mjs";
 
 export type LocalFolderRoot = {
 	name: string;
@@ -13,7 +14,7 @@ export declare const buildLocalFolderSystemContext: (
 export type ExecuteLocalCommand = (input: {
 	command: string;
 	rootPath: string;
-}) => Promise<unknown>;
+}) => Promise<LocalCommandExecutionResult>;
 
 export type StoreLocalImage = (input: {
 	bytes: Uint8Array;

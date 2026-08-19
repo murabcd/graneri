@@ -2,16 +2,23 @@ import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { ExecuteLocalCommand } from "../src/local-folder-tools.mjs";
 import {
 	buildClientLocalFolderTools,
 	buildLocalFolderSystemContext,
 	buildLocalFolderTools,
 } from "../src/local-folder-tools.mjs";
 
+const executeSuccessfulLocalCommand: ExecuteLocalCommand = async () => ({
+	exitCode: 0,
+	stderr: "",
+	stdout: "",
+	truncated: false,
+});
+
 const buildToolsForDirectory = async (
 	directory: string,
-	executeLocalCommand = async (input: { command: string; rootPath: string }) =>
-		input,
+	executeLocalCommand: ExecuteLocalCommand = executeSuccessfulLocalCommand,
 	storeLocalImage = async () => ({ storageId: "storage_test" }),
 ) => {
 	const rootPath = await realpath(directory);
@@ -79,7 +86,7 @@ describe("local folder tools", () => {
 			const storedImages: Array<{ bytes: Uint8Array; mediaType: string }> = [];
 			const tools = await buildToolsForDirectory(
 				directory,
-				async (input) => input,
+				executeSuccessfulLocalCommand,
 				async (input) => {
 					storedImages.push(input);
 					return { storageId: "storage_screen" };
@@ -232,7 +239,7 @@ describe("local folder tools", () => {
 
 	it("rejects stale path references instead of silently dropping them", async () => {
 		const tools = buildLocalFolderTools({
-			executeLocalCommand: async () => ({}),
+			executeLocalCommand: executeSuccessfulLocalCommand,
 			roots: [
 				{
 					name: "missing",
@@ -255,7 +262,12 @@ describe("local folder tools", () => {
 			const calls: Array<{ command: string; rootPath: string }> = [];
 			const tools = await buildToolsForDirectory(directory, async (input) => {
 				calls.push(input);
-				return { stdout: "delegated\n" };
+				return {
+					exitCode: 0,
+					stderr: "",
+					stdout: "delegated\n",
+					truncated: false,
+				};
 			});
 
 			const result = await tools.run_local_command.execute?.(
@@ -266,7 +278,12 @@ describe("local folder tools", () => {
 			expect(calls).toEqual([
 				{ command: "pwd", rootPath: await realpath(directory) },
 			]);
-			expect(result).toMatchObject({ stdout: "delegated\n" });
+			expect(result).toMatchObject({
+				exitCode: 0,
+				stderr: "",
+				stdout: "delegated\n",
+				truncated: false,
+			});
 		} finally {
 			await rm(directory, { force: true, recursive: true });
 		}

@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { MAX_LOCAL_IMAGE_UPLOADS } from "./local-folder-image-contract.mjs";
+import { parseLocalCommandExecutionResult } from "./local-folder-tool-contract.mjs";
 import {
 	buildLocalFolderToolConfigs,
 	MAX_LOCAL_FOLDER_ROOTS,
@@ -163,11 +164,13 @@ export const buildLocalFolderTools = ({
 		search_local_files: async ({ rootIndex, query }) =>
 			withDuration(() => workspace.searchFiles({ query, rootIndex })),
 		run_local_command: async ({ rootIndex, command }) =>
-			withDuration(() =>
-				executeLocalCommand({
-					command,
-					rootPath: workspace.getRoot(rootIndex).path,
-				}),
+			withDuration(async () =>
+				parseLocalCommandExecutionResult(
+					await executeLocalCommand({
+						command,
+						rootPath: workspace.getRoot(rootIndex).path,
+					}),
+				),
 			),
 		get_shared_local_folders: async () =>
 			withDuration(async () => ({

@@ -4,6 +4,7 @@ import {
 	isLocalFolderToolContinuationMessage,
 	isLocalFolderToolName,
 	LOCAL_FOLDER_TOOL_NAMES,
+	parseLocalCommandExecutionResult,
 } from "../src/local-folder-tool-contract.mjs";
 import {
 	buildLocalFolderToolConfigs,
@@ -20,6 +21,26 @@ const completedMessage = {
 			toolCallId: "call-1",
 			input: { rootIndex: 0, relativePath: "." },
 			output: { entries: [{ name: "meeting.txt" }] },
+			state: "output-available",
+		},
+	],
+};
+
+const completedCommandMessage = {
+	id: "assistant-command",
+	role: "assistant",
+	parts: [
+		{
+			type: "tool-run_local_command",
+			toolCallId: "call-command",
+			input: { command: "pwd", rootIndex: 0 },
+			output: {
+				exitCode: 0,
+				stderr: "",
+				stdout: "/workspace\n",
+				totalDurationMs: 12,
+				truncated: false,
+			},
 			state: "output-available",
 		},
 	],
@@ -59,6 +80,46 @@ describe("local folder tool contract", () => {
 				parts: completedMessage.parts.map((part) => ({
 					...part,
 					type: "tool-search_notes",
+				})),
+			}),
+		).toBe(false);
+	});
+
+	it("accepts only the semantic local command output contract", () => {
+		expect(
+			parseLocalCommandExecutionResult({
+				exitCode: 0,
+				stderr: "",
+				stdout: "/workspace\n",
+				truncated: false,
+			}),
+		).toEqual({
+			exitCode: 0,
+			stderr: "",
+			stdout: "/workspace\n",
+			truncated: false,
+		});
+		expect(() =>
+			parseLocalCommandExecutionResult({
+				exitCode: 0,
+				sandbox: "just-bash-overlay",
+				stderr: "",
+				stdout: "/workspace\n",
+				truncated: false,
+			}),
+		).toThrow();
+		expect(isLocalFolderToolContinuationMessage(completedCommandMessage)).toBe(
+			true,
+		);
+		expect(
+			isLocalFolderToolContinuationMessage({
+				...completedCommandMessage,
+				parts: completedCommandMessage.parts.map((part) => ({
+					...part,
+					output: {
+						...part.output,
+						sandbox: "just-bash-overlay",
+					},
 				})),
 			}),
 		).toBe(false);

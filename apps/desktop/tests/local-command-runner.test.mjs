@@ -30,20 +30,12 @@ test("runs isolated cross-platform commands over a shared folder", async () => {
 			command: "grep beta notes.txt",
 			rootPath,
 		});
-		assert.deepEqual(
-			{
-				exitCode: readResult.exitCode,
-				sandbox: readResult.sandbox,
-				stdout: readResult.stdout,
-				truncated: readResult.truncated,
-			},
-			{
-				exitCode: 0,
-				sandbox: "just-bash-overlay",
-				stdout: "beta\n",
-				truncated: false,
-			},
-		);
+		assert.deepEqual(readResult, {
+			exitCode: 0,
+			stderr: "",
+			stdout: "beta\n",
+			truncated: false,
+		});
 
 		const outsideResult = await runLocalCommand({
 			command: `cat '${outsideFile}' escape`,

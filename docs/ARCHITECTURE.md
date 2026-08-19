@@ -958,9 +958,13 @@ until the last referencing chat message is removed.
 selected root. The Electron main process creates a fresh `bash-tool`/`just-bash`
 `OverlayFs` environment for every call; the shared AI package receives that
 capability only through an explicit adapter when it builds desktop-executed
-tools. Reads reflect the live selected root, while writes exist only in the
-call's bounded copy-on-write layer and are discarded afterward. The overlay
-blocks reads outside the root and rejects symlink traversal. The shell exposes
+tools. The adapter returns only exit code, standard output, standard error, and
+truncation state; the shared local-folder contract validates that semantic
+result and keeps the command input, canonical root, and sandbox implementation
+private to Electron. Reads reflect the live selected root, while writes exist
+only in the call's bounded copy-on-write layer and are discarded afterward.
+The overlay blocks reads outside the root and rejects symlink traversal. The
+shell exposes
 the bounded `just-bash` tool catalog, sandboxed QuickJS and WASM CPython, and
 public-network requests; private, loopback, and link-local network targets are
 denied. Native host executables are not exposed. Command length, execution,

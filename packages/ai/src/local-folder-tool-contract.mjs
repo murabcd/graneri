@@ -8,9 +8,21 @@ import {
 export { LOCAL_FOLDER_TOOL_NAMES };
 
 const localFolderToolNameSet = new Set(LOCAL_FOLDER_TOOL_NAMES);
+const localCommandExecutionResultSchema = z.strictObject({
+	exitCode: z.number().int(),
+	stderr: z.string(),
+	stdout: z.string(),
+	truncated: z.boolean(),
+});
+const localCommandToolOutputSchema = localCommandExecutionResultSchema.extend({
+	totalDurationMs: z.number().int().nonnegative(),
+});
 
 export const isLocalFolderToolName = (toolName) =>
 	localFolderToolNameSet.has(toolName);
+
+export const parseLocalCommandExecutionResult = (value) =>
+	localCommandExecutionResultSchema.parse(value);
 
 const toolPartSchema = z.looseObject({
 	errorText: z.string().optional(),
@@ -49,7 +61,17 @@ const getCompletedLocalFolderToolPart = (value) => {
 
 	const { part } = localToolPart;
 	if (part.state === "output-available" && "output" in part) {
-		return localToolPart;
+		if (localToolPart.toolName !== "run_local_command") {
+			return localToolPart;
+		}
+
+		const result = localCommandToolOutputSchema.safeParse(part.output);
+		return result.success
+			? {
+					part: { ...part, output: result.data },
+					toolName: localToolPart.toolName,
+				}
+			: null;
 	}
 	if (
 		part.state === "output-error" &&

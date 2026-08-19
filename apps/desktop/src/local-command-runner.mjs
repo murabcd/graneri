@@ -95,10 +95,7 @@ export const runLocalCommand = async ({ command, rootPath }) => {
 	const stdout = truncateUtf8(result.stdout);
 	const stderr = truncateUtf8(result.stderr);
 	return {
-		command: normalizedCommand,
-		cwd: canonicalRootPath,
 		exitCode: result.exitCode,
-		sandbox: "just-bash-overlay",
 		stderr: stderr.text,
 		stdout: stdout.text,
 		truncated: stdout.truncated || stderr.truncated,
