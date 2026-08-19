@@ -47,13 +47,8 @@ const SIDEBAR_WIDTH_ICON = APP_SIDEBAR_COLLAPSED_WIDTH_CSS;
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 const SIDEBAR_LAYOUT_TRANSITION_DURATION_MS = 320;
 
-const persistSidebarState = (openState: boolean) => {
-	void window.cookieStore?.set({
-		name: SIDEBAR_COOKIE_NAME,
-		value: String(openState),
-		path: "/",
-		expires: Date.now() + SIDEBAR_COOKIE_MAX_AGE * 1000,
-	});
+const setCookie = (name: string, value: string | boolean) => {
+	document.cookie = `${name}=${value}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
 };
 
 const getCookie = (name: string): string | null => {
@@ -185,17 +180,6 @@ type SidebarProviderState = {
 };
 
 type SidebarProviderAction =
-	| {
-			type: "hydrateFromStorage";
-			value: Pick<
-				SidebarProviderState,
-				| "open"
-				| "rightMode"
-				| "rightOpen"
-				| "rightSidebarWidth"
-				| "rightSidebarWidthMobile"
-			>;
-	  }
 	| { type: "setHasRightSidebar"; value: boolean }
 	| { type: "setOpen"; value: boolean }
 	| { type: "setOpenMobile"; value: boolean }
@@ -207,31 +191,39 @@ type SidebarProviderAction =
 	| { type: "setRightSidebarWidthMobileOverride"; value: string | null }
 	| { type: "setRightSidebarWidthOverride"; value: string | null };
 
-const createSidebarProviderState = (
+const readInitialSidebarProviderState = (
 	defaultOpen: boolean,
-): SidebarProviderState => ({
-	hasRightSidebar: false,
-	open: defaultOpen,
-	openMobile: false,
-	rightMode: "sidebar",
-	rightOpen: false,
-	rightOpenMobile: false,
-	rightSidebarWidth: SIDEBAR_RIGHT_WIDTH,
-	rightSidebarWidthMobile: SIDEBAR_RIGHT_WIDTH_MOBILE,
-	rightSidebarWidthMobileOverride: null,
-	rightSidebarWidthOverride: null,
-});
+): SidebarProviderState => {
+	const savedRightMode = getCookie(SIDEBAR_RIGHT_MODE_COOKIE_NAME);
+
+	return {
+		hasRightSidebar: false,
+		open: getCookieBoolean(SIDEBAR_COOKIE_NAME, defaultOpen),
+		openMobile: false,
+		rightMode:
+			savedRightMode === "floating" || savedRightMode === "sidebar"
+				? savedRightMode
+				: "sidebar",
+		rightOpen: getCookieBoolean(SIDEBAR_RIGHT_COOKIE_NAME, false),
+		rightOpenMobile: false,
+		rightSidebarWidth: readStoredSidebarWidth(
+			SIDEBAR_RIGHT_WIDTH_STORAGE_KEY,
+			SIDEBAR_RIGHT_WIDTH,
+		),
+		rightSidebarWidthMobile: readStoredSidebarWidth(
+			SIDEBAR_RIGHT_WIDTH_MOBILE_STORAGE_KEY,
+			SIDEBAR_RIGHT_WIDTH_MOBILE,
+		),
+		rightSidebarWidthMobileOverride: null,
+		rightSidebarWidthOverride: null,
+	};
+};
 
 function sidebarProviderReducer(
 	state: SidebarProviderState,
 	action: SidebarProviderAction,
 ): SidebarProviderState {
 	switch (action.type) {
-		case "hydrateFromStorage":
-			return {
-				...state,
-				...action.value,
-			};
 		case "setHasRightSidebar":
 			return state.hasRightSidebar === action.value
 				? state
@@ -392,7 +384,7 @@ function useSidebarProviderElement({
 	const [sidebarState, dispatchSidebarState] = React.useReducer(
 		sidebarProviderReducer,
 		defaultOpen,
-		createSidebarProviderState,
+		readInitialSidebarProviderState,
 	);
 	const [dockedPanelWidths, dispatchDockedPanelWidths] = React.useReducer(
 		dockedPanelWidthsReducer,
@@ -426,61 +418,23 @@ function useSidebarProviderElement({
 			} else {
 				dispatchSidebarState({ type: "setOpen", value: openState });
 			}
-			persistSidebarState(openState);
+			setCookie(SIDEBAR_COOKIE_NAME, openState);
 		},
 		[setOpenProp, openProp, uncontrolledOpen],
 	);
-
-	const initRef = React.useRef({
-		defaultOpen,
-		initialized: false,
-		isControlled: openProp !== undefined,
-	});
-	React.useEffect(() => {
-		if (initRef.current.initialized) {
-			return;
-		}
-
-		initRef.current.initialized = true;
-
-		const savedLeftState = getCookieBoolean(
-			SIDEBAR_COOKIE_NAME,
-			initRef.current.defaultOpen,
-		);
-		const savedRightMode = getCookie(SIDEBAR_RIGHT_MODE_COOKIE_NAME);
-		dispatchSidebarState({
-			type: "hydrateFromStorage",
-			value: {
-				open: initRef.current.isControlled ? uncontrolledOpen : savedLeftState,
-				rightMode:
-					savedRightMode === "floating" || savedRightMode === "sidebar"
-						? savedRightMode
-						: "sidebar",
-				rightOpen: getCookieBoolean(SIDEBAR_RIGHT_COOKIE_NAME, false),
-				rightSidebarWidth: readStoredSidebarWidth(
-					SIDEBAR_RIGHT_WIDTH_STORAGE_KEY,
-					SIDEBAR_RIGHT_WIDTH,
-				),
-				rightSidebarWidthMobile: readStoredSidebarWidth(
-					SIDEBAR_RIGHT_WIDTH_MOBILE_STORAGE_KEY,
-					SIDEBAR_RIGHT_WIDTH_MOBILE,
-				),
-			},
-		});
-	}, [uncontrolledOpen]);
 
 	const setRightOpenWithCookie = React.useCallback(
 		(value: boolean | ((value: boolean) => boolean)) => {
 			const nextOpen = typeof value === "function" ? value(rightOpen) : value;
 			dispatchSidebarState({ type: "setRightOpen", value: nextOpen });
-			document.cookie = `${SIDEBAR_RIGHT_COOKIE_NAME}=${nextOpen}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+			setCookie(SIDEBAR_RIGHT_COOKIE_NAME, nextOpen);
 		},
 		[rightOpen],
 	);
 
 	const setRightMode = React.useCallback((mode: RightSidebarMode) => {
 		dispatchSidebarState({ type: "setRightMode", value: mode });
-		document.cookie = `${SIDEBAR_RIGHT_MODE_COOKIE_NAME}=${mode}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+		setCookie(SIDEBAR_RIGHT_MODE_COOKIE_NAME, mode);
 	}, []);
 
 	const setRightSidebarWidth = React.useCallback((width: string) => {
