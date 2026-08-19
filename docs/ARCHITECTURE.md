@@ -934,11 +934,14 @@ approval response, request preparation must compose both strict canonicalizers
 against the same stored assistant message so neither client-controlled copy of
 the original tool input is trusted and neither continuation result is dropped.
 `createLocalWorkspaceSession` is the canonical owner of shared-root validation,
-root lookup, and symlink-safe containment for local tools. Shared roots are
+root lookup, symlink-safe containment, no-follow file access, traversal limits,
+ignored-directory policy, and media-aware local search. Shared roots are
 canonical real paths, one chat may expose at most four unique roots, and an
-invalid or stale root fails the request visibly instead of being dropped.
-Structured file reads detect content from bounded bytes rather than trusting
-extensions and expose explicit byte ranges for large UTF-8 text files.
+invalid or stale root fails the request visibly instead of being dropped. The
+AI SDK tool builder is only an adapter over this workspace interface and the
+desktop image-storage and command capabilities. Structured file reads detect
+content from bounded bytes rather than trusting extensions and expose explicit
+byte ranges for large UTF-8 text files.
 Local image tools keep discovery and bounded byte access in Electron, then use
 authenticated Convex upload URLs to cross the hosted boundary. Their client
 tool outputs contain storage-backed image references, and the hosted AI SDK
