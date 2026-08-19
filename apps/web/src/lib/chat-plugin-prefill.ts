@@ -13,6 +13,15 @@ export type ChatPluginPrefill = ChatPluginSelection & {
 	composerId: string;
 };
 
+export const consumeChatPluginPrefill = ({
+	chatId,
+	prefill,
+}: {
+	chatId: string;
+	prefill: ChatPluginPrefill | null;
+}): ChatPluginPrefill | null =>
+	prefill?.composerId === chatId ? null : prefill;
+
 export const createChatPluginDraft = ({
 	provider,
 	sourceId,

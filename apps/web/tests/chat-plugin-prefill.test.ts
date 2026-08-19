@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createChatPluginDraft } from "../src/lib/chat-plugin-prefill";
+import {
+	consumeChatPluginPrefill,
+	createChatPluginDraft,
+} from "../src/lib/chat-plugin-prefill";
 
 describe("chat plugin prefill", () => {
 	it("creates composer text and mention metadata from a plugin selection", () => {
@@ -23,5 +26,26 @@ describe("chat plugin prefill", () => {
 				],
 			},
 		});
+	});
+
+	it("consumes the prefill after its fresh chat is persisted", () => {
+		const prefill = {
+			composerId: "chat-from-plugin",
+			provider: "yandex-calendar" as const,
+			sourceId: "app:yandex-calendar",
+		};
+
+		expect(
+			consumeChatPluginPrefill({
+				chatId: "chat-from-plugin",
+				prefill,
+			}),
+		).toBeNull();
+		expect(
+			consumeChatPluginPrefill({
+				chatId: "another-chat",
+				prefill,
+			}),
+		).toBe(prefill);
 	});
 });

@@ -115,9 +115,10 @@ import { useNoteNavigationPreparation } from "@/hooks/use-note-navigation-prepar
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
 import { type AuthSession, authClient } from "@/lib/auth-client";
 import { getChatId } from "@/lib/chat";
-import type {
-	ChatPluginPrefill,
-	ChatPluginSelection,
+import {
+	type ChatPluginPrefill,
+	type ChatPluginSelection,
+	consumeChatPluginPrefill,
 } from "@/lib/chat-plugin-prefill";
 import { clearCachedConvexToken } from "@/lib/convex-token";
 import {
@@ -1219,6 +1220,9 @@ const useAppShellState = ({
 	const handleChatPersisted = React.useCallback(
 		(chatId: string) => {
 			addPendingPersistedChatRouteId(chatId);
+			setChatPluginPrefill((prefill) =>
+				consumeChatPluginPrefill({ chatId, prefill }),
+			);
 
 			if (currentChatId !== chatId) {
 				setDraftChatComposerId(crypto.randomUUID());
