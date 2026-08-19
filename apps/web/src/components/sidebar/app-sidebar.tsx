@@ -13,7 +13,7 @@ import * as React from "react";
 import type { AppUser, AppView, NavigableAppView } from "@/app/app-types";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { InboxSheet } from "@/components/inbox/inbox-sheet";
-import { NavMain, NavPlatform } from "@/components/nav/nav-main";
+import { NavMain, NavWorkspace } from "@/components/nav/nav-main";
 import { NavNotes } from "@/components/nav/nav-notes";
 import { NavProjects } from "@/components/nav/nav-projects";
 import { NavStarred } from "@/components/nav/nav-starred";
@@ -853,7 +853,7 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 
 	return (
 		<SidebarContent viewportClassName="scroll-fade-b [--scroll-fade-reveal:2rem]">
-			<NavPlatform
+			<NavWorkspace
 				items={navItems}
 				onViewChange={onViewChange}
 				onInboxToggle={() => onInboxOpenChange(!inboxOpen)}

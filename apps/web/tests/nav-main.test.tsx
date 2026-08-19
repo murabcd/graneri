@@ -2,15 +2,15 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { House, MessageCircle, UsersRound } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NavPlatform } from "@/components/nav/nav-main";
+import { NavWorkspace } from "@/components/nav/nav-main";
 
 afterEach(cleanup);
 
-describe("NavPlatform", () => {
-	it("renders the Shared count with the platform badge treatment", () => {
+describe("NavWorkspace", () => {
+	it("renders the Workspace section and Shared count badge", () => {
 		render(
 			<SidebarProvider>
-				<NavPlatform
+				<NavWorkspace
 					items={[
 						{
 							action: "view",
@@ -26,6 +26,7 @@ describe("NavPlatform", () => {
 			</SidebarProvider>,
 		);
 
+		expect(screen.getByText("Workspace")).not.toBeNull();
 		const badge = screen.getByText("3");
 		expect(badge.className).toContain("rounded-full");
 		expect(badge.className).toContain("tabular-nums");
@@ -36,7 +37,7 @@ describe("NavPlatform", () => {
 
 		render(
 			<SidebarProvider>
-				<NavPlatform
+				<NavWorkspace
 					items={[
 						{
 							action: "view",
@@ -69,7 +70,7 @@ describe("NavPlatform", () => {
 
 		render(
 			<SidebarProvider>
-				<NavPlatform
+				<NavWorkspace
 					items={[]}
 					onInboxToggle={vi.fn()}
 					onViewChange={onViewChange}
@@ -87,7 +88,7 @@ describe("NavPlatform", () => {
 
 		render(
 			<SidebarProvider>
-				<NavPlatform
+				<NavWorkspace
 					items={[
 						{
 							action: "view",

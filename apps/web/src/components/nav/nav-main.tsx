@@ -46,7 +46,7 @@ export function NavMain({
 	);
 }
 
-export function NavPlatform({
+export function NavWorkspace({
 	className,
 	items,
 	onViewChange,
@@ -89,9 +89,9 @@ export function NavPlatform({
 
 	return (
 		<SidebarCollapsibleGroup
-			title="Platform"
+			title="Workspace"
 			className={className}
-			storageKey="platform"
+			storageKey="workspace"
 		>
 			<SidebarMenu>
 				{viewItems.map((item) => (
@@ -119,7 +119,7 @@ export function NavPlatform({
 							>
 								{item.icon && <item.icon />}
 								<span>{item.title}</span>
-								<PlatformViewShortcutHint
+								<WorkspaceViewShortcutHint
 									view={item.action === "view" ? item.view : undefined}
 								/>
 								{item.badge ? (
@@ -136,7 +136,7 @@ export function NavPlatform({
 	);
 }
 
-function PlatformViewShortcutHint({ view }: { view: NavItem["view"] }) {
+function WorkspaceViewShortcutHint({ view }: { view: NavItem["view"] }) {
 	const keyLabel = view === "chat" ? "N" : view === "home" ? "G" : null;
 
 	return keyLabel ? (
