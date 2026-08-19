@@ -95,8 +95,11 @@ CommandInput.displayName = CommandPrimitive.Input.displayName;
 function CommandList({
 	className,
 	onWheel,
+	viewportClassName,
 	...props
-}: React.ComponentProps<typeof CommandPrimitive.List>) {
+}: React.ComponentProps<typeof CommandPrimitive.List> & {
+	viewportClassName?: string;
+}) {
 	const handleWheel = React.useCallback(
 		(
 			event: React.WheelEvent<React.ElementRef<typeof CommandPrimitive.List>>,
@@ -147,7 +150,10 @@ function CommandList({
 		<ScrollArea
 			className={cn("max-h-72 min-w-0", className)}
 			reserveScrollbarGap
-			viewportClassName="max-h-[inherit] scroll-py-1 outline-none [&>div]:!block [&>div]:!min-w-0 [&>div]:!w-full"
+			viewportClassName={cn(
+				"max-h-[inherit] scroll-py-1 outline-none [&>div]:!block [&>div]:!min-w-0 [&>div]:!w-full",
+				viewportClassName,
+			)}
 		>
 			<CommandPrimitive.List
 				data-slot="command-list"

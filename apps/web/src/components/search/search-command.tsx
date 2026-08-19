@@ -558,6 +558,7 @@ function SearchCommandView({
 							"h-[22rem] max-h-[calc(100vh-14rem)] min-h-[14rem]",
 							isFilterPopoverOpen && "pointer-events-none",
 						)}
+						viewportClassName="scroll-fade-b [--scroll-fade-reveal:2rem]"
 					>
 						<CommandEmpty>No results found.</CommandEmpty>
 						{groupByDate ? (
