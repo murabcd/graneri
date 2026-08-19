@@ -1176,6 +1176,11 @@ rules from that module instead of repeating release layout strings. Each
 asset-backed runtime is declared there once with its package name and required
 files; main-bundle externalization, dependency-closure staging, targeted ASAR
 unpacking, and package verification derive from that policy.
+`runtime-package-closure.mjs` owns ordinary dependency traversal, package
+manifest validation, and flattened-version conflict detection. Source-tree
+staging and packaged-resource verification provide separate resolution adapters
+to that shared contract, and staging must resolve the complete closure before it
+copies files.
 
 Renderer route ownership lives in `packages/platform/src/renderer-routes.mjs`.
 The packaged desktop protocol must use that manifest to decide whether an

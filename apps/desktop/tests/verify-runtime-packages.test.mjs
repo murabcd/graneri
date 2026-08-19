@@ -7,24 +7,24 @@ import {
 } from "../scripts/verify-runtime-packages.mjs";
 
 const packageFile = (name, dependencies = {}) => ({
-	readText: () => JSON.stringify({ dependencies, name }),
+	readText: () => JSON.stringify({ dependencies, name, version: "1.0.0" }),
 	relativePath: `${stagedRuntimePackagePath(name)}/package.json`,
 });
 
-test("verifies the complete staged runtime package closure", () => {
+test("verifies the complete staged runtime package closure", async () => {
 	const files = [
 		packageFile("just-bash", { dependency: "1.0.0" }),
 		packageFile("dependency"),
 	];
 
-	assert.equal(verifyStagedRuntimePackageClosure({ files }), 2);
+	assert.equal(await verifyStagedRuntimePackageClosure({ files }), 2);
 });
 
-test("rejects a missing staged runtime dependency", () => {
+test("rejects a missing staged runtime dependency", async () => {
 	const files = [packageFile("just-bash", { missing: "1.0.0" })];
 
-	assert.throws(
-		() => verifyStagedRuntimePackageClosure({ files }),
+	await assert.rejects(
+		verifyStagedRuntimePackageClosure({ files }),
 		/Packaged runtime dependency is missing: missing/u,
 	);
 });

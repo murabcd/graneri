@@ -2,6 +2,10 @@ import { existsSync } from "node:fs";
 import { cp, readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
+import {
+	parseRuntimePackageManifest,
+	resolveRuntimePackageClosure,
+} from "./runtime-package-closure.mjs";
 
 const findPackageRoot = async ({ entryPath, packageName }) => {
 	let currentPath = existsSync(resolve(entryPath, "package.json"))
@@ -11,7 +15,11 @@ const findPackageRoot = async ({ entryPath, packageName }) => {
 	for (;;) {
 		const manifestPath = resolve(currentPath, "package.json");
 		if (existsSync(manifestPath)) {
-			const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+			const manifestText = await readFile(manifestPath, "utf8");
+			const manifest = parseRuntimePackageManifest({
+				source: manifestPath,
+				text: manifestText,
+			});
 			if (manifest.name === packageName) {
 				const rootPath = await realpath(currentPath);
 				return {
@@ -35,57 +43,28 @@ const findPackageRoot = async ({ entryPath, packageName }) => {
 const packageNodeModulesPath = ({ packageName, rootPath }) =>
 	resolve(rootPath, ...packageName.split("/").map(() => ".."));
 
-const stageRuntimePackage = async ({
-	destinationNodeModulesPath,
+const resolveSourceRuntimePackage = async ({
 	packageName,
-	packagePath,
-	packageRequire,
-	stagedVersions,
+	parentPackage,
+	rootRequire,
 }) => {
+	const packageRequire = parentPackage
+		? createRequire(parentPackage.manifestPath)
+		: rootRequire;
+	const packagePath = parentPackage
+		? resolve(
+				packageNodeModulesPath({
+					packageName: parentPackage.manifest.name,
+					rootPath: parentPackage.rootPath,
+				}),
+				...packageName.split("/"),
+			)
+		: undefined;
 	const entryPath =
 		packagePath && existsSync(packagePath)
 			? packagePath
 			: packageRequire.resolve(packageName);
-	const packageRoot = await findPackageRoot({ entryPath, packageName });
-	const stagedVersion = stagedVersions.get(packageName);
-	if (stagedVersions.has(packageName)) {
-		if (stagedVersion !== packageRoot.manifest.version) {
-			throw new Error(
-				`Conflicting ${packageName} runtime versions: ${stagedVersion} and ${packageRoot.manifest.version}`,
-			);
-		}
-		return;
-	}
-
-	stagedVersions.set(packageName, packageRoot.manifest.version);
-	await cp(
-		packageRoot.rootPath,
-		resolve(destinationNodeModulesPath, ...packageName.split("/")),
-		{
-			dereference: true,
-			recursive: true,
-		},
-	);
-
-	const childRequire = createRequire(packageRoot.manifestPath);
-	const childNodeModulesPath = packageNodeModulesPath({
-		packageName,
-		rootPath: packageRoot.rootPath,
-	});
-	await Promise.all(
-		Object.keys(packageRoot.manifest.dependencies ?? {}).map((dependencyName) =>
-			stageRuntimePackage({
-				destinationNodeModulesPath,
-				packageName: dependencyName,
-				packagePath: resolve(
-					childNodeModulesPath,
-					...dependencyName.split("/"),
-				),
-				packageRequire: childRequire,
-				stagedVersions,
-			}),
-		),
-	);
+	return findPackageRoot({ entryPath, packageName });
 };
 
 export const stageRuntimePackages = async ({
@@ -93,17 +72,29 @@ export const stageRuntimePackages = async ({
 	packageNames,
 	resolveFrom,
 }) => {
-	const packageRequire = createRequire(resolveFrom);
-	const stagedVersions = new Map();
-
-	await Promise.all(
-		packageNames.map((packageName) =>
-			stageRuntimePackage({
-				destinationNodeModulesPath,
+	const rootRequire = createRequire(resolveFrom);
+	const runtimePackages = await resolveRuntimePackageClosure({
+		packageNames,
+		resolvePackage: ({ packageName, parentPackage }) =>
+			resolveSourceRuntimePackage({
 				packageName,
-				packageRequire,
-				stagedVersions,
+				parentPackage,
+				rootRequire,
 			}),
+	});
+	await Promise.all(
+		runtimePackages.map((runtimePackage) =>
+			cp(
+				runtimePackage.rootPath,
+				resolve(
+					destinationNodeModulesPath,
+					...runtimePackage.manifest.name.split("/"),
+				),
+				{
+					dereference: true,
+					recursive: true,
+				},
+			),
 		),
 	);
 };

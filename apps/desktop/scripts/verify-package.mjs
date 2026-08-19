@@ -474,7 +474,7 @@ const scanRuntimeImports = (packagedResources) => {
 		}
 	}
 	const runtimePackageCount =
-		verifyStagedRuntimePackageClosure(packagedResources);
+		await verifyStagedRuntimePackageClosure(packagedResources);
 
 	for (const deployment of forbiddenDeployments) {
 		if (allText.includes(deployment)) {
