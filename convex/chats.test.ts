@@ -168,6 +168,85 @@ test("oversized user messages are rejected before chat persistence", async () =>
 	).rejects.toThrow("Chat message exceeds Convex's 1 MiB document limit.");
 });
 
+test("local folder tool completion canonically updates the stored assistant message", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "chat-local-tool",
+		message: {
+			id: "assistant-local-tool",
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{ type: "reasoning", text: "I will inspect the folder." },
+				{
+					type: "tool-list_local_directory",
+					toolCallId: "call-1",
+					input: { rootIndex: 0, relativePath: "." },
+					state: "input-available",
+				},
+			]),
+			text: "",
+			createdAt: 2_000,
+		},
+	});
+
+	const completed = await asOwner.mutation(
+		api.chats.completeLocalFolderToolMessage,
+		{
+			workspaceId,
+			chatId: "chat-local-tool",
+			message: {
+				id: "assistant-local-tool",
+				role: "assistant",
+				partsJson: JSON.stringify([
+					{
+						type: "tool-list_local_directory",
+						toolCallId: "call-1",
+						input: { rootIndex: 99, relativePath: "tampered" },
+						output: { entries: [{ name: "meeting.txt" }] },
+						state: "output-available",
+					},
+				]),
+				text: "ignored",
+				createdAt: 9_999,
+			},
+		},
+	);
+
+	expect(completed.createdAt).toBe(2_000);
+	expect(JSON.parse(completed.partsJson)).toEqual([
+		{ type: "reasoning", text: "I will inspect the folder." },
+		{
+			type: "tool-list_local_directory",
+			toolCallId: "call-1",
+			input: { rootIndex: 0, relativePath: "." },
+			output: { entries: [{ name: "meeting.txt" }] },
+			state: "output-available",
+		},
+	]);
+
+	await expect(
+		asOwner.mutation(api.chats.completeLocalFolderToolMessage, {
+			workspaceId,
+			chatId: "chat-local-tool",
+			message: {
+				id: "assistant-local-tool",
+				role: "assistant",
+				partsJson: JSON.stringify([
+					{
+						type: "tool-list_local_directory",
+						toolCallId: "unknown-call",
+						output: { entries: [] },
+						state: "output-available",
+					},
+				]),
+				text: "",
+				createdAt: 2_000,
+			},
+		}),
+	).rejects.toThrow("Local folder tool message is invalid.");
+});
+
 test("new chats use one placeholder title before generated title arrives", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 

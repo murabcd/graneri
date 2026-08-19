@@ -1,5 +1,7 @@
+import { createCanonicalLocalFolderToolContinuation } from "@workspace/ai/local-folder-tool-contract";
 import {
 	normalizeStoredUiMessage,
+	parseUiMessagePartsJson,
 	type StoredUiMessageRole,
 } from "@workspace/ai/ui-message-codec";
 import { ConvexError, v } from "convex/values";
@@ -1098,6 +1100,109 @@ export const saveMessage = mutation({
 			reasoningEffort: args.reasoningEffort,
 			message: args.message,
 		});
+	},
+});
+
+export const completeLocalFolderToolMessage = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+		message: chatMessageInputValidator,
+	},
+	returns: chatMessageValidator,
+	handler: async (ctx, args) => {
+		const identity = await requireIdentity(ctx);
+		const ownerTokenIdentifier = identity.tokenIdentifier;
+		const chat = await getOwnedActiveChatById(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			args.chatId,
+		);
+		if (!chat) {
+			throw new ConvexError({
+				code: "CHAT_NOT_FOUND",
+				message: "Chat not found.",
+			});
+		}
+
+		const existingMessage = await ctx.db
+			.query("chatMessages")
+			.withIndex("by_chatId_and_messageId", (q) =>
+				q.eq("chatId", chat._id).eq("messageId", args.message.id),
+			)
+			.unique();
+		if (!existingMessage) {
+			throw new ConvexError({
+				code: "LOCAL_FOLDER_TOOL_MESSAGE_NOT_FOUND",
+				message: "Local folder tool message was not found.",
+			});
+		}
+
+		const canonicalMessage = (() => {
+			try {
+				return createCanonicalLocalFolderToolContinuation({
+					message: {
+						id: args.message.id,
+						role: args.message.role,
+						parts: parseUiMessagePartsJson(args.message.partsJson),
+					},
+					storedMessage: {
+						id: existingMessage.messageId,
+						role: existingMessage.role,
+						partsJson: existingMessage.partsJson,
+						metadataJson: existingMessage.metadataJson,
+					},
+				});
+			} catch {
+				throw new ConvexError({
+					code: "INVALID_LOCAL_FOLDER_TOOL_MESSAGE",
+					message: "Local folder tool message is invalid.",
+				});
+			}
+		})();
+
+		const normalizedMessage = await normalizeStoredUiMessage({
+			id: existingMessage.messageId,
+			role: canonicalMessage.role,
+			partsJson: JSON.stringify(canonicalMessage.parts),
+			metadataJson: existingMessage.metadataJson,
+			text: existingMessage.text,
+			createdAt: existingMessage.createdAt,
+		});
+		const replacement = {
+			chatId: existingMessage.chatId,
+			ownerTokenIdentifier,
+			messageId: existingMessage.messageId,
+			role: "assistant" as const,
+			partsJson: normalizedMessage.partsJson,
+			metadataJson: normalizedMessage.metadataJson,
+			text: normalizedMessage.text,
+			createdAt: normalizedMessage.createdAt,
+		};
+		requireConvexDocumentWithinLimit({
+			document: {
+				...replacement,
+				_id: existingMessage._id,
+				_creationTime: existingMessage._creationTime,
+			},
+			errorCode: "CHAT_MESSAGE_TOO_LARGE",
+			message: "Chat message exceeds Convex's 1 MiB document limit.",
+		});
+
+		await Promise.all([
+			ctx.db.replace(existingMessage._id, replacement),
+			clearChatContextState(ctx, chat._id),
+		]);
+
+		const completedMessage = await ctx.db.get(existingMessage._id);
+		if (!completedMessage) {
+			throw new ConvexError({
+				code: "CHAT_SAVE_FAILED",
+				message: "Failed to save local folder tool message.",
+			});
+		}
+		return completedMessage;
 	},
 });
 

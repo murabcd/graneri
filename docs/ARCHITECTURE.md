@@ -920,6 +920,12 @@ including `localFolders`, so subsequent hosted model steps keep the same desktop
 tool context. Durable queued replay and steer are the exception: queued request
 state is stored in Convex and must reject non-empty `localFolders` rather than
 persisting local filesystem selections.
+The shared local-folder tool contract owns tool names and completed-output
+validation across the renderer, hosted route, and Convex. A desktop tool
+continuation is an assistant message, not an empty user input or an edited
+branch: the hosted route reconstructs it against the stored pending assistant
+message, Convex atomically replaces only the matching tool output fields, and
+the next hosted turn must not persist the preceding user message again.
 
 Hosted handlers must never claim direct access to the user's Mac filesystem.
 Desktop-local capabilities must fail visibly when the desktop bridge contract is

@@ -480,6 +480,108 @@ describe("chat handler persistence failures", () => {
 		]);
 	});
 
+	it("accepts and persists a completed desktop-local tool continuation", async () => {
+		convexMock.query.mockResolvedValueOnce({
+			model: defaultChatModelId,
+			title: "Existing chat",
+		});
+		convexMock.query.mockResolvedValueOnce(null);
+		convexMock.query.mockResolvedValueOnce([]);
+		convexMock.query.mockResolvedValueOnce(null);
+		convexMock.contextState.mockResolvedValueOnce({
+			compaction: null,
+			hasMoreMessages: false,
+			messages: [
+				{
+					id: "user_1",
+					role: "user",
+					partsJson: JSON.stringify([
+						{ type: "text", text: "Read the shared project" },
+					]),
+					createdAt: 1,
+				},
+				{
+					id: "assistant_1",
+					role: "assistant",
+					partsJson: JSON.stringify([
+						{
+							type: "tool-list_local_directory",
+							toolCallId: "call_1",
+							input: { rootIndex: 0, relativePath: "." },
+							state: "input-available",
+						},
+					]),
+					createdAt: 2,
+				},
+			],
+		});
+		convexMock.mutation.mockResolvedValueOnce({ ok: true });
+		convexMock.mutation.mockResolvedValueOnce({
+			_id: "run_2",
+			assistantMessageId: "assistant_2",
+			status: "running",
+		});
+		convexMock.mutation.mockRejectedValueOnce(
+			new Error("active stream failed"),
+		);
+		convexMock.mutation.mockResolvedValueOnce(null);
+
+		await expect(
+			postChatRequest({
+				id: "chat_1",
+				workspaceId: "workspace_1",
+				convexToken: "token_1",
+				model: defaultChatModelId,
+				appsEnabled: false,
+				localFolders: [
+					{
+						id: "folder_1",
+						name: "Project",
+						path: "/Users/test/Project",
+					},
+				],
+				trigger: "submit-message",
+				messageId: "assistant_1",
+				message: {
+					id: "assistant_1",
+					role: "assistant",
+					parts: [
+						{
+							type: "tool-list_local_directory",
+							toolCallId: "call_1",
+							input: { rootIndex: 0, relativePath: "." },
+							output: { entries: [{ name: "meeting.txt" }] },
+							state: "output-available",
+						},
+					],
+				},
+			}),
+		).resolves.toEqual({
+			status: 500,
+			body: { error: "Failed to start assistant stream." },
+		});
+
+		expect(
+			convexMock.mutation.mock.calls.map(([reference]) =>
+				getFunctionName(reference),
+			),
+		).toEqual([
+			"chats:completeLocalFolderToolMessage",
+			"assistantRuns:startAssistantRun",
+			"chats:startActiveStream",
+			"assistantRuns:failAssistantRun",
+		]);
+		expect(convexMock.mutation.mock.calls[0]?.[1]).toMatchObject({
+			chatId: "chat_1",
+			message: {
+				id: "assistant_1",
+				role: "assistant",
+			},
+			workspaceId: "workspace_1",
+		});
+		expect(convexMock.mutation.mock.calls[0]?.[1]).not.toHaveProperty("noteId");
+	});
+
 	it("fails closed when edited branch preservation fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,

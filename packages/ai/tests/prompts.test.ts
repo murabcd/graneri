@@ -621,6 +621,45 @@ describe("prompt helpers", () => {
 		expect(
 			validateHostedChatRequestInput({
 				message: {
+					id: "assistant-local-tool-output",
+					role: "assistant",
+					parts: [
+						{
+							type: "tool-list_local_directory",
+							toolCallId: "call-1",
+							input: { rootIndex: 0, relativePath: "." },
+							output: { entries: [] },
+							state: "output-available",
+						},
+					],
+				},
+				replayQueuedMessageId: null,
+				steerQueuedMessageId: null,
+			}),
+		).toMatchObject({ errorCode: "input_empty" });
+		expect(
+			validateHostedChatRequestInput({
+				allowLocalFolderToolContinuation: true,
+				message: {
+					id: "assistant-local-tool-output",
+					role: "assistant",
+					parts: [
+						{
+							type: "tool-list_local_directory",
+							toolCallId: "call-1",
+							input: { rootIndex: 0, relativePath: "." },
+							output: { entries: [] },
+							state: "output-available",
+						},
+					],
+				},
+				replayQueuedMessageId: null,
+				steerQueuedMessageId: null,
+			}),
+		).toBeNull();
+		expect(
+			validateHostedChatRequestInput({
+				message: {
 					id: "assistant-approval",
 					role: "assistant",
 					parts: [

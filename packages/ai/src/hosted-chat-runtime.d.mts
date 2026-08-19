@@ -65,6 +65,7 @@ export declare const getHostedChatInputValidationErrorResponse: (
 	};
 };
 export declare const validateHostedChatRequestInput: (args: {
+	allowLocalFolderToolContinuation?: boolean;
 	message?: UIMessage | null;
 	replayQueuedMessageId?: string | null;
 	steerQueuedMessageId?: string | null;

@@ -1,3 +1,4 @@
+import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import type {
 	ChatAddToolOutputFunction,
@@ -7,16 +8,6 @@ import type {
 import type { RefObject } from "react";
 import { logError } from "@/lib/logger";
 import { getLocalFolderToolApiUrl } from "@/lib/runtime-config";
-
-const localToolNames = new Set([
-	"get_shared_local_folders",
-	"inspect_local_image",
-	"list_local_directory",
-	"read_local_file",
-	"run_local_bash",
-	"search_local_files",
-	"search_local_images",
-]);
 
 type LocalToolCall = {
 	toolCallId: string;
@@ -33,9 +24,6 @@ type LocalToolRequestOptions =
 type DesktopLocalToolRequestBody = {
 	localFolders?: DesktopLocalFolder[];
 };
-
-const isDesktopLocalToolName = (toolName: string) =>
-	localToolNames.has(toolName);
 
 export const isDesktopLocalFolderArray = (
 	value: unknown,
@@ -82,7 +70,7 @@ const executeDesktopLocalToolCall = async ({
 		throw new Error("Desktop local tools are unavailable in this runtime.");
 	}
 
-	if (!isDesktopLocalToolName(toolCall.toolName)) {
+	if (!isLocalFolderToolName(toolCall.toolName)) {
 		throw new Error(`Unsupported local tool: ${toolCall.toolName}.`);
 	}
 
@@ -169,7 +157,7 @@ export const createDesktopLocalToolCallHandler =
 		}
 
 		const toolName = toolCall.toolName;
-		if (!isDesktopLocalToolName(toolName)) {
+		if (!isLocalFolderToolName(toolName)) {
 			return;
 		}
 

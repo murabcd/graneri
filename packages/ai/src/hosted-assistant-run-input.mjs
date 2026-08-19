@@ -129,7 +129,7 @@ export const prepareHostedAssistantRunInput = async ({
 				tools: runContext.tools,
 			});
 
-			return { ...runContext, chatMessages };
+			return { ...runContext, chatMessages, inputMessage: preparedMessage };
 		},
 	};
 };

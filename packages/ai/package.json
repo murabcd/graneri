@@ -111,6 +111,10 @@
       "types": "./src/local-folder-tools.d.mts",
       "import": "./src/local-folder-tools.mjs"
     },
+    "./local-folder-tool-contract": {
+      "types": "./src/local-folder-tool-contract.d.mts",
+      "import": "./src/local-folder-tool-contract.mjs"
+    },
     "./local-path-references": {
       "types": "./src/local-path-references.d.mts",
       "import": "./src/local-path-references.mjs"

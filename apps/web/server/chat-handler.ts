@@ -8,6 +8,7 @@ import {
 	getHostedChatInputValidationErrorResponse,
 	getHostedChatSteerTelemetry,
 	getStoredHostedNoteContext,
+	toHostedStoredMessage,
 	validateHostedChatInput,
 	validateHostedChatRequestInput,
 	validateHostedChatSteerRoute,
@@ -19,6 +20,10 @@ import {
 	type prepareHostedAssistantRunInput,
 	stopOrphanedHostedAssistantRun,
 } from "@workspace/ai/hosted-chat-turn";
+import {
+	createCanonicalLocalFolderToolContinuation,
+	isLocalFolderToolContinuationMessage,
+} from "@workspace/ai/local-folder-tool-contract";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
 import {
 	createCanonicalToolApprovalResponse,
@@ -343,6 +348,7 @@ export const handleChatRequest = async (
 	const resolvedTimezone = timezone?.trim() || "UTC";
 
 	const inputValidation = validateHostedChatRequestInput({
+		allowLocalFolderToolContinuation: localFolders.length > 0,
 		message,
 		replayQueuedMessageId,
 		steerQueuedMessageId,
@@ -510,6 +516,12 @@ export const handleChatRequest = async (
 			if (getToolApprovalResponse(inputMessage)) {
 				return { ok: true };
 			}
+			if (
+				localFolders.length > 0 &&
+				isLocalFolderToolContinuationMessage(inputMessage)
+			) {
+				return { ok: true };
+			}
 			try {
 				validateHostedChatInput(inputMessage);
 				return { ok: true };
@@ -584,6 +596,9 @@ export const handleChatRequest = async (
 	}
 	const { effectiveMessage, pendingSteerMessages, steeredUserMessages } =
 		preparedTurnInput;
+	const isLocalFolderToolContinuation =
+		localFolders.length > 0 &&
+		isLocalFolderToolContinuationMessage(effectiveMessage);
 	const cleanupClaimedSteerQueuedMessage = async (
 		operation: string,
 		options: { tolerateMissing?: boolean } = {},
@@ -598,6 +613,7 @@ export const handleChatRequest = async (
 	let chatMessages: UIMessage[];
 	let lastUserMessage: UIMessage | undefined;
 	let toolApprovalResponse: ToolApprovalResponse | null;
+	let inputMessage: UIMessage | null | undefined;
 	let shouldGenerateChatTitle: boolean;
 	let activeStreamSession: HostedActiveStreamSession | null = null;
 	try {
@@ -611,7 +627,10 @@ export const handleChatRequest = async (
 			convexClient,
 			logLatency,
 			message: effectiveMessage,
-			messageId: toolApprovalResponse ? undefined : messageId,
+			messageId:
+				toolApprovalResponse || isLocalFolderToolContinuation
+					? undefined
+					: messageId,
 			onBranchError: async ({ error, messageId: branchMessageId }) => {
 				if (
 					queuedInput.hasClaimed &&
@@ -652,7 +671,15 @@ export const handleChatRequest = async (
 									currentToolApprovalResponse.assistantMessageId,
 							),
 						})
-				: undefined,
+				: isLocalFolderToolContinuation
+					? ({ storedMessages }) =>
+							createCanonicalLocalFolderToolContinuation({
+								message: effectiveMessage,
+								storedMessage: storedMessages.find(
+									(storedMessage) => storedMessage.id === effectiveMessage.id,
+								),
+							})
+					: undefined,
 			safetyIdentifier: admission.safetyIdentifier,
 			trigger,
 			workspaceId: resolvedWorkspaceId,
@@ -666,6 +693,7 @@ export const handleChatRequest = async (
 			coreToolPolicyState,
 			finalizedToolSet,
 			instructions,
+			inputMessage,
 			localFolderRoots,
 			appConnections,
 		} = await preparedAssistantRunInput.complete({
@@ -729,13 +757,8 @@ export const handleChatRequest = async (
 		logLatency("chat.messages_validated", {
 			chatMessageCount: chatMessages.length,
 		});
-		lastUserMessage = toolApprovalResponse
-			? undefined
-			: effectiveMessage.role === "user"
-				? effectiveMessage
-				: [...chatMessages]
-						.reverse()
-						.find((currentMessage) => currentMessage.role === "user");
+		lastUserMessage =
+			effectiveMessage.role === "user" ? effectiveMessage : undefined;
 		shouldGenerateChatTitle = Boolean(
 			lastUserMessage && (!storedChat || storedChat.title === "New chat"),
 		);
@@ -757,6 +780,32 @@ export const handleChatRequest = async (
 			return;
 		}
 		throw error;
+	}
+	if (isLocalFolderToolContinuation) {
+		if (!inputMessage) {
+			throw new Error("Local folder tool continuation was not prepared.");
+		}
+		try {
+			await convexClient.mutation(api.chats.completeLocalFolderToolMessage, {
+				workspaceId: resolvedWorkspaceId,
+				chatId: id,
+				message: toHostedStoredMessage(inputMessage),
+			});
+		} catch (error) {
+			wideEvent.outcome = "error";
+			wideEvent.status_code = 500;
+			wideEvent.error_code = "local_tool_message_persist_failed";
+			recordServerError({
+				error,
+				event: wideEvent,
+				operation: "local_tool_message_persist",
+			});
+			emitWideEvent("error");
+			sendJson(response, 500, {
+				error: "Failed to persist local folder tool output.",
+			});
+			return;
+		}
 	}
 
 	const streamRuntimeResult = await runHostedChatTurnStreamRuntime({

@@ -7,6 +7,7 @@ import {
 } from "./chat-titles.mjs";
 import { getConvexErrorData } from "./convex-error.mjs";
 import { buildHostedRoutePath } from "./hosted-route-catalog.mjs";
+import { isLocalFolderToolContinuationMessage } from "./local-folder-tool-contract.mjs";
 import { aiLogger, serializeError } from "./logger.mjs";
 import {
 	CHAT_TITLE_MODEL_ID,
@@ -350,6 +351,7 @@ export const getHostedChatInputValidationErrorResponse = (error) => {
 };
 
 export const validateHostedChatRequestInput = ({
+	allowLocalFolderToolContinuation = false,
 	message,
 	replayQueuedMessageId,
 	steerQueuedMessageId,
@@ -367,6 +369,10 @@ export const validateHostedChatRequestInput = ({
 	if (
 		message &&
 		!getToolApprovalResponse(message) &&
+		!(
+			allowLocalFolderToolContinuation &&
+			isLocalFolderToolContinuationMessage(message)
+		) &&
 		!steerQueuedMessageId &&
 		!replayQueuedMessageId
 	) {

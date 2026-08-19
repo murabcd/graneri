@@ -66,8 +66,11 @@ export declare const prepareHostedAssistantRunInput: <
 	  }
 	| {
 			ok: true;
-			complete: (
-				context: RunContextInput,
-			) => Promise<RunContext & { chatMessages: UIMessage[] }>;
+			complete: (context: RunContextInput) => Promise<
+				RunContext & {
+					chatMessages: UIMessage[];
+					inputMessage: UIMessage | null | undefined;
+				}
+			>;
 	  }
 >;
