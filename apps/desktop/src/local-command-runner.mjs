@@ -1,7 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { StringDecoder } from "node:string_decoder";
 import { MAX_LOCAL_COMMAND_LENGTH } from "@workspace/ai/local-folder-tool-definitions";
-import { createBashTool } from "bash-tool";
 import { Bash, OverlayFs } from "just-bash";
 
 const COMMAND_TIMEOUT_MS = 10_000;
@@ -10,8 +9,6 @@ const MAX_FILE_READ_BYTES = 20_000_000;
 const MAX_VIRTUAL_WRITE_BYTES = 20_000_000;
 const MAX_NETWORK_RESPONSE_BYTES = 5_000_000;
 const MAX_SANDBOX_OUTPUT_BYTES = 250_000;
-const TOOL_PROMPT =
-	"Graneri supplies the model-facing command description and execution limits.";
 
 const truncateUtf8 = (value) => {
 	const bytes = Buffer.from(value, "utf8");
@@ -25,7 +22,7 @@ const truncateUtf8 = (value) => {
 	};
 };
 
-const createCommandTool = async (rootPath) => {
+const createCommandEnvironment = (rootPath) => {
 	const filesystem = new OverlayFs({
 		allowSymlinks: false,
 		maxFileReadSize: MAX_FILE_READ_BYTES,
@@ -33,7 +30,7 @@ const createCommandTool = async (rootPath) => {
 		root: rootPath,
 	});
 	const mountPoint = filesystem.getMountPoint();
-	const environment = new Bash({
+	return new Bash({
 		cwd: mountPoint,
 		// Host-global monkey patches are unsafe in Electron's shared main process.
 		defenseInDepth: false,
@@ -58,14 +55,6 @@ const createCommandTool = async (rootPath) => {
 		},
 		python: true,
 	});
-	const toolkit = await createBashTool({
-		destination: mountPoint,
-		maxOutputLength: MAX_SANDBOX_OUTPUT_BYTES,
-		promptOptions: { toolPrompt: TOOL_PROMPT },
-		sandbox: environment,
-	});
-
-	return toolkit.bash;
 };
 
 export const runLocalCommand = async ({ command, rootPath }) => {
@@ -83,14 +72,8 @@ export const runLocalCommand = async ({ command, rootPath }) => {
 		throw new Error("Shared folder root is no longer canonical.");
 	}
 	const normalizedCommand = command.trim();
-	const tool = await createCommandTool(canonicalRootPath);
-	if (typeof tool.execute !== "function") {
-		throw new Error("Local command execution is unavailable.");
-	}
-	const result = await tool.execute(
-		{ command: normalizedCommand },
-		{ messages: [], toolCallId: "graneri-local-command" },
-	);
+	const environment = createCommandEnvironment(canonicalRootPath);
+	const result = await environment.exec(normalizedCommand);
 
 	const stdout = truncateUtf8(result.stdout);
 	const stderr = truncateUtf8(result.stderr);

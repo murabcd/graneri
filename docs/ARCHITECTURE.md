@@ -955,11 +955,12 @@ next chat step. Electron neither constructs an OpenAI model nor consumes an
 OpenAI key. Chat attachment reference tracking owns those temporary image bytes
 until the last referencing chat message is removed.
 `run_local_command` executes one cross-platform virtual Bash environment from a
-selected root. The Electron main process creates a fresh `bash-tool`/`just-bash`
-`OverlayFs` environment for every call; the shared AI package receives that
-capability only through an explicit adapter when it builds desktop-executed
-tools. The adapter returns only exit code, standard output, standard error, and
-truncation state; the shared local-folder contract validates that semantic
+selected root. The Electron main process creates a fresh `just-bash` `OverlayFs`
+environment for every call and executes the command directly; the shared AI
+package is the only owner of the model-facing AI SDK tool and receives desktop
+execution only through an explicit adapter. The adapter returns only exit code,
+standard output, standard error, and truncation state; the shared local-folder
+contract validates that semantic
 result and keeps the command input, canonical root, and sandbox implementation
 private to Electron. Reads reflect the live selected root, while writes exist
 only in the call's bounded copy-on-write layer and are discarded afterward.
