@@ -26,14 +26,14 @@ const attachmentBearingToolPartSchema = z.discriminatedUnion("type", [
 	z.object({
 		output: z.object({ file: filePartSchema }),
 		state: z.literal("output-available"),
-		type: z.literal("tool-inspect_local_image"),
+		type: z.literal("tool-read_local_file"),
 	}),
 	z.object({
 		output: z.object({
 			results: z.array(z.object({ file: filePartSchema })),
 		}),
 		state: z.literal("output-available"),
-		type: z.literal("tool-search_local_images"),
+		type: z.literal("tool-search_local_files"),
 	}),
 ]);
 
@@ -83,9 +83,9 @@ const getStorageIdsFromToolPart = (part: unknown) => {
 	switch (result.data.type) {
 		case "tool-generate_image":
 			return [getStorageIdFromAttachmentArtifact(result.data.output)];
-		case "tool-inspect_local_image":
+		case "tool-read_local_file":
 			return [getStorageIdFromFilePart(result.data.output.file)];
-		case "tool-search_local_images":
+		case "tool-search_local_files":
 			return result.data.output.results.map((imageResult) =>
 				getStorageIdFromFilePart(imageResult.file),
 			);

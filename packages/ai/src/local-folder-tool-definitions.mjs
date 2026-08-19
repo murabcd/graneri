@@ -1,8 +1,8 @@
 import { z } from "zod";
 import {
-	inspectedLocalImageOutputForModel,
 	MAX_LOCAL_IMAGE_UPLOADS,
-	searchedLocalImagesOutputForModel,
+	readLocalFileOutputForModel,
+	searchLocalFilesOutputForModel,
 } from "./local-folder-image-contract.mjs";
 
 export const MAX_LOCAL_FOLDER_ROOTS = 4;
@@ -35,7 +35,7 @@ const localFolderToolCatalog = Object.freeze({
 	read_local_file: {
 		buildConfig: ({ rootSchema }) => ({
 			description:
-				"Read a bounded UTF-8 text byte range from a file inside a local folder explicitly shared by the desktop user.",
+				"Read a text file or inspect an image inside a local folder explicitly shared by the desktop user. Text reads return a bounded UTF-8 byte range. Image reads return multimodal content for screenshots, photos, charts, diagrams, and OCR.",
 			inputSchema: z.object({
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
@@ -57,7 +57,22 @@ const localFolderToolCatalog = Object.freeze({
 					.max(MAX_LOCAL_FILE_READ_BYTES)
 					.default(MAX_LOCAL_FILE_READ_BYTES)
 					.describe("Maximum number of bytes to read."),
+				contentType: z
+					.enum(["text", "image"])
+					.default("text")
+					.describe(
+						"Content to read. Use image for screenshots, photos, charts, diagrams, or OCR.",
+					),
+				prompt: z
+					.string()
+					.optional()
+					.describe("Optional specific question to answer about an image."),
+				detail: z
+					.enum(["auto", "low", "high"])
+					.default("auto")
+					.describe("Image detail level. Use high for OCR or small UI text."),
 			}),
+			toModelOutput: readLocalFileOutputForModel,
 		}),
 		ui: {
 			groupKey: "local-folder",
@@ -67,41 +82,10 @@ const localFolderToolCatalog = Object.freeze({
 			subtitleKeys: ["relativePath"],
 		},
 	},
-	inspect_local_image: {
-		buildConfig: ({ rootSchema }) => ({
-			description:
-				"Inspect an image inside a local folder explicitly shared by the desktop user. Use this to describe a screenshot/photo/image, extract visible text, read charts, or answer questions about a specific image file.",
-			inputSchema: z.object({
-				rootIndex: rootSchema.describe(
-					"Shared folder index from the system context.",
-				),
-				relativePath: z
-					.string()
-					.min(1)
-					.describe("Image file path relative to the shared folder root."),
-				prompt: z
-					.string()
-					.optional()
-					.describe("Optional specific question to answer about the image."),
-				detail: z
-					.enum(["auto", "low", "high"])
-					.default("auto")
-					.describe("Image detail level. Use high for OCR or small UI text."),
-			}),
-			toModelOutput: inspectedLocalImageOutputForModel,
-		}),
-		ui: {
-			groupKey: "local-folder",
-			icon: "file-image",
-			running: "Inspecting local image",
-			complete: "Inspected local image",
-			subtitleKeys: ["relativePath"],
-		},
-	},
-	search_local_images: {
+	search_local_files: {
 		buildConfig: ({ maxImageSearchResults, rootSchema }) => ({
 			description:
-				"Find and inspect candidate images inside a local folder explicitly shared by the desktop user. Use this when the user asks to find screenshots, photos, diagrams, images containing text, or images matching a visual description.",
+				"Search files inside a local folder explicitly shared by the desktop user. Text search matches file names and text-like contents. Image search finds and inspects candidate screenshots, photos, charts, diagrams, visible text, or visual descriptions.",
 			inputSchema: z.object({
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
@@ -113,35 +97,22 @@ const localFolderToolCatalog = Object.freeze({
 				query: z
 					.string()
 					.min(1)
-					.describe("Semantic image search query or visible text to find."),
+					.describe("Text, filename, visible text, or visual concept to find."),
+				contentType: z
+					.enum(["text", "image"])
+					.default("text")
+					.describe(
+						"Search mode. Use image for screenshots, photos, charts, diagrams, OCR, or visual meaning.",
+					),
 				maxResults: z
 					.number()
 					.int()
 					.min(1)
 					.max(maxImageSearchResults)
 					.default(5)
-					.describe("Maximum number of matching images to return."),
+					.describe("Maximum number of image candidates to return."),
 			}),
-			toModelOutput: searchedLocalImagesOutputForModel,
-		}),
-		ui: {
-			groupKey: "local-folder",
-			icon: "file-image",
-			running: "Searching local images",
-			complete: "Searched local images",
-			subtitleKeys: ["query"],
-		},
-	},
-	search_local_files: {
-		buildConfig: ({ rootSchema }) => ({
-			description:
-				"Search file names and text-like file contents inside a local folder explicitly shared by the desktop user.",
-			inputSchema: z.object({
-				rootIndex: rootSchema.describe(
-					"Shared folder index from the system context.",
-				),
-				query: z.string().min(1).describe("Case-insensitive text to find."),
-			}),
+			toModelOutput: searchLocalFilesOutputForModel,
 		}),
 		ui: {
 			groupKey: "local-folder",
@@ -176,18 +147,6 @@ const localFolderToolCatalog = Object.freeze({
 			subtitleKeys: ["command"],
 		},
 	},
-	get_shared_local_folders: {
-		buildConfig: () => ({
-			description: "Return the local folders shared with this chat request.",
-			inputSchema: z.object({}),
-		}),
-		ui: {
-			groupKey: "local-folder",
-			icon: "folder",
-			running: "Checking shared folders",
-			complete: "Checked shared folders",
-		},
-	},
 });
 
 export const LOCAL_FOLDER_TOOL_NAMES = Object.freeze(
@@ -211,8 +170,8 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"When the user asks about a shared local path, folder contents, local file, screenshot, image, or text transcript file inside a shared folder, use the local folder tools before answering. Do not use connected app tools such as Notion for local filesystem questions unless the user explicitly asks about those connected apps.",
 				"Do not say you cannot access the folder, and do not ask the user to run terminal commands, unless a local folder tool fails or the needed path is outside the shared folders.",
 				"For broad exploration, use run_local_command. It runs cross-platform virtual Bash with the selected shared folder as its working directory. Reads reflect the live shared folder; writes are temporary copy-on-write changes discarded after the call. Reads outside the folder, symlink traversal, private-network access, and native host executables are blocked. Public HTTP(S) requests, sandboxed JavaScript, sandboxed Python, and in-memory SQLite are available.",
-				"Use structured local tools for direct folder listing, bounded text reads, and image inspection. Use read_local_file byte ranges when a text file is larger than one response.",
-				"For local images, use inspect_local_image for a specific image and search_local_images when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
+				"Use structured local tools for direct folder listing, bounded text reads, image inspection, and file search. Use read_local_file byte ranges when a text file is larger than one response.",
+				"For local images, use read_local_file with contentType image for a specific image and search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"Shared local folders:",
 				...roots.map((root, index) => `${index}: ${root.name} (${root.path})`),
 			].join("\n");

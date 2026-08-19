@@ -49,19 +49,22 @@ describe("local folder tools", () => {
 		expect(context).toContain("Public HTTP(S) requests");
 	});
 
-	it("exposes local image inspection and semantic search tools", async () => {
+	it("folds local image inspection and search into the file tools", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
 		try {
 			await writeFile(join(directory, "notes.txt"), "not an image");
 
 			const tools = await buildToolsForDirectory(directory);
 
-			expect(Object.keys(tools)).toContain("inspect_local_image");
-			expect(Object.keys(tools)).toContain("search_local_images");
+			expect(Object.keys(tools)).not.toContain("inspect_local_image");
+			expect(Object.keys(tools)).not.toContain("search_local_images");
+			expect(Object.keys(tools)).toContain("read_local_file");
+			expect(Object.keys(tools)).toContain("search_local_files");
 			expect(Object.keys(tools)).not.toContain("transcribe_local_audio");
 			await expect(
-				tools.inspect_local_image.execute?.(
+				tools.read_local_file.execute?.(
 					{
+						contentType: "image",
 						rootIndex: 0,
 						relativePath: "notes.txt",
 					},
@@ -93,8 +96,9 @@ describe("local folder tools", () => {
 				},
 			);
 
-			const result = await tools.inspect_local_image.execute?.(
+			const result = await tools.read_local_file.execute?.(
 				{
+					contentType: "image",
 					detail: "high",
 					prompt: "Read the title",
 					rootIndex: 0,
@@ -113,6 +117,45 @@ describe("local folder tools", () => {
 					storageId: "storage_screen",
 				},
 				path: "screen.png",
+			});
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("searches and stores image candidates through search_local_files", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
+		try {
+			const image = Buffer.from([
+				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+			]);
+			await writeFile(join(directory, "screenshot.png"), image);
+			const tools = await buildToolsForDirectory(directory);
+
+			const result = await tools.search_local_files.execute?.(
+				{
+					contentType: "image",
+					maxResults: 1,
+					query: "screenshot",
+					relativePath: ".",
+					rootIndex: 0,
+				},
+				{ messages: [], toolCallId: "image-search" },
+			);
+
+			expect(result).toMatchObject({
+				results: [
+					{
+						file: {
+							filename: "screenshot.png",
+							mediaType: "image/png",
+							storageId: "storage_test",
+						},
+						path: "screenshot.png",
+					},
+				],
+				totalImageCount: 1,
+				truncated: false,
 			});
 		} finally {
 			await rm(directory, { force: true, recursive: true });

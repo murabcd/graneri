@@ -2,9 +2,9 @@ import { convertToModelMessages, type UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
 	getLocalImageUploadCount,
-	inspectedLocalImageOutputForModel,
+	readLocalFileOutputForModel,
 	resolveLocalImageToolOutput,
-	searchedLocalImagesOutputForModel,
+	searchLocalFilesOutputForModel,
 } from "../src/local-folder-image-contract.mjs";
 import { buildClientLocalFolderTools } from "../src/local-folder-tools.mjs";
 
@@ -15,17 +15,17 @@ const pendingFile = {
 };
 
 describe("local folder image contract", () => {
-	it("allocates upload capacity only for image tools", () => {
+	it("allocates upload capacity only for image-mode file tools", () => {
 		expect(
 			getLocalImageUploadCount({
-				input: {},
-				toolName: "inspect_local_image",
+				input: { contentType: "image" },
+				toolName: "read_local_file",
 			}),
 		).toBe(1);
 		expect(
 			getLocalImageUploadCount({
-				input: { maxResults: 3 },
-				toolName: "search_local_images",
+				input: { contentType: "image", maxResults: 3 },
+				toolName: "search_local_files",
 			}),
 		).toBe(3);
 		expect(
@@ -34,10 +34,35 @@ describe("local folder image contract", () => {
 				toolName: "read_local_file",
 			}),
 		).toBe(0);
+		expect(
+			getLocalImageUploadCount({
+				input: { contentType: "text", maxResults: 3 },
+				toolName: "search_local_files",
+			}),
+		).toBe(0);
+	});
+
+	it("preserves ordinary text outputs as JSON model results", () => {
+		const readOutput = { content: "meeting notes" };
+		const searchOutput = { matches: [{ path: "meeting.txt" }] };
+
+		expect(
+			readLocalFileOutputForModel({
+				input: { contentType: "text" },
+				output: readOutput,
+			}),
+		).toEqual({ type: "json", value: readOutput });
+		expect(
+			searchLocalFilesOutputForModel({
+				input: { contentType: "text" },
+				output: searchOutput,
+			}),
+		).toEqual({ type: "json", value: searchOutput });
 	});
 
 	it("resolves desktop uploads and emits canonical multimodal image output", async () => {
 		const resolved = await resolveLocalImageToolOutput({
+			input: { contentType: "image" },
 			output: {
 				file: pendingFile,
 				path: "screens/screen.png",
@@ -45,7 +70,7 @@ describe("local folder image contract", () => {
 			},
 			resolveStorageUrl: async (storageId) =>
 				`https://files.example.test/${storageId}`,
-			toolName: "inspect_local_image",
+			toolName: "read_local_file",
 		});
 
 		expect(resolved).toMatchObject({
@@ -57,8 +82,12 @@ describe("local folder image contract", () => {
 			path: "screens/screen.png",
 		});
 		expect(
-			inspectedLocalImageOutputForModel({
-				input: { detail: "high", prompt: "Read the dialog title." },
+			readLocalFileOutputForModel({
+				input: {
+					contentType: "image",
+					detail: "high",
+					prompt: "Read the dialog title.",
+				},
 				output: resolved,
 			}),
 		).toMatchObject({
@@ -76,6 +105,7 @@ describe("local folder image contract", () => {
 
 	it("interleaves image-search paths and files for hosted reasoning", async () => {
 		const resolved = await resolveLocalImageToolOutput({
+			input: { contentType: "image", maxResults: 1 },
 			output: {
 				candidateImageCount: 1,
 				path: "screens",
@@ -90,11 +120,15 @@ describe("local folder image contract", () => {
 				truncated: true,
 			},
 			resolveStorageUrl: async () => "https://files.example.test/screen",
-			toolName: "search_local_images",
+			toolName: "search_local_files",
 		});
 
-		const modelOutput = searchedLocalImagesOutputForModel({
-			input: { query: "billing dialog" },
+		const modelOutput = searchLocalFilesOutputForModel({
+			input: {
+				contentType: "image",
+				maxResults: 1,
+				query: "billing dialog",
+			},
 			output: resolved,
 		});
 		expect(modelOutput).toMatchObject({
@@ -119,6 +153,7 @@ describe("local folder image contract", () => {
 			parts: [
 				{
 					input: {
+						contentType: "image",
 						detail: "high",
 						prompt: "Read the dialog title.",
 						relativePath: "screen.png",
@@ -139,7 +174,7 @@ describe("local folder image contract", () => {
 					},
 					state: "output-available",
 					toolCallId: "call-image",
-					type: "tool-inspect_local_image",
+					type: "tool-read_local_file",
 				},
 			],
 			role: "assistant",
@@ -152,7 +187,7 @@ describe("local folder image contract", () => {
 					{
 						input: message.parts[0].input,
 						toolCallId: "call-image",
-						toolName: "inspect_local_image",
+						toolName: "read_local_file",
 						type: "tool-call",
 					},
 				],
@@ -183,7 +218,7 @@ describe("local folder image contract", () => {
 							],
 						},
 						toolCallId: "call-image",
-						toolName: "inspect_local_image",
+						toolName: "read_local_file",
 						type: "tool-result",
 					},
 				],

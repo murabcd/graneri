@@ -51,12 +51,13 @@ describe("desktop local tool calls", () => {
 			toolCall: {
 				dynamic: false,
 				input: {
+					contentType: "image",
 					detail: "high",
 					relativePath: "screen.png",
 					rootIndex: 0,
 				},
 				toolCallId: "call-image",
-				toolName: "inspect_local_image",
+				toolName: "read_local_file",
 				type: "tool-call",
 			},
 		});
@@ -68,7 +69,7 @@ describe("desktop local tool calls", () => {
 		expect(request).toMatchObject({
 			imageUploadUrls: ["https://example.convex.cloud/api/storage/upload"],
 			localFolders,
-			toolName: "inspect_local_image",
+			toolName: "read_local_file",
 		});
 		expect(addToolOutput).toHaveBeenCalledWith({
 			options: { body: { localFolders } },
@@ -83,7 +84,7 @@ describe("desktop local tool calls", () => {
 				path: "screen.png",
 				sizeBytes: 128,
 			},
-			tool: "inspect_local_image",
+			tool: "read_local_file",
 			toolCallId: "call-image",
 		});
 	});

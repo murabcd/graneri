@@ -25,13 +25,6 @@ const withDuration = async (operation) => {
 	};
 };
 
-const toRootSummary = (root, index) => ({
-	index,
-	name: root.name,
-	path: root.path,
-	source: root.source,
-});
-
 const inspectLocalImage = async ({
 	relativePath,
 	rootIndex,
@@ -123,46 +116,46 @@ export const buildLocalFolderTools = ({
 		list_local_directory: async ({ rootIndex, relativePath }) =>
 			withDuration(() => workspace.listDirectory({ relativePath, rootIndex })),
 		read_local_file: async ({
+			contentType,
 			lengthBytes,
 			offsetBytes,
 			rootIndex,
 			relativePath,
 		}) =>
 			withDuration(() =>
-				workspace.readTextFile({
-					lengthBytes,
-					offsetBytes,
-					relativePath,
-					rootIndex,
-				}),
+				contentType === "image"
+					? inspectLocalImage({
+							relativePath,
+							rootIndex,
+							storeLocalImage,
+							workspace,
+						})
+					: workspace.readTextFile({
+							lengthBytes,
+							offsetBytes,
+							relativePath,
+							rootIndex,
+						}),
 			),
-		inspect_local_image: async ({ rootIndex, relativePath }) =>
-			withDuration(() =>
-				inspectLocalImage({
-					relativePath,
-					rootIndex,
-					storeLocalImage,
-					workspace,
-				}),
-			),
-		search_local_images: async ({
+		search_local_files: async ({
+			contentType,
 			maxResults,
 			query,
 			relativePath,
 			rootIndex,
 		}) =>
 			withDuration(() =>
-				searchLocalImages({
-					maxResults,
-					query,
-					relativePath,
-					rootIndex,
-					storeLocalImage,
-					workspace,
-				}),
+				contentType === "image"
+					? searchLocalImages({
+							maxResults,
+							query,
+							relativePath,
+							rootIndex,
+							storeLocalImage,
+							workspace,
+						})
+					: workspace.searchFiles({ query, relativePath, rootIndex }),
 			),
-		search_local_files: async ({ rootIndex, query }) =>
-			withDuration(() => workspace.searchFiles({ query, rootIndex })),
 		run_local_command: async ({ rootIndex, command }) =>
 			withDuration(async () =>
 				parseLocalCommandExecutionResult(
@@ -172,10 +165,6 @@ export const buildLocalFolderTools = ({
 					}),
 				),
 			),
-		get_shared_local_folders: async () =>
-			withDuration(async () => ({
-				folders: workspace.roots.map(toRootSummary),
-			})),
 	};
 
 	return Object.fromEntries(

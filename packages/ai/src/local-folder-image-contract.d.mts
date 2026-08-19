@@ -9,6 +9,7 @@ export declare const getLocalImageUploadCount: (args: {
 }) => number;
 
 export declare const resolveLocalImageToolOutput: (args: {
+	input: unknown;
 	output: unknown;
 	resolveStorageUrl: (
 		storageId: GenericId<"_storage">,
@@ -16,12 +17,12 @@ export declare const resolveLocalImageToolOutput: (args: {
 	toolName: string;
 }) => Promise<unknown>;
 
-export declare const inspectedLocalImageOutputForModel: (args: {
+export declare const readLocalFileOutputForModel: (args: {
 	input: unknown;
 	output: unknown;
 }) => ToolResultOutput;
 
-export declare const searchedLocalImagesOutputForModel: (args: {
+export declare const searchLocalFilesOutputForModel: (args: {
 	input: unknown;
 	output: unknown;
 }) => ToolResultOutput;

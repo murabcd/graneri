@@ -425,15 +425,22 @@ export const createLocalWorkspaceSession = (roots) => {
 		};
 	};
 
-	const searchFiles = async ({ query, rootIndex }) => {
+	const searchFiles = async ({ query, relativePath = ".", rootIndex }) => {
 		const needle = query.trim().toLowerCase();
 		if (!needle) {
 			throw new Error("Search query is required.");
 		}
 
 		const root = getRoot(rootIndex);
-		const { path: rootPath } = await resolveExistingPath({ rootIndex });
-		const walk = await walkFiles({ directoryPath: rootPath, root });
+		const { path: directoryPath } = await resolveExistingPath({
+			relativePath,
+			rootIndex,
+		});
+		const directoryStat = await stat(directoryPath);
+		if (!directoryStat.isDirectory()) {
+			throw new Error("Search path is not a directory.");
+		}
+		const walk = await walkFiles({ directoryPath, root });
 		const matches = [];
 
 		for (const relativePath of walk.files) {

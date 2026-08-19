@@ -119,6 +119,7 @@ const executeDesktopLocalToolCall = async ({
 		output?: unknown;
 	};
 	return await resolveLocalImageToolOutput({
+		input: toolCall.input,
 		output: payload.output,
 		resolveStorageUrl: imageStorage.getUrl,
 		toolName: toolCall.toolName,

@@ -302,10 +302,14 @@ test("local image tool continuations retain and release stored image bytes", asy
 			role: "assistant",
 			partsJson: JSON.stringify([
 				{
-					input: { rootIndex: 0, relativePath: "screen.png" },
+					input: {
+						contentType: "image",
+						rootIndex: 0,
+						relativePath: "screen.png",
+					},
 					state: "input-available",
 					toolCallId: "call-image",
-					type: "tool-inspect_local_image",
+					type: "tool-read_local_file",
 				},
 			]),
 			text: "",
@@ -321,7 +325,11 @@ test("local image tool continuations retain and release stored image bytes", asy
 			role: "assistant",
 			partsJson: JSON.stringify([
 				{
-					input: { rootIndex: 0, relativePath: "tampered.png" },
+					input: {
+						contentType: "image",
+						rootIndex: 0,
+						relativePath: "tampered.png",
+					},
 					output: {
 						file: {
 							filename: "screen.png",
@@ -335,7 +343,7 @@ test("local image tool continuations retain and release stored image bytes", asy
 					},
 					state: "output-available",
 					toolCallId: "call-image",
-					type: "tool-inspect_local_image",
+					type: "tool-read_local_file",
 				},
 			]),
 			text: "",

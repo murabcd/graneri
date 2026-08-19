@@ -944,16 +944,18 @@ ignored-directory policy, and media-aware local search. Shared roots are
 canonical real paths, one chat may expose at most four unique roots, and an
 invalid or stale root fails the request visibly instead of being dropped. The
 AI SDK tool builder is only an adapter over this workspace interface and the
-desktop image-storage and command capabilities. Structured file reads detect
-content from bounded bytes rather than trusting extensions and expose explicit
-byte ranges for large UTF-8 text files.
-Local image tools keep discovery and bounded byte access in Electron, then use
-authenticated Convex upload URLs to cross the hosted boundary. Their client
-tool outputs contain storage-backed image references, and the hosted AI SDK
-tool declaration converts those references into multimodal model output for the
-next chat step. Electron neither constructs an OpenAI model nor consumes an
-OpenAI key. Chat attachment reference tracking owns those temporary image bytes
-until the last referencing chat message is removed.
+desktop image-storage and command capabilities. `read_local_file` detects
+content from bounded bytes rather than trusting extensions: text mode exposes
+explicit byte ranges for large UTF-8 files, while image mode inspects one
+supported image. `search_local_files` similarly owns both filename/text-content
+search and bounded image discovery. Image reads and searches keep discovery and
+byte access in Electron, then use authenticated Convex upload URLs to cross the
+hosted boundary. Their client tool outputs contain storage-backed image
+references, and the hosted AI SDK tool declaration converts those references
+into multimodal model output for the next chat step. Electron neither constructs
+an OpenAI model nor consumes an OpenAI key. Chat attachment reference tracking
+owns those temporary image bytes until the last referencing chat message is
+removed.
 `run_local_command` executes one cross-platform virtual Bash environment from a
 selected root. The Electron main process creates a fresh `just-bash` `OverlayFs`
 environment for every call and executes the command directly; the shared AI

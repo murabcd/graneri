@@ -18,12 +18,12 @@ const resolvedImageFileSchema = z.object({
 	type: z.literal("file"),
 	url: z.url(),
 });
-const pendingInspectedImageOutputSchema = z.object({
+const pendingImageReadOutputSchema = z.object({
 	file: pendingImageFileSchema,
 	path: z.string(),
 	sizeBytes: z.number().int().nonnegative(),
 });
-const resolvedInspectedImageOutputSchema = z.object({
+const resolvedImageReadOutputSchema = z.object({
 	file: resolvedImageFileSchema,
 	path: z.string(),
 	sizeBytes: z.number().int().nonnegative(),
@@ -54,7 +54,10 @@ const resolvedImageSearchOutputSchema = z.object({
 	totalImageCount: z.number().int().nonnegative(),
 	truncated: z.boolean(),
 });
-const imageSearchInputSchema = z.object({
+const localFileContentInputSchema = z.object({
+	contentType: z.enum(["text", "image"]).default("text"),
+});
+const imageSearchInputSchema = localFileContentInputSchema.extend({
 	maxResults: z.number().int().min(1).max(MAX_LOCAL_IMAGE_UPLOADS).default(5),
 });
 
@@ -76,28 +79,38 @@ const resolveImageFile = async (file, resolveStorageUrl) => {
 };
 
 export const getLocalImageUploadCount = ({ input, toolName }) => {
-	if (toolName === "inspect_local_image") {
-		return 1;
+	if (toolName === "read_local_file") {
+		return localFileContentInputSchema.parse(input).contentType === "image"
+			? 1
+			: 0;
 	}
-	if (toolName === "search_local_images") {
-		return imageSearchInputSchema.parse(input).maxResults;
+	if (toolName === "search_local_files") {
+		const parsed = imageSearchInputSchema.parse(input);
+		return parsed.contentType === "image" ? parsed.maxResults : 0;
 	}
 	return 0;
 };
 
 export const resolveLocalImageToolOutput = async ({
+	input,
 	output,
 	resolveStorageUrl,
 	toolName,
 }) => {
-	if (toolName === "inspect_local_image") {
-		const parsed = pendingInspectedImageOutputSchema.parse(output);
+	if (
+		toolName === "read_local_file" &&
+		localFileContentInputSchema.parse(input).contentType === "image"
+	) {
+		const parsed = pendingImageReadOutputSchema.parse(output);
 		return {
 			...parsed,
 			file: await resolveImageFile(parsed.file, resolveStorageUrl),
 		};
 	}
-	if (toolName === "search_local_images") {
+	if (
+		toolName === "search_local_files" &&
+		imageSearchInputSchema.parse(input).contentType === "image"
+	) {
 		const parsed = pendingImageSearchOutputSchema.parse(output);
 		return {
 			...parsed,
@@ -125,8 +138,12 @@ const createImageDetailProviderOptions = (detail) =>
 		? { openai: { imageDetail: detail } }
 		: undefined;
 
-export const inspectedLocalImageOutputForModel = ({ input, output }) => {
-	const parsed = resolvedInspectedImageOutputSchema.parse(output);
+export const readLocalFileOutputForModel = ({ input, output }) => {
+	if (localFileContentInputSchema.parse(input).contentType !== "image") {
+		return { type: "json", value: output };
+	}
+
+	const parsed = resolvedImageReadOutputSchema.parse(output);
 	const prompt = typeof input?.prompt === "string" ? input.prompt.trim() : "";
 
 	return {
@@ -146,7 +163,11 @@ export const inspectedLocalImageOutputForModel = ({ input, output }) => {
 	};
 };
 
-export const searchedLocalImagesOutputForModel = ({ input, output }) => {
+export const searchLocalFilesOutputForModel = ({ input, output }) => {
+	if (imageSearchInputSchema.parse(input).contentType !== "image") {
+		return { type: "json", value: output };
+	}
+
 	const parsed = resolvedImageSearchOutputSchema.parse(output);
 	const query = typeof input?.query === "string" ? input.query.trim() : "";
 	const value = [

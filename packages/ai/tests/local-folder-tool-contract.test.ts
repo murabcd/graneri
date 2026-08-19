@@ -49,6 +49,9 @@ const completedCommandMessage = {
 describe("local folder tool contract", () => {
 	it("owns the canonical local tool name catalog", () => {
 		expect(isLocalFolderToolName("list_local_directory")).toBe(true);
+		expect(isLocalFolderToolName("get_shared_local_folders")).toBe(false);
+		expect(isLocalFolderToolName("inspect_local_image")).toBe(false);
+		expect(isLocalFolderToolName("search_local_images")).toBe(false);
 		expect(isLocalFolderToolName("search_notes")).toBe(false);
 
 		const configs = buildLocalFolderToolConfigs([
