@@ -3,7 +3,13 @@ import {
 	createCanonicalLocalFolderToolContinuation,
 	isLocalFolderToolContinuationMessage,
 	isLocalFolderToolName,
+	LOCAL_FOLDER_TOOL_NAMES,
 } from "../src/local-folder-tool-contract.mjs";
+import {
+	buildLocalFolderToolConfigs,
+	LOCAL_FOLDER_TOOL_UI_METADATA,
+} from "../src/local-folder-tool-definitions.mjs";
+import { toolUiMetadata } from "../src/tool-ui-metadata.mjs";
 
 const completedMessage = {
 	id: "assistant-1",
@@ -23,6 +29,16 @@ describe("local folder tool contract", () => {
 	it("owns the canonical local tool name catalog", () => {
 		expect(isLocalFolderToolName("list_local_directory")).toBe(true);
 		expect(isLocalFolderToolName("search_notes")).toBe(false);
+
+		const configs = buildLocalFolderToolConfigs([
+			{ name: "shared", path: "/Users/test/Documents/shared" },
+		]);
+		expect(Object.keys(configs)).toEqual(LOCAL_FOLDER_TOOL_NAMES);
+		for (const toolName of LOCAL_FOLDER_TOOL_NAMES) {
+			expect(toolUiMetadata[toolName]).toBe(
+				LOCAL_FOLDER_TOOL_UI_METADATA[toolName],
+			);
+		}
 	});
 
 	it("recognizes only completed local folder tool continuations", () => {

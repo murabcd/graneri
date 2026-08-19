@@ -933,6 +933,11 @@ If one AI SDK step contains both a completed desktop-local tool and a tool
 approval response, request preparation must compose both strict canonicalizers
 against the same stored assistant message so neither client-controlled copy of
 the original tool input is trusted and neither continuation result is dropped.
+The local-folder tool definition catalog is authoritative for each tool's name,
+input validation, model-facing description, multimodal output conversion, and
+UI metadata. Hosted declarations, continuation recognition, desktop executor
+attachment, and tool presentation derive from that catalog; adding a local tool
+must not require another parallel name or metadata registry.
 `createLocalWorkspaceSession` is the canonical owner of shared-root validation,
 root lookup, symlink-safe containment, no-follow file access, traversal limits,
 ignored-directory policy, and media-aware local search. Shared roots are

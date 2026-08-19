@@ -118,76 +118,72 @@ export const buildLocalFolderTools = ({
 		maxImageSearchResults: MAX_LOCAL_IMAGE_UPLOADS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
-
-	return {
-		list_local_directory: tool({
-			...configs.list_local_directory,
-			execute: async ({ rootIndex, relativePath }) =>
-				withDuration(() =>
-					workspace.listDirectory({ relativePath, rootIndex }),
-				),
-		}),
-		read_local_file: tool({
-			...configs.read_local_file,
-			execute: async ({ lengthBytes, offsetBytes, rootIndex, relativePath }) =>
-				withDuration(() =>
-					workspace.readTextFile({
-						lengthBytes,
-						offsetBytes,
-						relativePath,
-						rootIndex,
-					}),
-				),
-		}),
-		inspect_local_image: tool({
-			...configs.inspect_local_image,
-			execute: async ({ rootIndex, relativePath }) =>
-				withDuration(() =>
-					inspectLocalImage({
-						relativePath,
-						rootIndex,
-						storeLocalImage,
-						workspace,
-					}),
-				),
-		}),
-		search_local_images: tool({
-			...configs.search_local_images,
-			execute: async ({ maxResults, query, relativePath, rootIndex }) =>
-				withDuration(() =>
-					searchLocalImages({
-						maxResults,
-						query,
-						relativePath,
-						rootIndex,
-						storeLocalImage,
-						workspace,
-					}),
-				),
-		}),
-		search_local_files: tool({
-			...configs.search_local_files,
-			execute: async ({ rootIndex, query }) =>
-				withDuration(() => workspace.searchFiles({ query, rootIndex })),
-		}),
-		run_local_command: tool({
-			...configs.run_local_command,
-			execute: async ({ rootIndex, command }) =>
-				withDuration(() =>
-					executeLocalCommand({
-						command,
-						rootPath: workspace.getRoot(rootIndex).path,
-					}),
-				),
-		}),
-		get_shared_local_folders: tool({
-			...configs.get_shared_local_folders,
-			execute: async () =>
-				withDuration(async () => ({
-					folders: workspace.roots.map(toRootSummary),
-				})),
-		}),
+	const executors = {
+		list_local_directory: async ({ rootIndex, relativePath }) =>
+			withDuration(() => workspace.listDirectory({ relativePath, rootIndex })),
+		read_local_file: async ({
+			lengthBytes,
+			offsetBytes,
+			rootIndex,
+			relativePath,
+		}) =>
+			withDuration(() =>
+				workspace.readTextFile({
+					lengthBytes,
+					offsetBytes,
+					relativePath,
+					rootIndex,
+				}),
+			),
+		inspect_local_image: async ({ rootIndex, relativePath }) =>
+			withDuration(() =>
+				inspectLocalImage({
+					relativePath,
+					rootIndex,
+					storeLocalImage,
+					workspace,
+				}),
+			),
+		search_local_images: async ({
+			maxResults,
+			query,
+			relativePath,
+			rootIndex,
+		}) =>
+			withDuration(() =>
+				searchLocalImages({
+					maxResults,
+					query,
+					relativePath,
+					rootIndex,
+					storeLocalImage,
+					workspace,
+				}),
+			),
+		search_local_files: async ({ rootIndex, query }) =>
+			withDuration(() => workspace.searchFiles({ query, rootIndex })),
+		run_local_command: async ({ rootIndex, command }) =>
+			withDuration(() =>
+				executeLocalCommand({
+					command,
+					rootPath: workspace.getRoot(rootIndex).path,
+				}),
+			),
+		get_shared_local_folders: async () =>
+			withDuration(async () => ({
+				folders: workspace.roots.map(toRootSummary),
+			})),
 	};
+
+	return Object.fromEntries(
+		Object.entries(configs).map(([name, config]) => {
+			const execute = executors[name];
+			if (!execute) {
+				throw new Error(`Local folder tool ${name} has no desktop executor.`);
+			}
+			return [name, tool({ ...config, execute })];
+		}),
+	);
 };
 
 export const buildClientLocalFolderTools = (roots) => {

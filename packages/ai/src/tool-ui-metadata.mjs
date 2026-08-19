@@ -1,3 +1,5 @@
+import { LOCAL_FOLDER_TOOL_UI_METADATA } from "./local-folder-tool-definitions.mjs";
+
 export const toolUiMetadata = {
 	create_automation: {
 		groupKey: "automation",
@@ -119,54 +121,7 @@ export const toolUiMetadata = {
 		complete: "Searched Jira",
 		subtitleKeys: ["query", "jql", "q"],
 	},
-	get_shared_local_folders: {
-		groupKey: "local-folder",
-		icon: "folder",
-		running: "Checking shared folders",
-		complete: "Checked shared folders",
-	},
-	list_local_directory: {
-		groupKey: "local-folder",
-		icon: "folder-open",
-		running: "Reading local folder",
-		complete: "Read local folder",
-		subtitleKeys: ["relativePath"],
-	},
-	read_local_file: {
-		groupKey: "local-folder",
-		icon: "file-text",
-		running: "Reading local file",
-		complete: "Read local file",
-		subtitleKeys: ["relativePath"],
-	},
-	inspect_local_image: {
-		groupKey: "local-folder",
-		icon: "file-image",
-		running: "Inspecting local image",
-		complete: "Inspected local image",
-		subtitleKeys: ["relativePath"],
-	},
-	search_local_images: {
-		groupKey: "local-folder",
-		icon: "file-image",
-		running: "Searching local images",
-		complete: "Searched local images",
-		subtitleKeys: ["query"],
-	},
-	search_local_files: {
-		groupKey: "local-folder",
-		icon: "file-search",
-		running: "Searching local files",
-		complete: "Searched local files",
-		subtitleKeys: ["query"],
-	},
-	run_local_command: {
-		groupKey: "local-folder",
-		icon: "terminal",
-		running: "Exploring local folder",
-		complete: "Explored local folder",
-		subtitleKeys: ["command"],
-	},
+	...LOCAL_FOLDER_TOOL_UI_METADATA,
 	web_search: {
 		groupKey: "search",
 		icon: "globe",

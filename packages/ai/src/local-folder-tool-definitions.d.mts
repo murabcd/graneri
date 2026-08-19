@@ -17,9 +17,30 @@ export declare const MAX_LOCAL_FOLDER_ROOTS: number;
 export declare const MAX_LOCAL_FILE_READ_BYTES: number;
 export declare const MAX_LOCAL_COMMAND_LENGTH: number;
 
+export declare const LOCAL_FOLDER_TOOL_NAMES: readonly string[];
+export declare const LOCAL_FOLDER_TOOL_UI_METADATA: Readonly<
+	Record<
+		string,
+		{
+			complete: string;
+			groupKey: string;
+			icon: string;
+			running: string;
+			subtitleKeys?: string[];
+		}
+	>
+>;
+
 export declare const buildLocalFolderSystemContext: (
 	roots: LocalFolderToolRoot[],
 ) => string;
+
+type LocalFolderToolConfig = {
+	description: string;
+	inputSchema: z.ZodType;
+	providerOptions?: unknown;
+	toModelOutput?: ToModelOutput;
+};
 
 export declare const buildLocalFolderToolConfigs: (
 	roots: LocalFolderToolRoot[],
@@ -27,35 +48,4 @@ export declare const buildLocalFolderToolConfigs: (
 		maxImageSearchResults?: number;
 		providerOptions?: unknown;
 	},
-) => {
-	list_local_directory: {
-		description: string;
-		inputSchema: z.ZodType;
-	};
-	read_local_file: {
-		description: string;
-		inputSchema: z.ZodType;
-	};
-	inspect_local_image: {
-		description: string;
-		inputSchema: z.ZodType;
-		toModelOutput: ToModelOutput;
-	};
-	search_local_images: {
-		description: string;
-		inputSchema: z.ZodType;
-		toModelOutput: ToModelOutput;
-	};
-	search_local_files: {
-		description: string;
-		inputSchema: z.ZodType;
-	};
-	run_local_command: {
-		description: string;
-		inputSchema: z.ZodType;
-	};
-	get_shared_local_folders: {
-		description: string;
-		inputSchema: z.ZodType;
-	};
-};
+) => Record<string, LocalFolderToolConfig>;
