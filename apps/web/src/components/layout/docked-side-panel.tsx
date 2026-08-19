@@ -8,7 +8,7 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { markPanelLayoutTransition } from "@workspace/ui/lib/panel-layout-activity";
 import { cn } from "@workspace/ui/lib/utils";
-import { Pin } from "lucide-react";
+import { Minus, Pin } from "lucide-react";
 import * as React from "react";
 import { ResizableSidePanelHandle } from "@/components/layout/resizable-side-panel";
 import type { DockedPanelSide } from "@/components/layout/use-docked-panel-widths";
@@ -62,6 +62,41 @@ export function DockedPanelPinButton({
 				className="pointer-events-none select-none"
 			>
 				{isPinned ? `Unpin ${label}` : `Pin ${label}`}
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+
+export function DockedPanelHideButton({
+	label,
+	onHide,
+}: {
+	label: string;
+	onHide: () => void;
+}) {
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-sm"
+					aria-label={label}
+					onClick={(event) => {
+						event.currentTarget.blur();
+						onHide();
+					}}
+				>
+					<Minus className="size-4" />
+				</Button>
+			</TooltipTrigger>
+			<TooltipContent
+				side="bottom"
+				align="end"
+				sideOffset={8}
+				className="pointer-events-none select-none"
+			>
+				{label}
 			</TooltipContent>
 		</Tooltip>
 	);

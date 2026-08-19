@@ -55,7 +55,6 @@ import {
 	ChevronRight,
 	Clock3,
 	FileText,
-	Minus,
 	Paperclip,
 	Plus,
 	X,
@@ -72,12 +71,14 @@ import {
 } from "@/components/layout/docked-panel-dimensions";
 import {
 	DesktopDockedSidePanel,
+	DockedPanelHideButton,
 	DockedPanelPinButton,
 } from "@/components/layout/docked-side-panel";
 import {
 	ResizableSidePanelHandle,
 	useResizableSidePanel,
 } from "@/components/layout/resizable-side-panel";
+import { useDesktopPanelPin } from "@/components/layout/use-desktop-panel-pin";
 import {
 	useDockedPanelInset,
 	useDockedPanelOverlayWidth,
@@ -158,36 +159,6 @@ const AUTOMATION_TAB: SummaryTab = {
 	id: "automation",
 	kind: "automation",
 	title: "Automation",
-};
-
-const readDesktopChatSummaryPanelPinnedState = () => {
-	if (typeof window === "undefined") {
-		return false;
-	}
-
-	try {
-		return (
-			window.localStorage.getItem(CHAT_SUMMARY_PANEL_PINNED_STORAGE_KEY) ===
-			"true"
-		);
-	} catch {
-		return false;
-	}
-};
-
-const writeDesktopChatSummaryPanelPinnedState = (isPinned: boolean) => {
-	if (typeof window === "undefined") {
-		return;
-	}
-
-	try {
-		window.localStorage.setItem(
-			CHAT_SUMMARY_PANEL_PINNED_STORAGE_KEY,
-			String(isPinned),
-		);
-	} catch {
-		// Keep the in-memory state if localStorage is unavailable.
-	}
 };
 
 const collectChatSources = (messages: UIMessage[]): SummarySource[] => {
@@ -280,9 +251,9 @@ export function ChatSummarySheet({
 }: ChatSummarySheetProps) {
 	const sidebarShell = useOptionalSidebarShell();
 	const isMobile = useIsMobile();
-	const [isPinned, setIsPinned] = React.useState(
-		readDesktopChatSummaryPanelPinnedState,
-	);
+	const { isPinned, togglePinned } = useDesktopPanelPin({
+		storageKey: CHAT_SUMMARY_PANEL_PINNED_STORAGE_KEY,
+	});
 	const { handleResizeKeyDown, handleResizeStart, isResizing, panelWidth } =
 		useResizableSidePanel({
 			isMobile,
@@ -303,11 +274,6 @@ export function ChatSummarySheet({
 		() => collectChatArtifacts(messages),
 		[messages],
 	);
-	const togglePinned = React.useCallback(() => {
-		const nextPinned = !isPinned;
-		setIsPinned(nextPinned);
-		writeDesktopChatSummaryPanelPinnedState(nextPinned);
-	}, [isPinned]);
 	const handleClose = React.useCallback(() => {
 		if (!isMobile && isPinned) {
 			togglePinned();
@@ -580,27 +546,7 @@ function ChatSummaryPanel({
 							onTogglePinned={onTogglePinned}
 						/>
 					)}
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Hide summary"
-								onClick={onClose}
-							>
-								<Minus className="size-4" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent
-							side="bottom"
-							align="end"
-							sideOffset={8}
-							className="pointer-events-none select-none"
-						>
-							Hide summary
-						</TooltipContent>
-					</Tooltip>
+					<DockedPanelHideButton label="Hide summary" onHide={onClose} />
 				</div>
 			</div>
 			{fileSearchOpen ? (

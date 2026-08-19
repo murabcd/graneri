@@ -6,16 +6,10 @@ import { optimisticRenameChat } from "@/components/chat/optimistic-rename-chat";
 import { optimisticRenameNote } from "@/components/note/optimistic-rename-note";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { logError } from "@/lib/logger";
-import { optimisticRenameProject } from "@/lib/optimistic-projects";
-import {
-	getProjectNameValidationError,
-	MAX_PROJECT_NAME_LENGTH,
-	normalizeProjectName,
-} from "@/lib/project-name";
 import { api } from "../../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
-type RenameKind = "chat" | "note" | "project";
+type RenameKind = "chat" | "note";
 
 type RenameTarget =
 	| {
@@ -27,15 +21,9 @@ type RenameTarget =
 			id: string;
 			kind: "chat";
 			title: string;
-	  }
-	| {
-			id: Id<"projects">;
-			kind: "project";
-			title: string;
 	  };
 
 type RenamePresentation = {
-	maxLength?: number;
 	placeholder: string;
 	successMessage: string;
 };
@@ -49,16 +37,10 @@ const RENAME_PRESENTATION: Record<RenameKind, RenamePresentation> = {
 		placeholder: "New note",
 		successMessage: "Note renamed",
 	},
-	project: {
-		maxLength: MAX_PROJECT_NAME_LENGTH,
-		placeholder: "Project name",
-		successMessage: "Project renamed",
-	},
 };
 
 export type BreadcrumbTitleEditorController = {
 	itemLabel: RenameKind;
-	maxLength?: number;
 	onCancel: () => void;
 	onCommit: () => void;
 	onOpen: () => void;
@@ -75,7 +57,6 @@ type BreadcrumbTitleEditorOptions = {
 	currentChatTitle: string;
 	currentNoteId: Id<"notes"> | null;
 	currentNoteTitle: string;
-	currentProject: Doc<"projects"> | null;
 	currentView: AppView;
 	onNoteTitleChange: (title: string) => void;
 };
@@ -85,7 +66,6 @@ const resolveRenameTarget = ({
 	currentChatTitle,
 	currentNoteId,
 	currentNoteTitle,
-	currentProject,
 	currentView,
 }: Omit<
 	BreadcrumbTitleEditorOptions,
@@ -108,21 +88,10 @@ const resolveRenameTarget = ({
 						title: currentChatTitle,
 					}
 				: null;
-		case "project":
-			return currentProject
-				? {
-						id: currentProject._id,
-						kind: "project",
-						title: currentProject.name,
-					}
-				: null;
 		default:
 			return null;
 	}
 };
-
-const normalizeRenameTitle = (kind: RenameKind, value: string) =>
-	kind === "project" ? normalizeProjectName(value) : value.trim();
 
 export function useBreadcrumbTitleEditor(
 	options: BreadcrumbTitleEditorOptions,
@@ -137,7 +106,6 @@ export function useBreadcrumbTitleEditor(
 		currentChatTitle,
 		currentNoteId,
 		currentNoteTitle,
-		currentProject,
 		currentView,
 		onNoteTitleChange,
 	} = options;
@@ -148,7 +116,6 @@ export function useBreadcrumbTitleEditor(
 				currentChatTitle,
 				currentNoteId,
 				currentNoteTitle,
-				currentProject,
 				currentView,
 			}),
 		[
@@ -156,7 +123,6 @@ export function useBreadcrumbTitleEditor(
 			currentChatTitle,
 			currentNoteId,
 			currentNoteTitle,
-			currentProject,
 			currentView,
 		],
 	);
@@ -180,12 +146,6 @@ export function useBreadcrumbTitleEditor(
 			);
 		},
 	);
-	const renameProject = useMutation(api.projects.rename).withOptimisticUpdate(
-		(localStore, args) => {
-			optimisticRenameProject(localStore, args.workspaceId, args.id, args.name);
-		},
-	);
-
 	const openEditor = React.useCallback(() => {
 		if (!renameTarget) {
 			return;
@@ -201,19 +161,8 @@ export function useBreadcrumbTitleEditor(
 			return;
 		}
 
-		const nextTitle = normalizeRenameTitle(renameTarget.kind, value);
-		const originalTitle = normalizeRenameTitle(
-			renameTarget.kind,
-			originalTitleRef.current,
-		);
-
-		if (renameTarget.kind === "project") {
-			const validationError = getProjectNameValidationError(nextTitle);
-			if (validationError) {
-				toast.error(validationError);
-				return;
-			}
-		}
+		const nextTitle = value.trim();
+		const originalTitle = originalTitleRef.current.trim();
 
 		if (nextTitle === originalTitle) {
 			setOpen(false);
@@ -239,13 +188,6 @@ export function useBreadcrumbTitleEditor(
 						title: nextTitle,
 					});
 					break;
-				case "project":
-					await renameProject({
-						workspaceId: activeWorkspaceId,
-						id: renameTarget.id,
-						name: nextTitle,
-					});
-					break;
 			}
 
 			originalTitleRef.current = nextTitle;
@@ -267,7 +209,6 @@ export function useBreadcrumbTitleEditor(
 		isRenaming,
 		renameChat,
 		renameNote,
-		renameProject,
 		renameTarget,
 		value,
 	]);
@@ -314,7 +255,6 @@ export function useBreadcrumbTitleEditor(
 	return {
 		editor: {
 			itemLabel: renameTarget.kind,
-			maxLength: presentation.maxLength,
 			onCancel: handleCancel,
 			onCommit: () => {
 				void commit();

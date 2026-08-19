@@ -66,8 +66,8 @@ import {
 	ProjectIdentityInput,
 } from "@/components/projects/project-appearance-picker";
 import {
-	type ProjectIdentityEditorController,
-	useProjectIdentityEditor,
+	type SidebarProjectIdentityEditorController,
+	useSidebarProjectIdentityEditor,
 } from "@/components/projects/use-project-identity-editor";
 import { logError } from "@/lib/logger";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
@@ -629,7 +629,10 @@ export function ProjectSidebarItem({
 		projectItemReducer,
 		initialProjectItemState,
 	);
-	const identityEditor = useProjectIdentityEditor({ project, workspaceId });
+	const identityEditor = useSidebarProjectIdentityEditor({
+		project,
+		workspaceId,
+	});
 	const [isRemoving, setIsRemoving] = React.useState(false);
 	const [isMovingNotesToTrash, setIsMovingNotesToTrash] = React.useState(false);
 	const isUpdatingStarRef = React.useRef(false);
@@ -801,7 +804,7 @@ function ProjectSidebarItemView({
 }: ProjectSidebarItemProps & {
 	dispatch: React.Dispatch<ProjectItemAction>;
 	hasNotes: boolean;
-	identityEditor: ProjectIdentityEditorController;
+	identityEditor: SidebarProjectIdentityEditorController;
 	isMovingNotesToTrash: boolean;
 	isRemoving: boolean;
 	onDeleteProject: () => Promise<void>;
@@ -837,7 +840,7 @@ function ProjectSidebarItemView({
 						onToggleOpen={() => onOpenChange(!open)}
 						onSelectProject={() => onProjectSelect(project._id)}
 						onStartRename={() => {
-							identityEditor.start();
+							identityEditor.prepareMenuOpen();
 							dispatch({ type: "setMenuOpen", value: false });
 						}}
 						onToggleStar={onToggleStar}
@@ -950,7 +953,7 @@ function ProjectSidebarRow({
 	onDeleteSelect,
 	rowActions,
 }: {
-	identityEditor: ProjectIdentityEditorController;
+	identityEditor: SidebarProjectIdentityEditorController;
 	projectName: string;
 	hasNotes: boolean;
 	isStarred: boolean;

@@ -461,24 +461,6 @@ export const reorder = mutation({
 	},
 });
 
-export const rename = mutation({
-	args: {
-		workspaceId: v.id("workspaces"),
-		id: v.id("projects"),
-		name: v.string(),
-	},
-	returns: projectValidator,
-	handler: async (ctx, args) => {
-		const project = await requireOwnedProject(ctx, args.id, args.workspaceId);
-
-		return await updateProjectIdentityRecord(ctx, project, {
-			name: args.name,
-			icon: project.icon,
-			color: project.color,
-		});
-	},
-});
-
 export const updateIdentity = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),

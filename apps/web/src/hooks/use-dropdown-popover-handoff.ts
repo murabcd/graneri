@@ -1,24 +1,24 @@
 import * as React from "react";
 
-export function useDropdownPopoverHandoff<Value>(
-	openPopover: (value: Value) => void,
+export function useDropdownPopoverHandoff<Args extends readonly unknown[]>(
+	openPopover: (...args: Args) => void,
 ) {
 	const preventCloseAutoFocusRef = React.useRef(false);
-	const pendingValueRef = React.useRef<{ value: Value } | null>(null);
+	const pendingArgsRef = React.useRef<Args | null>(null);
 
-	const preparePopoverOpen = React.useCallback((value: Value) => {
+	const preparePopoverOpen = React.useCallback((...args: Args) => {
 		preventCloseAutoFocusRef.current = true;
-		pendingValueRef.current = { value };
+		pendingArgsRef.current = args;
 	}, []);
 
 	const completePopoverOpen = React.useCallback(() => {
-		const pendingValue = pendingValueRef.current;
-		if (!pendingValue) {
+		const pendingArgs = pendingArgsRef.current;
+		if (!pendingArgs) {
 			return;
 		}
 
-		pendingValueRef.current = null;
-		openPopover(pendingValue.value);
+		pendingArgsRef.current = null;
+		openPopover(...pendingArgs);
 	}, [openPopover]);
 
 	return {

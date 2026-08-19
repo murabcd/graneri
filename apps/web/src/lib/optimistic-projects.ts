@@ -73,24 +73,3 @@ export const optimisticUpdateProjectIdentity = ({
 		),
 	);
 };
-
-export const optimisticRenameProject = (
-	localStore: OptimisticLocalStore,
-	workspaceId: WorkspaceId,
-	projectId: Id<"projects">,
-	name: string,
-) => {
-	const normalizedName = normalizeProjectName(name);
-
-	optimisticUpdateProjectList(localStore, workspaceId, (projects) =>
-		projects.map((project) =>
-			project._id === projectId
-				? {
-						...project,
-						name: normalizedName,
-						normalizedName: toNormalizedProjectKey(normalizedName),
-					}
-				: project,
-		),
-	);
-};

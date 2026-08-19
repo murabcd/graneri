@@ -16,20 +16,30 @@ type ProjectIdentityDraft = ProjectAppearance & {
 	name: string;
 };
 
+type ProjectIdentityEditorOptions = {
+	project: Doc<"projects">;
+	workspaceId: Id<"workspaces"> | null;
+};
+
 export type ProjectIdentityEditorController = {
 	cancel: () => void;
 	commit: () => Promise<void>;
-	completeMenuClose: () => void;
 	draft: ProjectIdentityDraft;
 	inputRef: React.RefObject<HTMLInputElement | null>;
 	onOpenChange: (open: boolean) => void;
 	open: boolean;
-	preventMenuCloseAutoFocusRef: React.MutableRefObject<boolean>;
 	previewAppearance: ProjectAppearance;
 	setAppearance: (appearance: ProjectAppearance) => void;
 	setName: (name: string) => void;
 	start: () => void;
 };
+
+export type SidebarProjectIdentityEditorController =
+	ProjectIdentityEditorController & {
+		completeMenuClose: () => void;
+		prepareMenuOpen: () => void;
+		preventMenuCloseAutoFocusRef: React.MutableRefObject<boolean>;
+	};
 
 const toProjectIdentityDraft = (
 	project: Pick<Doc<"projects">, "color" | "icon" | "name">,
@@ -42,10 +52,7 @@ const toProjectIdentityDraft = (
 export function useProjectIdentityEditor({
 	project,
 	workspaceId,
-}: {
-	project: Doc<"projects">;
-	workspaceId: Id<"workspaces"> | null;
-}): ProjectIdentityEditorController {
+}: ProjectIdentityEditorOptions): ProjectIdentityEditorController {
 	const [open, setOpen] = React.useState(false);
 	const [draft, setDraft] = React.useState<ProjectIdentityDraft>(() =>
 		toProjectIdentityDraft(project),
@@ -56,11 +63,6 @@ export function useProjectIdentityEditor({
 		setDraft(value);
 		setOpen(true);
 	}, []);
-	const {
-		completePopoverOpen: completeMenuClose,
-		preparePopoverOpen,
-		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
-	} = useDropdownPopoverHandoff(openEditor);
 	const updateProjectIdentity = useMutation(
 		api.projects.updateIdentity,
 	).withOptimisticUpdate((localStore, args) => {
@@ -125,16 +127,19 @@ export function useProjectIdentityEditor({
 		}
 	}, [draft, project, updateProjectIdentity, workspaceId]);
 
+	const start = React.useCallback(() => {
+		openEditor(toProjectIdentityDraft(project));
+	}, [openEditor, project]);
 	const onOpenChange = React.useCallback(
 		(nextOpen: boolean) => {
 			if (nextOpen) {
-				setOpen(true);
+				start();
 				return;
 			}
 
 			void commit();
 		},
-		[commit],
+		[commit, start],
 	);
 
 	const setAppearance = React.useCallback((appearance: ProjectAppearance) => {
@@ -143,19 +148,13 @@ export function useProjectIdentityEditor({
 	const setName = React.useCallback((name: string) => {
 		setDraft((current) => ({ ...current, name }));
 	}, []);
-	const start = React.useCallback(() => {
-		preparePopoverOpen(toProjectIdentityDraft(project));
-	}, [preparePopoverOpen, project]);
-
 	return {
 		cancel,
 		commit,
-		completeMenuClose,
 		draft,
 		inputRef,
 		onOpenChange,
 		open,
-		preventMenuCloseAutoFocusRef,
 		previewAppearance: {
 			color: open ? draft.color : project.color,
 			icon: open ? draft.icon : project.icon,
@@ -163,5 +162,23 @@ export function useProjectIdentityEditor({
 		setAppearance,
 		setName,
 		start,
+	};
+}
+
+export function useSidebarProjectIdentityEditor(
+	options: ProjectIdentityEditorOptions,
+): SidebarProjectIdentityEditorController {
+	const editor = useProjectIdentityEditor(options);
+	const {
+		completePopoverOpen: completeMenuClose,
+		preparePopoverOpen,
+		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
+	} = useDropdownPopoverHandoff(editor.start);
+
+	return {
+		...editor,
+		completeMenuClose,
+		prepareMenuOpen: preparePopoverOpen,
+		preventMenuCloseAutoFocusRef,
 	};
 }

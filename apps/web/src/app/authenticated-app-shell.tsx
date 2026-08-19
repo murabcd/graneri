@@ -31,11 +31,6 @@ import {
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
 import { Kbd } from "@workspace/ui/components/kbd";
-import {
-	Popover,
-	PopoverAnchor,
-	PopoverContent,
-} from "@workspace/ui/components/popover";
 import { Separator } from "@workspace/ui/components/separator";
 import {
 	SidebarProvider,
@@ -94,6 +89,10 @@ import { OPEN_CHAT_SUMMARY_EVENT } from "@/components/chat/chat-summary-events";
 import { optimisticPatchChat } from "@/components/chat/optimistic-patch-chat";
 import { AppShellInset } from "@/components/layout/app-shell-inset";
 import {
+	ProjectBreadcrumbTitleEditor,
+	RenameBreadcrumbTitleEditor,
+} from "@/components/navigation/breadcrumb-title-editor";
+import {
 	type BreadcrumbTitleEditorController,
 	useBreadcrumbTitleEditor,
 } from "@/components/navigation/use-breadcrumb-title-editor";
@@ -106,7 +105,6 @@ import {
 	type NoteEditorActions,
 	NoteEditorActionsStore,
 } from "@/components/note/note-editor-actions-store";
-import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { NoteTemplateSelect } from "@/components/templates/note-template-select";
@@ -1457,7 +1455,6 @@ function AppShellHeader({
 		currentChatTitle,
 		currentNoteId,
 		currentNoteTitle,
-		currentProject,
 		currentView,
 		onNoteTitleChange,
 	});
@@ -1517,6 +1514,8 @@ function AppShellHeader({
 					breadcrumbSectionLabel={breadcrumbSectionLabel}
 					breadcrumbDetailLabel={breadcrumbDetailLabel}
 					isDesktopMac={isDesktopMac}
+					currentProject={currentView === "project" ? currentProject : null}
+					workspaceId={activeWorkspaceId}
 					onBreadcrumbSectionClick={onBreadcrumbSectionClick}
 					titleEditor={breadcrumbTitleEditor}
 					showAutomationIcon={
@@ -1565,6 +1564,8 @@ function AppShellBreadcrumbs({
 	breadcrumbSectionLabel,
 	breadcrumbDetailLabel,
 	isDesktopMac,
+	currentProject,
+	workspaceId,
 	onBreadcrumbSectionClick,
 	titleEditor,
 	showAutomationIcon,
@@ -1573,6 +1574,8 @@ function AppShellBreadcrumbs({
 	breadcrumbSectionLabel: string;
 	breadcrumbDetailLabel: string | null;
 	isDesktopMac: boolean;
+	currentProject: Doc<"projects"> | null;
+	workspaceId: Id<"workspaces"> | null;
 	onBreadcrumbSectionClick: () => void;
 	titleEditor: BreadcrumbTitleEditorController | null;
 	showAutomationIcon?: boolean;
@@ -1614,54 +1617,22 @@ function AppShellBreadcrumbs({
 						</BreadcrumbItem>
 						<BreadcrumbSeparator className="hidden shrink-0 md:block" />
 						<BreadcrumbItem className="min-w-0 flex-1 overflow-hidden">
-							{titleEditor ? (
+							{titleEditor || currentProject ? (
 								<div className="flex min-w-0 items-center gap-2">
-									<Popover
-										open={titleEditor.open}
-										onOpenChange={titleEditor.onOpenChange}
-									>
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<PopoverAnchor asChild>
-													<button
-														type="button"
-														aria-current="page"
-														data-app-region={
-															isDesktopMac ? "no-drag" : undefined
-														}
-														className="line-clamp-1 -mx-1 -my-0.5 min-w-0 cursor-pointer rounded px-1 py-0.5 text-left"
-														onClick={titleEditor.onOpen}
-													>
-														<BreadcrumbPage className="block truncate">
-															{breadcrumbDetailLabel}
-														</BreadcrumbPage>
-													</button>
-												</PopoverAnchor>
-											</TooltipTrigger>
-											<TooltipContent>
-												{`Rename ${titleEditor.itemLabel}`}
-											</TooltipContent>
-										</Tooltip>
-										<PopoverContent
-											align="start"
-											side="bottom"
-											sideOffset={6}
-											className="w-85 rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
-										>
-											<div className="flex items-center gap-2">
-												<NoteTitleEditInput
-													focusOnMount
-													commitOnBlur={false}
-													placeholder={titleEditor.placeholder}
-													maxLength={titleEditor.maxLength}
-													value={titleEditor.value}
-													onValueChange={titleEditor.onValueChange}
-													onCommit={titleEditor.onCommit}
-													onCancel={titleEditor.onCancel}
-												/>
-											</div>
-										</PopoverContent>
-									</Popover>
+									{currentProject ? (
+										<ProjectBreadcrumbTitleEditor
+											detailLabel={breadcrumbDetailLabel}
+											isDesktopMac={isDesktopMac}
+											project={currentProject}
+											workspaceId={workspaceId}
+										/>
+									) : titleEditor ? (
+										<RenameBreadcrumbTitleEditor
+											detailLabel={breadcrumbDetailLabel}
+											editor={titleEditor}
+											isDesktopMac={isDesktopMac}
+										/>
+									) : null}
 									{automationIconButton}
 								</div>
 							) : (

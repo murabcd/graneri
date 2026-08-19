@@ -185,45 +185,15 @@ test("projects.updateIdentity stores its name, icon, and color", async () => {
 		"Founding Team",
 		"Research",
 	]);
-});
-
-test("projects.rename preserves appearance and workspace uniqueness", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
-
-	const project = await asOwner.mutation(api.projects.create, {
-		workspaceId,
-		name: "Product",
-	});
-	await asOwner.mutation(api.projects.create, {
-		workspaceId,
-		name: "Research",
-	});
-	await asOwner.mutation(api.projects.updateIdentity, {
-		workspaceId,
-		id: project._id,
-		name: project.name,
-		icon: "terminal",
-		color: "blue",
-	});
-
-	const renamed = await asOwner.mutation(api.projects.rename, {
-		workspaceId,
-		id: project._id,
-		name: "  Founding Team  ",
-	});
-
-	expect(renamed).toMatchObject({
-		name: "Founding Team",
-		icon: "terminal",
-		color: "blue",
-	});
 
 	await expect(
 		asOwner
-			.mutation(api.projects.rename, {
+			.mutation(api.projects.updateIdentity, {
 				workspaceId,
 				id: project._id,
 				name: "research",
+				icon: updated.icon,
+				color: updated.color,
 			})
 			.catch((error) => {
 				expect(error).toBeInstanceOf(Error);

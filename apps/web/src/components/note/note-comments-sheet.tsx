@@ -57,7 +57,6 @@ import {
 	MessageCircleCheck,
 	MessageCircleMore,
 	MessageSquareMore,
-	Minus,
 	MoreHorizontal,
 	SlidersHorizontal,
 } from "lucide-react";
@@ -71,6 +70,7 @@ import {
 } from "@/components/layout/docked-panel-dimensions";
 import {
 	DesktopDockedSidePanel,
+	DockedPanelHideButton,
 	DockedPanelPinButton,
 } from "@/components/layout/docked-side-panel";
 import { parseCssLengthToPixels } from "@/components/layout/parse-css-length";
@@ -837,18 +837,13 @@ function CommentsSheetPanel({
 	onTogglePinned: () => void;
 	onOpenChange: (open: boolean) => void;
 } & CommentsSheetBodyProps) {
-	const handleClose = React.useCallback(
-		(event: React.MouseEvent<HTMLButtonElement>) => {
-			event.currentTarget.blur();
+	const handleClose = React.useCallback(() => {
+		if (!isMobile && isPinned) {
+			onTogglePinned();
+		}
 
-			if (!isMobile && isPinned) {
-				onTogglePinned();
-			}
-
-			onOpenChange(false);
-		},
-		[isMobile, isPinned, onOpenChange, onTogglePinned],
-	);
+		onOpenChange(false);
+	}, [isMobile, isPinned, onOpenChange, onTogglePinned]);
 
 	return (
 		<div className="flex h-full flex-col bg-background text-foreground">
@@ -939,27 +934,7 @@ function CommentsSheetPanel({
 							onTogglePinned={onTogglePinned}
 						/>
 					) : null}
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								onClick={handleClose}
-							>
-								<Minus className="size-4" />
-								<span className="sr-only">Close comments</span>
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent
-							side="bottom"
-							align="end"
-							sideOffset={8}
-							className="pointer-events-none select-none"
-						>
-							Hide comments
-						</TooltipContent>
-					</Tooltip>
+					<DockedPanelHideButton label="Hide comments" onHide={handleClose} />
 				</div>
 			</div>
 
