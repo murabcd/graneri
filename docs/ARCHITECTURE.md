@@ -939,6 +939,13 @@ canonical real paths, one chat may expose at most four unique roots, and an
 invalid or stale root fails the request visibly instead of being dropped.
 Structured file reads detect content from bounded bytes rather than trusting
 extensions and expose explicit byte ranges for large UTF-8 text files.
+Local image tools keep discovery and bounded byte access in Electron, then use
+authenticated Convex upload URLs to cross the hosted boundary. Their client
+tool outputs contain storage-backed image references, and the hosted AI SDK
+tool declaration converts those references into multimodal model output for the
+next chat step. Electron neither constructs an OpenAI model nor consumes an
+OpenAI key. Chat attachment reference tracking owns those temporary image bytes
+until the last referencing chat message is removed.
 `run_local_command` executes a real non-interactive shell from one selected
 root. The Electron main process owns the native command executor; the shared AI
 package receives that capability only through an explicit adapter when it builds

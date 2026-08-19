@@ -6,32 +6,50 @@ import type { MutationCtx } from "./_generated/server";
 
 const CONVEX_STORAGE_PATH_SEGMENT = "/api/storage/";
 
-const filePartSchema = z.object({
+const attachmentArtifactSchema = z.object({
 	providerMetadata: z
 		.object({
 			graneri: z.object({ storageId: z.string() }).optional(),
 		})
 		.optional(),
-	type: z.literal("file"),
 	url: z.string().optional(),
 });
+const filePartSchema = attachmentArtifactSchema.extend({
+	type: z.literal("file"),
+});
+const attachmentBearingToolPartSchema = z.discriminatedUnion("type", [
+	z.object({
+		output: attachmentArtifactSchema,
+		state: z.literal("output-available"),
+		type: z.literal("tool-generate_image"),
+	}),
+	z.object({
+		output: z.object({ file: filePartSchema }),
+		state: z.literal("output-available"),
+		type: z.literal("tool-inspect_local_image"),
+	}),
+	z.object({
+		output: z.object({
+			results: z.array(z.object({ file: filePartSchema })),
+		}),
+		state: z.literal("output-available"),
+		type: z.literal("tool-search_local_images"),
+	}),
+]);
 
-const getStorageIdFromFilePart = (part: unknown) => {
-	const result = filePartSchema.safeParse(part);
-	if (!result.success) {
-		return null;
-	}
-	const filePart = result.data;
-	if (filePart.providerMetadata?.graneri) {
-		return filePart.providerMetadata.graneri.storageId;
+const getStorageIdFromAttachmentArtifact = (
+	artifact: z.infer<typeof attachmentArtifactSchema>,
+) => {
+	if (artifact.providerMetadata?.graneri) {
+		return artifact.providerMetadata.graneri.storageId;
 	}
 
-	if (!filePart.url) {
+	if (!artifact.url) {
 		return null;
 	}
 	let url: URL;
 	try {
-		url = new URL(filePart.url);
+		url = new URL(artifact.url);
 	} catch {
 		throw new ConvexError({
 			code: "INVALID_CHAT_ATTACHMENT_METADATA",
@@ -47,6 +65,31 @@ const getStorageIdFromFilePart = (part: unknown) => {
 			.slice(storagePathIndex + CONVEX_STORAGE_PATH_SEGMENT.length)
 			.split("/")[0] ?? null
 	);
+};
+
+const getStorageIdFromFilePart = (part: unknown) => {
+	const result = filePartSchema.safeParse(part);
+	return result.success
+		? getStorageIdFromAttachmentArtifact(result.data)
+		: null;
+};
+
+const getStorageIdsFromToolPart = (part: unknown) => {
+	const result = attachmentBearingToolPartSchema.safeParse(part);
+	if (!result.success) {
+		return [];
+	}
+
+	switch (result.data.type) {
+		case "tool-generate_image":
+			return [getStorageIdFromAttachmentArtifact(result.data.output)];
+		case "tool-inspect_local_image":
+			return [getStorageIdFromFilePart(result.data.output.file)];
+		case "tool-search_local_images":
+			return result.data.output.results.map((imageResult) =>
+				getStorageIdFromFilePart(imageResult.file),
+			);
+	}
 };
 
 const getAttachmentStorageIds = (
@@ -68,18 +111,23 @@ const getAttachmentStorageIds = (
 
 	const storageIds = new Set<Id<"_storage">>();
 	for (const part of parts) {
-		const value = getStorageIdFromFilePart(part);
-		if (!value) {
-			continue;
+		const values = [
+			getStorageIdFromFilePart(part),
+			...getStorageIdsFromToolPart(part),
+		];
+		for (const value of values) {
+			if (!value) {
+				continue;
+			}
+			const storageId = ctx.db.system.normalizeId("_storage", value);
+			if (!storageId) {
+				throw new ConvexError({
+					code: "INVALID_CHAT_ATTACHMENT_STORAGE_ID",
+					message: "Chat attachment storage id is invalid.",
+				});
+			}
+			storageIds.add(storageId);
 		}
-		const storageId = ctx.db.system.normalizeId("_storage", value);
-		if (!storageId) {
-			throw new ConvexError({
-				code: "INVALID_CHAT_ATTACHMENT_STORAGE_ID",
-				message: "Chat attachment storage id is invalid.",
-			});
-		}
-		storageIds.add(storageId);
 	}
 	return storageIds;
 };

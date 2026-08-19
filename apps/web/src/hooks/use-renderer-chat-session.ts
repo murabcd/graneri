@@ -31,6 +31,7 @@ import {
 import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useChatInteractionSession } from "./use-chat-interaction-session";
+import { useLocalImageStorage } from "./use-local-image-storage";
 import { useQueuedChatDrain } from "./use-queued-chat-drain";
 import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
 import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
@@ -70,6 +71,7 @@ export const useRendererChatSession = ({
 	const attachableActiveRun =
 		activeRun && activeRun.status !== "stopping" ? activeRun : null;
 	const transport = useWorkspaceChatTransport(workspaceId);
+	const localImageStorage = useLocalImageStorage();
 	const latestRequestBodyRef = React.useRef<ChatRequestContext | null>(null);
 	const addToolOutputRef =
 		React.useRef<ChatAddToolOutputFunction<UIMessage> | null>(null);
@@ -79,9 +81,11 @@ export const useRendererChatSession = ({
 		() =>
 			createDesktopLocalToolCallHandler({
 				addToolOutputRef,
+				fetchImpl: fetch,
+				imageStorage: localImageStorage,
 				latestRequestBodyRef,
 			}),
-		[],
+		[localImageStorage],
 	);
 	const {
 		messages,

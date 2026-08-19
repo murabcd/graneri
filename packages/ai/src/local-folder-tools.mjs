@@ -1,23 +1,18 @@
 import { constants } from "node:fs";
 import { open, readdir, stat } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
-import { openai } from "@ai-sdk/openai";
-import { embed, generateText, tool } from "ai";
+import { tool } from "ai";
 import {
 	decodeLocalUtf8Range,
 	detectLocalFileMedia,
 } from "./local-file-media.mjs";
+import { MAX_LOCAL_IMAGE_UPLOADS } from "./local-folder-image-contract.mjs";
 import {
 	buildLocalFolderToolConfigs,
 	MAX_LOCAL_FILE_READ_BYTES,
 	MAX_LOCAL_FOLDER_ROOTS,
 } from "./local-folder-tool-definitions.mjs";
 import { createLocalWorkspaceSession } from "./local-workspace-paths.mjs";
-import { aiLogger } from "./logger.mjs";
-import {
-	DEFAULT_CHAT_MODEL_ID,
-	getOpenAiModelProviderOptions,
-} from "./models.mjs";
 
 export { buildLocalFolderSystemContext } from "./local-folder-tool-definitions.mjs";
 
@@ -26,10 +21,6 @@ const MAX_WALK_FILES = 1000;
 const MAX_SEARCH_MATCHES = 40;
 const MAX_SEARCH_FILE_BYTES = 250_000;
 const MAX_IMAGE_BYTES = 20_000_000;
-const MAX_IMAGE_ANALYSIS_PROMPT_LENGTH = 1_000;
-const MAX_IMAGE_SEARCH_FILES = 12;
-const MAX_IMAGE_SEARCH_RESULTS = 10;
-const imageMetadataCache = new Map();
 const IGNORED_DIRECTORY_NAMES = new Set([
 	".cache",
 	".git",
@@ -50,8 +41,6 @@ const deferredOpenAIToolOptions = {
 
 const isIgnoredDirectory = (name) => IGNORED_DIRECTORY_NAMES.has(name);
 
-const imageEmbeddingModel = openai.embedding("text-embedding-3-small");
-
 const withDuration = async (operation) => {
 	const startedAt = Date.now();
 	const output = await operation();
@@ -60,28 +49,6 @@ const withDuration = async (operation) => {
 		...output,
 		totalDurationMs: Date.now() - startedAt,
 	};
-};
-
-const logLocalToolEvent = (event, payload = {}) => {
-	const env =
-		typeof globalThis.process === "object" &&
-		globalThis.process !== null &&
-		typeof globalThis.process.env === "object" &&
-		globalThis.process.env !== null
-			? globalThis.process.env
-			: {};
-	if (
-		env.GRANERI_LOCAL_TOOLS_DEBUG !== "1" &&
-		!event.startsWith("image_search_") &&
-		!event.startsWith("image_metadata_")
-	) {
-		return;
-	}
-
-	aiLogger.info({
-		event: `local_tools.${event}`,
-		...payload,
-	});
 };
 
 const toRootSummary = (root, index) => ({
@@ -236,28 +203,6 @@ const readLocalFile = async ({
 	}
 };
 
-const buildImageCacheKey = ({ filePath, fileStat }) =>
-	[filePath, fileStat.size, fileStat.mtimeMs].join(":");
-
-const cosineSimilarity = (left, right) => {
-	let dot = 0;
-	let leftMagnitude = 0;
-	let rightMagnitude = 0;
-	const length = Math.min(left.length, right.length);
-
-	for (let index = 0; index < length; index += 1) {
-		dot += left[index] * right[index];
-		leftMagnitude += left[index] * left[index];
-		rightMagnitude += right[index] * right[index];
-	}
-
-	if (leftMagnitude === 0 || rightMagnitude === 0) {
-		return 0;
-	}
-
-	return dot / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
-};
-
 const tokenizeSearchQuery = (query) =>
 	query
 		.toLowerCase()
@@ -287,41 +232,10 @@ const scoreImagePathCandidate = ({
 	return tokenHits * 5 + screenshotBoost + rootFolderBoost + shallowBoost;
 };
 
-const scoreImageDescriptionCandidate = ({ description, queryTokens }) => {
-	const normalizedDescription = description.toLowerCase();
-	const tokenHits = queryTokens.filter((token) =>
-		normalizedDescription.includes(token),
-	).length;
-	const explicitMatchBoost =
-		/\b(appears to match|matches|match: yes|yes[, -]|relevant)\b/iu.test(
-			description,
-		)
-			? 0.35
-			: 0;
-	const explicitNonMatchPenalty =
-		/\b(does not match|not a match|match: no|not relevant)\b/iu.test(
-			description,
-		)
-			? 0.6
-			: 0;
-
-	return tokenHits * 0.08 + explicitMatchBoost - explicitNonMatchPenalty;
-};
-
-const createImageDetailProviderOptions = (detail) =>
-	detail === "low" || detail === "high"
-		? {
-				openai: {
-					imageDetail: detail,
-				},
-			}
-		: undefined;
-
 const inspectLocalImage = async ({
-	detail = "auto",
-	prompt,
 	relativePath,
 	rootIndex,
+	storeLocalImage,
 	workspace,
 }) => {
 	const { path: filePath, root } = await workspace.resolveExistingPath({
@@ -333,135 +247,25 @@ const inspectLocalImage = async ({
 		tooLargeMessage: `Image file is too large to inspect directly. Maximum size is ${MAX_IMAGE_BYTES} bytes.`,
 	});
 
-	const normalizedPrompt =
-		typeof prompt === "string"
-			? prompt.trim().slice(0, MAX_IMAGE_ANALYSIS_PROMPT_LENGTH)
-			: "";
 	const media = detectLocalFileMedia(image.subarray(0, 8_192));
 	if (media.kind !== "image") {
 		throw new Error(
 			`Only supported image files can be inspected. Detected ${media.mediaType}.`,
 		);
 	}
-	const { text } = await generateText({
-		model: openai(DEFAULT_CHAT_MODEL_ID),
-		providerOptions: getOpenAiModelProviderOptions(DEFAULT_CHAT_MODEL_ID, {
-			reasoningEffort: "none",
-		}),
-		messages: [
-			{
-				role: "user",
-				content: [
-					{
-						type: "text",
-						text:
-							normalizedPrompt ||
-							"Inspect this local image. Describe what is visible, extract any readable text, and mention notable UI, document, chart, or scene details.",
-					},
-					{
-						type: "file",
-						data: image,
-						mediaType: media.mediaType,
-						providerOptions: createImageDetailProviderOptions(detail),
-					},
-				],
-			},
-		],
+	const storedImage = await storeLocalImage({
+		bytes: image,
+		mediaType: media.mediaType,
 	});
 
 	return {
+		file: {
+			filename: basename(filePath),
+			mediaType: media.mediaType,
+			storageId: storedImage.storageId,
+		},
 		path: relative(root.path, filePath),
 		sizeBytes: fileStat.size,
-		mediaType: media.mediaType,
-		analysis: text,
-	};
-};
-
-const describeImageForSearch = async ({
-	filePath,
-	fileStat,
-	image,
-	mediaType,
-	query,
-}) => {
-	const cacheKey = buildImageCacheKey({ filePath, fileStat });
-	const cached = imageMetadataCache.get(cacheKey);
-	if (cached) {
-		logLocalToolEvent("image_metadata_cache_hit", {
-			path: filePath,
-			sizeBytes: fileStat.size,
-		});
-		return {
-			...cached,
-			cached: true,
-		};
-	}
-
-	if (fileStat.size > MAX_IMAGE_BYTES) {
-		throw new Error("Image file is too large to index.");
-	}
-
-	const startedAt = Date.now();
-	logLocalToolEvent("image_metadata_start", {
-		path: filePath,
-		sizeBytes: fileStat.size,
-	});
-	const { text } = await generateText({
-		model: openai(DEFAULT_CHAT_MODEL_ID),
-		providerOptions: getOpenAiModelProviderOptions(DEFAULT_CHAT_MODEL_ID, {
-			reasoningEffort: "none",
-		}),
-		messages: [
-			{
-				role: "user",
-				content: [
-					{
-						type: "text",
-						text: [
-							"Create searchable metadata for this image.",
-							"Include a concise title, a factual description, visible text/OCR if present, objects, people, UI elements, colors, and likely document/screenshot context.",
-							query
-								? `The user's image search query is: ${query}. Explicitly say whether the image appears to match it and why.`
-								: "",
-							"Do not invent details that are not visible.",
-						]
-							.filter(Boolean)
-							.join(" "),
-					},
-					{
-						type: "file",
-						data: image,
-						mediaType,
-						providerOptions: createImageDetailProviderOptions("low"),
-					},
-				],
-			},
-		],
-	});
-	logLocalToolEvent("image_metadata_generated", {
-		durationMs: Date.now() - startedAt,
-		path: filePath,
-		textLength: text.length,
-	});
-	const embeddingStartedAt = Date.now();
-	const { embedding } = await embed({
-		model: imageEmbeddingModel,
-		value: text.replaceAll("\n", " "),
-	});
-	logLocalToolEvent("image_metadata_embedded", {
-		durationMs: Date.now() - embeddingStartedAt,
-		path: filePath,
-	});
-	const metadata = {
-		description: text,
-		embedding,
-	};
-
-	imageMetadataCache.set(cacheKey, metadata);
-
-	return {
-		...metadata,
-		cached: false,
 	};
 };
 
@@ -470,6 +274,7 @@ const searchLocalImages = async ({
 	query,
 	relativePath = ".",
 	rootIndex,
+	storeLocalImage,
 	workspace,
 }) => {
 	const needle = query.trim();
@@ -489,14 +294,7 @@ const searchLocalImages = async ({
 	}
 
 	const files = [];
-	const walkStartedAt = Date.now();
 	await walkFiles({ directory: directoryPath, files, root });
-	logLocalToolEvent("image_search_walk_complete", {
-		durationMs: Date.now() - walkStartedAt,
-		fileCount: files.length,
-		path: directoryPath,
-		query: needle,
-	});
 
 	const rootRelativePath = relative(root.path, directoryPath) || ".";
 	const queryTokens = tokenizeSearchQuery(needle);
@@ -531,37 +329,12 @@ const searchLocalImages = async ({
 			left.path.localeCompare(right.path),
 	);
 	const totalImageCount = imageCandidates.length;
-	const imagePaths = imageCandidates
-		.slice(0, MAX_IMAGE_SEARCH_FILES)
-		.map((candidate) => candidate.path);
-	logLocalToolEvent("image_search_candidates", {
-		candidateCount: imagePaths.length,
-		candidates: imageCandidates
-			.slice(0, MAX_IMAGE_SEARCH_FILES)
-			.map((candidate) => ({
-				path: candidate.path,
-				pathScore: candidate.pathScore,
-			})),
-		maxCandidates: MAX_IMAGE_SEARCH_FILES,
-		query: needle,
-		queryTokens,
-		totalImageCount,
-		truncated: imagePaths.length < totalImageCount,
-	});
-	const queryEmbeddingStartedAt = Date.now();
-	const { embedding: queryEmbedding } = await embed({
-		model: imageEmbeddingModel,
-		value: needle,
-	});
-	logLocalToolEvent("image_search_query_embedded", {
-		durationMs: Date.now() - queryEmbeddingStartedAt,
-		query: needle,
-	});
+	const normalizedMaxResults = Math.min(maxResults, MAX_LOCAL_IMAGE_UPLOADS);
+	const candidates = imageCandidates.slice(0, normalizedMaxResults);
 	const results = [];
-	let cachedMetadataCount = 0;
 
-	for (const imagePath of imagePaths) {
-		const imageStartedAt = Date.now();
+	for (const candidate of candidates) {
+		const imagePath = candidate.path;
 		const { path: absolutePath } = await workspace.resolveExistingPath({
 			relativePath: imagePath,
 			rootIndex,
@@ -572,76 +345,31 @@ const searchLocalImages = async ({
 		const fileStat = fileData?.fileStat ?? null;
 
 		if (!fileStat?.isFile() || fileStat.size > MAX_IMAGE_BYTES) {
-			logLocalToolEvent("image_search_candidate_skipped", {
-				path: imagePath,
-				reason: !fileStat?.isFile() ? "not a file" : "too large",
-				sizeBytes: fileStat?.size,
-			});
 			continue;
 		}
 
-		const metadata = await describeImageForSearch({
-			filePath: absolutePath,
-			fileStat,
-			image: fileData.buffer,
-			mediaType:
-				imageCandidates.find((candidate) => candidate.path === imagePath)
-					?.mediaType ?? "application/octet-stream",
-			query: needle,
-		});
-		if (metadata.cached) {
-			cachedMetadataCount += 1;
-		}
-
-		const pathSimilarity = imagePath
-			.toLowerCase()
-			.includes(needle.toLowerCase())
-			? 0.25
-			: 0;
-		const pathCandidateScore =
-			imageCandidates.find((candidate) => candidate.path === imagePath)
-				?.pathScore ?? 0;
-		const descriptionScore = scoreImageDescriptionCandidate({
-			description: metadata.description,
-			queryTokens,
+		const storedImage = await storeLocalImage({
+			bytes: fileData.buffer,
+			mediaType: candidate.mediaType,
 		});
 		results.push({
+			file: {
+				filename: basename(imagePath),
+				mediaType: candidate.mediaType,
+				storageId: storedImage.storageId,
+			},
 			path: imagePath,
-			sizeBytes: fileStat.size,
-			score:
-				cosineSimilarity(queryEmbedding, metadata.embedding) +
-				pathSimilarity +
-				pathCandidateScore / 100 +
-				descriptionScore,
-			description: metadata.description,
-		});
-		logLocalToolEvent("image_search_candidate_complete", {
-			cached: metadata.cached,
-			durationMs: Date.now() - imageStartedAt,
-			path: imagePath,
-			score: results.at(-1)?.score,
 			sizeBytes: fileStat.size,
 		});
 	}
 
-	const normalizedMaxResults = Math.min(
-		Math.max(Number.parseInt(String(maxResults), 10) || 5, 1),
-		MAX_IMAGE_SEARCH_RESULTS,
-	);
-
 	return {
+		candidateImageCount: results.length,
 		path: rootRelativePath,
-		indexedImageCount: imagePaths.length,
-		cachedMetadataCount,
+		results,
+		totalImageCount,
 		truncated:
-			files.length >= MAX_WALK_FILES || imagePaths.length < totalImageCount,
-		results: results
-			.sort((left, right) => right.score - left.score)
-			.slice(0, normalizedMaxResults)
-			.map((result) => ({
-				...result,
-				score: Number(result.score.toFixed(4)),
-			})),
+			files.length >= MAX_WALK_FILES || candidates.length < totalImageCount,
 	};
 };
 
@@ -754,17 +482,24 @@ const searchLocalFiles = async ({ query, rootIndex, workspace }) => {
 	};
 };
 
-export const buildLocalFolderTools = ({ executeLocalCommand, roots }) => {
+export const buildLocalFolderTools = ({
+	executeLocalCommand,
+	roots,
+	storeLocalImage,
+}) => {
 	if (roots.length === 0) {
 		return {};
 	}
 	if (typeof executeLocalCommand !== "function") {
 		throw new Error("A local command executor is required.");
 	}
+	if (typeof storeLocalImage !== "function") {
+		throw new Error("A local image storage adapter is required.");
+	}
 
 	const workspace = createLocalWorkspaceSession(roots);
 	const configs = buildLocalFolderToolConfigs(workspace.roots, {
-		maxImageSearchResults: MAX_IMAGE_SEARCH_RESULTS,
+		maxImageSearchResults: MAX_LOCAL_IMAGE_UPLOADS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
 
@@ -791,13 +526,12 @@ export const buildLocalFolderTools = ({ executeLocalCommand, roots }) => {
 		}),
 		inspect_local_image: tool({
 			...configs.inspect_local_image,
-			execute: async ({ detail, prompt, rootIndex, relativePath }) =>
+			execute: async ({ rootIndex, relativePath }) =>
 				withDuration(() =>
 					inspectLocalImage({
-						detail,
-						prompt,
 						relativePath,
 						rootIndex,
+						storeLocalImage,
 						workspace,
 					}),
 				),
@@ -811,6 +545,7 @@ export const buildLocalFolderTools = ({ executeLocalCommand, roots }) => {
 						query,
 						relativePath,
 						rootIndex,
+						storeLocalImage,
 						workspace,
 					}),
 				),
@@ -857,7 +592,7 @@ export const buildClientLocalFolderTools = (roots) => {
 	}
 
 	const configs = buildLocalFolderToolConfigs(roots, {
-		maxImageSearchResults: MAX_IMAGE_SEARCH_RESULTS,
+		maxImageSearchResults: MAX_LOCAL_IMAGE_UPLOADS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
 

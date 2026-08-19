@@ -1,11 +1,14 @@
+import { MAX_LOCAL_IMAGE_UPLOADS } from "@workspace/ai/local-folder-image-contract";
 import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
 import { MAX_LOCAL_FOLDER_ROOTS } from "@workspace/ai/local-folder-tool-definitions";
 import { buildLocalFolderTools } from "@workspace/ai/local-folder-tools";
 import { z } from "zod";
 import { runLocalCommand } from "./local-command-runner.mjs";
+import { createLocalImageStore } from "./local-image-storage.mjs";
 import { readJsonBody, sendJson } from "./local-server-http.mjs";
 
 const localFolderToolRequestSchema = z.object({
+	imageUploadUrls: z.array(z.url()).max(MAX_LOCAL_IMAGE_UPLOADS).default([]),
 	input: z.unknown(),
 	localFolders: z
 		.array(
@@ -34,7 +37,8 @@ export const createLocalFolderToolRouteHandler = ({
 			sendJson(response, 400, { error: "Invalid local tool request." });
 			return;
 		}
-		const { input, localFolders, toolCallId, toolName } = parsedRequest.data;
+		const { imageUploadUrls, input, localFolders, toolCallId, toolName } =
+			parsedRequest.data;
 		const localFolderRoots = getSharedLocalFolders(
 			localFolders.map(({ id }) => id),
 		);
@@ -42,6 +46,9 @@ export const createLocalFolderToolRouteHandler = ({
 		const toolToExecute = buildLocalFolderTools({
 			executeLocalCommand: runLocalCommand,
 			roots: localFolderRoots,
+			storeLocalImage: createLocalImageStore({
+				uploadUrls: imageUploadUrls,
+			}),
 		})[toolName];
 
 		if (!toolToExecute?.execute) {

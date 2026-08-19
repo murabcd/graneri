@@ -12,11 +12,13 @@ const buildToolsForDirectory = async (
 	directory: string,
 	executeLocalCommand = async (input: { command: string; rootPath: string }) =>
 		input,
+	storeLocalImage = async () => ({ storageId: "storage_test" }),
 ) => {
 	const rootPath = await realpath(directory);
 	return buildLocalFolderTools({
 		executeLocalCommand,
 		roots: [{ name: basename(rootPath), path: rootPath }],
+		storeLocalImage,
 	});
 };
 
@@ -60,6 +62,49 @@ describe("local folder tools", () => {
 					},
 				),
 			).rejects.toThrow("Only supported image files can be inspected");
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("stores local image bytes without running model inference in Electron", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
+		try {
+			const image = Buffer.from([
+				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+			]);
+			await writeFile(join(directory, "screen.png"), image);
+			const storedImages: Array<{ bytes: Uint8Array; mediaType: string }> = [];
+			const tools = await buildToolsForDirectory(
+				directory,
+				async (input) => input,
+				async (input) => {
+					storedImages.push(input);
+					return { storageId: "storage_screen" };
+				},
+			);
+
+			const result = await tools.inspect_local_image.execute?.(
+				{
+					detail: "high",
+					prompt: "Read the title",
+					rootIndex: 0,
+					relativePath: "screen.png",
+				},
+				{ messages: [], toolCallId: "image" },
+			);
+
+			expect(storedImages).toHaveLength(1);
+			expect(Buffer.from(storedImages[0].bytes)).toEqual(image);
+			expect(storedImages[0].mediaType).toBe("image/png");
+			expect(result).toMatchObject({
+				file: {
+					filename: "screen.png",
+					mediaType: "image/png",
+					storageId: "storage_screen",
+				},
+				path: "screen.png",
+			});
 		} finally {
 			await rm(directory, { force: true, recursive: true });
 		}
@@ -192,6 +237,7 @@ describe("local folder tools", () => {
 					path: "/definitely/missing/graneri-local-folder",
 				},
 			],
+			storeLocalImage: async () => ({ storageId: "storage_test" }),
 		});
 		await expect(
 			tools.list_local_directory.execute?.(

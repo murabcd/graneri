@@ -15,9 +15,15 @@ export type ExecuteLocalCommand = (input: {
 	rootPath: string;
 }) => Promise<unknown>;
 
+export type StoreLocalImage = (input: {
+	bytes: Uint8Array;
+	mediaType: string;
+}) => Promise<{ storageId: string }>;
+
 export declare const buildLocalFolderTools: (input: {
 	executeLocalCommand: ExecuteLocalCommand;
 	roots: LocalFolderRoot[];
+	storeLocalImage: StoreLocalImage;
 }) => ToolSet;
 
 export declare const buildClientLocalFolderTools: (

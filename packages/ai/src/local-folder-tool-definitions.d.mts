@@ -1,4 +1,11 @@
+import type { ToolResultOutput } from "@ai-sdk/provider-utils";
 import type { z } from "zod";
+
+type ToModelOutput = (args: {
+	input: unknown;
+	output: unknown;
+	toolCallId: string;
+}) => ToolResultOutput | PromiseLike<ToolResultOutput>;
 
 export type LocalFolderToolRoot = {
 	name: string;
@@ -32,10 +39,12 @@ export declare const buildLocalFolderToolConfigs: (
 	inspect_local_image: {
 		description: string;
 		inputSchema: z.ZodType;
+		toModelOutput: ToModelOutput;
 	};
 	search_local_images: {
 		description: string;
 		inputSchema: z.ZodType;
+		toModelOutput: ToModelOutput;
 	};
 	search_local_files: {
 		description: string;

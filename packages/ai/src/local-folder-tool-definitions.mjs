@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+	inspectedLocalImageOutputForModel,
+	MAX_LOCAL_IMAGE_UPLOADS,
+	searchedLocalImagesOutputForModel,
+} from "./local-folder-image-contract.mjs";
 
 export const MAX_LOCAL_FOLDER_ROOTS = 4;
 export const MAX_LOCAL_FILE_READ_BYTES = 120_000;
@@ -20,7 +25,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 
 export const buildLocalFolderToolConfigs = (
 	roots,
-	{ maxImageSearchResults = 10, providerOptions } = {},
+	{ maxImageSearchResults = MAX_LOCAL_IMAGE_UPLOADS, providerOptions } = {},
 ) => {
 	if (roots.length === 0) {
 		return {};
@@ -94,10 +99,11 @@ export const buildLocalFolderToolConfigs = (
 					.default("auto")
 					.describe("Image detail level. Use high for OCR or small UI text."),
 			}),
+			toModelOutput: inspectedLocalImageOutputForModel,
 		}),
 		search_local_images: withProviderOptions({
 			description:
-				"Semantically search images inside a local folder explicitly shared by the desktop user. Use this when the user asks to find screenshots, photos, diagrams, images containing text, or images matching a visual description.",
+				"Find and inspect candidate images inside a local folder explicitly shared by the desktop user. Use this when the user asks to find screenshots, photos, diagrams, images containing text, or images matching a visual description.",
 			inputSchema: z.object({
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
@@ -118,6 +124,7 @@ export const buildLocalFolderToolConfigs = (
 					.default(5)
 					.describe("Maximum number of matching images to return."),
 			}),
+			toModelOutput: searchedLocalImagesOutputForModel,
 		}),
 		search_local_files: withProviderOptions({
 			description:

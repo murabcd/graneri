@@ -1,6 +1,6 @@
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
 import schema from "./schema";
@@ -20,6 +20,11 @@ const otherIdentity = {
 	name: "Other",
 	email: "other@example.com",
 };
+
+afterEach(() => {
+	vi.useRealTimers();
+});
+
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
@@ -279,6 +284,79 @@ test("local folder tool completion canonically updates the stored assistant mess
 	await expect(
 		t.mutation(api.chats.completeLocalFolderToolMessage, completion),
 	).rejects.toThrow("You must be signed in to access chats.");
+});
+
+test("local image tool continuations retain and release stored image bytes", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(new Blob(["image"], { type: "image/png" })),
+	);
+
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "chat-local-image",
+		preview: "Inspect image",
+		message: {
+			id: "assistant-local-image",
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{
+					input: { rootIndex: 0, relativePath: "screen.png" },
+					state: "input-available",
+					toolCallId: "call-image",
+					type: "tool-inspect_local_image",
+				},
+			]),
+			text: "",
+			createdAt: 2_000,
+		},
+	});
+
+	await asOwner.mutation(api.chats.completeLocalFolderToolMessage, {
+		workspaceId,
+		chatId: "chat-local-image",
+		message: {
+			id: "assistant-local-image",
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{
+					input: { rootIndex: 0, relativePath: "tampered.png" },
+					output: {
+						file: {
+							filename: "screen.png",
+							mediaType: "image/png",
+							providerMetadata: { graneri: { storageId } },
+							type: "file",
+							url: "https://example.test/screen.png",
+						},
+						path: "screen.png",
+						sizeBytes: 5,
+					},
+					state: "output-available",
+					toolCallId: "call-image",
+					type: "tool-inspect_local_image",
+				},
+			]),
+			text: "",
+			createdAt: 9_999,
+		},
+	});
+
+	const references = await t.run((ctx) =>
+		ctx.db
+			.query("chatAttachmentReferences")
+			.withIndex("by_storageId", (q) => q.eq("storageId", storageId))
+			.collect(),
+	);
+	expect(references).toHaveLength(1);
+
+	await asOwner.mutation(api.chats.remove, {
+		workspaceId,
+		chatId: "chat-local-image",
+	});
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+	expect(await t.run((ctx) => ctx.db.system.get(storageId))).toBeNull();
 });
 
 test("new chats use one placeholder title before generated title arrives", async () => {

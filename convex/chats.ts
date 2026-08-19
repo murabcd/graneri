@@ -1193,6 +1193,11 @@ export const completeLocalFolderToolMessage = mutation({
 		await Promise.all([
 			ctx.db.replace(existingMessage._id, replacement),
 			clearChatContextState(ctx, chat._id),
+			syncChatMessageAttachmentReferences(ctx, {
+				chatId: chat._id,
+				messageId: existingMessage.messageId,
+				partsJson: replacement.partsJson,
+			}),
 		]);
 
 		const completedMessage = await ctx.db.get(existingMessage._id);
