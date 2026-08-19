@@ -86,6 +86,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	admissionReservationId,
 	agent,
 	appsEnabled,
+	assistantContinuationMessageId,
 	attachableRun,
 	chatId,
 	chatMessages,
@@ -124,6 +125,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	admissionReservationId?: Id<"aiAdmissionReservations">;
 	agent: HostedRunContext["agent"];
 	appsEnabled: boolean;
+	assistantContinuationMessageId?: string;
 	attachableRun: AttachableAssistantRun | null;
 	chatId: string;
 	chatMessages: UIMessage[];
@@ -233,7 +235,8 @@ export const runHostedChatTurnStreamRuntime = async ({
 		return { activeStreamSession: null, ok: false };
 	}
 
-	const assistantMessageId = `stream-${crypto.randomUUID()}`;
+	const assistantMessageId =
+		assistantContinuationMessageId ?? `stream-${crypto.randomUUID()}`;
 	let pendingQueuedAcceptanceHeaders: Record<string, string> | null = null;
 	if (toolApprovalResponse) {
 		try {

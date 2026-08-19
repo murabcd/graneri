@@ -925,7 +925,18 @@ validation across the renderer, hosted route, and Convex. A desktop tool
 continuation is an assistant message, not an empty user input or an edited
 branch: the hosted route reconstructs it against the stored pending assistant
 message, Convex atomically replaces only the matching tool output fields, and
-the next hosted turn must not persist the preceding user message again.
+the next hosted turn must not persist the preceding user message again. Every
+model step in that AI SDK client-tool loop reuses the same assistant message id,
+so accumulated tool parts replace one canonical Convex message instead of
+creating overlapping assistant-message copies.
+If one AI SDK step contains both a completed desktop-local tool and a tool
+approval response, request preparation must compose both strict canonicalizers
+against the same stored assistant message so neither client-controlled copy of
+the original tool input is trusted and neither continuation result is dropped.
+The local Bash tool runs the documented `bash-tool` direct-call interface in an
+in-memory, text-only snapshot of the selected shared folder. Its writes never
+modify the host filesystem, and the outer AI SDK tool-call id is propagated to
+the nested Bash execution for consistent tracing.
 
 Hosted handlers must never claim direct access to the user's Mac filesystem.
 Desktop-local capabilities must fail visibly when the desktop bridge contract is

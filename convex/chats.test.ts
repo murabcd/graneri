@@ -13,6 +13,13 @@ const ownerIdentity = {
 	name: "Owner",
 	email: "owner@example.com",
 };
+const otherIdentity = {
+	issuer: "https://graneri.test",
+	subject: "other-subject",
+	tokenIdentifier: "test|other",
+	name: "Other",
+	email: "other@example.com",
+};
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
@@ -169,7 +176,7 @@ test("oversized user messages are rejected before chat persistence", async () =>
 });
 
 test("local folder tool completion canonically updates the stored assistant message", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
+	const { asOwner, t, workspaceId } = await createWorkspace();
 	await asOwner.mutation(api.chats.saveMessage, {
 		workspaceId,
 		chatId: "chat-local-tool",
@@ -245,6 +252,33 @@ test("local folder tool completion canonically updates the stored assistant mess
 			},
 		}),
 	).rejects.toThrow("Local folder tool message is invalid.");
+
+	const completion = {
+		workspaceId,
+		chatId: "chat-local-tool",
+		message: {
+			id: "assistant-local-tool",
+			role: "assistant" as const,
+			partsJson: JSON.stringify([
+				{
+					type: "tool-list_local_directory",
+					toolCallId: "call-1",
+					output: { entries: [] },
+					state: "output-available",
+				},
+			]),
+			text: "",
+			createdAt: 2_000,
+		},
+	};
+	await expect(
+		t
+			.withIdentity(otherIdentity)
+			.mutation(api.chats.completeLocalFolderToolMessage, completion),
+	).rejects.toThrow("Workspace not found.");
+	await expect(
+		t.mutation(api.chats.completeLocalFolderToolMessage, completion),
+	).rejects.toThrow("You must be signed in to access chats.");
 });
 
 test("new chats use one placeholder title before generated title arrives", async () => {

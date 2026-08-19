@@ -20,13 +20,9 @@ import {
 	type prepareHostedAssistantRunInput,
 	stopOrphanedHostedAssistantRun,
 } from "@workspace/ai/hosted-chat-turn";
-import {
-	createCanonicalLocalFolderToolContinuation,
-	isLocalFolderToolContinuationMessage,
-} from "@workspace/ai/local-folder-tool-contract";
+import { isLocalFolderToolContinuationMessage } from "@workspace/ai/local-folder-tool-contract";
 import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
 import {
-	createCanonicalToolApprovalResponse,
 	getToolApprovalResponse,
 	getToolApprovalResponses,
 	type ToolApprovalResponse,
@@ -42,6 +38,7 @@ import {
 	normalizeReasoningEffort,
 	normalizeServiceTier,
 } from "../src/lib/ai/models.js";
+import { createCanonicalChatAssistantContinuation } from "./chat-assistant-continuation.js";
 import { prepareServerAssistantRunInput } from "./chat-assistant-run-input.js";
 import { createHostedChatAutomationActions } from "./chat-automation-actions.js";
 import type {
@@ -660,21 +657,19 @@ export const handleChatRequest = async (
 				return true;
 			},
 			pendingMessages: pendingSteerMessages,
-			prepareMessage: currentToolApprovalResponse
-				? ({ storedMessages }) =>
-						createCanonicalToolApprovalResponse({
-							approvalResponse: currentToolApprovalResponse,
-							approvalResponses: getToolApprovalResponses(effectiveMessage),
-							storedMessage: storedMessages.find(
-								(storedMessage) =>
-									storedMessage.id ===
-									currentToolApprovalResponse.assistantMessageId,
-							),
-						})
-				: isLocalFolderToolContinuation
+			prepareMessage:
+				currentToolApprovalResponse || isLocalFolderToolContinuation
 					? ({ storedMessages }) =>
-							createCanonicalLocalFolderToolContinuation({
-								message: effectiveMessage,
+							createCanonicalChatAssistantContinuation({
+								approval: currentToolApprovalResponse
+									? {
+											response: currentToolApprovalResponse,
+											responses: getToolApprovalResponses(effectiveMessage),
+										}
+									: null,
+								localFolderToolContinuation: isLocalFolderToolContinuation
+									? effectiveMessage
+									: null,
 								storedMessage: storedMessages.find(
 									(storedMessage) => storedMessage.id === effectiveMessage.id,
 								),
@@ -815,6 +810,9 @@ export const handleChatRequest = async (
 			| undefined,
 		agent,
 		appsEnabled,
+		assistantContinuationMessageId: isLocalFolderToolContinuation
+			? effectiveMessage.id
+			: undefined,
 		attachableRun,
 		chatId: id,
 		chatMessages,

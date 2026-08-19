@@ -871,7 +871,7 @@ const getLocalBashTool = async ({ root }) => {
 		};
 	}
 
-	const { sandbox, tools } = await createBashTool({
+	const { bash, sandbox } = await createBashTool({
 		files: snapshot.files,
 		maxFiles: MAX_BASH_SNAPSHOT_FILES,
 		maxOutputLength: MAX_BASH_OUTPUT_LENGTH,
@@ -882,18 +882,12 @@ const getLocalBashTool = async ({ root }) => {
 				...result,
 				stdout: normalizeBashOutput(result.stdout),
 				stderr: normalizeBashOutput(result.stderr),
-				snapshot: {
-					mountedFileCount: snapshot.mountedFiles.length,
-					skippedFileCount: snapshot.skippedFiles.length,
-					totalBytes: snapshot.totalBytes,
-					truncated: snapshot.truncated,
-				},
 			},
 		}),
 	});
 	const value = {
 		sandbox,
-		tool: tools.bash,
+		tool: bash,
 		snapshot,
 	};
 
@@ -909,7 +903,7 @@ const getLocalBashTool = async ({ root }) => {
 	};
 };
 
-const runLocalBash = async ({ command, root }) => {
+const runLocalBash = async ({ command, root, toolCallId }) => {
 	const trimmedCommand = command.trim();
 
 	if (!trimmedCommand) {
@@ -923,7 +917,7 @@ const runLocalBash = async ({ command, root }) => {
 		},
 		{
 			messages: [],
-			toolCallId: "run_local_bash",
+			toolCallId,
 		},
 	);
 
@@ -1006,8 +1000,14 @@ export const buildLocalFolderTools = (roots) => {
 		}),
 		run_local_bash: tool({
 			...configs.run_local_bash,
-			execute: async ({ rootIndex, command }) =>
-				withDuration(() => runLocalBash({ command, root: getRoot(rootIndex) })),
+			execute: async ({ rootIndex, command }, { toolCallId }) =>
+				withDuration(() =>
+					runLocalBash({
+						command,
+						root: getRoot(rootIndex),
+						toolCallId,
+					}),
+				),
 		}),
 		get_shared_local_folders: tool({
 			...configs.get_shared_local_folders,

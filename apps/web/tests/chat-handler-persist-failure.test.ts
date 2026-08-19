@@ -580,6 +580,11 @@ describe("chat handler persistence failures", () => {
 			workspaceId: "workspace_1",
 		});
 		expect(convexMock.mutation.mock.calls[0]?.[1]).not.toHaveProperty("noteId");
+		expect(convexMock.mutation.mock.calls[1]?.[1]).toMatchObject({
+			assistantMessageId: "assistant_1",
+			chatId: "chat_1",
+			workspaceId: "workspace_1",
+		});
 	});
 
 	it("fails closed when edited branch preservation fails", async () => {
