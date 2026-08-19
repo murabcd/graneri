@@ -247,6 +247,8 @@ export default defineConfig(() => {
 			},
 		},
 		test: {
+			// Prevent full-suite jsdom workers from starving async React effects.
+			maxWorkers: 2,
 			setupFiles: ["./tests/setup.ts"],
 		},
 	};
