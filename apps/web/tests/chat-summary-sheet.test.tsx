@@ -36,7 +36,7 @@ describe("ChatSummarySheet", () => {
 		).toBe("false");
 	});
 
-	it("shows actual citations and executed apps instead of mentioned apps", () => {
+	it("shows input sources without cited links or a separate apps section", () => {
 		const messages: UIMessage[] = [
 			{
 				id: "user-1",
@@ -53,7 +53,15 @@ describe("ChatSummarySheet", () => {
 						},
 					],
 				},
-				parts: [{ type: "text", text: "@Figma find the roadmap" }],
+				parts: [
+					{ type: "text", text: "@Figma find the roadmap" },
+					{
+						type: "file",
+						filename: "brief.png",
+						mediaType: "image/png",
+						url: "https://files.example/brief.png",
+					},
+				],
 			},
 			{
 				id: "assistant-1",
@@ -89,10 +97,10 @@ describe("ChatSummarySheet", () => {
 			</TooltipProvider>,
 		);
 
-		expect(
-			screen.getByRole<HTMLAnchorElement>("link", { name: "Roadmap" }).href,
-		).toBe("https://example.com/roadmap");
+		expect(screen.queryByRole("link", { name: "Roadmap" })).toBeNull();
 		expect(screen.getByText("Google Drive")).toBeTruthy();
+		expect(screen.getByTitle("brief.png")).toBeTruthy();
+		expect(screen.queryByText("Apps used")).toBeNull();
 		expect(screen.queryByText("Figma")).toBeNull();
 	});
 });

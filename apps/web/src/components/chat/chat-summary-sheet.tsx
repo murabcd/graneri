@@ -219,7 +219,7 @@ export function ChatSummarySheet({
 				>
 					<SheetTitle className="sr-only">Chat summary</SheetTitle>
 					<SheetDescription className="sr-only">
-						View files, artifacts, sources, and apps used in this chat.
+						View files, artifacts, and sources in this chat.
 					</SheetDescription>
 					<ResizableSidePanelHandle
 						side="right"

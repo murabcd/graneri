@@ -14,7 +14,6 @@ import { ChevronRight, FileText, Paperclip } from "lucide-react";
 import * as React from "react";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import {
-	type ChatSummaryApp,
 	type ChatSummaryArtifact,
 	type ChatSummaryContent,
 	type ChatSummarySource,
@@ -62,19 +61,6 @@ export function ChatSummaryOverview({
 						</p>
 					)}
 				</ChatSummarySection>
-				<ChatSummarySection title="Apps used">
-					{content.appsUsed.length > 0 ? (
-						<div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-							{content.appsUsed.map((app) => (
-								<SummaryAppRow key={app.provider} app={app} />
-							))}
-						</div>
-					) : (
-						<p className="px-2 py-1.5 text-xs text-muted-foreground">
-							No apps used yet
-						</p>
-					)}
-				</ChatSummarySection>
 			</div>
 		</ScrollArea>
 	);
@@ -109,6 +95,18 @@ function SummarySourceRow({ source }: { source: ChatSummarySource }) {
 		"hover:bg-accent/50 hover:text-foreground",
 	);
 
+	if (source.kind === "app") {
+		return (
+			<div className={className} title={source.title}>
+				<AppSourceIcon
+					provider={source.provider}
+					className="size-3.5 shrink-0"
+				/>
+				<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
+			</div>
+		);
+	}
+
 	if (source.kind === "file") {
 		return (
 			<HoverCard openDelay={150}>
@@ -126,21 +124,6 @@ function SummarySourceRow({ source }: { source: ChatSummarySource }) {
 				</HoverCardTrigger>
 				<SummaryFilePreview file={source} />
 			</HoverCard>
-		);
-	}
-
-	if (source.kind === "url") {
-		return (
-			<a
-				className={cn(className, "cursor-pointer")}
-				href={source.href}
-				rel="noreferrer"
-				target="_blank"
-				title={source.title}
-			>
-				<FileText className="size-3.5 shrink-0" />
-				<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
-			</a>
 		);
 	}
 
@@ -178,18 +161,6 @@ function SummaryFilePreview({ file }: { file: ChatSummaryArtifact }) {
 	);
 }
 
-function SummaryAppRow({ app }: { app: ChatSummaryApp }) {
-	return (
-		<div
-			className="flex h-8 w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md px-2 text-sm text-muted-foreground"
-			title={app.title}
-		>
-			<AppSourceIcon provider={app.provider} className="size-3.5 shrink-0" />
-			<span className="min-w-0 flex-1 basis-0 truncate">{app.title}</span>
-		</div>
-	);
-}
-
 export function ChatSummarySection({
 	children,
 	defaultOpen = true,
@@ -206,8 +177,8 @@ export function ChatSummarySection({
 			<CollapsibleTrigger
 				aria-controls={contentId}
 				className={cn(
-					"group/label flex h-8 w-full cursor-pointer items-center justify-start gap-1.5 rounded-lg px-3 text-xs font-medium text-sidebar-foreground/60 outline-hidden transition-colors",
-					"hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+					"group/label flex h-8 w-full cursor-pointer items-center justify-start gap-1.5 rounded-lg px-3 text-xs font-medium text-sidebar-foreground/60 outline-hidden",
+					"focus-visible:ring-2 focus-visible:ring-sidebar-ring",
 				)}
 			>
 				<span>{title}</span>

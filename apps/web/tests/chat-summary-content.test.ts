@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { collectChatSummaryContent } from "../src/lib/chat-summary-content";
 
 describe("collectChatSummaryContent", () => {
-	it("separates actual citations, artifacts, and executed apps", () => {
+	it("collects input sources without cited links", () => {
 		const messages: UIMessage[] = [
 			{
 				id: "user-1",
@@ -12,16 +12,23 @@ describe("collectChatSummaryContent", () => {
 					mentionPositions: [
 						{
 							from: 0,
+							id: "note-1",
+							label: "Project brief",
+							to: 14,
+							type: "note",
+						},
+						{
+							from: 15,
 							id: "app:figma",
 							label: "Figma",
 							provider: "figma",
-							to: 6,
+							to: 21,
 							type: "tool",
 						},
 					],
 				},
 				parts: [
-					{ type: "text", text: "@Figma compare these sources" },
+					{ type: "text", text: "@Project brief @Figma compare these sources" },
 					{
 						type: "file",
 						filename: "brief.pdf",
@@ -110,10 +117,6 @@ describe("collectChatSummaryContent", () => {
 		];
 
 		expect(collectChatSummaryContent(messages)).toEqual({
-			appsUsed: [
-				{ provider: "google-drive", title: "Google Drive" },
-				{ provider: "notion", title: "Notion" },
-			],
 			artifacts: [
 				{
 					filename: "result.csv",
@@ -129,31 +132,25 @@ describe("collectChatSummaryContent", () => {
 					url: "https://files.example/brief.pdf",
 				},
 				{
-					kind: "document",
-					mediaType: "application/pdf",
-					sourceId: "document-1",
-					title: "Research paper",
+					kind: "note",
+					sourceId: "note-1",
+					title: "Project brief",
 				},
 				{
-					href: "https://example.com/reference",
-					kind: "url",
-					title: "Primary reference",
+					kind: "app",
+					provider: "google-drive",
+					title: "Google Drive",
 				},
 				{
-					href: "https://drive.example/roadmap",
-					kind: "url",
-					title: "Roadmap",
-				},
-				{
-					href: "https://search.example/result",
-					kind: "url",
-					title: "Search result",
+					kind: "app",
+					provider: "notion",
+					title: "Notion",
 				},
 			],
 		});
 	});
 
-	it("deduplicates source, artifact, and app identities", () => {
+	it("deduplicates source and artifact identities", () => {
 		const message: UIMessage = {
 			id: "assistant-1",
 			role: "assistant",
@@ -187,7 +184,6 @@ describe("collectChatSummaryContent", () => {
 		};
 
 		expect(collectChatSummaryContent([message, message])).toEqual({
-			appsUsed: [{ provider: "google-drive", title: "Google Drive" }],
 			artifacts: [
 				{
 					mediaType: "text/plain",
@@ -196,9 +192,9 @@ describe("collectChatSummaryContent", () => {
 			],
 			sources: [
 				{
-					href: "https://example.com/reference",
-					kind: "url",
-					title: "First title",
+					kind: "app",
+					provider: "google-drive",
+					title: "Google Drive",
 				},
 			],
 		});

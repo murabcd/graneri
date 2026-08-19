@@ -6,11 +6,9 @@ import type { UIMessage } from "ai";
 import {
 	extractFileParts,
 	extractGeneratedArtifacts,
+	getChatMessageMetadata,
 } from "@/lib/chat-message";
-import {
-	collectMessageAppProviders,
-	collectMessageSources,
-} from "@/lib/chat-sources";
+import { collectMessageAppProviders } from "@/lib/chat-sources";
 
 export type ChatSummaryArtifact = {
 	filename?: string;
@@ -19,27 +17,19 @@ export type ChatSummaryArtifact = {
 };
 
 export type ChatSummarySource =
-	| ({ kind: "file" } & ChatSummaryArtifact)
 	| {
-			filename?: string;
-			kind: "document";
-			mediaType: string;
-			sourceId: string;
+			kind: "app";
+			provider: AppSourceProvider;
 			title: string;
 	  }
+	| ({ kind: "file" } & ChatSummaryArtifact)
 	| {
-			href: string;
-			kind: "url";
+			kind: "note";
+			sourceId: string;
 			title: string;
 	  };
 
-export type ChatSummaryApp = {
-	provider: AppSourceProvider;
-	title: string;
-};
-
 export type ChatSummaryContent = {
-	appsUsed: ChatSummaryApp[];
 	artifacts: ChatSummaryArtifact[];
 	sources: ChatSummarySource[];
 };
@@ -52,51 +42,52 @@ const toSummaryArtifact = (artifact: ChatSummaryArtifact) => ({
 
 export const getChatSummarySourceKey = (source: ChatSummarySource) => {
 	switch (source.kind) {
+		case "app":
+			return `app:${source.provider}`;
 		case "file":
 			return `file:${source.url}`;
-		case "document":
-			return `document:${source.sourceId}`;
-		case "url":
-			return `url:${source.href}`;
+		case "note":
+			return `note:${source.sourceId}`;
 	}
 };
 
 const collectMessageSummarySources = (
 	message: UIMessage,
 ): ChatSummarySource[] => {
-	const files =
-		message.role === "user"
-			? extractFileParts(message).map(
-					(file) =>
-						({
-							...toSummaryArtifact(file),
-							kind: "file",
-						}) satisfies ChatSummarySource,
-				)
-			: [];
-	const referencedDocuments = message.parts.flatMap((part) =>
-		part.type === "source-document"
+	const apps = collectMessageAppProviders(message).map(
+		(provider) =>
+			({
+				kind: "app",
+				provider,
+				title: getChatAppSourceLabel(provider),
+			}) satisfies ChatSummarySource,
+	);
+	if (message.role !== "user") {
+		return apps;
+	}
+
+	const files = extractFileParts(message).map(
+		(file) =>
+			({
+				...toSummaryArtifact(file),
+				kind: "file",
+			}) satisfies ChatSummarySource,
+	);
+	const notes = (
+		getChatMessageMetadata(message)?.mentionPositions ?? []
+	).flatMap((mention) =>
+		mention.type === "note"
 			? [
 					{
-						...(part.filename && { filename: part.filename }),
-						kind: "document",
-						mediaType: part.mediaType,
-						sourceId: part.sourceId,
-						title: part.title,
+						kind: "note",
+						sourceId: mention.id,
+						title: mention.label,
 					} satisfies ChatSummarySource,
 				]
 			: [],
 	);
-	const referencedUrls = collectMessageSources(message).map(
-		(source) =>
-			({
-				href: source.href,
-				kind: "url",
-				title: source.title,
-			}) satisfies ChatSummarySource,
-	);
 
-	return [...files, ...referencedDocuments, ...referencedUrls];
+	return [...files, ...notes, ...apps];
 };
 
 const collectArtifacts = (messages: UIMessage[]): ChatSummaryArtifact[] => {
@@ -134,13 +125,7 @@ export const collectChatSummaryContent = (
 			seenSources.add(key);
 			return true;
 		});
-	const providers = [...new Set(messages.flatMap(collectMessageAppProviders))];
-
 	return {
-		appsUsed: providers.map((provider) => ({
-			provider,
-			title: getChatAppSourceLabel(provider),
-		})),
 		artifacts: collectArtifacts(messages),
 		sources,
 	};

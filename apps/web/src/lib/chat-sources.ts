@@ -48,17 +48,18 @@ const parseToolSourceOutput = (value: unknown) => {
 const collectToolSources = (message: UIMessage): ToolSource[] => {
 	const sources: ToolSource[] = [];
 
-	const addSourcesFromToolOutput = (toolName: string, output: unknown) => {
+	for (const part of message.parts) {
 		if (
-			toolName !== "web_search" &&
-			getAppSourceProviderForToolName(toolName) === null
+			!isToolUIPart(part) ||
+			part.state !== "output-available" ||
+			getToolName(part) !== "web_search"
 		) {
-			return;
+			continue;
 		}
 
-		const result = parseToolSourceOutput(output);
+		const result = parseToolSourceOutput(part.output);
 		if (!result) {
-			return;
+			continue;
 		}
 
 		for (const source of result.sources) {
@@ -67,18 +68,6 @@ const collectToolSources = (message: UIMessage): ToolSource[] => {
 				title: toDisplayTitle(source.url, source.title),
 			});
 		}
-	};
-
-	for (const part of message.parts) {
-		if (!isToolUIPart(part)) {
-			continue;
-		}
-
-		if (part.state !== "output-available") {
-			continue;
-		}
-
-		addSourcesFromToolOutput(getToolName(part), part.output);
 	}
 
 	const seen = new Set<string>();
