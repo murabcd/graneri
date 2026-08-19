@@ -4,25 +4,46 @@ const packagedNodeModules = Object.freeze([
 	"objc-js",
 ]);
 
-const localCommandRuntimeFiles = Object.freeze([
-	"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/js-exec-worker.js",
-	"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/sqlite3-worker.js",
-	"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/worker.js",
-	"dist-electron/main/node_modules/just-bash/package.json",
-	"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python.cjs",
-	"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python.wasm",
-	"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python313.zip",
+const runtimeDirectory = "dist-electron/main";
+const assetBackedRuntimes = Object.freeze([
+	Object.freeze({
+		packageName: "just-bash",
+		requiredFiles: Object.freeze([
+			"dist/bundle/chunks/js-exec-worker.js",
+			"dist/bundle/chunks/sqlite3-worker.js",
+			"dist/bundle/chunks/worker.js",
+			"package.json",
+			"vendor/cpython-emscripten/python.cjs",
+			"vendor/cpython-emscripten/python.wasm",
+			"vendor/cpython-emscripten/python313.zip",
+		]),
+	}),
 ]);
-
-const localCommandRuntimePackages = Object.freeze(["just-bash"]);
+const assetBackedRuntimePackages = Object.freeze(
+	assetBackedRuntimes.map(({ packageName }) => packageName),
+);
+const assetBackedRuntimeFiles = Object.freeze(
+	assetBackedRuntimes.flatMap(({ packageName, requiredFiles }) =>
+		requiredFiles.map(
+			(file) => `${runtimeDirectory}/node_modules/${packageName}/${file}`,
+		),
+	),
+);
+const mainBundleExternals = Object.freeze([
+	"electron",
+	"objc-js",
+	...assetBackedRuntimePackages,
+]);
 
 export const desktopPackageContract = {
 	appDirectory: ".package-app",
 	asarUnpack: [
-		"dist-electron/main/bin/**",
-		"dist-electron/main/node_modules/**",
+		`${runtimeDirectory}/bin/**`,
+		`${runtimeDirectory}/node_modules/**`,
 		"node_modules/objc-js/prebuilds/**",
 	],
+	assetBackedRuntimeFiles,
+	assetBackedRuntimePackages,
 	builderFiles: [
 		"dist-electron/**/*",
 		"dist-app/**/*",
@@ -33,13 +54,12 @@ export const desktopPackageContract = {
 		),
 	],
 	mainEntry: "dist-electron/main/index.js",
-	localCommandRuntimeFiles,
-	localCommandRuntimePackages,
+	mainBundleExternals,
 	packagedResourcesPath: "release/mac-arm64/Graneri.app/Contents/Resources/app",
 	packagedResourcesAsarPath:
 		"release/mac-arm64/Graneri.app/Contents/Resources/app.asar",
 	rendererDirectory: "dist-app",
-	runtimeDirectory: "dist-electron/main",
+	runtimeDirectory,
 	runtimeImportDirectory: "dist-electron/",
 	packagedNodeModules,
 };

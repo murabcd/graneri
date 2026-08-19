@@ -45,7 +45,7 @@ export const verifyStagedRuntimePackageClosure = (packagedResources) => {
 		}
 	};
 
-	for (const packageName of desktopPackageContract.localCommandRuntimePackages) {
+	for (const packageName of desktopPackageContract.assetBackedRuntimePackages) {
 		verifyPackage(packageName);
 	}
 

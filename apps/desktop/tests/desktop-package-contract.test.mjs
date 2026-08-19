@@ -21,7 +21,7 @@ test("desktop package contract owns the generated runtime layout", () => {
 		"dist-electron/main/node_modules/**",
 		"node_modules/objc-js/prebuilds/**",
 	]);
-	assert.deepEqual(desktopPackageContract.localCommandRuntimeFiles, [
+	assert.deepEqual(desktopPackageContract.assetBackedRuntimeFiles, [
 		"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/js-exec-worker.js",
 		"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/sqlite3-worker.js",
 		"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/worker.js",
@@ -30,7 +30,12 @@ test("desktop package contract owns the generated runtime layout", () => {
 		"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python.wasm",
 		"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python313.zip",
 	]);
-	assert.deepEqual(desktopPackageContract.localCommandRuntimePackages, [
+	assert.deepEqual(desktopPackageContract.assetBackedRuntimePackages, [
+		"just-bash",
+	]);
+	assert.deepEqual(desktopPackageContract.mainBundleExternals, [
+		"electron",
+		"objc-js",
 		"just-bash",
 	]);
 	assert.deepEqual(desktopPackageContract.builderFiles, [

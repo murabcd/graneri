@@ -466,10 +466,10 @@ const scanRuntimeImports = (packagedResources) => {
 	if (!packagedFilePaths.has("dist-app/theme-init.js")) {
 		throw new Error("Packaged app is missing the external theme initializer.");
 	}
-	for (const runtimeFile of desktopPackageContract.localCommandRuntimeFiles) {
+	for (const runtimeFile of desktopPackageContract.assetBackedRuntimeFiles) {
 		if (!packagedFilePaths.has(runtimeFile)) {
 			throw new Error(
-				`Packaged local command runtime is missing: ${runtimeFile}`,
+				`Packaged asset-backed runtime file is missing: ${runtimeFile}`,
 			);
 		}
 	}

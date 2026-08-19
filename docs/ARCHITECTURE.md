@@ -1167,7 +1167,10 @@ verifier.
 The generated package shape is owned by
 `apps/desktop/scripts/desktop-package-contract.mjs`. Build scripts, Electron
 Builder config, and package verification must read package paths and ASAR
-rules from that module instead of repeating release layout strings.
+rules from that module instead of repeating release layout strings. Each
+asset-backed runtime is declared there once with its package name and required
+files; main-bundle externalization, dependency-closure staging, targeted ASAR
+unpacking, and package verification derive from that policy.
 
 Renderer route ownership lives in `packages/platform/src/renderer-routes.mjs`.
 The packaged desktop protocol must use that manifest to decide whether an

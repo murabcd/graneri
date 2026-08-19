@@ -103,12 +103,10 @@ const bundleDesktopMain = async () => {
 			"--format=esm",
 			`--outdir=${bundledMainDir}`,
 			"--splitting",
-			"--external",
-			"electron",
-			"--external",
-			"objc-js",
-			"--external",
-			"just-bash",
+			...desktopPackageContract.mainBundleExternals.flatMap((packageName) => [
+				"--external",
+				packageName,
+			]),
 			"--sourcemap=none",
 		],
 		{
@@ -136,10 +134,10 @@ const bundleDesktopMain = async () => {
 	}
 };
 
-const stageLocalCommandRuntime = async () => {
+const stageAssetBackedRuntimes = async () => {
 	await stageRuntimePackages({
 		destinationNodeModulesPath: resolve(distDir, "node_modules"),
-		packageNames: desktopPackageContract.localCommandRuntimePackages,
+		packageNames: desktopPackageContract.assetBackedRuntimePackages,
 		resolveFrom: resolve(packageRoot, "package.json"),
 	});
 };
@@ -252,7 +250,7 @@ await mkdir(distDir, { recursive: true });
 await copyRuntimeSources();
 await bundleDesktopPreload();
 await bundleDesktopMain();
-await stageLocalCommandRuntime();
+await stageAssetBackedRuntimes();
 await copyNativeRuntimeTools();
 await copyMacOSRuntimeNodeModules();
 await stagePackageApp();
