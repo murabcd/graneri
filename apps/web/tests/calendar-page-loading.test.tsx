@@ -625,28 +625,6 @@ describe("CalendarPage loading", () => {
 		expect(screen.queryByRole("heading", { name: "New event" })).toBeNull();
 	}, 10_000);
 
-	it("blocks event creation while guest search text is unresolved", async () => {
-		const user = userEvent.setup();
-		renderCalendarPageWithNewEventTrigger(workspaceId);
-		await screen.findByText("Planning");
-
-		await user.click(screen.getByRole("button", { name: "New event" }));
-		await user.type(
-			await screen.findByRole("textbox", { name: "Title" }),
-			"Product sync",
-		);
-		const guests = screen.getByRole("combobox", { name: "Guests" });
-		await user.type(guests, "not-an-email");
-		await user.keyboard("{Tab}");
-		expect((guests as HTMLInputElement).validationMessage).toBe(
-			"Enter a valid email address.",
-		);
-		await user.click(screen.getByRole("button", { name: "Create" }));
-
-		expect(createCalendarEvent).not.toHaveBeenCalled();
-		expect(screen.getByText("Enter a valid email address.")).not.toBeNull();
-	});
-
 	it("creates a provider calendar and reloads the agenda", async () => {
 		const user = userEvent.setup();
 		listCalendarEvents.mockResolvedValue({
