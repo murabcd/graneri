@@ -1,6 +1,5 @@
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import { isDesktopRuntime } from "@workspace/platform/desktop";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import {
@@ -48,6 +47,7 @@ import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
+import { useSharedLocalFolderSession } from "@/hooks/use-shared-local-folder-session";
 import {
 	getStoredChatModel as getStoredLocalChatModel,
 	storeChatModel,
@@ -95,7 +95,6 @@ import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
-import { requireRehydratedSharedLocalFolders } from "@/lib/local-folder-sharing";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import {
@@ -313,11 +312,9 @@ const useChatPageController = ({
 		null,
 	);
 	// Preparing state tracks async request construction started by submit handlers.
-	// Shared local folders hydrate from desktop storage for the active chat scope.
-	const [sharedLocalFolders, setSharedLocalFolders] = React.useState<
-		DesktopLocalFolder[]
-	>([]);
 	const localFolderStorageScope = `chat:${chatId}`;
+	const { reconcileSharedLocalFolders, sharedLocalFolders } =
+		useSharedLocalFolderSession(localFolderStorageScope);
 	const notes = useQuery(
 		api.notes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -335,30 +332,6 @@ const useChatPageController = ({
 		},
 		[setDraftMetadata],
 	);
-	React.useEffect(() => {
-		let isCurrent = true;
-
-		void requireRehydratedSharedLocalFolders(localFolderStorageScope)
-			.then((folders) => {
-				if (isCurrent) {
-					setSharedLocalFolders(() => folders);
-				}
-			})
-			.catch((error: unknown) => {
-				if (isCurrent) {
-					setSharedLocalFolders([]);
-				}
-				logError({
-					event: "client.error",
-					error,
-					message: "Failed to re-register shared local folders.",
-				});
-			});
-
-		return () => {
-			isCurrent = false;
-		};
-	}, [localFolderStorageScope]);
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const persistChatSettings = useMutation(api.chats.setChatSettings);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
@@ -726,7 +699,7 @@ const useChatPageController = ({
 					setEditingMessageId(null);
 					clearDraft();
 					setAttachedFiles([]);
-					setSharedLocalFolders(() => localFolders);
+					reconcileSharedLocalFolders(localFolders);
 				},
 				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
 					setQueuedMessages((messages) =>
@@ -791,6 +764,7 @@ const useChatPageController = ({
 		isQueuedMessageEditCurrent,
 		latestRequestBodyRef,
 		localFolderStorageScope,
+		reconcileSharedLocalFolders,
 		mentions,
 		// The submit callback must capture the latest parent persistence callback.
 		chatPersistedCallback,

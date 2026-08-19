@@ -6,7 +6,6 @@ import {
 	canOpenDesktopSoundSettings,
 	openDesktopSoundSettings,
 } from "@workspace/platform/desktop";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent, CardHeader } from "@workspace/ui/components/card";
 import {
@@ -129,6 +128,7 @@ import {
 } from "@/hooks/use-note-discussion-session";
 import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
+import { useSharedLocalFolderSession } from "@/hooks/use-shared-local-folder-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
@@ -142,7 +142,6 @@ import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
-import { requireRehydratedSharedLocalFolders } from "@/lib/local-folder-sharing";
 import { logError } from "@/lib/logger";
 import { resolveCanGenerateNotes } from "@/lib/note-generate-action";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
@@ -486,34 +485,9 @@ const useNoteComposerController = ({
 		userPreferenceReasoningEffort: userPreferences?.reasoningEffort,
 		userPreferenceServiceTier: userPreferences?.serviceTier,
 	});
-	const [sharedLocalFolders, setSharedLocalFolders] = React.useState<
-		DesktopLocalFolder[]
-	>([]);
 	const localFolderStorageScope = `note-chat:${currentChatId}`;
-	React.useEffect(() => {
-		let isCurrent = true;
-
-		void requireRehydratedSharedLocalFolders(localFolderStorageScope)
-			.then((folders) => {
-				if (isCurrent) {
-					setSharedLocalFolders(() => folders);
-				}
-			})
-			.catch((error: unknown) => {
-				if (isCurrent) {
-					setSharedLocalFolders([]);
-				}
-				logError({
-					event: "client.error",
-					error,
-					message: "Failed to re-register shared local folders.",
-				});
-			});
-
-		return () => {
-			isCurrent = false;
-		};
-	}, [localFolderStorageScope]);
+	const { reconcileSharedLocalFolders, sharedLocalFolders } =
+		useSharedLocalFolderSession(localFolderStorageScope);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const enqueueQueuedMessage = useMutation(
@@ -1320,7 +1294,7 @@ const useNoteComposerController = ({
 					clearDraft();
 					setAttachedFiles([]);
 					resetTextareaHeight();
-					setSharedLocalFolders(() => localFolders);
+					reconcileSharedLocalFolders(localFolders);
 					requestComposerFocus();
 				},
 				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
@@ -1388,6 +1362,7 @@ const useNoteComposerController = ({
 		getDraftSnapshot,
 		latestRequestBodyRef,
 		localFolderStorageScope,
+		reconcileSharedLocalFolders,
 		openRightSidebar,
 		presentationMode,
 		queuedMessageEditDraft,

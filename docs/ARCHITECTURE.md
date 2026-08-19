@@ -964,6 +964,10 @@ Desktop-local capabilities must fail visibly when the desktop bridge contract is
 unavailable. Local path references must be registered through
 `shareLocalFolders` before they reach `/api/chat`, or request preparation must
 fail with an actionable error.
+Renderer chat surfaces use `useSharedLocalFolderSession` as the canonical owner
+of scope-tagged folder state, storage hydration, cancellation, error clearing,
+and request-prepared reconciliation. A late hydration result must never replace
+newer request state or expose folders from the previously active chat scope.
 
 On macOS, live transcription must use the desktop transcription controller. It
 must not silently fall back to the browser transcription controller when the
