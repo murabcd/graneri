@@ -80,6 +80,40 @@ describe("local folder sharing", () => {
 		]);
 	});
 
+	it("registers the complete canonical folder set when adding a path", async () => {
+		const existingFolder = {
+			id: "folder_1",
+			name: "one",
+			path: "/Users/test/Documents/one",
+		};
+		const addedFolder = {
+			id: "folder_2",
+			name: "two",
+			path: "/Users/test/Documents/two",
+		};
+		const shareLocalFolders = vi.fn().mockResolvedValue({
+			folders: [existingFolder, addedFolder],
+		});
+		window.graneriDesktop = {
+			platform: "darwin",
+			shareLocalFolders,
+		} as Window["graneriDesktop"];
+
+		await expect(
+			shareLocalFoldersFromText({
+				currentFolders: [existingFolder],
+				text: "compare with /Users/test/Documents/two",
+			}),
+		).resolves.toEqual({
+			allFolders: [existingFolder, addedFolder],
+			newFolders: [addedFolder],
+		});
+		expect(shareLocalFolders).toHaveBeenCalledWith([
+			"/Users/test/Documents/one",
+			"/Users/test/Documents/two",
+		]);
+	});
+
 	it("fails strict rehydration instead of reusing stale folders without the desktop bridge", async () => {
 		window.graneriDesktop = undefined;
 		storeSharedLocalFolders("chat_1", [

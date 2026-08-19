@@ -25,14 +25,6 @@ type LocalFolderRoot = {
 
 type Recipe = { name: string; prompt: string } | null;
 
-export declare const getHostedChatLocalFolderReferencePaths: (
-	localFolders?: LocalFolderReference[],
-) => string[];
-
-export declare const getHostedChatLocalFolderReferenceIds: (
-	localFolders?: LocalFolderReference[],
-) => string[];
-
 export declare const buildHostedChatRunContext: (args: {
 	appsEnabled?: boolean;
 	automationActions?: AutomationActions | null;
@@ -59,7 +51,6 @@ export declare const buildHostedChatRunContext: (args: {
 	}) => Promise<string>;
 	getUserProfileContext: () => Promise<unknown>;
 	localFolders?: LocalFolderReference[];
-	localFolderToolMode?: "client" | "server";
 	logLatency: (stage: string, details?: LogLatencyDetails) => void;
 	message?: UIMessage | null;
 	noteContext?: {
@@ -69,9 +60,6 @@ export declare const buildHostedChatRunContext: (args: {
 	noteId?: string | null;
 	providerOptions?: ProviderOptions;
 	recipeSlug?: string | null;
-	resolveLocalFolderRoots: (
-		localFolderPaths: string[],
-	) => Promise<LocalFolderRoot[]> | LocalFolderRoot[];
 	selectedSourceIds?: string[];
 	webSearchEnabled?: boolean;
 	workspaceId: string;

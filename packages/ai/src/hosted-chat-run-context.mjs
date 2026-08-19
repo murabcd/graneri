@@ -12,47 +12,34 @@ import { MAX_LOCAL_FOLDER_ROOTS } from "./local-folder-tool-definitions.mjs";
 import {
 	buildClientLocalFolderTools,
 	buildLocalFolderSystemContext,
-	buildLocalFolderTools,
 } from "./local-folder-tools.mjs";
 
-const buildClientLocalFolderRoots = (localFolders) =>
-	localFolders
-		.slice(0, MAX_LOCAL_FOLDER_ROOTS)
-		.map((folder) => {
-			const path =
-				typeof folder?.path === "string" && folder.path.trim().length > 0
-					? folder.path.trim()
-					: typeof folder?.name === "string" && folder.name.trim().length > 0
-						? folder.name.trim()
-						: null;
-			if (!path) {
-				return null;
-			}
+const buildClientLocalFolderRoots = (localFolders) => {
+	if (localFolders.length > MAX_LOCAL_FOLDER_ROOTS) {
+		throw new Error(
+			`At most ${MAX_LOCAL_FOLDER_ROOTS} local folders can be shared with one chat.`,
+		);
+	}
 
-			return {
-				...(typeof folder.id === "string" &&
-					folder.id.length > 0 && { id: folder.id }),
-				name:
-					typeof folder.name === "string" && folder.name.trim().length > 0
-						? folder.name.trim()
-						: path,
-				path,
-			};
-		})
-		.filter(Boolean);
-
-export const getHostedChatLocalFolderReferencePaths = (localFolders = []) =>
-	localFolders.reduce((paths, folder) => {
-		if (typeof folder?.path === "string" && folder.path.length > 0) {
-			paths.push(folder.path);
+	return localFolders.map((folder) => {
+		if (
+			typeof folder?.id !== "string" ||
+			!folder.id.trim() ||
+			typeof folder.name !== "string" ||
+			!folder.name.trim() ||
+			typeof folder.path !== "string" ||
+			!folder.path.trim()
+		) {
+			throw new Error("Shared local folder metadata is invalid.");
 		}
-		return paths;
-	}, []);
 
-export const getHostedChatLocalFolderReferenceIds = (localFolders = []) =>
-	localFolders
-		.map((folder) => folder?.id)
-		.filter((id) => typeof id === "string" && id.length > 0);
+		return {
+			id: folder.id.trim(),
+			name: folder.name.trim(),
+			path: folder.path.trim(),
+		};
+	});
+};
 
 export const buildHostedChatRunContext = async ({
 	appsEnabled = false,
@@ -72,14 +59,12 @@ export const buildHostedChatRunContext = async ({
 	getStoredNoteContext,
 	getUserProfileContext,
 	localFolders = [],
-	localFolderToolMode = "server",
 	logLatency,
 	message,
 	noteContext,
 	noteId,
 	providerOptions,
 	recipeSlug,
-	resolveLocalFolderRoots,
 	selectedSourceIds = [],
 	webSearchEnabled = false,
 	workspaceId,
@@ -116,12 +101,7 @@ export const buildHostedChatRunContext = async ({
 		hasRecipeContext: recipeContext.length > 0,
 		hasUserProfileContext: Boolean(userProfileContext),
 	});
-	const localFolderRoots =
-		localFolderToolMode === "client"
-			? buildClientLocalFolderRoots(localFolders)
-			: await resolveLocalFolderRoots(
-					getHostedChatLocalFolderReferencePaths(localFolders),
-				);
+	const localFolderRoots = buildClientLocalFolderRoots(localFolders);
 	const localFolderContext = buildLocalFolderSystemContext(localFolderRoots);
 	logLatency("tools.workspace_ready", {
 		appToolCount: Object.keys(appTools).length,
@@ -164,9 +144,7 @@ export const buildHostedChatRunContext = async ({
 		localFolderContext,
 		localFolderTools:
 			localFolderRoots.length > 0
-				? localFolderToolMode === "client"
-					? buildClientLocalFolderTools(localFolderRoots)
-					: buildLocalFolderTools(localFolderRoots)
+				? buildClientLocalFolderTools(localFolderRoots)
 				: {},
 		model: defaultModel,
 		providerOptions,

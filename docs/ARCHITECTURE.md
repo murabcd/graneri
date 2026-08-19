@@ -933,10 +933,21 @@ If one AI SDK step contains both a completed desktop-local tool and a tool
 approval response, request preparation must compose both strict canonicalizers
 against the same stored assistant message so neither client-controlled copy of
 the original tool input is trusted and neither continuation result is dropped.
-The local Bash tool runs the documented `bash-tool` direct-call interface in an
-in-memory, text-only snapshot of the selected shared folder. Its writes never
-modify the host filesystem, and the outer AI SDK tool-call id is propagated to
-the nested Bash execution for consistent tracing.
+`createLocalWorkspaceSession` is the canonical owner of shared-root validation,
+root lookup, and symlink-safe containment for local tools. Shared roots are
+canonical real paths, one chat may expose at most four unique roots, and an
+invalid or stale root fails the request visibly instead of being dropped.
+Structured file reads detect content from bounded bytes rather than trusting
+extensions and expose explicit byte ranges for large UTF-8 text files.
+`run_local_command` executes a real non-interactive shell from one selected
+root. The Electron main process owns the native command executor; the shared AI
+package receives that capability only through an explicit adapter when it builds
+desktop-executed tools. On macOS the executor must enter
+`/usr/bin/sandbox-exec` with a closed-by-default Seatbelt profile that permits
+reads of that root and the minimum system runtime, but grants no user-data reads
+outside the root, filesystem writes, or network access. Command length,
+runtime, and captured output are bounded. If that native sandbox is unavailable,
+execution fails closed; there is no virtual or unsandboxed fallback.
 
 Hosted handlers must never claim direct access to the user's Mac filesystem.
 Desktop-local capabilities must fail visibly when the desktop bridge contract is

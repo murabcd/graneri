@@ -40,8 +40,8 @@ describe("AI SDK tool part adapter", () => {
 			input: { command: "pwd" },
 			state: "input-available",
 			toolCallId: "call-3",
-			toolName: "run_local_bash",
-			type: "tool-run_local_bash",
+			toolName: "run_local_command",
+			type: "tool-run_local_command",
 		});
 
 		expect(metadata?.icon).toBe(Terminal);

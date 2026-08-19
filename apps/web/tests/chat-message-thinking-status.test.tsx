@@ -36,7 +36,7 @@ const completedToolAndReasoningMessage: UIMessage = {
 	role: "assistant",
 	parts: [
 		{
-			type: "tool-run_local_bash",
+			type: "tool-run_local_command",
 			toolCallId: "call-1",
 			state: "output-available",
 			input: { command: "pwd" },
@@ -299,6 +299,6 @@ describe("chat message thinking status", () => {
 		).toHaveLength(1);
 		await user.click(screen.getByRole("button", { name: /^Worked.*1 call/ }));
 		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
-		expect(screen.getByText("Explored local snapshot")).not.toBeNull();
+		expect(screen.getByText("Explored local folder")).not.toBeNull();
 	});
 });

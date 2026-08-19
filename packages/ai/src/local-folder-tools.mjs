@@ -1,19 +1,18 @@
-import { readdir, readFile, realpath, stat } from "node:fs/promises";
-import {
-	basename,
-	dirname,
-	isAbsolute,
-	join,
-	relative,
-	resolve,
-} from "node:path";
+import { constants } from "node:fs";
+import { open, readdir, stat } from "node:fs/promises";
+import { basename, join, relative } from "node:path";
 import { openai } from "@ai-sdk/openai";
 import { embed, generateText, tool } from "ai";
-import { createBashTool } from "bash-tool";
+import {
+	decodeLocalUtf8Range,
+	detectLocalFileMedia,
+} from "./local-file-media.mjs";
 import {
 	buildLocalFolderToolConfigs,
+	MAX_LOCAL_FILE_READ_BYTES,
 	MAX_LOCAL_FOLDER_ROOTS,
 } from "./local-folder-tool-definitions.mjs";
+import { createLocalWorkspaceSession } from "./local-workspace-paths.mjs";
 import { aiLogger } from "./logger.mjs";
 import {
 	DEFAULT_CHAT_MODEL_ID,
@@ -21,22 +20,15 @@ import {
 } from "./models.mjs";
 
 export { buildLocalFolderSystemContext } from "./local-folder-tool-definitions.mjs";
-export { extractTextFromUIMessage } from "./local-path-references.mjs";
 
 const MAX_DIRECTORY_ENTRIES = 200;
 const MAX_WALK_FILES = 1000;
-const MAX_FILE_BYTES = 120_000;
 const MAX_SEARCH_MATCHES = 40;
 const MAX_SEARCH_FILE_BYTES = 250_000;
-const MAX_BASH_SNAPSHOT_FILES = 500;
-const MAX_BASH_SNAPSHOT_FILE_BYTES = 250_000;
-const MAX_BASH_SNAPSHOT_BYTES = 3_000_000;
-const MAX_BASH_OUTPUT_LENGTH = 20_000;
 const MAX_IMAGE_BYTES = 20_000_000;
 const MAX_IMAGE_ANALYSIS_PROMPT_LENGTH = 1_000;
 const MAX_IMAGE_SEARCH_FILES = 12;
 const MAX_IMAGE_SEARCH_RESULTS = 10;
-const bashToolCache = new Map();
 const imageMetadataCache = new Map();
 const IGNORED_DIRECTORY_NAMES = new Set([
 	".cache",
@@ -50,57 +42,6 @@ const IGNORED_DIRECTORY_NAMES = new Set([
 	"out",
 	"target",
 ]);
-const TEXT_FILE_EXTENSIONS = new Set([
-	".c",
-	".cc",
-	".conf",
-	".cpp",
-	".cs",
-	".css",
-	".csv",
-	".go",
-	".h",
-	".hpp",
-	".html",
-	".java",
-	".js",
-	".json",
-	".jsx",
-	".kt",
-	".log",
-	".md",
-	".mdx",
-	".mjs",
-	".py",
-	".rb",
-	".rs",
-	".sh",
-	".sql",
-	".swift",
-	".toml",
-	".ts",
-	".tsx",
-	".txt",
-	".xml",
-	".yaml",
-	".yml",
-]);
-const LOCAL_IMAGE_EXTENSIONS = new Set([
-	".gif",
-	".heic",
-	".jpeg",
-	".jpg",
-	".png",
-	".webp",
-]);
-const IMAGE_MEDIA_TYPES = {
-	".gif": "image/gif",
-	".heic": "image/heic",
-	".jpeg": "image/jpeg",
-	".jpg": "image/jpeg",
-	".png": "image/png",
-	".webp": "image/webp",
-};
 const deferredOpenAIToolOptions = {
 	openai: {
 		deferLoading: true,
@@ -109,44 +50,7 @@ const deferredOpenAIToolOptions = {
 
 const isIgnoredDirectory = (name) => IGNORED_DIRECTORY_NAMES.has(name);
 
-const getExtension = (path) => {
-	const name = basename(path);
-	const index = name.lastIndexOf(".");
-	return index >= 0 ? name.slice(index).toLowerCase() : "";
-};
-
-const isProbablyTextFile = (path) => {
-	const name = basename(path).toLowerCase();
-	return (
-		TEXT_FILE_EXTENSIONS.has(getExtension(path)) ||
-		name === "makefile" ||
-		name === "dockerfile" ||
-		name === "license"
-	);
-};
-
-const isSupportedImageFile = (path) =>
-	LOCAL_IMAGE_EXTENSIONS.has(getExtension(path));
-
-export const getImageMediaType = (path) =>
-	IMAGE_MEDIA_TYPES[getExtension(path)] ?? "image/png";
-
 const imageEmbeddingModel = openai.embedding("text-embedding-3-small");
-
-const resolveInsideRoot = ({ relativePath = ".", root }) => {
-	const candidate = resolve(root.path, relativePath);
-	const rootRelativePath = relative(root.path, candidate);
-
-	if (
-		rootRelativePath.startsWith("..") ||
-		rootRelativePath === ".." ||
-		isAbsolute(rootRelativePath)
-	) {
-		throw new Error("Path is outside the shared folder.");
-	}
-
-	return candidate;
-};
 
 const withDuration = async (operation) => {
 	const startedAt = Date.now();
@@ -187,42 +91,14 @@ const toRootSummary = (root, index) => ({
 	source: root.source,
 });
 
-export const resolveLocalFolderRoots = async (references) => {
-	const roots = [];
-	const seen = new Set();
+const openReadOnlyFile = (filePath) =>
+	open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
 
-	for (const source of references.slice(0, MAX_LOCAL_FOLDER_ROOTS * 2)) {
-		try {
-			const resolvedPath = await realpath(source);
-			const pathStat = await stat(resolvedPath);
-			const rootPath = pathStat.isDirectory()
-				? resolvedPath
-				: dirname(resolvedPath);
-
-			if (seen.has(rootPath)) {
-				continue;
-			}
-
-			seen.add(rootPath);
-			roots.push({
-				name: basename(rootPath) || rootPath,
-				path: rootPath,
-				source,
-			});
-
-			if (roots.length >= MAX_LOCAL_FOLDER_ROOTS) {
-				break;
-			}
-		} catch {
-			// Ignore stale pasted paths; the assistant can still answer normally.
-		}
-	}
-
-	return roots;
-};
-
-const listDirectory = async ({ relativePath = ".", root }) => {
-	const directoryPath = resolveInsideRoot({ relativePath, root });
+const listDirectory = async ({ relativePath = ".", rootIndex, workspace }) => {
+	const { path: directoryPath, root } = await workspace.resolveExistingPath({
+		relativePath,
+		rootIndex,
+	});
 	const directoryStat = await stat(directoryPath);
 
 	if (!directoryStat.isDirectory()) {
@@ -253,28 +129,111 @@ const listDirectory = async ({ relativePath = ".", root }) => {
 	};
 };
 
-const readLocalFile = async ({ relativePath, root }) => {
-	const filePath = resolveInsideRoot({ relativePath, root });
-	const fileStat = await stat(filePath);
-
-	if (!fileStat.isFile()) {
-		throw new Error("Path is not a file.");
+const readFileHeader = async (filePath, maxBytes = 8_192) => {
+	const file = await openReadOnlyFile(filePath);
+	try {
+		const fileStat = await file.stat();
+		if (!fileStat.isFile()) {
+			throw new Error("Path is not a file.");
+		}
+		const header = Buffer.alloc(Math.min(maxBytes, fileStat.size));
+		const { bytesRead } = await file.read(header, 0, header.length, 0);
+		return {
+			buffer: header.subarray(0, bytesRead),
+			fileStat,
+		};
+	} finally {
+		await file.close();
 	}
+};
 
-	if (!isProbablyTextFile(filePath)) {
-		throw new Error("Only text-like files can be read.");
+const readEntireFile = async (
+	filePath,
+	{ maxBytes = Number.POSITIVE_INFINITY, tooLargeMessage } = {},
+) => {
+	const file = await openReadOnlyFile(filePath);
+	try {
+		const fileStat = await file.stat();
+		if (!fileStat.isFile()) {
+			throw new Error("Path is not a file.");
+		}
+		if (fileStat.size > maxBytes) {
+			throw new Error(tooLargeMessage ?? "File exceeds the read limit.");
+		}
+		return {
+			buffer: await file.readFile(),
+			fileStat,
+		};
+	} finally {
+		await file.close();
 	}
+};
 
-	const buffer = await readFile(filePath);
-	const truncated = buffer.byteLength > MAX_FILE_BYTES;
-	const content = buffer.subarray(0, MAX_FILE_BYTES).toString("utf8");
+const readLocalFile = async ({
+	lengthBytes,
+	offsetBytes,
+	relativePath,
+	rootIndex,
+	workspace,
+}) => {
+	const { path: filePath, root } = await workspace.resolveExistingPath({
+		relativePath,
+		rootIndex,
+	});
+	const file = await openReadOnlyFile(filePath);
+	try {
+		const fileStat = await file.stat();
+		if (!fileStat.isFile()) {
+			throw new Error("Path is not a file.");
+		}
 
-	return {
-		path: relative(root.path, filePath),
-		sizeBytes: fileStat.size,
-		truncated,
-		content,
-	};
+		const header = Buffer.alloc(Math.min(8_192, fileStat.size));
+		const headerRead = await file.read(header, 0, header.length, 0);
+		const media = detectLocalFileMedia(
+			header.subarray(0, headerRead.bytesRead),
+		);
+		if (media.kind !== "text") {
+			throw new Error(
+				`Only UTF-8 text files can be read. Detected ${media.mediaType}.`,
+			);
+		}
+
+		const normalizedOffset = Math.min(offsetBytes, fileStat.size);
+		const normalizedLength = Math.min(
+			lengthBytes,
+			MAX_LOCAL_FILE_READ_BYTES,
+			fileStat.size - normalizedOffset,
+		);
+		const buffer = Buffer.alloc(normalizedLength);
+		const { bytesRead } = await file.read(
+			buffer,
+			0,
+			normalizedLength,
+			normalizedOffset,
+		);
+		const decoded = decodeLocalUtf8Range(buffer.subarray(0, bytesRead), {
+			allowTrailingPartial: normalizedOffset + bytesRead < fileStat.size,
+		});
+		if (bytesRead > 0 && decoded.byteLength === 0) {
+			throw new Error(
+				"The requested byte length is too small for the next UTF-8 character.",
+			);
+		}
+		const nextOffsetBytes = normalizedOffset + decoded.byteLength;
+
+		return {
+			content: decoded.text,
+			lengthBytes: decoded.byteLength,
+			mediaType: media.mediaType,
+			nextOffsetBytes: nextOffsetBytes < fileStat.size ? nextOffsetBytes : null,
+			offsetBytes: normalizedOffset,
+			path: relative(root.path, filePath),
+			sizeBytes: fileStat.size,
+			truncated: nextOffsetBytes < fileStat.size,
+		};
+	} finally {
+		await file.close();
+	}
 };
 
 const buildImageCacheKey = ({ filePath, fileStat }) =>
@@ -362,30 +321,28 @@ const inspectLocalImage = async ({
 	detail = "auto",
 	prompt,
 	relativePath,
-	root,
+	rootIndex,
+	workspace,
 }) => {
-	const filePath = resolveInsideRoot({ relativePath, root });
-	const fileStat = await stat(filePath);
-
-	if (!fileStat.isFile()) {
-		throw new Error("Path is not a file.");
-	}
-
-	if (!isSupportedImageFile(filePath)) {
-		throw new Error("Only supported image files can be inspected.");
-	}
-
-	if (fileStat.size > MAX_IMAGE_BYTES) {
-		throw new Error(
-			`Image file is too large to inspect directly. Maximum size is ${MAX_IMAGE_BYTES} bytes.`,
-		);
-	}
+	const { path: filePath, root } = await workspace.resolveExistingPath({
+		relativePath,
+		rootIndex,
+	});
+	const { buffer: image, fileStat } = await readEntireFile(filePath, {
+		maxBytes: MAX_IMAGE_BYTES,
+		tooLargeMessage: `Image file is too large to inspect directly. Maximum size is ${MAX_IMAGE_BYTES} bytes.`,
+	});
 
 	const normalizedPrompt =
 		typeof prompt === "string"
 			? prompt.trim().slice(0, MAX_IMAGE_ANALYSIS_PROMPT_LENGTH)
 			: "";
-	const image = await readFile(filePath);
+	const media = detectLocalFileMedia(image.subarray(0, 8_192));
+	if (media.kind !== "image") {
+		throw new Error(
+			`Only supported image files can be inspected. Detected ${media.mediaType}.`,
+		);
+	}
 	const { text } = await generateText({
 		model: openai(DEFAULT_CHAT_MODEL_ID),
 		providerOptions: getOpenAiModelProviderOptions(DEFAULT_CHAT_MODEL_ID, {
@@ -404,7 +361,7 @@ const inspectLocalImage = async ({
 					{
 						type: "file",
 						data: image,
-						mediaType: getImageMediaType(filePath),
+						mediaType: media.mediaType,
 						providerOptions: createImageDetailProviderOptions(detail),
 					},
 				],
@@ -415,12 +372,18 @@ const inspectLocalImage = async ({
 	return {
 		path: relative(root.path, filePath),
 		sizeBytes: fileStat.size,
-		mediaType: getImageMediaType(filePath),
+		mediaType: media.mediaType,
 		analysis: text,
 	};
 };
 
-const describeImageForSearch = async ({ filePath, fileStat, query }) => {
+const describeImageForSearch = async ({
+	filePath,
+	fileStat,
+	image,
+	mediaType,
+	query,
+}) => {
 	const cacheKey = buildImageCacheKey({ filePath, fileStat });
 	const cached = imageMetadataCache.get(cacheKey);
 	if (cached) {
@@ -438,7 +401,6 @@ const describeImageForSearch = async ({ filePath, fileStat, query }) => {
 		throw new Error("Image file is too large to index.");
 	}
 
-	const image = await readFile(filePath);
 	const startedAt = Date.now();
 	logLocalToolEvent("image_metadata_start", {
 		path: filePath,
@@ -469,7 +431,7 @@ const describeImageForSearch = async ({ filePath, fileStat, query }) => {
 					{
 						type: "file",
 						data: image,
-						mediaType: getImageMediaType(filePath),
+						mediaType,
 						providerOptions: createImageDetailProviderOptions("low"),
 					},
 				],
@@ -507,7 +469,8 @@ const searchLocalImages = async ({
 	maxResults = 5,
 	query,
 	relativePath = ".",
-	root,
+	rootIndex,
+	workspace,
 }) => {
 	const needle = query.trim();
 
@@ -515,7 +478,10 @@ const searchLocalImages = async ({
 		throw new Error("Search query is required.");
 	}
 
-	const directoryPath = resolveInsideRoot({ relativePath, root });
+	const { path: directoryPath, root } = await workspace.resolveExistingPath({
+		relativePath,
+		rootIndex,
+	});
 	const directoryStat = await stat(directoryPath);
 
 	if (!directoryStat.isDirectory()) {
@@ -534,22 +500,36 @@ const searchLocalImages = async ({
 
 	const rootRelativePath = relative(root.path, directoryPath) || ".";
 	const queryTokens = tokenizeSearchQuery(needle);
-	const imageCandidates = files
-		.filter(isSupportedImageFile)
-		.map((imagePath) => ({
+	const imageCandidates = [];
+	for (const imagePath of files) {
+		const { path: absolutePath } = await workspace.resolveExistingPath({
+			relativePath: imagePath,
+			rootIndex,
+		});
+		const fileHeader = await readFileHeader(absolutePath).catch(() => null);
+		if (!fileHeader) {
+			continue;
+		}
+		const media = detectLocalFileMedia(fileHeader.buffer);
+		if (media.kind !== "image") {
+			continue;
+		}
+		imageCandidates.push({
+			mediaType: media.mediaType,
 			path: imagePath,
 			pathScore: scoreImagePathCandidate({
 				imagePath,
 				queryTokens,
 				rootRelativePath,
 			}),
-		}))
-		.sort(
-			(left, right) =>
-				right.pathScore - left.pathScore ||
-				left.path.split("/").length - right.path.split("/").length ||
-				left.path.localeCompare(right.path),
-		);
+		});
+	}
+	imageCandidates.sort(
+		(left, right) =>
+			right.pathScore - left.pathScore ||
+			left.path.split("/").length - right.path.split("/").length ||
+			left.path.localeCompare(right.path),
+	);
 	const totalImageCount = imageCandidates.length;
 	const imagePaths = imageCandidates
 		.slice(0, MAX_IMAGE_SEARCH_FILES)
@@ -582,8 +562,14 @@ const searchLocalImages = async ({
 
 	for (const imagePath of imagePaths) {
 		const imageStartedAt = Date.now();
-		const absolutePath = resolveInsideRoot({ relativePath: imagePath, root });
-		const fileStat = await stat(absolutePath).catch(() => null);
+		const { path: absolutePath } = await workspace.resolveExistingPath({
+			relativePath: imagePath,
+			rootIndex,
+		});
+		const fileData = await readEntireFile(absolutePath, {
+			maxBytes: MAX_IMAGE_BYTES,
+		}).catch(() => null);
+		const fileStat = fileData?.fileStat ?? null;
 
 		if (!fileStat?.isFile() || fileStat.size > MAX_IMAGE_BYTES) {
 			logLocalToolEvent("image_search_candidate_skipped", {
@@ -597,6 +583,10 @@ const searchLocalImages = async ({
 		const metadata = await describeImageForSearch({
 			filePath: absolutePath,
 			fileStat,
+			image: fileData.buffer,
+			mediaType:
+				imageCandidates.find((candidate) => candidate.path === imagePath)
+					?.mediaType ?? "application/octet-stream",
 			query: needle,
 		});
 		if (metadata.cached) {
@@ -688,13 +678,14 @@ const walkFiles = async ({ directory, files, root }) => {
 	}
 };
 
-const searchLocalFiles = async ({ query, root }) => {
+const searchLocalFiles = async ({ query, rootIndex, workspace }) => {
 	const needle = query.trim().toLowerCase();
 
 	if (!needle) {
 		throw new Error("Search query is required.");
 	}
 
+	const root = workspace.getRoot(rootIndex);
 	const files = [];
 	await walkFiles({ directory: root.path, files, root });
 
@@ -706,8 +697,12 @@ const searchLocalFiles = async ({ query, root }) => {
 		}
 
 		const pathMatches = relativePath.toLowerCase().includes(needle);
-		const absolutePath = resolveInsideRoot({ relativePath, root });
-		const fileStat = await stat(absolutePath).catch(() => null);
+		const { path: absolutePath } = await workspace.resolveExistingPath({
+			relativePath,
+			rootIndex,
+		});
+		const headerData = await readFileHeader(absolutePath).catch(() => null);
+		const fileStat = headerData?.fileStat ?? null;
 
 		if (!fileStat?.isFile()) {
 			continue;
@@ -715,12 +710,18 @@ const searchLocalFiles = async ({ query, root }) => {
 
 		const lineMatches = [];
 
-		if (
-			isProbablyTextFile(absolutePath) &&
-			fileStat.size <= MAX_SEARCH_FILE_BYTES
-		) {
-			const content = await readFile(absolutePath, "utf8").catch(() => "");
-			const lines = content.split(/\r?\n/u);
+		if (fileStat.size <= MAX_SEARCH_FILE_BYTES) {
+			const fileData = await readEntireFile(absolutePath, {
+				maxBytes: MAX_SEARCH_FILE_BYTES,
+			}).catch(() => null);
+			const buffer = fileData?.buffer ?? null;
+			const media = buffer
+				? detectLocalFileMedia(buffer.subarray(0, 8_192))
+				: null;
+			const lines =
+				buffer && media?.kind === "text"
+					? buffer.toString("utf8").split(/\r?\n/u)
+					: [];
 
 			for (let index = 0; index < lines.length; index += 1) {
 				if (lines[index].toLowerCase().includes(needle)) {
@@ -753,218 +754,39 @@ const searchLocalFiles = async ({ query, root }) => {
 	};
 };
 
-const buildBashSnapshotCacheKey = ({ files, root }) =>
-	[
-		root.path,
-		...files.map((file) => [file.path, file.sizeBytes, file.mtimeMs].join(":")),
-	].join("|");
-
-const normalizeBashOutput = (output) => {
-	if (!/^\d+(,\d+)*$/u.test(output.trim())) {
-		return output;
-	}
-
-	const bytes = output
-		.trim()
-		.split(",")
-		.map((value) => Number.parseInt(value, 10));
-
-	if (
-		bytes.some((value) => !Number.isInteger(value) || value < 0 || value > 255)
-	) {
-		return output;
-	}
-
-	return Buffer.from(bytes).toString("utf8");
-};
-
-const createLocalBashSnapshot = async ({ root }) => {
-	const relativePaths = [];
-	await walkFiles({ directory: root.path, files: relativePaths, root });
-
-	const files = {};
-	const mountedFiles = [];
-	const skippedFiles = [];
-	let totalBytes = 0;
-
-	for (const relativePath of relativePaths) {
-		if (mountedFiles.length >= MAX_BASH_SNAPSHOT_FILES) {
-			skippedFiles.push({
-				path: relativePath,
-				reason: "snapshot file limit reached",
-			});
-			continue;
-		}
-
-		const absolutePath = resolveInsideRoot({ relativePath, root });
-		const fileStat = await stat(absolutePath).catch(() => null);
-
-		if (!fileStat?.isFile()) {
-			continue;
-		}
-
-		if (!isProbablyTextFile(absolutePath)) {
-			skippedFiles.push({
-				path: relativePath,
-				reason: "not a text-like file",
-			});
-			continue;
-		}
-
-		if (fileStat.size > MAX_BASH_SNAPSHOT_FILE_BYTES) {
-			skippedFiles.push({
-				path: relativePath,
-				reason: "file too large",
-			});
-			continue;
-		}
-
-		if (totalBytes + fileStat.size > MAX_BASH_SNAPSHOT_BYTES) {
-			skippedFiles.push({
-				path: relativePath,
-				reason: "snapshot byte limit reached",
-			});
-			continue;
-		}
-
-		const content = await readFile(absolutePath, "utf8").catch(() => null);
-		if (content === null) {
-			skippedFiles.push({
-				path: relativePath,
-				reason: "file could not be read",
-			});
-			continue;
-		}
-
-		files[relativePath] = content;
-		totalBytes += fileStat.size;
-		mountedFiles.push({
-			path: relativePath,
-			sizeBytes: fileStat.size,
-			mtimeMs: fileStat.mtimeMs,
-		});
-	}
-
-	return {
-		files,
-		mountedFiles,
-		skippedFiles,
-		totalBytes,
-		truncated:
-			relativePaths.length >= MAX_WALK_FILES ||
-			mountedFiles.length >= MAX_BASH_SNAPSHOT_FILES ||
-			totalBytes >= MAX_BASH_SNAPSHOT_BYTES,
-	};
-};
-
-const getLocalBashTool = async ({ root }) => {
-	const snapshot = await createLocalBashSnapshot({ root });
-	const cacheKey = buildBashSnapshotCacheKey({
-		files: snapshot.mountedFiles,
-		root,
-	});
-	const cached = bashToolCache.get(cacheKey);
-	if (cached) {
-		return {
-			...cached,
-			cached: true,
-		};
-	}
-
-	const { bash, sandbox } = await createBashTool({
-		files: snapshot.files,
-		maxFiles: MAX_BASH_SNAPSHOT_FILES,
-		maxOutputLength: MAX_BASH_OUTPUT_LENGTH,
-		extraInstructions:
-			"This is a virtual snapshot of text-like files from one user-shared local folder. It is not the user's real filesystem. Use commands for read/search/analysis such as find, grep, cat, head, tail, wc, sort, uniq, sed, awk, and jq. Do not claim that snapshot writes change the user's real files.",
-		onAfterBashCall: ({ result }) => ({
-			result: {
-				...result,
-				stdout: normalizeBashOutput(result.stdout),
-				stderr: normalizeBashOutput(result.stderr),
-			},
-		}),
-	});
-	const value = {
-		sandbox,
-		tool: bash,
-		snapshot,
-	};
-
-	for (const cachedValue of bashToolCache.values()) {
-		await cachedValue.sandbox?.stop?.();
-	}
-	bashToolCache.clear();
-	bashToolCache.set(cacheKey, value);
-
-	return {
-		...value,
-		cached: false,
-	};
-};
-
-const runLocalBash = async ({ command, root, toolCallId }) => {
-	const trimmedCommand = command.trim();
-
-	if (!trimmedCommand) {
-		throw new Error("Command is required.");
-	}
-
-	const { cached, snapshot, tool: bashTool } = await getLocalBashTool({ root });
-	const result = await bashTool.execute(
-		{
-			command: trimmedCommand,
-		},
-		{
-			messages: [],
-			toolCallId,
-		},
-	);
-
-	return {
-		...result,
-		cached,
-		snapshot: {
-			mountedFileCount: snapshot.mountedFiles.length,
-			skippedFileCount: snapshot.skippedFiles.length,
-			totalBytes: snapshot.totalBytes,
-			truncated: snapshot.truncated,
-		},
-	};
-};
-
-export const buildLocalFolderTools = (roots) => {
+export const buildLocalFolderTools = ({ executeLocalCommand, roots }) => {
 	if (roots.length === 0) {
 		return {};
 	}
+	if (typeof executeLocalCommand !== "function") {
+		throw new Error("A local command executor is required.");
+	}
 
-	const configs = buildLocalFolderToolConfigs(roots, {
+	const workspace = createLocalWorkspaceSession(roots);
+	const configs = buildLocalFolderToolConfigs(workspace.roots, {
 		maxImageSearchResults: MAX_IMAGE_SEARCH_RESULTS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
-	const getRoot = (rootIndex) => {
-		const root = roots[rootIndex];
-
-		if (!root) {
-			throw new Error("Unknown shared folder.");
-		}
-
-		return root;
-	};
 
 	return {
 		list_local_directory: tool({
 			...configs.list_local_directory,
 			execute: async ({ rootIndex, relativePath }) =>
 				withDuration(() =>
-					listDirectory({ relativePath, root: getRoot(rootIndex) }),
+					listDirectory({ relativePath, rootIndex, workspace }),
 				),
 		}),
 		read_local_file: tool({
 			...configs.read_local_file,
-			execute: async ({ rootIndex, relativePath }) =>
+			execute: async ({ lengthBytes, offsetBytes, rootIndex, relativePath }) =>
 				withDuration(() =>
-					readLocalFile({ relativePath, root: getRoot(rootIndex) }),
+					readLocalFile({
+						lengthBytes,
+						offsetBytes,
+						relativePath,
+						rootIndex,
+						workspace,
+					}),
 				),
 		}),
 		inspect_local_image: tool({
@@ -975,7 +797,8 @@ export const buildLocalFolderTools = (roots) => {
 						detail,
 						prompt,
 						relativePath,
-						root: getRoot(rootIndex),
+						rootIndex,
+						workspace,
 					}),
 				),
 		}),
@@ -987,7 +810,8 @@ export const buildLocalFolderTools = (roots) => {
 						maxResults,
 						query,
 						relativePath,
-						root: getRoot(rootIndex),
+						rootIndex,
+						workspace,
 					}),
 				),
 		}),
@@ -995,17 +819,20 @@ export const buildLocalFolderTools = (roots) => {
 			...configs.search_local_files,
 			execute: async ({ rootIndex, query }) =>
 				withDuration(() =>
-					searchLocalFiles({ query, root: getRoot(rootIndex) }),
+					searchLocalFiles({
+						query,
+						rootIndex,
+						workspace,
+					}),
 				),
 		}),
-		run_local_bash: tool({
-			...configs.run_local_bash,
-			execute: async ({ rootIndex, command }, { toolCallId }) =>
+		run_local_command: tool({
+			...configs.run_local_command,
+			execute: async ({ rootIndex, command }) =>
 				withDuration(() =>
-					runLocalBash({
+					executeLocalCommand({
 						command,
-						root: getRoot(rootIndex),
-						toolCallId,
+						rootPath: workspace.getRoot(rootIndex).path,
 					}),
 				),
 		}),
@@ -1013,7 +840,7 @@ export const buildLocalFolderTools = (roots) => {
 			...configs.get_shared_local_folders,
 			execute: async () =>
 				withDuration(async () => ({
-					folders: roots.map(toRootSummary),
+					folders: workspace.roots.map(toRootSummary),
 				})),
 		}),
 	};
@@ -1022,6 +849,11 @@ export const buildLocalFolderTools = (roots) => {
 export const buildClientLocalFolderTools = (roots) => {
 	if (roots.length === 0) {
 		return {};
+	}
+	if (roots.length > MAX_LOCAL_FOLDER_ROOTS) {
+		throw new Error(
+			`At most ${MAX_LOCAL_FOLDER_ROOTS} local folders can be shared with one chat.`,
+		);
 	}
 
 	const configs = buildLocalFolderToolConfigs(roots, {

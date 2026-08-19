@@ -6,6 +6,10 @@ export type LocalFolderToolRoot = {
 	source?: string;
 };
 
+export declare const MAX_LOCAL_FOLDER_ROOTS: number;
+export declare const MAX_LOCAL_FILE_READ_BYTES: number;
+export declare const MAX_LOCAL_COMMAND_LENGTH: number;
+
 export declare const buildLocalFolderSystemContext: (
 	roots: LocalFolderToolRoot[],
 ) => string;
@@ -37,7 +41,7 @@ export declare const buildLocalFolderToolConfigs: (
 		description: string;
 		inputSchema: z.ZodType;
 	};
-	run_local_bash: {
+	run_local_command: {
 		description: string;
 		inputSchema: z.ZodType;
 	};

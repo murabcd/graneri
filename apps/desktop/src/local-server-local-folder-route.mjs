@@ -1,55 +1,59 @@
+import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
+import { MAX_LOCAL_FOLDER_ROOTS } from "@workspace/ai/local-folder-tool-definitions";
 import { buildLocalFolderTools } from "@workspace/ai/local-folder-tools";
+import { z } from "zod";
+import { runLocalCommand } from "./local-command-runner.mjs";
 import { readJsonBody, sendJson } from "./local-server-http.mjs";
 
-const getLocalFolderIds = (localFolders) =>
-	Array.isArray(localFolders)
-		? localFolders
-				.map((folder) => folder?.id)
-				.filter((id) => typeof id === "string" && id.length > 0)
-		: [];
+const localFolderToolRequestSchema = z.object({
+	input: z.unknown(),
+	localFolders: z
+		.array(
+			z.object({
+				id: z.string().min(1),
+			}),
+		)
+		.min(1)
+		.max(MAX_LOCAL_FOLDER_ROOTS),
+	toolCallId: z.string().min(1),
+	toolName: z.string().refine(isLocalFolderToolName),
+});
 
-export const createLocalFolderToolRouteHandler =
-	({ getSharedLocalFolders }) =>
-	async (request, response) => {
-		const {
-			input,
-			localFolders = [],
-			toolCallId,
-			toolName,
-		} = await readJsonBody(request);
+export const createLocalFolderToolRouteHandler = ({
+	getSharedLocalFolders,
+}) => {
+	if (typeof getSharedLocalFolders !== "function") {
+		throw new Error("Desktop shared-folder lookup is required.");
+	}
 
-		if (typeof toolName !== "string" || !toolName) {
-			sendJson(response, 400, { error: "toolName is required." });
+	return async (request, response) => {
+		const parsedRequest = localFolderToolRequestSchema.safeParse(
+			await readJsonBody(request),
+		);
+		if (!parsedRequest.success) {
+			sendJson(response, 400, { error: "Invalid local tool request." });
 			return;
 		}
+		const { input, localFolders, toolCallId, toolName } = parsedRequest.data;
+		const localFolderRoots = getSharedLocalFolders(
+			localFolders.map(({ id }) => id),
+		);
 
-		if (typeof toolCallId !== "string" || !toolCallId) {
-			sendJson(response, 400, { error: "toolCallId is required." });
-			return;
-		}
-
-		const localFolderRoots =
-			typeof getSharedLocalFolders === "function"
-				? getSharedLocalFolders(getLocalFolderIds(localFolders))
-				: [];
-
-		if (localFolderRoots.length === 0) {
-			sendJson(response, 400, {
-				error: "No shared local folders are available for this tool call.",
-			});
-			return;
-		}
-
-		const toolToExecute = buildLocalFolderTools(localFolderRoots)[toolName];
+		const toolToExecute = buildLocalFolderTools({
+			executeLocalCommand: runLocalCommand,
+			roots: localFolderRoots,
+		})[toolName];
 
 		if (!toolToExecute?.execute) {
 			sendJson(response, 400, { error: `Unknown local tool: ${toolName}.` });
 			return;
 		}
 
-		const output = await toolToExecute.execute(input ?? {}, {
+		const parsedInput = await toolToExecute.inputSchema.parseAsync(input);
+		const output = await toolToExecute.execute(parsedInput, {
 			messages: [],
 			toolCallId,
 		});
 		sendJson(response, 200, { output });
 	};
+};

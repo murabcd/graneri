@@ -96,3 +96,39 @@ test("shares a file path by registering its parent folder", async () => {
 		result.folders[0],
 	]);
 });
+
+test("replaces the shared-root session atomically and rejects invalid paths", async () => {
+	const { rootDir, storage } = await createTestStorage();
+	const firstDir = join(rootDir, "first");
+	const secondDir = join(rootDir, "second");
+	await mkdir(firstDir);
+	await mkdir(secondDir);
+
+	const first = await storage.shareLocalFolders([firstDir]);
+	await assert.rejects(
+		storage.shareLocalFolders([secondDir, ""]),
+		/Local folder paths must be non-empty strings/u,
+	);
+	assert.deepEqual(storage.getSharedLocalFolders([first.folders[0].id]), [
+		first.folders[0],
+	]);
+
+	const second = await storage.shareLocalFolders([secondDir]);
+	assert.throws(
+		() => storage.getSharedLocalFolders([first.folders[0].id]),
+		/Shared local folder is no longer registered/u,
+	);
+	assert.deepEqual(storage.getSharedLocalFolders([second.folders[0].id]), [
+		second.folders[0],
+	]);
+	await assert.rejects(
+		storage.shareLocalFolders([
+			firstDir,
+			secondDir,
+			firstDir,
+			secondDir,
+			firstDir,
+		]),
+		/At most 4 local folders/u,
+	);
+});

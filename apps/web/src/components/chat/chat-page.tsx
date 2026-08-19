@@ -95,10 +95,7 @@ import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
-import {
-	loadStoredSharedLocalFolders,
-	rehydrateSharedLocalFolders,
-} from "@/lib/local-folder-sharing";
+import { requireRehydratedSharedLocalFolders } from "@/lib/local-folder-sharing";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import {
@@ -340,16 +337,23 @@ const useChatPageController = ({
 	);
 	React.useEffect(() => {
 		let isCurrent = true;
-		const storedFolders = loadStoredSharedLocalFolders(localFolderStorageScope);
-		setSharedLocalFolders(storedFolders);
 
-		void rehydrateSharedLocalFolders(localFolderStorageScope).then(
-			(folders) => {
+		void requireRehydratedSharedLocalFolders(localFolderStorageScope)
+			.then((folders) => {
 				if (isCurrent) {
 					setSharedLocalFolders(() => folders);
 				}
-			},
-		);
+			})
+			.catch((error: unknown) => {
+				if (isCurrent) {
+					setSharedLocalFolders([]);
+				}
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to re-register shared local folders.",
+				});
+			});
 
 		return () => {
 			isCurrent = false;

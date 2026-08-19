@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { startLocalServer } from "../src/local-server.mjs";
+
+const startTestLocalServer = (options = {}) =>
+	startLocalServer({
+		getSharedLocalFolders: () => [],
+		...options,
+	});
 
 const restoreEnv = (name, value) => {
 	if (value === undefined) {
@@ -59,7 +65,7 @@ test("enhance-note always proxies without forwarding stale body encoding headers
 	};
 
 	try {
-		server = await startLocalServer();
+		server = await startTestLocalServer();
 		const response = await fetchFromLocalServer(
 			originalFetch,
 			server,
@@ -121,7 +127,7 @@ test("apply-template strips stale body encoding headers from its streamed respon
 	};
 
 	try {
-		server = await startLocalServer();
+		server = await startTestLocalServer();
 		const response = await fetchFromLocalServer(
 			originalFetch,
 			server,
@@ -179,7 +185,7 @@ test("desktop streaming AI routes always proxy to the web server", async () => {
 	};
 
 	try {
-		server = await startLocalServer();
+		server = await startTestLocalServer();
 		const requestHeaders = {
 			connection: "close",
 			"content-type": "application/json",
@@ -284,7 +290,7 @@ test("desktop chat requires SITE_URL even when a local OpenAI key exists", async
 	process.env.OPENAI_API_KEY = "desktop-key-must-not-be-used";
 
 	try {
-		server = await startLocalServer();
+		server = await startTestLocalServer();
 		const response = await fetchFromLocalServer(fetch, server, "/api/chat", {
 			method: "POST",
 			headers: {
@@ -307,13 +313,16 @@ test("desktop chat requires SITE_URL even when a local OpenAI key exists", async
 });
 
 test("local folder tool requests execute against shared desktop folders", async () => {
-	const rootPath = await mkdtemp(join(tmpdir(), "graneri-local-tool-"));
+	const temporaryRootPath = await mkdtemp(
+		join(tmpdir(), "graneri-local-tool-"),
+	);
+	const rootPath = await realpath(temporaryRootPath);
 	await writeFile(join(rootPath, "note.txt"), "hello", "utf8");
 	let requestedFolderIds = null;
 	let server = null;
 
 	try {
-		server = await startLocalServer({
+		server = await startTestLocalServer({
 			getSharedLocalFolders: (folderIds) => {
 				requestedFolderIds = folderIds;
 				return [
@@ -355,6 +364,6 @@ test("local folder tool requests execute against shared desktop folders", async 
 		assert.equal(payload.output.entries[0].name, "note.txt");
 	} finally {
 		await server?.close();
-		await rm(rootPath, { force: true, recursive: true });
+		await rm(temporaryRootPath, { force: true, recursive: true });
 	}
 });

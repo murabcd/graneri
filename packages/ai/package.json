@@ -18,7 +18,6 @@
     "@ai-sdk/provider-utils": "^5.0.11",
     "@js-temporal/polyfill": "0.5.1",
     "ai": "7.0.31",
-    "bash-tool": "^1.3.18",
     "convex": "^1.42.3",
     "pino": "^10.1.0",
     "rrule": "2.8.1",
@@ -114,6 +113,10 @@
     "./local-folder-tool-contract": {
       "types": "./src/local-folder-tool-contract.d.mts",
       "import": "./src/local-folder-tool-contract.mjs"
+    },
+    "./local-folder-tool-definitions": {
+      "types": "./src/local-folder-tool-definitions.d.mts",
+      "import": "./src/local-folder-tool-definitions.mjs"
     },
     "./local-path-references": {
       "types": "./src/local-path-references.d.mts",

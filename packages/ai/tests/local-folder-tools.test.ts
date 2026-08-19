@@ -1,13 +1,24 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	buildClientLocalFolderTools,
 	buildLocalFolderSystemContext,
 	buildLocalFolderTools,
-	getImageMediaType,
 } from "../src/local-folder-tools.mjs";
+
+const buildToolsForDirectory = async (
+	directory: string,
+	executeLocalCommand = async (input: { command: string; rootPath: string }) =>
+		input,
+) => {
+	const rootPath = await realpath(directory);
+	return buildLocalFolderTools({
+		executeLocalCommand,
+		roots: [{ name: basename(rootPath), path: rootPath }],
+	});
+};
 
 describe("local folder tools", () => {
 	it("instructs the model to use tools for shared local path questions", () => {
@@ -23,7 +34,8 @@ describe("local folder tools", () => {
 		expect(context).toContain("Do not use connected app tools");
 		expect(context).toContain("screenshot");
 		expect(context).toContain("For local images");
-		expect(context).toContain("run_local_bash");
+		expect(context).toContain("run_local_command");
+		expect(context).toContain("blocks writes, network access");
 	});
 
 	it("exposes local image inspection and semantic search tools", async () => {
@@ -31,18 +43,11 @@ describe("local folder tools", () => {
 		try {
 			await writeFile(join(directory, "notes.txt"), "not an image");
 
-			const tools = buildLocalFolderTools([
-				{
-					name: "shared",
-					path: directory,
-				},
-			]);
+			const tools = await buildToolsForDirectory(directory);
 
 			expect(Object.keys(tools)).toContain("inspect_local_image");
 			expect(Object.keys(tools)).toContain("search_local_images");
 			expect(Object.keys(tools)).not.toContain("transcribe_local_audio");
-			expect(getImageMediaType("screen.png")).toBe("image/png");
-			expect(getImageMediaType("photo.jpg")).toBe("image/jpeg");
 			await expect(
 				tools.inspect_local_image.execute?.(
 					{
@@ -63,12 +68,7 @@ describe("local folder tools", () => {
 	it("marks local folder tools as deferred for OpenAI tool search", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
 		try {
-			const tools = buildLocalFolderTools([
-				{
-					name: "shared",
-					path: directory,
-				},
-			]);
+			const tools = await buildToolsForDirectory(directory);
 
 			for (const tool of Object.values(tools)) {
 				expect(tool.providerOptions?.openai?.deferLoading).toBe(true);
@@ -93,24 +93,23 @@ describe("local folder tools", () => {
 		}
 	});
 
-	it("runs bash commands against a text-only virtual snapshot", async () => {
+	it("reads explicit byte ranges from UTF-8 text without trusting extensions", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
 		try {
-			await writeFile(join(directory, "notes.txt"), "alpha\nbeta\nalpha\n");
-			await writeFile(join(directory, "image.png"), "not mounted as text");
+			await writeFile(join(directory, "meeting-data"), "alpha\nbeta\ngamma\n");
+			await writeFile(
+				join(directory, "binary-data"),
+				Buffer.from([0, 1, 2, 3]),
+			);
 
-			const tools = buildLocalFolderTools([
-				{
-					name: "shared",
-					path: directory,
-				},
-			]);
+			const tools = await buildToolsForDirectory(directory);
 
-			expect(Object.keys(tools)).toContain("run_local_bash");
-			const result = await tools.run_local_bash.execute?.(
+			const result = await tools.read_local_file.execute?.(
 				{
+					lengthBytes: 5,
+					offsetBytes: 6,
 					rootIndex: 0,
-					command: "cat notes.txt",
+					relativePath: "meeting-data",
 				},
 				{
 					messages: [],
@@ -118,12 +117,140 @@ describe("local folder tools", () => {
 				},
 			);
 
-			expect(result?.stdout).toContain("alpha");
-			expect(result?.stdout).not.toContain("image.png");
-			expect(result?.snapshot.mountedFileCount).toBe(1);
-			expect(result?.snapshot.skippedFileCount).toBe(1);
+			expect(result).toMatchObject({
+				content: "beta\n",
+				lengthBytes: 5,
+				mediaType: "text/plain; charset=utf-8",
+				nextOffsetBytes: 11,
+				offsetBytes: 6,
+				truncated: true,
+			});
+			await expect(
+				tools.read_local_file.execute?.(
+					{
+						lengthBytes: 4,
+						offsetBytes: 0,
+						rootIndex: 0,
+						relativePath: "binary-data",
+					},
+					{ messages: [], toolCallId: "binary" },
+				),
+			).rejects.toThrow("Detected application/octet-stream");
 		} finally {
 			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("returns only complete UTF-8 characters across byte ranges", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
+		try {
+			await writeFile(join(directory, "unicode-data"), "start 🙂 finish");
+			const tools = await buildToolsForDirectory(directory);
+
+			const first = await tools.read_local_file.execute?.(
+				{
+					lengthBytes: 8,
+					offsetBytes: 0,
+					rootIndex: 0,
+					relativePath: "unicode-data",
+				},
+				{ messages: [], toolCallId: "unicode-first" },
+			);
+			expect(first).toMatchObject({
+				content: "start ",
+				lengthBytes: 6,
+				nextOffsetBytes: 6,
+				truncated: true,
+			});
+
+			const second = await tools.read_local_file.execute?.(
+				{
+					lengthBytes: 4,
+					offsetBytes: first?.nextOffsetBytes,
+					rootIndex: 0,
+					relativePath: "unicode-data",
+				},
+				{ messages: [], toolCallId: "unicode-second" },
+			);
+			expect(second).toMatchObject({
+				content: "🙂",
+				lengthBytes: 4,
+				nextOffsetBytes: 10,
+				truncated: true,
+			});
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("rejects stale path references instead of silently dropping them", async () => {
+		const tools = buildLocalFolderTools({
+			executeLocalCommand: async () => ({}),
+			roots: [
+				{
+					name: "missing",
+					path: "/definitely/missing/graneri-local-folder",
+				},
+			],
+		});
+		await expect(
+			tools.list_local_directory.execute?.(
+				{ relativePath: ".", rootIndex: 0 },
+				{ messages: [], toolCallId: "missing" },
+			),
+		).rejects.toThrow();
+	});
+
+	it("delegates commands through the required desktop executor", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
+		try {
+			const calls: Array<{ command: string; rootPath: string }> = [];
+			const tools = await buildToolsForDirectory(directory, async (input) => {
+				calls.push(input);
+				return { stdout: "delegated\n" };
+			});
+
+			const result = await tools.run_local_command.execute?.(
+				{ command: "pwd", rootIndex: 0 },
+				{ messages: [], toolCallId: "command" },
+			);
+
+			expect(calls).toEqual([
+				{ command: "pwd", rootPath: await realpath(directory) },
+			]);
+			expect(result).toMatchObject({ stdout: "delegated\n" });
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("rejects structured reads through a symlink outside the shared root", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
+		const outsideDirectory = await mkdtemp(
+			join(tmpdir(), "graneri-local-tools-outside-"),
+		);
+		try {
+			await writeFile(join(outsideDirectory, "secret.txt"), "outside secret");
+			await symlink(
+				join(outsideDirectory, "secret.txt"),
+				join(directory, "escape"),
+			);
+			const tools = await buildToolsForDirectory(directory);
+
+			await expect(
+				tools.read_local_file.execute?.(
+					{
+						lengthBytes: 100,
+						offsetBytes: 0,
+						rootIndex: 0,
+						relativePath: "escape",
+					},
+					{ messages: [], toolCallId: "escape" },
+				),
+			).rejects.toThrow("outside the shared folder");
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+			await rm(outsideDirectory, { force: true, recursive: true });
 		}
 	});
 });

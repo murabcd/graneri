@@ -56,21 +56,3 @@ export const extractTextFromUIMessage = (message) => {
 		)
 		.join("\n");
 };
-
-export const mergeLocalFolders = (...folderGroups) => {
-	const foldersById = new Map();
-
-	for (const group of folderGroups) {
-		for (const folder of group ?? []) {
-			if (
-				folder &&
-				typeof folder.id === "string" &&
-				typeof folder.name === "string"
-			) {
-				foldersById.set(folder.id, folder);
-			}
-		}
-	}
-
-	return Array.from(foldersById.values());
-};

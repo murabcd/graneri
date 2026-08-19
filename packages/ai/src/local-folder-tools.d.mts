@@ -6,21 +6,19 @@ export type LocalFolderRoot = {
 	source?: string;
 };
 
-export { extractTextFromUIMessage } from "./local-path-references.mjs";
-
-export declare const resolveLocalFolderRoots: (
-	references: string[],
-) => Promise<LocalFolderRoot[]>;
-
-export declare const getImageMediaType: (path: string) => string;
-
 export declare const buildLocalFolderSystemContext: (
 	roots: LocalFolderRoot[],
 ) => string;
 
-export declare const buildLocalFolderTools: (
-	roots: LocalFolderRoot[],
-) => ToolSet;
+export type ExecuteLocalCommand = (input: {
+	command: string;
+	rootPath: string;
+}) => Promise<unknown>;
+
+export declare const buildLocalFolderTools: (input: {
+	executeLocalCommand: ExecuteLocalCommand;
+	roots: LocalFolderRoot[];
+}) => ToolSet;
 
 export declare const buildClientLocalFolderTools: (
 	roots: LocalFolderRoot[],

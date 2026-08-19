@@ -9,15 +9,14 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { MAX_LOCAL_FOLDER_ROOTS } from "@workspace/ai/local-folder-tool-definitions";
 import { logError } from "./logger.mjs";
 
 const transcriptDraftStorageVersion = 1;
 const transcriptDraftMaxAgeMs = 72 * 60 * 60 * 1000;
 const noteDraftStorageVersion = 1;
 const noteDraftMaxAgeMs = 72 * 60 * 60 * 1000;
-const maxLocalFolderShareRequestPaths = 8;
 const maxLocalFolderPathLength = 4096;
-const maxSharedLocalFolders = 12;
 
 const createLocalFolderId = (folderPath) =>
 	createHash("sha256").update(folderPath).digest("hex").slice(0, 24);
@@ -170,26 +169,29 @@ export const createDesktopStorage = ({
 
 	return {
 		getSharedLocalFolders: (ids) =>
-			ids
-				.map((id) => sharedLocalFolders.get(id))
-				.filter(Boolean)
-				.map(toSharedLocalFolderPayload),
+			ids.map((id) => {
+				const folder = sharedLocalFolders.get(id);
+				if (!folder) {
+					throw new Error("Shared local folder is no longer registered.");
+				}
+				return toSharedLocalFolderPayload(folder);
+			}),
 		shareLocalFolders: async (paths) => {
 			if (!Array.isArray(paths)) {
 				throw new Error("Local folder paths must be an array.");
 			}
 
-			if (paths.length > maxLocalFolderShareRequestPaths) {
+			if (paths.length > MAX_LOCAL_FOLDER_ROOTS) {
 				throw new Error(
-					`At most ${maxLocalFolderShareRequestPaths} local folders can be shared at once.`,
+					`At most ${MAX_LOCAL_FOLDER_ROOTS} local folders can be shared at once.`,
 				);
 			}
 
-			const folders = [];
+			const foldersById = new Map();
 
 			for (const value of paths) {
 				if (typeof value !== "string" || !value.trim()) {
-					continue;
+					throw new Error("Local folder paths must be non-empty strings.");
 				}
 
 				const requestedPath = value.trim();
@@ -206,19 +208,17 @@ export const createDesktopStorage = ({
 					path: folderPath,
 				};
 
+				foldersById.set(folder.id, folder);
+			}
+
+			sharedLocalFolders.clear();
+			for (const folder of foldersById.values()) {
 				sharedLocalFolders.set(folder.id, folder);
-				folders.push(toSharedLocalFolderPayload(folder));
 			}
 
-			while (sharedLocalFolders.size > maxSharedLocalFolders) {
-				const firstKey = sharedLocalFolders.keys().next().value;
-				if (!firstKey) {
-					break;
-				}
-				sharedLocalFolders.delete(firstKey);
-			}
-
-			return { folders };
+			return {
+				folders: Array.from(foldersById.values(), toSharedLocalFolderPayload),
+			};
 		},
 		loadTranscriptDraft: (noteKey) =>
 			loadDraft({

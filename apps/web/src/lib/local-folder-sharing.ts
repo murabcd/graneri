@@ -1,7 +1,4 @@
-import {
-	extractLocalPathReferences,
-	mergeLocalFolders,
-} from "@workspace/ai/local-path-references";
+import { extractLocalPathReferences } from "@workspace/ai/local-path-references";
 import { shareDesktopLocalFolders } from "@workspace/platform/desktop";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 
@@ -57,27 +54,6 @@ export const storeSharedLocalFolders = (
 	}
 };
 
-export const rehydrateSharedLocalFolders = async (
-	scope: string,
-): Promise<DesktopLocalFolder[]> => {
-	const storedFolders = loadStoredSharedLocalFolders(scope);
-
-	if (storedFolders.length === 0) {
-		return storedFolders;
-	}
-
-	const result = await shareDesktopLocalFolders(
-		storedFolders.map((folder) => folder.path),
-	).catch(() => null);
-
-	if (!result) {
-		return storedFolders;
-	}
-
-	storeSharedLocalFolders(scope, result.folders);
-	return result.folders;
-};
-
 export const requireRehydratedSharedLocalFolders = async (
 	scope: string,
 ): Promise<DesktopLocalFolder[]> => {
@@ -126,7 +102,11 @@ export const shareLocalFoldersFromText = async ({
 		};
 	}
 
-	const result = await shareDesktopLocalFolders(paths).catch(
+	const currentFolderIds = new Set(currentFolders.map((folder) => folder.id));
+	const requestedPaths = Array.from(
+		new Set([...currentFolders.map((folder) => folder.path), ...paths]),
+	);
+	const result = await shareDesktopLocalFolders(requestedPaths).catch(
 		(error: unknown) => {
 			throw new Error(
 				error instanceof Error
@@ -141,10 +121,10 @@ export const shareLocalFoldersFromText = async ({
 			"Desktop local folder sharing is unavailable. Restart the desktop app, then try again.",
 		);
 	}
-	const allFolders = mergeLocalFolders(currentFolders, result.folders);
-
 	return {
-		allFolders,
-		newFolders: result.folders,
+		allFolders: result.folders,
+		newFolders: result.folders.filter(
+			(folder) => !currentFolderIds.has(folder.id),
+		),
 	};
 };

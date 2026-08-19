@@ -21,7 +21,6 @@ import {
 	stopOrphanedHostedAssistantRun,
 } from "@workspace/ai/hosted-chat-turn";
 import { isLocalFolderToolContinuationMessage } from "@workspace/ai/local-folder-tool-contract";
-import { resolveLocalFolderRoots } from "@workspace/ai/local-folder-tools";
 import {
 	getToolApprovalResponse,
 	getToolApprovalResponses,
@@ -71,8 +70,6 @@ type PreparedHostedAssistantRunInput = Extract<
 type HostedChatRunContext = Awaited<
 	ReturnType<PreparedHostedAssistantRunInput["complete"]>
 >;
-
-const canUseLocalFolderTools = () => process.env.GRANERI_ENV_MODE === "local";
 
 const interruptActiveChatRun = async ({
 	chatId,
@@ -736,15 +733,12 @@ export const handleChatRequest = async (
 			getUserProfileContext: () =>
 				convexClient.query(api.userPreferences.getAiProfileContext, {}),
 			localFolders,
-			localFolderToolMode: canUseLocalFolderTools() ? "server" : "client",
 			logLatency,
 			message: effectiveMessage,
 			noteContext,
 			noteId: resolvedNoteId,
 			providerOptions,
 			recipeSlug,
-			resolveLocalFolderRoots: (folderPaths) =>
-				canUseLocalFolderTools() ? resolveLocalFolderRoots(folderPaths) : [],
 			selectedSourceIds,
 			webSearchEnabled,
 			workspaceId: resolvedWorkspaceId,

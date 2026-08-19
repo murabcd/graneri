@@ -9,7 +9,7 @@ export const LOCAL_FOLDER_TOOL_NAMES = [
 	"inspect_local_image",
 	"list_local_directory",
 	"read_local_file",
-	"run_local_bash",
+	"run_local_command",
 	"search_local_files",
 	"search_local_images",
 ];

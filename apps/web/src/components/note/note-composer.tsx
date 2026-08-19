@@ -142,10 +142,7 @@ import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
-import {
-	loadStoredSharedLocalFolders,
-	rehydrateSharedLocalFolders,
-} from "@/lib/local-folder-sharing";
+import { requireRehydratedSharedLocalFolders } from "@/lib/local-folder-sharing";
 import { logError } from "@/lib/logger";
 import { resolveCanGenerateNotes } from "@/lib/note-generate-action";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
@@ -495,16 +492,23 @@ const useNoteComposerController = ({
 	const localFolderStorageScope = `note-chat:${currentChatId}`;
 	React.useEffect(() => {
 		let isCurrent = true;
-		const storedFolders = loadStoredSharedLocalFolders(localFolderStorageScope);
-		setSharedLocalFolders(storedFolders);
 
-		void rehydrateSharedLocalFolders(localFolderStorageScope).then(
-			(folders) => {
+		void requireRehydratedSharedLocalFolders(localFolderStorageScope)
+			.then((folders) => {
 				if (isCurrent) {
 					setSharedLocalFolders(() => folders);
 				}
-			},
-		);
+			})
+			.catch((error: unknown) => {
+				if (isCurrent) {
+					setSharedLocalFolders([]);
+				}
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to re-register shared local folders.",
+				});
+			});
 
 		return () => {
 			isCurrent = false;

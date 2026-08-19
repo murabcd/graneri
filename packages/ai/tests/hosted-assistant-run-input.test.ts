@@ -72,7 +72,6 @@ const createCompletionInput = (): CompletionInput => ({
 	getStoredNoteContext: async () => "",
 	getUserProfileContext: async () => null,
 	logLatency: () => undefined,
-	resolveLocalFolderRoots: () => [],
 	workspaceId: "workspace-1",
 });
 

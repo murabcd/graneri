@@ -160,11 +160,11 @@ export const toolUiMetadata = {
 		complete: "Searched local files",
 		subtitleKeys: ["query"],
 	},
-	run_local_bash: {
+	run_local_command: {
 		groupKey: "local-folder",
 		icon: "terminal",
-		running: "Exploring local snapshot",
-		complete: "Explored local snapshot",
+		running: "Exploring local folder",
+		complete: "Explored local folder",
 		subtitleKeys: ["command"],
 	},
 	web_search: {

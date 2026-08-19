@@ -4,35 +4,12 @@ import {
 	buildChatAutomationContext,
 } from "../src/automation-tools.mjs";
 import { prepareHostedAssistantRunInput } from "../src/hosted-assistant-run-input.mjs";
-import {
-	buildHostedChatRunContext,
-	getHostedChatLocalFolderReferenceIds,
-	getHostedChatLocalFolderReferencePaths,
-} from "../src/hosted-chat-run-context.mjs";
+import { buildHostedChatRunContext } from "../src/hosted-chat-run-context.mjs";
 
 describe("hosted chat run context", () => {
-	it("extracts web local folder paths and desktop local folder ids", () => {
-		const folders = [
-			{ id: "folder-1", path: "/tmp/one" },
-			{ id: "", path: "" },
-			{ id: "folder-2" },
-			{ path: "/tmp/two" },
-		];
-
-		expect(getHostedChatLocalFolderReferencePaths(folders)).toEqual([
-			"/tmp/one",
-			"/tmp/two",
-		]);
-		expect(getHostedChatLocalFolderReferenceIds(folders)).toEqual([
-			"folder-1",
-			"folder-2",
-		]);
-	});
-
-	it("loads sources, builds tools, and preserves route-owned local folder resolution", async () => {
+	it("loads sources and builds client-executed local folder tools", async () => {
 		const latencyStages: string[] = [];
 		const automations: unknown[] = [];
-		const localFolderArguments: unknown[] = [];
 		const convexClient = {
 			query: async () => null,
 			mutation: async () => null,
@@ -106,7 +83,7 @@ describe("hosted chat run context", () => {
 			}),
 			getStoredNoteContext: async () => "stored note",
 			getUserProfileContext: async () => ({ name: "Murad" }),
-			localFolders: [{ id: "folder-1", path: "/tmp/project" }],
+			localFolders: [{ id: "folder-1", name: "Project", path: "/tmp/project" }],
 			logLatency: (stage) => latencyStages.push(stage),
 			message: {
 				id: "message-1",
@@ -114,10 +91,6 @@ describe("hosted chat run context", () => {
 				parts: [{ type: "text", text: "Use the project" }],
 			},
 			noteId: "note-1",
-			resolveLocalFolderRoots: (folders) => {
-				localFolderArguments.push(folders);
-				return [{ id: "folder-1", name: "Project", path: "/tmp/project" }];
-			},
 			selectedSourceIds: ["source-1"],
 			workspaceId: "workspace-1",
 		});
@@ -153,7 +126,6 @@ describe("hosted chat run context", () => {
 		expect(context.instructions).toContain("stored note");
 		expect(context.instructions).toContain("Earlier context.");
 		expect(context.instructions).toContain("Project");
-		expect(localFolderArguments).toEqual([["/tmp/project"]]);
 		expect(automations).toEqual([]);
 		expect(latencyStages).toEqual([
 			"context.sources_loaded",
@@ -178,24 +150,18 @@ describe("hosted chat run context", () => {
 			getStoredNoteContext: async () => "",
 			getUserProfileContext: async () => null,
 			compactionSummary: null,
-			localFolders: [{ id: "folder-1", name: "Project" }],
-			localFolderToolMode: "client",
+			localFolders: [{ id: "folder-1", name: "Project", path: "/tmp/project" }],
 			logLatency: () => {},
 			message: {
 				id: "message-1",
 				role: "user",
 				parts: [{ type: "text", text: "Read the project" }],
 			},
-			resolveLocalFolderRoots: () => {
-				throw new Error(
-					"desktop folders must not resolve on the hosted server",
-				);
-			},
 			workspaceId: "workspace-1",
 		});
 
 		expect(context.localFolderRoots).toEqual([
-			{ id: "folder-1", name: "Project", path: "Project" },
+			{ id: "folder-1", name: "Project", path: "/tmp/project" },
 		]);
 		expect(context.instructions).toContain("Project");
 		expect(context.tools.read_local_file?.execute).toBeUndefined();
@@ -240,7 +206,6 @@ describe("hosted chat run context", () => {
 				role: "user",
 				parts: [{ type: "text", text: "Use Google Calendar" }],
 			},
-			resolveLocalFolderRoots: () => [],
 			selectedSourceIds: ["app:google-calendar"],
 			workspaceId: "workspace-1",
 		});
