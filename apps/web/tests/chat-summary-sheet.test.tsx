@@ -36,7 +36,7 @@ describe("ChatSummarySheet", () => {
 		).toBe("false");
 	});
 
-	it("shows input sources without cited links or a separate apps section", () => {
+	it("shows web search usage without cited links or a separate apps section", () => {
 		const messages: UIMessage[] = [
 			{
 				id: "user-1",
@@ -81,6 +81,21 @@ describe("ChatSummarySheet", () => {
 						input: { query: "roadmap" },
 						output: { sources: [] },
 					},
+					{
+						type: "dynamic-tool",
+						toolCallId: "web-1",
+						toolName: "web_search",
+						state: "output-available",
+						input: { query: "roadmap" },
+						output: {
+							sources: [
+								{
+									title: "Roadmap",
+									url: "https://example.com/roadmap",
+								},
+							],
+						},
+					},
 				],
 			},
 		];
@@ -99,6 +114,7 @@ describe("ChatSummarySheet", () => {
 
 		expect(screen.queryByRole("link", { name: "Roadmap" })).toBeNull();
 		expect(screen.getByText("Google Drive")).toBeTruthy();
+		expect(screen.getByText("Web search")).toBeTruthy();
 		expect(screen.getByTitle("brief.png")).toBeTruthy();
 		expect(screen.queryByText("Apps used")).toBeNull();
 		expect(screen.queryByText("Figma")).toBeNull();

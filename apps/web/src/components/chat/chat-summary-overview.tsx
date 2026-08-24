@@ -10,7 +10,7 @@ import {
 } from "@workspace/ui/components/hover-card";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { cn } from "@workspace/ui/lib/utils";
-import { ChevronRight, FileText, Paperclip } from "lucide-react";
+import { ChevronRight, FileText, Globe2, Paperclip } from "lucide-react";
 import * as React from "react";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import {
@@ -124,6 +124,15 @@ function SummarySourceRow({ source }: { source: ChatSummarySource }) {
 				</HoverCardTrigger>
 				<SummaryFilePreview file={source} />
 			</HoverCard>
+		);
+	}
+
+	if (source.kind === "web-search") {
+		return (
+			<div className={className} title={source.title}>
+				<Globe2 className="size-3.5 shrink-0" />
+				<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
+			</div>
 		);
 	}
 

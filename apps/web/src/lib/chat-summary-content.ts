@@ -1,14 +1,14 @@
 import {
 	type AppSourceProvider,
+	getAppSourceProviderForToolName,
 	getChatAppSourceLabel,
 } from "@workspace/ai/capability-metadata";
-import type { UIMessage } from "ai";
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import {
 	extractFileParts,
 	extractGeneratedArtifacts,
 	getChatMessageMetadata,
 } from "@/lib/chat-message";
-import { collectMessageAppProviders } from "@/lib/chat-sources";
 
 export type ChatSummaryArtifact = {
 	filename?: string;
@@ -27,12 +27,21 @@ export type ChatSummarySource =
 			kind: "note";
 			sourceId: string;
 			title: string;
+	  }
+	| {
+			kind: "web-search";
+			title: "Web search";
 	  };
 
 export type ChatSummaryContent = {
 	artifacts: ChatSummaryArtifact[];
 	sources: ChatSummarySource[];
 };
+
+const WEB_SEARCH_SOURCE = {
+	kind: "web-search",
+	title: "Web search",
+} satisfies ChatSummarySource;
 
 const toSummaryArtifact = (artifact: ChatSummaryArtifact) => ({
 	...(artifact.filename && { filename: artifact.filename }),
@@ -48,22 +57,40 @@ export const getChatSummarySourceKey = (source: ChatSummarySource) => {
 			return `file:${source.url}`;
 		case "note":
 			return `note:${source.sourceId}`;
+		case "web-search":
+			return "web-search";
 	}
 };
 
 const collectMessageSummarySources = (
 	message: UIMessage,
 ): ChatSummarySource[] => {
-	const apps = collectMessageAppProviders(message).map(
-		(provider) =>
-			({
-				kind: "app",
-				provider,
-				title: getChatAppSourceLabel(provider),
-			}) satisfies ChatSummarySource,
-	);
+	const toolSources = message.parts.flatMap((part): ChatSummarySource[] => {
+		if (
+			!isToolUIPart(part) ||
+			(part.state !== "output-available" && part.state !== "output-error")
+		) {
+			return [];
+		}
+
+		const toolName = getToolName(part);
+		if (toolName === "web_search") {
+			return [WEB_SEARCH_SOURCE];
+		}
+
+		const provider = getAppSourceProviderForToolName(toolName);
+		return provider
+			? [
+					{
+						kind: "app",
+						provider,
+						title: getChatAppSourceLabel(provider),
+					} satisfies ChatSummarySource,
+				]
+			: [];
+	});
 	if (message.role !== "user") {
-		return apps;
+		return toolSources;
 	}
 
 	const files = extractFileParts(message).map(
@@ -87,7 +114,7 @@ const collectMessageSummarySources = (
 			: [],
 	);
 
-	return [...files, ...notes, ...apps];
+	return [...files, ...notes, ...toolSources];
 };
 
 const collectArtifacts = (messages: UIMessage[]): ChatSummaryArtifact[] => {

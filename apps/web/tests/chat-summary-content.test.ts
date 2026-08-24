@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { collectChatSummaryContent } from "../src/lib/chat-summary-content";
 
 describe("collectChatSummaryContent", () => {
-	it("collects input sources without cited links", () => {
+	it("collects input sources and web search usage without cited links", () => {
 		const messages: UIMessage[] = [
 			{
 				id: "user-1",
@@ -146,6 +146,10 @@ describe("collectChatSummaryContent", () => {
 					provider: "notion",
 					title: "Notion",
 				},
+				{
+					kind: "web-search",
+					title: "Web search",
+				},
 			],
 		});
 	});
@@ -180,6 +184,14 @@ describe("collectChatSummaryContent", () => {
 					input: { query: "roadmap" },
 					output: { sources: [] },
 				},
+				{
+					type: "dynamic-tool",
+					toolCallId: "web-1",
+					toolName: "web_search",
+					state: "output-available",
+					input: { query: "reference" },
+					output: { sources: [] },
+				},
 			],
 		};
 
@@ -196,7 +208,28 @@ describe("collectChatSummaryContent", () => {
 					provider: "google-drive",
 					title: "Google Drive",
 				},
+				{
+					kind: "web-search",
+					title: "Web search",
+				},
 			],
 		});
+	});
+
+	it("does not infer web search usage from cited URLs", () => {
+		const message: UIMessage = {
+			id: "assistant-1",
+			role: "assistant",
+			parts: [
+				{
+					type: "source-url",
+					sourceId: "source-1",
+					title: "Primary reference",
+					url: "https://example.com/reference",
+				},
+			],
+		};
+
+		expect(collectChatSummaryContent([message]).sources).toEqual([]);
 	});
 });

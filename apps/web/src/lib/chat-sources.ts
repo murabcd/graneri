@@ -1,7 +1,3 @@
-import {
-	type AppSourceProvider,
-	getAppSourceProviderForToolName,
-} from "@workspace/ai/capability-metadata";
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { z } from "zod";
 
@@ -82,24 +78,6 @@ const collectToolSources = (message: UIMessage): ToolSource[] => {
 		seen.add(key);
 		return true;
 	});
-};
-
-export const collectMessageAppProviders = (
-	message: UIMessage,
-): AppSourceProvider[] => {
-	const providers = message.parts.flatMap((part) => {
-		if (
-			!isToolUIPart(part) ||
-			(part.state !== "output-available" && part.state !== "output-error")
-		) {
-			return [];
-		}
-
-		const provider = getAppSourceProviderForToolName(getToolName(part));
-		return provider ? [provider] : [];
-	});
-
-	return [...new Set(providers)];
 };
 
 export const collectMessageSources = (message: UIMessage): ToolSource[] => {
