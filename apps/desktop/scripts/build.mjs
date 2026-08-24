@@ -16,7 +16,7 @@ import {
 	desktopPackageContract,
 } from "./desktop-package-contract.mjs";
 import { nativeRuntimeToolNames } from "./native-runtime-tools.mjs";
-import { stageRuntimePackages } from "./stage-runtime-packages.mjs";
+import { stageNftRuntimeFiles } from "./runtime-file-trace.mjs";
 
 const require = createRequire(import.meta.url);
 const execFileAsync = promisify(execFile);
@@ -134,14 +134,6 @@ const bundleDesktopMain = async () => {
 	}
 };
 
-const stageAssetBackedRuntimes = async () => {
-	await stageRuntimePackages({
-		destinationNodeModulesPath: resolve(distDir, "node_modules"),
-		packageNames: desktopPackageContract.assetBackedRuntimePackages,
-		resolveFrom: resolve(packageRoot, "package.json"),
-	});
-};
-
 const copyMacOSRuntimeNodeModules = async () => {
 	if (process.platform !== "darwin") {
 		return;
@@ -250,7 +242,7 @@ await mkdir(distDir, { recursive: true });
 await copyRuntimeSources();
 await bundleDesktopPreload();
 await bundleDesktopMain();
-await stageAssetBackedRuntimes();
+await stageNftRuntimeFiles({ distDir, packageRoot, repoRoot });
 await copyNativeRuntimeTools();
 await copyMacOSRuntimeNodeModules();
 await stagePackageApp();

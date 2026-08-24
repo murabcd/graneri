@@ -5,34 +5,65 @@ const packagedNodeModules = Object.freeze([
 ]);
 
 const runtimeDirectory = "dist-electron/main";
-const assetBackedRuntimes = Object.freeze([
+const runtimeTraceEntrypoints = Object.freeze([
 	Object.freeze({
 		packageName: "just-bash",
-		requiredFiles: Object.freeze([
+		files: Object.freeze([
 			"dist/bundle/chunks/js-exec-worker.js",
 			"dist/bundle/chunks/sqlite3-worker.js",
 			"dist/bundle/chunks/worker.js",
-			"package.json",
+		]),
+	}),
+]);
+const explicitRuntimeAssets = Object.freeze([
+	Object.freeze({
+		packageName: "just-bash",
+		files: Object.freeze([
 			"vendor/cpython-emscripten/python.cjs",
 			"vendor/cpython-emscripten/python.wasm",
 			"vendor/cpython-emscripten/python313.zip",
 		]),
 	}),
+	Object.freeze({
+		packageName: "sql.js",
+		files: Object.freeze(["dist/sql-wasm.wasm"]),
+	}),
 ]);
-const assetBackedRuntimePackages = Object.freeze(
-	assetBackedRuntimes.map(({ packageName }) => packageName),
-);
-const assetBackedRuntimeFiles = Object.freeze(
-	assetBackedRuntimes.flatMap(({ packageName, requiredFiles }) =>
-		requiredFiles.map(
+const requiredRuntimeFiles = Object.freeze(
+	[
+		...runtimeTraceEntrypoints,
+		...explicitRuntimeAssets,
+		Object.freeze({
+			packageName: "just-bash",
+			files: Object.freeze(["package.json"]),
+		}),
+		Object.freeze({
+			packageName: "sql.js",
+			files: Object.freeze(["dist/sql-wasm.js", "package.json"]),
+		}),
+	].flatMap(({ packageName, files }) =>
+		files.map(
 			(file) => `${runtimeDirectory}/node_modules/${packageName}/${file}`,
 		),
 	),
 );
+const ignoredRuntimePackages = Object.freeze([
+	"@mongodb-js/zstd",
+	"electron",
+	"node-liblzma",
+	"objc-js",
+]);
+const runtimeTrace = Object.freeze({
+	entrypoints: runtimeTraceEntrypoints,
+	explicitAssets: explicitRuntimeAssets,
+	externalPackages: Object.freeze(["just-bash"]),
+	ignoredPackages: ignoredRuntimePackages,
+	requiredFiles: requiredRuntimeFiles,
+});
 const mainBundleExternals = Object.freeze([
 	"electron",
 	"objc-js",
-	...assetBackedRuntimePackages,
+	...runtimeTrace.externalPackages,
 ]);
 
 export const desktopPackageContract = {
@@ -42,8 +73,6 @@ export const desktopPackageContract = {
 		`${runtimeDirectory}/node_modules/**`,
 		"node_modules/objc-js/prebuilds/**",
 	],
-	assetBackedRuntimeFiles,
-	assetBackedRuntimePackages,
 	builderFiles: [
 		"dist-electron/**/*",
 		"dist-app/**/*",
@@ -61,6 +90,7 @@ export const desktopPackageContract = {
 	rendererDirectory: "dist-app",
 	runtimeDirectory,
 	runtimeImportDirectory: "dist-electron/",
+	runtimeTrace,
 	packagedNodeModules,
 };
 

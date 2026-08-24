@@ -40,6 +40,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@vercel/nft": "1.11.0",
     "electron": "^42.3.3",
     "electron-builder": "^26.8.1",
     "web": "workspace:*"

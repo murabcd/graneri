@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { join, resolve } from "node:path";
@@ -9,18 +8,18 @@ import {
 	loadSelectedEnvFile,
 } from "../../../scripts/release-contract.mjs";
 import { desktopPackageContract } from "./desktop-package-contract.mjs";
-import { nativeRuntimeToolNames } from "./native-runtime-tools.mjs";
-import {
-	isStagedRuntimePackagePath,
-	stagedRuntimePackagePath,
-	verifyStagedRuntimePackageClosure,
-} from "./verify-runtime-packages.mjs";
+import { packageNameFromSpecifier } from "./package-specifier.mjs";
+import { verifyPackagedRuntimeExecutables } from "./packaged-runtime-verification.mjs";
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = resolve(packageRoot, "../..");
 const packagedAppAsarPath = resolve(
 	packageRoot,
 	desktopPackageContract.packagedResourcesAsarPath,
+);
+const runtimeNodeModulesPath = join(
+	desktopPackageContract.runtimeDirectory,
+	"node_modules",
 );
 const convexDeploymentUrlPattern =
 	/\bhttps:\/\/([a-z0-9-]+)\.convex\.(?:cloud|site)\b/giu;
@@ -208,92 +207,11 @@ const loadPackagedResources = () => {
 	};
 };
 
-const resolvePackagedNativeToolPath = (toolName) => {
-	const unpackedToolPath = join(
-		`${packagedAppAsarPath}.unpacked`,
-		desktopPackageContract.runtimeDirectory,
-		"bin",
-		toolName,
-	);
-	if (existsSync(unpackedToolPath)) {
-		return unpackedToolPath;
-	}
+const stagedRuntimePackagePath = (packageName) =>
+	join(runtimeNodeModulesPath, ...packageName.split("/"));
 
-	return null;
-};
-
-const runNativeRuntimeTool = (toolPath, args) =>
-	new Promise((resolvePromise, rejectPromise) => {
-		const child = spawn(toolPath, args, {
-			stdio: ["ignore", "pipe", "pipe"],
-		});
-		let stdout = "";
-		let stderr = "";
-		child.stdout.setEncoding("utf8");
-		child.stderr.setEncoding("utf8");
-		child.stdout.on("data", (chunk) => {
-			stdout += chunk;
-		});
-		child.stderr.on("data", (chunk) => {
-			stderr += chunk;
-		});
-		child.on("error", rejectPromise);
-		child.on("exit", (code) => {
-			if (code !== 0) {
-				rejectPromise(
-					new Error(
-						`${toolPath} ${args.join(" ")} exited with code ${code ?? -1}.\n${stderr}`,
-					),
-				);
-				return;
-			}
-
-			resolvePromise(stdout);
-		});
-	});
-
-const verifyNativeRuntimeTools = async () => {
-	for (const toolName of nativeRuntimeToolNames) {
-		if (!resolvePackagedNativeToolPath(toolName)) {
-			throw new Error(`Packaged native runtime tool is missing: ${toolName}`);
-		}
-	}
-
-	const combinedAudioHelperPath = resolvePackagedNativeToolPath(
-		"graneri-combined-audio-helper",
-	);
-	const selfTestOutput = await runNativeRuntimeTool(combinedAudioHelperPath, [
-		"--self-test",
-	]);
-	const selfTestResult = JSON.parse(selfTestOutput.trim());
-
-	if (
-		selfTestResult?.ok !== true ||
-		typeof selfTestResult.activeRenderPassthroughErrorRms !== "number" ||
-		selfTestResult.activeRenderPassthroughErrorRms > 0.16 ||
-		typeof selfTestResult.echoReductionRatio !== "number" ||
-		selfTestResult.echoReductionRatio < 0.35 ||
-		typeof selfTestResult.noRenderPassthroughErrorRms !== "number" ||
-		selfTestResult.noRenderPassthroughErrorRms > 0.000001 ||
-		typeof selfTestResult.residualLeakGateSuppressedChunks !== "number" ||
-		selfTestResult.residualLeakGateSuppressedChunks <= 0 ||
-		typeof selfTestResult.suppressedChunks !== "number" ||
-		selfTestResult.suppressedChunks <= 0 ||
-		typeof selfTestResult.systemOutputErrorRms !== "number" ||
-		selfTestResult.systemOutputErrorRms > 0.000001
-	) {
-		throw new Error(
-			`Combined audio helper self-test failed: ${selfTestOutput.trim()}`,
-		);
-	}
-
-	return selfTestResult;
-};
-
-const packageNameFromSpecifier = (specifier) =>
-	specifier.startsWith("@")
-		? specifier.split("/").slice(0, 2).join("/")
-		: specifier.split("/")[0];
+const isStagedRuntimePackagePath = (relativePath) =>
+	relativePath.startsWith(`${runtimeNodeModulesPath}/`);
 
 const scanRuntimeImports = (packagedResources) => {
 	const runtimeFiles = packagedResources.files.filter(
@@ -361,7 +279,6 @@ const scanRuntimeImports = (packagedResources) => {
 
 {
 	const packagedResources = loadPackagedResources();
-	const nativeAudioSelfTestResult = await verifyNativeRuntimeTools();
 	const allText = packagedResources.files
 		.filter(
 			(file) =>
@@ -392,15 +309,15 @@ const scanRuntimeImports = (packagedResources) => {
 	if (!packagedFilePaths.has("dist-app/theme-init.js")) {
 		throw new Error("Packaged app is missing the external theme initializer.");
 	}
-	for (const runtimeFile of desktopPackageContract.assetBackedRuntimeFiles) {
+	for (const runtimeFile of desktopPackageContract.runtimeTrace.requiredFiles) {
 		if (!packagedFilePaths.has(runtimeFile)) {
 			throw new Error(
 				`Packaged asset-backed runtime file is missing: ${runtimeFile}`,
 			);
 		}
 	}
-	const runtimePackageCount =
-		await verifyStagedRuntimePackageClosure(packagedResources);
+	const { nativeAudioSelfTestResult, runtimeSmokeTests } =
+		await verifyPackagedRuntimeExecutables({ packagedAppAsarPath });
 
 	for (const deployment of forbiddenDeployments) {
 		if (allText.includes(deployment)) {
@@ -479,7 +396,7 @@ const scanRuntimeImports = (packagedResources) => {
 		[
 			"Desktop package verification passed.",
 			`Runtime files checked: ${runtimeFileCount}`,
-			`Runtime packages checked: ${runtimePackageCount}`,
+			`Packaged runtime smoke tests: ${runtimeSmokeTests.join(", ")}`,
 			expectedDeployment
 				? `Expected Convex deployment: ${expectedDeployment}`
 				: "Expected Convex deployment: not configured",

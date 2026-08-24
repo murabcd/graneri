@@ -1192,24 +1192,33 @@ live in `dist-app`. Packaged windows load renderer assets through `app://ui`.
 Packaged runtime code must not rely on source-tree imports. JavaScript runtime
 dependencies belong in the main-process bundle unless their published runtime
 loads worker, WASM, or adjacent package assets by path. An asset-backed runtime
-must be staged with its ordinary dependency closure beside the bundled importer;
-native optional dependencies are excluded unless Graneri explicitly uses them.
-Native modules that cannot be bundled remain platform-specific optional
-dependencies. Every staged runtime must be covered by the package contract and
+must be externalized from the Bun main bundle and traced from the final bundled
+Node entrypoint with `@vercel/nft`. Worker entrypoints that load their own
+dependencies are additional trace roots. Native optional dependencies are
+excluded unless Graneri explicitly uses them. Native modules that cannot be
+bundled remain platform-specific optional dependencies. Every traced runtime
+and explicitly staged asset must be covered by the package contract and
 verifier.
 
 The generated package shape is owned by
 `apps/desktop/scripts/desktop-package-contract.mjs`. Build scripts, Electron
 Builder config, and package verification must read package paths and ASAR
-rules from that module instead of repeating release layout strings. Each
-asset-backed runtime is declared there once with its package name and required
-files; main-bundle externalization, dependency-closure staging, targeted ASAR
-unpacking, and package verification derive from that policy.
-`runtime-package-closure.mjs` owns ordinary dependency traversal, package
-manifest validation, and flattened-version conflict detection. Source-tree
-staging and packaged-resource verification provide separate resolution adapters
-to that shared contract, and staging must resolve the complete closure before it
-copies files.
+rules from that module instead of repeating release layout strings. Its runtime
+trace policy declares external packages, worker entrypoints, explicit assets,
+ignored packages, and required packaged files; main-bundle externalization,
+targeted ASAR unpacking, and package verification derive from that policy.
+`runtime-file-trace.mjs` owns programmatic NFT tracing, deterministic
+path normalization, and flattened-path collision detection. It traces the final
+main bundle for remaining external JavaScript dependencies without claiming
+explicit native/resource paths, then traces declared worker entrypoints with
+asset analysis enabled. Python's CPython bundle and SQLite's WASM binary remain
+explicit assets. Electron, `objc-js`, and unused optional native compression
+packages are explicit trace exclusions. Unresolved or otherwise unexpected NFT
+warnings fail the build; NFT's known script-parser fallback warning is accepted
+only when an `.mjs` file is subsequently parsed as a module.
+`packaged-runtime-verification.mjs` owns executable verification of the unpacked
+JavaScript, Python, SQLite, and native helper runtimes; the main package verifier
+remains responsible for static ASAR, configuration, and import checks.
 
 Renderer route ownership lives in `packages/platform/src/renderer-routes.mjs`.
 The packaged desktop protocol must use that manifest to decide whether an
@@ -1265,6 +1274,8 @@ The verifier must fail if:
 - Packaged runtime code imports Convex server TypeScript.
 - Bare package imports in `dist-electron` cannot resolve from packaged
   `node_modules`.
+- The final packaged `just-bash` runtime cannot execute JavaScript, start its
+  Python worker, or load SQLite and run a basic in-memory query.
 - Required native runtime helpers are missing, or the combined audio helper
   fails its AEC3 self-test, including residual-leak gating for active system
   audio.

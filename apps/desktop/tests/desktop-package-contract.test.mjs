@@ -21,18 +21,51 @@ test("desktop package contract owns the generated runtime layout", () => {
 		"dist-electron/main/node_modules/**",
 		"node_modules/objc-js/prebuilds/**",
 	]);
-	assert.deepEqual(desktopPackageContract.assetBackedRuntimeFiles, [
-		"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/js-exec-worker.js",
-		"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/sqlite3-worker.js",
-		"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/worker.js",
-		"dist-electron/main/node_modules/just-bash/package.json",
-		"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python.cjs",
-		"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python.wasm",
-		"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python313.zip",
-	]);
-	assert.deepEqual(desktopPackageContract.assetBackedRuntimePackages, [
-		"just-bash",
-	]);
+	assert.deepEqual(desktopPackageContract.runtimeTrace, {
+		entrypoints: [
+			{
+				files: [
+					"dist/bundle/chunks/js-exec-worker.js",
+					"dist/bundle/chunks/sqlite3-worker.js",
+					"dist/bundle/chunks/worker.js",
+				],
+				packageName: "just-bash",
+			},
+		],
+		explicitAssets: [
+			{
+				files: [
+					"vendor/cpython-emscripten/python.cjs",
+					"vendor/cpython-emscripten/python.wasm",
+					"vendor/cpython-emscripten/python313.zip",
+				],
+				packageName: "just-bash",
+			},
+			{
+				files: ["dist/sql-wasm.wasm"],
+				packageName: "sql.js",
+			},
+		],
+		externalPackages: ["just-bash"],
+		ignoredPackages: [
+			"@mongodb-js/zstd",
+			"electron",
+			"node-liblzma",
+			"objc-js",
+		],
+		requiredFiles: [
+			"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/js-exec-worker.js",
+			"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/sqlite3-worker.js",
+			"dist-electron/main/node_modules/just-bash/dist/bundle/chunks/worker.js",
+			"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python.cjs",
+			"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python.wasm",
+			"dist-electron/main/node_modules/just-bash/vendor/cpython-emscripten/python313.zip",
+			"dist-electron/main/node_modules/sql.js/dist/sql-wasm.wasm",
+			"dist-electron/main/node_modules/just-bash/package.json",
+			"dist-electron/main/node_modules/sql.js/dist/sql-wasm.js",
+			"dist-electron/main/node_modules/sql.js/package.json",
+		],
+	});
 	assert.deepEqual(desktopPackageContract.mainBundleExternals, [
 		"electron",
 		"objc-js",
