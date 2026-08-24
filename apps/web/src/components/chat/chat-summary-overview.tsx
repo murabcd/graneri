@@ -3,15 +3,11 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@workspace/ui/components/collapsible";
-import {
-	HoverCard,
-	HoverCardContent,
-	HoverCardTrigger,
-} from "@workspace/ui/components/hover-card";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { cn } from "@workspace/ui/lib/utils";
-import { ChevronRight, FileText, Globe2, Paperclip } from "lucide-react";
+import { ChevronRight, FileText, Globe2 } from "lucide-react";
 import * as React from "react";
+import { FileAttachmentGlyph } from "@/components/ai-elements/file-attachment-type-icon";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import {
 	type ChatSummaryArtifact,
@@ -19,6 +15,9 @@ import {
 	type ChatSummarySource,
 	getChatSummarySourceKey,
 } from "@/lib/chat-summary-content";
+
+const SUMMARY_ROW_CLASS_NAME =
+	"flex h-8 w-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-start text-sm text-muted-foreground";
 
 export function ChatSummaryOverview({
 	content,
@@ -68,40 +67,23 @@ export function ChatSummaryOverview({
 
 function SummaryArtifactRow({ artifact }: { artifact: ChatSummaryArtifact }) {
 	return (
-		<HoverCard openDelay={150}>
-			<HoverCardTrigger asChild>
-				<button
-					type="button"
-					title={artifact.filename || "Attached file"}
-					className={cn(
-						"group/artifact flex h-8 w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md px-2 text-sm text-muted-foreground transition-colors",
-						"hover:bg-accent/50 hover:text-foreground",
-					)}
-				>
-					<Paperclip className="size-3.5 shrink-0" />
-					<span className="min-w-0 flex-1 basis-0 truncate">
-						{artifact.filename || "Attached file"}
-					</span>
-				</button>
-			</HoverCardTrigger>
-			<SummaryFilePreview file={artifact} />
-		</HoverCard>
+		<div
+			className={SUMMARY_ROW_CLASS_NAME}
+			title={artifact.filename || "Attached file"}
+		>
+			<FileAttachmentGlyph className="size-4" file={artifact} />
+			<span className="min-w-0 flex-1 basis-0 truncate">
+				{artifact.filename || "Attached file"}
+			</span>
+		</div>
 	);
 }
 
 function SummarySourceRow({ source }: { source: ChatSummarySource }) {
-	const className = cn(
-		"group/source flex h-8 w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md px-2 text-sm text-muted-foreground transition-colors",
-		"hover:bg-accent/50 hover:text-foreground",
-	);
-
 	if (source.kind === "app") {
 		return (
-			<div className={className} title={source.title}>
-				<AppSourceIcon
-					provider={source.provider}
-					className="size-3.5 shrink-0"
-				/>
+			<div className={SUMMARY_ROW_CLASS_NAME} title={source.title}>
+				<AppSourceIcon provider={source.provider} className="size-4 shrink-0" />
 				<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
 			</div>
 		);
@@ -109,67 +91,34 @@ function SummarySourceRow({ source }: { source: ChatSummarySource }) {
 
 	if (source.kind === "file") {
 		return (
-			<HoverCard openDelay={150}>
-				<HoverCardTrigger asChild>
-					<button
-						type="button"
-						className={cn(className, "cursor-pointer")}
-						title={source.filename || "Attached file"}
-					>
-						<Paperclip className="size-3.5 shrink-0" />
-						<span className="min-w-0 flex-1 basis-0 truncate">
-							{source.filename || "Attached file"}
-						</span>
-					</button>
-				</HoverCardTrigger>
-				<SummaryFilePreview file={source} />
-			</HoverCard>
+			<div
+				className={SUMMARY_ROW_CLASS_NAME}
+				title={source.filename || "Attached file"}
+			>
+				<FileAttachmentGlyph className="size-4" file={source} />
+				<span className="min-w-0 flex-1 basis-0 truncate">
+					{source.filename || "Attached file"}
+				</span>
+			</div>
 		);
 	}
 
 	if (source.kind === "web-search") {
 		return (
-			<div className={className} title={source.title}>
-				<Globe2 className="size-3.5 shrink-0" />
+			<div className={SUMMARY_ROW_CLASS_NAME} title={source.title}>
+				<Globe2 className="size-4 shrink-0" />
 				<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
 			</div>
 		);
 	}
 
 	return (
-		<div className={className} title={source.title}>
-			<FileText className="size-3.5 shrink-0" />
+		<div className={SUMMARY_ROW_CLASS_NAME} title={source.title}>
+			<FileText className="size-4 shrink-0" />
 			<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
 		</div>
 	);
 }
-
-function SummaryFilePreview({ file }: { file: ChatSummaryArtifact }) {
-	return (
-		<HoverCardContent
-			align="start"
-			side="left"
-			className={
-				file.mediaType.startsWith("image/")
-					? "w-auto max-w-80 border-0 bg-transparent p-0 shadow-none ring-0"
-					: "w-64"
-			}
-		>
-			{file.mediaType.startsWith("image/") ? (
-				<img
-					src={file.url}
-					alt={file.filename || "Attached image"}
-					className="block max-h-80 max-w-80 rounded-lg object-contain shadow-md ring-1 ring-foreground/10"
-				/>
-			) : (
-				<div className="flex h-28 items-center justify-center bg-muted/40 text-muted-foreground">
-					<Paperclip className="size-6" />
-				</div>
-			)}
-		</HoverCardContent>
-	);
-}
-
 export function ChatSummarySection({
 	children,
 	defaultOpen = true,

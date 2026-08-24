@@ -49,10 +49,6 @@ export const extractGeneratedArtifacts = (
 	message: UIMessage,
 ): ChatGeneratedArtifact[] =>
 	extractToolParts(message).flatMap((part) => {
-		if (part.type !== "tool-generate_image") {
-			return [];
-		}
-
 		if (!("state" in part) || part.state !== "output-available") {
 			return [];
 		}

@@ -70,7 +70,9 @@ const FILE_KIND_MEDIA_TYPES: Partial<Record<string, FileKind>> = {
 		"word",
 };
 
-const getFileKind = (file: FileUIPart): FileKind => {
+type FileAttachmentGlyphFile = Pick<FileUIPart, "filename" | "mediaType">;
+
+const getFileKind = (file: FileAttachmentGlyphFile): FileKind => {
 	const extension = getFilenameExtension(file.filename);
 	const extensionKind = FILE_KIND_EXTENSIONS[extension];
 
@@ -99,7 +101,7 @@ export function FileAttachmentGlyph({
 	file,
 }: {
 	className?: string;
-	file: FileUIPart;
+	file: FileAttachmentGlyphFile;
 }) {
 	const kind = getFileKind(file);
 	const Icon = FILE_KIND_ICONS[kind];

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import type { UIMessage } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -118,5 +118,85 @@ describe("ChatSummarySheet", () => {
 		expect(screen.getByTitle("brief.png")).toBeTruthy();
 		expect(screen.queryByText("Apps used")).toBeNull();
 		expect(screen.queryByText("Figma")).toBeNull();
+	});
+
+	it("shows assistant-generated files under artifacts and user files under sources", () => {
+		const messages: UIMessage[] = [
+			{
+				id: "user-1",
+				role: "user",
+				parts: [
+					{
+						type: "file",
+						filename: "source-brief.pdf",
+						mediaType: "application/pdf",
+						url: "https://files.example/source-brief.pdf",
+					},
+				],
+			},
+			{
+				id: "assistant-1",
+				role: "assistant",
+				parts: [
+					{
+						type: "dynamic-tool",
+						toolCallId: "generate-pdf-1",
+						toolName: "generate_pdf",
+						state: "output-available",
+						input: { title: "Generated report" },
+						output: {
+							filename: "generated-report.pdf",
+							mediaType: "application/pdf",
+							url: "https://files.example/generated-report.pdf",
+						},
+					},
+				],
+			},
+		];
+
+		const { container } = render(
+			<TooltipProvider>
+				<ChatSummarySheet
+					open
+					messages={messages}
+					chatTitle="Test chat"
+					workspaceSources={[]}
+					onOpenChange={vi.fn()}
+				/>
+			</TooltipProvider>,
+		);
+
+		const artifactsContentId = within(container)
+			.getByRole("button", { name: "Artifacts" })
+			.getAttribute("aria-controls");
+		const sourcesContentId = within(container)
+			.getByRole("button", { name: "Sources" })
+			.getAttribute("aria-controls");
+		if (!artifactsContentId || !sourcesContentId) {
+			throw new Error(
+				"Summary sections must identify their controlled content",
+			);
+		}
+
+		const artifactsContent = document.getElementById(artifactsContentId);
+		const sourcesContent = document.getElementById(sourcesContentId);
+		if (!artifactsContent || !sourcesContent) {
+			throw new Error("Summary section content must be rendered");
+		}
+
+		const generatedArtifact = within(artifactsContent).getByTitle(
+			"generated-report.pdf",
+		);
+		expect(generatedArtifact).toBeTruthy();
+		expect(
+			generatedArtifact.querySelector('[data-file-kind="pdf"]'),
+		).not.toBeNull();
+		expect(
+			within(artifactsContent).queryByTitle("source-brief.pdf"),
+		).toBeNull();
+		expect(within(sourcesContent).getByTitle("source-brief.pdf")).toBeTruthy();
+		expect(
+			within(sourcesContent).queryByTitle("generated-report.pdf"),
+		).toBeNull();
 	});
 });
