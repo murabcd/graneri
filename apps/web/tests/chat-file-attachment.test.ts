@@ -8,6 +8,8 @@ import {
 import type { FileUIPart } from "ai";
 import { createElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
+import { FileAttachmentChips } from "@/components/ai-elements/file-attachment-controls";
+import { FileAttachmentGlyph } from "@/components/ai-elements/file-attachment-type-icon";
 import { ChatMessageFileAttachments } from "@/components/chat/message-file-attachments";
 import {
 	formatFileSize,
@@ -25,6 +27,13 @@ const file: FileUIPart = {
 	url: "https://files.example.test/report.pdf",
 };
 
+const image: FileUIPart = {
+	type: "file",
+	filename: "workspace.png",
+	mediaType: "image/png",
+	url: "data:image/png;base64,preview",
+};
+
 afterEach(() => {
 	cleanup();
 });
@@ -40,14 +49,190 @@ describe("chat file attachments", () => {
 		expect(isDownloadableUrl("javascript:alert(1)")).toBe(false);
 	});
 
-	it("renders the file size and an in-card download link", () => {
-		render(createElement(ChatMessageFileAttachments, { files: [file] }));
+	it.each([
+		["pdf", "application/pdf"],
+		[
+			"word",
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		],
+		[
+			"spreadsheet",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		],
+		[
+			"presentation",
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		],
+	] as const)("selects the %s glyph from its media type", (kind, mediaType) => {
+		const { container } = render(
+			createElement(FileAttachmentGlyph, {
+				file: {
+					type: "file",
+					mediaType,
+					url: `https://files.example.test/${kind}`,
+				},
+			}),
+		);
 
-		expect(screen.getByText("PDF · 2.4 MB")).toBeTruthy();
+		expect(container.querySelector(`[data-file-kind="${kind}"]`)).toBeTruthy();
+	});
+
+	it("renders the file size and an in-card download link", () => {
+		render(
+			createElement(ChatMessageFileAttachments, {
+				align: "start",
+				files: [file],
+			}),
+		);
+
+		expect(screen.getByText("2.4 MB")).toBeTruthy();
+		const messageFile =
+			screen.getByText("report.pdf").parentElement?.parentElement;
+		expect(messageFile?.querySelector('[data-file-kind="pdf"]')).toBeTruthy();
+		expect(messageFile?.classList.contains("border")).toBe(false);
+		expect(messageFile?.classList.contains("bg-muted/50")).toBe(true);
+		expect(messageFile?.classList.contains("h-16")).toBe(true);
 		const downloadButton = screen.getByRole("button", {
 			name: "Download report.pdf",
 		});
 		expect(downloadButton.getAttribute("title")).toBe("Download report.pdf");
+	});
+
+	it("keeps the same file identity in the composer", () => {
+		render(
+			createElement(FileAttachmentChips, {
+				files: [
+					{
+						...file,
+						id: "report",
+						uploadStatus: "ready" as const,
+					},
+				],
+				onRemove: () => undefined,
+			}),
+		);
+
+		expect(screen.getByText("report.pdf")).toBeTruthy();
+		expect(screen.getByText("2.4 MB")).toBeTruthy();
+		const composerFile =
+			screen.getByText("report.pdf").parentElement?.parentElement;
+		expect(composerFile?.querySelector('[data-file-kind="pdf"]')).toBeTruthy();
+		expect(composerFile?.classList.contains("border")).toBe(false);
+		expect(composerFile?.classList.contains("bg-muted/50")).toBe(true);
+		expect(composerFile?.classList.contains("h-14")).toBe(true);
+		expect(
+			screen.getByRole("button", { name: "Remove report.pdf" }),
+		).toBeTruthy();
+	});
+
+	it("uses ChatGPT-sized bordered image tiles in user messages", () => {
+		const message = render(
+			createElement(ChatMessageFileAttachments, {
+				align: "end",
+				files: [image],
+			}),
+		);
+		const messageImage = screen.getByRole("button", { name: "workspace.png" });
+		expect(messageImage.classList.contains("border")).toBe(true);
+		expect(messageImage.classList.contains("size-20")).toBe(true);
+		expect(messageImage.classList.contains("rounded-lg")).toBe(true);
+		message.unmount();
+
+		render(
+			createElement(FileAttachmentChips, {
+				files: [
+					{
+						...image,
+						id: "workspace",
+						uploadStatus: "ready" as const,
+					},
+				],
+				onRemove: () => undefined,
+			}),
+		);
+		const composerImage = screen.getByRole("button", {
+			name: "Preview workspace.png",
+		});
+		expect(composerImage.parentElement?.classList.contains("border")).toBe(
+			false,
+		);
+		expect(composerImage.parentElement?.classList.contains("bg-muted/50")).toBe(
+			true,
+		);
+		expect(composerImage.classList.contains("size-14")).toBe(true);
+		expect(composerImage.parentElement?.classList.contains("h-14")).toBe(true);
+	});
+
+	it("wraps multiple user images in a right-aligned group", () => {
+		render(
+			createElement(ChatMessageFileAttachments, {
+				align: "end",
+				files: [
+					image,
+					{
+						...image,
+						filename: "dashboard.png",
+						url: "data:image/png;base64,dashboard",
+					},
+				],
+			}),
+		);
+
+		const galleryImage = screen.getByRole("button", { name: "workspace.png" });
+		expect(galleryImage.classList.contains("border")).toBe(true);
+		expect(galleryImage.classList.contains("rounded-lg")).toBe(true);
+		expect(galleryImage.classList.contains("size-20")).toBe(true);
+		expect(galleryImage.parentElement?.classList.contains("flex-wrap")).toBe(
+			true,
+		);
+		expect(galleryImage.parentElement?.classList.contains("justify-end")).toBe(
+			true,
+		);
+	});
+
+	it("groups user images above wrapped right-aligned file pills", () => {
+		render(
+			createElement(ChatMessageFileAttachments, {
+				align: "end",
+				files: [
+					file,
+					image,
+					{
+						...file,
+						filename: "notes.docx",
+						mediaType:
+							"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						url: "https://files.example.test/notes.docx",
+					},
+				],
+			}),
+		);
+
+		const imageGroup = screen.getByRole("button", {
+			name: "workspace.png",
+		}).parentElement;
+		const firstDocumentPill = screen.getByText("report.pdf").parentElement;
+		const documentRow = firstDocumentPill?.parentElement;
+
+		expect(imageGroup?.nextElementSibling).toBe(documentRow);
+		expect(imageGroup?.classList.contains("flex-wrap")).toBe(true);
+		expect(imageGroup?.classList.contains("justify-end")).toBe(true);
+		expect(documentRow?.classList.contains("flex-wrap")).toBe(true);
+		expect(documentRow?.classList.contains("justify-end")).toBe(true);
+		expect(documentRow?.classList.contains("overflow-x-auto")).toBe(false);
+		expect(documentRow?.children).toHaveLength(2);
+		expect(screen.queryByText("2.4 MB")).toBeNull();
+		expect(
+			screen.queryByRole("button", { name: "Download report.pdf" }),
+		).toBeNull();
+		expect(
+			firstDocumentPill?.querySelector('[data-file-kind="pdf"]'),
+		).toBeTruthy();
+		expect(
+			screen
+				.getByText("notes.docx")
+				.parentElement?.querySelector('[data-file-kind="word"]'),
+		).toBeTruthy();
 	});
 
 	it("shows progress while downloading and saves with the original filename", async () => {
@@ -62,6 +247,7 @@ describe("chat file attachments", () => {
 
 		render(
 			createElement(ChatMessageFileAttachments, {
+				align: "start",
 				downloadFile,
 				files: [file],
 			}),

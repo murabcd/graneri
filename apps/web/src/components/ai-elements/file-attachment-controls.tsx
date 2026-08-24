@@ -8,9 +8,14 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
-import { FileText, Paperclip, X } from "lucide-react";
+import { Paperclip, X } from "lucide-react";
 import * as React from "react";
+import {
+	formatFileSize,
+	getChatFileSizeBytes,
+} from "@/lib/chat-file-attachment";
 import { AttachmentImagePreviewDialog } from "./attachment-image-preview-dialog";
+import { FileAttachmentGlyph } from "./file-attachment-type-icon";
 import type { ChatAttachment } from "./file-attachment-utils";
 import { useFileAttachmentDropzone } from "./use-file-attachments";
 
@@ -97,43 +102,72 @@ export function FileAttachmentChips({
 				{files.map((file, index) => {
 					const isImage = file.mediaType.startsWith("image/");
 					const canPreview = isImage && file.url.length > 0;
+					const filename = file.filename || "Attached file";
+					const sizeBytes = getChatFileSizeBytes(file);
+					const fileDetails = [
+						file.uploadStatus === "uploading" ? "Uploading" : null,
+						sizeBytes === null ? null : formatFileSize(sizeBytes),
+					]
+						.filter(Boolean)
+						.join(" · ");
 
 					return (
 						<div
 							key={file.id}
 							className={cn(
-								"group/attachment-preview relative flex size-14 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-foreground",
+								"group/attachment-preview relative flex h-14 shrink-0 items-center justify-center rounded-lg text-muted-foreground",
+								isImage
+									? "w-14 bg-muted/50"
+									: "w-56 justify-start gap-2.5 bg-muted/50 px-2.5",
 								file.uploadStatus === "uploading" && "opacity-80",
 							)}
 						>
-							<button
-								type="button"
-								className={cn(
-									"flex size-12 items-center justify-center overflow-hidden rounded-[5px] bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-									canPreview && "cursor-zoom-in",
-								)}
-								onClick={() => {
-									if (canPreview) {
-										setPreviewImage(file);
-									}
-								}}
-								aria-label={
-									canPreview
-										? `Preview ${file.filename || "attached image"}`
-										: file.filename || "Attached file"
-								}
-							>
-								{isImage ? (
+							{isImage ? (
+								<button
+									type="button"
+									className={cn(
+										"flex size-14 items-center justify-center overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+										canPreview && "cursor-zoom-in",
+									)}
+									onClick={() => {
+										if (canPreview) {
+											setPreviewImage(file);
+										}
+									}}
+									aria-label={canPreview ? `Preview ${filename}` : filename}
+								>
 									<img
 										src={file.url}
-										alt={file.filename || "Attached image"}
+										alt={filename}
 										className="size-full object-cover"
 									/>
-								) : (
-									<FileText className="size-5" />
-								)}
-							</button>
-							{file.uploadStatus === "uploading" ? (
+								</button>
+							) : (
+								<>
+									<FileAttachmentGlyph
+										className="size-7 shrink-0"
+										file={file}
+									/>
+									<div className="min-w-0 flex-1">
+										<p
+											className="truncate font-medium text-foreground text-sm"
+											title={filename}
+										>
+											{filename}
+										</p>
+										{fileDetails ? (
+											<p className="mt-0.5 truncate text-xs">{fileDetails}</p>
+										) : null}
+									</div>
+									{file.uploadStatus === "uploading" ? (
+										<Spinner
+											className="mr-1 size-4"
+											aria-label="Uploading file"
+										/>
+									) : null}
+								</>
+							)}
+							{isImage && file.uploadStatus === "uploading" ? (
 								<div className="absolute inset-0 flex items-center justify-center bg-background/55 backdrop-blur-[1px]">
 									<Spinner className="size-4" aria-label="Uploading file" />
 								</div>

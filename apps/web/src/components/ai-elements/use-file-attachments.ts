@@ -106,6 +106,7 @@ function createPendingAttachment(
 		type: "file",
 		mediaType: file.type || "application/octet-stream",
 		filename: file.name,
+		providerMetadata: { graneri: { sizeBytes: file.size } },
 		url: localUrl,
 		localUrl,
 		uploadStatus: "uploading",

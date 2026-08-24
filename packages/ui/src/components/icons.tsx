@@ -1,7 +1,15 @@
-import type { LucideIcon, LucideProps } from "lucide-react";
+import type { LucideProps } from "lucide-react";
+import {
+	File,
+	FileArchive,
+	FileCode2,
+	FileImage,
+	FileText,
+} from "lucide-react";
+import type { ComponentType } from "react";
 import { Spinner } from "./spinner";
 
-export type Icon = LucideIcon;
+export type Icon = ComponentType<LucideProps>;
 
 export const context7LogoPaths = [
 	"M27.94 40.6c0 5.93-2.41 10.89-6.33 15.45h9.13v4.43h-14v-4.2c4.29-4.84 5.94-8.79 5.94-15.68z",
@@ -13,7 +21,274 @@ export const context7LogoPaths = [
 export const linearLogoPath =
 	"M1.23 61.52c-.22-.95.91-1.55 1.59-.86l36.51 36.52c.69.69.1 1.82-.86 1.59-18.42-4.32-32.92-18.82-37.24-37.25ZM0 46.89c-.02.28.09.56.29.76l52.06 52.06c.2.2.48.31.76.29a50 50 0 0 0 6.96-.93c.76-.16 1.03-1.1.48-1.65L2.58 39.45c-.55-.55-1.49-.29-1.65.48A50 50 0 0 0 0 46.89Zm4.21-17.18c-.17.37-.08.81.21 1.1l64.77 64.77c.29.29.73.38 1.1.21a50 50 0 0 0 5.19-2.68c.55-.33.64-1.09.18-1.54L8.44 24.34c-.46-.46-1.22-.37-1.55.18a50 50 0 0 0-2.68 5.19Zm8.45-11.64c-.37-.37-.39-.96-.05-1.35A50 50 0 1 1 83.28 87.39c-.39.35-.98.32-1.35-.05L12.66 18.07Z";
 
+const FilePdfIcon = ({ ...props }: LucideProps) => (
+	<svg
+		aria-hidden="true"
+		fill="none"
+		viewBox="0 0 24 24"
+		xmlns="http://www.w3.org/2000/svg"
+		{...props}
+	>
+		<path
+			d="M13 2.594c.267 0 .538.074.813.224.274.15.583.393.924.726l4.95 4.9c.542.541.813 1.091.813 1.65v7.45c0 .725-.179 1.396-.537 2.013a4.001 4.001 0 0 1-1.463 1.449 3.87 3.87 0 0 1-2 .538h-9c-.725 0-1.396-.18-2.013-.538a4.031 4.031 0 0 1-1.45-1.45 3.937 3.937 0 0 1-.537-2.012V6.594c0-.725.179-1.392.537-2a4.002 4.002 0 0 1 1.45-1.463A3.936 3.936 0 0 1 7.5 2.594H13Z"
+			fill="#F75858"
+		/>
+		<path
+			d="M13 2.594c.267 0 .537.075.813.225.274.15.583.391.925.725l4.95 4.9c.541.541.812 1.091.812 1.65h-4.787c-.834 0-1.496-.242-1.988-.725C13.242 8.877 13 8.215 13 7.38V2.594Z"
+			fill="#FF928C"
+		/>
+		<path
+			d="M14.314 17.96v-3.687H17v.632h-1.975v.948h1.712v.632h-1.712v1.474h-.711Zm-3.844 0v-3.687h1.263c1.106 0 1.87.632 1.87 1.843 0 1.211-.737 1.843-1.843 1.843h-1.29Zm1.21-.633c.712 0 1.212-.29 1.212-1.211 0-.922-.5-1.211-1.211-1.211h-.5v2.422h.5ZM7 17.96v-3.687h1.659c.711 0 1.185.421 1.185 1.158 0 .738-.474 1.164-1.185 1.164h-.948v1.364H7Zm1.58-1.997c.369 0 .553-.216.553-.532 0-.316-.184-.526-.553-.526h-.869v1.058h.869Z"
+			fill="#fff"
+		/>
+	</svg>
+);
+
+const FileWordIcon = ({ ...props }: LucideProps) => (
+	<svg
+		aria-hidden="true"
+		fill="none"
+		viewBox="0 0 24 24"
+		xmlns="http://www.w3.org/2000/svg"
+		{...props}
+	>
+		<path
+			d="M13.0039 2.59375C13.2705 2.59375 13.5415 2.66842 13.8164 2.81836C14.0914 2.96836 14.3995 3.21061 14.7412 3.54395L19.6914 8.44336C20.2331 8.98503 20.5039 9.53542 20.5039 10.0938V17.5439C20.5039 18.2689 20.3251 18.94 19.9668 19.5566C19.6085 20.1649 19.1205 20.6476 18.5039 21.0059C17.8956 21.3642 17.2289 21.5439 16.5039 21.5439H7.50391C6.77891 21.5439 6.10788 21.3642 5.49121 21.0059C4.88307 20.6476 4.39928 20.1648 4.04102 19.5566C3.68271 18.94 3.50394 18.2689 3.50391 17.5439V6.59375C3.50391 5.86882 3.68275 5.20204 4.04102 4.59375C4.39935 3.97708 4.88288 3.48919 5.49121 3.13086C6.10787 2.77254 6.77892 2.59375 7.50391 2.59375H13.0039Z"
+			fill="url(#chatgpt-word-file-base)"
+		/>
+		<path
+			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
+			fill="url(#chatgpt-word-file-panel)"
+		/>
+		<path
+			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
+			fill="url(#chatgpt-word-file-highlight)"
+			fillOpacity="0.65"
+		/>
+		<path
+			d="M15.0894 10.5215L13.9817 15.6637L12.6576 15.6643L12.0037 12.5786L11.3191 15.6643H9.98242L8.91797 10.5221H10.0098L10.6665 13.9158L11.3191 10.5221H12.6576L13.3408 13.9158L13.9817 10.5221L15.0894 10.5215Z"
+			fill="white"
+		/>
+		<path
+			d="M13.0039 2.59375C13.2706 2.59375 13.5414 2.66875 13.8164 2.81875C14.0914 2.96875 14.3997 3.21042 14.7414 3.54375L19.6914 8.44375C20.2331 8.98542 20.5039 9.53542 20.5039 10.0938H15.7164C14.8831 10.0938 14.2206 9.85208 13.7289 9.36875C13.2456 8.87708 13.0039 8.21458 13.0039 7.38125V2.59375Z"
+			fill="url(#chatgpt-word-file-fold)"
+		/>
+		<defs>
+			<linearGradient
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-word-file-base"
+				x1="4.50391"
+				x2="16.0039"
+				y1="20.5938"
+				y2="7.09375"
+			>
+				<stop stopColor="#1293F1" />
+				<stop offset="1" stopColor="#043CCC" />
+			</linearGradient>
+			<radialGradient
+				cx="0"
+				cy="0"
+				gradientTransform="translate(7.50391 8.59375) rotate(45) scale(12.7279)"
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-word-file-panel"
+				r="1"
+			>
+				<stop offset="0.0811439" stopColor="#367AF2" />
+				<stop offset="0.871875" stopColor="#001A8F" />
+			</radialGradient>
+			<radialGradient
+				cx="0"
+				cy="0"
+				gradientTransform="translate(12.0039 13.9937) rotate(90) scale(6.3 7.18031)"
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-word-file-highlight"
+				r="1"
+			>
+				<stop offset="0.586954" stopColor="#2763E5" stopOpacity="0" />
+				<stop offset="0.973806" stopColor="#58AAFE" />
+			</radialGradient>
+			<linearGradient
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-word-file-fold"
+				x1="16.5039"
+				x2="13.5039"
+				y1="6.09375"
+				y2="9.59375"
+			>
+				<stop offset="0.0673077" stopColor="#59B6FB" />
+				<stop offset="0.721154" stopColor="#7A7CF4" />
+			</linearGradient>
+		</defs>
+	</svg>
+);
+
+const FileExcelIcon = ({ ...props }: LucideProps) => (
+	<svg
+		aria-hidden="true"
+		fill="none"
+		viewBox="0 0 24 24"
+		xmlns="http://www.w3.org/2000/svg"
+		{...props}
+	>
+		<path
+			d="M13 2.59375C13.2666 2.59375 13.5376 2.66842 13.8125 2.81836C14.0875 2.96836 14.3956 3.21061 14.7373 3.54395L19.6875 8.44336C20.2292 8.98503 20.5 9.53542 20.5 10.0938V17.5439C20.5 18.2689 20.3212 18.94 19.9629 19.5566C19.6046 20.1649 19.1165 20.6476 18.5 21.0059C17.8917 21.3642 17.225 21.5439 16.5 21.5439H7.5C6.775 21.5439 6.10397 21.3642 5.4873 21.0059C4.87916 20.6476 4.39537 20.1648 4.03711 19.5566C3.67881 18.94 3.50003 18.2689 3.5 17.5439V6.59375C3.5 5.86882 3.67884 5.20204 4.03711 4.59375C4.39544 3.97708 4.87897 3.48919 5.4873 3.13086C6.10396 2.77254 6.77501 2.59375 7.5 2.59375H13Z"
+			fill="url(#chatgpt-excel-file-base)"
+		/>
+		<path
+			d="M14.6719 8.59375H9.32812C8.31848 8.59375 7.5 9.41223 7.5 10.4219V15.7656C7.5 16.7753 8.31848 17.5938 9.32812 17.5938H14.6719C15.6815 17.5938 16.5 16.7753 16.5 15.7656V10.4219C16.5 9.41223 15.6815 8.59375 14.6719 8.59375Z"
+			fill="url(#chatgpt-excel-file-panel)"
+		/>
+		<path
+			d="M14.6719 8.59375H9.32812C8.31848 8.59375 7.5 9.41223 7.5 10.4219V15.7656C7.5 16.7753 8.31848 17.5938 9.32812 17.5938H14.6719C15.6815 17.5938 16.5 16.7753 16.5 15.7656V10.4219C16.5 9.41223 15.6815 8.59375 14.6719 8.59375Z"
+			fill="url(#chatgpt-excel-file-highlight)"
+			fillOpacity="0.3"
+		/>
+		<path
+			d="M14.3646 15.6643H12.9773L12.1062 14.0254C12.0752 13.968 12.0513 13.9225 12.0346 13.8891C12.0202 13.8532 12.0047 13.8126 11.9879 13.7672H11.9736C11.9521 13.8245 11.9318 13.8712 11.9127 13.907C11.8935 13.9429 11.8708 13.9871 11.8446 14.0397L10.9412 15.6643H9.63281L11.2029 13.0893L9.74035 10.5215H11.1097L11.884 11.9847C11.915 12.0445 11.9414 12.0971 11.9628 12.1425C11.9868 12.1855 12.0107 12.2369 12.0346 12.2967H12.0489C12.0823 12.2274 12.1086 12.1724 12.1278 12.1318C12.1493 12.0911 12.1779 12.0373 12.2138 11.9704L13.0167 10.5215H14.3216L12.8375 13.0499L14.3646 15.6643Z"
+			fill="white"
+		/>
+		<path
+			d="M13 2.59375C13.2667 2.59375 13.5375 2.66875 13.8125 2.81875C14.0875 2.96875 14.3958 3.21042 14.7375 3.54375L19.6875 8.44375C20.2292 8.98542 20.5 9.53542 20.5 10.0938H15.7125C14.8792 10.0938 14.2167 9.85208 13.725 9.36875C13.2417 8.87708 13 8.21458 13 7.38125V2.59375Z"
+			fill="url(#chatgpt-excel-file-fold)"
+		/>
+		<defs>
+			<linearGradient
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-excel-file-base"
+				x1="4.5"
+				x2="16"
+				y1="20.5938"
+				y2="7.09375"
+			>
+				<stop offset="0.177885" stopColor="#4AA647" />
+				<stop offset="1" stopColor="#13551B" />
+			</linearGradient>
+			<radialGradient
+				cx="0"
+				cy="0"
+				gradientTransform="translate(7.5 8.59375) rotate(45) scale(12.7279 36.2329)"
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-excel-file-panel"
+				r="1"
+			>
+				<stop stopColor="#20A85E" />
+				<stop offset="0.94375" stopColor="#09442A" />
+			</radialGradient>
+			<radialGradient
+				cx="0"
+				cy="0"
+				gradientTransform="translate(12 13.9937) rotate(90) scale(6.3 7.25625)"
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-excel-file-highlight"
+				r="1"
+			>
+				<stop offset="0.580357" stopColor="#33A662" stopOpacity="0" />
+				<stop offset="0.973806" stopColor="#98F0B0" />
+			</radialGradient>
+			<linearGradient
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-excel-file-fold"
+				x1="16.5"
+				x2="13.5"
+				y1="6.09375"
+				y2="9.59375"
+			>
+				<stop stopColor="#B5E480" />
+				<stop offset="0.850962" stopColor="#5FC34C" />
+			</linearGradient>
+		</defs>
+	</svg>
+);
+
+const FilePowerpointIcon = ({ ...props }: LucideProps) => (
+	<svg
+		aria-hidden="true"
+		fill="none"
+		viewBox="0 0 24 24"
+		xmlns="http://www.w3.org/2000/svg"
+		{...props}
+	>
+		<path
+			d="M13.0039 2.59375C13.2705 2.59375 13.5415 2.66842 13.8164 2.81836C14.0914 2.96836 14.3995 3.21061 14.7412 3.54395L19.6914 8.44336C20.2331 8.98503 20.5039 9.53542 20.5039 10.0938V17.5439C20.5039 18.2689 20.3251 18.94 19.9668 19.5566C19.6085 20.1649 19.1205 20.6476 18.5039 21.0059C17.8956 21.3642 17.2289 21.5439 16.5039 21.5439H7.50391C6.77891 21.5439 6.10788 21.3642 5.49121 21.0059C4.88307 20.6476 4.39928 20.1648 4.04102 19.5566C3.68271 18.94 3.50394 18.2689 3.50391 17.5439V6.59375C3.50391 5.86882 3.68275 5.20204 4.04102 4.59375C4.39935 3.97708 4.88288 3.48919 5.49121 3.13086C6.10787 2.77254 6.77892 2.59375 7.50391 2.59375H13.0039Z"
+			fill="url(#chatgpt-powerpoint-file-base)"
+		/>
+		<path
+			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
+			fill="url(#chatgpt-powerpoint-file-panel)"
+		/>
+		<path
+			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
+			fill="url(#chatgpt-powerpoint-file-highlight)"
+			fillOpacity="0.3"
+		/>
+		<path
+			d="M11.566 13.9895V15.6643H10.4082V10.5215H12.1969C12.8374 10.5215 13.3249 10.6613 13.6595 10.9411C13.9965 11.2208 14.165 11.6356 14.165 12.1855C14.165 12.7522 13.9762 13.1945 13.5986 13.5125C13.2234 13.8305 12.7191 13.9895 12.0858 13.9895H11.566ZM11.566 11.4109V13.1H12.05C12.3368 13.1 12.5578 13.0248 12.7131 12.8741C12.8685 12.7235 12.9462 12.5071 12.9462 12.225C12.9462 11.9644 12.8697 11.7635 12.7167 11.6225C12.5662 11.4814 12.3499 11.4109 12.0679 11.4109H11.566Z"
+			fill="white"
+		/>
+		<path
+			d="M13.0039 2.59375C13.2706 2.59375 13.5414 2.66875 13.8164 2.81875C14.0914 2.96875 14.3997 3.21042 14.7414 3.54375L19.6914 8.44375C20.2331 8.98542 20.5039 9.53542 20.5039 10.0938H15.7164C14.8831 10.0938 14.2206 9.85208 13.7289 9.36875C13.2456 8.87708 13.0039 8.21458 13.0039 7.38125V2.59375Z"
+			fill="url(#chatgpt-powerpoint-file-fold)"
+		/>
+		<defs>
+			<linearGradient
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-powerpoint-file-base"
+				x1="4.50391"
+				x2="16.0039"
+				y1="20.5938"
+				y2="7.09375"
+			>
+				<stop offset="0.0240385" stopColor="#F35AAA" />
+				<stop offset="0.528846" stopColor="#E1473D" />
+				<stop offset="1" stopColor="#B0212C" />
+			</linearGradient>
+			<radialGradient
+				cx="0"
+				cy="0"
+				gradientTransform="translate(7.50281 8.59375) rotate(45) scale(12.7279)"
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-powerpoint-file-panel"
+				r="1"
+			>
+				<stop stopColor="#F8193E" />
+				<stop offset="0.939062" stopColor="#920616" />
+			</radialGradient>
+			<radialGradient
+				cx="0"
+				cy="0"
+				gradientTransform="translate(12.0028 13.9937) rotate(90) scale(6.3 7.17187)"
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-powerpoint-file-highlight"
+				r="1"
+			>
+				<stop offset="0.575893" stopColor="#FFB055" stopOpacity="0" />
+				<stop offset="0.973806" stopColor="#FFF2BE" />
+			</radialGradient>
+			<linearGradient
+				gradientUnits="userSpaceOnUse"
+				id="chatgpt-powerpoint-file-fold"
+				x1="16.5039"
+				x2="13.5039"
+				y1="6.09375"
+				y2="9.59375"
+			>
+				<stop stopColor="#FF8F29" />
+				<stop offset="0.850962" stopColor="#FE80AD" />
+			</linearGradient>
+		</defs>
+	</svg>
+);
+
 export const Icons = {
+	file: File,
+	fileArchive: FileArchive,
+	fileCode: FileCode2,
+	fileExcel: FileExcelIcon,
+	fileImage: FileImage,
+	filePdf: FilePdfIcon,
+	filePowerpoint: FilePowerpointIcon,
+	fileText: FileText,
+	fileWord: FileWordIcon,
 	codexLogo: ({ ...props }: LucideProps) => (
 		<svg
 			aria-hidden="true"
