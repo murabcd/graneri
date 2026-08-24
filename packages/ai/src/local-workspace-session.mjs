@@ -422,25 +422,25 @@ export const createLocalWorkspaceSession = (roots) => {
 			0,
 			Math.min(maxResults, MAX_LOCAL_FILE_UPLOADS),
 		);
-		const results = [];
+		const results = await Promise.all(
+			candidates.map(async (candidate) => {
+				const { path: absolutePath } = await resolveExistingPath({
+					relativePath: candidate.path,
+					rootIndex,
+				});
+				const fileData = await readEntireFile(absolutePath, {
+					maxBytes: MAX_IMAGE_BYTES,
+				});
 
-		for (const candidate of candidates) {
-			const { path: absolutePath } = await resolveExistingPath({
-				relativePath: candidate.path,
-				rootIndex,
-			});
-			const fileData = await readEntireFile(absolutePath, {
-				maxBytes: MAX_IMAGE_BYTES,
-			});
-
-			results.push({
-				bytes: fileData.buffer,
-				filename: basename(candidate.path),
-				mediaType: candidate.mediaType,
-				path: candidate.path,
-				sizeBytes: fileData.sizeBytes,
-			});
-		}
+				return {
+					bytes: fileData.buffer,
+					filename: basename(candidate.path),
+					mediaType: candidate.mediaType,
+					path: candidate.path,
+					sizeBytes: fileData.sizeBytes,
+				};
+			}),
+		);
 
 		return {
 			path: rootRelativePath,

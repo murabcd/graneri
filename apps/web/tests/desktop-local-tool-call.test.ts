@@ -6,6 +6,15 @@ vi.mock("@/lib/runtime-config", () => ({
 		"http://127.0.0.1:42831/api/local-folder-tool",
 }));
 
+const localFolders = [
+	{
+		id: "folder_1",
+		name: "Screens",
+		path: "/Users/test/Screens",
+		source: "path-reference" as const,
+	},
+];
+
 describe("desktop local tool calls", () => {
 	it("uploads local image bytes through Convex and submits a resolved file output", async () => {
 		const fetchMock = vi.fn(
@@ -33,14 +42,6 @@ describe("desktop local tool calls", () => {
 		const getUrl = vi.fn(
 			async () => "https://example.convex.cloud/api/storage/storage_1",
 		);
-		const localFolders = [
-			{
-				id: "folder_1",
-				name: "Screens",
-				path: "/Users/test/Screens",
-				source: "path-reference" as const,
-			},
-		];
 		const handler = createDesktopLocalToolCallHandler({
 			addToolOutputRef: { current: addToolOutput },
 			fetchImpl: fetchMock,
@@ -88,5 +89,45 @@ describe("desktop local tool calls", () => {
 			tool: "read_local_file",
 			toolCallId: "call-image",
 		});
+	});
+
+	it("rejects malformed success payloads at the HTTP boundary", async () => {
+		const addToolOutput = vi.fn();
+		const handler = createDesktopLocalToolCallHandler({
+			addToolOutputRef: { current: addToolOutput },
+			fetchImpl: vi.fn(
+				async () =>
+					new Response(JSON.stringify({ unexpected: true }), {
+						headers: { "Content-Type": "application/json" },
+						status: 200,
+					}),
+			),
+			fileStorage: {
+				generateUploadUrl: vi.fn(
+					async () => "https://example.convex.cloud/api/storage/upload",
+				),
+				getUrl: vi.fn(async () => null),
+			},
+			latestRequestBodyRef: { current: { localFolders } },
+		});
+
+		handler({
+			toolCall: {
+				dynamic: false,
+				input: { relativePath: "screen.png", rootIndex: 0 },
+				toolCallId: "malformed-response",
+				toolName: "read_local_file",
+				type: "tool-call",
+			},
+		});
+		await vi.waitFor(() => expect(addToolOutput).toHaveBeenCalledOnce());
+
+		expect(addToolOutput).toHaveBeenCalledWith(
+			expect.objectContaining({
+				errorText: expect.stringContaining("output"),
+				state: "output-error",
+				toolCallId: "malformed-response",
+			}),
+		);
 	});
 });

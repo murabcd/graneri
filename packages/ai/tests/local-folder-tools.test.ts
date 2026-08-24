@@ -1,7 +1,7 @@
 import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ExecuteLocalCommand } from "../src/local-folder-tools.mjs";
 import {
 	buildClientLocalFolderTools,
@@ -217,6 +217,51 @@ describe("local folder tools", () => {
 				],
 				totalImageCount: 1,
 				truncated: false,
+			});
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("stores independent image-search candidates concurrently", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
+		try {
+			const image = Buffer.from([
+				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+			]);
+			await Promise.all([
+				writeFile(join(directory, "screen-one.png"), image),
+				writeFile(join(directory, "screen-two.png"), image),
+			]);
+			const finishUploads: Array<() => void> = [];
+			const tools = await buildToolsForDirectory(
+				directory,
+				executeSuccessfulLocalCommand,
+				() => {
+					const storageId = `storage_${finishUploads.length + 1}`;
+					return new Promise((resolve) => {
+						finishUploads.push(() => resolve({ storageId }));
+					});
+				},
+			);
+
+			const search = tools.search_local_files.execute?.(
+				{
+					contentType: "image",
+					maxResults: 2,
+					query: "screen",
+					relativePath: ".",
+					rootIndex: 0,
+				},
+				{ messages: [], toolCallId: "parallel-image-search" },
+			);
+
+			await vi.waitFor(() => expect(finishUploads).toHaveLength(2));
+			for (const finishUpload of finishUploads) {
+				finishUpload();
+			}
+			await expect(search).resolves.toMatchObject({
+				candidateImageCount: 2,
 			});
 		} finally {
 			await rm(directory, { force: true, recursive: true });

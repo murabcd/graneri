@@ -192,11 +192,6 @@ export function useFileAttachmentDropzone({
 								: "Attachment upload failed.",
 						);
 						onFileUploadFailed(attachment.id);
-					})
-					.finally(() => {
-						if (attachment.localUrl) {
-							URL.revokeObjectURL(attachment.localUrl);
-						}
 					});
 			}
 		},

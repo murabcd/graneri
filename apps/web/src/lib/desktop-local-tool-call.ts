@@ -10,6 +10,7 @@ import type {
 	UIMessage,
 } from "ai";
 import type { RefObject } from "react";
+import { z } from "zod";
 import { logError } from "@/lib/logger";
 import { getLocalFolderToolApiUrl } from "@/lib/runtime-config";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -29,6 +30,18 @@ type LocalToolRequestOptions =
 type DesktopLocalToolRequestBody = {
 	localFolders?: DesktopLocalFolder[];
 };
+
+const localToolErrorResponseSchema = z.object({
+	error: z.string().optional(),
+});
+const localToolSuccessResponseSchema = z.object({
+	output: z
+		.unknown()
+		.refine(
+			(output) => output !== undefined,
+			"Local tool response is missing output.",
+		),
+});
 
 export type LocalFileStorage = {
 	generateUploadUrl: () => Promise<string>;
@@ -109,15 +122,17 @@ const executeDesktopLocalToolCall = async ({
 		}),
 	});
 	if (!response.ok) {
-		const errorPayload = (await response.json().catch(() => ({}))) as {
-			error?: string;
-		};
-		throw new Error(errorPayload.error || "Local tool execution failed.");
+		const errorPayload = localToolErrorResponseSchema.safeParse(
+			await response.json().catch(() => null),
+		);
+		throw new Error(
+			errorPayload.success && errorPayload.data.error
+				? errorPayload.data.error
+				: "Local tool execution failed.",
+		);
 	}
 
-	const payload = (await response.json().catch(() => ({}))) as {
-		output?: unknown;
-	};
+	const payload = localToolSuccessResponseSchema.parse(await response.json());
 	return await resolveLocalFileToolOutput({
 		output: payload.output,
 		resolveStorageUrl: fileStorage.getUrl,

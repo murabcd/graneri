@@ -74,23 +74,23 @@ const searchLocalImages = async ({
 		relativePath,
 		rootIndex,
 	});
-	const results = [];
-
-	for (const candidate of searchResult.results) {
-		const storedImage = await storeLocalFile({
-			bytes: candidate.bytes,
-			mediaType: candidate.mediaType,
-		});
-		results.push({
-			file: {
-				filename: candidate.filename,
+	const results = await Promise.all(
+		searchResult.results.map(async (candidate) => {
+			const storedImage = await storeLocalFile({
+				bytes: candidate.bytes,
 				mediaType: candidate.mediaType,
-				storageId: storedImage.storageId,
-			},
-			path: candidate.path,
-			sizeBytes: candidate.sizeBytes,
-		});
-	}
+			});
+			return {
+				file: {
+					filename: candidate.filename,
+					mediaType: candidate.mediaType,
+					storageId: storedImage.storageId,
+				},
+				path: candidate.path,
+				sizeBytes: candidate.sizeBytes,
+			};
+		}),
+	);
 
 	return {
 		candidateImageCount: results.length,
