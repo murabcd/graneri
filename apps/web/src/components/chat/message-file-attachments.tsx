@@ -32,7 +32,7 @@ function DocumentAttachmentCard({
 		.join(" · ");
 
 	return (
-		<div className="flex h-16 w-[17rem] max-w-full min-w-0 items-center gap-3 rounded-2xl bg-muted/50 px-3">
+		<div className="flex h-16 w-[17rem] max-w-full min-w-0 items-center gap-3 rounded-2xl border border-border/60 bg-muted/50 px-3">
 			<FileAttachmentGlyph className="size-8 shrink-0" file={file} />
 			<div className="min-w-0 flex-1">
 				<p
@@ -85,7 +85,7 @@ function UserDocumentAttachmentPill({ file }: { file: FileUIPart }) {
 	const filename = file.filename || "Attached file";
 
 	return (
-		<div className="inline-flex max-w-80 min-w-0 items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-1.5 text-sm text-foreground">
+		<div className="inline-flex max-w-80 min-w-0 items-center gap-1 rounded-full border border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground">
 			<FileAttachmentGlyph file={file} />
 			<span className="min-w-0 truncate pe-1 font-medium" title={filename}>
 				{filename}
@@ -171,10 +171,8 @@ export function ChatMessageFileAttachments({
 								key={file.url}
 								type="button"
 								className={cn(
-									"cursor-zoom-in overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-									isUserMessage
-										? "size-20 rounded-lg border border-border"
-										: "size-16 rounded-xl",
+									"cursor-zoom-in overflow-hidden border border-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+									isUserMessage ? "size-20 rounded-lg" : "size-16 rounded-xl",
 								)}
 								onClick={() => setPreviewImage(file)}
 							>

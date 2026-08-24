@@ -118,7 +118,7 @@ export function FileAttachmentChips({
 								"group/attachment-preview relative flex h-14 shrink-0 items-center justify-center rounded-lg text-muted-foreground",
 								isImage
 									? "w-14 bg-muted/50"
-									: "w-56 justify-start gap-2.5 bg-muted/50 px-2.5",
+									: "w-56 justify-start gap-2.5 border border-border/60 bg-muted/50 px-2.5",
 								file.uploadStatus === "uploading" && "opacity-80",
 							)}
 						>
@@ -126,7 +126,7 @@ export function FileAttachmentChips({
 								<button
 									type="button"
 									className={cn(
-										"flex size-14 items-center justify-center overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+										"flex size-14 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 										canPreview && "cursor-zoom-in",
 									)}
 									onClick={() => {

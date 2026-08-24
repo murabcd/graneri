@@ -89,7 +89,7 @@ describe("chat file attachments", () => {
 		const messageFile =
 			screen.getByText("report.pdf").parentElement?.parentElement;
 		expect(messageFile?.querySelector('[data-file-kind="pdf"]')).toBeTruthy();
-		expect(messageFile?.classList.contains("border")).toBe(false);
+		expect(messageFile?.classList.contains("border")).toBe(true);
 		expect(messageFile?.classList.contains("bg-muted/50")).toBe(true);
 		expect(messageFile?.classList.contains("h-16")).toBe(true);
 		const downloadButton = screen.getByRole("button", {
@@ -117,7 +117,7 @@ describe("chat file attachments", () => {
 		const composerFile =
 			screen.getByText("report.pdf").parentElement?.parentElement;
 		expect(composerFile?.querySelector('[data-file-kind="pdf"]')).toBeTruthy();
-		expect(composerFile?.classList.contains("border")).toBe(false);
+		expect(composerFile?.classList.contains("border")).toBe(true);
 		expect(composerFile?.classList.contains("bg-muted/50")).toBe(true);
 		expect(composerFile?.classList.contains("h-14")).toBe(true);
 		expect(
@@ -125,7 +125,7 @@ describe("chat file attachments", () => {
 		).toBeTruthy();
 	});
 
-	it("uses ChatGPT-sized bordered image tiles in user messages", () => {
+	it("uses bordered image tiles in messages and the composer", () => {
 		const message = render(
 			createElement(ChatMessageFileAttachments, {
 				align: "end",
@@ -137,6 +137,18 @@ describe("chat file attachments", () => {
 		expect(messageImage.classList.contains("size-20")).toBe(true);
 		expect(messageImage.classList.contains("rounded-lg")).toBe(true);
 		message.unmount();
+
+		const assistantMessage = render(
+			createElement(ChatMessageFileAttachments, {
+				align: "start",
+				files: [image],
+			}),
+		);
+		const assistantImage = screen.getByRole("button", {
+			name: "workspace.png",
+		});
+		expect(assistantImage.classList.contains("border")).toBe(true);
+		assistantMessage.unmount();
 
 		render(
 			createElement(FileAttachmentChips, {
@@ -153,9 +165,7 @@ describe("chat file attachments", () => {
 		const composerImage = screen.getByRole("button", {
 			name: "Preview workspace.png",
 		});
-		expect(composerImage.parentElement?.classList.contains("border")).toBe(
-			false,
-		);
+		expect(composerImage.classList.contains("border")).toBe(true);
 		expect(composerImage.parentElement?.classList.contains("bg-muted/50")).toBe(
 			true,
 		);
