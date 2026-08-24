@@ -45,3 +45,9 @@ jobs:
 
       - name: Run tests
         run: bun run test
+
+  deploy:
+    needs: validate
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy-vercel.yml
+    secrets: inherit

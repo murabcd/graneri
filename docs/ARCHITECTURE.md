@@ -774,8 +774,9 @@ Vercel deployments have one owner: `.github/workflows/deploy-vercel.yml`.
 That workflow pins Vercel CLI `59.5.0`, pulls the selected Vercel environment,
 builds locally with `vercel build`, installs from the frozen Bun lockfile, and
 deploys only the prebuilt output.
-Production deploys run for pushes to `main` or an explicit manual dispatch;
-pull requests are validation-only. `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+For pushes to `main`, `ci.yml` calls the deployment workflow only after all
+validation passes; an explicit manual dispatch is also available. Pull requests
+are validation-only. `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
 `VERCEL_PROJECT_ID` are GitHub repository secrets. Public build-time values are
 non-sensitive Vercel config, while runtime credentials remain sensitive. The
 Vercel Git integration must remain disconnected so a second hosted builder
