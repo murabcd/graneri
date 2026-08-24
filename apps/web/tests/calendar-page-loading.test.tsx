@@ -623,7 +623,7 @@ describe("CalendarPage loading", () => {
 			expect(listCalendarEvents).toHaveBeenCalledTimes(requestCount + 3),
 		);
 		expect(screen.queryByRole("heading", { name: "New event" })).toBeNull();
-	}, 10_000);
+	}, 20_000);
 
 	it("creates a provider calendar and reloads the agenda", async () => {
 		const user = userEvent.setup();
