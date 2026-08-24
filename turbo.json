@@ -1,14 +1,16 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://v2-10-11.turborepo.dev/schema.json",
   "ui": "tui",
   "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.env*"],
       "outputs": ["dist/**"]
     },
     "lint": {
-      "dependsOn": ["^lint"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/biome.json",
@@ -16,7 +18,6 @@
       ]
     },
     "check": {
-      "dependsOn": ["^check"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/biome.json",
@@ -24,14 +25,14 @@
       ]
     },
     "format": {
-      "dependsOn": ["^format"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/biome.json"]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["transit"],
+      "outputs": ["node_modules/.tmp/*.tsbuildinfo"]
     },
     "test": {
-      "dependsOn": ["^test"]
+      "dependsOn": ["transit"]
     },
     "preview": {
       "cache": false
