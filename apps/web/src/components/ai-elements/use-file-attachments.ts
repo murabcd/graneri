@@ -56,8 +56,10 @@ function useConvexFileAttachmentUpload() {
 
 	return React.useCallback(
 		async (file: File): Promise<FileUIPart> => {
-			const mediaType = await detectModelFileAttachmentMediaType(file);
-			const uploadUrl = await generateUploadUrl();
+			const [mediaType, uploadUrl] = await Promise.all([
+				detectModelFileAttachmentMediaType(file),
+				generateUploadUrl(),
+			]);
 			const response = await fetch(uploadUrl, {
 				method: "POST",
 				headers: { "Content-Type": mediaType },
@@ -82,6 +84,7 @@ function useConvexFileAttachmentUpload() {
 				url,
 				providerMetadata: {
 					graneri: {
+						sizeBytes: file.size,
 						storageId: result.storageId,
 					},
 				},

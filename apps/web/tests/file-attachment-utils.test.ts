@@ -16,7 +16,9 @@ describe("file attachment utilities", () => {
 			{
 				filename: "report.pdf",
 				mediaType: "application/pdf",
-				providerMetadata: { graneri: { storageId: "storage_report" } },
+				providerMetadata: {
+					graneri: { sizeBytes: 2_483_200, storageId: "storage_report" },
+				},
 				type: "file",
 				url: "https://files.example.test/report.pdf",
 			},
@@ -27,7 +29,9 @@ describe("file attachment utilities", () => {
 			id: "pending-report",
 			localUrl: undefined,
 			mediaType: "application/pdf",
-			providerMetadata: { graneri: { storageId: "storage_report" } },
+			providerMetadata: {
+				graneri: { sizeBytes: 2_483_200, storageId: "storage_report" },
+			},
 			type: "file",
 			uploadStatus: "ready",
 			url: "https://files.example.test/report.pdf",

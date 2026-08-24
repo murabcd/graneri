@@ -1,4 +1,5 @@
 import { saveDesktopTextFile } from "@workspace/platform/desktop";
+import { downloadBlobAsFile } from "@/lib/download-file";
 
 export const exportTextFile = async ({
 	fileName,
@@ -16,12 +17,7 @@ export const exportTextFile = async ({
 	const blob = new Blob([content], {
 		type: "text/plain;charset=utf-8",
 	});
-	const downloadUrl = URL.createObjectURL(blob);
-	const anchor = document.createElement("a");
-	anchor.href = downloadUrl;
-	anchor.download = fileName;
-	anchor.click();
-	URL.revokeObjectURL(downloadUrl);
+	downloadBlobAsFile({ blob, filename: fileName });
 
 	return {
 		ok: true,

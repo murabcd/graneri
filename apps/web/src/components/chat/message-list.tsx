@@ -17,11 +17,9 @@ import {
 	FileText,
 	GitBranch,
 	LoaderCircle,
-	Paperclip,
 	Scissors,
 } from "lucide-react";
 import * as React from "react";
-import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 import {
 	Source,
@@ -34,6 +32,7 @@ import { isRenderableToolUiPart } from "@/components/ai-elements/tools/tool-part
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
+import { ChatMessageFileAttachments } from "@/components/chat/message-file-attachments";
 import {
 	ASSISTANT_CHAT_CONTENT_CLASS,
 	CHAT_MESSAGE_MAX_WIDTH_CLASS,
@@ -473,7 +472,10 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 				)}
 			>
 				{selectedRecipe ? <ChatRecipeReceipt recipe={selectedRecipe} /> : null}
-				<ChatMessageFileAttachments files={fileParts} />
+				<ChatMessageFileAttachments
+					align={message.role === "user" ? "end" : "start"}
+					files={fileParts}
+				/>
 				{assistantTurnWorkParts ? (
 					<ToolGroup
 						parts={assistantTurnWorkParts}
@@ -717,57 +719,5 @@ function MessageSources({
 				))}
 			</SourcesContent>
 		</Sources>
-	);
-}
-
-function ChatMessageFileAttachments({
-	files,
-}: {
-	files: ReturnType<typeof extractFileParts>;
-}) {
-	const [previewImage, setPreviewImage] = React.useState<
-		ReturnType<typeof extractFileParts>[number] | null
-	>(null);
-
-	if (files.length === 0) {
-		return null;
-	}
-
-	return (
-		<>
-			<div className="mt-2 flex max-w-full flex-wrap gap-2 first:mt-0">
-				{files.map((file) =>
-					file.mediaType.startsWith("image/") ? (
-						<button
-							key={file.url}
-							type="button"
-							className="size-24 cursor-zoom-in overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							onClick={() => setPreviewImage(file)}
-						>
-							<img
-								src={file.url}
-								alt={file.filename || "Attached image"}
-								className="size-full object-cover"
-							/>
-						</button>
-					) : (
-						<button
-							key={file.url}
-							type="button"
-							className="flex size-24 items-center justify-center rounded-md border border-border/50 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
-						>
-							<Paperclip className="size-5" />
-							<span className="sr-only">
-								{file.filename || "Attached file"}
-							</span>
-						</button>
-					),
-				)}
-			</div>
-			<AttachmentImagePreviewDialog
-				image={previewImage}
-				onClose={() => setPreviewImage(null)}
-			/>
-		</>
 	);
 }

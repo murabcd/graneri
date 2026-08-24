@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { downloadUrlAsFile } from "@/lib/download-file";
 import {
 	NOTE_IMAGE_ALIGNMENTS,
 	type NoteImageAlignment,
@@ -43,22 +44,6 @@ const getDownloadFileName = (alt: string | null, src: string | null) => {
 		}
 	}
 	return "note-image";
-};
-
-const downloadImage = async (src: string, fileName: string) => {
-	const response = await fetch(src);
-	if (!response.ok) {
-		throw new Error("Image download failed.");
-	}
-	const objectUrl = URL.createObjectURL(await response.blob());
-	try {
-		const anchor = document.createElement("a");
-		anchor.href = objectUrl;
-		anchor.download = fileName;
-		anchor.click();
-	} finally {
-		URL.revokeObjectURL(objectUrl);
-	}
 };
 
 function ImageMenuTooltip({
@@ -185,10 +170,10 @@ export function NoteImageMenu({
 			return;
 		}
 		try {
-			await downloadImage(
-				imageState.src,
-				getDownloadFileName(imageState.alt, imageState.src),
-			);
+			await downloadUrlAsFile({
+				filename: getDownloadFileName(imageState.alt, imageState.src),
+				url: imageState.src,
+			});
 		} catch {
 			toast.error("Failed to download image.");
 		}
