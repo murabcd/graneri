@@ -45,8 +45,8 @@ describe("local folder tools", () => {
 		expect(context).toContain("For local images");
 		expect(context).toContain("run_local_command");
 		expect(context).toContain("temporary copy-on-write changes");
-		expect(context).toContain("private-network access");
-		expect(context).toContain("Public HTTP(S) requests");
+		expect(context).toContain("Network access is unavailable");
+		expect(context).not.toContain("Public HTTP(S) requests");
 	});
 
 	it("folds local image inspection and search into the file tools", async () => {

@@ -62,11 +62,12 @@ test("runs isolated cross-platform commands over a shared folder", async () => {
 		assert.equal(languageResult.stdout, "42\n42\n42\n");
 
 		const networkResult = await runLocalCommand({
-			command: "curl --fail --silent http://127.0.0.1:1",
+			command: "curl --fail --silent https://example.com",
 			rootPath,
 		});
-		assert.equal(networkResult.exitCode, 7);
+		assert.equal(networkResult.exitCode, 127);
 		assert.equal(networkResult.stdout, "");
+		assert.match(networkResult.stderr, /curl: command not found/u);
 
 		const outputResult = await runLocalCommand({
 			command: "seq 1 10000",

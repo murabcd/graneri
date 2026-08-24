@@ -7,7 +7,6 @@ const COMMAND_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT_BYTES = 20_000;
 const MAX_FILE_READ_BYTES = 20_000_000;
 const MAX_VIRTUAL_WRITE_BYTES = 20_000_000;
-const MAX_NETWORK_RESPONSE_BYTES = 5_000_000;
 const MAX_SANDBOX_OUTPUT_BYTES = 250_000;
 
 const truncateUtf8 = (value) => {
@@ -46,13 +45,6 @@ const createCommandEnvironment = (rootPath) => {
 		},
 		fs: filesystem,
 		javascript: true,
-		network: {
-			dangerouslyAllowFullInternetAccess: true,
-			denyPrivateRanges: true,
-			maxRedirects: 5,
-			maxResponseSize: MAX_NETWORK_RESPONSE_BYTES,
-			timeoutMs: COMMAND_TIMEOUT_MS,
-		},
 		python: true,
 	});
 };

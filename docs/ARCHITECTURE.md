@@ -986,11 +986,10 @@ private to Electron. Reads reflect the live selected root, while writes exist
 only in the call's bounded copy-on-write layer and are discarded afterward.
 The overlay blocks reads outside the root and rejects symlink traversal. The
 shell exposes
-the bounded `just-bash` tool catalog, sandboxed QuickJS and WASM CPython, and
-public-network requests; private, loopback, and link-local network targets are
-denied. Native host executables are not exposed. Command length, execution,
-traversal, file reads, virtual writes, network responses, and captured output
-are bounded. The optional `just-bash` host-global defense monkey patches must
+the bounded `just-bash` tool catalog, sandboxed QuickJS and WASM CPython. It
+exposes neither network access nor native host executables. Command length,
+execution, traversal, file reads, virtual writes, and captured output are
+bounded. The optional `just-bash` host-global defense monkey patches must
 remain disabled because Electron main owns unrelated timers and process state;
 the capability boundary, virtual filesystem, worker runtimes, and explicit
 limits are the isolation layers. There is no native OS command runner or
