@@ -1,15 +1,17 @@
 import { constants } from "node:fs";
 import { open, readdir, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
-import {
-	decodeLocalUtf8Range,
-	detectLocalFileMedia,
-} from "./local-file-media.mjs";
-import { MAX_LOCAL_IMAGE_UPLOADS } from "./local-folder-image-contract.mjs";
+import { MAX_LOCAL_FILE_UPLOADS } from "./local-folder-file-contract.mjs";
 import {
 	MAX_LOCAL_FILE_READ_BYTES,
 	MAX_LOCAL_FOLDER_ROOTS,
 } from "./local-folder-tool-definitions.mjs";
+import {
+	assertModelFileMedia,
+	decodeModelUtf8Range,
+	detectModelFileMedia,
+	MAX_MODEL_FILE_BYTES,
+} from "./model-file-input.mjs";
 
 const MAX_DIRECTORY_ENTRIES = 200;
 const MAX_WALK_FILES = 1000;
@@ -266,7 +268,7 @@ export const createLocalWorkspaceSession = (roots) => {
 
 			const header = Buffer.alloc(Math.min(8_192, fileStat.size));
 			const headerRead = await file.read(header, 0, header.length, 0);
-			const media = detectLocalFileMedia(
+			const media = detectModelFileMedia(
 				header.subarray(0, headerRead.bytesRead),
 			);
 			if (media.kind !== "text") {
@@ -288,7 +290,7 @@ export const createLocalWorkspaceSession = (roots) => {
 				normalizedLength,
 				normalizedOffset,
 			);
-			const decoded = decodeLocalUtf8Range(buffer.subarray(0, bytesRead), {
+			const decoded = decodeModelUtf8Range(buffer.subarray(0, bytesRead), {
 				allowTrailingPartial: normalizedOffset + bytesRead < fileStat.size,
 			});
 			if (bytesRead > 0 && decoded.byteLength === 0) {
@@ -300,6 +302,7 @@ export const createLocalWorkspaceSession = (roots) => {
 
 			return {
 				content: decoded.text,
+				kind: "text",
 				lengthBytes: decoded.byteLength,
 				mediaType: media.mediaType,
 				nextOffsetBytes:
@@ -314,25 +317,47 @@ export const createLocalWorkspaceSession = (roots) => {
 		}
 	};
 
-	const readImage = async ({ relativePath, rootIndex }) => {
+	const readFile = async ({
+		lengthBytes,
+		offsetBytes,
+		relativePath,
+		rootIndex,
+	}) => {
 		const { path: filePath, root } = await resolveExistingPath({
 			relativePath,
 			rootIndex,
 		});
-		const { buffer, sizeBytes } = await readEntireFile(filePath, {
-			maxBytes: MAX_IMAGE_BYTES,
-			tooLargeMessage: `Image file is too large to inspect directly. Maximum size is ${MAX_IMAGE_BYTES} bytes.`,
-		});
-		const media = detectLocalFileMedia(buffer.subarray(0, 8_192));
-		if (media.kind !== "image") {
+		const headerData = await readFileHeader(filePath);
+		const headerMedia = detectModelFileMedia(headerData.buffer);
+		if (headerMedia.kind === "text") {
+			return await readTextFile({
+				lengthBytes,
+				offsetBytes,
+				relativePath,
+				rootIndex,
+			});
+		}
+		if (headerMedia.kind === "binary") {
 			throw new Error(
-				`Only supported image files can be inspected. Detected ${media.mediaType}.`,
+				`Unsupported file format. Detected ${headerMedia.mediaType}; supported inputs are UTF-8 text, images, PDF, DOCX, XLSX, and PPTX.`,
 			);
+		}
+
+		const maximumBytes =
+			headerMedia.kind === "image" ? MAX_IMAGE_BYTES : MAX_MODEL_FILE_BYTES;
+		const { buffer, sizeBytes } = await readEntireFile(filePath, {
+			maxBytes: maximumBytes,
+			tooLargeMessage: `File is too large to inspect directly. Maximum size is ${maximumBytes} bytes.`,
+		});
+		const media = assertModelFileMedia(buffer);
+		if (media.kind === "text") {
+			throw new Error("File media changed while it was being read.");
 		}
 
 		return {
 			bytes: buffer,
 			filename: basename(filePath),
+			kind: "file",
 			mediaType: media.mediaType,
 			path: relative(root.path, filePath),
 			sizeBytes,
@@ -369,7 +394,7 @@ export const createLocalWorkspaceSession = (roots) => {
 				rootIndex,
 			});
 			const fileHeader = await readFileHeader(absolutePath);
-			const media = detectLocalFileMedia(fileHeader.buffer);
+			const media = detectModelFileMedia(fileHeader.buffer);
 			if (
 				media.kind !== "image" ||
 				fileHeader.fileStat.size > MAX_IMAGE_BYTES
@@ -395,7 +420,7 @@ export const createLocalWorkspaceSession = (roots) => {
 		const totalImageCount = imageCandidates.length;
 		const candidates = imageCandidates.slice(
 			0,
-			Math.min(maxResults, MAX_LOCAL_IMAGE_UPLOADS),
+			Math.min(maxResults, MAX_LOCAL_FILE_UPLOADS),
 		);
 		const results = [];
 
@@ -460,7 +485,7 @@ export const createLocalWorkspaceSession = (roots) => {
 				const fileData = await readEntireFile(absolutePath, {
 					maxBytes: MAX_SEARCH_FILE_BYTES,
 				});
-				const media = detectLocalFileMedia(fileData.buffer.subarray(0, 8_192));
+				const media = detectModelFileMedia(fileData.buffer.subarray(0, 8_192));
 				const lines =
 					media.kind === "text"
 						? fileData.buffer.toString("utf8").split(/\r?\n/u)
@@ -490,6 +515,7 @@ export const createLocalWorkspaceSession = (roots) => {
 		}
 
 		return {
+			kind: "text-search",
 			matches,
 			truncated: walk.truncated || matches.length >= MAX_SEARCH_MATCHES,
 		};
@@ -498,8 +524,7 @@ export const createLocalWorkspaceSession = (roots) => {
 	return Object.freeze({
 		getRoot,
 		listDirectory,
-		readImage,
-		readTextFile,
+		readFile,
 		roots: Object.freeze(canonicalRoots),
 		searchFiles,
 		searchImages,

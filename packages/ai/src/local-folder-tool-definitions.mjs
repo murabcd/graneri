@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
-	MAX_LOCAL_IMAGE_UPLOADS,
+	MAX_LOCAL_FILE_UPLOADS,
 	readLocalFileOutputForModel,
 	searchLocalFilesOutputForModel,
-} from "./local-folder-image-contract.mjs";
+} from "./local-folder-file-contract.mjs";
 
 export const MAX_LOCAL_FOLDER_ROOTS = 4;
 export const MAX_LOCAL_FILE_READ_BYTES = 120_000;
@@ -35,7 +35,7 @@ const localFolderToolCatalog = Object.freeze({
 	read_local_file: {
 		buildConfig: ({ rootSchema }) => ({
 			description:
-				"Read a text file or inspect an image inside a local folder explicitly shared by the desktop user. Text reads return a bounded UTF-8 byte range. Image reads return multimodal content for screenshots, photos, charts, diagrams, and OCR.",
+				"Read a supported file inside a local folder explicitly shared by the desktop user. The file format is detected from its bytes. UTF-8 text returns a bounded byte range; images, PDF, DOCX, XLSX, and PPTX return model-readable file content.",
 			inputSchema: z.object({
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
@@ -57,20 +57,16 @@ const localFolderToolCatalog = Object.freeze({
 					.max(MAX_LOCAL_FILE_READ_BYTES)
 					.default(MAX_LOCAL_FILE_READ_BYTES)
 					.describe("Maximum number of bytes to read."),
-				contentType: z
-					.enum(["text", "image"])
-					.default("text")
-					.describe(
-						"Content to read. Use image for screenshots, photos, charts, diagrams, or OCR.",
-					),
 				prompt: z
 					.string()
 					.optional()
-					.describe("Optional specific question to answer about an image."),
+					.describe("Optional specific question to answer about the file."),
 				detail: z
 					.enum(["auto", "low", "high"])
 					.default("auto")
-					.describe("Image detail level. Use high for OCR or small UI text."),
+					.describe(
+						"Image detail level. Use high for OCR or small UI text; ignored for documents and text.",
+					),
 			}),
 			toModelOutput: readLocalFileOutputForModel,
 		}),
@@ -170,15 +166,15 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"When the user asks about a shared local path, folder contents, local file, screenshot, image, or text transcript file inside a shared folder, use the local folder tools before answering. Do not use connected app tools such as Notion for local filesystem questions unless the user explicitly asks about those connected apps.",
 				"Do not say you cannot access the folder, and do not ask the user to run terminal commands, unless a local folder tool fails or the needed path is outside the shared folders.",
 				"For broad exploration, use run_local_command. It runs cross-platform virtual Bash with the selected shared folder as its working directory. Reads reflect the live shared folder; writes are temporary copy-on-write changes discarded after the call. Reads outside the folder, symlink traversal, and native host executables are blocked. Network access is unavailable. Sandboxed JavaScript, sandboxed Python, and in-memory SQLite are available.",
-				"Use structured local tools for direct folder listing, bounded text reads, image inspection, and file search. Use read_local_file byte ranges when a text file is larger than one response.",
-				"For local images, use read_local_file with contentType image for a specific image and search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
+				"Use structured local tools for direct folder listing, automatic supported-file reading, and file search. read_local_file detects UTF-8 text, images, PDF, DOCX, XLSX, and PPTX from file bytes. Use byte ranges when a text file is larger than one response.",
+				"For a specific local image or document, use read_local_file directly. Use search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"Shared local folders:",
 				...roots.map((root, index) => `${index}: ${root.name} (${root.path})`),
 			].join("\n");
 
 export const buildLocalFolderToolConfigs = (
 	roots,
-	{ maxImageSearchResults = MAX_LOCAL_IMAGE_UPLOADS, providerOptions } = {},
+	{ maxImageSearchResults = MAX_LOCAL_FILE_UPLOADS, providerOptions } = {},
 ) => {
 	if (roots.length === 0) {
 		return {};

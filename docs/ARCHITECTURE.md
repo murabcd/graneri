@@ -962,18 +962,28 @@ ignored-directory policy, and media-aware local search. Shared roots are
 canonical real paths, one chat may expose at most four unique roots, and an
 invalid or stale root fails the request visibly instead of being dropped. The
 AI SDK tool builder is only an adapter over this workspace interface and the
-desktop image-storage and command capabilities. `read_local_file` detects
-content from bounded bytes rather than trusting extensions: text mode exposes
-explicit byte ranges for large UTF-8 files, while image mode inspects one
-supported image. `search_local_files` similarly owns both filename/text-content
-search and bounded image discovery. Image reads and searches keep discovery and
-byte access in Electron, then use authenticated Convex upload URLs to cross the
-hosted boundary. Their client tool outputs contain storage-backed image
-references, and the hosted AI SDK tool declaration converts those references
-into multimodal model output for the next chat step. Electron neither constructs
-an OpenAI model nor consumes an OpenAI key. Chat attachment reference tracking
-owns those temporary image bytes until the last referencing chat message is
-removed.
+desktop file-storage and command capabilities. `read_local_file` has one
+automatic, signature-based input path: it returns explicit byte ranges for
+UTF-8 text and model file content for supported images, PDF, DOCX, XLSX, and
+PPTX. OOXML packages are classified from their ZIP entry names, not their file
+extensions or caller-provided MIME types. There is no content-mode argument or
+format-specific read tool. `search_local_files` similarly owns both
+filename/text-content search and bounded image discovery. Image searches and
+non-text reads keep discovery and byte access in Electron, then use
+authenticated Convex upload URLs to cross the hosted boundary. Their client
+tool outputs contain storage-backed file references, and the hosted AI SDK tool
+declaration converts those references into model file content for the next chat
+step. Electron neither constructs an OpenAI model nor consumes an OpenAI key.
+Chat attachment reference tracking owns those temporary file bytes until the
+last referencing chat message is removed.
+
+Chat composer attachments use the same browser-safe signature detector before
+requesting storage. The detector, rather than the browser-declared MIME type,
+owns the canonical media type and accepts UTF-8 text, supported images, PDF,
+DOCX, XLSX, and PPTX up to the model file limit. Unsupported binary files and
+generic ZIP archives fail before upload. Both direct attachments and local-file
+tool results reach the hosted OpenAI Responses model as URL-backed AI SDK file
+parts; no renderer or Electron process parses document contents itself.
 `run_local_command` executes one cross-platform virtual Bash environment from a
 selected root. The Electron main process creates a fresh `just-bash` `OverlayFs`
 environment for every call and executes the command directly; the shared AI

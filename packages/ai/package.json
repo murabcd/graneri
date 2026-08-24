@@ -118,13 +118,17 @@
       "types": "./src/local-folder-tool-definitions.d.mts",
       "import": "./src/local-folder-tool-definitions.mjs"
     },
-    "./local-folder-image-contract": {
-      "types": "./src/local-folder-image-contract.d.mts",
-      "import": "./src/local-folder-image-contract.mjs"
+    "./local-folder-file-contract": {
+      "types": "./src/local-folder-file-contract.d.mts",
+      "import": "./src/local-folder-file-contract.mjs"
     },
     "./local-path-references": {
       "types": "./src/local-path-references.d.mts",
       "import": "./src/local-path-references.mjs"
+    },
+    "./model-file-input": {
+      "types": "./src/model-file-input.d.mts",
+      "import": "./src/model-file-input.mjs"
     },
     "./models": {
       "types": "./src/models.d.mts",

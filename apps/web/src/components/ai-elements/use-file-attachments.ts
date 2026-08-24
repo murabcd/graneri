@@ -1,9 +1,19 @@
 import type { FileUIPart } from "ai";
 import { useMutation } from "convex/react";
 import * as React from "react";
+import { toast } from "sonner";
+import { z } from "zod";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../../convex/_generated/api";
-import type { ChatAttachment, UploadResult } from "./file-attachment-utils";
+import type { Id } from "../../../../../convex/_generated/dataModel";
+import type { ChatAttachment } from "./file-attachment-utils";
+import { detectModelFileAttachmentMediaType } from "./model-file-attachment";
+
+const attachmentUploadResultSchema = z.object({
+	storageId: z.custom<Id<"_storage">>(
+		(value) => typeof value === "string" && value.length > 0,
+	),
+});
 
 export function useRevokeAttachmentObjectUrls(attachments: ChatAttachment[]) {
 	const localUrlById = React.useMemo(() => new Map<string, string>(), []);
@@ -46,10 +56,11 @@ function useConvexFileAttachmentUpload() {
 
 	return React.useCallback(
 		async (file: File): Promise<FileUIPart> => {
+			const mediaType = await detectModelFileAttachmentMediaType(file);
 			const uploadUrl = await generateUploadUrl();
 			const response = await fetch(uploadUrl, {
 				method: "POST",
-				headers: { "Content-Type": file.type },
+				headers: { "Content-Type": mediaType },
 				body: file,
 			});
 
@@ -57,10 +68,7 @@ function useConvexFileAttachmentUpload() {
 				throw new Error("Attachment upload failed.");
 			}
 
-			const result = (await response.json()) as UploadResult;
-			if (!result.storageId) {
-				throw new Error("Attachment upload did not return a storage id.");
-			}
+			const result = attachmentUploadResultSchema.parse(await response.json());
 
 			const url = await getFileUrl({ storageId: result.storageId });
 			if (!url) {
@@ -69,7 +77,7 @@ function useConvexFileAttachmentUpload() {
 
 			return {
 				type: "file",
-				mediaType: file.type || "application/octet-stream",
+				mediaType,
 				filename: file.name,
 				url,
 				providerMetadata: {
@@ -174,6 +182,11 @@ export function useFileAttachmentDropzone({
 							error,
 							message: "Failed to upload attachment",
 						});
+						toast.error(
+							error instanceof Error
+								? error.message
+								: "Attachment upload failed.",
+						);
 						onFileUploadFailed(attachment.id);
 					})
 					.finally(() => {

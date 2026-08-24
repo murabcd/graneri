@@ -78,8 +78,11 @@ import {
 	FileAttachmentButton,
 	FileAttachmentChips,
 } from "@/components/ai-elements/file-attachment-controls";
-import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
-import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
+import {
+	type ChatAttachment,
+	completeAttachmentUpload,
+	hasUploadingAttachments,
+} from "@/components/ai-elements/file-attachment-utils";
 import {
 	useFileAttachmentDropzone,
 	useRevokeAttachmentObjectUrls,
@@ -2667,14 +2670,7 @@ function ChatInlinePopoverFooter({
 		(id: string, uploadedFile: FileUIPart) => {
 			onAttachedFilesChange((files) =>
 				files.map((file) =>
-					file.id === id
-						? {
-								...file,
-								localUrl: undefined,
-								uploadStatus: "ready",
-								url: uploadedFile.url,
-							}
-						: file,
+					file.id === id ? completeAttachmentUpload(file, uploadedFile) : file,
 				),
 			);
 		},

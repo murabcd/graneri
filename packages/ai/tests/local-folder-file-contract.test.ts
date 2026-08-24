@@ -1,11 +1,11 @@
 import { convertToModelMessages, type UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
-	getLocalImageUploadCount,
+	getLocalFileUploadCount,
 	readLocalFileOutputForModel,
-	resolveLocalImageToolOutput,
+	resolveLocalFileToolOutput,
 	searchLocalFilesOutputForModel,
-} from "../src/local-folder-image-contract.mjs";
+} from "../src/local-folder-file-contract.mjs";
 import { buildClientLocalFolderTools } from "../src/local-folder-tools.mjs";
 
 const pendingFile = {
@@ -14,28 +14,22 @@ const pendingFile = {
 	storageId: "storage_1",
 };
 
-describe("local folder image contract", () => {
-	it("allocates upload capacity only for image-mode file tools", () => {
+describe("local folder file contract", () => {
+	it("allocates upload capacity for automatic reads and image search", () => {
 		expect(
-			getLocalImageUploadCount({
-				input: { contentType: "image" },
+			getLocalFileUploadCount({
+				input: {},
 				toolName: "read_local_file",
 			}),
 		).toBe(1);
 		expect(
-			getLocalImageUploadCount({
+			getLocalFileUploadCount({
 				input: { contentType: "image", maxResults: 3 },
 				toolName: "search_local_files",
 			}),
 		).toBe(3);
 		expect(
-			getLocalImageUploadCount({
-				input: {},
-				toolName: "read_local_file",
-			}),
-		).toBe(0);
-		expect(
-			getLocalImageUploadCount({
+			getLocalFileUploadCount({
 				input: { contentType: "text", maxResults: 3 },
 				toolName: "search_local_files",
 			}),
@@ -43,12 +37,33 @@ describe("local folder image contract", () => {
 	});
 
 	it("preserves ordinary text outputs as JSON model results", () => {
-		const readOutput = { content: "meeting notes" };
-		const searchOutput = { matches: [{ path: "meeting.txt" }] };
+		const readOutput = {
+			content: "meeting notes",
+			kind: "text",
+			lengthBytes: 13,
+			mediaType: "text/plain; charset=utf-8",
+			nextOffsetBytes: null,
+			offsetBytes: 0,
+			path: "meeting.txt",
+			sizeBytes: 13,
+			truncated: false,
+		};
+		const searchOutput = {
+			kind: "text-search",
+			matches: [
+				{
+					matchedPath: true,
+					matches: [],
+					path: "meeting.txt",
+					sizeBytes: 13,
+				},
+			],
+			truncated: false,
+		};
 
 		expect(
 			readLocalFileOutputForModel({
-				input: { contentType: "text" },
+				input: {},
 				output: readOutput,
 			}),
 		).toEqual({ type: "json", value: readOutput });
@@ -61,10 +76,10 @@ describe("local folder image contract", () => {
 	});
 
 	it("resolves desktop uploads and emits canonical multimodal image output", async () => {
-		const resolved = await resolveLocalImageToolOutput({
-			input: { contentType: "image" },
+		const resolved = await resolveLocalFileToolOutput({
 			output: {
 				file: pendingFile,
+				kind: "file",
 				path: "screens/screen.png",
 				sizeBytes: 128,
 			},
@@ -84,7 +99,6 @@ describe("local folder image contract", () => {
 		expect(
 			readLocalFileOutputForModel({
 				input: {
-					contentType: "image",
 					detail: "high",
 					prompt: "Read the dialog title.",
 				},
@@ -103,11 +117,47 @@ describe("local folder image contract", () => {
 		});
 	});
 
+	it("emits documents as model file content without image-only options", async () => {
+		const resolved = await resolveLocalFileToolOutput({
+			output: {
+				file: {
+					filename: "brief.docx",
+					mediaType:
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					storageId: "storage_doc",
+				},
+				kind: "file",
+				path: "brief.docx",
+				sizeBytes: 512,
+			},
+			resolveStorageUrl: async () => "https://files.example.test/brief.docx",
+			toolName: "read_local_file",
+		});
+
+		expect(
+			readLocalFileOutputForModel({
+				input: { detail: "high" },
+				output: resolved,
+			}),
+		).toMatchObject({
+			type: "content",
+			value: [
+				{ text: expect.stringContaining("Read brief.docx"), type: "text" },
+				{
+					filename: "brief.docx",
+					mediaType:
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					type: "file",
+				},
+			],
+		});
+	});
+
 	it("interleaves image-search paths and files for hosted reasoning", async () => {
-		const resolved = await resolveLocalImageToolOutput({
-			input: { contentType: "image", maxResults: 1 },
+		const resolved = await resolveLocalFileToolOutput({
 			output: {
 				candidateImageCount: 1,
+				kind: "image-search",
 				path: "screens",
 				results: [
 					{
@@ -153,7 +203,6 @@ describe("local folder image contract", () => {
 			parts: [
 				{
 					input: {
-						contentType: "image",
 						detail: "high",
 						prompt: "Read the dialog title.",
 						relativePath: "screen.png",
@@ -169,6 +218,7 @@ describe("local folder image contract", () => {
 							type: "file",
 							url: "https://files.example.test/screen.png",
 						},
+						kind: "file",
 						path: "screen.png",
 						sizeBytes: 128,
 					},

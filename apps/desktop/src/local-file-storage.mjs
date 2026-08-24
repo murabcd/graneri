@@ -22,20 +22,20 @@ const validateUploadUrls = (uploadUrls) => {
 	return uploadUrls.map((value) => {
 		const url = new URL(value);
 		if (url.protocol !== "https:" || url.origin !== convexOrigin) {
-			throw new Error("Local image upload target is invalid.");
+			throw new Error("Local file upload target is invalid.");
 		}
 		return url;
 	});
 };
 
-export const createLocalImageStore = ({ fetchImpl = fetch, uploadUrls }) => {
+export const createLocalFileStore = ({ fetchImpl = fetch, uploadUrls }) => {
 	const validatedUploadUrls = validateUploadUrls(uploadUrls);
 	let nextUploadIndex = 0;
 
 	return async ({ bytes, mediaType }) => {
 		const uploadUrl = validatedUploadUrls[nextUploadIndex];
 		if (!uploadUrl) {
-			throw new Error("Local image upload capacity is missing.");
+			throw new Error("Local file upload capacity is missing.");
 		}
 		nextUploadIndex += 1;
 
@@ -45,7 +45,7 @@ export const createLocalImageStore = ({ fetchImpl = fetch, uploadUrls }) => {
 			method: "POST",
 		});
 		if (!response.ok) {
-			throw new Error("Local image upload failed.");
+			throw new Error("Local file upload failed.");
 		}
 
 		return uploadResultSchema.parse(await response.json());

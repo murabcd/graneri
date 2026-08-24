@@ -18,6 +18,7 @@ describe("desktop local tool calls", () => {
 								mediaType: "image/png",
 								storageId: "storage_1",
 							},
+							kind: "file",
 							path: "screen.png",
 							sizeBytes: 128,
 						},
@@ -43,7 +44,7 @@ describe("desktop local tool calls", () => {
 		const handler = createDesktopLocalToolCallHandler({
 			addToolOutputRef: { current: addToolOutput },
 			fetchImpl: fetchMock,
-			imageStorage: { generateUploadUrl, getUrl },
+			fileStorage: { generateUploadUrl, getUrl },
 			latestRequestBodyRef: { current: { localFolders } },
 		});
 
@@ -51,7 +52,6 @@ describe("desktop local tool calls", () => {
 			toolCall: {
 				dynamic: false,
 				input: {
-					contentType: "image",
 					detail: "high",
 					relativePath: "screen.png",
 					rootIndex: 0,
@@ -67,7 +67,7 @@ describe("desktop local tool calls", () => {
 		expect(getUrl).toHaveBeenCalledWith("storage_1");
 		const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 		expect(request).toMatchObject({
-			imageUploadUrls: ["https://example.convex.cloud/api/storage/upload"],
+			fileUploadUrls: ["https://example.convex.cloud/api/storage/upload"],
 			localFolders,
 			toolName: "read_local_file",
 		});
@@ -81,6 +81,7 @@ describe("desktop local tool calls", () => {
 					type: "file",
 					url: "https://example.convex.cloud/api/storage/storage_1",
 				},
+				kind: "file",
 				path: "screen.png",
 				sizeBytes: 128,
 			},

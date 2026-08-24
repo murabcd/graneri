@@ -1,9 +1,9 @@
 import { useMutation } from "convex/react";
 import * as React from "react";
-import type { LocalImageStorage } from "@/lib/desktop-local-tool-call";
+import type { LocalFileStorage } from "@/lib/desktop-local-tool-call";
 import { api } from "../../../../convex/_generated/api";
 
-export const useLocalImageStorage = (): LocalImageStorage => {
+export const useLocalFileStorage = (): LocalFileStorage => {
 	const generateUploadUrl = useMutation(api.chatAttachments.generateUploadUrl);
 	const getUrl = useMutation(api.chatAttachments.getUrl);
 

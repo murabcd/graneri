@@ -286,26 +286,25 @@ test("local folder tool completion canonically updates the stored assistant mess
 	).rejects.toThrow("You must be signed in to access chats.");
 });
 
-test("local image tool continuations retain and release stored image bytes", async () => {
+test("local file tool continuations retain and release stored document bytes", async () => {
 	vi.useFakeTimers();
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const storageId = await t.run((ctx) =>
-		ctx.storage.store(new Blob(["image"], { type: "image/png" })),
+		ctx.storage.store(new Blob(["%PDF-1.7"], { type: "application/pdf" })),
 	);
 
 	await asOwner.mutation(api.chats.saveMessage, {
 		workspaceId,
-		chatId: "chat-local-image",
+		chatId: "chat-local-file",
 		preview: "Inspect image",
 		message: {
-			id: "assistant-local-image",
+			id: "assistant-local-file",
 			role: "assistant",
 			partsJson: JSON.stringify([
 				{
 					input: {
-						contentType: "image",
 						rootIndex: 0,
-						relativePath: "screen.png",
+						relativePath: "report.pdf",
 					},
 					state: "input-available",
 					toolCallId: "call-image",
@@ -319,27 +318,27 @@ test("local image tool continuations retain and release stored image bytes", asy
 
 	await asOwner.mutation(api.chats.completeLocalFolderToolMessage, {
 		workspaceId,
-		chatId: "chat-local-image",
+		chatId: "chat-local-file",
 		message: {
-			id: "assistant-local-image",
+			id: "assistant-local-file",
 			role: "assistant",
 			partsJson: JSON.stringify([
 				{
 					input: {
-						contentType: "image",
 						rootIndex: 0,
-						relativePath: "tampered.png",
+						relativePath: "tampered.pdf",
 					},
 					output: {
 						file: {
-							filename: "screen.png",
-							mediaType: "image/png",
+							filename: "report.pdf",
+							mediaType: "application/pdf",
 							providerMetadata: { graneri: { storageId } },
 							type: "file",
-							url: "https://example.test/screen.png",
+							url: "https://example.test/report.pdf",
 						},
-						path: "screen.png",
-						sizeBytes: 5,
+						kind: "file",
+						path: "report.pdf",
+						sizeBytes: 8,
 					},
 					state: "output-available",
 					toolCallId: "call-image",
@@ -361,7 +360,7 @@ test("local image tool continuations retain and release stored image bytes", asy
 
 	await asOwner.mutation(api.chats.remove, {
 		workspaceId,
-		chatId: "chat-local-image",
+		chatId: "chat-local-file",
 	});
 	await t.finishAllScheduledFunctions(vi.runAllTimers);
 	expect(await t.run((ctx) => ctx.db.system.get(storageId))).toBeNull();

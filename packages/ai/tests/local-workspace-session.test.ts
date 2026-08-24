@@ -52,8 +52,9 @@ describe("local workspace session", () => {
 			expect(fileSearch.matches.map((match) => match.path)).toEqual([
 				"meeting.txt",
 			]);
+			expect(fileSearch.kind).toBe("text-search");
 			await expect(
-				session.readTextFile({
+				session.readFile({
 					lengthBytes: 7,
 					offsetBytes: 0,
 					relativePath: "meeting.txt",
@@ -120,7 +121,7 @@ describe("local workspace session", () => {
 			const session = await createSession(directory);
 
 			await expect(
-				session.readTextFile({
+				session.readFile({
 					lengthBytes: 100,
 					offsetBytes: 0,
 					relativePath: "escape",

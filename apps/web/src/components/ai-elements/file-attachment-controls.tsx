@@ -1,3 +1,4 @@
+import { MODEL_FILE_INPUT_ACCEPT } from "@workspace/ai/model-file-input";
 import { InputGroupButton } from "@workspace/ui/components/input-group";
 import { Spinner } from "@workspace/ui/components/spinner";
 import {
@@ -36,6 +37,7 @@ export function FileAttachmentButton({
 		<>
 			<input
 				ref={inputRef}
+				accept={MODEL_FILE_INPUT_ACCEPT}
 				aria-label="Attach files"
 				className="hidden"
 				multiple

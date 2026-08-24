@@ -1,5 +1,4 @@
 import type { FileUIPart } from "ai";
-import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export type ChatAttachment = FileUIPart & {
 	id: string;
@@ -7,9 +6,18 @@ export type ChatAttachment = FileUIPart & {
 	uploadStatus: "uploading" | "ready";
 };
 
-export type UploadResult = {
-	storageId?: Id<"_storage">;
-};
+export const completeAttachmentUpload = (
+	attachment: ChatAttachment,
+	uploadedFile: FileUIPart,
+): ChatAttachment => ({
+	...attachment,
+	filename: uploadedFile.filename,
+	localUrl: undefined,
+	mediaType: uploadedFile.mediaType,
+	providerMetadata: uploadedFile.providerMetadata,
+	uploadStatus: "ready",
+	url: uploadedFile.url,
+});
 
 export const getReadyFileParts = (
 	attachments: ChatAttachment[],

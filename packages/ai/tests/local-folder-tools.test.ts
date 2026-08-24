@@ -8,6 +8,7 @@ import {
 	buildLocalFolderSystemContext,
 	buildLocalFolderTools,
 } from "../src/local-folder-tools.mjs";
+import { createOpenXmlBytes } from "./model-file-fixtures";
 
 const executeSuccessfulLocalCommand: ExecuteLocalCommand = async () => ({
 	exitCode: 0,
@@ -19,13 +20,13 @@ const executeSuccessfulLocalCommand: ExecuteLocalCommand = async () => ({
 const buildToolsForDirectory = async (
 	directory: string,
 	executeLocalCommand: ExecuteLocalCommand = executeSuccessfulLocalCommand,
-	storeLocalImage = async () => ({ storageId: "storage_test" }),
+	storeLocalFile = async () => ({ storageId: "storage_test" }),
 ) => {
 	const rootPath = await realpath(directory);
 	return buildLocalFolderTools({
 		executeLocalCommand,
 		roots: [{ name: basename(rootPath), path: rootPath }],
-		storeLocalImage,
+		storeLocalFile,
 	});
 };
 
@@ -42,14 +43,14 @@ describe("local folder tools", () => {
 		expect(context).toContain("do not ask the user to run terminal commands");
 		expect(context).toContain("Do not use connected app tools");
 		expect(context).toContain("screenshot");
-		expect(context).toContain("For local images");
+		expect(context).toContain("PDF, DOCX, XLSX, and PPTX");
 		expect(context).toContain("run_local_command");
 		expect(context).toContain("temporary copy-on-write changes");
 		expect(context).toContain("Network access is unavailable");
 		expect(context).not.toContain("Public HTTP(S) requests");
 	});
 
-	it("folds local image inspection and search into the file tools", async () => {
+	it("uses one automatic read tool without format-specific tool names", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
 		try {
 			await writeFile(join(directory, "notes.txt"), "not an image");
@@ -64,7 +65,6 @@ describe("local folder tools", () => {
 			await expect(
 				tools.read_local_file.execute?.(
 					{
-						contentType: "image",
 						rootIndex: 0,
 						relativePath: "notes.txt",
 					},
@@ -73,7 +73,10 @@ describe("local folder tools", () => {
 						toolCallId: "test",
 					},
 				),
-			).rejects.toThrow("Only supported image files can be inspected");
+			).resolves.toMatchObject({
+				content: "not an image",
+				kind: "text",
+			});
 		} finally {
 			await rm(directory, { force: true, recursive: true });
 		}
@@ -98,7 +101,6 @@ describe("local folder tools", () => {
 
 			const result = await tools.read_local_file.execute?.(
 				{
-					contentType: "image",
 					detail: "high",
 					prompt: "Read the title",
 					rootIndex: 0,
@@ -116,7 +118,66 @@ describe("local folder tools", () => {
 					mediaType: "image/png",
 					storageId: "storage_screen",
 				},
+				kind: "file",
 				path: "screen.png",
+			});
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it.each([
+		[
+			"brief.docx",
+			Buffer.from(
+				createOpenXmlBytes(["[Content_Types].xml", "word/document.xml"]),
+			),
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		],
+		[
+			"forecast.xlsx",
+			Buffer.from(
+				createOpenXmlBytes(["[Content_Types].xml", "xl/workbook.xml"]),
+			),
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		],
+		[
+			"review.pptx",
+			Buffer.from(
+				createOpenXmlBytes(["[Content_Types].xml", "ppt/presentation.xml"]),
+			),
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		],
+		["report.pdf", Buffer.from("%PDF-1.7\n"), "application/pdf"],
+	] as const)("detects and stores %s for hosted model reading", async (filename, bytes, mediaType) => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-tools-"));
+		try {
+			await writeFile(join(directory, filename), bytes);
+			const storedFiles: Array<{
+				bytes: Uint8Array;
+				mediaType: string;
+			}> = [];
+			const tools = await buildToolsForDirectory(
+				directory,
+				executeSuccessfulLocalCommand,
+				async (input) => {
+					storedFiles.push(input);
+					return { storageId: `storage_${filename}` };
+				},
+			);
+
+			const result = await tools.read_local_file.execute?.(
+				{ relativePath: filename, rootIndex: 0 },
+				{ messages: [], toolCallId: `read-${filename}` },
+			);
+
+			expect(storedFiles).toHaveLength(1);
+			expect(storedFiles[0].mediaType).toBe(mediaType);
+			expect(Buffer.from(storedFiles[0].bytes)).toEqual(bytes);
+			expect(result).toMatchObject({
+				file: { filename, mediaType },
+				kind: "file",
+				path: filename,
 			});
 		} finally {
 			await rm(directory, { force: true, recursive: true });
@@ -289,7 +350,7 @@ describe("local folder tools", () => {
 					path: "/definitely/missing/graneri-local-folder",
 				},
 			],
-			storeLocalImage: async () => ({ storageId: "storage_test" }),
+			storeLocalFile: async () => ({ storageId: "storage_test" }),
 		});
 		await expect(
 			tools.list_local_directory.execute?.(

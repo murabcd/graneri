@@ -1,8 +1,9 @@
 import { tool } from "ai";
-import { MAX_LOCAL_IMAGE_UPLOADS } from "./local-folder-image-contract.mjs";
+import { MAX_LOCAL_FILE_UPLOADS } from "./local-folder-file-contract.mjs";
 import { parseLocalCommandExecutionResult } from "./local-folder-tool-contract.mjs";
 import {
 	buildLocalFolderToolConfigs,
+	MAX_LOCAL_FILE_READ_BYTES,
 	MAX_LOCAL_FOLDER_ROOTS,
 } from "./local-folder-tool-definitions.mjs";
 import { createLocalWorkspaceSession } from "./local-workspace-session.mjs";
@@ -25,29 +26,37 @@ const withDuration = async (operation) => {
 	};
 };
 
-const inspectLocalImage = async ({
+const storeWorkspaceFile = async ({
+	lengthBytes,
+	offsetBytes,
 	relativePath,
 	rootIndex,
-	storeLocalImage,
+	storeLocalFile,
 	workspace,
 }) => {
-	const image = await workspace.readImage({
+	const result = await workspace.readFile({
+		lengthBytes,
+		offsetBytes,
 		relativePath,
 		rootIndex,
 	});
-	const storedImage = await storeLocalImage({
-		bytes: image.bytes,
-		mediaType: image.mediaType,
+	if (result.kind === "text") {
+		return result;
+	}
+	const storedFile = await storeLocalFile({
+		bytes: result.bytes,
+		mediaType: result.mediaType,
 	});
 
 	return {
 		file: {
-			filename: image.filename,
-			mediaType: image.mediaType,
-			storageId: storedImage.storageId,
+			filename: result.filename,
+			mediaType: result.mediaType,
+			storageId: storedFile.storageId,
 		},
-		path: image.path,
-		sizeBytes: image.sizeBytes,
+		kind: "file",
+		path: result.path,
+		sizeBytes: result.sizeBytes,
 	};
 };
 
@@ -56,7 +65,7 @@ const searchLocalImages = async ({
 	query,
 	relativePath = ".",
 	rootIndex,
-	storeLocalImage,
+	storeLocalFile,
 	workspace,
 }) => {
 	const searchResult = await workspace.searchImages({
@@ -68,7 +77,7 @@ const searchLocalImages = async ({
 	const results = [];
 
 	for (const candidate of searchResult.results) {
-		const storedImage = await storeLocalImage({
+		const storedImage = await storeLocalFile({
 			bytes: candidate.bytes,
 			mediaType: candidate.mediaType,
 		});
@@ -85,6 +94,7 @@ const searchLocalImages = async ({
 
 	return {
 		candidateImageCount: results.length,
+		kind: "image-search",
 		path: searchResult.path,
 		results,
 		totalImageCount: searchResult.totalImageCount,
@@ -95,7 +105,7 @@ const searchLocalImages = async ({
 export const buildLocalFolderTools = ({
 	executeLocalCommand,
 	roots,
-	storeLocalImage,
+	storeLocalFile,
 }) => {
 	if (roots.length === 0) {
 		return {};
@@ -103,39 +113,33 @@ export const buildLocalFolderTools = ({
 	if (typeof executeLocalCommand !== "function") {
 		throw new Error("A local command executor is required.");
 	}
-	if (typeof storeLocalImage !== "function") {
-		throw new Error("A local image storage adapter is required.");
+	if (typeof storeLocalFile !== "function") {
+		throw new Error("A local file storage adapter is required.");
 	}
 
 	const workspace = createLocalWorkspaceSession(roots);
 	const configs = buildLocalFolderToolConfigs(workspace.roots, {
-		maxImageSearchResults: MAX_LOCAL_IMAGE_UPLOADS,
+		maxImageSearchResults: MAX_LOCAL_FILE_UPLOADS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
 	const executors = {
 		list_local_directory: async ({ rootIndex, relativePath }) =>
 			withDuration(() => workspace.listDirectory({ relativePath, rootIndex })),
 		read_local_file: async ({
-			contentType,
-			lengthBytes,
-			offsetBytes,
+			lengthBytes = MAX_LOCAL_FILE_READ_BYTES,
+			offsetBytes = 0,
 			rootIndex,
 			relativePath,
 		}) =>
 			withDuration(() =>
-				contentType === "image"
-					? inspectLocalImage({
-							relativePath,
-							rootIndex,
-							storeLocalImage,
-							workspace,
-						})
-					: workspace.readTextFile({
-							lengthBytes,
-							offsetBytes,
-							relativePath,
-							rootIndex,
-						}),
+				storeWorkspaceFile({
+					lengthBytes,
+					offsetBytes,
+					relativePath,
+					rootIndex,
+					storeLocalFile,
+					workspace,
+				}),
 			),
 		search_local_files: async ({
 			contentType,
@@ -151,7 +155,7 @@ export const buildLocalFolderTools = ({
 							query,
 							relativePath,
 							rootIndex,
-							storeLocalImage,
+							storeLocalFile,
 							workspace,
 						})
 					: workspace.searchFiles({ query, relativePath, rootIndex }),
@@ -189,7 +193,7 @@ export const buildClientLocalFolderTools = (roots) => {
 	}
 
 	const configs = buildLocalFolderToolConfigs(roots, {
-		maxImageSearchResults: MAX_LOCAL_IMAGE_UPLOADS,
+		maxImageSearchResults: MAX_LOCAL_FILE_UPLOADS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
 

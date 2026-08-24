@@ -1,7 +1,7 @@
 import {
-	getLocalImageUploadCount,
-	resolveLocalImageToolOutput,
-} from "@workspace/ai/local-folder-image-contract";
+	getLocalFileUploadCount,
+	resolveLocalFileToolOutput,
+} from "@workspace/ai/local-folder-file-contract";
 import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import type {
@@ -30,7 +30,7 @@ type DesktopLocalToolRequestBody = {
 	localFolders?: DesktopLocalFolder[];
 };
 
-export type LocalImageStorage = {
+export type LocalFileStorage = {
 	generateUploadUrl: () => Promise<string>;
 	getUrl: (storageId: Id<"_storage">) => Promise<string | null>;
 };
@@ -69,12 +69,12 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 
 const executeDesktopLocalToolCall = async ({
 	fetchImpl,
-	imageStorage,
+	fileStorage,
 	localFolders,
 	toolCall,
 }: {
 	fetchImpl: typeof fetch;
-	imageStorage: LocalImageStorage;
+	fileStorage: LocalFileStorage;
 	localFolders: DesktopLocalFolder[];
 	toolCall: LocalToolCall;
 }) => {
@@ -87,13 +87,13 @@ const executeDesktopLocalToolCall = async ({
 	if (!isLocalFolderToolName(toolCall.toolName)) {
 		throw new Error(`Unsupported local tool: ${toolCall.toolName}.`);
 	}
-	const imageUploadCount = getLocalImageUploadCount({
+	const fileUploadCount = getLocalFileUploadCount({
 		input: toolCall.input,
 		toolName: toolCall.toolName,
 	});
-	const imageUploadUrls = await Promise.all(
-		Array.from({ length: imageUploadCount }, () =>
-			imageStorage.generateUploadUrl(),
+	const fileUploadUrls = await Promise.all(
+		Array.from({ length: fileUploadCount }, () =>
+			fileStorage.generateUploadUrl(),
 		),
 	);
 
@@ -101,7 +101,7 @@ const executeDesktopLocalToolCall = async ({
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
-			imageUploadUrls,
+			fileUploadUrls,
 			localFolders,
 			toolCallId: toolCall.toolCallId,
 			toolName: toolCall.toolName,
@@ -118,10 +118,9 @@ const executeDesktopLocalToolCall = async ({
 	const payload = (await response.json().catch(() => ({}))) as {
 		output?: unknown;
 	};
-	return await resolveLocalImageToolOutput({
-		input: toolCall.input,
+	return await resolveLocalFileToolOutput({
 		output: payload.output,
-		resolveStorageUrl: imageStorage.getUrl,
+		resolveStorageUrl: fileStorage.getUrl,
 		toolName: toolCall.toolName,
 	});
 };
@@ -129,14 +128,14 @@ const executeDesktopLocalToolCall = async ({
 const submitDesktopLocalToolCall = async ({
 	addToolOutputRef,
 	fetchImpl,
-	imageStorage,
+	fileStorage,
 	requestBody,
 	requestOptions,
 	toolCall,
 }: {
 	addToolOutputRef: RefObject<ChatAddToolOutputFunction<UIMessage> | null>;
 	fetchImpl: typeof fetch;
-	imageStorage: LocalImageStorage;
+	fileStorage: LocalFileStorage;
 	requestBody: DesktopLocalToolRequestBody | null;
 	requestOptions: LocalToolRequestOptions;
 	toolCall: LocalToolCall;
@@ -144,7 +143,7 @@ const submitDesktopLocalToolCall = async ({
 	try {
 		const output = await executeDesktopLocalToolCall({
 			fetchImpl,
-			imageStorage,
+			fileStorage,
 			localFolders: getRequestLocalFolders(requestBody),
 			toolCall,
 		});
@@ -182,12 +181,12 @@ export const createDesktopLocalToolCallHandler =
 	({
 		addToolOutputRef,
 		fetchImpl,
-		imageStorage,
+		fileStorage,
 		latestRequestBodyRef,
 	}: {
 		addToolOutputRef: RefObject<ChatAddToolOutputFunction<UIMessage> | null>;
 		fetchImpl: typeof fetch;
-		imageStorage: LocalImageStorage;
+		fileStorage: LocalFileStorage;
 		latestRequestBodyRef: RefObject<DesktopLocalToolRequestBody | null>;
 	}): ChatOnToolCallCallback<UIMessage> =>
 	({ toolCall }) => {
@@ -205,7 +204,7 @@ export const createDesktopLocalToolCallHandler =
 		void submitDesktopLocalToolCall({
 			addToolOutputRef,
 			fetchImpl,
-			imageStorage,
+			fileStorage,
 			requestBody,
 			requestOptions,
 			toolCall: {
