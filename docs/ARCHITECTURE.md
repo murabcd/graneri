@@ -770,6 +770,23 @@ GRANERI_HOSTED_CONVEX_SITE_URL=https://<prod-deployment>.convex.site
 GRANERI_HOSTED_SITE_URL=https://<hosted-app-origin>
 ```
 
+Vercel deployments have one owner: `.github/workflows/deploy-vercel.yml`.
+That workflow pins Vercel CLI `59.5.0`, pulls the selected Vercel environment,
+builds locally with `vercel build`, installs from the frozen Bun lockfile, and
+deploys only the prebuilt output.
+Production deploys run for pushes to `main` or an explicit manual dispatch;
+pull requests are validation-only. `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+`VERCEL_PROJECT_ID` are GitHub repository secrets. Public build-time values are
+non-sensitive Vercel config, while runtime credentials remain sensitive. The
+Vercel Git integration must remain disconnected so a second hosted builder
+cannot race or bypass this release boundary.
+
+The workspace depends directly on the native TypeScript `7.0.2` package. Do
+not add a package named `typescript` to adapt an older deployment builder.
+Upgrading either TypeScript or the pinned Vercel CLI requires a successful
+production-targeted `vercel build --prod` plus the normal repository checks
+before the deployment workflow changes.
+
 Local development builds stay local. `bun dev` and desktop dev runs load local
 runtime values and connect to the development Convex deployment.
 Rebuilding or packaging the desktop app does not deploy its hosted dependencies.
@@ -1242,6 +1259,8 @@ The verifier must fail if:
 
 `bun run check`, `bun run typecheck`, targeted tests, and
 `bun --filter=desktop run verify:package` enforce this document's invariants.
+Vercel deployment-boundary changes must also pass `vercel build --prod` with
+the production environment pulled for the linked project.
 Desktop realtime transcription changes must include the desktop transport tests
 for stop-flush behavior, native audio tests for combined-helper AEC3 behavior,
 and renderer auto-stop tests for meeting/idle state.

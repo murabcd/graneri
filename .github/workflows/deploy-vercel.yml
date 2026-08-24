@@ -1,0 +1,55 @@
+name: deploy vercel
+
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production
+
+      - name: Build and deploy
+        id: deploy
+        shell: bash
+        run: |
+          vercel build --prod
+          deployment_url="$(vercel deploy --prebuilt --prod)"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Record deployment
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: echo "Vercel deployment — $DEPLOYMENT_URL" >> "$GITHUB_STEP_SUMMARY"

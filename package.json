@@ -39,7 +39,7 @@
     "convex-test": "^0.0.54",
     "husky": "^9.1.7",
     "turbo": "^2.10.7",
-    "typescript": "workspace:*",
+    "typescript": "7.0.2",
     "vite": "^8.1.5",
     "vitest": "^4.1.9"
   },

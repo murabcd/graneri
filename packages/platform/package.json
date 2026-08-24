@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "typescript": "workspace:*"
+    "typescript": "7.0.2"
   },
   "exports": {
     "./calendar-event-navigation": "./src/calendar-event-navigation.mjs",
