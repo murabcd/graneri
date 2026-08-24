@@ -1,8 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { readdir } from "node:fs/promises";
 import { builtinModules } from "node:module";
-import { join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	getExpectedConvexDeployment,
@@ -19,17 +18,9 @@ import {
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = resolve(packageRoot, "../..");
-const packagedAppResourcePath = resolve(
-	packageRoot,
-	desktopPackageContract.packagedResourcesPath,
-);
 const packagedAppAsarPath = resolve(
 	packageRoot,
 	desktopPackageContract.packagedResourcesAsarPath,
-);
-const stagedPackageAppPath = resolve(
-	packageRoot,
-	desktopPackageContract.appDirectory,
 );
 const convexDeploymentUrlPattern =
 	/\bhttps:\/\/([a-z0-9-]+)\.convex\.(?:cloud|site)\b/giu;
@@ -103,24 +94,6 @@ if (new URL(expectedSiteUrl).hostname.endsWith(".convex.site")) {
 const forbiddenDeployments = getForbiddenConvexDeployments({
 	expectedDeployment,
 });
-
-const walkFiles = async (directory) => {
-	const entries = await readdir(directory, { withFileTypes: true });
-	const files = [];
-
-	for (const entry of entries) {
-		const filePath = join(directory, entry.name);
-
-		if (entry.isDirectory()) {
-			files.push(...(await walkFiles(filePath)));
-			continue;
-		}
-
-		files.push(filePath);
-	}
-
-	return files;
-};
 
 const getConfigurationConvexDeployments = (source) => {
 	const deployments = new Set();
@@ -199,36 +172,10 @@ const readAsarEntryText = ({
 	return archive.subarray(offset, offset + entry.size).toString("utf8");
 };
 
-const loadPackagedResources = async () => {
-	if (existsSync(stagedPackageAppPath)) {
-		const files = await walkFiles(stagedPackageAppPath);
-		return {
-			files: files.map((filePath) => ({
-				absolutePath: filePath,
-				readText: () => readFileSync(filePath, "utf8"),
-				relativePath: relative(stagedPackageAppPath, filePath),
-			})),
-			hasPackagePath: (relativePackagePath) =>
-				existsSync(join(stagedPackageAppPath, relativePackagePath)),
-		};
-	}
-
-	if (existsSync(packagedAppResourcePath)) {
-		const files = await walkFiles(packagedAppResourcePath);
-		return {
-			files: files.map((filePath) => ({
-				absolutePath: filePath,
-				readText: () => readFileSync(filePath, "utf8"),
-				relativePath: relative(packagedAppResourcePath, filePath),
-			})),
-			hasPackagePath: (relativePackagePath) =>
-				existsSync(join(packagedAppResourcePath, relativePackagePath)),
-		};
-	}
-
+const loadPackagedResources = () => {
 	if (!existsSync(packagedAppAsarPath)) {
 		throw new Error(
-			`Packaged app resources are missing at ${packagedAppResourcePath} or ${packagedAppAsarPath}. Run bun run dist:mac first.`,
+			`Packaged app ASAR is missing at ${packagedAppAsarPath}. Run bun run dist:mac first.`,
 		);
 	}
 
@@ -262,17 +209,6 @@ const loadPackagedResources = async () => {
 };
 
 const resolvePackagedNativeToolPath = (toolName) => {
-	const stagedToolPath = join(
-		packageRoot,
-		desktopPackageContract.appDirectory,
-		desktopPackageContract.runtimeDirectory,
-		"bin",
-		toolName,
-	);
-	if (existsSync(stagedToolPath)) {
-		return stagedToolPath;
-	}
-
 	const unpackedToolPath = join(
 		`${packagedAppAsarPath}.unpacked`,
 		desktopPackageContract.runtimeDirectory,
@@ -281,16 +217,6 @@ const resolvePackagedNativeToolPath = (toolName) => {
 	);
 	if (existsSync(unpackedToolPath)) {
 		return unpackedToolPath;
-	}
-
-	const directoryToolPath = join(
-		packagedAppResourcePath,
-		desktopPackageContract.runtimeDirectory,
-		"bin",
-		toolName,
-	);
-	if (existsSync(directoryToolPath)) {
-		return directoryToolPath;
 	}
 
 	return null;
@@ -434,7 +360,7 @@ const scanRuntimeImports = (packagedResources) => {
 };
 
 {
-	const packagedResources = await loadPackagedResources();
+	const packagedResources = loadPackagedResources();
 	const nativeAudioSelfTestResult = await verifyNativeRuntimeTools();
 	const allText = packagedResources.files
 		.filter(

@@ -43,6 +43,7 @@ test("desktop package contract owns the generated runtime layout", () => {
 		"dist-app/**/*",
 		"package.json",
 		"!node_modules/**",
+		"dist-electron/main/node_modules/**/*",
 		"node_modules/node-addon-api/**",
 		"node_modules/node-gyp-build/**",
 		"node_modules/objc-js/**",

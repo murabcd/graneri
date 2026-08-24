@@ -49,13 +49,13 @@ export const desktopPackageContract = {
 		"dist-app/**/*",
 		"package.json",
 		"!node_modules/**",
+		`${runtimeDirectory}/node_modules/**/*`,
 		...packagedNodeModules.map(
 			(packageName) => `node_modules/${packageName}/**`,
 		),
 	],
 	mainEntry: "dist-electron/main/index.js",
 	mainBundleExternals,
-	packagedResourcesPath: "release/mac-arm64/Graneri.app/Contents/Resources/app",
 	packagedResourcesAsarPath:
 		"release/mac-arm64/Graneri.app/Contents/Resources/app.asar",
 	rendererDirectory: "dist-app",

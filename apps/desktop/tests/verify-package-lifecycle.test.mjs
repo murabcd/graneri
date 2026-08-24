@@ -46,3 +46,9 @@ test("desktop package verification requires CSP and an external theme initialize
 	assert.match(verifyPackageSource, /script-src 'self'/u);
 	assert.match(verifyPackageSource, /dist-app\/theme-init\.js/u);
 });
+
+test("desktop package verification inspects the final ASAR only", () => {
+	assert.doesNotMatch(verifyPackageSource, /stagedPackageAppPath/u);
+	assert.doesNotMatch(verifyPackageSource, /packagedAppResourcePath/u);
+	assert.match(verifyPackageSource, /readAsarHeader\(packagedAppAsarPath\)/u);
+});

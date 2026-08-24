@@ -1242,6 +1242,10 @@ After building the desktop package, run:
 bun --filter=desktop run verify:package
 ```
 
+The package verifier reads the final `app.asar` and its unpacked mirror only.
+Generated `.package-app` staging output is not a release artifact and must not
+satisfy package verification.
+
 The verifier must fail if:
 
 - The packaged `Contents/Resources/app` runtime contains a stale development
