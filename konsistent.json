@@ -1,0 +1,76 @@
+{
+  "$schema": "node_modules/konsistent/konsistent.schema.json",
+  "version": "v1",
+  "conventions": [
+    {
+      "name": "workspace-package-structure",
+      "description": "Shared workspace packages keep the metadata and TypeScript configuration required by the root toolchain.",
+      "paths": "packages/{packageName}",
+      "must": {
+        "haveType": "directory",
+        "haveFiles": ["package.json", "tsconfig.json"]
+      }
+    },
+    {
+      "name": "component-entry-contract",
+      "description": "Lazy component entry modules expose a filename-derived entry and use the canonical component-module resolver.",
+      "paths": "apps/web/src/components/**/{componentName}-entry.tsx",
+      "must": {
+        "exportConstants": ["${componentName.toPascalCase()}Entry"],
+        "importValues": [
+          {
+            "name": "getOnlyComponentModule",
+            "from": "@/lib/component-entry"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ui-component-export-contract",
+      "description": "Single-component UI modules expose a filename-derived component; chart is a component family and sonner is a dependency-named Toaster adapter.",
+      "paths": "packages/ui/src/components/{componentName}.tsx",
+      "excludeFiles": [
+        "packages/ui/src/components/chart.tsx",
+        "packages/ui/src/components/sonner.tsx"
+      ],
+      "must": {
+        "exportValues": ["${componentName.toPascalCase()}"]
+      }
+    },
+    {
+      "name": "hook-module-export-contract",
+      "description": "Single-hook modules expose the hook derived from their filename; the excluded web modules intentionally collect multiple related hooks.",
+      "paths": [
+        "apps/web/src/**/{hookName:matches(^use-.*$)}.ts",
+        "apps/web/src/**/{hookName:matches(^use-.*$)}.tsx",
+        "packages/ui/src/**/{hookName:matches(^use-.*$)}.ts",
+        "packages/ui/src/**/{hookName:matches(^use-.*$)}.tsx"
+      ],
+      "excludeFiles": [
+        "apps/web/src/components/ai-elements/use-file-attachments.ts",
+        "apps/web/src/components/layout/use-docked-panel-widths.ts"
+      ],
+      "must": {
+        "exportValues": ["${hookName.toCamelCase()}"]
+      }
+    },
+    {
+      "name": "tool-module-builder-contract",
+      "description": "Existing runtime and declaration tool-collection modules each expose a filename-derived builder; aggregate automation and Convex catalog modules have different contracts.",
+      "paths": [
+        "packages/ai/src/{toolName}-tools.mjs",
+        "packages/ai/src/{toolName}-tools.d.mts"
+      ],
+      "excludeFiles": [
+        "packages/ai/src/automation-tools.*",
+        "packages/ai/src/convex-workspace-tools.*"
+      ],
+      "must": {
+        "exportValues": ["build${toolName.toPascalCase()}Tools"]
+      }
+    }
+  ],
+  "kebabToPascalMap": {
+    "posthog": "PostHog"
+  }
+}

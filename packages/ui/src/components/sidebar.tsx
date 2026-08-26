@@ -18,7 +18,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import { useIsMobile } from "@workspace/ui/hooks/use-mobile";
+import { useIsMobile } from "@workspace/ui/hooks/use-is-mobile";
 import {
 	APP_SIDEBAR_COLLAPSED_WIDTH_CSS,
 	APP_SIDEBAR_EXPANDED_WIDTH_CSS,

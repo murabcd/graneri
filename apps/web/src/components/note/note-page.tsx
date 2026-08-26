@@ -5,7 +5,7 @@ import { isDesktopRuntime } from "@workspace/platform/desktop";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { useIsMobile } from "@workspace/ui/hooks/use-mobile";
+import { useIsMobile } from "@workspace/ui/hooks/use-is-mobile";
 import { cn } from "@workspace/ui/lib/utils";
 import { useConvex, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";

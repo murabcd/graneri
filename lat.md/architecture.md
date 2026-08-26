@@ -35,6 +35,12 @@ The workspace assigns each runtime and shared concern to one primary module whil
 - [convex](../convex/package.json) owns backend functions, schema, durable state,
   authentication, HTTP actions, and server integrations.
 
+## Structural enforcement
+
+Repeated cross-file conventions belong in [konsistent.json](../konsistent.json), while Biome owns file-local syntax and tests own behavioral boundaries.
+
+The root `check` command runs all three enforcement layers so architecture prose does not become a duplicate executable contract.
+
 ## Documentation contract
 
 This graph must change with every architecture, packaging, release configuration, or Convex integration contract change.
