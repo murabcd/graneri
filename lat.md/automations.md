@@ -1,0 +1,73 @@
+# Automations
+
+Automation modules own schedules, reservations, execution state, assistant-run delegation, result classification, delivery leases, and the durable inbox.
+
+- [[assistant-runs]] executes automation prompts through the normal durable run lifecycle.
+- [[convex/automationRunStateMachine.ts]]
+- [[convex/automationSchedule.ts]]
+
+## State and schedule contract
+
+One state machine owns run transitions, one schedule module owns calculation and registration, and one cross-runtime contract validates recurrence.
+
+Automation execution state is owned by
+`convex/automationRunStateMachine.ts`. Run reservation, active-run checks,
+terminal transitions, and chat-linked pause/resume/move consequences
+must enter through that module. `convex/automationSchedule.ts` is the canonical
+home for next-run calculation and scheduled-function registration; definition
+CRUD may invoke it but must not reproduce schedule arithmetic or cancellation
+behavior. Authenticated automation functions and background AI producers share
+the same owner-scoped CRUD operations; internal producers receive the owner from
+durable run state and must never persist or forward a user Convex token.
+The cross-runtime schedule contract lives in
+`@workspace/ai/automation-schedule`. It supports exact one-time instants and
+RFC 5545 recurring rules anchored to an IANA timezone. Recurring rules are
+evaluated as local wall-clock schedules so daily and weekly tasks stay at the
+same local time across daylight-saving transitions. Both manual and tool-based
+creation reject schedules that run more than once per hour. A workspace may
+have at most ten active automation definitions across creation and every resume
+path. Chat creation accepts broader windows such as morning or evening by
+choosing a visible local start time before persisting the exact schedule.
+Durable task prompts are limited to 64,000 characters, stop conditions to
+2,000 characters, and monitoring comparison snapshots to 64,000 characters;
+the full assistant answer remains authoritative in chat history.
+
+## Execution
+
+Scheduled and manual starts share one atomic orchestration operation and inherit the normal assistant Workflow and single-flight rules.
+
+Scheduled automation execution is not a standalone action loop. The scheduled
+mutation delegates to one run-start orchestration operation that atomically
+reserves an `automationRuns` row, saves the task prompt into its destination
+chat, creates a normal Convex-owned assistant run, and starts the existing
+assistant Workflow/Workpool. Manual and scheduled entrypoints do not assemble
+those lifecycle steps independently. Automation runs therefore inherit
+the same rich message snapshots, approvals, focused user-question pauses,
+idempotent tool receipts, three-attempt action retries, and twenty-step logical
+limit as interactive hosted chat. `current_chat` destinations continue from the
+selected conversation; `standalone` destinations own a dedicated result chat.
+Multiple task definitions may use one chat, but the one-active-run-per-chat
+invariant still serializes their execution. The minute reconciliation cron
+retries a due task whose scheduled function was lost or could not reserve the
+busy chat.
+
+## Results and delivery
+
+Automation runs form a durable result inbox with explicit classification, unread state, delivery leases, notifications, and stop conditions.
+
+`automationRuns` is also the durable task-result inbox. Successful, failed, and
+unchanged checks retain their result summary, read state, delivery state, and
+archive state and are exposed through cursor pagination. `always` delivery
+publishes every successful result. `failed_runs_only` retains successful runs
+without marking them unread or emitting notifications while failures remain
+unread and notification-eligible. `meaningful_change` compares a scheduled
+result with the last observed result in a retryable classification Workflow;
+routine checks remain in history without becoming unread. An optional stop
+condition is classified at the same boundary and completes the definition when
+met. Scheduled unread results are leased transactionally before the renderer
+asks Electron to show a native notification, preventing concurrent alerts from
+multiple open clients. A successful display is acknowledged durably; failed or
+interrupted delivery releases its fenced lease for retry. Clicking the alert
+opens the owning chat. Native alerts require the desktop process to be running;
+the durable in-app inbox remains the authoritative delivery surface when it is
+not.
