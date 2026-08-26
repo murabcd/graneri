@@ -30,21 +30,10 @@ import {
 	type GoogleAuthContext,
 	getGoogleAccessToken,
 } from "./googleAuth";
-
-type GoogleCalendarListResponse = {
-	items?: GoogleCalendarListEntry[];
-};
-
-type GoogleCalendarListEntry = {
-	accessRole?: string;
-	backgroundColor?: string;
-	hidden?: boolean;
-	id: string;
-	primary?: boolean;
-	selected?: boolean;
-	summary?: string;
-	summaryOverride?: string;
-};
+import type {
+	GoogleCalendarListEntry,
+	GoogleCalendarListResponse,
+} from "./googleCalendarApiTypes";
 
 type GoogleCalendarEventsResponse = {
 	items?: GoogleCalendarEvent[];

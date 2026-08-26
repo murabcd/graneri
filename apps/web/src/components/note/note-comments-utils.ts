@@ -1,6 +1,16 @@
+import type { FunctionReturnType } from "convex/server";
 import { getAvatarSrc } from "@/lib/avatar";
 import { isSameCalendarDay } from "@/lib/calendar-day";
+import type { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+
+export type ThreadSummary = FunctionReturnType<
+	typeof api.noteComments.listThreads
+>[number];
+export type ThreadDetail = NonNullable<
+	FunctionReturnType<typeof api.noteComments.getThread>
+>;
+export type ThreadComment = ThreadDetail["comments"][number];
 
 export type CommentViewer = {
 	name: string;

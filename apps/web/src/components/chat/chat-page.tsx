@@ -95,6 +95,7 @@ import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
+import { getCssHighlightApi } from "@/lib/css-highlights";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import {
@@ -153,15 +154,6 @@ const getPersistedChatReasoningEffort = (
 ): ReasoningEffort | null =>
 	reasoningEffort ? (findReasoningEffort(reasoningEffort)?.id ?? null) : null;
 
-type CssHighlightRegistry = {
-	set: (name: string, highlight: Highlight) => void;
-	delete: (name: string) => void;
-};
-
-type CssWithHighlights = typeof CSS & {
-	highlights?: CssHighlightRegistry;
-};
-
 type MessageSearchState = {
 	open: boolean;
 	query: string;
@@ -192,9 +184,6 @@ const messageSearchReducer = (
 
 	return { ...state, index: action.index };
 };
-
-declare const Highlight: (new (...ranges: Range[]) => Highlight) | undefined;
-type Highlight = object;
 
 const CHAT_SEARCH_MATCH_HIGHLIGHT = "chat-search-match";
 const CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT = "chat-search-active-match";
@@ -1243,19 +1232,16 @@ export function ChatPage({
 		});
 	}, [messageSearch.open]);
 	React.useEffect(() => {
-		const highlightRegistry =
-			typeof CSS === "undefined"
-				? undefined
-				: (CSS as CssWithHighlights).highlights;
+		const highlightApi = getCssHighlightApi();
+		if (!highlightApi) {
+			return;
+		}
 
-		if (
-			!messageSearch.open ||
-			!messageSearch.query.trim() ||
-			!highlightRegistry ||
-			typeof Highlight === "undefined"
-		) {
-			highlightRegistry?.delete(CHAT_SEARCH_MATCH_HIGHLIGHT);
-			highlightRegistry?.delete(CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT);
+		const { Highlight: HighlightConstructor, registry: highlightRegistry } =
+			highlightApi;
+		if (!messageSearch.open || !messageSearch.query.trim()) {
+			highlightRegistry.delete(CHAT_SEARCH_MATCH_HIGHLIGHT);
+			highlightRegistry.delete(CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT);
 			return;
 		}
 
@@ -1288,11 +1274,11 @@ export function ChatPage({
 
 		highlightRegistry.set(
 			CHAT_SEARCH_MATCH_HIGHLIGHT,
-			new Highlight(...matchRanges),
+			new HighlightConstructor(...matchRanges),
 		);
 		highlightRegistry.set(
 			CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT,
-			new Highlight(...activeMatchRanges),
+			new HighlightConstructor(...activeMatchRanges),
 		);
 
 		return () => {

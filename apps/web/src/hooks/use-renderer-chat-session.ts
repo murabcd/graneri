@@ -8,9 +8,9 @@ import {
 	lastAssistantMessageIsCompleteWithApprovalResponses,
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
-import type { FunctionReturnType } from "convex/server";
 import * as React from "react";
 import { toast } from "sonner";
+import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import { stopActiveChatStream } from "@/lib/chat-active-stream";
 import { stopChatInteraction } from "@/lib/chat-interaction-session";
 import {
@@ -28,7 +28,6 @@ import {
 	mergeRendererChatSessionMessages,
 	resolveRendererChatRunState,
 } from "@/lib/renderer-chat-session";
-import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useChatInteractionSession } from "./use-chat-interaction-session";
 import { useLocalFileStorage } from "./use-local-file-storage";
@@ -36,10 +35,6 @@ import { useQueuedChatDrain } from "./use-queued-chat-drain";
 import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
 import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
 import { useWorkspaceChatTransport } from "./use-workspace-chat-transport";
-
-type AttachableRun =
-	| FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
-	| undefined;
 
 const EMPTY_STREAMING_MESSAGE_IDS = new Set<string>();
 
@@ -58,7 +53,7 @@ export const useRendererChatSession = ({
 	stopExternalRun,
 	workspaceId,
 }: {
-	activeRun: AttachableRun;
+	activeRun: AttachableAssistantRunQueryResult;
 	chatId: string;
 	contextLabel: string;
 	isExternallyBlocked?: boolean;

@@ -1,15 +1,10 @@
-import type { FunctionReturnType } from "convex/server";
 import * as React from "react";
+import type { AttachableAssistantRun } from "@/lib/attachable-assistant-run";
 import { logError } from "@/lib/logger";
-import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-type AttachableRun = NonNullable<
-	FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
->;
-
 export type ResumableActiveRun = Pick<
-	AttachableRun,
+	AttachableAssistantRun,
 	"_id" | "producer" | "status"
 >;
 

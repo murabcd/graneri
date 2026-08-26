@@ -28,7 +28,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import * as React from "react";
-import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { NoteCommentsDeleteDialog } from "./note-comments-delete-dialog";
 import {
 	type CommentViewer,
@@ -36,9 +36,8 @@ import {
 	formatDiscussionTitle,
 	getAvatarLabel,
 	resolveAuthorIdentity,
+	type ThreadSummary,
 } from "./note-comments-utils";
-
-type ThreadSummary = Doc<"noteCommentThreads">;
 
 export function NoteCommentsThreadSummary({
 	thread,

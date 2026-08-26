@@ -17,7 +17,6 @@ import {
 	createHostedActiveStreamKey,
 	createHostedChatTurnInput,
 	type HostedActiveStreamSession,
-	type prepareHostedAssistantRunInput,
 	stopOrphanedHostedAssistantRun,
 } from "@workspace/ai/hosted-chat-turn";
 import { isLocalFolderToolContinuationMessage } from "@workspace/ai/local-folder-tool-contract";
@@ -38,7 +37,10 @@ import {
 	normalizeServiceTier,
 } from "../src/lib/ai/models.js";
 import { createCanonicalChatAssistantContinuation } from "./chat-assistant-continuation.js";
-import { prepareServerAssistantRunInput } from "./chat-assistant-run-input.js";
+import {
+	prepareServerAssistantRunInput,
+	type ServerAssistantRunContext,
+} from "./chat-assistant-run-input.js";
 import { createHostedChatAutomationActions } from "./chat-automation-actions.js";
 import type {
 	AttachableAssistantRun,
@@ -62,14 +64,6 @@ const activeChatStreamControllers = new Map<
 	HostedActiveStreamSession
 >();
 const AI_LATENCY_DEBUG_ENABLED = process.env.GRANERI_AI_LATENCY_DEBUG === "1";
-
-type PreparedHostedAssistantRunInput = Extract<
-	Awaited<ReturnType<typeof prepareHostedAssistantRunInput>>,
-	{ ok: true }
->;
-type HostedChatRunContext = Awaited<
-	ReturnType<PreparedHostedAssistantRunInput["complete"]>
->;
 
 const interruptActiveChatRun = async ({
 	chatId,
@@ -598,11 +592,11 @@ export const handleChatRequest = async (
 		options: { tolerateMissing?: boolean } = {},
 	) =>
 		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(operation, options);
-	let appConnections: HostedChatRunContext["appConnections"];
-	let localFolderRoots: HostedChatRunContext["localFolderRoots"];
-	let agent: HostedChatRunContext["agent"];
-	let finalizedToolSet: HostedChatRunContext["finalizedToolSet"];
-	let coreToolPolicyState: HostedChatRunContext["coreToolPolicyState"];
+	let appConnections: ServerAssistantRunContext["appConnections"];
+	let localFolderRoots: ServerAssistantRunContext["localFolderRoots"];
+	let agent: ServerAssistantRunContext["agent"];
+	let finalizedToolSet: ServerAssistantRunContext["finalizedToolSet"];
+	let coreToolPolicyState: ServerAssistantRunContext["coreToolPolicyState"];
 	let instructions: string;
 	let chatMessages: UIMessage[];
 	let lastUserMessage: UIMessage | undefined;

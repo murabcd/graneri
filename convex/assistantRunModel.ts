@@ -1,3 +1,4 @@
+import type { Infer } from "convex/values";
 import { v } from "convex/values";
 
 export const reasoningEffortValidator = v.union(
@@ -45,6 +46,10 @@ export const pendingDecisionValidator = v.union(
 	userQuestionPendingDecisionValidator,
 	toolApprovalPendingDecisionValidator,
 );
+
+export type AssistantRunPendingDecision = Infer<
+	typeof pendingDecisionValidator
+>;
 
 export const stopReasonValidator = v.union(
 	v.literal("user_requested"),

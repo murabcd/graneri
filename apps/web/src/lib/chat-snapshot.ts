@@ -3,10 +3,7 @@ import {
 	type StoredUiMessageRole,
 } from "@workspace/ai/ui-message-codec";
 import type { UIMessage } from "ai";
-
-type TimestampedUIMessage = UIMessage & {
-	createdAt?: Date | string | number;
-};
+import { getChatMessageTimestamp } from "@/lib/chat-timestamp";
 
 export type StoredChatMessage = {
 	id: string;
@@ -28,7 +25,7 @@ export const getUIMessageSeedKey = (messages: UIMessage[]) =>
 				role: message.role,
 				parts: message.parts,
 				metadata: message.metadata,
-				createdAt: (message as TimestampedUIMessage).createdAt,
+				createdAt: getChatMessageTimestamp(message),
 			}),
 		)
 		.join("|");

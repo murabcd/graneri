@@ -21,6 +21,7 @@ import {
 } from "@/components/layout/composer-dock";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
+import { getCssHighlightApi } from "@/lib/css-highlights";
 import { logError } from "@/lib/logger";
 import {
 	getExportFileName,
@@ -85,18 +86,6 @@ import {
 } from "./use-note-image-upload";
 import { useNoteTableOfContents } from "./use-note-table-of-contents";
 import { useNoteTitleSynchronization } from "./use-note-title-synchronization";
-
-type CssHighlightRegistry = {
-	set: (name: string, highlight: Highlight) => void;
-	delete: (name: string) => void;
-};
-
-type CssWithHighlights = typeof CSS & {
-	highlights?: CssHighlightRegistry;
-};
-
-declare const Highlight: (new (...ranges: Range[]) => Highlight) | undefined;
-type Highlight = object;
 
 const NOTE_SEARCH_MATCH_HIGHLIGHT = "note-search-match";
 const NOTE_SEARCH_ACTIVE_MATCH_HIGHLIGHT = "note-search-active-match";
@@ -1516,19 +1505,16 @@ function useNoteSearch(searchableText: string) {
 		});
 	}, [activeRange, open]);
 	React.useEffect(() => {
-		const highlightRegistry =
-			typeof CSS === "undefined"
-				? undefined
-				: (CSS as CssWithHighlights).highlights;
+		const highlightApi = getCssHighlightApi();
+		if (!highlightApi) {
+			return;
+		}
 
-		if (
-			!open ||
-			!query.trim() ||
-			!highlightRegistry ||
-			typeof Highlight === "undefined"
-		) {
-			highlightRegistry?.delete(NOTE_SEARCH_MATCH_HIGHLIGHT);
-			highlightRegistry?.delete(NOTE_SEARCH_ACTIVE_MATCH_HIGHLIGHT);
+		const { Highlight: HighlightConstructor, registry: highlightRegistry } =
+			highlightApi;
+		if (!open || !query.trim()) {
+			highlightRegistry.delete(NOTE_SEARCH_MATCH_HIGHLIGHT);
+			highlightRegistry.delete(NOTE_SEARCH_ACTIVE_MATCH_HIGHLIGHT);
 			return;
 		}
 
@@ -1543,11 +1529,11 @@ function useNoteSearch(searchableText: string) {
 
 		highlightRegistry.set(
 			NOTE_SEARCH_MATCH_HIGHLIGHT,
-			new Highlight(...matchRanges),
+			new HighlightConstructor(...matchRanges),
 		);
 		highlightRegistry.set(
 			NOTE_SEARCH_ACTIVE_MATCH_HIGHLIGHT,
-			new Highlight(...activeRanges),
+			new HighlightConstructor(...activeRanges),
 		);
 
 		return () => {

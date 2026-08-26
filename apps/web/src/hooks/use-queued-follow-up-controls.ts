@@ -1,8 +1,8 @@
 import { useMutation } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import * as React from "react";
 import { toast } from "sonner";
 import type { QueuedFollowUpBarItem } from "@/components/chat/chat-queued-follow-up-bar";
+import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
@@ -15,9 +15,6 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-type AttachableRun =
-	| FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
-	| undefined;
 type SetQueuedMessages = (
 	updater: (
 		messages: Array<QueuedFollowUpMessage>,
@@ -54,7 +51,7 @@ export const useQueuedFollowUpControls = ({
 	setQueuedMessages,
 	workspaceId,
 }: {
-	activeRun: AttachableRun;
+	activeRun: AttachableAssistantRunQueryResult;
 	chatId: string;
 	contextLabel: string;
 	latestRequestBodyRef: React.MutableRefObject<ChatRequestContext | null>;

@@ -9,10 +9,9 @@ import {
 } from "@/lib/structured-note";
 
 type NoteTemplateFetch = typeof fetch;
-type ResolveConvexToken = () => Promise<string | null>;
 
 const requireAuthorizationHeader = async (
-	resolveConvexToken: ResolveConvexToken,
+	resolveConvexToken: typeof getCachedConvexToken,
 ) => {
 	const convexToken = await resolveConvexToken();
 	if (!convexToken) {
@@ -37,7 +36,7 @@ export const requestEnhancedStructuredNote = async (
 		resolveConvexToken = getCachedConvexToken,
 	}: {
 		fetcher?: NoteTemplateFetch;
-		resolveConvexToken?: ResolveConvexToken;
+		resolveConvexToken?: typeof getCachedConvexToken;
 	} = {},
 ) => {
 	const authorization = await requireAuthorizationHeader(resolveConvexToken);
@@ -109,7 +108,7 @@ export const requestTemplateStructuredNote = async ({
 	template: NoteTemplate;
 	onMarkdown: (markdown: string) => void;
 	fetcher?: NoteTemplateFetch;
-	resolveConvexToken?: ResolveConvexToken;
+	resolveConvexToken?: typeof getCachedConvexToken;
 }) => {
 	const authorization = await requireAuthorizationHeader(resolveConvexToken);
 	const response = await fetcher(getHostedApiUrl("applyTemplate"), {

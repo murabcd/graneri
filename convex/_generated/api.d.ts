@@ -82,6 +82,7 @@ import type * as documentSize from "../documentSize.js";
 import type * as domain from "../domain.js";
 import type * as googleAuth from "../googleAuth.js";
 import type * as googleCalendar from "../googleCalendar.js";
+import type * as googleCalendarApiTypes from "../googleCalendarApiTypes.js";
 import type * as googleCalendarManagement from "../googleCalendarManagement.js";
 import type * as googleTools from "../googleTools.js";
 import type * as http from "../http.js";
@@ -206,6 +207,7 @@ declare const fullApi: ApiFromModules<{
   domain: typeof domain;
   googleAuth: typeof googleAuth;
   googleCalendar: typeof googleCalendar;
+  googleCalendarApiTypes: typeof googleCalendarApiTypes;
   googleCalendarManagement: typeof googleCalendarManagement;
   googleTools: typeof googleTools;
   http: typeof http;

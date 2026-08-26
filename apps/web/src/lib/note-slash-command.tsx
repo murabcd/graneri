@@ -1,4 +1,4 @@
-import { type Editor, Extension } from "@tiptap/core";
+import { type Editor, Extension, type Range } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion, {
@@ -13,11 +13,6 @@ import {
 	type NoteBlockStyleId,
 } from "./note-block-style";
 
-type EditorRange = {
-	from: number;
-	to: number;
-};
-
 type NoteSlashCommandGroup = "Style" | "Insert" | "Upload";
 
 type NoteSlashCommandItem = {
@@ -26,7 +21,7 @@ type NoteSlashCommandItem = {
 	title: string;
 	keywords: string[];
 	icon: LucideIcon;
-	execute: (editor: Editor, range: EditorRange) => void;
+	execute: (editor: Editor, range: Range) => void;
 };
 
 type NoteSlashCommandMenuHandle = {
@@ -55,7 +50,7 @@ const createNoteSlashCommands = (
 		title: option.label,
 		keywords: option.keywords,
 		icon: option.icon,
-		execute: (editor: Editor, range: EditorRange) => {
+		execute: (editor: Editor, range: Range) => {
 			option.apply(editor, range);
 		},
 	})),

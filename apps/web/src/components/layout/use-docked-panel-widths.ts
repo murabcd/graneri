@@ -1,14 +1,10 @@
-import { useOptionalDockedPanelWidths } from "@workspace/ui/components/sidebar";
+import {
+	type DockedPanelWidthsUpdate,
+	useOptionalDockedPanelWidths,
+} from "@workspace/ui/components/sidebar";
 import * as React from "react";
 
 export type DockedPanelSide = "left" | "right";
-
-type DockedPanelWidthsUpdate = {
-	leftInsetPanelWidth?: string | null;
-	leftOverlayPanelWidth?: string | null;
-	rightInsetPanelWidth?: string | null;
-	rightOverlayPanelWidth?: string | null;
-};
 
 const useIsomorphicLayoutEffect =
 	typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;

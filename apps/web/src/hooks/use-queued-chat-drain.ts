@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import * as React from "react";
 import { toast } from "sonner";
+import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import {
 	getQueuedFollowUpCacheKey,
 	QUEUED_FOLLOW_UP_DRAIN_RETRY_MS,
@@ -22,10 +22,6 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-type AttachableRun =
-	| FunctionReturnType<typeof api.assistantRuns.getAttachableRun>
-	| undefined;
-
 export const useQueuedChatDrain = ({
 	activeRun,
 	chatId,
@@ -36,7 +32,7 @@ export const useQueuedChatDrain = ({
 	sendMessage,
 	workspaceId,
 }: {
-	activeRun: AttachableRun;
+	activeRun: AttachableAssistantRunQueryResult;
 	chatId: string;
 	contextLabel: string;
 	isBlocked: boolean;

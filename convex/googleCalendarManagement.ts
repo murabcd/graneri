@@ -11,17 +11,10 @@ import {
 	type GoogleAuthContext,
 	getGoogleAccessToken,
 } from "./googleAuth";
-
-type GoogleCalendarListEntry = {
-	accessRole?: string;
-	id: string;
-	primary?: boolean;
-	summary?: string;
-};
-
-type GoogleCalendarListResponse = {
-	items?: GoogleCalendarListEntry[];
-};
+import type {
+	GoogleCalendarListEntry,
+	GoogleCalendarListResponse,
+} from "./googleCalendarApiTypes";
 
 type GoogleCalendarEventListItem = {
 	eventType?: string;

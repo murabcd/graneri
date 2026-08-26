@@ -1,4 +1,3 @@
-import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import {
@@ -18,6 +17,7 @@ import {
 	upsertAssistantRunJobMessage,
 } from "./assistantRunJobState";
 import {
+	type AssistantRunPendingDecision,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
 	serviceTierValidator,
@@ -52,8 +52,6 @@ const completedTitleContextValidator = v.union(
 	v.object({ ownerTokenIdentifier: v.string() }),
 	v.null(),
 );
-
-type PendingDecision = Infer<typeof pendingDecisionValidator>;
 
 const getFinalizationContext = async (
 	ctx: MutationCtx,
@@ -118,7 +116,7 @@ const completeRun = async (ctx: MutationCtx, run: Doc<"assistantRuns">) => {
 const waitForUserDecision = async (
 	ctx: MutationCtx,
 	run: Doc<"assistantRuns">,
-	pendingDecision: PendingDecision,
+	pendingDecision: AssistantRunPendingDecision,
 ) => {
 	if (pendingDecision.assistantMessageId !== run.assistantMessageId) {
 		return false;

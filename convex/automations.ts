@@ -36,6 +36,7 @@ import {
 } from "./automationSchedule";
 import {
 	automationAppSourceProviderValidator,
+	automationDeliveryContextValidator,
 	automationDeliveryPolicyValidator,
 	automationDestinationValidator,
 	automationScheduleValidator,
@@ -1047,17 +1048,7 @@ export const getDeliveryContext = internalQuery({
 	args: {
 		automationRunId: v.id("automationRuns"),
 	},
-	returns: v.union(
-		v.object({
-			ownerTokenIdentifier: v.string(),
-			title: v.string(),
-			prompt: v.string(),
-			previousResult: v.union(v.string(), v.null()),
-			resultText: v.string(),
-			stopCondition: v.union(v.string(), v.null()),
-		}),
-		v.null(),
-	),
+	returns: v.union(automationDeliveryContextValidator, v.null()),
 	handler: async (ctx, args) =>
 		await getAutomationDeliveryContext(ctx, args.automationRunId),
 });

@@ -14,7 +14,6 @@ import {
 	type HostedActiveStreamSession,
 	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,
-	type prepareHostedAssistantRunInput,
 	startHostedChatRun,
 } from "@workspace/ai/hosted-chat-turn";
 import type { ReasoningEffort, ServiceTier } from "@workspace/ai/models";
@@ -23,9 +22,10 @@ import type { UIMessage, UIMessageChunk } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
+import type { ServerAssistantRunContext } from "./chat-assistant-run-input.js";
 import type { AttachableAssistantRun } from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
-import type { JsonObject } from "./http-utils.js";
+import type { SendJson } from "./http-utils.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 import { pipeUiMessageStreamToServerResponse } from "./ui-message-response-stream.js";
 
@@ -40,21 +40,6 @@ type HostedTurnInput = ReturnType<
 
 type HostedQueuedInput = HostedTurnInput["queuedInput"];
 type HostedTurnController = HostedTurnInput["turnController"];
-
-type PreparedHostedAssistantRunInput = Extract<
-	Awaited<ReturnType<typeof prepareHostedAssistantRunInput>>,
-	{ ok: true }
->;
-type HostedRunContext = Awaited<
-	ReturnType<PreparedHostedAssistantRunInput["complete"]>
->;
-
-type SendJson = (
-	response: ServerResponse,
-	statusCode: number,
-	payload: JsonObject,
-	headers?: Record<string, string> | null,
-) => void;
 
 export type HostedChatTurnStreamRuntimeResult =
 	| {
@@ -123,7 +108,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 }: {
 	activeChatStreamControllers: Map<string, HostedActiveStreamSession>;
 	admissionReservationId?: Id<"aiAdmissionReservations">;
-	agent: HostedRunContext["agent"];
+	agent: ServerAssistantRunContext["agent"];
 	appsEnabled: boolean;
 	assistantContinuationMessageId?: string;
 	attachableRun: AttachableAssistantRun | null;
@@ -131,13 +116,13 @@ export const runHostedChatTurnStreamRuntime = async ({
 	chatMessages: UIMessage[];
 	convexClient: ConvexHttpClient;
 	continueRunId?: Id<"assistantRuns"> | null;
-	coreToolPolicyState: HostedRunContext["coreToolPolicyState"];
+	coreToolPolicyState: ServerAssistantRunContext["coreToolPolicyState"];
 	defaultTimezone: string;
 	emitWideEvent: (level: "error" | "info") => void;
-	finalizedToolSet: HostedRunContext["finalizedToolSet"];
+	finalizedToolSet: ServerAssistantRunContext["finalizedToolSet"];
 	instructions: string;
 	lastUserMessage?: UIMessage;
-	localFolderRoots: HostedRunContext["localFolderRoots"];
+	localFolderRoots: ServerAssistantRunContext["localFolderRoots"];
 	logLatency: ChatLatencyLogger;
 	model: string;
 	noteId: Id<"notes"> | null;
@@ -150,7 +135,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	sendJson: SendJson;
 	setAcceptedSteerTurnId: (runId: Id<"assistantRuns"> | null) => void;
 	shouldGenerateChatTitle: boolean;
-	appConnections: HostedRunContext["appConnections"];
+	appConnections: ServerAssistantRunContext["appConnections"];
 	selectedSourceIds: string[];
 	steeredUserMessages: UIMessage[];
 	supersedeActiveRun?: boolean;

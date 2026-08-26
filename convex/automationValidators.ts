@@ -1,3 +1,4 @@
+import type { Infer } from "convex/values";
 import { v } from "convex/values";
 
 export const automationAppSourceProviderValidator = v.union(
@@ -25,6 +26,29 @@ export const automationDeliveryPolicyValidator = v.union(
 	v.literal("failed_runs_only"),
 	v.literal("meaningful_change"),
 );
+
+export const automationDeliveryDecisionValidator = v.object({
+	meaningfulChange: v.boolean(),
+	stopConditionMet: v.boolean(),
+	summary: v.string(),
+});
+
+export type AutomationDeliveryDecision = Infer<
+	typeof automationDeliveryDecisionValidator
+>;
+
+export const automationDeliveryContextValidator = v.object({
+	ownerTokenIdentifier: v.string(),
+	title: v.string(),
+	prompt: v.string(),
+	previousResult: v.union(v.string(), v.null()),
+	resultText: v.string(),
+	stopCondition: v.union(v.string(), v.null()),
+});
+
+export type AutomationDeliveryContext = Infer<
+	typeof automationDeliveryContextValidator
+>;
 
 export const automationRunStatusValidator = v.union(
 	v.literal("running"),

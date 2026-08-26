@@ -7,7 +7,6 @@ import { logInfo } from "@/lib/logger";
 import { getHostedApiUrl } from "@/lib/runtime-config";
 
 type ProjectDescriptionFetch = typeof fetch;
-type ResolveConvexToken = () => Promise<string | null>;
 
 export const requestGeneratedProjectDescription = async (
 	body: GenerateProjectDescriptionRequest,
@@ -16,7 +15,7 @@ export const requestGeneratedProjectDescription = async (
 		resolveConvexToken = getCachedConvexToken,
 	}: {
 		fetcher?: ProjectDescriptionFetch;
-		resolveConvexToken?: ResolveConvexToken;
+		resolveConvexToken?: typeof getCachedConvexToken;
 	} = {},
 ) => {
 	const convexToken = await resolveConvexToken();

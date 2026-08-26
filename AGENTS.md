@@ -58,6 +58,14 @@ be parsed once at its external, persisted, or SDK boundary with a named schema
 that describes the actual contract, then passed downstream as the concrete
 domain type. Do not rename or recreate a generic object or record guard.
 
+Prefer source-owned types. Before declaring a type, reuse an existing exported
+type or derive it with `typeof`, `ReturnType`, `Awaited`, `Parameters`, indexed
+access, `FunctionReturnType`, `Infer`, `z.infer`, `Doc`, `Id`, `Pick`, or `Omit`.
+When multiple modules consume the same semantic contract, export it from the
+module that owns the corresponding runtime value, schema, or API. Keep a type
+local when it describes genuinely private implementation state; do not export
+implementation details merely to avoid a local type.
+
 ## Testing Guidelines
 Web tests use Vitest with Testing Library and `jsdom`. Name tests `*.test.tsx` and keep them near feature-level behavior, as in `apps/web/tests/chat-page.test.tsx`. Run `bun run test` before opening a PR; for frontend changes, also run `bun run typecheck` and `bun run check`. Desktop changes should pass `bun --filter=desktop run typecheck` and `bun --filter=desktop run check`; native behavior should include targeted tests when practical or a clear manual verification note when it depends on macOS permissions, packaging, or system audio. Desktop realtime transcription changes must cover stop-flush behavior, combined-helper AEC3 behavior, and renderer auto-stop behavior where applicable.
 

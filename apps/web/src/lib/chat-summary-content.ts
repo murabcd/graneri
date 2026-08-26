@@ -119,39 +119,48 @@ const collectMessageSummarySources = (
 
 const collectArtifacts = (messages: UIMessage[]): ChatSummaryArtifact[] => {
 	const seen = new Set<string>();
+	const artifacts: ChatSummaryArtifact[] = [];
 
-	return messages
-		.flatMap((message) =>
-			message.role === "assistant"
-				? [...extractFileParts(message), ...extractGeneratedArtifacts(message)]
-				: [],
-		)
-		.map(toSummaryArtifact)
-		.filter((artifact) => {
+	for (const message of messages) {
+		if (message.role !== "assistant") {
+			continue;
+		}
+
+		for (const value of [
+			...extractFileParts(message),
+			...extractGeneratedArtifacts(message),
+		]) {
+			const artifact = toSummaryArtifact(value);
 			if (seen.has(artifact.url)) {
-				return false;
+				continue;
 			}
 
 			seen.add(artifact.url);
-			return true;
-		});
+			artifacts.push(artifact);
+		}
+	}
+
+	return artifacts;
 };
 
 export const collectChatSummaryContent = (
 	messages: UIMessage[],
 ): ChatSummaryContent => {
 	const seenSources = new Set<string>();
-	const sources = messages
-		.flatMap(collectMessageSummarySources)
-		.filter((source) => {
+	const sources: ChatSummarySource[] = [];
+
+	for (const message of messages) {
+		for (const source of collectMessageSummarySources(message)) {
 			const key = getChatSummarySourceKey(source);
 			if (seenSources.has(key)) {
-				return false;
+				continue;
 			}
 
 			seenSources.add(key);
-			return true;
-		});
+			sources.push(source);
+		}
+	}
+
 	return {
 		artifacts: collectArtifacts(messages),
 		sources,

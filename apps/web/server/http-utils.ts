@@ -39,3 +39,5 @@ export const sendJson = (
 	}
 	response.end(JSON.stringify(payload));
 };
+
+export type SendJson = typeof sendJson;

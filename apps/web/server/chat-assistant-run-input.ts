@@ -96,3 +96,12 @@ export const prepareServerAssistantRunInput = ({
 		workspaceId,
 	});
 };
+
+type PreparedServerAssistantRunInput = Extract<
+	Awaited<ReturnType<typeof prepareServerAssistantRunInput>>,
+	{ ok: true }
+>;
+
+export type ServerAssistantRunContext = Awaited<
+	ReturnType<PreparedServerAssistantRunInput["complete"]>
+>;

@@ -150,7 +150,7 @@ type DockedPanelWidthsState = {
 	rightOverlayPanelWidth: string | null;
 };
 
-type DockedPanelWidthsUpdate = Partial<DockedPanelWidthsState>;
+export type DockedPanelWidthsUpdate = Partial<DockedPanelWidthsState>;
 
 const INITIAL_DOCKED_PANEL_WIDTHS: DockedPanelWidthsState = {
 	leftInsetPanelWidth: null,

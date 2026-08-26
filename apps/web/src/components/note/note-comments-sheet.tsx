@@ -98,6 +98,9 @@ import {
 	INITIAL_COMMENTS_UI_STATE,
 	resolveAuthorIdentity,
 	THREAD_VIEW_OPTIONS,
+	type ThreadComment,
+	type ThreadDetail,
+	type ThreadSummary,
 	type ThreadView,
 } from "@/components/note/note-comments-utils";
 import { writeTextToClipboard } from "@/components/note/share-note";
@@ -106,7 +109,7 @@ import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import { getErrorMessage } from "@/lib/error-message";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const COMMENTS_PANEL_STORAGE_KEY_DESKTOP =
 	"graneri.note-comments-panel-width.desktop";
@@ -121,9 +124,6 @@ const THREAD_VIEW_ICONS = {
 const INITIAL_VISIBLE_THREAD_COMMENTS = 2;
 const THREAD_COMMENT_PAGE_SIZE = 4;
 
-type ThreadSummary = Doc<"noteCommentThreads">;
-type ThreadComment = Doc<"noteComments">;
-type ThreadDetail = ThreadSummary & { comments: ThreadComment[] };
 type FlattenedNoteComment = FlattenedThreadComment<ThreadComment>;
 
 export type PendingNoteCommentSelection = {

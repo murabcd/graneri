@@ -1,13 +1,6 @@
 import type { ServerResponse } from "node:http";
-import type { JsonObject } from "./http-utils.js";
+import type { SendJson } from "./http-utils.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
-
-type SendJson = (
-	response: ServerResponse,
-	statusCode: number,
-	payload: JsonObject,
-	headers?: Record<string, string> | null,
-) => void;
 
 type CleanupClaimedSteerQueuedMessageResult =
 	| {

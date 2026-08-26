@@ -1,4 +1,4 @@
-import type { Editor } from "@tiptap/core";
+import type { Editor, Range } from "@tiptap/core";
 import type { LucideIcon } from "lucide-react";
 import {
 	Code2,
@@ -11,11 +11,6 @@ import {
 	Pilcrow,
 	Quote,
 } from "lucide-react";
-
-type EditorRange = {
-	from: number;
-	to: number;
-};
 
 export type NoteBlockStyleId =
 	| "paragraph"
@@ -34,10 +29,10 @@ export type NoteBlockStyleOption = {
 	keywords: string[];
 	icon: LucideIcon;
 	isActive: (editor: Editor) => boolean;
-	apply: (editor: Editor, range?: EditorRange) => void;
+	apply: (editor: Editor, range?: Range) => void;
 };
 
-const commandChain = (editor: Editor, range?: EditorRange) => {
+const commandChain = (editor: Editor, range?: Range) => {
 	const chain = editor.chain().focus();
 	return range ? chain.deleteRange(range) : chain;
 };

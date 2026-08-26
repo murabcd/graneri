@@ -10,10 +10,8 @@ import {
 } from "@workspace/ui/components/dropdown-menu";
 import { MoreHorizontal, PencilLine, Trash2 } from "lucide-react";
 import * as React from "react";
-import type { Doc } from "../../../../../convex/_generated/dataModel";
 import { NoteCommentsDeleteDialog } from "./note-comments-delete-dialog";
-
-type ThreadComment = Doc<"noteComments">;
+import type { ThreadComment } from "./note-comments-utils";
 
 export function NoteCommentActionsMenu({
 	comment,

@@ -11,38 +11,22 @@ import { v } from "convex/values";
 import { z } from "zod";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-
-const deliveryDecisionValidator = v.object({
-	meaningfulChange: v.boolean(),
-	stopConditionMet: v.boolean(),
-	summary: v.string(),
-});
-
-type DeliveryDecision = {
-	meaningfulChange: boolean;
-	stopConditionMet: boolean;
-	summary: string;
-};
-
-type DeliveryContext = {
-	ownerTokenIdentifier: string;
-	title: string;
-	prompt: string;
-	previousResult: string | null;
-	resultText: string;
-	stopCondition: string | null;
-};
+import {
+	type AutomationDeliveryContext,
+	type AutomationDeliveryDecision,
+	automationDeliveryDecisionValidator,
+} from "./automationValidators";
 
 export const classify = internalAction({
 	args: {
 		automationRunId: v.id("automationRuns"),
 	},
-	returns: deliveryDecisionValidator,
-	handler: async (ctx, args): Promise<DeliveryDecision> => {
-		const context = (await ctx.runQuery(
+	returns: automationDeliveryDecisionValidator,
+	handler: async (ctx, args): Promise<AutomationDeliveryDecision> => {
+		const context: AutomationDeliveryContext | null = await ctx.runQuery(
 			internal.automations.getDeliveryContext,
 			args,
-		)) as DeliveryContext | null;
+		);
 		if (!context) {
 			throw new Error("Automation delivery context is no longer active.");
 		}

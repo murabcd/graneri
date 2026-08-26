@@ -10,14 +10,13 @@ import {
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import { deleteAssistantRunJob } from "./assistantRunJobState";
 import type {
+	AssistantRunPendingDecision,
 	assistantRunProducerValidator,
-	pendingDecisionValidator,
 	reasoningEffortValidator,
 	serviceTierValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
 
-type PendingDecision = Infer<typeof pendingDecisionValidator>;
 type AssistantRunProducer = Infer<typeof assistantRunProducerValidator>;
 type ReasoningEffort = Infer<typeof reasoningEffortValidator>;
 type ServiceTier = Infer<typeof serviceTierValidator>;
@@ -33,7 +32,7 @@ type AssistantRunTransition =
 	| { type: "start_assistant_message"; assistantMessageId: string }
 	| {
 			type: "wait_for_user";
-			pendingDecision: PendingDecision;
+			pendingDecision: AssistantRunPendingDecision;
 			phase?: string;
 	  }
 	| {

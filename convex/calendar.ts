@@ -1,5 +1,6 @@
 "use node";
 
+import type { Infer } from "convex/values";
 import { ConvexError, v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -16,7 +17,6 @@ import { runCalendarToolQuery } from "./calendarToolQuery";
 import type {
 	CalendarEventsFetchResult,
 	CalendarProvider,
-	CalendarSource,
 	UpcomingCalendarEvent,
 } from "./calendarTypes";
 import {
@@ -34,29 +34,6 @@ const CALENDAR_EVENTS_LIMIT = 250;
 const CALENDAR_VIEW_MAX_WINDOW_MS = 62 * 24 * 60 * 60 * 1000;
 const { requireIdentity: requireCalendarIdentity } =
 	createResourceAccess("calendars");
-type UpcomingEventsResponse =
-	| {
-			status: "not_connected";
-			events: UpcomingCalendarEvent[];
-	  }
-	| {
-			status: "ready";
-			events: UpcomingCalendarEvent[];
-			connectedCalendarCount: number;
-	  };
-
-type CalendarEventsResponse =
-	| {
-			status: "not_connected";
-			calendars: CalendarSource[];
-			events: UpcomingCalendarEvent[];
-	  }
-	| {
-			status: "ready";
-			calendars: CalendarSource[];
-			events: UpcomingCalendarEvent[];
-	  };
-
 type RequestedCalendarWindow = {
 	timeMin: number;
 	timeMax: number;
@@ -203,7 +180,10 @@ export const listUpcomingCalendarEvents = action({
 		timeMin: v.string(),
 	},
 	returns: upcomingEventsResponseValidator,
-	handler: async (ctx, args): Promise<UpcomingEventsResponse> => {
+	handler: async (
+		ctx,
+		args,
+	): Promise<Infer<typeof upcomingEventsResponseValidator>> => {
 		const identity = await ctx.auth.getUserIdentity();
 
 		if (!identity) {
@@ -265,7 +245,10 @@ export const listCalendarEvents = action({
 		timeMin: v.string(),
 	},
 	returns: calendarEventsResponseValidator,
-	handler: async (ctx, args): Promise<CalendarEventsResponse> => {
+	handler: async (
+		ctx,
+		args,
+	): Promise<Infer<typeof calendarEventsResponseValidator>> => {
 		const identity = await ctx.auth.getUserIdentity();
 
 		if (!identity) {
