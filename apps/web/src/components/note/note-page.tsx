@@ -175,7 +175,7 @@ const useNotePageController = ({
 	);
 	const publishedEditorActionsRef = React.useRef<{
 		noteId: Id<"notes">;
-		canCopyMarkdown: boolean;
+		canCopyContent: boolean;
 		canUndo: boolean;
 		canRedo: boolean;
 		canShowTemplateSelect: boolean;
@@ -399,7 +399,7 @@ const useNotePageController = ({
 		element.style.height = `${nextHeight}px`;
 	}, [title]);
 
-	const copyText = React.useCallback(async () => {
+	const copyContent = React.useCallback(async () => {
 		if (!editor) {
 			return;
 		}
@@ -670,7 +670,7 @@ const useNotePageController = ({
 				latestEditorStateRef.current;
 			const nextActions = {
 				noteId,
-				canCopyMarkdown: Boolean(
+				canCopyContent: Boolean(
 					title.trim().length > 0 || searchableText.trim().length > 0,
 				),
 				canUndo: editor.can().undo(),
@@ -682,7 +682,7 @@ const useNotePageController = ({
 			if (
 				previousActions &&
 				previousActions.noteId === nextActions.noteId &&
-				previousActions.canCopyMarkdown === nextActions.canCopyMarkdown &&
+				previousActions.canCopyContent === nextActions.canCopyContent &&
 				previousActions.canUndo === nextActions.canUndo &&
 				previousActions.canRedo === nextActions.canRedo &&
 				previousActions.canShowTemplateSelect ===
@@ -694,7 +694,7 @@ const useNotePageController = ({
 			publishedEditorActionsRef.current = nextActions;
 			editorActionsStore?.set({
 				...nextActions,
-				copyMarkdown: copyText,
+				copyContent,
 				undo,
 				redo,
 				exportMarkdown: exportNote,
@@ -714,7 +714,7 @@ const useNotePageController = ({
 		};
 	}, [
 		applyTemplate,
-		copyText,
+		copyContent,
 		editorActionsStore,
 		editor,
 		exportNote,

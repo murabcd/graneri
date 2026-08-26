@@ -76,7 +76,10 @@ describe("writeRichTextToClipboard", () => {
 		expect(clipboardWrite).toHaveBeenCalledOnce();
 		const [clipboardItem] = clipboardWrite.mock.calls[0]?.[0] ?? [];
 		expect(clipboardItem).toBeInstanceOf(ClipboardItemMock);
-		const { items } = clipboardItem as ClipboardItemMock;
+		if (!(clipboardItem instanceof ClipboardItemMock)) {
+			throw new Error("Expected one ClipboardItem to be written.");
+		}
+		const { items } = clipboardItem;
 		expect(Object.keys(items).sort()).toEqual(["text/html", "text/plain"]);
 		expect(await items["text/html"]?.text()).toBe(
 			"<article><h2>Details</h2><ul><li><p>First item</p></li></ul></article>",

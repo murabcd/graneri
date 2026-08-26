@@ -1,11 +1,11 @@
 import type { NoteTemplate } from "@/lib/note-templates";
 
 export type NoteEditorActions = {
-	canCopyMarkdown: boolean;
+	canCopyContent: boolean;
 	canUndo: boolean;
 	canRedo: boolean;
 	canShowTemplateSelect: boolean;
-	copyMarkdown: () => Promise<void>;
+	copyContent: () => Promise<void>;
 	undo: () => void;
 	redo: () => void;
 	exportMarkdown: () => Promise<void>;
