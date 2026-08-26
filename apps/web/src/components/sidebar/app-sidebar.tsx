@@ -583,7 +583,7 @@ export function AppSidebar({
 
 	return (
 		<>
-			<Sidebar data-app-sidebar="true" {...props}>
+			<Sidebar data-app-sidebar="true" data-desktop-nonselectable {...props}>
 				<AppSidebarHeaderSection
 					activeWorkspaceId={activeWorkspaceId}
 					currentView={currentView}

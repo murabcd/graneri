@@ -31,6 +31,14 @@ const renderHome = (upcomingCalendar: UpcomingCalendarState) =>
 afterEach(cleanup);
 
 describe("HomeView", () => {
+	it("owns its desktop text-selection policy at the page boundary", () => {
+		const { container } = renderHome({ status: "ready", events: [] });
+
+		expect(
+			container.firstElementChild?.hasAttribute("data-desktop-nonselectable"),
+		).toBe(true);
+	});
+
 	it("renders meeting-row skeletons while the calendar initially loads", () => {
 		renderHome({ status: "checking", events: [] });
 

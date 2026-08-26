@@ -1495,6 +1495,7 @@ function AppShellHeader({
 
 	return (
 		<header
+			data-desktop-nonselectable
 			className={cn(
 				"sticky top-0 z-20 flex h-12 shrink-0 items-center justify-between bg-background/95 px-4 backdrop-blur transition-[width,height] ease-linear md:px-6",
 				isDesktopMac && DESKTOP_MAIN_HEADER_CLASS,

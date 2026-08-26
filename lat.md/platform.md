@@ -21,13 +21,18 @@ main process fails startup when a required handler is missing, duplicated, or
 unexpected. Desktop builds bundle the preload so the shared catalog does not
 become a packaged runtime dependency.
 
-## Application menu commands
+## Native renderer commands
 
-Native menu commands cross the same typed bridge and reuse renderer action owners instead of synthesizing keyboard input.
+Native commands cross the typed bridge and reuse renderer action owners instead of synthesizing keyboard input or mutating renderer state in Electron.
 
-Native application-menu commands that act on renderer state cross this same
-bridge as typed semantic commands. Electron must not synthesize keyboard input;
-renderer command owners share the action handlers used by real shortcuts.
+Native application-menu commands and Electron-owned shortcuts that act on
+renderer state cross this same bridge as typed semantic commands. Electron must
+not synthesize keyboard input; renderer command owners share the action handlers
+used by web shortcuts and editable surfaces. Select All is intercepted in
+[desktop-select-all-shortcut.mjs](../apps/desktop/src/desktop-select-all-shortcut.mjs)
+before Chromium can select the whole document, then
+[[apps/web/src/lib/application-command.ts]] scopes it through
+[[apps/web/src/lib/desktop-select-all.ts]] to the focused editable surface.
 
 ## Renderer routes
 

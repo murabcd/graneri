@@ -2,7 +2,10 @@ import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 
 import "./index.css";
-import { setDesktopNativeTheme } from "@workspace/platform/desktop";
+import {
+	isDesktopRuntime,
+	setDesktopNativeTheme,
+} from "@workspace/platform/desktop";
 import type { DesktopThemeSource } from "@workspace/platform/desktop-bridge";
 import { rendererMeetingWidgetPathname } from "@workspace/platform/renderer-routes";
 import { Toaster } from "@workspace/ui/components/sonner";
@@ -24,6 +27,10 @@ const rootElement = document.getElementById("root");
 
 if (!rootElement) {
 	throw new Error("Root element #root was not found");
+}
+
+if (isDesktopRuntime()) {
+	document.documentElement.dataset.desktopRuntime = "true";
 }
 
 const root = createRoot(rootElement);

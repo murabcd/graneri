@@ -46,7 +46,10 @@ export function ProjectView({
 	}, [notes, project]);
 
 	return (
-		<div className="box-border flex w-full max-w-full min-w-0 justify-center px-4 pb-6 md:px-6">
+		<div
+			data-desktop-nonselectable
+			className="box-border flex w-full max-w-full min-w-0 justify-center px-4 pb-6 md:px-6"
+		>
 			<div
 				className={cn(
 					"flex w-full min-w-0 max-w-5xl flex-col gap-6",

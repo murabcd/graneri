@@ -26,6 +26,16 @@ body {
 	-webkit-app-region: no-drag;
 }
 
+html[data-desktop-runtime="true"] [data-desktop-nonselectable] {
+	user-select: none;
+}
+
+html[data-desktop-runtime="true"]
+	[data-desktop-nonselectable]
+	:is(input, textarea, [contenteditable="true"]) {
+	user-select: text;
+}
+
 @source "../../../node_modules/streamdown/dist/*.js";
 @source "./**/*.{ts,tsx}";
 @source "../../../packages/*/src/**/*.{js,jsx,ts,tsx}";

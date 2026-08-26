@@ -50,6 +50,7 @@ export type DesktopAppCommand =
 	| "navigate-forward"
 	| "open-ask-ai"
 	| "open-search"
+	| "select-all"
 	| "toggle-sidebar";
 
 export type DesktopTranscriptionControllerPhase =

@@ -1817,6 +1817,7 @@ const getDesktopAuthCallbackUrl = async () => {
 };
 
 desktopWindow = createDesktopWindow({
+	desktopAppCommandChannel,
 	desktopNavigationChannel,
 	dockIconPath,
 	getBackgroundColor: getMainWindowBackgroundColor,

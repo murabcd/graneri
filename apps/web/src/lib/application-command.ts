@@ -1,6 +1,7 @@
 import { onDesktopAppCommand } from "@workspace/platform/desktop";
 import type { DesktopAppCommand } from "@workspace/platform/desktop-bridge";
 import * as React from "react";
+import { selectAllInActiveEditable } from "@/lib/desktop-select-all";
 
 type ApplicationCommandHandler = () => void;
 
@@ -44,5 +45,9 @@ export const useApplicationCommand = (
 };
 
 export const useDesktopApplicationCommands = () => {
+	useApplicationCommand("select-all", () => {
+		selectAllInActiveEditable(document);
+	});
+
 	React.useEffect(() => onDesktopAppCommand(dispatchApplicationCommand), []);
 };
