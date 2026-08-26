@@ -64,7 +64,7 @@ export const getRichTextContent = ({
 	title: string;
 	searchableText: string;
 }) => {
-	const plainText = getPlainTextContent({
+	const markdown = getMarkdownContent({
 		editor,
 		title,
 		searchableText,
@@ -87,7 +87,7 @@ export const getRichTextContent = ({
 					.join("");
 
 	return {
-		text: plainText,
+		text: markdown,
 		html: `<article>${titleHtml}${bodyHtml}</article>`,
 	};
 };

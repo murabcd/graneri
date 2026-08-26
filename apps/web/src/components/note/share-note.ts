@@ -89,6 +89,14 @@ function sanitizeClipboardHtml(html: string) {
 	}
 
 	for (const element of parsedDocument.body.querySelectorAll("*")) {
+		if (
+			/^H[1-6]$/.test(element.tagName) &&
+			element.hasAttribute("data-toc-id")
+		) {
+			element.removeAttribute("id");
+			element.removeAttribute("data-toc-id");
+		}
+
 		for (const attribute of Array.from(element.attributes)) {
 			const attributeName = attribute.name.toLowerCase();
 			const attributeValue = attribute.value.trim().toLowerCase();
