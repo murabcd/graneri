@@ -23,7 +23,7 @@ type ProjectIdentityEditorOptions = {
 
 export type ProjectIdentityEditorController = {
 	cancel: () => void;
-	commit: () => Promise<void>;
+	commit: () => Promise<boolean>;
 	draft: ProjectIdentityDraft;
 	inputRef: React.RefObject<HTMLInputElement | null>;
 	onOpenChange: (open: boolean) => void;
@@ -83,14 +83,14 @@ export function useProjectIdentityEditor({
 
 	const commit = React.useCallback(async () => {
 		if (!workspaceId || isSavingRef.current) {
-			return;
+			return false;
 		}
 
 		const name = normalizeProjectName(draft.name);
 		const validationError = getProjectNameValidationError(name);
 		if (validationError) {
 			toast.error(validationError);
-			return;
+			return false;
 		}
 
 		if (
@@ -100,7 +100,7 @@ export function useProjectIdentityEditor({
 		) {
 			setDraft({ ...draft, name });
 			setOpen(false);
-			return;
+			return true;
 		}
 
 		isSavingRef.current = true;
@@ -115,6 +115,7 @@ export function useProjectIdentityEditor({
 			setDraft({ ...draft, name });
 			setOpen(false);
 			toast.success("Project updated");
+			return true;
 		} catch (error) {
 			logError({
 				event: "client.error",
@@ -122,6 +123,7 @@ export function useProjectIdentityEditor({
 				message: "Failed to rename project",
 			});
 			toast.error("Failed to rename project");
+			return false;
 		} finally {
 			isSavingRef.current = false;
 		}

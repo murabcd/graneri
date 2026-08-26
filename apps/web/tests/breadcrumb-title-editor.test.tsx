@@ -1,12 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as React from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import {
 	NoteBreadcrumbTitleEditor,
 	ProjectBreadcrumbTitleEditor,
 } from "../src/components/navigation/breadcrumb-title-editor";
+import { ProjectIcon } from "../src/components/projects/project-appearance-picker";
+import {
+	applyProjectAppearancePreview,
+	type ProjectAppearancePreview,
+} from "../src/components/projects/project-appearance-preview";
 
 const { mutationMock, useMutationMock } = vi.hoisted(() => ({
 	mutationMock: vi.fn(),
@@ -37,6 +43,33 @@ const project = {
 	workspaceId,
 } satisfies Doc<"projects">;
 
+function ProjectAppearancePreviewHarness() {
+	const [preview, setPreview] = React.useState<ProjectAppearancePreview | null>(
+		null,
+	);
+	const [previewedProject] = applyProjectAppearancePreview([project], preview);
+	if (!previewedProject) {
+		throw new Error("Expected the project preview to be available.");
+	}
+
+	return (
+		<>
+			<ProjectBreadcrumbTitleEditor
+				detailLabel={project.name}
+				isDesktopMac={false}
+				onAppearancePreviewChange={setPreview}
+				project={project}
+				workspaceId={workspaceId}
+			/>
+			<ProjectIcon
+				color={previewedProject.color}
+				data-testid="sidebar-project-appearance"
+				icon={previewedProject.icon}
+			/>
+		</>
+	);
+}
+
 beforeEach(() => {
 	vi.clearAllMocks();
 	mutationMock.mockResolvedValue(project);
@@ -49,6 +82,8 @@ beforeEach(() => {
 		return mutationMock;
 	});
 });
+
+afterEach(cleanup);
 
 describe("NoteBreadcrumbTitleEditor", () => {
 	it("renames through the canonical note title mutation", async () => {
@@ -88,12 +123,7 @@ describe("ProjectBreadcrumbTitleEditor", () => {
 
 		render(
 			<TooltipProvider>
-				<ProjectBreadcrumbTitleEditor
-					detailLabel={project.name}
-					isDesktopMac={false}
-					project={project}
-					workspaceId={workspaceId}
-				/>
+				<ProjectAppearancePreviewHarness />
 			</TooltipProvider>,
 		);
 
@@ -104,7 +134,14 @@ describe("ProjectBreadcrumbTitleEditor", () => {
 			}),
 		);
 		await user.click(screen.getByRole("radio", { name: "Use Blue" }));
+		const sidebarAppearance = screen.getByTestId("sidebar-project-appearance");
+		expect(sidebarAppearance.classList).toContain("text-blue-500");
+		expect(mutationMock).not.toHaveBeenCalled();
 		await user.click(screen.getByRole("radio", { name: "Use Terminal" }));
+		expect(
+			screen.getByTestId("sidebar-project-appearance").classList,
+		).toContain("lucide-square-terminal");
+		expect(mutationMock).not.toHaveBeenCalled();
 		const nameInput = screen.getByRole("textbox", { name: "Project name" });
 		await user.clear(nameInput);
 		await user.type(nameInput, "Research lab{Enter}");
@@ -116,5 +153,35 @@ describe("ProjectBreadcrumbTitleEditor", () => {
 			icon: "terminal",
 			color: "blue",
 		});
+	});
+
+	it("keeps the shared appearance preview when saving fails", async () => {
+		const user = userEvent.setup();
+		mutationMock.mockRejectedValueOnce(new Error("Save failed"));
+
+		render(
+			<TooltipProvider>
+				<ProjectAppearancePreviewHarness />
+			</TooltipProvider>,
+		);
+
+		await user.click(screen.getByRole("button", { name: project.name }));
+		await user.click(
+			screen.getByRole("button", {
+				name: `Change icon and color for ${project.name}`,
+			}),
+		);
+		await user.click(screen.getByRole("radio", { name: "Use Blue" }));
+		const nameInput = screen.getByRole("textbox", { name: "Project name" });
+		await user.click(nameInput);
+		await user.keyboard("{Enter}");
+
+		await waitFor(() => expect(mutationMock).toHaveBeenCalledOnce());
+		expect(screen.getByRole("textbox", { name: "Project name" })).toBe(
+			nameInput,
+		);
+		expect(
+			screen.getByTestId("sidebar-project-appearance").classList,
+		).toContain("text-blue-500");
 	});
 });

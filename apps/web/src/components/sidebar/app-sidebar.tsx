@@ -18,6 +18,10 @@ import { NavNotes } from "@/components/nav/nav-notes";
 import { NavProjects } from "@/components/nav/nav-projects";
 import { NavStarred } from "@/components/nav/nav-starred";
 import { NavTrash } from "@/components/nav/nav-trash";
+import {
+	applyProjectAppearancePreview,
+	type ProjectAppearancePreview,
+} from "@/components/projects/project-appearance-preview";
 import { RecipesDialogEntry } from "@/components/recipes/recipes-dialog-entry";
 import type { SearchCommandItem } from "@/components/search/search-command";
 import { SearchCommandEntry } from "@/components/search/search-command-entry";
@@ -57,6 +61,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 	automations: AutomationListItem[] | undefined;
 	notes: Array<Doc<"notes">> | undefined;
 	sharedNotes: Array<Doc<"notes">> | undefined;
+	projectAppearancePreview: ProjectAppearancePreview | null;
 	onWorkspaceSelect: (workspaceId: Id<"workspaces">) => void;
 	onWorkspaceCreate: (input: { name: string }) => Promise<WorkspaceRecord>;
 	onViewChange: (view: NavigableAppView) => void;
@@ -510,6 +515,7 @@ export function AppSidebar({
 	automations,
 	notes,
 	sharedNotes,
+	projectAppearancePreview,
 	onWorkspaceSelect,
 	onWorkspaceCreate,
 	onViewChange,
@@ -537,9 +543,19 @@ export function AppSidebar({
 	...props
 }: AppSidebarProps) {
 	const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebarShell();
-	const projects = useQuery(
+	const queriedProjects = useQuery(
 		api.projects.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+	);
+	const projects = React.useMemo(
+		() =>
+			queriedProjects
+				? applyProjectAppearancePreview(
+						queriedProjects,
+						projectAppearancePreview,
+					)
+				: undefined,
+		[projectAppearancePreview, queriedProjects],
 	);
 	const model = useAppSidebarModel({
 		activeWorkspaceId,

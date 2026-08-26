@@ -97,6 +97,7 @@ import {
 	NoteEditorActionsStore,
 } from "@/components/note/note-editor-actions-store";
 import { NoteHeaderActionsMenu } from "@/components/note/note-header-actions-menu";
+import type { ProjectAppearancePreview } from "@/components/projects/project-appearance-preview";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { NoteTemplateSelect } from "@/components/templates/note-template-select";
@@ -1397,6 +1398,9 @@ type AppShellHeaderProps = {
 	currentNoteId: Id<"notes"> | null;
 	currentNoteTitle: string;
 	currentProject: Doc<"projects"> | null;
+	onProjectAppearancePreviewChange: (
+		preview: ProjectAppearancePreview | null,
+	) => void;
 	currentNoteTemplateSlug: string | null;
 	currentNoteEditorActions: NoteEditorActions | null;
 	currentNoteCommentsOpener: (() => void) | null;
@@ -1424,6 +1428,7 @@ function AppShellHeader({
 	currentNoteId,
 	currentNoteTitle,
 	currentProject,
+	onProjectAppearancePreviewChange,
 	currentNoteTemplateSlug,
 	currentNoteEditorActions,
 	currentNoteCommentsOpener,
@@ -1458,6 +1463,7 @@ function AppShellHeader({
 					<ProjectBreadcrumbTitleEditor
 						detailLabel={breadcrumbDetailLabel}
 						isDesktopMac={isDesktopMac}
+						onAppearancePreviewChange={onProjectAppearancePreviewChange}
 						project={currentProject}
 						workspaceId={activeWorkspaceId}
 					/>
@@ -2194,6 +2200,8 @@ export function AuthenticatedAppShell({
 		workspaces,
 		initialDesktopMac,
 	});
+	const [projectAppearancePreview, setProjectAppearancePreview] =
+		React.useState<ProjectAppearancePreview | null>(null);
 	const handleOpenConnectionsSettings = React.useCallback(
 		() => controller.handleSettingsOpenChange(true, "Plugins"),
 		[controller.handleSettingsOpenChange],
@@ -2229,6 +2237,7 @@ export function AuthenticatedAppShell({
 					automations={controller.automations}
 					notes={controller.notes}
 					sharedNotes={controller.sharedNotes}
+					projectAppearancePreview={projectAppearancePreview}
 					onWorkspaceSelect={controller.setActiveWorkspaceId}
 					onWorkspaceCreate={controller.handleWorkspaceCreate}
 					onViewChange={controller.handleViewChange}
@@ -2270,6 +2279,7 @@ export function AuthenticatedAppShell({
 						currentNoteId={controller.currentNoteId}
 						currentNoteTitle={controller.currentNoteTitle}
 						currentProject={controller.selectedProject}
+						onProjectAppearancePreviewChange={setProjectAppearancePreview}
 						currentNoteTemplateSlug={controller.currentNoteTemplateSlug}
 						currentNoteEditorActions={controller.currentNoteEditorActions}
 						currentNoteCommentsOpener={controller.currentNoteCommentsOpener}

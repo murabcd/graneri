@@ -12,7 +12,11 @@ import {
 import * as React from "react";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
 import { useNoteTitleEditor } from "@/components/note/use-note-title-editor";
-import { ProjectIdentityInput } from "@/components/projects/project-appearance-picker";
+import {
+	type ProjectAppearance,
+	ProjectIdentityInput,
+} from "@/components/projects/project-appearance-picker";
+import type { ProjectAppearancePreview } from "@/components/projects/project-appearance-preview";
 import { useProjectIdentityEditor } from "@/components/projects/use-project-identity-editor";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import type { BreadcrumbChatTitleEditorController } from "./use-breadcrumb-chat-title-editor";
@@ -153,15 +157,49 @@ export function NoteBreadcrumbTitleEditor({
 export function ProjectBreadcrumbTitleEditor({
 	detailLabel,
 	isDesktopMac,
+	onAppearancePreviewChange,
 	project,
 	workspaceId,
 }: {
 	detailLabel: string;
 	isDesktopMac: boolean;
+	onAppearancePreviewChange: (preview: ProjectAppearancePreview | null) => void;
 	project: Doc<"projects">;
 	workspaceId: Id<"workspaces"> | null;
 }) {
 	const editor = useProjectIdentityEditor({ project, workspaceId });
+	const publishAppearancePreview = (appearance: ProjectAppearance) => {
+		onAppearancePreviewChange({ projectId: project._id, ...appearance });
+	};
+	const start = () => {
+		editor.start();
+		publishAppearancePreview(project);
+	};
+	const commit = async () => {
+		if (await editor.commit()) {
+			onAppearancePreviewChange(null);
+		}
+	};
+	const cancel = () => {
+		editor.cancel();
+		onAppearancePreviewChange(null);
+	};
+	const handleOpenChange = (open: boolean) => {
+		if (open) {
+			start();
+			return;
+		}
+
+		void commit();
+	};
+	const handleAppearanceChange = (appearance: ProjectAppearance) => {
+		editor.setAppearance(appearance);
+		publishAppearancePreview(appearance);
+	};
+	React.useEffect(
+		() => () => onAppearancePreviewChange(null),
+		[onAppearancePreviewChange],
+	);
 	const handleOpenAutoFocus = React.useCallback(
 		(event: Event) => {
 			event.preventDefault();
@@ -177,21 +215,19 @@ export function ProjectBreadcrumbTitleEditor({
 			detailLabel={detailLabel}
 			isDesktopMac={isDesktopMac}
 			itemLabel="project"
-			onOpen={editor.start}
+			onOpen={start}
 			onOpenAutoFocus={handleOpenAutoFocus}
-			onOpenChange={editor.onOpenChange}
+			onOpenChange={handleOpenChange}
 			open={editor.open}
 		>
 			<ProjectIdentityInput
 				inputRef={editor.inputRef}
 				appearance={editor.draft}
 				name={editor.draft.name}
-				onAppearanceChange={editor.setAppearance}
+				onAppearanceChange={handleAppearanceChange}
 				onNameChange={editor.setName}
-				onCommit={() => {
-					void editor.commit();
-				}}
-				onCancel={editor.cancel}
+				onCommit={() => void commit()}
+				onCancel={cancel}
 			/>
 		</BreadcrumbTitlePopover>
 	);
