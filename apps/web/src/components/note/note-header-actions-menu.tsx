@@ -1,0 +1,99 @@
+import { Button } from "@workspace/ui/components/button";
+import { DropdownMenuItem } from "@workspace/ui/components/dropdown-menu";
+import { ArrowDown, Copy, MoreHorizontal, Redo2, Undo2 } from "lucide-react";
+import * as React from "react";
+import type { Id } from "../../../../../convex/_generated/dataModel";
+import { NoteActionsMenu } from "./note-actions-menu";
+import type { NoteEditorActions } from "./note-editor-actions-store";
+
+export function NoteHeaderActionsMenu({
+	noteId,
+	noteTitle,
+	noteEditorActions,
+	onNoteTrashed,
+}: {
+	noteId: Id<"notes">;
+	noteTitle: string;
+	noteEditorActions: NoteEditorActions | null;
+	onNoteTrashed: (noteId: Id<"notes">) => void;
+}) {
+	const itemsBeforeDefaults = React.useMemo(
+		() =>
+			noteEditorActions ? (
+				<DropdownMenuItem
+					className="cursor-pointer"
+					disabled={!noteEditorActions.canCopyMarkdown}
+					onSelect={() => {
+						void noteEditorActions.copyMarkdown();
+					}}
+				>
+					<Copy />
+					Copy note content
+				</DropdownMenuItem>
+			) : null,
+		[noteEditorActions],
+	);
+	const itemsAfterDefaults = React.useMemo(
+		() =>
+			noteEditorActions ? (
+				<>
+					<DropdownMenuItem
+						className="cursor-pointer"
+						disabled={!noteEditorActions.canUndo}
+						onSelect={(event) => {
+							event.preventDefault();
+							noteEditorActions.undo();
+						}}
+					>
+						<Undo2 />
+						Undo
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						className="cursor-pointer"
+						disabled={!noteEditorActions.canRedo}
+						onSelect={(event) => {
+							event.preventDefault();
+							noteEditorActions.redo();
+						}}
+					>
+						<Redo2 />
+						Redo
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						className="cursor-pointer"
+						disabled={!noteEditorActions.canCopyMarkdown}
+						onSelect={(event) => {
+							event.preventDefault();
+							void noteEditorActions.exportMarkdown();
+						}}
+					>
+						<ArrowDown />
+						Export
+					</DropdownMenuItem>
+				</>
+			) : null,
+		[noteEditorActions],
+	);
+
+	return (
+		<NoteActionsMenu
+			noteId={noteId}
+			onMoveToTrash={onNoteTrashed}
+			align="end"
+			triggerTooltip="More actions"
+			showRename={false}
+			itemsBeforeDefaults={itemsBeforeDefaults}
+			itemsAfterDefaults={itemsAfterDefaults}
+		>
+			<Button
+				type="button"
+				variant="ghost"
+				size="icon-sm"
+				className="text-muted-foreground hover:text-foreground"
+				aria-label={`Open actions for ${noteTitle || "note"}`}
+			>
+				<MoreHorizontal className="size-4" />
+			</Button>
+		</NoteActionsMenu>
+	);
+}

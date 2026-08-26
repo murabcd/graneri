@@ -46,18 +46,14 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
-	ArrowDown,
 	Clock,
-	Copy,
 	MoreHorizontal,
 	Pencil,
 	Plus,
-	Redo2,
 	Star,
 	StarOff,
 	TextSearch,
 	Trash2,
-	Undo2,
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -94,15 +90,13 @@ import {
 	ProjectBreadcrumbTitleEditor,
 } from "@/components/navigation/breadcrumb-title-editor";
 import { useBreadcrumbChatTitleEditor } from "@/components/navigation/use-breadcrumb-chat-title-editor";
-import {
-	NoteActionsMenu,
-	NoteStarButton,
-} from "@/components/note/note-actions-menu";
+import { NoteStarButton } from "@/components/note/note-actions-menu";
 import { NoteCommentsButton } from "@/components/note/note-comments-button";
 import {
 	type NoteEditorActions,
 	NoteEditorActionsStore,
 } from "@/components/note/note-editor-actions-store";
+import { NoteHeaderActionsMenu } from "@/components/note/note-header-actions-menu";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { NoteTemplateSelect } from "@/components/templates/note-template-select";
@@ -1802,99 +1796,6 @@ function AppShellHeaderActions({
 				onNoteTrashed={onNoteTrashed}
 			/>
 		</div>
-	);
-}
-
-function NoteHeaderActionsMenu({
-	noteId,
-	noteTitle,
-	noteEditorActions,
-	onNoteTrashed,
-}: {
-	noteId: Id<"notes">;
-	noteTitle: string;
-	noteEditorActions: NoteEditorActions | null;
-	onNoteTrashed: (noteId: Id<"notes">) => void;
-}) {
-	const itemsBeforeDefaults = React.useMemo(
-		() =>
-			noteEditorActions ? (
-				<DropdownMenuItem
-					className="cursor-pointer"
-					disabled={!noteEditorActions.canCopyMarkdown}
-					onSelect={(event) => {
-						event.preventDefault();
-						noteEditorActions.copyMarkdown();
-					}}
-				>
-					<Copy />
-					Copy note content
-				</DropdownMenuItem>
-			) : null,
-		[noteEditorActions],
-	);
-	const itemsAfterDefaults = React.useMemo(
-		() =>
-			noteEditorActions ? (
-				<>
-					<DropdownMenuItem
-						className="cursor-pointer"
-						disabled={!noteEditorActions.canUndo}
-						onSelect={(event) => {
-							event.preventDefault();
-							noteEditorActions.undo();
-						}}
-					>
-						<Undo2 />
-						Undo
-					</DropdownMenuItem>
-					<DropdownMenuItem
-						className="cursor-pointer"
-						disabled={!noteEditorActions.canRedo}
-						onSelect={(event) => {
-							event.preventDefault();
-							noteEditorActions.redo();
-						}}
-					>
-						<Redo2 />
-						Redo
-					</DropdownMenuItem>
-					<DropdownMenuItem
-						className="cursor-pointer"
-						disabled={!noteEditorActions.canCopyMarkdown}
-						onSelect={(event) => {
-							event.preventDefault();
-							noteEditorActions.exportMarkdown();
-						}}
-					>
-						<ArrowDown />
-						Export
-					</DropdownMenuItem>
-				</>
-			) : null,
-		[noteEditorActions],
-	);
-
-	return (
-		<NoteActionsMenu
-			noteId={noteId}
-			onMoveToTrash={onNoteTrashed}
-			align="end"
-			triggerTooltip="More actions"
-			showRename={false}
-			itemsBeforeDefaults={itemsBeforeDefaults}
-			itemsAfterDefaults={itemsAfterDefaults}
-		>
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon-sm"
-				className="text-muted-foreground hover:text-foreground"
-				aria-label={`Open actions for ${noteTitle || "note"}`}
-			>
-				<MoreHorizontal className="size-4" />
-			</Button>
-		</NoteActionsMenu>
 	);
 }
 
