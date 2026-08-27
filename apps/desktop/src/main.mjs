@@ -1816,8 +1816,14 @@ const getDesktopAuthCallbackUrl = async () => {
 	return `${server.origin}/auth/callback`;
 };
 
+const desktopViewCommands = createDesktopViewCommands({
+	appCommandChannel: desktopAppCommandChannel,
+	getWindow: () =>
+		requireDesktopService(desktopWindow, "desktopWindow").getWindow(),
+	platform: process.platform,
+});
+
 desktopWindow = createDesktopWindow({
-	desktopAppCommandChannel,
 	desktopNavigationChannel,
 	dockIconPath,
 	getBackgroundColor: getMainWindowBackgroundColor,
@@ -1828,6 +1834,7 @@ desktopWindow = createDesktopWindow({
 		).get(),
 	getNavigationUrl,
 	isQuitting: () => isQuitting,
+	onBeforeInputEvent: desktopViewCommands.handleBeforeInputEvent,
 	onHideRequested: () => hideMainWindow(),
 	preloadPath: join(runtimeDir, "preload.cjs"),
 	rememberNavigation: rememberRendererNavigation,
@@ -1846,12 +1853,6 @@ desktopWindow = createDesktopWindow({
 const showMainWindow = async (options = {}) => {
 	await requireDesktopService(desktopWindow, "desktopWindow").show(options);
 };
-
-const desktopViewCommands = createDesktopViewCommands({
-	appCommandChannel: desktopAppCommandChannel,
-	getWindow: () =>
-		requireDesktopService(desktopWindow, "desktopWindow").getWindow(),
-});
 
 desktopTray = createDesktopTray({
 	app,

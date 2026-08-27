@@ -29,7 +29,7 @@ Native application-menu commands and Electron-owned shortcuts that act on
 renderer state cross this same bridge as typed semantic commands. Electron must
 not synthesize keyboard input; renderer command owners share the action handlers
 used by web shortcuts and editable surfaces. Select All is intercepted in
-[desktop-select-all-shortcut.mjs](../apps/desktop/src/desktop-select-all-shortcut.mjs)
+[desktop-view-commands.mjs](../apps/desktop/src/desktop-view-commands.mjs)
 before Chromium can select the whole document, then
 [[apps/web/src/lib/application-command.ts]] scopes it through
 [[apps/web/src/lib/desktop-select-all.ts]] to the focused editable surface.

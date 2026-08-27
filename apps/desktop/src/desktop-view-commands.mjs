@@ -1,4 +1,23 @@
-export const createDesktopViewCommands = ({ appCommandChannel, getWindow }) => {
+const isPrimarySelectAllShortcut = (input, platform) => {
+	const usesPrimaryModifier =
+		platform === "darwin"
+			? input.meta && !input.control
+			: input.control && !input.meta;
+
+	return (
+		input.type === "keyDown" &&
+		input.key.toLowerCase() === "a" &&
+		usesPrimaryModifier &&
+		!input.alt &&
+		!input.shift
+	);
+};
+
+export const createDesktopViewCommands = ({
+	appCommandChannel,
+	getWindow,
+	platform,
+}) => {
 	const getLiveWindow = () => {
 		const window = getWindow();
 
@@ -13,15 +32,27 @@ export const createDesktopViewCommands = ({ appCommandChannel, getWindow }) => {
 		const window = getLiveWindow();
 
 		if (!window) {
-			return;
+			return false;
 		}
 
 		window.webContents.send(appCommandChannel, command);
+		return true;
 	};
 
 	return {
 		goHome: () => {
 			sendRendererCommand("go-home");
+		},
+		handleBeforeInputEvent: (event, input) => {
+			if (
+				!isPrimarySelectAllShortcut(input, platform) ||
+				!sendRendererCommand("select-all")
+			) {
+				return false;
+			}
+
+			event.preventDefault();
+			return true;
 		},
 		navigateBack: () => {
 			sendRendererCommand("navigate-back");

@@ -1,6 +1,5 @@
 import { BrowserWindow, desktopCapturer } from "electron";
 import { createRendererWebPreferences } from "./desktop-renderer-window.mjs";
-import { handleDesktopSelectAllShortcut } from "./desktop-select-all-shortcut.mjs";
 import { logError } from "./logger.mjs";
 
 const minimumWindowSize = {
@@ -14,13 +13,13 @@ const defaultWindowSize = {
 };
 
 export const createDesktopWindow = ({
-	desktopAppCommandChannel,
 	desktopNavigationChannel,
 	dockIconPath,
 	getBackgroundColor,
 	getDefaultNavigation,
 	getNavigationUrl,
 	isQuitting,
+	onBeforeInputEvent,
 	onHideRequested,
 	preloadPath,
 	rememberNavigation,
@@ -107,15 +106,7 @@ export const createDesktopWindow = ({
 		mainWindow.webContents.on("did-navigate-in-page", (_event, url) => {
 			void rememberNavigation(url);
 		});
-		mainWindow.webContents.on("before-input-event", (event, input) => {
-			handleDesktopSelectAllShortcut({
-				appCommandChannel: desktopAppCommandChannel,
-				event,
-				input,
-				platform: process.platform,
-				webContents: mainWindow.webContents,
-			});
-		});
+		mainWindow.webContents.on("before-input-event", onBeforeInputEvent);
 
 		shell.ensureDockVisible();
 		mainWindow.show();
