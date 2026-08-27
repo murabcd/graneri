@@ -9,7 +9,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { ChevronsUp, MoreHorizontal, Plus } from "lucide-react";
 import * as React from "react";
 import {
 	SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME,
@@ -81,6 +81,26 @@ export function NavNotes({
 			actionClassName={`${SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME} ${SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME} ${filtersOpen ? SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME : ""}`}
 			actions={
 				<div className="flex items-center gap-0.5">
+					{showAllNotes && hasMoreNotes ? (
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<button
+									type="button"
+									aria-label="Show fewer notes"
+									onClick={() => setShowAllNotes(false)}
+								>
+									<ChevronsUp />
+								</button>
+							</TooltipTrigger>
+							<TooltipContent
+								side="bottom"
+								align="center"
+								className="pointer-events-none select-none"
+							>
+								Show less
+							</TooltipContent>
+						</Tooltip>
+					) : null}
 					<SidebarSortMenu
 						label="Sort notes"
 						open={filtersOpen}
