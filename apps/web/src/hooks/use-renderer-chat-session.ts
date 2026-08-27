@@ -1,5 +1,5 @@
 import { useChat } from "@ai-sdk/react";
-import { getPendingToolApproval } from "@workspace/ai/tool-approval-state";
+import { getPendingHostedHumanDecision } from "@workspace/ai/hosted-human-decision";
 import type { ChatAddToolOutputFunction, UIMessage } from "ai";
 import {
 	lastAssistantMessageIsCompleteWithApprovalResponses,
@@ -305,8 +305,8 @@ export const useRendererChatSession = ({
 			sessionPersistedMessages,
 		],
 	);
-	const pendingToolApproval = React.useMemo(
-		() => getPendingToolApproval(displayMessages),
+	const pendingHumanDecision = React.useMemo(
+		() => getPendingHostedHumanDecision(displayMessages),
 		[displayMessages],
 	);
 	const localMessageIds = React.useMemo(
@@ -536,7 +536,10 @@ export const useRendererChatSession = ({
 			buildRequestBody: SubmitRendererChatTurnInput["buildRequestBody"];
 			onRequestPrepared?: (requestBody: ChatRequestContext) => void;
 		}) => {
-			if (!pendingToolApproval || isPreparingRequest) {
+			if (
+				pendingHumanDecision?.type !== "tool_approval" ||
+				isPreparingRequest
+			) {
 				return Promise.resolve(false);
 			}
 			if (!displayActiveRun) {
@@ -550,7 +553,7 @@ export const useRendererChatSession = ({
 				latestRequestBodyRef.current = requestBody;
 				onRequestPrepared?.(requestBody);
 				await addToolApprovalResponse({
-					id: pendingToolApproval.approvalId,
+					id: pendingHumanDecision.approvalId,
 					approved,
 					reason: approved ? "Approved by user." : "Denied by user.",
 					options: {
@@ -567,7 +570,7 @@ export const useRendererChatSession = ({
 			addToolApprovalResponse,
 			displayActiveRun,
 			isPreparingRequest,
-			pendingToolApproval,
+			pendingHumanDecision,
 			runPreparedRequest,
 		],
 	);
@@ -634,7 +637,7 @@ export const useRendererChatSession = ({
 		isQueuedMessageEditCurrent:
 			queuedFollowUpControls.isQueuedMessageEditCurrent,
 		onQueuedFollowUpsReorder: queuedFollowUpControls.onQueuedFollowUpsReorder,
-		pendingToolApproval,
+		pendingHumanDecision,
 		queuedFollowUps: queuedFollowUpControls.queuedFollowUps,
 		runPlan: runPlan ?? null,
 		regenerateTurn,

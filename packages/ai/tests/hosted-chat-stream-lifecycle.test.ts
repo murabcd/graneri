@@ -300,6 +300,9 @@ describe("hosted chat stream lifecycle", () => {
 					type: "tool_approval",
 					approvalId: "approval-1",
 					assistantMessageId: "assistant-message-1",
+					authority: undefined,
+					consequence:
+						"This action can change data or perform an external action.",
 					toolCallId: "call-1",
 					toolName: "delete_automation",
 				},

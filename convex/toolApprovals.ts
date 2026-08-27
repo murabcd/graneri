@@ -123,8 +123,12 @@ export const acceptResponse = mutation({
 		}
 		await cleanupAssistantRunSnapshots(ctx, run._id);
 		const resumedRun = await transitionAssistantRun(ctx, run, {
-			type: "resume_after_user_decision",
-			approved: approval.approved,
+			type: "resolve_user_decision",
+			resolution: {
+				type: "tool_approval",
+				approved: approval.approved,
+				toolCallId: pendingDecision.toolCallId,
+			},
 			assistantMessageId: args.nextAssistantMessageId,
 		});
 		if (run.producer === "convex") {

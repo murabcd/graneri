@@ -42,6 +42,11 @@ const getToolName = (part) => {
 		: null;
 };
 
+export const getToolApprovalConsequence = (authority) =>
+	authority?.access === "read"
+		? "This action can read data from a connected service."
+		: "This action can change data or perform an external action.";
+
 const getToolApprovals = (message, state) => {
 	if (message?.role !== "assistant" || !Array.isArray(message.parts)) {
 		return [];
@@ -65,6 +70,9 @@ const getToolApprovals = (message, state) => {
 			approvalId,
 			assistantMessageId: message.id,
 			authority: part.toolMetadata?.graneri?.authority,
+			consequence: getToolApprovalConsequence(
+				part.toolMetadata?.graneri?.authority,
+			),
 			input: part.input,
 			toolCallId,
 			toolName,
@@ -151,20 +159,4 @@ export const createCanonicalToolApprovalResponse = ({
 		parts,
 		...(metadata !== undefined && { metadata }),
 	};
-};
-
-export const getPendingToolApproval = (messages) => {
-	for (let index = messages.length - 1; index >= 0; index -= 1) {
-		const message = messages[index];
-		if (message.role === "user") {
-			return null;
-		}
-
-		const approval = getToolApprovalRequest(message);
-		if (approval) {
-			return approval;
-		}
-	}
-
-	return null;
 };

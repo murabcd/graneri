@@ -3,16 +3,17 @@ import type { Infer } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { deleteAssistantRunActivity } from "./assistantRunActivity";
 import {
 	discardClaimedForRunInternal,
 	discardQueuedForRunInternal,
 } from "./assistantQueuedMessageStateMachine";
+import { deleteAssistantRunActivity } from "./assistantRunActivity";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import { deleteAssistantRunJob } from "./assistantRunJobState";
 import type {
 	AssistantRunPendingDecision,
 	assistantRunProducerValidator,
+	HumanDecisionResolution,
 	reasoningEffortValidator,
 	serviceTierValidator,
 	stopReasonValidator,
@@ -38,9 +39,9 @@ type AssistantRunTransition =
 			phase?: string;
 	  }
 	| {
-			type: "resume_after_user_decision";
+			type: "resolve_user_decision";
 			assistantMessageId?: string;
-			approved?: boolean;
+			resolution: HumanDecisionResolution;
 	  }
 	| { type: "append_user_messages"; messages: AppendedUserMessage[] }
 	| { type: "complete" }
@@ -228,24 +229,34 @@ export const transitionAssistantRun = async (
 			});
 			await appendAssistantRunEvent(ctx, run, {
 				type: "input.requested",
-				decisionType: transition.pendingDecision.type,
+				decision: transition.pendingDecision,
 			});
 			return savedRun;
 		}
 
-		case "resume_after_user_decision":
+		case "resolve_user_decision":
 			if (run.status !== "waiting_for_user") {
 				return invalidTransition(
 					"Assistant run cannot resume from a user decision.",
 				);
 			}
-			if (typeof transition.approved === "boolean") {
-				await appendAssistantRunEvent(ctx, run, {
-					type: "input.resolved",
-					decisionType: "tool_approval",
-					approved: transition.approved,
-				});
+			if (run.pendingDecision?.type !== transition.resolution.type) {
+				return invalidTransition(
+					"Assistant run resolution does not match its pending decision.",
+				);
 			}
+			if (
+				transition.resolution.type === "tool_approval" &&
+				run.pendingDecision.toolCallId !== transition.resolution.toolCallId
+			) {
+				return invalidTransition(
+					"Tool approval resolution does not match its pending tool call.",
+				);
+			}
+			await appendAssistantRunEvent(ctx, run, {
+				type: "input.resolved",
+				resolution: transition.resolution,
+			});
 			return await patchAndReloadRun(ctx, run, {
 				assistantMessageId:
 					transition.assistantMessageId ?? run.assistantMessageId,
@@ -280,17 +291,6 @@ export const transitionAssistantRun = async (
 				await appendAssistantRunEvent(ctx, run, {
 					type: "user.message.appended",
 					messageId: message.messageId,
-				});
-			}
-			if (run.status === "waiting_for_user") {
-				await appendAssistantRunEvent(ctx, run, {
-					type: "input.resolved",
-					decisionType: "user_question",
-				});
-				return await patchAndReloadRun(ctx, run, {
-					status: "running",
-					pendingDecision: undefined,
-					updatedAt: now,
 				});
 			}
 			return run;

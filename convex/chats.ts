@@ -1391,10 +1391,22 @@ export const acceptSteeredUserMessages = mutation({
 					messageId: message.id,
 				};
 			});
-			const continuedRun = await transitionAssistantRun(ctx, run, {
+			const appendedRun = await transitionAssistantRun(ctx, run, {
 				type: "append_user_messages",
 				messages: transitionMessages,
 			});
+			const continuedRun =
+				appendedRun.status === "waiting_for_user"
+					? await transitionAssistantRun(ctx, appendedRun, {
+							type: "resolve_user_decision",
+							resolution: {
+								type: "user_question",
+								answerMessageIds: savedMessages.map(
+									({ message }) => message.messageId,
+								),
+							},
+						})
+					: appendedRun;
 			const messageRun = await transitionAssistantRun(ctx, continuedRun, {
 				type: "start_assistant_message",
 				assistantMessageId: args.nextAssistantMessageId,

@@ -3,18 +3,64 @@ import { z } from "zod";
 
 export const HOSTED_REQUEST_USER_INPUT_TOOL_NAME = "request_user_input";
 
-const requestUserInputSchema = z.object({
-	question: z
-		.string()
-		.trim()
-		.min(1)
-		.max(2_000)
-		.describe("One focused question the user can answer in the chat composer."),
+const questionOptionSchema = z.object({
+	label: z.string().trim().min(1).max(120),
+	description: z.string().trim().min(1).max(240).optional(),
 });
+
+const requestUserInputSchema = z
+	.object({
+		question: z
+			.string()
+			.trim()
+			.min(1)
+			.max(2_000)
+			.describe("One focused question the user must answer."),
+		responseType: z
+			.enum(["text", "choice"])
+			.describe(
+				"Use choice only when the valid answers are known and bounded.",
+			),
+		options: z.array(questionOptionSchema).min(2).max(5).optional(),
+		consequence: z
+			.string()
+			.trim()
+			.min(1)
+			.max(500)
+			.optional()
+			.describe("Why this answer is required or what it will affect."),
+	})
+	.superRefine((request, context) => {
+		if (request.responseType === "choice" && !request.options) {
+			context.addIssue({
+				code: "custom",
+				path: ["options"],
+				message: "Choice questions require options.",
+			});
+		}
+		if (request.responseType === "text" && request.options) {
+			context.addIssue({
+				code: "custom",
+				path: ["options"],
+				message: "Text questions cannot include options.",
+			});
+		}
+		if (
+			request.options &&
+			new Set(request.options.map(({ label }) => label)).size !==
+				request.options.length
+		) {
+			context.addIssue({
+				code: "custom",
+				path: ["options"],
+				message: "Question options must be unique.",
+			});
+		}
+	});
 
 const getQuestion = (input) => {
 	const result = requestUserInputSchema.safeParse(input);
-	return result.success ? result.data.question : null;
+	return result.success ? result.data : null;
 };
 
 const getQuestionPart = (part) => {
@@ -29,10 +75,21 @@ const getQuestionPart = (part) => {
 	return question ? { part, question } : null;
 };
 
+const questionsMatch = (left, right) =>
+	left.question === right.question &&
+	left.responseType === right.responseType &&
+	left.consequence === right.consequence &&
+	(left.options?.length ?? 0) === (right.options?.length ?? 0) &&
+	(left.options ?? []).every(
+		(option, index) =>
+			option.label === right.options?.[index]?.label &&
+			option.description === right.options[index]?.description,
+	);
+
 export const createHostedRequestUserInputTool = () =>
 	tool({
 		description:
-			"Pause the current assistant run to ask the user one focused question that must be answered before work can continue. Use this only when proceeding without the answer would require a consequential guess. The user answers in the existing chat composer.",
+			"Pause the current run for one focused answer when proceeding would require a consequential guess. Use a bounded choice when valid answers are known; otherwise request text. Explain the consequence when it is not obvious. Do not request passwords, tokens, credentials, or other secrets in chat.",
 		inputSchema: requestUserInputSchema,
 		metadata: {
 			ui: {
@@ -60,7 +117,7 @@ export const getHostedUserQuestionRequest = (message) => {
 				type: "user_question",
 				assistantMessageId: message.id,
 				toolCallId: request.part.toolCallId,
-				question: request.question,
+				...request.question,
 			}
 		: null;
 };
@@ -74,10 +131,16 @@ export const resolveHostedUserQuestionMessage = ({ message, decision }) => {
 	}
 	const requests = message.parts.map(getQuestionPart).filter(Boolean);
 	const [request] = requests;
+	const decisionQuestion = {
+		question: decision.question,
+		responseType: decision.responseType,
+		...(decision.options && { options: decision.options }),
+		...(decision.consequence && { consequence: decision.consequence }),
+	};
 	if (
 		requests.length !== 1 ||
 		request.part.toolCallId !== decision.toolCallId ||
-		request.question !== decision.question
+		!questionsMatch(request.question, decisionQuestion)
 	) {
 		return null;
 	}

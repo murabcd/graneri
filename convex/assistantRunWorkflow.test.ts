@@ -205,7 +205,7 @@ test("user answers resolve the question and continue the durable workflow", asyn
 			type: "tool-request_user_input",
 			toolCallId: "question-1",
 			state: "input-available",
-			input: { question },
+			input: { question, responseType: "text" },
 		},
 	]);
 	await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
@@ -221,6 +221,7 @@ test("user answers resolve the question and continue the durable workflow", asyn
 			assistantMessageId: run.assistantMessageId,
 			toolCallId: "question-1",
 			question,
+			responseType: "text",
 		},
 	});
 	expect(

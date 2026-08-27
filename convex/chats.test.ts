@@ -71,6 +71,7 @@ const userQuestionDecision = (
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
 	question,
+	responseType: "text" as const,
 });
 
 const saveUserQuestion = async ({
@@ -97,7 +98,7 @@ const saveUserQuestion = async ({
 					type: "tool-request_user_input",
 					toolCallId: `${assistantMessageId}-question`,
 					state: "input-available",
-					input: { question },
+					input: { question, responseType: "text" },
 				},
 			]),
 			text: "",

@@ -26,6 +26,7 @@ import {
 	resolveAssistantRunUserQuestion,
 } from "./assistantRunUserQuestions";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
+import { requireAssistantRunToolApproval } from "./toolApproval";
 
 const { requireTokenIdentifier } = createResourceAccess("assistantRuns");
 
@@ -288,6 +289,12 @@ export const waitForUserDecision = mutation({
 		) {
 			await requireAssistantRunUserQuestion(ctx, run, args.pendingDecision);
 		}
+		if (
+			run.status === "running" &&
+			args.pendingDecision.type === "tool_approval"
+		) {
+			await requireAssistantRunToolApproval(ctx, run, args.pendingDecision);
+		}
 
 		return await transitionAssistantRun(ctx, run, {
 			type: "wait_for_user",
@@ -320,10 +327,16 @@ export const appendUserMessageToAssistantRun = mutation({
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 		await resolveAssistantRunUserQuestion(ctx, run, [args.messageId]);
-
-		return await transitionAssistantRun(ctx, run, {
+		const appendedRun = await transitionAssistantRun(ctx, run, {
 			type: "append_user_messages",
 			messages: [{ messageId: args.messageId }],
+		});
+		return await transitionAssistantRun(ctx, appendedRun, {
+			type: "resolve_user_decision",
+			resolution: {
+				type: "user_question",
+				answerMessageIds: [args.messageId],
+			},
 		});
 	},
 });

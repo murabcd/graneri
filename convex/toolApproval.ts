@@ -1,12 +1,15 @@
 import {
 	createCanonicalToolApprovalResponse,
+	getToolApprovalRequest,
 	getToolApprovalResponses,
+	type ToolApprovalAuthority,
 	type ToolApprovalResponse,
 } from "@workspace/ai/tool-approval-state";
 import { decodeTrustedStoredUiMessage } from "@workspace/ai/ui-message-codec";
 import type { Infer } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import type { pendingDecisionValidator } from "./assistantRunModel";
 
 type ToolApprovalDecision = Extract<
@@ -18,6 +21,58 @@ type ToolApprovalMessageInput = {
 	id: string;
 	role: "assistant";
 	partsJson: string;
+};
+
+const toolApprovalAuthoritiesMatch = (
+	requestAuthority: ToolApprovalAuthority | undefined,
+	pendingAuthority: ToolApprovalAuthority | undefined,
+) =>
+	requestAuthority?.access === pendingAuthority?.access &&
+	requestAuthority?.approval === pendingAuthority?.approval &&
+	requestAuthority?.provider === pendingAuthority?.provider;
+
+export const requireAssistantRunToolApproval = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+	pendingDecision: ToolApprovalDecision,
+) => {
+	const storedMessage = await ctx.db
+		.query("chatMessages")
+		.withIndex("by_chatId_and_messageId", (q) =>
+			q
+				.eq("chatId", run.chatId)
+				.eq("messageId", pendingDecision.assistantMessageId),
+		)
+		.unique();
+	if (
+		!storedMessage ||
+		storedMessage.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
+		storedMessage.role !== "assistant"
+	) {
+		throw new ConvexError({
+			code: "TOOL_APPROVAL_INVALID",
+			message: "Stored tool approval request was not found.",
+		});
+	}
+	const request = getToolApprovalRequest({
+		id: storedMessage.messageId,
+		role: storedMessage.role,
+		parts: parseParts(storedMessage.partsJson),
+	});
+	if (
+		!request ||
+		request.approvalId !== pendingDecision.approvalId ||
+		request.toolCallId !== pendingDecision.toolCallId ||
+		request.toolName !== pendingDecision.toolName ||
+		request.consequence !== pendingDecision.consequence ||
+		!toolApprovalAuthoritiesMatch(request.authority, pendingDecision.authority)
+	) {
+		throw new ConvexError({
+			code: "TOOL_APPROVAL_INVALID",
+			message:
+				"Stored tool approval request does not match the pending decision.",
+		});
+	}
 };
 
 const parseParts = (partsJson: string) => {

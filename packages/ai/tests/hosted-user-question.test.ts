@@ -13,7 +13,10 @@ const questionMessage = {
 			type: "tool-request_user_input" as const,
 			toolCallId: "question-1",
 			state: "input-available" as const,
-			input: { question: "Which notes should I search?" },
+			input: {
+				question: "Which notes should I search?",
+				responseType: "text" as const,
+			},
 		},
 	],
 };
@@ -39,6 +42,7 @@ describe("hosted user questions", () => {
 			assistantMessageId: "assistant-1",
 			toolCallId: "question-1",
 			question: "Which notes should I search?",
+			responseType: "text",
 		});
 		expect(
 			resolveHostedUserQuestionMessage({
@@ -64,6 +68,7 @@ describe("hosted user questions", () => {
 					assistantMessageId: "assistant-1",
 					toolCallId: "question-1",
 					question: "A different question",
+					responseType: "text",
 				},
 			}),
 		).toBeNull();
@@ -78,12 +83,48 @@ describe("hosted user questions", () => {
 					type: "tool-request_user_input" as const,
 					toolCallId: "question-2",
 					state: "input-available" as const,
-					input: { question: "Which date range should I use?" },
+					input: {
+						question: "Which date range should I use?",
+						responseType: "text" as const,
+					},
 				},
 			],
 		};
 		expect(() => getHostedUserQuestionRequest(message)).toThrow(
 			"multiple user questions",
 		);
+	});
+
+	it("preserves bounded choices and their consequence in the pending decision", () => {
+		const decision = getHostedUserQuestionRequest({
+			id: "assistant-choice",
+			role: "assistant",
+			parts: [
+				{
+					type: "tool-request_user_input",
+					toolCallId: "question-choice",
+					state: "input-available",
+					input: {
+						question: "Which scope should I use?",
+						responseType: "choice",
+						consequence: "This controls the search scope.",
+						options: [
+							{ label: "Current project" },
+							{ label: "All projects", description: "Search everything." },
+						],
+					},
+				},
+			],
+		});
+
+		expect(decision).toMatchObject({
+			type: "user_question",
+			responseType: "choice",
+			consequence: "This controls the search scope.",
+			options: [
+				{ label: "Current project" },
+				{ label: "All projects", description: "Search everything." },
+			],
+		});
 	});
 });

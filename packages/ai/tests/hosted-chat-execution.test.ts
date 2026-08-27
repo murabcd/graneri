@@ -68,7 +68,10 @@ describe("hosted assistant execution", () => {
 					type: "tool-request_user_input" as const,
 					state: "input-available" as const,
 					toolCallId: "call-2",
-					input: { question: "Which workspace should I use?" },
+					input: {
+						question: "Which workspace should I use?",
+						responseType: "text",
+					},
 				},
 			],
 		};
@@ -84,6 +87,7 @@ describe("hosted assistant execution", () => {
 				assistantMessageId: "assistant-3",
 				toolCallId: "call-2",
 				question: "Which workspace should I use?",
+				responseType: "text",
 			},
 		});
 	});
@@ -107,12 +111,15 @@ describe("hosted assistant execution", () => {
 							type: "tool-request_user_input",
 							state: "input-available",
 							toolCallId: "question-call",
-							input: { question: "Which scope should I use?" },
+							input: {
+								question: "Which scope should I use?",
+								responseType: "text",
+							},
 						},
 					],
 				},
 			}),
-		).toThrow("approval and user input");
+		).toThrow("approval and clarification");
 	});
 
 	it("consumes rich message snapshots and returns the final snapshot", async () => {

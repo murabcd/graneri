@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { assistantRunPlanValidator } from "./assistantRunActivityModel";
-import { serviceTierValidator } from "./assistantRunModel";
+import {
+	humanDecisionResolutionValidator,
+	pendingDecisionValidator,
+	serviceTierValidator,
+} from "./assistantRunModel";
 
 export const assistantRunEventValidator = v.union(
 	v.object({
@@ -61,19 +65,11 @@ export const assistantRunEventValidator = v.union(
 	}),
 	v.object({
 		type: v.literal("input.requested"),
-		decisionType: v.union(
-			v.literal("user_question"),
-			v.literal("tool_approval"),
-		),
+		decision: pendingDecisionValidator,
 	}),
 	v.object({
 		type: v.literal("input.resolved"),
-		decisionType: v.literal("tool_approval"),
-		approved: v.boolean(),
-	}),
-	v.object({
-		type: v.literal("input.resolved"),
-		decisionType: v.literal("user_question"),
+		resolution: humanDecisionResolutionValidator,
 	}),
 	v.object({
 		type: v.literal("run.completed"),

@@ -158,6 +158,8 @@ describe("hosted assistant run finalizer", () => {
 				assistantMessageId: "assistant-message-1",
 				toolCallId: "call-1",
 				toolName: "delete_automation",
+				consequence:
+					"This action can change data or perform an external action.",
 			},
 			responseMessage: createMessage(),
 			status: "waiting_for_user",

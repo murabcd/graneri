@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import type * as HostedChatRuntime from "./hosted-chat-runtime.mjs";
-import type { HostedUserQuestionPendingDecision } from "./hosted-user-question.mjs";
+import type { HostedHumanDecisionPendingDecision } from "./hosted-human-decision.mjs";
 
 type CompletedAssistantRunTerminalization = {
 	responseMessage: UIMessage;
@@ -12,18 +12,8 @@ type FailedAssistantRunTerminalization = {
 	status: "failed";
 };
 
-export type HostedToolApprovalPendingDecision = {
-	type: "tool_approval";
-	approvalId: string;
-	assistantMessageId: string;
-	toolCallId: string;
-	toolName: string;
-};
-
 type WaitingAssistantRunTerminalization = {
-	pendingDecision:
-		| HostedToolApprovalPendingDecision
-		| HostedUserQuestionPendingDecision;
+	pendingDecision: HostedHumanDecisionPendingDecision;
 	responseMessage: UIMessage;
 	status: "waiting_for_user";
 };
@@ -111,9 +101,7 @@ export declare const createHostedAssistantRunFinalizer: <
 		workspaceId: WorkspaceId;
 	}) => Promise<unknown>;
 	waitForUserDecision: (args: {
-		pendingDecision:
-			| HostedToolApprovalPendingDecision
-			| HostedUserQuestionPendingDecision;
+		pendingDecision: HostedHumanDecisionPendingDecision;
 		runId: AssistantRunId;
 	}) => Promise<unknown>;
 	workspaceId: WorkspaceId;

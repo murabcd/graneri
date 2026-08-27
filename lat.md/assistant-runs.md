@@ -385,12 +385,14 @@ decision instead of creating a second active run. Normal duplicate sends must
 reject before persisting a new user message when a chat already has a
 non-terminal run; clients must queue follow-ups against the active run.
 Generic clarification uses the producer-neutral `request_user_input` tool. It
-asks one focused question through the existing tool-row rendering and accepts
-the answer through the normal chat composer; no separate question-form UI or
-synthetic approval protocol exists. Both producers persist the exact assistant
-message id, tool call id, and question as a `user_question` decision. Accepting
-the next durable user message atomically verifies the stored request, converts
-every pending question tool part in that assistant message to
+asks one focused text or bounded-choice question and may explain what the
+answer affects. The shared Human Decision bar presents questions and approvals
+through one interface in chat and note composers; a choice fills the normal
+composer so the user can review the answer before sending it. Both producers
+persist the exact assistant message id, tool call id, typed question, options,
+and consequence as a `user_question` decision. Accepting the next durable user
+message atomically verifies the stored request, converts the pending question
+tool part in that assistant message to
 `output-available`, appends the answer, records `input.resolved`, rotates the
 assistant message generation, and resumes the same run. A normal user message
 must not bypass a pending tool approval.
@@ -401,6 +403,11 @@ stream persists the assistant message in `approval-requested` state and moves th
 atomically verify the approval id, assistant message id, tool call id, and tool
 name, persist the `approval-responded` message, update the next assistant message
 id, and resume that same run before a replacement stream starts.
+`assistantRunStateMachine` owns one producer-neutral decision-resolution
+transition for both variants. `input.requested` journals the full typed decision
+and `input.resolved` journals the exact approval result or durable answer message
+ids. The decision row does not duplicate tool input: the stored assistant
+message and tool-call journal remain its durable owners.
 The [tool-authority module](../packages/ai/src/ai-tool-authority.mjs) is the
 single owner of approval classification and AI SDK approval configuration.
 Every Graneri-owned tool definition declares whether approval is required;
@@ -409,6 +416,9 @@ artifacts are classified explicitly. Approval presentation includes the
 authority consequence and stored tool input so the user can review the action
 before responding. Runtime code must not infer approval from a tool name or
 maintain a second approval registry.
+Human Decision chat input must never collect passwords, tokens, credentials, or
+other secrets. Secret entry requires a separate encrypted credential boundary;
+until that boundary exists, the question contract rejects that use explicitly.
 `startAssistantRun` only supports reject or explicit supersede policies;
 it must never return an existing active run as a fallback. Assistant runs are
 created directly as `running`; queued work is represented by
@@ -549,7 +559,7 @@ identical storage.
 | Stale claimed input is not an invisible leftover. | Claim mutations requeue stale claimed rows before attempting the next claim; terminal run cleanup deletes queued and claimed rows for that run. | Implemented |
 | Waiting-for-user input resumes the same turn. | `waiting_for_user` runs can claim and accept steered input, clear `pendingDecision`, append `turn.steer.accepted`, and continue without creating a second run. | Implemented |
 | Destructive tools pause for durable user approval. | AI SDK approval parts are persisted on the assistant message; Convex stores a typed `tool_approval` decision, validates the matching response atomically, appends `input.resolved`, and resumes the same run. | Implemented |
-| The assistant can ask for required clarification and continue the same turn. | `request_user_input` persists a typed `user_question`; the existing composer answer completes the stored tool call and resumes the matching web or Convex producer without UI redesign. | Implemented |
+| Human-blocking work has one typed interface and durable resolution. | The shared Human Decision bar renders approvals plus text or bounded-choice questions with consequences; Convex journals full requests and exact resolutions, then resumes the matching web or Convex producer through one state-machine transition. | Implemented |
 | Pending input is local to a turn and can be drained into the next turn state. | Hosted active stream sessions expose `extendPendingInput`, `takePendingInput`, `hasPendingInput`, and `clearPendingInput`; running steer interruptions append the steered message, drain the active session, and feed ordered pending user messages into the next AI SDK prompt branch with message-id de-duplication against persisted history. | Implemented |
 | Multiple active-turn inputs can accumulate before the model loop drains them. | Graneri can persist multiple queued follow-ups, the renderer accepts distinct manual steer intents into a FIFO while one steer request is in flight, `claimReadyForRun` claims the targeted row plus ready queued rows for the same active run, `acceptSteeredUserMessages` atomically saves/deletes the accepted batch, and active stream replacement carries ordered pending input until it is drained into the next prompt branch. | Implemented |
 | Activity subscribers can distinguish mailbox work from steered input. | Hosted active stream sessions expose `subscribePendingInputActivity`; pending steered input reports `steer`, queued mailbox-style input reports `mailbox`, and subscribing after input is already pending returns the pending activity. | Implemented |

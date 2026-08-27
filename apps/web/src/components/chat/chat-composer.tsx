@@ -1,7 +1,7 @@
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
-import type { ToolApprovalRequest } from "@workspace/ai/tool-approval-state";
+import type { HostedHumanDecisionRequest } from "@workspace/ai/hosted-human-decision";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -45,10 +45,13 @@ import {
 import { useFileAttachmentDropzone } from "@/components/ai-elements/use-file-attachments";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import {
+	ChatHumanDecisionBar,
+	type HumanDecisionResponse,
+} from "@/components/chat/chat-human-decision-bar";
+import {
 	ChatQueuedFollowUpBar,
 	type QueuedFollowUpBarItem,
 } from "@/components/chat/chat-queued-follow-up-bar";
-import { ChatToolApprovalBar } from "@/components/chat/chat-tool-approval-bar";
 import {
 	type ChatModel,
 	ChatModelPicker,
@@ -169,11 +172,11 @@ type ChatComposerProps = {
 	editingMessageId?: string | null;
 	placeholder: string;
 	topAccessory?: React.ReactNode;
-	toolApproval?: ToolApprovalRequest | null;
-	isToolApprovalSubmitting?: boolean;
+	humanDecision?: HostedHumanDecisionRequest | null;
+	isHumanDecisionSubmitting?: boolean;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 	onQueuedFollowUpsReorder?: (ids: Array<string>) => void;
-	onToolApprovalResponse?: (approved: boolean) => void;
+	onHumanDecisionResponse?: (response: HumanDecisionResponse) => void;
 	onDraftChange: (value: string) => void;
 	onDraftKeyDown: (event: KeyboardEvent) => void;
 	onCancelEdit?: () => void;
@@ -212,11 +215,11 @@ export function ChatComposer({
 	editingMessageId,
 	placeholder,
 	topAccessory,
-	toolApproval,
-	isToolApprovalSubmitting,
+	humanDecision,
+	isHumanDecisionSubmitting,
 	queuedFollowUps = EMPTY_QUEUED_FOLLOW_UPS,
 	onQueuedFollowUpsReorder,
-	onToolApprovalResponse,
+	onHumanDecisionResponse,
 	onDraftChange,
 	onDraftKeyDown,
 	onCancelEdit,
@@ -284,11 +287,11 @@ export function ChatComposer({
 				onCancelEdit={onCancelEdit}
 				topAccessory={topAccessory}
 			/>
-			{toolApproval ? (
-				<ChatToolApprovalBar
-					approval={toolApproval}
-					disabled={isToolApprovalSubmitting}
-					onRespond={(approved) => onToolApprovalResponse?.(approved)}
+			{humanDecision ? (
+				<ChatHumanDecisionBar
+					decision={humanDecision}
+					disabled={isHumanDecisionSubmitting}
+					onRespond={(response) => onHumanDecisionResponse?.(response)}
 				/>
 			) : null}
 			{queuedFollowUps.length > 0 ? (
@@ -301,7 +304,7 @@ export function ChatComposer({
 				data-drag-over={attachmentDropzone.isDragOver ? "true" : undefined}
 				className={cn(
 					"min-h-[132px] max-h-[32rem] max-w-full overflow-hidden border-input/30 bg-background bg-clip-padding shadow-sm has-disabled:bg-background has-disabled:opacity-100 data-[drag-over=true]:border-ring data-[drag-over=true]:ring-3 data-[drag-over=true]:ring-ring/50 dark:bg-input/30 dark:has-disabled:bg-input/30",
-					toolApproval || queuedFollowUps.length > 0
+					humanDecision || queuedFollowUps.length > 0
 						? "-mt-px rounded-lg"
 						: "rounded-lg",
 				)}

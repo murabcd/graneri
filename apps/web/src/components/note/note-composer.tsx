@@ -87,8 +87,11 @@ import {
 	useFileAttachmentDropzone,
 	useRevokeAttachmentObjectUrls,
 } from "@/components/ai-elements/use-file-attachments";
+import {
+	ChatHumanDecisionBar,
+	type HumanDecisionResponse,
+} from "@/components/chat/chat-human-decision-bar";
 import { ChatQueuedFollowUpBar } from "@/components/chat/chat-queued-follow-up-bar";
-import { ChatToolApprovalBar } from "@/components/chat/chat-tool-approval-bar";
 import {
 	ASSISTANT_CHAT_CONTENT_CLASS,
 	CHAT_MESSAGE_MAX_WIDTH_CLASS,
@@ -583,7 +586,7 @@ const useNoteComposerController = ({
 		handleStop,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
-		pendingToolApproval,
+		pendingHumanDecision,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
 		runPlan,
@@ -1385,9 +1388,19 @@ const useNoteComposerController = ({
 		selectedRecipe?.slug,
 		sharedLocalFolders,
 	]);
-	const handleToolApprovalResponse = React.useCallback(
-		async (approved: boolean) => {
-			if (!pendingToolApproval || isPreparingRequest) {
+	const handleHumanDecisionResponse = React.useCallback(
+		async (response: HumanDecisionResponse) => {
+			if (response.type === "user_question") {
+				setMessage(response.answer);
+				setDraftMetadata(null);
+				setAttachedFiles([]);
+				requestComposerFocus();
+				return;
+			}
+			if (
+				pendingHumanDecision?.type !== "tool_approval" ||
+				isPreparingRequest
+			) {
 				return;
 			}
 
@@ -1399,7 +1412,7 @@ const useNoteComposerController = ({
 
 			try {
 				await submitToolApproval({
-					approved,
+					approved: response.approved,
 					buildRequestBody,
 				});
 			} catch (error) {
@@ -1421,9 +1434,11 @@ const useNoteComposerController = ({
 			buildRequestBody,
 			isPreparingRequest,
 			openRightSidebar,
-			pendingToolApproval,
+			pendingHumanDecision,
 			presentationMode,
 			requestComposerFocus,
+			setDraftMetadata,
+			setMessage,
 			submitToolApproval,
 			setPanelMode,
 		],
@@ -1697,9 +1712,9 @@ const useNoteComposerController = ({
 		reasoningEffort: selectedReasoningEffort,
 		serviceTier: selectedServiceTier,
 		selectedModel,
-		pendingToolApproval,
-		isToolApprovalSubmitting: isPreparingRequest,
-		onToolApprovalResponse: handleToolApprovalResponse,
+		pendingHumanDecision,
+		isHumanDecisionSubmitting: isPreparingRequest,
+		onHumanDecisionResponse: handleHumanDecisionResponse,
 		queuedFollowUps,
 		runPlan,
 		onQueuedFollowUpsReorder,
@@ -3045,11 +3060,11 @@ function ChatComposerForm({
 					<div className="pointer-events-auto">{activeTopAccessory}</div>
 				</div>
 			) : null}
-			{controller.pendingToolApproval ? (
-				<ChatToolApprovalBar
-					approval={controller.pendingToolApproval}
-					disabled={controller.isToolApprovalSubmitting}
-					onRespond={controller.onToolApprovalResponse}
+			{controller.pendingHumanDecision ? (
+				<ChatHumanDecisionBar
+					decision={controller.pendingHumanDecision}
+					disabled={controller.isHumanDecisionSubmitting}
+					onRespond={controller.onHumanDecisionResponse}
 				/>
 			) : null}
 			{controller.queuedFollowUps.length > 0 ? (

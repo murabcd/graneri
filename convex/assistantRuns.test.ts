@@ -49,6 +49,7 @@ const userQuestionDecision = (
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
 	question,
+	responseType: "text" as const,
 });
 
 const saveUserQuestion = async ({
@@ -75,7 +76,7 @@ const saveUserQuestion = async ({
 					type: "tool-request_user_input",
 					toolCallId: `${assistantMessageId}-question`,
 					state: "input-available",
-					input: { question },
+					input: { question, responseType: "text" },
 				},
 			]),
 			text: "",
@@ -562,6 +563,8 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 				assistantMessageId: run.assistantMessageId,
 				toolCallId: "tool-call-1",
 				toolName: "delete_automation",
+				consequence:
+					"This action can change data or perform an external action.",
 			},
 		}),
 	).toBe(true);
@@ -1580,6 +1583,70 @@ test("assistant runs durably wait for user questions", async () => {
 	).rejects.toThrow("Assistant run cannot be completed.");
 });
 
+test("assistant runs preserve bounded choice questions in state and events", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-choice-decision";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await asOwner.mutation(api.assistantRuns.startAssistantRun, {
+		workspaceId,
+		chatId,
+		assistantMessageId: "chat-choice-decision-assistant-1",
+		model: "gpt-5",
+		serviceTier: "auto",
+		policy: "reject",
+	});
+	const decision = {
+		type: "user_question" as const,
+		assistantMessageId: run.assistantMessageId,
+		toolCallId: `${run.assistantMessageId}-question`,
+		question: "Which scope should I use?",
+		responseType: "choice" as const,
+		options: [
+			{ label: "Current note", description: "Use only the open note." },
+			{ label: "All notes", description: "Search the workspace." },
+		],
+		consequence: "This controls which notes can influence the answer.",
+	};
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId,
+		message: {
+			id: run.assistantMessageId,
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{
+					type: "tool-request_user_input",
+					toolCallId: decision.toolCallId,
+					state: "input-available",
+					input: {
+						question: decision.question,
+						responseType: decision.responseType,
+						options: decision.options,
+						consequence: decision.consequence,
+					},
+				},
+			]),
+			text: "",
+			createdAt: 2_001,
+		},
+	});
+
+	const waitingRun = await asOwner.mutation(
+		api.assistantRuns.waitForUserDecision,
+		{ runId: run._id, pendingDecision: decision },
+	);
+	const events = await asOwner.query(
+		api.assistantRunEvents.listRunEventsAfter,
+		{ runId: run._id },
+	);
+
+	expect(waitingRun.pendingDecision).toEqual(decision);
+	expect(events.at(-1)?.event).toEqual({
+		type: "input.requested",
+		decision,
+	});
+});
+
 test("assistant runs reject questions that do not match stored assistant input", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-invalid-decision", workspaceId });
@@ -1686,6 +1753,17 @@ test("appended user input resolves the question and resumes its run", async () =
 		"user.message.appended",
 		"input.resolved",
 	]);
+	const events = await asOwner.query(
+		api.assistantRunEvents.listRunEventsAfter,
+		{ runId: run._id },
+	);
+	expect(events.at(-1)?.event).toEqual({
+		type: "input.resolved",
+		resolution: {
+			type: "user_question",
+			answerMessageIds: ["msg-user-answer"],
+		},
+	});
 });
 
 test("stopping a waiting-for-user run clears the pending decision", async () => {

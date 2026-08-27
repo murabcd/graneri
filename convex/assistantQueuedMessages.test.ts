@@ -45,6 +45,7 @@ const userQuestionDecision = (
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
 	question,
+	responseType: "text" as const,
 });
 
 const createChat = async ({
@@ -541,7 +542,7 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 					type: "tool-request_user_input",
 					toolCallId: `${waitingRun.assistantMessageId}-question`,
 					state: "input-available",
-					input: { question: "Clarify scope" },
+					input: { question: "Clarify scope", responseType: "text" },
 				},
 			]),
 			text: "",

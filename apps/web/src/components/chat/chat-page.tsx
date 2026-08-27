@@ -19,6 +19,7 @@ import type { ChatAttachment } from "@/components/ai-elements/file-attachment-ut
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
 import { useRevokeAttachmentObjectUrls } from "@/components/ai-elements/use-file-attachments";
 import type { AutomationListItem } from "@/components/automations/automation-types";
+import type { HumanDecisionResponse } from "@/components/chat/chat-human-decision-bar";
 import { ChatMessageSearchNavigator } from "@/components/chat/chat-message-search";
 import { getChatSearchMatches } from "@/components/chat/chat-message-search-matches";
 import { ChatMessagesEntry } from "@/components/chat/chat-messages-entry";
@@ -372,7 +373,7 @@ const useChatPageController = ({
 		isChatRequestPending,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
-		pendingToolApproval,
+		pendingHumanDecision,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
 		runPlan,
@@ -770,11 +771,17 @@ const useChatPageController = ({
 		sharedLocalFolders,
 		webSearchEnabled,
 	]);
-	const handleToolApprovalResponse = React.useCallback(
-		async (approved: boolean) => {
+	const handleHumanDecisionResponse = React.useCallback(
+		async (response: HumanDecisionResponse) => {
+			if (response.type === "user_question") {
+				setDraft(response.answer);
+				handleMentionsChange([]);
+				setAttachedFiles([]);
+				return;
+			}
 			try {
 				await submitToolApproval({
-					approved,
+					approved: response.approved,
 					buildRequestBody,
 				});
 			} catch (error) {
@@ -790,7 +797,7 @@ const useChatPageController = ({
 				);
 			}
 		},
-		[buildRequestBody, submitToolApproval],
+		[buildRequestBody, handleMentionsChange, setDraft, submitToolApproval],
 	);
 
 	const handleDeleteMessage = React.useCallback(
@@ -920,9 +927,9 @@ const useChatPageController = ({
 		webSearchEnabled,
 		workspaceSources,
 		appSources,
-		pendingToolApproval,
-		isToolApprovalSubmitting: isPreparingRequest,
-		onToolApprovalResponse: handleToolApprovalResponse,
+		pendingHumanDecision,
+		isHumanDecisionSubmitting: isPreparingRequest,
+		onHumanDecisionResponse: handleHumanDecisionResponse,
 		editingMessageId,
 		mentions,
 		noteMentionCatalog,
@@ -1238,9 +1245,9 @@ export function ChatPage({
 					? "Ask for follow-up"
 					: "Ask anything. @ to use recipes, tools, or notes"
 			}
-			toolApproval={controller.pendingToolApproval}
-			isToolApprovalSubmitting={controller.isToolApprovalSubmitting}
-			onToolApprovalResponse={controller.onToolApprovalResponse}
+			humanDecision={controller.pendingHumanDecision}
+			isHumanDecisionSubmitting={controller.isHumanDecisionSubmitting}
+			onHumanDecisionResponse={controller.onHumanDecisionResponse}
 			queuedFollowUps={queuedFollowUps}
 			onQueuedFollowUpsReorder={controller.onQueuedFollowUpsReorder}
 			onDraftChange={controller.setDraft}

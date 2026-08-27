@@ -10,10 +10,15 @@ export type ToolApprovalRequest = {
 	approvalId: string;
 	assistantMessageId: string;
 	authority?: ToolApprovalAuthority;
+	consequence: string;
 	input: JSONValue;
 	toolCallId: string;
 	toolName: string;
 };
+
+export declare const getToolApprovalConsequence: (
+	authority?: ToolApprovalAuthority,
+) => string;
 
 export type ToolApprovalResponse = ToolApprovalRequest & {
 	approved: boolean;
@@ -40,6 +45,3 @@ export declare const createCanonicalToolApprovalResponse: (args: {
 	approvalResponses?: ToolApprovalResponse[];
 	storedMessage: StoredToolApprovalMessage | null | undefined;
 }) => UIMessage;
-export declare const getPendingToolApproval: (
-	messages: UIMessage[],
-) => ToolApprovalRequest | null;

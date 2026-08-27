@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
 	createCanonicalToolApprovalResponse,
-	getPendingToolApproval,
 	getToolApprovalRequest,
 	getToolApprovalResponse,
 } from "../src/tool-approval-state.mjs";
@@ -39,13 +38,11 @@ describe("tool approval state", () => {
 				approval: "required",
 				provider: "graneri",
 			},
+			consequence: "This action can change data or perform an external action.",
 			input: { automationId: "automation-1" },
 			toolCallId: "call-1",
 			toolName: "delete_automation",
 		});
-		expect(getPendingToolApproval([message])).toEqual(
-			getToolApprovalRequest(message),
-		);
 	});
 
 	test("extracts a responded approval and ignores stale requests", () => {
@@ -62,16 +59,6 @@ describe("tool approval state", () => {
 		};
 
 		expect(getToolApprovalResponse(responseMessage)?.approved).toBe(false);
-		expect(
-			getPendingToolApproval([
-				{
-					id: "assistant-old",
-					role: "assistant",
-					parts: [approvalPart],
-				},
-				{ id: "user-1", role: "user", parts: [{ type: "text", text: "next" }] },
-			]),
-		).toBeNull();
 	});
 
 	test("reconstructs the response from server-owned tool input", () => {
@@ -80,6 +67,8 @@ describe("tool approval state", () => {
 				approvalId: "approval-1",
 				approved: true,
 				assistantMessageId: "assistant-1",
+				consequence:
+					"This action can change data or perform an external action.",
 				input: { automationId: "tampered" },
 				toolCallId: "call-1",
 				toolName: "delete_automation",
@@ -111,6 +100,8 @@ describe("tool approval state", () => {
 				approvalId: "approval-1",
 				approved: true,
 				assistantMessageId: "assistant-1",
+				consequence:
+					"This action can change data or perform an external action.",
 				input: approvalPart.input,
 				toolCallId: "call-1",
 				toolName: "delete_automation",
@@ -119,6 +110,8 @@ describe("tool approval state", () => {
 				approvalId: "approval-2",
 				approved: false,
 				assistantMessageId: "assistant-1",
+				consequence:
+					"This action can change data or perform an external action.",
 				input: secondRequest.input,
 				toolCallId: "call-2",
 				toolName: "delete_automation",

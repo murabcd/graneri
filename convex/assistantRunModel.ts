@@ -27,12 +27,25 @@ export const assistantRunProducerValidator = v.union(
 	v.literal("convex"),
 );
 
+export const toolApprovalAuthorityValidator = v.object({
+	access: v.union(v.literal("read"), v.literal("write")),
+	approval: v.union(v.literal("not_required"), v.literal("required")),
+	provider: v.string(),
+});
+
+export const userQuestionOptionValidator = v.object({
+	label: v.string(),
+	description: v.optional(v.string()),
+});
+
 export const toolApprovalPendingDecisionValidator = v.object({
 	type: v.literal("tool_approval"),
 	approvalId: v.string(),
 	assistantMessageId: v.string(),
 	toolCallId: v.string(),
 	toolName: v.string(),
+	authority: v.optional(toolApprovalAuthorityValidator),
+	consequence: v.string(),
 });
 
 export const userQuestionPendingDecisionValidator = v.object({
@@ -40,6 +53,9 @@ export const userQuestionPendingDecisionValidator = v.object({
 	assistantMessageId: v.string(),
 	toolCallId: v.string(),
 	question: v.string(),
+	responseType: v.union(v.literal("text"), v.literal("choice")),
+	options: v.optional(v.array(userQuestionOptionValidator)),
+	consequence: v.optional(v.string()),
 });
 
 export const pendingDecisionValidator = v.union(
@@ -49,6 +65,22 @@ export const pendingDecisionValidator = v.union(
 
 export type AssistantRunPendingDecision = Infer<
 	typeof pendingDecisionValidator
+>;
+
+export const humanDecisionResolutionValidator = v.union(
+	v.object({
+		type: v.literal("tool_approval"),
+		approved: v.boolean(),
+		toolCallId: v.string(),
+	}),
+	v.object({
+		type: v.literal("user_question"),
+		answerMessageIds: v.array(v.string()),
+	}),
+);
+
+export type HumanDecisionResolution = Infer<
+	typeof humanDecisionResolutionValidator
 >;
 
 export const stopReasonValidator = v.union(

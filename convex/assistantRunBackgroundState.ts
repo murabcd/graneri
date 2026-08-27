@@ -30,6 +30,7 @@ import {
 import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import { saveMessageForOwnerInternal } from "./chats";
 import { syncAssistantRunToolCalls } from "./chatToolCalls";
+import { requireAssistantRunToolApproval } from "./toolApproval";
 
 const backgroundRunContextValidator = v.union(
 	v.object({
@@ -132,6 +133,8 @@ const waitForUserDecision = async (
 	await saveActiveAssistantMessage(ctx, run, context);
 	if (pendingDecision.type === "user_question") {
 		await requireAssistantRunUserQuestion(ctx, run, pendingDecision);
+	} else {
+		await requireAssistantRunToolApproval(ctx, run, pendingDecision);
 	}
 	await upsertAssistantRunJobMessage(ctx, run._id, {
 		id: run.assistantMessageId,

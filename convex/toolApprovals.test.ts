@@ -75,6 +75,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 			assistantMessageId: run.assistantMessageId,
 			toolCallId: "call-1",
 			toolName: "delete_automation",
+			consequence: "This action can change data or perform an external action.",
 		},
 	});
 
@@ -128,7 +129,11 @@ test("accepting a matching tool approval resumes the same run atomically", async
 			.query("chatActiveStreams")
 			.withIndex("by_runId", (q) => q.eq("runId", run._id))
 			.unique();
-		return { message, savedRun, stream };
+		const events = await ctx.db
+			.query("assistantRunEvents")
+			.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", run._id))
+			.collect();
+		return { events, message, savedRun, stream };
 	});
 
 	expect(state.savedRun).toMatchObject({
@@ -137,6 +142,18 @@ test("accepting a matching tool approval resumes the same run atomically", async
 	});
 	expect(state.savedRun?.pendingDecision).toBeUndefined();
 	expect(state.stream).toMatchObject({ assistantMessageId: "stream-2" });
+	expect(state.events.at(-1)?.event).toEqual({
+		type: "assistant.message.started",
+		assistantMessageId: "stream-2",
+	});
+	expect(state.events.at(-2)?.event).toEqual({
+		type: "input.resolved",
+		resolution: {
+			type: "tool_approval",
+			approved: true,
+			toolCallId: "call-1",
+		},
+	});
 	expect(JSON.parse(state.message?.partsJson ?? "[]")).toEqual([
 		expect.objectContaining({
 			state: "approval-responded",
