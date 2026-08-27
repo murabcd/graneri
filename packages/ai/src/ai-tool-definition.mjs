@@ -1,11 +1,6 @@
 import { tool } from "ai";
+import { createAiToolMetadata } from "./ai-tool-authority.mjs";
 import { withToolTiming } from "./tool-timing.mjs";
-
-const GRANERI_TOOL_METADATA_KEY = "graneri";
-
-export const requiresAiToolUserApproval = (toolDefinition) =>
-	toolDefinition.metadata?.[GRANERI_TOOL_METADATA_KEY]?.requiresApproval ===
-	true;
 
 export const defineAiTool = ({
 	deferLoading = true,
@@ -25,14 +20,7 @@ export const defineAiTool = ({
 		tool({
 			description,
 			inputSchema,
-			metadata: {
-				...(policy.requiresApproval && {
-					[GRANERI_TOOL_METADATA_KEY]: {
-						requiresApproval: true,
-					},
-				}),
-				ui,
-			},
+			metadata: createAiToolMetadata({ policy, ui }),
 			providerOptions: {
 				openai: {
 					deferLoading,

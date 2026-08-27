@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { z } from "zod";
+import { getReadableToolName } from "@/components/ai-elements/utils/tool-display";
 import { getTrimmedString } from "@/lib/string-value";
 
 export type ToolMeta = {
@@ -65,14 +66,6 @@ const getFirstString = (value: JSONValue | undefined, keys: string[]) => {
 
 const clamp = (value: string, maxLength = 54) =>
 	value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
-
-const getReadableToolName = (name: string) =>
-	name
-		.trim()
-		.replace(/^tool-/u, "")
-		.replace(/[_-]+/gu, " ")
-		.replace(/\s+/gu, " ")
-		.trim();
 
 const toolIconRegistry = {
 	"audio-lines": AudioLines,

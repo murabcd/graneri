@@ -406,7 +406,12 @@ describe("chat automation tools", () => {
 		});
 		expect(deleteCount).toBe(1);
 		expect(context.tools.delete_automation.metadata).toMatchObject({
-			graneri: { requiresApproval: true },
+			graneri: {
+				authority: {
+					access: "write",
+					approval: "required",
+				},
+			},
 		});
 	});
 });

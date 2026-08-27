@@ -86,9 +86,9 @@ describe("hosted chat agent tool set", () => {
 			name: "delete_record",
 			policy: {
 				access: "write",
+				approval: "required",
 				capability: "write",
 				provider: "graneri",
-				requiresApproval: true,
 			},
 			ui: {
 				complete: "Deleted record",
@@ -104,9 +104,42 @@ describe("hosted chat agent tool set", () => {
 		});
 
 		expect(deleteTool.needsApproval).toBeUndefined();
+		expect(deleteTool.metadata).toMatchObject({
+			graneri: {
+				authority: {
+					access: "write",
+					approval: "required",
+				},
+			},
+		});
 		expect(assembled.toolApproval).toEqual({
 			delete_record: "user-approval",
 		});
+	});
+
+	it("does not request approval for explicitly classified read tools", () => {
+		const readTool = defineAiTool({
+			description: "Read a record.",
+			execute: async () => ({ found: true }),
+			inputSchema: z.object({ id: z.string() }),
+			name: "read_record",
+			policy: {
+				access: "read",
+				approval: "not_required",
+				capability: "read",
+				provider: "graneri",
+			},
+			ui: {
+				complete: "Read record",
+				icon: "file-text",
+				running: "Reading record",
+			},
+		}).toAITool();
+		const assembled = buildHostedChatAgentToolSet({
+			enabledTools: { read_record: readTool },
+		});
+
+		expect(assembled.toolApproval).toBeUndefined();
 	});
 });
 

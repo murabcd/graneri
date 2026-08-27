@@ -224,6 +224,7 @@ export const createAutomationTool = ({
 		}),
 		policy: {
 			access: "write",
+			approval: "required",
 			capability: "create",
 			provider: "graneri",
 		},
@@ -274,6 +275,7 @@ const createListAutomationsTool = ({ listAutomations }) =>
 		inputSchema: z.object({}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "read",
 			provider: "graneri",
 		},
@@ -292,6 +294,7 @@ const createGetAutomationTool = ({ getAutomation }) =>
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "read",
 			provider: "graneri",
 		},
@@ -335,6 +338,7 @@ const createUpdateAutomationTool = ({
 		}),
 		policy: {
 			access: "write",
+			approval: "required",
 			capability: "write",
 			provider: "graneri",
 		},
@@ -395,6 +399,7 @@ const createPauseAutomationTool = ({ getAutomation, togglePaused }) =>
 		}),
 		policy: {
 			access: "write",
+			approval: "required",
 			capability: "write",
 			provider: "graneri",
 		},
@@ -422,6 +427,7 @@ const createResumeAutomationTool = ({ getAutomation, togglePaused }) =>
 		}),
 		policy: {
 			access: "write",
+			approval: "required",
 			capability: "write",
 			provider: "graneri",
 		},
@@ -449,6 +455,7 @@ const createRunAutomationNowTool = ({ runAutomationNow }) =>
 		}),
 		policy: {
 			access: "write",
+			approval: "required",
 			capability: "write",
 			provider: "graneri",
 		},
@@ -468,9 +475,9 @@ const createDeleteAutomationTool = ({ deleteAutomation }) =>
 		}),
 		policy: {
 			access: "write",
+			approval: "required",
 			capability: "write",
 			provider: "graneri",
-			requiresApproval: true,
 		},
 		ui: toolUiMetadata.delete_automation,
 		execute: async ({ automationId }) => {

@@ -82,6 +82,7 @@ export const createImageGenerationTool = ({ uploadGeneratedImage }) =>
 		}),
 		policy: {
 			access: "write",
+			approval: "not_required",
 			capability: "generate",
 			provider: "openai",
 		},

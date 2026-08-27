@@ -1,19 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { ToolLoopAgent } from "ai";
-import { requiresAiToolUserApproval } from "./ai-tool-definition.mjs";
+import { buildAiToolApprovalConfiguration } from "./ai-tool-authority.mjs";
 import { finalizeOpenAIToolSet } from "./openai-tool-search.mjs";
-
-const buildToolApprovalConfiguration = (tools) => {
-	if (!tools) {
-		return undefined;
-	}
-
-	const entries = Object.entries(tools).flatMap(([name, tool]) =>
-		requiresAiToolUserApproval(tool) ? [[name, "user-approval"]] : [],
-	);
-
-	return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-};
 
 export const buildHostedChatAgentToolSet = ({
 	additionalAgentTools,
@@ -29,7 +17,7 @@ export const buildHostedChatAgentToolSet = ({
 					...(additionalAgentTools ?? {}),
 				}
 			: undefined;
-	const toolApproval = buildToolApprovalConfiguration(agentTools);
+	const toolApproval = buildAiToolApprovalConfiguration(agentTools);
 
 	return {
 		agentTools,

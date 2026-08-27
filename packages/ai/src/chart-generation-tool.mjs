@@ -125,6 +125,7 @@ export const createChartGenerationTool = () =>
 		inputSchema: chartSpecSchema,
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "generate",
 			provider: "openai",
 		},

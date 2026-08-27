@@ -9,8 +9,21 @@ const toolApprovalPartSchema = z.looseObject({
 		approved: z.boolean().optional(),
 		id: z.string().min(1),
 	}),
-	input: z.unknown().optional(),
+	input: z.json(),
 	state: z.enum(["approval-requested", "approval-responded"]),
+	toolMetadata: z
+		.looseObject({
+			graneri: z
+				.looseObject({
+					authority: z.looseObject({
+						access: z.enum(["read", "write"]),
+						approval: z.enum(["not_required", "required"]),
+						provider: z.string().min(1),
+					}),
+				})
+				.optional(),
+		})
+		.optional(),
 	toolCallId: z.string().min(1),
 	toolName: z.string().optional(),
 	type: z.string(),
@@ -51,6 +64,7 @@ const getToolApprovals = (message, state) => {
 		approvals.push({
 			approvalId,
 			assistantMessageId: message.id,
+			authority: part.toolMetadata?.graneri?.authority,
 			input: part.input,
 			toolCallId,
 			toolName,

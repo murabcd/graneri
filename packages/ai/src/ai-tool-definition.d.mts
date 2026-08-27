@@ -1,22 +1,6 @@
 import type { ToolSet } from "ai";
 import type { z } from "zod";
-
-export type AiToolPolicy = {
-	access: "read" | "write";
-	capability: "generate" | "read" | "search" | "write";
-	provider: string;
-	requiresApproval?: boolean;
-	requiresConnection?: boolean;
-};
-
-export type AiToolUi = {
-	complete: string;
-	groupLabel?: string;
-	groupKey?: string;
-	icon: string;
-	running: string;
-	subtitleKeys?: string[];
-};
+import type { AiToolPolicy, AiToolUi } from "./ai-tool-authority.mjs";
 
 export type AiToolDefinition<TInput = unknown> = {
 	description: string;
@@ -26,10 +10,6 @@ export type AiToolDefinition<TInput = unknown> = {
 	ui: AiToolUi;
 	toAITool(): ToolSet[string];
 };
-
-export declare function requiresAiToolUserApproval(
-	toolDefinition: ToolSet[string],
-): boolean;
 
 export declare function defineAiTool<TInput, TOutput extends object>(args: {
 	deferLoading?: boolean;

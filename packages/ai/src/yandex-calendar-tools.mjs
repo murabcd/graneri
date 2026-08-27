@@ -16,6 +16,7 @@ export const buildYandexCalendarToolDefinitions = ({
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "read",
 			provider: "yandex-calendar",
 			requiresConnection: true,
@@ -35,6 +36,7 @@ export const buildYandexCalendarToolDefinitions = ({
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "search",
 			provider: "yandex-calendar",
 			requiresConnection: true,

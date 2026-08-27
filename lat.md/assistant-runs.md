@@ -378,6 +378,14 @@ stream persists the assistant message in `approval-requested` state and moves th
 atomically verify the approval id, assistant message id, tool call id, and tool
 name, persist the `approval-responded` message, update the next assistant message
 id, and resume that same run before a replacement stream starts.
+The [tool-authority module](../packages/ai/src/ai-tool-authority.mjs) is the
+single owner of approval classification and AI SDK approval configuration.
+Every Graneri-owned tool definition declares whether approval is required;
+write-capable automation tools require it, while read-only and generative
+artifacts are classified explicitly. Approval presentation includes the
+authority consequence and stored tool input so the user can review the action
+before responding. Runtime code must not infer approval from a tool name or
+maintain a second approval registry.
 `startAssistantRun` only supports reject or explicit supersede policies;
 it must never return an existing active run as a fallback. Assistant runs are
 created directly as `running`; queued work is represented by

@@ -56,6 +56,13 @@ current Google token from Better Auth when a Google tool is enabled; the token
 itself remains outside job state. Automations do not inherit an interactive
 user identity and remain restricted to their explicitly selected server-owned
 connections.
+The [remote MCP adapter](../packages/ai/src/remote-mcp-tools.mjs) maps every
+discovered tool into the shared
+[tool-authority module](../packages/ai/src/ai-tool-authority.mjs). A tool is
+treated as read-only without approval only when its validated MCP annotation
+declares `readOnlyHint: true`; missing or write-capable annotations require
+durable user approval before execution. Provider discovery cannot bypass this
+classification by supplying presentation metadata alone.
 
 ## Capability metadata and adapters
 

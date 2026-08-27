@@ -16,6 +16,7 @@ export const buildGoogleCalendarToolDefinitions = ({
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "read",
 			provider: "google-calendar",
 			requiresConnection: true,
@@ -35,6 +36,7 @@ export const buildGoogleCalendarToolDefinitions = ({
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "search",
 			provider: "google-calendar",
 			requiresConnection: true,

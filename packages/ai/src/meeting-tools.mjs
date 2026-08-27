@@ -15,6 +15,7 @@ export const buildMeetingToolDefinitions = ({ searchMeetings }) => [
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "search",
 			provider: "graneri-meetings",
 			requiresConnection: false,

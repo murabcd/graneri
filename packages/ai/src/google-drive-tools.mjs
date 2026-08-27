@@ -13,6 +13,7 @@ export const buildGoogleDriveToolDefinitions = ({ searchFiles, getFile }) => [
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "search",
 			provider: "google-drive",
 			requiresConnection: true,
@@ -29,6 +30,7 @@ export const buildGoogleDriveToolDefinitions = ({ searchFiles, getFile }) => [
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "read",
 			provider: "google-drive",
 			requiresConnection: true,

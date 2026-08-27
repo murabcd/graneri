@@ -1,9 +1,16 @@
-import type { UIMessage } from "ai";
+import type { JSONValue, UIMessage } from "ai";
+
+export type ToolApprovalAuthority = {
+	access: "read" | "write";
+	approval: "not_required" | "required";
+	provider: string;
+};
 
 export type ToolApprovalRequest = {
 	approvalId: string;
 	assistantMessageId: string;
-	input: unknown;
+	authority?: ToolApprovalAuthority;
+	input: JSONValue;
 	toolCallId: string;
 	toolName: string;
 };

@@ -1,6 +1,10 @@
 import { createMCPClient } from "@ai-sdk/mcp";
 import { dynamicTool, jsonSchema } from "ai";
 import { z } from "zod";
+import {
+	classifyRemoteMcpToolPolicy,
+	createAiToolMetadata,
+} from "./ai-tool-authority.mjs";
 
 const REMOTE_MCP_DISCOVERY_TIMEOUT_MS = 5_000;
 const REMOTE_MCP_DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -22,6 +26,7 @@ const remoteMcpToolDefinitionSchema = z
 			.catchall(z.json()),
 		annotations: z
 			.object({
+				readOnlyHint: z.boolean().optional(),
 				title: z.string().optional(),
 			})
 			.catchall(z.json())
@@ -329,10 +334,16 @@ const buildRemoteMcpToolsFromDefinitions = (
 				additionalProperties: false,
 			}),
 			metadata: {
+				...createAiToolMetadata({
+					policy: classifyRemoteMcpToolPolicy({
+						annotations: definition.annotations,
+						provider: connection.provider,
+					}),
+					ui: getRemoteMcpToolUiMetadata(connection),
+				}),
 				provider: connection.provider,
 				source: "mcp",
 				mcpToolName: definition.name,
-				ui: getRemoteMcpToolUiMetadata(connection),
 			},
 			providerOptions: {
 				openai: {

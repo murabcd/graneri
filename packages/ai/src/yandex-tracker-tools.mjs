@@ -172,6 +172,7 @@ const buildYandexTrackerToolDefinitionsWithAdapter = (adapter) => [
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "search",
 			provider: "yandex-tracker",
 			requiresConnection: true,
@@ -189,6 +190,7 @@ const buildYandexTrackerToolDefinitionsWithAdapter = (adapter) => [
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "read",
 			provider: "yandex-tracker",
 			requiresConnection: true,

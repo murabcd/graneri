@@ -12,6 +12,15 @@ const approvalPart = {
 	input: { automationId: "automation-1" },
 	approval: { id: "approval-1" },
 	state: "approval-requested",
+	toolMetadata: {
+		graneri: {
+			authority: {
+				access: "write",
+				approval: "required",
+				provider: "graneri",
+			},
+		},
+	},
 } as const;
 
 describe("tool approval state", () => {
@@ -25,6 +34,11 @@ describe("tool approval state", () => {
 		expect(getToolApprovalRequest(message)).toEqual({
 			approvalId: "approval-1",
 			assistantMessageId: "assistant-1",
+			authority: {
+				access: "write",
+				approval: "required",
+				provider: "graneri",
+			},
 			input: { automationId: "automation-1" },
 			toolCallId: "call-1",
 			toolName: "delete_automation",

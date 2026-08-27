@@ -1,5 +1,20 @@
 import type { JSONValue } from "ai";
 
+export const getReadableToolName = (name: string) =>
+	name
+		.trim()
+		.replace(/^tool-/u, "")
+		.replace(/[_-]+/gu, " ")
+		.replace(/\s+/gu, " ")
+		.trim();
+
+export const getToolDisplayName = (name: string) => {
+	const readableName = getReadableToolName(name);
+	return readableName
+		? `${readableName.charAt(0).toUpperCase()}${readableName.slice(1)}`
+		: "";
+};
+
 export const formatElapsedTime = (ms: number) => {
 	if (!Number.isFinite(ms) || ms <= 0) {
 		return "";

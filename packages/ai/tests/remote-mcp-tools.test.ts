@@ -38,6 +38,7 @@ vi.mock("@ai-sdk/mcp", () => {
 	return { createMCPClient: mcpMocks.createClient };
 });
 
+import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
 import {
 	buildRemoteMcpProxyTools,
 	buildRemoteMcpTools,
@@ -136,6 +137,60 @@ describe("remote MCP tool discovery", () => {
 		expect(secondTools.notion_search).toBeDefined();
 		expect(mcpMocks.createClient).toHaveBeenCalledTimes(1);
 		expect(mcpMocks.listTools).toHaveBeenCalledTimes(1);
+	});
+
+	it("requires approval when a discovered tool is not declared read-only", async () => {
+		const tools = await buildRemoteMcpTools({
+			sourceId: "app:test-remote-authority-write",
+			provider: "notion",
+			displayName: "Notion",
+			baseUrl: "https://mcp.example.com",
+			oauthAccessToken: "token",
+		});
+		const assembled = buildHostedChatAgentToolSet({ enabledTools: tools });
+
+		expect(tools.notion_search?.metadata).toMatchObject({
+			graneri: {
+				authority: {
+					access: "write",
+					approval: "required",
+				},
+			},
+		});
+		expect(assembled.toolApproval).toEqual({
+			notion_search: "user-approval",
+		});
+	});
+
+	it("allows a discovered tool that is explicitly declared read-only", async () => {
+		mcpMocks.listTools.mockResolvedValueOnce({
+			tools: [
+				{
+					name: "search",
+					description: "Search the connected workspace.",
+					inputSchema: { type: "object", properties: {} },
+					annotations: { readOnlyHint: true },
+				},
+			],
+		});
+		const tools = await buildRemoteMcpTools({
+			sourceId: "app:test-remote-authority-read",
+			provider: "notion",
+			displayName: "Notion",
+			baseUrl: "https://mcp.example.com",
+			oauthAccessToken: "token",
+		});
+		const assembled = buildHostedChatAgentToolSet({ enabledTools: tools });
+
+		expect(tools.notion_search?.metadata).toMatchObject({
+			graneri: {
+				authority: {
+					access: "read",
+					approval: "not_required",
+				},
+			},
+		});
+		expect(assembled.toolApproval).toBeUndefined();
 	});
 
 	it("shares one in-flight discovery across concurrent chat turns", async () => {

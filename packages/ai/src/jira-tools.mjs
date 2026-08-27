@@ -240,6 +240,7 @@ export const buildJiraToolDefinitions = (connection) => [
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "search",
 			provider: "jira",
 			requiresConnection: true,
@@ -257,6 +258,7 @@ export const buildJiraToolDefinitions = (connection) => [
 		}),
 		policy: {
 			access: "read",
+			approval: "not_required",
 			capability: "read",
 			provider: "jira",
 			requiresConnection: true,
