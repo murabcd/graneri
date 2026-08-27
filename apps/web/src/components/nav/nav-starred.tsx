@@ -2,6 +2,7 @@ import { Icons } from "@workspace/ui/components/icons";
 import {
 	SidebarMenu,
 	SidebarMenuAction,
+	SidebarMenuBadge,
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@workspace/ui/components/sidebar";
@@ -12,6 +13,7 @@ import { Clock, FileText, MessageCircle, MoreHorizontal } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { ChatActionsMenu } from "@/components/chat/chat-actions-menu";
+import { ChatUnreadIndicator } from "@/components/chat/chat-unread-indicator";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { ProjectSidebarItem } from "@/components/nav/nav-projects";
 import { SidebarCollapsibleGroup } from "@/components/nav/sidebar-collapsible-group";
@@ -502,6 +504,8 @@ function StarredChatItem({
 	const displayTitle = getChatDisplayTitle(title);
 	const hasAutomation = automationChatIds?.has(chatId) ?? false;
 	const isStreaming = activeStreamingChatIds?.has(chatId) ?? false;
+	const hasUnreadResponse =
+		chat.unreadAssistantCompletedAt !== undefined && !isActive;
 
 	return (
 		<SidebarMenuItem
@@ -543,6 +547,11 @@ function StarredChatItem({
 					/>
 				) : null}
 			</SidebarMenuButton>
+			{hasUnreadResponse ? (
+				<SidebarMenuBadge className="transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0">
+					<ChatUnreadIndicator />
+				</SidebarMenuBadge>
+			) : null}
 		</SidebarMenuItem>
 	);
 }

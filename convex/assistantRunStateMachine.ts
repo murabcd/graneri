@@ -16,6 +16,7 @@ import type {
 	serviceTierValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
+import { markUnreadAssistantCompletion } from "./chatUnreadState";
 
 type AssistantRunProducer = Infer<typeof assistantRunProducerValidator>;
 type ReasoningEffort = Infer<typeof reasoningEffortValidator>;
@@ -304,6 +305,7 @@ export const transitionAssistantRun = async (
 				updatedAt: now,
 				finishedAt: now,
 			});
+			await markUnreadAssistantCompletion(ctx, run, now);
 			await appendAssistantRunEvent(ctx, run, { type: "run.completed" });
 			await cleanupAssistantRunSnapshots(ctx, run._id);
 			await deleteAssistantRunJob(ctx, run._id);

@@ -593,6 +593,7 @@ export default defineSchema({
 				v.literal("xhigh"),
 			),
 		),
+		unreadAssistantCompletedAt: v.optional(v.number()),
 		isArchived: v.boolean(),
 		archivedAt: v.optional(v.number()),
 		createdAt: v.number(),

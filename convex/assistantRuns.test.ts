@@ -223,6 +223,37 @@ test("finishAssistantRun leaves no snapshots for runId", async () => {
 	expect(snapshots.toolCalls).toHaveLength(0);
 });
 
+test("completed assistant response stays unread until the chat is opened", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-unread-completion";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRunWithSnapshots({
+		asOwner,
+		chatId,
+		workspaceId,
+	});
+
+	const finishedRun = await asOwner.mutation(
+		api.assistantRuns.finishAssistantRun,
+		{ runId: run._id },
+	);
+	const unreadChat = (
+		await asOwner.query(api.chats.list, { workspaceId })
+	).find((chat) => chat.chatId === chatId);
+
+	expect(unreadChat?.unreadAssistantCompletedAt).toBe(finishedRun.finishedAt);
+
+	await asOwner.mutation(api.chats.markAssistantCompletionRead, {
+		workspaceId,
+		chatId,
+	});
+	const readChat = (await asOwner.query(api.chats.list, { workspaceId })).find(
+		(chat) => chat.chatId === chatId,
+	);
+
+	expect(readChat?.unreadAssistantCompletedAt).toBeUndefined();
+});
+
 test("background start atomically creates a Convex-owned run and finalizes its rich snapshot", async () => {
 	vi.useFakeTimers();
 	const { asOwner, t, workspaceId } = await createWorkspace();
@@ -945,6 +976,11 @@ test("failAssistantRun leaves no snapshots for runId", async () => {
 	}));
 	expect(snapshots.streams).toHaveLength(0);
 	expect(snapshots.toolCalls).toHaveLength(0);
+	const failedChat = (
+		await asOwner.query(api.chats.list, { workspaceId })
+	).find((chat) => chat.chatId === "chat-fail");
+	expect(failedChat).toBeDefined();
+	expect(failedChat?.unreadAssistantCompletedAt).toBeUndefined();
 	expect(await listRunEventTypes({ asOwner, runId: run._id })).toContain(
 		"run.failed",
 	);

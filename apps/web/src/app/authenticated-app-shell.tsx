@@ -106,6 +106,7 @@ import { ActiveWorkspaceProvider } from "@/hooks/active-workspace-provider";
 import { useAutomationActions } from "@/hooks/use-automation-actions";
 import { useAutomationNotifications } from "@/hooks/use-automation-notifications";
 import { prefetchChatMessagesSnapshot } from "@/hooks/use-chat-messages-snapshot";
+import { useMarkAssistantCompletionRead } from "@/hooks/use-mark-assistant-completion-read";
 import { useNoteNavigationPreparation } from "@/hooks/use-note-navigation-preparation";
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
 import { type AuthSession, authClient } from "@/lib/auth-client";
@@ -525,6 +526,8 @@ const useAppShellState = ({
 		matches: (chat, id) => getChatId(chat) === id,
 		resolvingIds: resolvingPersistedChatIds,
 	});
+	const currentChat =
+		currentChatRoute.status === "ready" ? currentChatRoute.value : null;
 	const isResolvingPendingPersistedChat =
 		currentChatId !== null && resolvingPersistedChatIds.has(currentChatId);
 	const selectedProjectRoute = resolveCollectionRoute({
@@ -556,6 +559,10 @@ const useAppShellState = ({
 	});
 	const resolvedCurrentView = applicationView.view;
 	const isResolvingResourceRoute = applicationView.isResolving;
+	useMarkAssistantCompletionRead({
+		chat: currentChat,
+		workspaceId: resolvedActiveWorkspaceId,
+	});
 
 	React.useEffect(() => {
 		let isCancelled = false;
@@ -1240,8 +1247,6 @@ const useAppShellState = ({
 		},
 		[currentChatId, navigateChat, removePendingPersistedChatRouteId],
 	);
-	const currentChat =
-		currentChatRoute.status === "ready" ? currentChatRoute.value : null;
 	const currentChatTitle = currentChat?.title || "New chat";
 	const automationChatTitle = automationChatId
 		? (chats?.find((chat) => getChatId(chat) === automationChatId)?.title ?? "")

@@ -16,6 +16,7 @@ import {
 } from "@/lib/group-by-relative-date";
 import type { Doc } from "../../../../../convex/_generated/dataModel";
 import { ChatActionsMenu } from "./chat-actions-menu";
+import { ChatUnreadIndicator } from "./chat-unread-indicator";
 
 type ChatHistoryListProps = {
 	chats: Array<Doc<"chats">>;
@@ -132,6 +133,9 @@ function ChatHistoryItem({
 	const activityDate = new Date(activityTime);
 	const formattedActivityTime = formatRelativeTimestamp(activityDate);
 	const activityDateTime = activityDate.toISOString();
+	const hasUnreadResponse =
+		chat.unreadAssistantCompletedAt !== undefined &&
+		activeChatId !== storedChatId;
 
 	return (
 		<div
@@ -174,22 +178,27 @@ function ChatHistoryItem({
 					aria-label="Automation set"
 				/>
 			) : null}
-			<ChatActionsMenu
-				chat={chat}
-				hasAutomation={hasAutomation}
-				onAddAutomation={onAddAutomation}
-				onMoveToTrash={onMoveToTrash}
-			>
-				<button
-					type="button"
-					data-chat-actions
-					className="flex aspect-square size-5 cursor-pointer items-center justify-center rounded-md p-0 text-muted-foreground opacity-0 outline-hidden transition-[color,opacity] group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:opacity-100 data-[state=open]:text-foreground"
-					aria-label={`Open actions for ${chat.title || "chat"}`}
-					onClick={(event) => event.stopPropagation()}
+			<div className="relative size-5 shrink-0">
+				{hasUnreadResponse ? (
+					<ChatUnreadIndicator className="pointer-events-none absolute top-1/2 left-1/2 -translate-1/2 transition-opacity group-focus-within:opacity-0 group-hover:opacity-0" />
+				) : null}
+				<ChatActionsMenu
+					chat={chat}
+					hasAutomation={hasAutomation}
+					onAddAutomation={onAddAutomation}
+					onMoveToTrash={onMoveToTrash}
 				>
-					<MoreHorizontal className="size-4" />
-				</button>
-			</ChatActionsMenu>
+					<button
+						type="button"
+						data-chat-actions
+						className="absolute inset-0 flex aspect-square size-5 cursor-pointer items-center justify-center rounded-md p-0 text-muted-foreground opacity-0 outline-hidden transition-[color,opacity] group-hover:opacity-100 hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:opacity-100 data-[state=open]:text-foreground"
+						aria-label={`Open actions for ${chat.title || "chat"}`}
+						onClick={(event) => event.stopPropagation()}
+					>
+						<MoreHorizontal className="size-4" />
+					</button>
+				</ChatActionsMenu>
+			</div>
 		</div>
 	);
 }

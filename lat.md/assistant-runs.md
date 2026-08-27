@@ -183,6 +183,13 @@ Hosted chat runs are durable Convex lifecycle records.
 lifecycle events, and mandatory queue/snapshot cleanup; `assistantRuns` exposes
 the public Convex function adapters and lifecycle queries. Chat and queue modules
 must cross the state-machine seam instead of patching `assistantRuns` rows.
+Successful completion also atomically marks the owning active chat with its
+unread assistant-completion timestamp. [[convex/chatUnreadState.ts]] owns that
+marker, and [[convex/chats.ts]] clears it when the chat is opened. Ask AI history
+and Starred render the same chat-owned marker; the active chat suppresses the
+indicator immediately while the read mutation settles. Failed, stopped,
+superseded, and expired runs never create a new unread marker; archived chats
+are not marked by a stale completion.
 `assistantQueuedMessageStateMachine` owns follow-up claim, stale-claim recovery,
 acceptance validation, accepted-row deletion, and terminal cleanup. Acceptance
 is one state-machine operation: it validates every claim, invokes the adapter's

@@ -70,6 +70,7 @@ import type * as chatContextCompactions from "../chatContextCompactions.js";
 import type * as chatFormatting from "../chatFormatting.js";
 import type * as chatThreads from "../chatThreads.js";
 import type * as chatToolCalls from "../chatToolCalls.js";
+import type * as chatUnreadState from "../chatUnreadState.js";
 import type * as chats from "../chats.js";
 import type * as companyDomain from "../companyDomain.js";
 import type * as connectedAppRateLimits from "../connectedAppRateLimits.js";
@@ -195,6 +196,7 @@ declare const fullApi: ApiFromModules<{
   chatFormatting: typeof chatFormatting;
   chatThreads: typeof chatThreads;
   chatToolCalls: typeof chatToolCalls;
+  chatUnreadState: typeof chatUnreadState;
   chats: typeof chats;
   companyDomain: typeof companyDomain;
   connectedAppRateLimits: typeof connectedAppRateLimits;

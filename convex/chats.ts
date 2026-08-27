@@ -47,6 +47,7 @@ import {
 } from "./chatAttachmentReferences";
 import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
+import { clearUnreadAssistantCompletion } from "./chatUnreadState";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
 	clampWhitespace,
@@ -83,6 +84,7 @@ const chatFields = {
 	preview: v.string(),
 	model: v.optional(v.string()),
 	reasoningEffort: v.optional(reasoningEffortValidator),
+	unreadAssistantCompletedAt: v.optional(v.number()),
 	isArchived: v.boolean(),
 	archivedAt: v.optional(v.number()),
 	createdAt: v.number(),
@@ -868,6 +870,33 @@ export const getSession = query({
 			args.workspaceId,
 			args.chatId,
 		);
+	},
+});
+
+export const markAssistantCompletionRead = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		const chat = await getOwnedActiveChatById(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			args.chatId,
+		);
+
+		if (!chat) {
+			throw new ConvexError({
+				code: "CHAT_NOT_FOUND",
+				message: "Chat not found.",
+			});
+		}
+
+		await clearUnreadAssistantCompletion(ctx, chat);
+		return null;
 	},
 });
 
