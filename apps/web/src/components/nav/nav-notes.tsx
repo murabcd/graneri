@@ -102,7 +102,6 @@ export function NavNotes({
 						<TooltipContent
 							side="bottom"
 							align="center"
-							sideOffset={8}
 							className="pointer-events-none select-none"
 						>
 							Add note

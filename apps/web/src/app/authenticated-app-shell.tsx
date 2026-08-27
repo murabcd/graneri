@@ -1531,7 +1531,7 @@ function AppShellHeader({
 							data-app-region={isDesktopMac ? "no-drag" : undefined}
 						/>
 					</TooltipTrigger>
-					<TooltipContent side="bottom" align="start" sideOffset={8}>
+					<TooltipContent side="bottom">
 						<div className="flex items-center gap-2">
 							<span>Toggle sidebar</span>
 							<Kbd className="border border-border/60 bg-muted px-1.5 font-mono text-[10px] opacity-100">

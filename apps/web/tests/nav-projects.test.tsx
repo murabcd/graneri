@@ -360,6 +360,16 @@ describe("ProjectSidebarItem", () => {
 });
 
 describe("NavProjects", () => {
+	it("aligns section actions with the header label", () => {
+		renderNavProjects();
+
+		const actionRow = screen
+			.getByRole("button", { name: "Add project" })
+			.closest('[data-sidebar="group-action"]');
+
+		expect(actionRow?.classList.contains("top-2.5")).toBe(true);
+	});
+
 	it("creates a project when Enter is pressed in the name field", async () => {
 		const user = userEvent.setup();
 		mutationMock.mockResolvedValue(project);

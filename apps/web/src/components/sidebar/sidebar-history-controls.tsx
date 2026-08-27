@@ -36,7 +36,7 @@ function HistoryButton({
 					<Icon className="size-4" />
 				</Button>
 			</TooltipTrigger>
-			<TooltipContent side="bottom" align="center" sideOffset={8}>
+			<TooltipContent side="bottom" align="center">
 				<div className="flex items-center gap-2">
 					<span>{ariaLabel}</span>
 					<Kbd className="h-5 px-1.5 text-[10px]">

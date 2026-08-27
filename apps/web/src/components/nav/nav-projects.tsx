@@ -393,7 +393,6 @@ export function NavProjects({
 								<TooltipContent
 									side="bottom"
 									align="center"
-									sideOffset={8}
 									className="pointer-events-none select-none"
 								>
 									{isProjectTreeCollapsed ? "Reopen previous" : "Collapse all"}
@@ -423,7 +422,6 @@ export function NavProjects({
 							<TooltipContent
 								side="bottom"
 								align="center"
-								sideOffset={8}
 								className="pointer-events-none select-none"
 							>
 								Add project
