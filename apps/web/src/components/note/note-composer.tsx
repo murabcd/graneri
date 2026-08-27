@@ -100,6 +100,7 @@ import {
 	type ReasoningEffort,
 	type ServiceTier,
 } from "@/components/chat/model-picker";
+import { RunPlanProgress } from "@/components/chat/run-plan-progress";
 import {
 	COMPOSER_MENTION_PICKER_ICON_CLASS,
 	COMPOSER_MENTION_PICKER_ITEM_CLASS,
@@ -585,6 +586,7 @@ const useNoteComposerController = ({
 		pendingToolApproval,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
+		runPlan,
 		regenerateTurn,
 		restoreEditedQueuedMessage,
 		setMessages,
@@ -1699,6 +1701,7 @@ const useNoteComposerController = ({
 		isToolApprovalSubmitting: isPreparingRequest,
 		onToolApprovalResponse: handleToolApprovalResponse,
 		queuedFollowUps,
+		runPlan,
 		onQueuedFollowUpsReorder,
 		suppressRecipePickerUntilUserActionRef,
 		handleStop,
@@ -3013,6 +3016,10 @@ function ChatComposerForm({
 	speechControls: React.ReactNode;
 	topAccessory?: React.ReactNode;
 }) {
+	const activeTopAccessory =
+		topAccessory ??
+		(controller.runPlan ? <RunPlanProgress plan={controller.runPlan} /> : null);
+
 	return (
 		<form
 			onSubmit={controller.handleSubmit}
@@ -3033,9 +3040,9 @@ function ChatComposerForm({
 						</Kbd>
 					</Button>
 				</div>
-			) : topAccessory ? (
+			) : activeTopAccessory ? (
 				<div className="pointer-events-none absolute inset-x-0 bottom-full z-10 mb-3 flex justify-center">
-					<div className="pointer-events-auto">{topAccessory}</div>
+					<div className="pointer-events-auto">{activeTopAccessory}</div>
 				</div>
 			) : null}
 			{controller.pendingToolApproval ? (

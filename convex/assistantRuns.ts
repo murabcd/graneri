@@ -7,6 +7,7 @@ import {
 	getNonTerminalRunsForChat,
 	getOwnedActiveChatById,
 	nonTerminalRunStatuses,
+	requireSingleNonTerminalRun,
 } from "./assistantRunLifecycle";
 import {
 	assistantRunValidator,
@@ -78,17 +79,6 @@ const requireOwnedRun = async (
 	}
 
 	return run;
-};
-
-const requireSingleNonTerminalRun = (runs: Doc<"assistantRuns">[]) => {
-	if (runs.length <= 1) {
-		return runs[0] ?? null;
-	}
-
-	throw new ConvexError({
-		code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
-		message: "Chat has multiple active assistant runs.",
-	});
 };
 
 export const startAssistantRunForOwner = async (

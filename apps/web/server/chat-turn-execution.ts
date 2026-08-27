@@ -283,7 +283,9 @@ export const executeHostedChatTurn = async ({
 	const isLocalFolderToolContinuation =
 		localFolders.length > 0 &&
 		isLocalFolderToolContinuationMessage(effectiveMessage);
-	let activeStreamSession: HostedActiveStreamSession | null = null;
+	let activeStreamSession: HostedActiveStreamSession<
+		Id<"assistantRuns">
+	> | null = null;
 	let assistantRun: ServerAssistantRunContext;
 	let toolApprovalResponse: ReturnType<typeof getToolApprovalResponse>;
 	try {
@@ -393,6 +395,16 @@ export const executeHostedChatTurn = async ({
 			noteContext,
 			noteId: model.noteId,
 			providerOptions: model.providerOptions,
+			publishRunPlan: async (plan) => {
+				const runId = activeStreamSession?.persister.runId;
+				if (!runId) {
+					throw new Error("Run activity requires an active assistant run.");
+				}
+				await client.mutation(api.assistantRunActivity.publishPlan, {
+					runId,
+					plan,
+				});
+			},
 			recipeSlug,
 			selectedSourceIds,
 			webSearchEnabled,

@@ -5,6 +5,7 @@ Assistant modules share model preparation, execution, durable lifecycle, streami
 - [[connected-apps]] assembles provider tools and credentials.
 - [[desktop-ai]] owns the desktop-local tool exception.
 - [[convex/assistantRunStateMachine.ts]]
+- [[convex/assistantRunActivity.ts]]
 - [producer-neutral execution](../packages/ai/src/hosted-chat-execution.mjs)
 
 ## Shared AI package
@@ -290,6 +291,21 @@ terminal runs must leave no stream or active tool snapshots behind. These
 records do not move desktop-local tool execution out of the
 renderer/local-server bridge.
 
+## Run activity projection
+
+One bounded plan projection connects model progress to the active composer without turning transient UI into the source of truth.
+
+Both hosted producers expose the same `update_plan` runtime tool. The shared AI
+package validates a plan as two to twelve ordered steps with exactly one active
+step unless all work is complete. [[convex/assistantRunActivity.ts]] revalidates
+that contract at the persistence boundary, updates the single
+`assistantRunActivities` row for the active run, and appends the same plan as a
+durable `plan.updated` event in one mutation. Chat and note renderers subscribe
+to the active projection and show a compact progress badge above the composer;
+hover or keyboard focus reveals completed, active, and pending steps. The plan
+does not appear in the transcript. Terminalization deletes the active
+projection while preserving the event journal for replay and diagnosis.
+
 ## Run event timeline
 
 Append-only typed events preserve lifecycle and tool details without duplicating high-frequency streamed text.
@@ -538,6 +554,7 @@ identical storage.
 | Multiple active-turn inputs can accumulate before the model loop drains them. | Graneri can persist multiple queued follow-ups, the renderer accepts distinct manual steer intents into a FIFO while one steer request is in flight, `claimReadyForRun` claims the targeted row plus ready queued rows for the same active run, `acceptSteeredUserMessages` atomically saves/deletes the accepted batch, and active stream replacement carries ordered pending input until it is drained into the next prompt branch. | Implemented |
 | Activity subscribers can distinguish mailbox work from steered input. | Hosted active stream sessions expose `subscribePendingInputActivity`; pending steered input reports `steer`, queued mailbox-style input reports `mailbox`, and subscribing after input is already pending returns the pending activity. | Implemented |
 | A model tool can wait for mailbox or steer activity. | Graneri exposes a runtime-only AI SDK `wait_agent` tool. It subscribes to hosted active stream activity, wakes immediately on already-pending activity, returns app-server-compatible `{ message, timed_out }` results for mailbox, steer, and timeout, and aborts with the active turn. | Implemented |
+| A multi-step run can expose durable current and completed work without polluting the transcript. | Both producers expose `update_plan`; Convex atomically updates one bounded active projection and appends `plan.updated`, while chat and note composers render the projection as a floating badge with an accessible plan popover. Terminal cleanup removes the projection but retains the journal. | Implemented |
 | Mailbox delivery is accepted into turn state. | Hosted active stream sessions keep mailbox-style pending input separate from steered input, can defer mailbox delivery after an answer boundary, and reopen delivery when steered input arrives. Replacement sessions carry both steer and mailbox pending input forward. | Implemented |
 | Long visible history is explicit and recoverable. | The renderer subscribes to cursor-paginated newest-first Convex pages, prepends the active rich stream on the first page, and offers an explicit `Load earlier messages` action until the stored transcript is exhausted. | Implemented |
 | An assistant answer can fork into a new chat without changing its source. | The `Fork chat` assistant message action creates an immutable fork through the selected stored answer, records its lineage, shares attachment lifetime safely, opens the new chat, marks it as forked, and separately discloses any ancestry omitted by the bounded copy. | Implemented |

@@ -2,6 +2,7 @@ import { vWorkflowId } from "@convex-dev/workflow";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
+import { assistantRunPlanValidator } from "./assistantRunActivityModel";
 import {
 	assistantRunExecutionValidator,
 	assistantRunJobValidator,
@@ -754,6 +755,14 @@ export default defineSchema({
 		event: assistantRunEventValidator,
 		createdAt: v.number(),
 	}).index("by_runId_and_eventIndex", ["runId", "eventIndex"]),
+	assistantRunActivities: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		chatId: v.id("chats"),
+		runId: v.id("assistantRuns"),
+		plan: assistantRunPlanValidator,
+		updatedAt: v.number(),
+	}).index("by_runId", ["runId"]),
 	assistantRunJobs: defineTable({
 		ownerTokenIdentifier: v.string(),
 		runId: v.id("assistantRuns"),

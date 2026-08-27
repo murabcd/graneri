@@ -223,6 +223,108 @@ test("finishAssistantRun leaves no snapshots for runId", async () => {
 	expect(snapshots.toolCalls).toHaveLength(0);
 });
 
+test("run plans project active progress and persist as durable events", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-run-plan";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRunWithSnapshots({ asOwner, chatId, workspaceId });
+	const plan = [
+		{ step: "Inspect current behavior", status: "completed" as const },
+		{ step: "Implement the projection", status: "in_progress" as const },
+		{ step: "Verify the result", status: "pending" as const },
+	];
+
+	await asOwner.mutation(api.assistantRunActivity.publishPlan, {
+		runId: run._id,
+		plan,
+	});
+
+	await expect(
+		asOwner.query(api.assistantRunActivity.getActivePlan, {
+			runId: run._id,
+		}),
+	).resolves.toEqual(plan);
+	const planEvent = (
+		await asOwner.query(api.assistantRunEvents.listRunEventsAfter, {
+			runId: run._id,
+		})
+	).find(({ event }) => event.type === "plan.updated");
+	expect(planEvent?.event).toEqual({ type: "plan.updated", plan });
+
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+	});
+	await expect(
+		asOwner.query(api.assistantRunActivity.getActivePlan, {
+			runId: run._id,
+		}),
+	).resolves.toBeNull();
+	const storedActivity = await t.run(async (ctx) =>
+		ctx.db
+			.query("assistantRunActivities")
+			.withIndex("by_runId", (q) => q.eq("runId", run._id))
+			.unique(),
+	);
+	expect(storedActivity).toBeNull();
+	expect(await listRunEventTypes({ asOwner, runId: run._id })).toContain(
+		"plan.updated",
+	);
+});
+
+test("run plans reject ambiguous progress ordering", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-invalid-run-plan";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRunWithSnapshots({ asOwner, chatId, workspaceId });
+
+	await expect(
+		asOwner.mutation(api.assistantRunActivity.publishPlan, {
+			runId: run._id,
+			plan: [
+				{ step: "Pending first", status: "pending" },
+				{ step: "Active second", status: "in_progress" },
+			],
+		}),
+	).rejects.toThrow("ordered as completed, active, then pending");
+});
+
+test("a superseded run cannot publish activity into its replacement", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-stale-run-plan";
+	await createChat({ asOwner, chatId, workspaceId });
+	const staleRun = await startRunWithSnapshots({
+		asOwner,
+		chatId,
+		workspaceId,
+	});
+	const replacementRun = await asOwner.mutation(
+		api.assistantRuns.startAssistantRun,
+		{
+			workspaceId,
+			chatId,
+			assistantMessageId: "replacement-assistant-message",
+			model: "gpt-5",
+			serviceTier: "auto",
+			policy: "supersede",
+		},
+	);
+
+	await expect(
+		asOwner.mutation(api.assistantRunActivity.publishPlan, {
+			runId: staleRun._id,
+			plan: [
+				{ step: "Stale work", status: "in_progress" },
+				{ step: "Wrong destination", status: "pending" },
+			],
+		}),
+	).rejects.toThrow("only be updated while the run is active");
+	await expect(
+		asOwner.query(api.assistantRunActivity.getActivePlan, {
+			runId: replacementRun._id,
+		}),
+	).resolves.toBeNull();
+});
+
 test("completed assistant response stays unread until the chat is opened", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	const chatId = "chat-unread-completion";

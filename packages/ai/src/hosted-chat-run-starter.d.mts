@@ -73,12 +73,12 @@ export declare const startHostedChatRun: <
 	workspaceId: WorkspaceId;
 }) => Promise<
 	| {
-			activeStreamSession: HostedActiveStreamSession;
+			activeStreamSession: HostedActiveStreamSession<RunId>;
 			assistantRun: { _id: RunId };
 			ok: true;
 	  }
 	| {
-			activeStreamSession: HostedActiveStreamSession | null;
+			activeStreamSession: HostedActiveStreamSession<RunId> | null;
 			assistantRun: { _id: RunId } | null;
 			error: unknown;
 			ok: false;

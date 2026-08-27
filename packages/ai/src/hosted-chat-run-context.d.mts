@@ -3,6 +3,7 @@ import type { ToolLoopAgent, ToolSet, UIMessage } from "ai";
 import type { AutomationActions } from "./automation-tools.mjs";
 import type { WorkspaceToolConnection } from "./capability-registry.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
+import type { HostedRunPlan } from "./hosted-run-activity.mjs";
 import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
 import type { ReasoningEffort, ServiceTier } from "./models.mjs";
 
@@ -59,6 +60,7 @@ export declare const buildHostedChatRunContext: (args: {
 	} | null;
 	noteId?: string | null;
 	providerOptions?: ProviderOptions;
+	publishRunPlan: (plan: HostedRunPlan) => Promise<unknown>;
 	recipeSlug?: string | null;
 	selectedSourceIds?: string[];
 	webSearchEnabled?: boolean;

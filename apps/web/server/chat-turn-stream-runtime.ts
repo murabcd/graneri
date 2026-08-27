@@ -44,13 +44,17 @@ type HostedTurnController = HostedTurnInput["turnController"];
 
 export type HostedChatTurnStreamRuntimeResult =
 	| {
-			activeStreamSession: HostedActiveStreamSession | null;
+			activeStreamSession: HostedActiveStreamSession<
+				Id<"assistantRuns">
+			> | null;
 			assistantMessageId: string;
 			assistantRunId: Id<"assistantRuns">;
 			ok: true;
 	  }
 	| {
-			activeStreamSession: HostedActiveStreamSession | null;
+			activeStreamSession: HostedActiveStreamSession<
+				Id<"assistantRuns">
+			> | null;
 			ok: false;
 	  };
 

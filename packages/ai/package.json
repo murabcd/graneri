@@ -94,6 +94,10 @@
       "types": "./src/hosted-chat-turn.d.mts",
       "import": "./src/hosted-chat-turn.mjs"
     },
+    "./hosted-run-activity": {
+      "types": "./src/hosted-run-activity.d.mts",
+      "import": "./src/hosted-run-activity.mjs"
+    },
     "./hosted-user-question": {
       "types": "./src/hosted-user-question.d.mts",
       "import": "./src/hosted-user-question.mjs"

@@ -33,6 +33,7 @@ import type {
 	ReasoningEffort,
 	ServiceTier,
 } from "@/components/chat/model-picker";
+import { RunPlanProgress } from "@/components/chat/run-plan-progress";
 import {
 	COMPOSER_DOCK_FADE_CLASS,
 	COMPOSER_DOCK_WRAPPER_CLASS,
@@ -374,6 +375,7 @@ const useChatPageController = ({
 		pendingToolApproval,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
+		runPlan,
 		regenerateTurn,
 		restoreEditedQueuedMessage,
 		streamingMessageIds,
@@ -927,6 +929,7 @@ const useChatPageController = ({
 		recipeMentionCatalog,
 		handleCancelEdit,
 		queuedFollowUps,
+		runPlan,
 		onQueuedFollowUpsReorder,
 		onDeleteMessage: handleDeleteMessage,
 		onForkMessage: handleForkMessage,
@@ -1267,6 +1270,11 @@ export function ChatPage({
 			onOpenConnectionsSettings={onOpenConnectionsSettings}
 			editingMessageId={controller.editingMessageId}
 			onCancelEdit={controller.handleCancelEdit}
+			topAccessory={
+				controller.runPlan ? (
+					<RunPlanProgress plan={controller.runPlan} />
+				) : undefined
+			}
 		/>
 	);
 	const scrollContent = (

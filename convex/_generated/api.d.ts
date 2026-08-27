@@ -17,6 +17,8 @@ import type * as appConnections from "../appConnections.js";
 import type * as assistantQueuedMessageStateMachine from "../assistantQueuedMessageStateMachine.js";
 import type * as assistantQueuedMessages from "../assistantQueuedMessages.js";
 import type * as assistantRunActions from "../assistantRunActions.js";
+import type * as assistantRunActivity from "../assistantRunActivity.js";
+import type * as assistantRunActivityModel from "../assistantRunActivityModel.js";
 import type * as assistantRunAutomationActions from "../assistantRunAutomationActions.js";
 import type * as assistantRunBackground from "../assistantRunBackground.js";
 import type * as assistantRunBackgroundState from "../assistantRunBackgroundState.js";
@@ -143,6 +145,8 @@ declare const fullApi: ApiFromModules<{
   assistantQueuedMessageStateMachine: typeof assistantQueuedMessageStateMachine;
   assistantQueuedMessages: typeof assistantQueuedMessages;
   assistantRunActions: typeof assistantRunActions;
+  assistantRunActivity: typeof assistantRunActivity;
+  assistantRunActivityModel: typeof assistantRunActivityModel;
   assistantRunAutomationActions: typeof assistantRunAutomationActions;
   assistantRunBackground: typeof assistantRunBackground;
   assistantRunBackgroundState: typeof assistantRunBackgroundState;

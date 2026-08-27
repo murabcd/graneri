@@ -5,7 +5,7 @@ import {
 	lastAssistantMessageIsCompleteWithApprovalResponses,
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import * as React from "react";
 // Optimistic insertion must commit before submit continues into DOM measurement.
 // react-doctor-disable-next-line react-doctor/no-flush-sync -- the interaction owner guarantees the optimistic message is visible before submit continues.
@@ -103,6 +103,10 @@ export const useRendererChatSession = ({
 }) => {
 	const attachableActiveRun =
 		activeRun && activeRun.status !== "stopping" ? activeRun : null;
+	const runPlan = useQuery(
+		api.assistantRunActivity.getActivePlan,
+		attachableActiveRun ? { runId: attachableActiveRun._id } : "skip",
+	);
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
@@ -632,6 +636,7 @@ export const useRendererChatSession = ({
 		onQueuedFollowUpsReorder: queuedFollowUpControls.onQueuedFollowUpsReorder,
 		pendingToolApproval,
 		queuedFollowUps: queuedFollowUpControls.queuedFollowUps,
+		runPlan: runPlan ?? null,
 		regenerateTurn,
 		restoreEditedQueuedMessage:
 			queuedFollowUpControls.restoreEditedQueuedMessage,

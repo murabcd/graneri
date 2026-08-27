@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { deleteAssistantRunActivity } from "./assistantRunActivity";
 import {
 	discardClaimedForRunInternal,
 	discardQueuedForRunInternal,
@@ -107,6 +108,7 @@ export const cleanupAssistantRunSnapshots = async (
 		...streamIds.map((streamId) => ctx.db.delete(streamId)),
 		...toolCallIds.map((toolCallId) => ctx.db.delete(toolCallId)),
 		cleanupAssistantRunToolExecutions(ctx, runId),
+		deleteAssistantRunActivity(ctx, runId),
 	]);
 };
 

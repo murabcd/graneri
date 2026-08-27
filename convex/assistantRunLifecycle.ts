@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireOwnedWorkspace } from "./domain";
@@ -56,4 +57,17 @@ export const getNonTerminalRunsForChat = async (
 			right.startedAt - left.startedAt ||
 			right._creationTime - left._creationTime,
 	);
+};
+
+export const requireSingleNonTerminalRun = (
+	runs: Doc<"assistantRuns">[],
+) => {
+	if (runs.length <= 1) {
+		return runs[0] ?? null;
+	}
+
+	throw new ConvexError({
+		code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
+		message: "Chat has multiple active assistant runs.",
+	});
 };

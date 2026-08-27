@@ -5,8 +5,8 @@ export declare const HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS = 250;
 
 export type HostedActiveToolCallStatus = "completed" | "failed" | "denied";
 
-export type HostedActiveStreamPersisterLike = {
-	readonly runId?: string;
+export type HostedActiveStreamPersisterLike<RunId extends string = string> = {
+	readonly runId?: RunId;
 	append(delta: string): void;
 	replaceParts?(parts: UIMessage["parts"]): void;
 	closePersistence?(): Promise<void>;
@@ -106,10 +106,10 @@ export declare class HostedActiveChatStreamPersister<
 	discardPending(): void;
 }
 
-export type HostedActiveStreamSession = {
+export type HostedActiveStreamSession<RunId extends string = string> = {
 	abort(reason?: unknown): void;
 	abortSignal: AbortSignal;
-	persister: HostedActiveStreamPersisterLike;
+	persister: HostedActiveStreamPersisterLike<RunId>;
 	streamKey: string;
 	turnInput: HostedTurnInputBuffer;
 	start(): Promise<void>;
@@ -172,7 +172,7 @@ export declare const createHostedActiveChatStreamSession: <
 	messageId?: string;
 	runId: RunId;
 	workspaceId: WorkspaceId;
-}) => HostedActiveStreamSession;
+}) => HostedActiveStreamSession<RunId>;
 
 export declare const pipeHostedActiveStreamText: <
 	Chunk extends { type: string },

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { assistantRunPlanValidator } from "./assistantRunActivityModel";
 import { serviceTierValidator } from "./assistantRunModel";
 
 export const assistantRunEventValidator = v.union(
@@ -53,6 +54,10 @@ export const assistantRunEventValidator = v.union(
 		),
 		outputJson: v.optional(v.string()),
 		errorText: v.optional(v.string()),
+	}),
+	v.object({
+		type: v.literal("plan.updated"),
+		plan: assistantRunPlanValidator,
 	}),
 	v.object({
 		type: v.literal("input.requested"),

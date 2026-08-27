@@ -10,6 +10,7 @@ import {
 	prepareHostedAssistantExecution,
 	startHostedAssistantExecution,
 } from "@workspace/ai/hosted-assistant-execution";
+import { createHostedRunActivityTool } from "@workspace/ai/hosted-run-activity";
 import {
 	generateHostedChatTitle,
 	getHostedChatMessageText,
@@ -344,6 +345,16 @@ export const runStep = internalAction({
 			const { agent } = prepareHostedAssistantExecution({
 				additionalAgentTools: {
 					request_user_input: createHostedRequestUserInputTool(),
+					update_plan: createHostedRunActivityTool({
+						publishPlan: (plan) =>
+							ctx.runMutation(
+								internal.assistantRunActivity.publishPlanInternal,
+								{
+									runId: args.runId,
+									plan,
+								},
+							),
+					}),
 				},
 				enabledTools,
 				instructions: context.job.instructions,
