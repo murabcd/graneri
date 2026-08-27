@@ -8,6 +8,7 @@ import {
 	validateHostedChatActiveRunPolicy,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
+	createHostedActiveStreamKey,
 	createHostedAssistantRunFinalizer,
 	createHostedChatRunResponseStream,
 	type createHostedChatTurnInput,
@@ -66,85 +67,149 @@ export const pipeHostedActiveStreamSessionToResponse = ({
 	});
 };
 
-export const runHostedChatTurnStreamRuntime = async ({
-	activeChatStreamControllers,
-	admissionReservationId,
-	agent,
-	appsEnabled,
-	assistantContinuationMessageId,
-	attachableRun,
+export const interruptHostedChatRun = async ({
+	activeStreamSessions,
 	chatId,
-	chatMessages,
-	convexClient,
-	continueRunId,
-	coreToolPolicyState,
-	defaultTimezone,
-	emitWideEvent,
-	finalizedToolSet,
-	instructions,
-	lastUserMessage,
-	localFolderRoots,
-	logLatency,
-	model,
-	noteId,
-	queuedInput,
-	reasoningEffort,
-	serviceTier,
-	safetyIdentifier,
-	replayQueuedMessageId,
-	response,
-	sendJson,
-	setAcceptedSteerTurnId,
-	shouldGenerateChatTitle,
-	appConnections,
-	selectedSourceIds,
-	steeredUserMessages,
-	supersedeActiveRun,
-	toolApprovalResponse,
-	trigger,
-	turnController,
-	wideEvent,
+	client,
+	pendingInput = [],
+	runId,
 	workspaceId,
 }: {
-	activeChatStreamControllers: Map<string, HostedActiveStreamSession>;
-	admissionReservationId?: Id<"aiAdmissionReservations">;
-	agent: ServerAssistantRunContext["agent"];
-	appsEnabled: boolean;
-	assistantContinuationMessageId?: string;
-	attachableRun: AttachableAssistantRun | null;
+	activeStreamSessions: Map<string, HostedActiveStreamSession>;
 	chatId: string;
-	chatMessages: UIMessage[];
-	convexClient: ConvexHttpClient;
-	continueRunId?: Id<"assistantRuns"> | null;
-	coreToolPolicyState: ServerAssistantRunContext["coreToolPolicyState"];
-	defaultTimezone: string;
-	emitWideEvent: (level: "error" | "info") => void;
-	finalizedToolSet: ServerAssistantRunContext["finalizedToolSet"];
-	instructions: string;
-	lastUserMessage?: UIMessage;
-	localFolderRoots: ServerAssistantRunContext["localFolderRoots"];
+	client: ConvexHttpClient;
+	pendingInput?: readonly unknown[];
+	runId: Id<"assistantRuns">;
+	workspaceId: Id<"workspaces">;
+}) => {
+	const streamKey = createHostedActiveStreamKey({ workspaceId, chatId });
+	const activeSession = activeStreamSessions.get(streamKey);
+	if (pendingInput.length > 0) {
+		activeSession?.turnInput.extendSteerInput([...pendingInput]);
+	}
+	const drainedPendingInput =
+		activeSession?.turnInput.takeForCurrentTurn() ?? [];
+	activeSession?.abort("stopped");
+	activeSession?.cleanup();
+
+	await client.mutation(api.chats.stopActiveStream, {
+		workspaceId,
+		chatId,
+		runId,
+	});
+
+	return drainedPendingInput;
+};
+
+export type HostedChatTurnRouteEnvironment = {
+	activeStreamSessions: Map<string, HostedActiveStreamSession>;
+	client: ConvexHttpClient;
+	emitEvent: (level: "error" | "info") => void;
 	logLatency: ChatLatencyLogger;
-	model: string;
-	noteId: Id<"notes"> | null;
-	queuedInput: HostedQueuedInput;
-	reasoningEffort: ReasoningEffort;
-	serviceTier: ServiceTier;
-	safetyIdentifier: string;
-	replayQueuedMessageId?: Id<"assistantQueuedMessages"> | null;
+	onSteerAccepted: (runId: Id<"assistantRuns"> | null) => void;
 	response: ServerResponse;
 	sendJson: SendJson;
-	setAcceptedSteerTurnId: (runId: Id<"assistantRuns"> | null) => void;
-	shouldGenerateChatTitle: boolean;
-	appConnections: ServerAssistantRunContext["appConnections"];
-	selectedSourceIds: string[];
-	steeredUserMessages: UIMessage[];
-	supersedeActiveRun?: boolean;
-	toolApprovalResponse: ToolApprovalResponse | null;
-	trigger?: "submit-message" | "regenerate-message";
-	turnController: HostedTurnController;
 	wideEvent: ServerWideEvent;
+};
+
+export type HostedChatTurnAcceptedInput = {
+	attachableRun: AttachableAssistantRun | null;
+	continueRunId?: Id<"assistantRuns"> | null;
+	queuedInput: HostedQueuedInput;
+	replayQueuedMessageId?: Id<"assistantQueuedMessages"> | null;
+	steeredUserMessages: UIMessage[];
+	toolApprovalResponse: ToolApprovalResponse | null;
+	turnController: HostedTurnController;
+};
+
+export type HostedChatTurnPreparedRun = Pick<
+	ServerAssistantRunContext,
+	| "agent"
+	| "appConnections"
+	| "chatMessages"
+	| "coreToolPolicyState"
+	| "finalizedToolSet"
+	| "instructions"
+	| "localFolderRoots"
+> & {
+	assistantContinuationMessageId?: string;
+	lastUserMessage?: UIMessage;
+	shouldGenerateChatTitle: boolean;
+};
+
+export type HostedChatTurnExecutionPolicy = {
+	admissionReservationId?: Id<"aiAdmissionReservations">;
+	appsEnabled: boolean;
+	chatId: string;
+	defaultTimezone: string;
+	model: string;
+	noteId: Id<"notes"> | null;
+	reasoningEffort: ReasoningEffort;
+	safetyIdentifier: string;
+	selectedSourceIds: string[];
+	serviceTier: ServiceTier;
+	supersedeActiveRun?: boolean;
+	trigger?: "submit-message" | "regenerate-message";
 	workspaceId: Id<"workspaces">;
+};
+
+export const runHostedChatTurnStreamRuntime = async ({
+	acceptedInput,
+	environment,
+	policy,
+	preparedRun,
+}: {
+	acceptedInput: HostedChatTurnAcceptedInput;
+	environment: HostedChatTurnRouteEnvironment;
+	policy: HostedChatTurnExecutionPolicy;
+	preparedRun: HostedChatTurnPreparedRun;
 }): Promise<HostedChatTurnStreamRuntimeResult> => {
+	const {
+		attachableRun,
+		continueRunId,
+		queuedInput,
+		replayQueuedMessageId,
+		steeredUserMessages,
+		toolApprovalResponse,
+		turnController,
+	} = acceptedInput;
+	const {
+		activeStreamSessions,
+		client: convexClient,
+		emitEvent: emitWideEvent,
+		logLatency,
+		onSteerAccepted: setAcceptedSteerTurnId,
+		response,
+		sendJson,
+		wideEvent,
+	} = environment;
+	const {
+		admissionReservationId,
+		appsEnabled,
+		chatId,
+		defaultTimezone,
+		model,
+		noteId,
+		reasoningEffort,
+		safetyIdentifier,
+		selectedSourceIds,
+		serviceTier,
+		supersedeActiveRun,
+		trigger,
+		workspaceId,
+	} = policy;
+	const {
+		agent,
+		appConnections,
+		assistantContinuationMessageId,
+		chatMessages,
+		coreToolPolicyState,
+		finalizedToolSet,
+		instructions,
+		lastUserMessage,
+		localFolderRoots,
+		shouldGenerateChatTitle,
+	} = preparedRun;
 	const turnRouteErrors = createHostedChatTurnRouteErrorResponder({
 		continueRunId,
 		emitWideEvent,
@@ -470,7 +535,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 		serviceTier,
 		trigger,
 		supersedeActiveRun,
-		controllers: activeChatStreamControllers,
+		controllers: activeStreamSessions,
 		startAssistantRun: (args) =>
 			convexClient.mutation(api.assistantRuns.startAssistantRun, args),
 		failAssistantRun: (args) =>

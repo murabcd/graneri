@@ -4,7 +4,7 @@ import type { AutomationActions } from "./automation-tools.mjs";
 import type { WorkspaceToolConnection } from "./capability-registry.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
-import type { ServiceTier } from "./models.mjs";
+import type { ReasoningEffort, ServiceTier } from "./models.mjs";
 
 type LogLatencyDetails = Record<
 	string,
@@ -33,7 +33,7 @@ export declare const buildHostedChatRunContext: (args: {
 	compactionSummary: string | null;
 	convexClient: unknown;
 	defaultModel: string;
-	defaultReasoningEffort: string;
+	defaultReasoningEffort: ReasoningEffort;
 	defaultServiceTier: ServiceTier;
 	defaultTimezone: string;
 	getActiveStreamSession: () => HostedActiveStreamSession | null;

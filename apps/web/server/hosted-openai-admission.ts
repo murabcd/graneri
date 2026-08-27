@@ -3,6 +3,7 @@ import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat
 import { authorizeOpenAiRequest } from "@workspace/ai/openai-admission";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
+import type { Id } from "../../../convex/_generated/dataModel.js";
 import { sendJson } from "./http-utils.js";
 
 type HostedOpenAiOperation =
@@ -66,7 +67,7 @@ const authorizeHostedOpenAiRequest = async ({
 		});
 	}
 
-	return await authorizeOpenAiRequest({
+	return await authorizeOpenAiRequest<Id<"aiAdmissionReservations">>({
 		authorize: () => authorizeOperation(authorizationClient, operation),
 		rateLimitError: rateLimitErrors[operation],
 	});
@@ -98,7 +99,7 @@ type HostedOpenAiAdmissionRequest = HostedOpenAiAdmissionBase &
 	);
 
 type HostedOpenAiAdmission = {
-	admissionReservationId?: string;
+	admissionReservationId?: Id<"aiAdmissionReservations">;
 	apiKey?: string;
 	safetyIdentifier: string;
 };

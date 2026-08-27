@@ -378,12 +378,26 @@ describe("chat handler persistence failures", () => {
 		expect(convexMock.mutation).toHaveBeenCalledTimes(1);
 	});
 
-	it("starts a durable background run without a web active stream or web OpenAI key", async () => {
+	it.each([
+		{
+			expectedTitleGeneration: false,
+			label: "existing titled chat",
+			storedChat: {
+				model: defaultChatModelId,
+				title: "Existing chat",
+			},
+		},
+		{
+			expectedTitleGeneration: true,
+			label: "new chat without a stored session",
+			storedChat: null,
+		},
+	])("starts a durable background run for an $label without a web stream or web key", async ({
+		expectedTitleGeneration,
+		storedChat,
+	}) => {
 		delete process.env.OPENAI_API_KEY;
-		convexMock.query.mockResolvedValueOnce({
-			model: defaultChatModelId,
-			title: "Existing chat",
-		});
+		convexMock.query.mockResolvedValueOnce(storedChat);
 		convexMock.query.mockResolvedValueOnce(null);
 		convexMock.query.mockResolvedValueOnce([]);
 		convexMock.query.mockResolvedValueOnce(null);
@@ -418,7 +432,7 @@ describe("chat handler persistence failures", () => {
 			chatId: "chat_1",
 			job: {
 				model: defaultChatModelId,
-				shouldGenerateChatTitle: false,
+				shouldGenerateChatTitle: expectedTitleGeneration,
 			},
 			workspaceId: "workspace_1",
 		});

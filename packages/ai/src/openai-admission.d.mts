@@ -1,6 +1,6 @@
-type OpenAiAdmission =
+type OpenAiAdmission<TAdmissionReservationId extends string> =
 	| {
-			admissionReservationId?: string;
+			admissionReservationId?: TAdmissionReservationId;
 			ok: true;
 			safetyIdentifier: string;
 	  }
@@ -15,10 +15,12 @@ type OpenAiAdmission =
 			statusCode: 401 | 429 | 503;
 	  };
 
-export declare const authorizeOpenAiRequest: (args: {
+export declare const authorizeOpenAiRequest: <
+	TAdmissionReservationId extends string = string,
+>(args: {
 	authorize: () => Promise<{
-		admissionReservationId?: string;
+		admissionReservationId?: TAdmissionReservationId;
 		tokenIdentifier: string;
 	}>;
 	rateLimitError: string;
-}) => Promise<OpenAiAdmission>;
+}) => Promise<OpenAiAdmission<TAdmissionReservationId>>;

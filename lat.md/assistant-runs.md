@@ -93,12 +93,19 @@ shared modules own chat behavior.
 
 ## Hosted stream runtime
 
-The hosted stream runtime owns active-run policy, accepted input, start, finalization, initial streaming, and reconnect streaming.
+The hosted turn executor owns accepted-turn preparation and hands one domain-shaped transaction to the producer runtime.
 
-The hosted web chat route delegates active-run policy, same-run validation,
-queued acceptance headers, assistant-run start, stream finalization, initial
-AI SDK stream piping, and reconnect stream piping to its hosted stream runtime
-module so HTTP parsing/context assembly stays separate from turn execution.
+The hosted web chat route authenticates the request, resolves stored model
+configuration, and admits the request before delegating to
+[[apps/web/server/chat-turn-execution.ts]]. That executor alone claims queued
+input, prepares branches and compacted context, resolves connected tools and
+local continuations, persists accepted local output, and passes the runtime four
+explicit records: route environment, accepted input, prepared run, and execution
+policy. [[apps/web/server/chat-turn-stream-runtime.ts]] owns producer selection,
+active-run policy, same-run validation, accepted user or approval persistence,
+queued acceptance headers, run start, finalization, and initial streaming.
+Reconnect streaming remains transport-only and never reconstructs turn
+preparation or producer policy.
 
 ## Rolling context compaction
 

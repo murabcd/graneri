@@ -102,6 +102,10 @@ type PreparedServerAssistantRunInput = Extract<
 	{ ok: true }
 >;
 
+export type ServerAssistantRunCompletionInput = Parameters<
+	PreparedServerAssistantRunInput["complete"]
+>[0];
+
 export type ServerAssistantRunContext = Awaited<
 	ReturnType<PreparedServerAssistantRunInput["complete"]>
 >;
