@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	getHostedHumanDecisionPendingDecision,
+	getMatchingPendingHostedHumanDecision,
 	getPendingHostedHumanDecision,
 } from "../src/hosted-human-decision.mjs";
 
@@ -42,6 +43,31 @@ describe("hosted human decisions", () => {
 					parts: [{ type: "text", text: "next" }],
 				},
 			]),
+		).toBeNull();
+	});
+
+	it("exposes a decision only while durable run state is waiting for it", () => {
+		const pendingDecision =
+			getHostedHumanDecisionPendingDecision(approvalMessage);
+		expect(
+			getMatchingPendingHostedHumanDecision({
+				messages: [approvalMessage],
+				pendingDecision,
+			}),
+		).toMatchObject({ approvalId: "approval-1", type: "tool_approval" });
+		expect(
+			getMatchingPendingHostedHumanDecision({
+				messages: [approvalMessage],
+				pendingDecision: null,
+			}),
+		).toBeNull();
+		expect(
+			getMatchingPendingHostedHumanDecision({
+				messages: [approvalMessage],
+				pendingDecision: pendingDecision
+					? { ...pendingDecision, toolCallId: "different-call" }
+					: null,
+			}),
 		).toBeNull();
 	});
 });

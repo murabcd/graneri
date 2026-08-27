@@ -1,4 +1,5 @@
 import { getSelectedNoteSourceIds } from "@workspace/ai/capability-metadata";
+import type { ChatMode } from "@workspace/ai/chat-mode";
 import {
 	buildHostedNotesContext,
 	getHostedChatConvexRouteError,
@@ -11,6 +12,7 @@ import {
 	createHostedChatTurnInput,
 	type HostedActiveStreamSession,
 } from "@workspace/ai/hosted-chat-turn";
+import { getHostedUserQuestionAnswer } from "@workspace/ai/hosted-user-question";
 import { isLocalFolderToolContinuationMessage } from "@workspace/ai/local-folder-tool-contract";
 import {
 	getToolApprovalResponse,
@@ -56,6 +58,7 @@ type HostedChatTurnRequest = Pick<
 	| "trigger"
 	| "webSearchEnabled"
 > & {
+	chatMode: ChatMode;
 	chatId: string;
 	workspaceId: Id<"workspaces">;
 };
@@ -182,6 +185,7 @@ export const executeHostedChatTurn = async ({
 	} = environment;
 	const {
 		appsEnabled = true,
+		chatMode,
 		chatId,
 		continueRunId,
 		localFolders = [],
@@ -198,6 +202,10 @@ export const executeHostedChatTurn = async ({
 		webSearchEnabled = false,
 		workspaceId,
 	} = request;
+	const pendingUserQuestion =
+		attachableRun?.pendingDecision?.type === "user_question"
+			? attachableRun.pendingDecision
+			: null;
 	const { queuedInput, turnController } = createHostedChatTurnInput<
 		Id<"workspaces">,
 		string,
@@ -224,6 +232,11 @@ export const executeHostedChatTurn = async ({
 		validateInput: (inputMessage) => {
 			if (
 				getToolApprovalResponse(inputMessage) ||
+				(pendingUserQuestion &&
+					getHostedUserQuestionAnswer({
+						message: inputMessage,
+						decision: pendingUserQuestion,
+					}) !== null) ||
 				(localFolders.length > 0 &&
 					isLocalFolderToolContinuationMessage(inputMessage))
 			) {
@@ -283,6 +296,23 @@ export const executeHostedChatTurn = async ({
 	const isLocalFolderToolContinuation =
 		localFolders.length > 0 &&
 		isLocalFolderToolContinuationMessage(effectiveMessage);
+	const userQuestionAnswer = pendingUserQuestion
+		? getHostedUserQuestionAnswer({
+				message: effectiveMessage,
+				decision: pendingUserQuestion,
+			})
+		: null;
+	if (pendingUserQuestion && continueRunId && userQuestionAnswer === null) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = 400;
+		wideEvent.error_code = "user_question_answer_invalid";
+		emitEvent("error");
+		sendJson(response, 400, {
+			error: "Questionnaire continuation is missing its tool answer.",
+			errorCode: "user_question_answer_invalid",
+		});
+		return;
+	}
 	let activeStreamSession: HostedActiveStreamSession<
 		Id<"assistantRuns">
 	> | null = null;
@@ -299,7 +329,9 @@ export const executeHostedChatTurn = async ({
 			logLatency,
 			message: effectiveMessage,
 			messageId:
-				toolApprovalResponse || isLocalFolderToolContinuation
+				toolApprovalResponse ||
+				userQuestionAnswer !== null ||
+				isLocalFolderToolContinuation
 					? undefined
 					: messageId,
 			onBranchError: async ({ error, messageId: branchMessageId }) => {
@@ -330,7 +362,9 @@ export const executeHostedChatTurn = async ({
 			},
 			pendingMessages: pendingSteerMessages,
 			prepareMessage:
-				toolApprovalResponse || isLocalFolderToolContinuation
+				toolApprovalResponse ||
+				userQuestionAnswer !== null ||
+				isLocalFolderToolContinuation
 					? ({ storedMessages }) =>
 							createCanonicalChatAssistantContinuation({
 								approval: toolApprovalResponse
@@ -345,6 +379,13 @@ export const executeHostedChatTurn = async ({
 								storedMessage: storedMessages.find(
 									(storedMessage) => storedMessage.id === effectiveMessage.id,
 								),
+								userQuestion:
+									userQuestionAnswer !== null && pendingUserQuestion
+										? {
+												answer: userQuestionAnswer,
+												decision: pendingUserQuestion,
+											}
+										: null,
 							})
 					: undefined,
 			safetyIdentifier: admission.safetyIdentifier,
@@ -356,6 +397,7 @@ export const executeHostedChatTurn = async ({
 		}
 		assistantRun = await preparedAssistantRunInput.complete({
 			appsEnabled,
+			chatMode,
 			automationActions: createHostedChatAutomationActions({
 				convexClient: client,
 				workspaceId,
@@ -489,6 +531,7 @@ export const executeHostedChatTurn = async ({
 			steeredUserMessages,
 			toolApprovalResponse,
 			turnController,
+			userQuestionAnswer,
 		},
 		environment,
 		policy: {

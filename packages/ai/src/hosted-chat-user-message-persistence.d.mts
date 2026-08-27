@@ -85,10 +85,6 @@ export declare const persistHostedChatUserMessage: <
 				message: ReturnType<typeof toHostedStoredMessage>;
 			}>;
 		}) => Promise<unknown>;
-		appendUserMessageToRun: (args: {
-			runId: RunId;
-			messageId: string;
-		}) => Promise<unknown>;
 		continueRunId?: RunId | null;
 		nextAssistantMessageId: string;
 		queuedInput: QueuedInput<WorkspaceId, ChatId, RunId, QueuedMessageId>;

@@ -1,4 +1,8 @@
-import { resolveHostedUserQuestionMessage } from "@workspace/ai/hosted-user-question";
+import {
+	getHostedUserQuestionRequest,
+	hostedUserQuestionDecisionsMatch,
+	resolveHostedUserQuestionMessage,
+} from "@workspace/ai/hosted-user-question";
 import { decodeStoredUiMessage } from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
@@ -19,9 +23,7 @@ const requireStoredUserQuestion = async (
 	const storedMessage = await ctx.db
 		.query("chatMessages")
 		.withIndex("by_chatId_and_messageId", (q) =>
-			q
-				.eq("chatId", run.chatId)
-				.eq("messageId", decision.assistantMessageId),
+			q.eq("chatId", run.chatId).eq("messageId", decision.assistantMessageId),
 		)
 		.unique();
 	if (
@@ -35,28 +37,32 @@ const requireStoredUserQuestion = async (
 		});
 	}
 
-	let resolvedMessage;
+	let questionMessage: Awaited<ReturnType<typeof decodeStoredUiMessage>> | null;
 	try {
-		resolvedMessage = resolveHostedUserQuestionMessage({
-			message: await decodeStoredUiMessage({
-				id: storedMessage.messageId,
-				role: storedMessage.role,
-				partsJson: storedMessage.partsJson,
-				metadataJson: storedMessage.metadataJson,
-				createdAt: storedMessage.createdAt,
-			}),
-			decision,
+		questionMessage = await decodeStoredUiMessage({
+			id: storedMessage.messageId,
+			role: storedMessage.role,
+			partsJson: storedMessage.partsJson,
+			metadataJson: storedMessage.metadataJson,
+			createdAt: storedMessage.createdAt,
 		});
 	} catch {
-		resolvedMessage = null;
+		questionMessage = null;
 	}
-	if (!resolvedMessage) {
+	const storedDecision = questionMessage
+		? getHostedUserQuestionRequest(questionMessage)
+		: null;
+	if (
+		!questionMessage ||
+		!storedDecision ||
+		!hostedUserQuestionDecisionsMatch(storedDecision, decision)
+	) {
 		throw new ConvexError({
 			code: "USER_QUESTION_INVALID",
 			message: "Stored assistant question does not match the pending request.",
 		});
 	}
-	return { resolvedMessage, storedMessage };
+	return { questionMessage, storedMessage };
 };
 
 export const requireAssistantRunUserQuestion = async (
@@ -70,44 +76,37 @@ export const requireAssistantRunUserQuestion = async (
 export const resolveAssistantRunUserQuestion = async (
 	ctx: MutationCtx,
 	run: Doc<"assistantRuns">,
-	answerMessageIds: ReadonlyArray<string>,
+	answer: string,
 ) => {
 	const decision = run.pendingDecision;
 	if (run.status !== "waiting_for_user" || decision?.type !== "user_question") {
 		return false;
 	}
-	if (answerMessageIds.length === 0) {
+	if (!answer.trim()) {
 		throw new ConvexError({
 			code: "USER_QUESTION_ANSWER_INVALID",
 			message: "Assistant question answer is missing.",
 		});
 	}
-	for (const messageId of answerMessageIds) {
-		const answerMessage = await ctx.db
-			.query("chatMessages")
-			.withIndex("by_chatId_and_messageId", (q) =>
-				q.eq("chatId", run.chatId).eq("messageId", messageId),
-			)
-			.unique();
-		if (
-			!answerMessage ||
-			answerMessage.ownerTokenIdentifier !== run.ownerTokenIdentifier ||
-			answerMessage.role !== "user"
-		) {
-			throw new ConvexError({
-				code: "USER_QUESTION_ANSWER_INVALID",
-				message: "Assistant question answer was not found.",
-			});
-		}
-	}
 
-	const { resolvedMessage, storedMessage } = await requireStoredUserQuestion(
+	const { questionMessage, storedMessage } = await requireStoredUserQuestion(
 		ctx,
 		run,
 		decision,
 	);
+	const answeredMessage = resolveHostedUserQuestionMessage({
+		message: questionMessage,
+		decision,
+		answer,
+	});
+	if (!answeredMessage) {
+		throw new ConvexError({
+			code: "USER_QUESTION_ANSWER_INVALID",
+			message: "Assistant question answer did not match its request.",
+		});
+	}
 
-	const partsJson = JSON.stringify(resolvedMessage.parts);
+	const partsJson = JSON.stringify(answeredMessage.parts);
 	const replacement = {
 		chatId: storedMessage.chatId,
 		ownerTokenIdentifier: storedMessage.ownerTokenIdentifier,

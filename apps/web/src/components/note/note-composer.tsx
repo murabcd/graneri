@@ -2,6 +2,7 @@ import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
+import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
 import {
 	canOpenDesktopSoundSettings,
 	openDesktopSoundSettings,
@@ -87,10 +88,7 @@ import {
 	useFileAttachmentDropzone,
 	useRevokeAttachmentObjectUrls,
 } from "@/components/ai-elements/use-file-attachments";
-import {
-	ChatHumanDecisionBar,
-	type HumanDecisionResponse,
-} from "@/components/chat/chat-human-decision-bar";
+import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
 import { ChatQueuedFollowUpBar } from "@/components/chat/chat-queued-follow-up-bar";
 import {
 	ASSISTANT_CHAT_CONTENT_CLASS,
@@ -595,8 +593,8 @@ const useNoteComposerController = ({
 		setMessages,
 		status: chatStatus,
 		streamingMessageIds,
-		submitToolApproval,
 		submitTurn,
+		submitHumanDecision,
 		updateQueuedTurn,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
@@ -1389,18 +1387,8 @@ const useNoteComposerController = ({
 		sharedLocalFolders,
 	]);
 	const handleHumanDecisionResponse = React.useCallback(
-		async (response: HumanDecisionResponse) => {
-			if (response.type === "user_question") {
-				setMessage(response.answer);
-				setDraftMetadata(null);
-				setAttachedFiles([]);
-				requestComposerFocus();
-				return;
-			}
-			if (
-				pendingHumanDecision?.type !== "tool_approval" ||
-				isPreparingRequest
-			) {
+		async (response: HostedHumanDecisionResponse) => {
+			if (isPreparingRequest) {
 				return;
 			}
 
@@ -1411,20 +1399,17 @@ const useNoteComposerController = ({
 			}
 
 			try {
-				await submitToolApproval({
-					approved: response.approved,
-					buildRequestBody,
-				});
+				await submitHumanDecision({ response, buildRequestBody });
 			} catch (error) {
 				logError({
 					event: "client.error",
 					error,
-					message: "Failed to submit tool approval",
+					message: "Failed to submit human decision",
 				});
 				toast.error(
 					error instanceof Error
 						? error.message
-						: "Failed to submit tool approval",
+						: "Failed to submit human decision",
 				);
 			} finally {
 				requestComposerFocus();
@@ -1434,12 +1419,9 @@ const useNoteComposerController = ({
 			buildRequestBody,
 			isPreparingRequest,
 			openRightSidebar,
-			pendingHumanDecision,
 			presentationMode,
 			requestComposerFocus,
-			setDraftMetadata,
-			setMessage,
-			submitToolApproval,
+			submitHumanDecision,
 			setPanelMode,
 		],
 	);

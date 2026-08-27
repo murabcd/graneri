@@ -187,7 +187,16 @@ describe("hosted assistant run finalizer", () => {
 				type: "user_question",
 				assistantMessageId: "assistant-message-1",
 				toolCallId: "question-1",
-				question: "Which notes should I search?",
+				questions: [
+					{
+						id: "scope",
+						question: "Which notes should I search?",
+						options: [
+							{ label: "Current", description: "Use the current scope." },
+							{ label: "All", description: "Use every available scope." },
+						],
+					},
+				],
 			},
 			responseMessage: createMessage(),
 			status: "waiting_for_user",

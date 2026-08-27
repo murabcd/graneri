@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CHAT_MODE } from "../src/chat-mode.mjs";
 import { deriveFallbackChatTitle } from "../src/chat-titles.mjs";
 import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
 import {
@@ -294,7 +295,7 @@ describe("prompt helpers", () => {
 			"assistantQueuedMessages:enqueueForActiveRun",
 			"assistantQueuedMessages:getClaimedForChat",
 			"assistantRuns:getAttachableRun",
-			"assistantRuns:appendUserMessageToAssistantRun",
+			"assistantRunQuestionAnswers:answer",
 		]) {
 			expect(
 				getHostedChatConvexRouteError(
@@ -318,6 +319,22 @@ describe("prompt helpers", () => {
 
 		expect(instructions).toContain(
 			"The selected app source for this chat is Linear.",
+		);
+	});
+
+	it("adds planning guidance only when Plan mode is selected", () => {
+		const defaultInstructions = buildHostedChatRuntimeInstructions({
+			chatMode: CHAT_MODE.DEFAULT,
+		});
+		const planInstructions = buildHostedChatRuntimeInstructions({
+			chatMode: CHAT_MODE.PLAN,
+		});
+
+		expect(defaultInstructions).not.toContain("Plan mode is active.");
+		expect(planInstructions).toContain("Plan mode is active.");
+		expect(planInstructions).toContain("Use request_user_input");
+		expect(planInstructions).toContain(
+			"Do not implement or mutate external state until the user explicitly asks",
 		);
 	});
 
@@ -618,6 +635,79 @@ describe("prompt helpers", () => {
 				steerQueuedMessageId: null,
 			}),
 		).toBeNull();
+		expect(
+			validateHostedChatRequestInput({
+				continueRunId: "run-1",
+				message: {
+					id: "assistant-question",
+					role: "assistant",
+					parts: [
+						{
+							type: "tool-request_user_input",
+							toolCallId: "question-1",
+							state: "output-available",
+							input: {
+								questions: [
+									{
+										id: "scope",
+										question: "Which scope should I use?",
+										options: [
+											{
+												label: "Current note",
+												description: "Use only the current note.",
+											},
+											{
+												label: "All notes",
+												description: "Use all available notes.",
+											},
+										],
+									},
+								],
+							},
+							output: { answer: "All notes" },
+						},
+					],
+				},
+				replayQueuedMessageId: null,
+				steerQueuedMessageId: null,
+			}),
+		).toBeNull();
+		expect(
+			validateHostedChatRequestInput({
+				message: {
+					id: "assistant-question-without-run",
+					role: "assistant",
+					parts: [
+						{
+							type: "tool-request_user_input",
+							toolCallId: "question-1",
+							state: "output-available",
+							input: {
+								questions: [
+									{
+										id: "scope",
+										question: "Which scope should I use?",
+										options: [
+											{
+												label: "Current note",
+												description: "Use only the current note.",
+											},
+											{
+												label: "All notes",
+												description: "Use all available notes.",
+											},
+										],
+									},
+								],
+							},
+							output: { answer: "All notes" },
+						},
+					],
+				},
+				replayQueuedMessageId: null,
+				steerQueuedMessageId: null,
+			}),
+		).toMatchObject({ errorCode: "input_empty" });
 		expect(
 			validateHostedChatRequestInput({
 				message: {

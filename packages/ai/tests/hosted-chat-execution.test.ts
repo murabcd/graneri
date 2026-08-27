@@ -69,8 +69,19 @@ describe("hosted assistant execution", () => {
 					state: "input-available" as const,
 					toolCallId: "call-2",
 					input: {
-						question: "Which workspace should I use?",
-						responseType: "text",
+						questions: [
+							{
+								id: "workspace",
+								question: "Which workspace should I use?",
+								options: [
+									{
+										label: "Current",
+										description: "Use the current workspace.",
+									},
+									{ label: "Another", description: "Use another workspace." },
+								],
+							},
+						],
 					},
 				},
 			],
@@ -86,8 +97,16 @@ describe("hosted assistant execution", () => {
 				type: "user_question",
 				assistantMessageId: "assistant-3",
 				toolCallId: "call-2",
-				question: "Which workspace should I use?",
-				responseType: "text",
+				questions: [
+					{
+						id: "workspace",
+						question: "Which workspace should I use?",
+						options: [
+							{ label: "Current", description: "Use the current workspace." },
+							{ label: "Another", description: "Use another workspace." },
+						],
+					},
+				],
 			},
 		});
 	});
@@ -112,8 +131,22 @@ describe("hosted assistant execution", () => {
 							state: "input-available",
 							toolCallId: "question-call",
 							input: {
-								question: "Which scope should I use?",
-								responseType: "text",
+								questions: [
+									{
+										id: "scope",
+										question: "Which scope should I use?",
+										options: [
+											{
+												label: "Current",
+												description: "Use the current scope.",
+											},
+											{
+												label: "All",
+												description: "Use every available scope.",
+											},
+										],
+									},
+								],
 							},
 						},
 					],

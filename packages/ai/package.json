@@ -54,6 +54,10 @@
       "types": "./src/chat-message-metadata.d.mts",
       "import": "./src/chat-message-metadata.mjs"
     },
+    "./chat-mode": {
+      "types": "./src/chat-mode.d.mts",
+      "import": "./src/chat-mode.mjs"
+    },
     "./chat-context-policy": {
       "types": "./src/chat-context-policy.d.mts",
       "import": "./src/chat-context-policy.mjs"

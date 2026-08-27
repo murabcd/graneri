@@ -1,3 +1,4 @@
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { describe, expect, it } from "vitest";
 import { defaultChatModel } from "@/lib/ai/models";
 import { buildWorkspaceChatRequestBodyFromLocalFolders } from "@/lib/chat-request-preparation";
@@ -5,6 +6,7 @@ import { buildWorkspaceChatRequestBodyFromLocalFolders } from "@/lib/chat-reques
 describe("workspace chat request preparation", () => {
 	it("carries the selected recipe through the canonical workspace request", async () => {
 		const request = await buildWorkspaceChatRequestBodyFromLocalFolders({
+			chatMode: CHAT_MODE.PLAN,
 			localFolders: [],
 			mentions: ["note-1"],
 			model: defaultChatModel.model,
@@ -18,6 +20,7 @@ describe("workspace chat request preparation", () => {
 		});
 
 		expect(request).toMatchObject({
+			chatMode: CHAT_MODE.PLAN,
 			convexToken: "convex-token",
 			mentions: ["note-1"],
 			recipeSlug: "write-weekly-recap",

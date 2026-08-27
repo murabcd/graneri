@@ -73,6 +73,20 @@ const postChatRequest = async ({
 };
 
 describe("chat steer HTTP contract", () => {
+	it("rejects an unknown chat mode before starting a turn", async () => {
+		await expect(
+			postChatRequest({
+				body: { chatMode: "planning" },
+			}),
+		).resolves.toEqual({
+			status: 400,
+			body: {
+				error: "chatMode must be default or plan.",
+				errorCode: "chat_mode_invalid",
+			},
+		});
+	});
+
 	it("rejects steer route requests without the expected active turn id", async () => {
 		await expect(
 			postChatRequest({

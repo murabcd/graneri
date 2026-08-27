@@ -1,62 +1,64 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { decodeTrustedStoredUiMessage } from "./ui-message-codec.mjs";
 
 export const HOSTED_REQUEST_USER_INPUT_TOOL_NAME = "request_user_input";
 
-const questionOptionSchema = z.object({
-	label: z.string().trim().min(1).max(120),
-	description: z.string().trim().min(1).max(240).optional(),
-});
+const questionOptionSchema = z
+	.object({
+		label: z.string().trim().min(1).max(120),
+		description: z.string().trim().min(1).max(300),
+	})
+	.strict();
+
+const userQuestionSchema = z
+	.object({
+		id: z.string().trim().min(1).max(64),
+		question: z.string().trim().min(1).max(2_000),
+		options: z.array(questionOptionSchema).min(2).max(9),
+	})
+	.strict();
 
 const requestUserInputSchema = z
 	.object({
-		question: z
-			.string()
-			.trim()
+		questions: z
+			.array(userQuestionSchema)
 			.min(1)
-			.max(2_000)
-			.describe("One focused question the user must answer."),
-		responseType: z
-			.enum(["text", "choice"])
-			.describe(
-				"Use choice only when the valid answers are known and bounded.",
-			),
-		options: z.array(questionOptionSchema).min(2).max(5).optional(),
-		consequence: z
-			.string()
-			.trim()
-			.min(1)
-			.max(500)
-			.optional()
-			.describe("Why this answer is required or what it will affect."),
+			.max(3)
+			.describe("One to three concise questions for the user."),
 	})
+	.strict()
 	.superRefine((request, context) => {
-		if (request.responseType === "choice" && !request.options) {
-			context.addIssue({
-				code: "custom",
-				path: ["options"],
-				message: "Choice questions require options.",
-			});
-		}
-		if (request.responseType === "text" && request.options) {
-			context.addIssue({
-				code: "custom",
-				path: ["options"],
-				message: "Text questions cannot include options.",
-			});
-		}
 		if (
-			request.options &&
-			new Set(request.options.map(({ label }) => label)).size !==
-				request.options.length
+			new Set(request.questions.map(({ id }) => id)).size !==
+			request.questions.length
 		) {
 			context.addIssue({
 				code: "custom",
-				path: ["options"],
-				message: "Question options must be unique.",
+				path: ["questions"],
+				message: "Question IDs must be unique.",
 			});
 		}
+		request.questions.forEach((question, index) => {
+			if (
+				new Set(question.options.map(({ label }) => label)).size ===
+				question.options.length
+			) {
+				return;
+			}
+			context.addIssue({
+				code: "custom",
+				path: ["questions", index, "options"],
+				message: "Question options must be unique.",
+			});
+		});
 	});
+
+const userQuestionAnswerSchema = z
+	.object({
+		answer: z.string().trim().min(1),
+	})
+	.strict();
 
 const getQuestion = (input) => {
 	const result = requestUserInputSchema.safeParse(input);
@@ -75,21 +77,55 @@ const getQuestionPart = (part) => {
 	return question ? { part, question } : null;
 };
 
+const getQuestionAnswerPart = (part) => {
+	if (
+		part.type !== `tool-${HOSTED_REQUEST_USER_INPUT_TOOL_NAME}` ||
+		part.state !== "output-available" ||
+		typeof part.toolCallId !== "string"
+	) {
+		return null;
+	}
+	const question = getQuestion(part.input);
+	const answer = userQuestionAnswerSchema.safeParse(part.output);
+	return question && answer.success
+		? { answer: answer.data.answer, part, question }
+		: null;
+};
+
+const optionArraysMatch = (left, right) =>
+	left.length === right.length &&
+	left.every((option, index) => {
+		const candidate = right[index];
+		return (
+			candidate &&
+			option.label === candidate.label &&
+			option.description === candidate.description
+		);
+	});
+
 const questionsMatch = (left, right) =>
-	left.question === right.question &&
-	left.responseType === right.responseType &&
-	left.consequence === right.consequence &&
-	(left.options?.length ?? 0) === (right.options?.length ?? 0) &&
-	(left.options ?? []).every(
-		(option, index) =>
-			option.label === right.options?.[index]?.label &&
-			option.description === right.options[index]?.description,
-	);
+	left.length === right.length &&
+	left.every((question, index) => {
+		const candidate = right[index];
+		return (
+			candidate &&
+			question.id === candidate.id &&
+			question.question === candidate.question &&
+			optionArraysMatch(question.options, candidate.options)
+		);
+	});
+
+export const hostedUserQuestionDecisionsMatch = (left, right) =>
+	left.type === "user_question" &&
+	right.type === "user_question" &&
+	left.assistantMessageId === right.assistantMessageId &&
+	left.toolCallId === right.toolCallId &&
+	questionsMatch(left.questions, right.questions);
 
 export const createHostedRequestUserInputTool = () =>
 	tool({
 		description:
-			"Pause the current run for one focused answer when proceeding would require a consequential guess. Use a bounded choice when valid answers are known; otherwise request text. Explain the consequence when it is not obvious. Do not request passwords, tokens, credentials, or other secrets in chat.",
+			"Pause the current run for one to three concise single-choice questions when proceeding would require a consequential guess. When several independent choices may apply, ask one Yes/No question for each choice. Provide two or three mutually exclusive options with a concise description. Put the recommended option first and suffix its label with ' (Recommended)'. The client adds a free-form Other response. Do not request passwords, tokens, credentials, or other secrets in chat.",
 		inputSchema: requestUserInputSchema,
 		metadata: {
 			ui: {
@@ -122,7 +158,44 @@ export const getHostedUserQuestionRequest = (message) => {
 		: null;
 };
 
-export const resolveHostedUserQuestionMessage = ({ message, decision }) => {
+export const isHostedUserQuestionAnswerMessage = (message) =>
+	message?.role === "assistant" &&
+	Array.isArray(message.parts) &&
+	message.parts.map(getQuestionAnswerPart).filter(Boolean).length === 1;
+
+export const getHostedUserQuestionAnswer = ({ message, decision }) => {
+	if (
+		message?.id !== decision.assistantMessageId ||
+		message.role !== "assistant" ||
+		!Array.isArray(message.parts)
+	) {
+		return null;
+	}
+	const answers = message.parts
+		.map((part) => {
+			const answeredQuestion = getQuestionAnswerPart(part);
+			if (
+				!answeredQuestion ||
+				answeredQuestion.part.toolCallId !== decision.toolCallId
+			) {
+				return null;
+			}
+			return questionsMatch(
+				answeredQuestion.question.questions,
+				decision.questions,
+			)
+				? answeredQuestion.answer
+				: null;
+		})
+		.filter((answer) => answer !== null);
+	return answers.length === 1 ? answers[0] : null;
+};
+
+export const resolveHostedUserQuestionMessage = ({
+	message,
+	decision,
+	answer,
+}) => {
 	if (
 		message.id !== decision.assistantMessageId ||
 		message.role !== "assistant"
@@ -132,15 +205,12 @@ export const resolveHostedUserQuestionMessage = ({ message, decision }) => {
 	const requests = message.parts.map(getQuestionPart).filter(Boolean);
 	const [request] = requests;
 	const decisionQuestion = {
-		question: decision.question,
-		responseType: decision.responseType,
-		...(decision.options && { options: decision.options }),
-		...(decision.consequence && { consequence: decision.consequence }),
+		questions: decision.questions,
 	};
 	if (
 		requests.length !== 1 ||
 		request.part.toolCallId !== decision.toolCallId ||
-		!questionsMatch(request.question, decisionQuestion)
+		!questionsMatch(request.question.questions, decisionQuestion.questions)
 	) {
 		return null;
 	}
@@ -152,8 +222,31 @@ export const resolveHostedUserQuestionMessage = ({ message, decision }) => {
 		return {
 			...pendingQuestion.part,
 			state: "output-available",
-			output: { answered: true },
+			output: { answer },
 		};
 	});
 	return { ...message, parts };
+};
+
+export const createCanonicalHostedUserQuestionAnswer = ({
+	answer,
+	decision,
+	storedMessage,
+}) => {
+	if (
+		storedMessage?.role !== "assistant" ||
+		storedMessage.id !== decision.assistantMessageId
+	) {
+		throw new Error("Pending user question message was not found.");
+	}
+	const message = decodeTrustedStoredUiMessage(storedMessage);
+	const resolvedMessage = resolveHostedUserQuestionMessage({
+		message,
+		decision,
+		answer,
+	});
+	if (!resolvedMessage) {
+		throw new Error("Pending user question does not match the answer.");
+	}
+	return resolvedMessage;
 };

@@ -1,13 +1,25 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
+
+const option = (label: string, description: string) => ({
+	label,
+	description,
+});
 
 describe("ChatHumanDecisionBar", () => {
 	afterEach(() => {
 		cleanup();
+		vi.useRealTimers();
 	});
 
-	it("shows approval consequence and server-owned input before responding", () => {
+	it("shows a distinct permission card with reviewable action input", () => {
 		const onRespond = vi.fn();
 		render(
 			<ChatHumanDecisionBar
@@ -20,8 +32,7 @@ describe("ChatHumanDecisionBar", () => {
 						approval: "required",
 						provider: "graneri",
 					},
-					consequence:
-						"This action can change data or perform an external action.",
+					consequence: "This action will permanently delete the automation.",
 					input: { automationId: "automation-1" },
 					toolCallId: "call-1",
 					toolName: "delete_automation",
@@ -30,22 +41,37 @@ describe("ChatHumanDecisionBar", () => {
 			/>,
 		);
 
+		expect(screen.getByText("Write access")).not.toBeNull();
 		expect(
-			screen.getByText(
-				"This action can change data or perform an external action.",
-			),
+			screen.getByText("Allow Graneri to delete automation?"),
 		).not.toBeNull();
+		expect(
+			screen.getByText("This action will permanently delete the automation."),
+		).not.toBeNull();
+		expect(screen.queryByText("Approval")).toBeNull();
+		expect(screen.queryByText(/Connected service:/u)).toBeNull();
 		fireEvent.click(screen.getByText("Review action input"));
 		expect(screen.getByText(/automation-1/u)).not.toBeNull();
+		expect(
+			document.querySelector('[data-slot="approval-status-icon"]'),
+		).not.toBeNull();
 
-		fireEvent.click(screen.getByRole("button", { name: /Approve/u }));
+		const approve = screen.getByRole("button", { name: /Allow once/u });
+		const deny = screen.getByRole("button", { name: /Deny/u });
+		expect(approve.getAttribute("aria-keyshortcuts")).toBe("Enter");
+		expect(deny.getAttribute("aria-keyshortcuts")).toBe("Escape");
+		expect(approve.parentElement).toBe(deny.parentElement);
+		expect(approve.parentElement?.lastElementChild).toBe(approve);
+
+		fireEvent.click(approve);
 		expect(onRespond).toHaveBeenCalledWith({
 			type: "tool_approval",
 			approved: true,
 		});
 	});
 
-	it("renders bounded clarification choices and their consequence", () => {
+	it("renders described numbered choices and submits one choice immediately", () => {
+		vi.useFakeTimers();
 		const onRespond = vi.fn();
 		render(
 			<ChatHumanDecisionBar
@@ -53,15 +79,18 @@ describe("ChatHumanDecisionBar", () => {
 					type: "user_question",
 					assistantMessageId: "assistant-2",
 					toolCallId: "question-1",
-					question: "Which scope should I inspect?",
-					responseType: "choice",
-					consequence: "This determines which files will be read.",
-					options: [
+					questions: [
 						{
-							label: "Current folder",
-							description: "Inspect this project only.",
+							id: "scope",
+							question: "Which scope should I inspect?",
+							options: [
+								option(
+									"Current folder (Recommended)",
+									"Use only the current folder.",
+								),
+								option("All projects", "Use all available projects."),
+							],
 						},
-						{ label: "All projects", description: "Inspect every project." },
 					],
 				}}
 				onRespond={onRespond}
@@ -69,12 +98,158 @@ describe("ChatHumanDecisionBar", () => {
 		);
 
 		expect(
-			screen.getByText("This determines which files will be read."),
+			screen.getByRole("group", { name: "Which scope should I inspect?" }),
 		).not.toBeNull();
-		fireEvent.click(screen.getByRole("button", { name: /Current folder/u }));
+		expect(screen.queryByText("Question")).toBeNull();
+		expect(screen.getByText("Recommended")).not.toBeNull();
+		expect(screen.getByText("Use only the current folder.")).not.toBeNull();
+		expect(screen.queryByRole("checkbox")).toBeNull();
+		expect(screen.getAllByRole("radio")).toHaveLength(2);
+		expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
+		expect(
+			screen.getByRole("textbox", { name: "Other answer" }),
+		).toHaveProperty("placeholder", "Something else...");
+
+		const currentFolder = screen.getByRole("radio", {
+			name: /Current folder.*Use only the current folder/u,
+		});
+		const allProjects = screen.getByRole("radio", {
+			name: /All projects.*Use all available projects/u,
+		});
+		const optionGroup = screen.getByRole("radiogroup", {
+			name: "Which scope should I inspect?",
+		});
+		expect(currentFolder.getAttribute("aria-keyshortcuts")).toBe("1");
+		expect(currentFolder.getAttribute("aria-checked")).toBe("true");
+		expect(currentFolder.classList.contains("bg-muted")).toBe(true);
+		fireEvent.pointerEnter(allProjects);
+		expect(currentFolder.classList.contains("bg-muted")).toBe(false);
+		expect(allProjects.classList.contains("bg-muted")).toBe(true);
+		fireEvent.pointerLeave(optionGroup);
+		expect(currentFolder.classList.contains("bg-muted")).toBe(true);
+		expect(allProjects.classList.contains("bg-muted")).toBe(false);
+		fireEvent.click(currentFolder);
+		expect(onRespond).not.toHaveBeenCalled();
+		act(() => vi.advanceTimersByTime(180));
 		expect(onRespond).toHaveBeenCalledWith({
 			type: "user_question",
-			answer: "Current folder",
+			answer: "> Which scope should I inspect?\nCurrent folder",
+		});
+	});
+
+	it("uses one Yes or No question per independent choice", () => {
+		vi.useFakeTimers();
+		const onRespond = vi.fn();
+		const yes = option("Yes (Recommended)", "Allow this source.");
+		const no = option("No", "Do not use this source.");
+		render(
+			<ChatHumanDecisionBar
+				decision={{
+					type: "user_question",
+					assistantMessageId: "assistant-3",
+					toolCallId: "question-2",
+					questions: [
+						{
+							id: "notes",
+							question: "May I use Notes?",
+							options: [yes, no],
+						},
+						{
+							id: "files",
+							question: "May I use Files?",
+							options: [yes, no],
+						},
+						{
+							id: "web",
+							question: "May I use the Web?",
+							options: [yes, no],
+						},
+					],
+				}}
+				onRespond={onRespond}
+			/>,
+		);
+
+		const yesOption = screen.getByRole("radio", { name: /Yes.*Allow/u });
+		const noOption = screen.getByRole("radio", {
+			name: /No.*Do not use/u,
+		});
+		expect(yesOption.getAttribute("aria-checked")).toBe("true");
+		fireEvent.keyDown(document, { key: "ArrowDown" });
+		expect(noOption.getAttribute("aria-checked")).toBe("true");
+		fireEvent.keyDown(document, { key: "ArrowUp" });
+		expect(yesOption.getAttribute("aria-checked")).toBe("true");
+		fireEvent.click(yesOption);
+		act(() => vi.advanceTimersByTime(180));
+		expect(screen.getByText("2 of 3")).not.toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Previous question" }));
+		expect(
+			screen
+				.getByRole("radio", { name: /Yes.*Allow/u })
+				.getAttribute("aria-checked"),
+		).toBe("true");
+		fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+
+		fireEvent.click(screen.getByRole("radio", { name: /No.*Do not use/u }));
+		act(() => vi.advanceTimersByTime(180));
+		expect(screen.getByText("3 of 3")).not.toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+		expect(onRespond).toHaveBeenCalledWith({
+			type: "user_question",
+			answer:
+				"> May I use Notes?\nYes\n\n> May I use Files?\nNo\n\n> May I use the Web?\nSkipped",
+		});
+	});
+
+	it("supports numeric shortcuts, free-form answers, and closing unresolved questions", () => {
+		vi.useFakeTimers();
+		const onRespond = vi.fn();
+		const decision = {
+			type: "user_question" as const,
+			assistantMessageId: "assistant-4",
+			toolCallId: "question-3",
+			questions: [
+				{
+					id: "scope",
+					question: "Which scope?",
+					options: [
+						option("Current", "Use the current scope."),
+						option("All", "Use every available scope."),
+					],
+				},
+				{
+					id: "format",
+					question: "Which format?",
+					options: [
+						option("Summary", "Return a summary."),
+						option("Table", "Return a table."),
+					],
+				},
+			],
+		};
+		const { unmount } = render(
+			<ChatHumanDecisionBar decision={decision} onRespond={onRespond} />,
+		);
+
+		fireEvent.keyDown(document, { key: "2" });
+		act(() => vi.advanceTimersByTime(180));
+		expect(screen.getByText("2 of 2")).not.toBeNull();
+		const other = screen.getByRole("textbox", { name: "Other answer" });
+		fireEvent.change(other, { target: { value: "Checklist" } });
+		fireEvent.keyDown(other, { key: "Enter" });
+		expect(onRespond).toHaveBeenCalledWith({
+			type: "user_question",
+			answer: "> Which scope?\nAll\n\n> Which format?\nChecklist",
+		});
+
+		unmount();
+		onRespond.mockClear();
+		render(<ChatHumanDecisionBar decision={decision} onRespond={onRespond} />);
+		fireEvent.click(screen.getByRole("button", { name: "Close questions" }));
+		expect(onRespond).toHaveBeenCalledWith({
+			type: "user_question",
+			answer: "> Which scope?\nSkipped\n\n> Which format?\nSkipped",
 		});
 	});
 });

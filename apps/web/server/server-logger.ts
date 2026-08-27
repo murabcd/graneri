@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
+import type { ChatMode } from "@workspace/ai/chat-mode";
 import type { getHostedChatSteerTelemetry } from "@workspace/ai/hosted-chat-runtime";
 import pino from "pino";
 
@@ -14,6 +15,7 @@ export type ServerWideEvent = {
 	assistant_message_id?: string;
 	assistant_run_id?: string;
 	chat_id?: string | null;
+	chat_mode?: ChatMode;
 	continue_run_id?: string | null;
 	deferred_tool_count?: number;
 	duration_ms?: number;

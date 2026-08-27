@@ -36,6 +36,49 @@ export const getOwnedActiveChatById = async (
 	return chat;
 };
 
+export const requireOwnedActiveChatAndRun = async (
+	ctx: MutationCtx,
+	args: {
+		ownerTokenIdentifier: string;
+		workspaceId: Id<"workspaces">;
+		chatId: string;
+		runId: Id<"assistantRuns">;
+		runNotFoundMessage?: string;
+	},
+): Promise<{
+	chat: Doc<"chats">;
+	run: Doc<"assistantRuns">;
+}> => {
+	const chat = await getOwnedActiveChatById(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		args.chatId,
+	);
+
+	if (!chat) {
+		throw new ConvexError({
+			code: "CHAT_NOT_FOUND",
+			message: "Chat not found.",
+		});
+	}
+
+	const run = await ctx.db.get(args.runId);
+	if (
+		!run ||
+		run.ownerTokenIdentifier !== args.ownerTokenIdentifier ||
+		run.workspaceId !== args.workspaceId ||
+		run.chatId !== chat._id
+	) {
+		throw new ConvexError({
+			code: "ASSISTANT_RUN_NOT_FOUND",
+			message: args.runNotFoundMessage ?? "Assistant run not found.",
+		});
+	}
+
+	return { chat, run };
+};
+
 export const getNonTerminalRunsForChat = async (
 	ctx: QueryCtx | MutationCtx,
 	chatId: Id<"chats">,
@@ -59,9 +102,7 @@ export const getNonTerminalRunsForChat = async (
 	);
 };
 
-export const requireSingleNonTerminalRun = (
-	runs: Doc<"assistantRuns">[],
-) => {
+export const requireSingleNonTerminalRun = (runs: Doc<"assistantRuns">[]) => {
 	if (runs.length <= 1) {
 		return runs[0] ?? null;
 	}

@@ -22,7 +22,10 @@ import {
 	deleteAssistantRunJob,
 	upsertAssistantRunJobMessage,
 } from "./assistantRunJobState";
-import { getOwnedActiveChatById } from "./assistantRunLifecycle";
+import {
+	getOwnedActiveChatById,
+	requireOwnedActiveChatAndRun,
+} from "./assistantRunLifecycle";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import {
 	cleanupAssistantRunSnapshots,
@@ -35,7 +38,6 @@ import {
 	getActiveStreamForRun,
 	updateAssistantRunStream,
 } from "./assistantRunStreamState";
-import { resolveAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import {
 	moveLinkedAutomationToFreshChat,
 	pauseLinkedAutomationForChat,
@@ -137,7 +139,7 @@ const storedUiMessageValidator = v.object({
 	text: v.string(),
 });
 
-const chatMessageInputValidator = v.object({
+export const chatMessageInputValidator = v.object({
 	id: v.string(),
 	role: chatRoleValidator,
 	partsJson: v.string(),
@@ -292,49 +294,6 @@ const getActiveStreamByRunId = async (
 	ctx: QueryCtx | MutationCtx,
 	runId: Id<"assistantRuns">,
 ) => await getActiveStreamForRun(ctx, runId);
-
-const requireOwnedActiveChatAndRun = async (
-	ctx: MutationCtx,
-	args: {
-		ownerTokenIdentifier: string;
-		workspaceId: Id<"workspaces">;
-		chatId: string;
-		runId: Id<"assistantRuns">;
-		runNotFoundMessage?: string;
-	},
-): Promise<{
-	chat: Doc<"chats">;
-	run: Doc<"assistantRuns">;
-}> => {
-	const chat = await getOwnedActiveChatById(
-		ctx,
-		args.ownerTokenIdentifier,
-		args.workspaceId,
-		args.chatId,
-	);
-
-	if (!chat) {
-		throw new ConvexError({
-			code: "CHAT_NOT_FOUND",
-			message: "Chat not found.",
-		});
-	}
-
-	const run = await ctx.db.get(args.runId);
-	if (
-		!run ||
-		run.ownerTokenIdentifier !== args.ownerTokenIdentifier ||
-		run.workspaceId !== args.workspaceId ||
-		run.chatId !== chat._id
-	) {
-		throw new ConvexError({
-			code: "ASSISTANT_RUN_NOT_FOUND",
-			message: args.runNotFoundMessage ?? "Assistant run not found.",
-		});
-	}
-
-	return { chat, run };
-};
 
 const deleteRunEventsBatch = async (
 	ctx: MutationCtx,
@@ -1288,7 +1247,7 @@ export const acceptSteeredUserMessages = mutation({
 			runId: args.runId,
 		});
 
-		if (run.status !== "running" && run.status !== "waiting_for_user") {
+		if (run.status !== "running") {
 			throw new ConvexError({
 				code: "INVALID_ASSISTANT_RUN_TRANSITION",
 				message: "Assistant run cannot accept steered user input.",
@@ -1371,12 +1330,6 @@ export const acceptSteeredUserMessages = mutation({
 					await upsertAssistantRunJobMessage(ctx, run._id, message);
 				}
 			}
-			await resolveAssistantRunUserQuestion(
-				ctx,
-				run,
-				savedMessages.map(({ message }) => message.messageId),
-			);
-
 			const transitionMessages = queuedMessages.map((queuedMessage, index) => {
 				const message = args.messages[index]?.message;
 				if (!message) {
@@ -1395,19 +1348,7 @@ export const acceptSteeredUserMessages = mutation({
 				type: "append_user_messages",
 				messages: transitionMessages,
 			});
-			const continuedRun =
-				appendedRun.status === "waiting_for_user"
-					? await transitionAssistantRun(ctx, appendedRun, {
-							type: "resolve_user_decision",
-							resolution: {
-								type: "user_question",
-								answerMessageIds: savedMessages.map(
-									({ message }) => message.messageId,
-								),
-							},
-						})
-					: appendedRun;
-			const messageRun = await transitionAssistantRun(ctx, continuedRun, {
+			const messageRun = await transitionAssistantRun(ctx, appendedRun, {
 				type: "start_assistant_message",
 				assistantMessageId: args.nextAssistantMessageId,
 			});

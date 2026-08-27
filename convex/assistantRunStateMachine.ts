@@ -267,17 +267,9 @@ export const transitionAssistantRun = async (
 			});
 
 		case "append_user_messages":
-			if (run.status !== "running" && run.status !== "waiting_for_user") {
+			if (run.status !== "running") {
 				return invalidTransition(
 					"Assistant run cannot accept steered user input.",
-				);
-			}
-			if (
-				run.status === "waiting_for_user" &&
-				run.pendingDecision?.type !== "user_question"
-			) {
-				return invalidTransition(
-					"Assistant run is waiting for a different user decision.",
 				);
 			}
 			for (const message of transition.messages) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { defineAiTool } from "../src/ai-tool-definition.mjs";
+import { CHAT_MODE } from "../src/chat-mode.mjs";
 import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
 import { buildHostedChatRunPlan } from "../src/hosted-chat-run-plan.mjs";
 
@@ -158,6 +159,7 @@ describe("hosted chat run plan", () => {
 					create_automation: immediateTool,
 				},
 			},
+			chatMode: CHAT_MODE.PLAN,
 			context: {
 				notesContext: "Attached notes.",
 				attachedNoteContext: "Current note.",
@@ -185,6 +187,7 @@ describe("hosted chat run plan", () => {
 		expect(runPlan.instructions).toContain("Automation instruction.");
 		expect(runPlan.instructions).toContain("Local folder context.");
 		expect(runPlan.instructions).toContain("Selected app source instruction.");
+		expect(runPlan.instructions).toContain("Plan mode is active.");
 		expect(runPlan.enabledTools.web_search).toBe(immediateTool);
 		expect(runPlan.enabledTools.create_automation).toBe(immediateTool);
 		expect(runPlan.enabledTools.search_linear).toBe(immediateTool);

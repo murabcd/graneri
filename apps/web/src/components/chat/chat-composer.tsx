@@ -1,7 +1,11 @@
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
-import type { HostedHumanDecisionRequest } from "@workspace/ai/hosted-human-decision";
+import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
+import type {
+	HostedHumanDecisionRequest,
+	HostedHumanDecisionResponse,
+} from "@workspace/ai/hosted-human-decision";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -27,10 +31,12 @@ import type { FileUIPart } from "ai";
 import {
 	ArrowUp,
 	Globe,
+	Lightbulb,
 	type LucideIcon,
 	Plus,
 	Settings2,
 	Square,
+	X,
 } from "lucide-react";
 import * as React from "react";
 import {
@@ -44,10 +50,7 @@ import {
 } from "@/components/ai-elements/file-attachment-utils";
 import { useFileAttachmentDropzone } from "@/components/ai-elements/use-file-attachments";
 import { AppSourceIcon } from "@/components/app-source-icon";
-import {
-	ChatHumanDecisionBar,
-	type HumanDecisionResponse,
-} from "@/components/chat/chat-human-decision-bar";
+import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
 import {
 	ChatQueuedFollowUpBar,
 	type QueuedFollowUpBarItem,
@@ -176,7 +179,7 @@ type ChatComposerProps = {
 	isHumanDecisionSubmitting?: boolean;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 	onQueuedFollowUpsReorder?: (ids: Array<string>) => void;
-	onHumanDecisionResponse?: (response: HumanDecisionResponse) => void;
+	onHumanDecisionResponse?: (response: HostedHumanDecisionResponse) => void;
 	onDraftChange: (value: string) => void;
 	onDraftKeyDown: (event: KeyboardEvent) => void;
 	onCancelEdit?: () => void;
@@ -201,6 +204,8 @@ type ChatComposerProps = {
 	onSourcesOpenChange: (open: boolean) => void;
 	webSearchEnabled: boolean;
 	onWebSearchEnabledChange: (value: boolean) => void;
+	chatMode: ChatMode;
+	onChatModeChange: (mode: ChatMode) => void;
 	appSources: AppSource[];
 	onOpenConnectionsSettings: () => void;
 };
@@ -244,6 +249,8 @@ export function ChatComposer({
 	onSourcesOpenChange,
 	webSearchEnabled,
 	onWebSearchEnabledChange,
+	chatMode,
+	onChatModeChange,
 	appSources,
 	onOpenConnectionsSettings,
 }: ChatComposerProps) {
@@ -365,8 +372,17 @@ export function ChatComposer({
 							onOpenChange={onSourcesOpenChange}
 							webSearchEnabled={webSearchEnabled}
 							onWebSearchEnabledChange={onWebSearchEnabledChange}
+							chatMode={chatMode}
+							onChatModeChange={onChatModeChange}
 							onOpenConnectionsSettings={onOpenConnectionsSettings}
 						/>
+					}
+					modeIndicator={
+						chatMode === CHAT_MODE.PLAN ? (
+							<PlanModeIndicator
+								onDisable={() => onChatModeChange(CHAT_MODE.DEFAULT)}
+							/>
+						) : null
 					}
 				/>
 			</InputGroup>
@@ -1273,6 +1289,7 @@ function ChatComposerFooter({
 	onStop,
 	modelPicker,
 	scopePicker,
+	modeIndicator,
 }: {
 	draft: string;
 	attachedFiles: ChatAttachment[];
@@ -1284,6 +1301,7 @@ function ChatComposerFooter({
 	onStop: () => void;
 	modelPicker: React.ReactNode;
 	scopePicker: React.ReactNode;
+	modeIndicator: React.ReactNode;
 }) {
 	const hasDraftText = draft.trim().length > 0;
 	const hasSendableInput =
@@ -1303,6 +1321,7 @@ function ChatComposerFooter({
 				onFilesAdded={onAttachmentsAdded}
 			/>
 			{scopePicker}
+			{modeIndicator}
 			<div className="ml-auto flex min-w-0 items-center gap-1">
 				{modelPicker}
 			</div>
@@ -1331,17 +1350,43 @@ function ChatComposerFooter({
 	);
 }
 
+function PlanModeIndicator({ onDisable }: { onDisable: () => void }) {
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<InputGroupButton
+					aria-label="Turn off Plan mode"
+					className="group text-muted-foreground hover:text-foreground"
+					onClick={onDisable}
+				>
+					<Lightbulb
+						aria-hidden="true"
+						className="shrink-0 group-hover:hidden"
+					/>
+					<X aria-hidden="true" className="hidden shrink-0 group-hover:block" />
+					<span>Plan</span>
+				</InputGroupButton>
+			</TooltipTrigger>
+			<TooltipContent>Turn off Plan mode</TooltipContent>
+		</Tooltip>
+	);
+}
+
 function ScopePicker({
 	open,
 	onOpenChange,
 	webSearchEnabled,
 	onWebSearchEnabledChange,
+	chatMode,
+	onChatModeChange,
 	onOpenConnectionsSettings,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	webSearchEnabled: boolean;
 	onWebSearchEnabledChange: (value: boolean) => void;
+	chatMode: ChatMode;
+	onChatModeChange: (mode: ChatMode) => void;
 	onOpenConnectionsSettings: () => void;
 }) {
 	return (
@@ -1378,6 +1423,22 @@ function ScopePicker({
 								className="ml-auto"
 								checked={webSearchEnabled}
 								onCheckedChange={onWebSearchEnabledChange}
+							/>
+						</label>
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						asChild
+						onSelect={(event) => event.preventDefault()}
+					>
+						<label htmlFor="plan-mode">
+							<Lightbulb className="text-foreground" /> Plan mode
+							<Switch
+								id="plan-mode"
+								className="ml-auto"
+								checked={chatMode === CHAT_MODE.PLAN}
+								onCheckedChange={(enabled) =>
+									onChatModeChange(enabled ? CHAT_MODE.PLAN : CHAT_MODE.DEFAULT)
+								}
 							/>
 						</label>
 					</DropdownMenuItem>

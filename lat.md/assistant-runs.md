@@ -375,6 +375,27 @@ of HTTP SSE attachment. Resume request preparation must fail when required
 workspace or authentication state is unavailable; it must not fall back to the
 normal chat send endpoint.
 
+## Composer planning mode
+
+Planning mode is an explicit composer and request contract, not a visual-only preference.
+
+The chat composer owns a `default` or `plan` selection from the shared
+[chat mode contract](../packages/ai/src/chat-mode.mjs). Selecting planning mode
+adds a Lightbulb-labelled `Plan` control to the composer footer; hovering the
+control replaces the Lightbulb with a close affordance, and activating it
+returns the composer to default mode without reopening chat options. The mode
+travels with normal and durable queued requests so replay cannot silently
+change the selected workflow.
+
+The shared hosted runtime converts planning mode into trusted instructions
+before either producer starts. Planning mode explores relevant context, asks
+focused questions through `request_user_input` only when missing decisions
+would materially change the plan, returns an ordered plan, and avoids mutation
+until the user asks to proceed. Default mode has no planning mandate; it may
+still use the questionnaire for genuinely necessary clarification. Background
+runs persist the already-resolved instruction set in their job, so the mode
+does not require a second Convex schema field or a parallel prompt path.
+
 ## Human decisions
 
 Questions and tool approvals persist typed pending decisions and resume the same run through atomic validation.
@@ -385,17 +406,27 @@ decision instead of creating a second active run. Normal duplicate sends must
 reject before persisting a new user message when a chat already has a
 non-terminal run; clients must queue follow-ups against the active run.
 Generic clarification uses the producer-neutral `request_user_input` tool. It
-asks one focused text or bounded-choice question and may explain what the
-answer affects. The shared Human Decision bar presents questions and approvals
-through one interface in chat and note composers; a choice fills the normal
-composer so the user can review the answer before sending it. Both producers
-persist the exact assistant message id, tool call id, typed question, options,
-and consequence as a `user_question` decision. Accepting the next durable user
-message atomically verifies the stored request, converts the pending question
-tool part in that assistant message to
-`output-available`, appends the answer, records `input.resolved`, rotates the
-assistant message generation, and resumes the same run. A normal user message
-must not bypass a pending tool approval.
+asks one to three focused single-select or multi-select questions. The shared
+Human Decision bar presents questionnaires and approvals through one interface
+in chat and note composers. Question options are compact labels without
+secondary descriptions, and every question includes a free-form `Other` path.
+The write-in field uses the stable `Something else...` placeholder rather than
+model-generated copy.
+Single-select clicks and their displayed `1`–`9` shortcuts acknowledge the
+choice, then advance or submit directly; multi-select choices toggle and wait
+for `Next`, `Submit`, `Skip`, or `Enter`, with `Next` reserved for a question
+that has another step. Multi-step answers are serialized as quoted
+questions followed by their selected and free-form values. Both producers
+persist the exact assistant message id, tool call id, ordered question types,
+prompts, and option labels as a `user_question` decision. Accepting the direct
+durable answer atomically verifies the stored request, converts the pending
+question tool part in that assistant message to `output-available` with the
+structured answer, records `input.resolved`, rotates the assistant message
+generation, and resumes the same run. Questionnaire answers never create
+synthetic user messages; a normal user message cannot resolve a pending
+questionnaire or bypass a pending tool approval. The renderer dismisses a
+questionnaire as soon as its local tool output is recorded, then restores the
+same pending card if continuation fails before the durable decision resolves.
 Tool approval uses the AI SDK v7 `toolApproval` protocol rather than
 tool-specific confirmation payloads or synthetic user messages. The first
 stream persists the assistant message in `approval-requested` state and moves the run to
@@ -405,8 +436,8 @@ name, persist the `approval-responded` message, update the next assistant messag
 id, and resume that same run before a replacement stream starts.
 `assistantRunStateMachine` owns one producer-neutral decision-resolution
 transition for both variants. `input.requested` journals the full typed decision
-and `input.resolved` journals the exact approval result or durable answer message
-ids. The decision row does not duplicate tool input: the stored assistant
+and `input.resolved` journals the exact approval result or questionnaire answer.
+The decision row does not duplicate tool input: the stored assistant
 message and tool-call journal remain its durable owners.
 The [tool-authority module](../packages/ai/src/ai-tool-authority.mjs) is the
 single owner of approval classification and AI SDK approval configuration.
@@ -559,7 +590,7 @@ identical storage.
 | Stale claimed input is not an invisible leftover. | Claim mutations requeue stale claimed rows before attempting the next claim; terminal run cleanup deletes queued and claimed rows for that run. | Implemented |
 | Waiting-for-user input resumes the same turn. | `waiting_for_user` runs can claim and accept steered input, clear `pendingDecision`, append `turn.steer.accepted`, and continue without creating a second run. | Implemented |
 | Destructive tools pause for durable user approval. | AI SDK approval parts are persisted on the assistant message; Convex stores a typed `tool_approval` decision, validates the matching response atomically, appends `input.resolved`, and resumes the same run. | Implemented |
-| Human-blocking work has one typed interface and durable resolution. | The shared Human Decision bar renders approvals plus text or bounded-choice questions with consequences; Convex journals full requests and exact resolutions, then resumes the matching web or Convex producer through one state-machine transition. | Implemented |
+| Human-blocking work has one typed interface and durable resolution. | The shared Human Decision bar renders approvals with consequences plus compact single-select and multi-select questionnaires; Convex journals full requests and exact resolutions, then resumes the matching web or Convex producer through one state-machine transition. | Implemented |
 | Pending input is local to a turn and can be drained into the next turn state. | Hosted active stream sessions expose `extendPendingInput`, `takePendingInput`, `hasPendingInput`, and `clearPendingInput`; running steer interruptions append the steered message, drain the active session, and feed ordered pending user messages into the next AI SDK prompt branch with message-id de-duplication against persisted history. | Implemented |
 | Multiple active-turn inputs can accumulate before the model loop drains them. | Graneri can persist multiple queued follow-ups, the renderer accepts distinct manual steer intents into a FIFO while one steer request is in flight, `claimReadyForRun` claims the targeted row plus ready queued rows for the same active run, `acceptSteeredUserMessages` atomically saves/deletes the accepted batch, and active stream replacement carries ordered pending input until it is drained into the next prompt branch. | Implemented |
 | Activity subscribers can distinguish mailbox work from steered input. | Hosted active stream sessions expose `subscribePendingInputActivity`; pending steered input reports `steer`, queued mailbox-style input reports `mailbox`, and subscribing after input is already pending returns the pending activity. | Implemented |

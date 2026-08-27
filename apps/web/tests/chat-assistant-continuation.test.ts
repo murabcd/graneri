@@ -47,6 +47,7 @@ describe("chat assistant continuation", () => {
 					},
 				],
 			},
+			userQuestion: null,
 			storedMessage: {
 				id: "assistant-1",
 				role: "assistant",
@@ -88,5 +89,67 @@ describe("chat assistant continuation", () => {
 				},
 			},
 		]);
+	});
+
+	it("keeps questionnaire answers inside their assistant tool part", () => {
+		const message = createCanonicalChatAssistantContinuation({
+			approval: null,
+			localFolderToolContinuation: null,
+			storedMessage: {
+				id: "assistant-question",
+				role: "assistant",
+				partsJson: JSON.stringify([
+					{
+						type: "tool-request_user_input",
+						toolCallId: "question-call",
+						state: "input-available",
+						input: {
+							questions: [
+								{
+									id: "sources",
+									question: "Which sources may I use?",
+									options: [
+										{ label: "Notes", description: "Use connected notes." },
+										{ label: "Files", description: "Use workspace files." },
+										{ label: "Web", description: "Use online sources." },
+									],
+								},
+							],
+						},
+					},
+				]),
+			},
+			userQuestion: {
+				answer: "> Which sources may I use?\nFiles, Web",
+				decision: {
+					type: "user_question",
+					assistantMessageId: "assistant-question",
+					toolCallId: "question-call",
+					questions: [
+						{
+							id: "sources",
+							question: "Which sources may I use?",
+							options: [
+								{ label: "Notes", description: "Use connected notes." },
+								{ label: "Files", description: "Use workspace files." },
+								{ label: "Web", description: "Use online sources." },
+							],
+						},
+					],
+				},
+			},
+		});
+
+		expect(message).toMatchObject({
+			role: "assistant",
+			parts: [
+				{
+					state: "output-available",
+					output: {
+						answer: "> Which sources may I use?\nFiles, Web",
+					},
+				},
+			],
+		});
 	});
 });

@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { createQueuedRequestBodyJson } from "./assistantQueuedMessage.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -48,8 +49,16 @@ const userQuestionDecision = (
 	type: "user_question" as const,
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
-	question,
-	responseType: "text" as const,
+	questions: [
+		{
+			id: "scope",
+			question,
+			options: [
+				{ label: "Current", description: "Use the current scope." },
+				{ label: "All", description: "Use every available scope." },
+			],
+		},
+	],
 });
 
 const saveUserQuestion = async ({
@@ -76,7 +85,10 @@ const saveUserQuestion = async ({
 					type: "tool-request_user_input",
 					toolCallId: `${assistantMessageId}-question`,
 					state: "input-available",
-					input: { question, responseType: "text" },
+					input: {
+						questions: userQuestionDecision(assistantMessageId, question)
+							.questions,
+					},
 				},
 			]),
 			text: "",
@@ -154,7 +166,7 @@ const startRunWithSnapshots = async ({
 const queuedMessageInput = (messageId: string, text: string) => ({
 	messageId,
 	text,
-	requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
+	requestBodyJson: createQueuedRequestBodyJson(),
 });
 
 const backgroundJob = {
@@ -1169,7 +1181,7 @@ test("finishStoppedAssistantRun idempotently removes stale queued rows", async (
 			runId: run._id,
 			messageId: "stale-queued",
 			text: "Stale queued",
-			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
+			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "queued",
 			createdAt: 3_000,
 			updatedAt: 3_000,
@@ -1182,7 +1194,7 @@ test("finishStoppedAssistantRun idempotently removes stale queued rows", async (
 			runId: run._id,
 			messageId: "stale-claimed",
 			text: "Stale claimed",
-			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
+			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "claimed",
 			createdAt: 3_001,
 			updatedAt: 3_001,
@@ -1241,7 +1253,7 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 			runId: run._id,
 			messageId: "stale-terminal-queued",
 			text: "Stale queued",
-			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
+			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "queued",
 			createdAt: 4_000,
 			updatedAt: 4_000,
@@ -1254,7 +1266,7 @@ test("waitForUserDecision cleans stale queued rows on terminal re-entry", async 
 			runId: run._id,
 			messageId: "stale-terminal-claimed",
 			text: "Stale claimed",
-			requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
+			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "claimed",
 			createdAt: 4_001,
 			updatedAt: 4_001,
@@ -1599,13 +1611,16 @@ test("assistant runs preserve bounded choice questions in state and events", asy
 		type: "user_question" as const,
 		assistantMessageId: run.assistantMessageId,
 		toolCallId: `${run.assistantMessageId}-question`,
-		question: "Which scope should I use?",
-		responseType: "choice" as const,
-		options: [
-			{ label: "Current note", description: "Use only the open note." },
-			{ label: "All notes", description: "Search the workspace." },
+		questions: [
+			{
+				id: "scope",
+				question: "Which scope should I use?",
+				options: [
+					{ label: "Current note", description: "Use only the current note." },
+					{ label: "All notes", description: "Use all available notes." },
+				],
+			},
 		],
-		consequence: "This controls which notes can influence the answer.",
 	};
 	await asOwner.mutation(api.chats.saveMessage, {
 		workspaceId,
@@ -1618,12 +1633,7 @@ test("assistant runs preserve bounded choice questions in state and events", asy
 					type: "tool-request_user_input",
 					toolCallId: decision.toolCallId,
 					state: "input-available",
-					input: {
-						question: decision.question,
-						responseType: decision.responseType,
-						options: decision.options,
-						consequence: decision.consequence,
-					},
+					input: { questions: decision.questions },
 				},
 			]),
 			text: "",
@@ -1683,7 +1693,7 @@ test("assistant runs reject questions that do not match stored assistant input",
 	expect(savedRun?.status).toBe("running");
 });
 
-test("appended user input resolves the question and resumes its run", async () => {
+test("a tool answer resolves the question without appending a user message", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-append-decision", workspaceId });
 	const run = await asOwner.mutation(api.assistantRuns.startAssistantRun, {
@@ -1708,49 +1718,57 @@ test("appended user input resolves the question and resumes its run", async () =
 			"Which scope should I use?",
 		),
 	});
-	await asOwner.mutation(api.chats.saveMessage, {
+	const userMessageIdsBeforeAnswer = await t.run(async (ctx) =>
+		(await ctx.db.query("chatMessages").collect())
+			.filter((message) => message.role === "user")
+			.map((message) => message.messageId),
+	);
+	await asOwner.mutation(api.assistantRunQuestionAnswers.answer, {
 		workspaceId,
 		chatId: "chat-append-decision",
-		message: {
-			id: "msg-user-answer",
-			role: "user",
-			partsJson: JSON.stringify([{ type: "text", text: "Use all notes." }]),
-			text: "Use all notes.",
-			createdAt: 2_002,
-		},
+		runId: run._id,
+		nextAssistantMessageId: "chat-append-decision-assistant-2",
+		answer: "> Which scope should I use?\nUse all notes.",
 	});
 
-	const resumedRun = await asOwner.mutation(
-		api.assistantRuns.appendUserMessageToAssistantRun,
-		{
-			runId: run._id,
-			messageId: "msg-user-answer",
-		},
-	);
+	const resumedRun = await asOwner.query(api.assistantRuns.getAttachableRun, {
+		workspaceId,
+		chatId: "chat-append-decision",
+	});
 
-	expect(resumedRun.status).toBe("running");
+	expect(resumedRun?.status).toBe("running");
+	if (!resumedRun) {
+		throw new Error("Expected the answered assistant run to remain active.");
+	}
 	expect(resumedRun.pendingDecision).toBeUndefined();
-	const resolvedQuestion = await t.run(async (ctx) => {
+	const persistedMessages = await t.run(async (ctx) => {
 		const chat = await ctx.db.get(resumedRun.chatId);
 		return chat
 			? await ctx.db
 					.query("chatMessages")
-					.withIndex("by_chatId_and_messageId", (q) =>
-						q.eq("chatId", chat._id).eq("messageId", run.assistantMessageId),
-					)
-					.unique()
-			: null;
+					.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+					.collect()
+			: [];
 	});
+	const resolvedQuestion = persistedMessages.find(
+		(message) => message.messageId === run.assistantMessageId,
+	);
+	expect(
+		persistedMessages
+			.filter((message) => message.role === "user")
+			.map((message) => message.messageId),
+	).toEqual(userMessageIdsBeforeAnswer);
 	expect(JSON.parse(resolvedQuestion?.partsJson ?? "[]")).toEqual([
 		expect.objectContaining({
 			state: "output-available",
-			output: { answered: true },
+			output: {
+				answer: "> Which scope should I use?\nUse all notes.",
+			},
 		}),
 	]);
 	expect(await listRunEventTypes({ asOwner, runId: run._id })).toEqual([
 		"run.started",
 		"input.requested",
-		"user.message.appended",
 		"input.resolved",
 	]);
 	const events = await asOwner.query(
@@ -1761,7 +1779,7 @@ test("appended user input resolves the question and resumes its run", async () =
 		type: "input.resolved",
 		resolution: {
 			type: "user_question",
-			answerMessageIds: ["msg-user-answer"],
+			answer: "> Which scope should I use?\nUse all notes.",
 		},
 	});
 });

@@ -1,3 +1,7 @@
+import {
+	createCanonicalHostedUserQuestionAnswer,
+	type HostedUserQuestionPendingDecision,
+} from "@workspace/ai/hosted-user-question";
 import { createCanonicalLocalFolderToolContinuation } from "@workspace/ai/local-folder-tool-contract";
 import {
 	createCanonicalToolApprovalResponse,
@@ -31,6 +35,7 @@ export const createCanonicalChatAssistantContinuation = ({
 	approval,
 	localFolderToolContinuation,
 	storedMessage,
+	userQuestion,
 }: {
 	approval: {
 		response: ToolApprovalResponse;
@@ -38,13 +43,26 @@ export const createCanonicalChatAssistantContinuation = ({
 	} | null;
 	localFolderToolContinuation: UIMessage | null;
 	storedMessage: StoredAssistantMessage | null | undefined;
+	userQuestion: {
+		answer: string;
+		decision: HostedUserQuestionPendingDecision;
+	} | null;
 }) => {
 	let canonicalMessage: UIMessage | null = null;
+	if (userQuestion) {
+		canonicalMessage = createCanonicalHostedUserQuestionAnswer({
+			answer: userQuestion.answer,
+			decision: userQuestion.decision,
+			storedMessage,
+		});
+	}
 	if (approval) {
 		canonicalMessage = createCanonicalToolApprovalResponse({
 			approvalResponse: approval.response,
 			approvalResponses: approval.responses,
-			storedMessage,
+			storedMessage: canonicalMessage
+				? toStoredAssistantMessage(canonicalMessage)
+				: storedMessage,
 		});
 	}
 

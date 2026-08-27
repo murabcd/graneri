@@ -33,11 +33,6 @@ export const toolApprovalAuthorityValidator = v.object({
 	provider: v.string(),
 });
 
-export const userQuestionOptionValidator = v.object({
-	label: v.string(),
-	description: v.optional(v.string()),
-});
-
 export const toolApprovalPendingDecisionValidator = v.object({
 	type: v.literal("tool_approval"),
 	approvalId: v.string(),
@@ -52,10 +47,18 @@ export const userQuestionPendingDecisionValidator = v.object({
 	type: v.literal("user_question"),
 	assistantMessageId: v.string(),
 	toolCallId: v.string(),
-	question: v.string(),
-	responseType: v.union(v.literal("text"), v.literal("choice")),
-	options: v.optional(v.array(userQuestionOptionValidator)),
-	consequence: v.optional(v.string()),
+	questions: v.array(
+		v.object({
+			id: v.string(),
+			question: v.string(),
+			options: v.array(
+				v.object({
+					label: v.string(),
+					description: v.string(),
+				}),
+			),
+		}),
+	),
 });
 
 export const pendingDecisionValidator = v.union(
@@ -75,7 +78,7 @@ export const humanDecisionResolutionValidator = v.union(
 	}),
 	v.object({
 		type: v.literal("user_question"),
-		answerMessageIds: v.array(v.string()),
+		answer: v.string(),
 	}),
 );
 

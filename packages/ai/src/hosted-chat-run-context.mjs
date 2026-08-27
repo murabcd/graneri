@@ -1,4 +1,5 @@
 import { buildChatAutomationContext } from "./automation-tools.mjs";
+import { CHAT_MODE } from "./chat-mode.mjs";
 import { buildCoreChatToolPolicy } from "./chat-tool-policy.mjs";
 import { buildConvexWorkspaceToolSet } from "./convex-workspace-tools.mjs";
 import { buildHostedChatRunPlan } from "./hosted-chat-run-plan.mjs";
@@ -44,6 +45,7 @@ const buildClientLocalFolderRoots = (localFolders) => {
 
 export const buildHostedChatRunContext = async ({
 	appsEnabled = false,
+	chatMode = CHAT_MODE.DEFAULT,
 	automationActions,
 	chatAttachmentsApi,
 	chatId,
@@ -145,6 +147,7 @@ export const buildHostedChatRunContext = async ({
 			recipeContext,
 			userProfileContext,
 		},
+		chatMode,
 		coreToolPolicy,
 		localFolderContext,
 		localFolderTools:

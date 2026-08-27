@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
 	createHostedRequestUserInputTool,
+	getHostedUserQuestionAnswer,
 	getHostedUserQuestionRequest,
+	isHostedUserQuestionAnswerMessage,
 	resolveHostedUserQuestionMessage,
 } from "../src/hosted-user-question.mjs";
+
+const questions = [
+	{
+		id: "scope",
+		question: "Which notes should I search?",
+		options: [
+			{ label: "Current note", description: "Use only the current note." },
+			{ label: "All notes", description: "Use all available notes." },
+		],
+	},
+];
 
 const questionMessage = {
 	id: "assistant-1",
@@ -13,16 +26,13 @@ const questionMessage = {
 			type: "tool-request_user_input" as const,
 			toolCallId: "question-1",
 			state: "input-available" as const,
-			input: {
-				question: "Which notes should I search?",
-				responseType: "text" as const,
-			},
+			input: { questions },
 		},
 	],
 };
 
 describe("hosted user questions", () => {
-	it("defines a client-resolved question tool", () => {
+	it("defines a client-resolved questionnaire tool", () => {
 		const questionTool = createHostedRequestUserInputTool();
 
 		expect(questionTool.execute).toBeUndefined();
@@ -31,7 +41,7 @@ describe("hosted user questions", () => {
 		});
 	});
 
-	it("detects and resolves the exact pending question", () => {
+	it("detects and resolves the exact pending questionnaire", () => {
 		const decision = getHostedUserQuestionRequest(questionMessage);
 		if (!decision) {
 			throw new Error("Expected a pending user question.");
@@ -41,40 +51,61 @@ describe("hosted user questions", () => {
 			type: "user_question",
 			assistantMessageId: "assistant-1",
 			toolCallId: "question-1",
-			question: "Which notes should I search?",
-			responseType: "text",
+			questions,
 		});
-		expect(
-			resolveHostedUserQuestionMessage({
-				message: questionMessage,
-				decision,
-			}),
-		).toMatchObject({
+		const resolvedMessage = resolveHostedUserQuestionMessage({
+			message: questionMessage,
+			decision,
+			answer: "> Which notes should I search?\nAll notes",
+		});
+		expect(resolvedMessage).toMatchObject({
 			parts: [
 				{
 					state: "output-available",
-					output: { answered: true },
+					output: {
+						answer: "> Which notes should I search?\nAll notes",
+					},
 				},
 			],
 		});
+		if (!resolvedMessage) {
+			throw new Error("Expected the question to resolve.");
+		}
+		expect(
+			getHostedUserQuestionAnswer({
+				message: resolvedMessage,
+				decision,
+			}),
+		).toBe("> Which notes should I search?\nAll notes");
+		expect(isHostedUserQuestionAnswerMessage(resolvedMessage)).toBe(true);
+		expect(
+			isHostedUserQuestionAnswerMessage({
+				...resolvedMessage,
+				parts: resolvedMessage.parts.map((part) =>
+					part.type === "tool-request_user_input"
+						? { ...part, output: { answer: "   " } }
+						: part,
+				),
+			}),
+		).toBe(false);
 	});
 
 	it("rejects a pending decision that does not match stored input", () => {
 		expect(
 			resolveHostedUserQuestionMessage({
 				message: questionMessage,
+				answer: "All notes",
 				decision: {
 					type: "user_question",
 					assistantMessageId: "assistant-1",
 					toolCallId: "question-1",
-					question: "A different question",
-					responseType: "text",
+					questions: [{ ...questions[0], question: "A different question" }],
 				},
 			}),
 		).toBeNull();
 	});
 
-	it("rejects multiple questions in one step", () => {
+	it("rejects multiple questionnaire tools in one step", () => {
 		const message = {
 			...questionMessage,
 			parts: [
@@ -83,10 +114,7 @@ describe("hosted user questions", () => {
 					type: "tool-request_user_input" as const,
 					toolCallId: "question-2",
 					state: "input-available" as const,
-					input: {
-						question: "Which date range should I use?",
-						responseType: "text" as const,
-					},
+					input: { questions },
 				},
 			],
 		};
@@ -95,36 +123,118 @@ describe("hosted user questions", () => {
 		);
 	});
 
-	it("preserves bounded choices and their consequence in the pending decision", () => {
+	it("preserves one to three described single-choice questions", () => {
 		const decision = getHostedUserQuestionRequest({
-			id: "assistant-choice",
+			id: "assistant-questionnaire",
 			role: "assistant",
 			parts: [
 				{
 					type: "tool-request_user_input",
-					toolCallId: "question-choice",
+					toolCallId: "questionnaire-1",
 					state: "input-available",
 					input: {
-						question: "Which scope should I use?",
-						responseType: "choice",
-						consequence: "This controls the search scope.",
-						options: [
-							{ label: "Current project" },
-							{ label: "All projects", description: "Search everything." },
+						questions: [
+							...questions,
+							{
+								id: "sources",
+								question: "Which sources may I use?",
+								options: [
+									{ label: "Notes", description: "Use connected notes." },
+									{ label: "Files", description: "Use workspace files." },
+									{ label: "Web", description: "Use online sources." },
+								],
+							},
 						],
 					},
 				},
 			],
 		});
 
-		expect(decision).toMatchObject({
-			type: "user_question",
-			responseType: "choice",
-			consequence: "This controls the search scope.",
-			options: [
-				{ label: "Current project" },
-				{ label: "All projects", description: "Search everything." },
+		expect(decision?.questions).toEqual([
+			...questions,
+			{
+				id: "sources",
+				question: "Which sources may I use?",
+				options: [
+					{ label: "Notes", description: "Use connected notes." },
+					{ label: "Files", description: "Use workspace files." },
+					{ label: "Web", description: "Use online sources." },
+				],
+			},
+		]);
+	});
+
+	it("rejects the superseded multi-select question contract", () => {
+		expect(
+			getHostedUserQuestionRequest({
+				id: "assistant-multi-select",
+				role: "assistant",
+				parts: [
+					{
+						type: "tool-request_user_input",
+						toolCallId: "question-multi-select",
+						state: "input-available",
+						input: {
+							questions: [{ ...questions[0], type: "multi_select" }],
+						},
+					},
+				],
+			}),
+		).toBeNull();
+	});
+
+	it("rejects duplicate question IDs and options", () => {
+		const invalidMessage = {
+			id: "assistant-invalid-questionnaire",
+			role: "assistant" as const,
+			parts: [
+				{
+					type: "tool-request_user_input" as const,
+					toolCallId: "questionnaire-invalid",
+					state: "input-available" as const,
+					input: {
+						questions: [
+							questions[0],
+							{
+								...questions[0],
+								options: [
+									{ label: "All notes", description: "Use all notes." },
+									{ label: "All notes", description: "Use every note." },
+								],
+							},
+						],
+					},
+				},
 			],
-		});
+		};
+
+		expect(getHostedUserQuestionRequest(invalidMessage)).toBeNull();
+	});
+
+	it("rejects the superseded one-question shape", () => {
+		expect(
+			getHostedUserQuestionRequest({
+				id: "assistant-old-question",
+				role: "assistant",
+				parts: [
+					{
+						type: "tool-request_user_input",
+						toolCallId: "question-old",
+						state: "input-available",
+						input: {
+							question: "Which scope should I use?",
+							responseType: "choice",
+							options: [
+								{
+									label: "Current note",
+									description: "Use only the current note.",
+								},
+								{ label: "All notes", description: "Use all available notes." },
+							],
+						},
+					},
+				],
+			}),
+		).toBeNull();
 	});
 });

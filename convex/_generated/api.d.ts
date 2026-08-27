@@ -30,6 +30,7 @@ import type * as assistantRunJobModel from "../assistantRunJobModel.js";
 import type * as assistantRunJobState from "../assistantRunJobState.js";
 import type * as assistantRunLifecycle from "../assistantRunLifecycle.js";
 import type * as assistantRunModel from "../assistantRunModel.js";
+import type * as assistantRunQuestionAnswers from "../assistantRunQuestionAnswers.js";
 import type * as assistantRunScheduling from "../assistantRunScheduling.js";
 import type * as assistantRunStateMachine from "../assistantRunStateMachine.js";
 import type * as assistantRunStreamState from "../assistantRunStreamState.js";
@@ -158,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   assistantRunJobState: typeof assistantRunJobState;
   assistantRunLifecycle: typeof assistantRunLifecycle;
   assistantRunModel: typeof assistantRunModel;
+  assistantRunQuestionAnswers: typeof assistantRunQuestionAnswers;
   assistantRunScheduling: typeof assistantRunScheduling;
   assistantRunStateMachine: typeof assistantRunStateMachine;
   assistantRunStreamState: typeof assistantRunStreamState;

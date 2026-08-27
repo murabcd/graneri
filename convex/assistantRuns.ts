@@ -21,10 +21,7 @@ import {
 	deleteAssistantRunRuntimeBatch,
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
-import {
-	requireAssistantRunUserQuestion,
-	resolveAssistantRunUserQuestion,
-} from "./assistantRunUserQuestions";
+import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import { requireAssistantRunToolApproval } from "./toolApproval";
 
@@ -314,30 +311,6 @@ export const finishAssistantRun = mutation({
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
 
 		return await transitionAssistantRun(ctx, run, { type: "complete" });
-	},
-});
-
-export const appendUserMessageToAssistantRun = mutation({
-	args: {
-		runId: v.id("assistantRuns"),
-		messageId: v.string(),
-	},
-	returns: assistantRunValidator,
-	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
-		await resolveAssistantRunUserQuestion(ctx, run, [args.messageId]);
-		const appendedRun = await transitionAssistantRun(ctx, run, {
-			type: "append_user_messages",
-			messages: [{ messageId: args.messageId }],
-		});
-		return await transitionAssistantRun(ctx, appendedRun, {
-			type: "resolve_user_decision",
-			resolution: {
-				type: "user_question",
-				answerMessageIds: [args.messageId],
-			},
-		});
 	},
 });
 

@@ -1,10 +1,10 @@
 import { useChat } from "@ai-sdk/react";
-import { getPendingHostedHumanDecision } from "@workspace/ai/hosted-human-decision";
-import type { ChatAddToolOutputFunction, UIMessage } from "ai";
 import {
-	lastAssistantMessageIsCompleteWithApprovalResponses,
-	lastAssistantMessageIsCompleteWithToolCalls,
-} from "ai";
+	getMatchingPendingHostedHumanDecision,
+	type HostedHumanDecisionResponse,
+} from "@workspace/ai/hosted-human-decision";
+import { HOSTED_REQUEST_USER_INPUT_TOOL_NAME } from "@workspace/ai/hosted-user-question";
+import type { ChatAddToolOutputFunction, UIMessage } from "ai";
 import { useMutation, useQuery } from "convex/react";
 import * as React from "react";
 // Optimistic insertion must commit before submit continues into DOM measurement.
@@ -32,7 +32,9 @@ import { createDesktopLocalToolCallHandler } from "@/lib/desktop-local-tool-call
 import { logError } from "@/lib/logger";
 import {
 	mergeRendererChatSessionMessages,
+	prepareRendererUserQuestionMessages,
 	resolveRendererChatRunState,
+	shouldAutomaticallyContinueRendererChat,
 } from "@/lib/renderer-chat-session";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -64,6 +66,22 @@ type UpdateQueuedRendererChatTurnInput = Pick<
 	onRequestPrepared?: SubmitRendererChatTurnInput["onRequestPrepared"];
 };
 
+type SubmitUserQuestionAnswerInput = Pick<
+	SubmitRendererChatTurnInput,
+	"buildRequestBody"
+> & {
+	answer: string;
+	onRequestPrepared?: (requestBody: ChatRequestContext) => void;
+};
+
+type SubmitHumanDecisionInput = Pick<
+	SubmitRendererChatTurnInput,
+	"buildRequestBody"
+> & {
+	response: HostedHumanDecisionResponse;
+	onRequestPrepared?: (requestBody: ChatRequestContext) => void;
+};
+
 type RegenerateRendererChatTurnInput = Pick<
 	SubmitRendererChatTurnInput,
 	"buildRequestBody"
@@ -75,10 +93,6 @@ type RegenerateRendererChatTurnInput = Pick<
 		>,
 	) => void;
 };
-
-const shouldAutomaticallyContinueChat = (args: { messages: UIMessage[] }) =>
-	lastAssistantMessageIsCompleteWithApprovalResponses(args) ||
-	lastAssistantMessageIsCompleteWithToolCalls(args);
 
 export const useRendererChatSession = ({
 	activeRun,
@@ -133,6 +147,12 @@ export const useRendererChatSession = ({
 	const transport = useWorkspaceChatTransport(workspaceId);
 	const localFileStorage = useLocalFileStorage();
 	const latestRequestBodyRef = React.useRef<ChatRequestContext | null>(null);
+	const pendingUserQuestionRollbackRef = React.useRef<{
+		assistantMessageId: string;
+		chatId: string;
+		messages: UIMessage[];
+		toolCallId: string;
+	} | null>(null);
 	const addToolOutputRef =
 		React.useRef<ChatAddToolOutputFunction<UIMessage> | null>(null);
 	const [activeSteerHandoffStreamingMessageIds, setActiveSteerHandoffIds] =
@@ -158,13 +178,14 @@ export const useRendererChatSession = ({
 		resumeStream,
 		addToolOutput,
 		addToolApprovalResponse,
+		clearError,
 	} = useChat({
 		id: chatId,
 		throttle: CHAT_STREAM_UI_THROTTLE_MS,
 		messages: sessionPersistedMessages,
 		transport,
 		onToolCall: handleToolCall,
-		sendAutomaticallyWhen: shouldAutomaticallyContinueChat,
+		sendAutomaticallyWhen: shouldAutomaticallyContinueRendererChat,
 	});
 	const {
 		commitOptimisticMessage,
@@ -213,6 +234,39 @@ export const useRendererChatSession = ({
 		displayActiveRun || isChatRequestPending
 			? activeSteerHandoffStreamingMessageIds
 			: EMPTY_STREAMING_MESSAGE_IDS;
+	React.useEffect(() => {
+		const rollback = pendingUserQuestionRollbackRef.current;
+		if (!error || !rollback) {
+			return;
+		}
+		if (rollback.chatId !== chatId) {
+			pendingUserQuestionRollbackRef.current = null;
+			return;
+		}
+
+		pendingUserQuestionRollbackRef.current = null;
+		setMessages(rollback.messages);
+	}, [chatId, error, setMessages]);
+	React.useEffect(() => {
+		const rollback = pendingUserQuestionRollbackRef.current;
+		if (!rollback) {
+			return;
+		}
+		if (rollback.chatId !== chatId) {
+			pendingUserQuestionRollbackRef.current = null;
+			return;
+		}
+		const pendingDecision = attachableActiveRun?.pendingDecision;
+		if (
+			pendingDecision?.type === "user_question" &&
+			pendingDecision.assistantMessageId === rollback.assistantMessageId &&
+			pendingDecision.toolCallId === rollback.toolCallId
+		) {
+			return;
+		}
+
+		pendingUserQuestionRollbackRef.current = null;
+	}, [attachableActiveRun?.pendingDecision, chatId]);
 	useResumeActiveChatRun({
 		activeRun: displayActiveRun,
 		chatId,
@@ -306,8 +360,12 @@ export const useRendererChatSession = ({
 		],
 	);
 	const pendingHumanDecision = React.useMemo(
-		() => getPendingHostedHumanDecision(displayMessages),
-		[displayMessages],
+		() =>
+			getMatchingPendingHostedHumanDecision({
+				messages: displayMessages,
+				pendingDecision: displayActiveRun?.pendingDecision,
+			}),
+		[displayActiveRun?.pendingDecision, displayMessages],
 	);
 	const localMessageIds = React.useMemo(
 		() =>
@@ -484,6 +542,73 @@ export const useRendererChatSession = ({
 			workspaceId,
 		],
 	);
+	const submitUserQuestionAnswer = React.useCallback(
+		({
+			answer,
+			buildRequestBody,
+			onRequestPrepared,
+		}: SubmitUserQuestionAnswerInput) => {
+			if (
+				pendingHumanDecision?.type !== "user_question" ||
+				isPreparingRequest
+			) {
+				return Promise.resolve(false);
+			}
+			if (!displayActiveRun) {
+				return Promise.reject(
+					new Error("Answering a question requires an active assistant run."),
+				);
+			}
+
+			return runPreparedRequest(async () => {
+				const requestBody = await buildRequestBody();
+				latestRequestBodyRef.current = requestBody;
+				onRequestPrepared?.(requestBody);
+				const pendingMessages = prepareRendererUserQuestionMessages({
+					decision: pendingHumanDecision,
+					messages: displayMessages,
+				});
+				clearError();
+				pendingUserQuestionRollbackRef.current = {
+					assistantMessageId: pendingHumanDecision.assistantMessageId,
+					chatId,
+					messages: pendingMessages,
+					toolCallId: pendingHumanDecision.toolCallId,
+				};
+				setMessages(pendingMessages);
+				try {
+					await addToolOutput({
+						tool: HOSTED_REQUEST_USER_INPUT_TOOL_NAME,
+						toolCallId: pendingHumanDecision.toolCallId,
+						output: { answer },
+					});
+					await sendMessage(undefined, {
+						body: {
+							...requestBody,
+							continueRunId: displayActiveRun._id,
+						},
+					});
+					return true;
+				} catch (error) {
+					pendingUserQuestionRollbackRef.current = null;
+					setMessages(pendingMessages);
+					throw error;
+				}
+			});
+		},
+		[
+			addToolOutput,
+			clearError,
+			chatId,
+			displayActiveRun,
+			displayMessages,
+			isPreparingRequest,
+			pendingHumanDecision,
+			runPreparedRequest,
+			sendMessage,
+			setMessages,
+		],
+	);
 	const updateQueuedTurn = React.useCallback(
 		(input: UpdateQueuedRendererChatTurnInput) =>
 			runPreparedRequest(async () => {
@@ -574,6 +699,25 @@ export const useRendererChatSession = ({
 			runPreparedRequest,
 		],
 	);
+	const submitHumanDecision = React.useCallback(
+		({
+			buildRequestBody,
+			onRequestPrepared,
+			response,
+		}: SubmitHumanDecisionInput) =>
+			response.type === "user_question"
+				? submitUserQuestionAnswer({
+						answer: response.answer,
+						buildRequestBody,
+						onRequestPrepared,
+					})
+				: submitToolApproval({
+						approved: response.approved,
+						buildRequestBody,
+						onRequestPrepared,
+					}),
+		[submitToolApproval, submitUserQuestionAnswer],
+	);
 	const deleteMessage = React.useCallback(
 		async (messageId: string) => {
 			if (isChatUiPending) {
@@ -646,7 +790,7 @@ export const useRendererChatSession = ({
 		setMessages,
 		status,
 		streamingMessageIds,
-		submitToolApproval,
+		submitHumanDecision,
 		submitTurn,
 		updateQueuedTurn,
 	};

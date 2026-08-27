@@ -2,6 +2,7 @@ import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { ToolLoopAgent, ToolSet, UIMessage } from "ai";
 import type { AutomationActions } from "./automation-tools.mjs";
 import type { WorkspaceToolConnection } from "./capability-registry.mjs";
+import type { ChatMode } from "./chat-mode.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 import type { HostedRunPlan } from "./hosted-run-activity.mjs";
 import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
@@ -28,6 +29,7 @@ type Recipe = { name: string; prompt: string } | null;
 
 export declare const buildHostedChatRunContext: (args: {
 	appsEnabled?: boolean;
+	chatMode?: ChatMode;
 	automationActions?: AutomationActions | null;
 	chatAttachmentsApi: ChatAttachmentsApi;
 	chatId: string;

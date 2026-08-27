@@ -94,6 +94,7 @@ const sanitizeQueuedRequestBody = (
 		: undefined;
 
 	return {
+		chatMode: requestBody.chatMode,
 		mentions: requestBody.mentions,
 		model: requestBody.model,
 		reasoningEffort: requestBody.reasoningEffort,

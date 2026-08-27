@@ -1,4 +1,6 @@
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
+import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
+import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
 import { isDesktopRuntime } from "@workspace/platform/desktop";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -19,7 +21,6 @@ import type { ChatAttachment } from "@/components/ai-elements/file-attachment-ut
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
 import { useRevokeAttachmentObjectUrls } from "@/components/ai-elements/use-file-attachments";
 import type { AutomationListItem } from "@/components/automations/automation-types";
-import type { HumanDecisionResponse } from "@/components/chat/chat-human-decision-bar";
 import { ChatMessageSearchNavigator } from "@/components/chat/chat-message-search";
 import { getChatSearchMatches } from "@/components/chat/chat-message-search-matches";
 import { ChatMessagesEntry } from "@/components/chat/chat-messages-entry";
@@ -290,6 +291,7 @@ const useChatPageController = ({
 		React.useState<ChatSummaryOpenSourceRequest | null>(null);
 	// Web-search mode is composer state set by explicit change handlers.
 	const [webSearchEnabled, setWebSearchEnabled] = React.useState(false);
+	const [chatMode, setChatMode] = React.useState<ChatMode>(CHAT_MODE.DEFAULT);
 	// Edit mode is composer state controlled by message edit/cancel handlers.
 	const [editingMessageId, setEditingMessageId] = React.useState<string | null>(
 		null,
@@ -380,8 +382,8 @@ const useChatPageController = ({
 		regenerateTurn,
 		restoreEditedQueuedMessage,
 		streamingMessageIds,
-		submitToolApproval,
 		submitTurn,
+		submitHumanDecision,
 		updateQueuedTurn,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
@@ -572,6 +574,7 @@ const useChatPageController = ({
 				const didUpdateCurrentEdit = await updateQueuedTurn({
 					buildRequestBody: () =>
 						buildWorkspaceChatRequestBody({
+							chatMode,
 							localFolderStorageScope,
 							mentions: mentionIds,
 							model: selectedModel.model,
@@ -608,6 +611,7 @@ const useChatPageController = ({
 				attachedFiles,
 				buildRequestBody: () =>
 					buildWorkspaceChatRequestBody({
+						chatMode,
 						localFolderStorageScope,
 						mentions: mentionIds,
 						model: selectedModel.model,
@@ -673,6 +677,7 @@ const useChatPageController = ({
 		mentions,
 		// The submit callback must capture the latest parent persistence callback.
 		chatPersistedCallback,
+		chatMode,
 		queuedMessageEditDraft,
 		recipes,
 		clearDraft,
@@ -710,6 +715,9 @@ const useChatPageController = ({
 
 	const handleWebSearchEnabledChange = React.useCallback((enabled: boolean) => {
 		setWebSearchEnabled(() => enabled);
+	}, []);
+	const handleChatModeChange = React.useCallback((mode: ChatMode) => {
+		setChatMode(() => mode);
 	}, []);
 
 	const handleEditMessage = React.useCallback(
@@ -751,6 +759,7 @@ const useChatPageController = ({
 			getWorkspaceChatMentionContext(mentions);
 
 		return await buildWorkspaceChatRequestBodyFromLocalFolders({
+			chatMode,
 			localFolders: sharedLocalFolders,
 			mentions: mentionIds,
 			model: selectedModel.model,
@@ -764,6 +773,7 @@ const useChatPageController = ({
 		});
 	}, [
 		activeWorkspaceId,
+		chatMode,
 		mentions,
 		selectedReasoningEffort,
 		selectedServiceTier,
@@ -772,32 +782,23 @@ const useChatPageController = ({
 		webSearchEnabled,
 	]);
 	const handleHumanDecisionResponse = React.useCallback(
-		async (response: HumanDecisionResponse) => {
-			if (response.type === "user_question") {
-				setDraft(response.answer);
-				handleMentionsChange([]);
-				setAttachedFiles([]);
-				return;
-			}
+		async (response: HostedHumanDecisionResponse) => {
 			try {
-				await submitToolApproval({
-					approved: response.approved,
-					buildRequestBody,
-				});
+				await submitHumanDecision({ response, buildRequestBody });
 			} catch (error) {
 				logError({
 					event: "client.error",
 					error,
-					message: "Failed to submit tool approval",
+					message: "Failed to submit human decision",
 				});
 				toast.error(
 					error instanceof Error
 						? error.message
-						: "Failed to submit tool approval",
+						: "Failed to submit human decision",
 				);
 			}
 		},
-		[buildRequestBody, handleMentionsChange, setDraft, submitToolApproval],
+		[buildRequestBody, submitHumanDecision],
 	);
 
 	const handleDeleteMessage = React.useCallback(
@@ -892,6 +893,7 @@ const useChatPageController = ({
 		handleSubmit,
 		handleStop,
 		handleWebSearchEnabledChange,
+		handleChatModeChange,
 		hasMessages,
 		activeStreamingChatIds: visibleActiveStreamingChatIds,
 		canStop,
@@ -925,6 +927,7 @@ const useChatPageController = ({
 		sourcesOpen,
 		summaryOpen,
 		webSearchEnabled,
+		chatMode,
 		workspaceSources,
 		appSources,
 		pendingHumanDecision,
@@ -1241,9 +1244,11 @@ export function ChatPage({
 			useCompactLayout={shouldShowActiveChatSurface}
 			draft={controller.draft}
 			placeholder={
-				controller.hasMessages
-					? "Ask for follow-up"
-					: "Ask anything. @ to use recipes, tools, or notes"
+				controller.chatMode === CHAT_MODE.PLAN
+					? "Describe your task to generate a plan..."
+					: controller.hasMessages
+						? "Ask for follow-up"
+						: "Ask anything. @ to use recipes, tools, or notes"
 			}
 			humanDecision={controller.pendingHumanDecision}
 			isHumanDecisionSubmitting={controller.isHumanDecisionSubmitting}
@@ -1273,6 +1278,8 @@ export function ChatPage({
 			onSourcesOpenChange={controller.setSourcesOpen}
 			webSearchEnabled={controller.webSearchEnabled}
 			onWebSearchEnabledChange={controller.handleWebSearchEnabledChange}
+			chatMode={controller.chatMode}
+			onChatModeChange={controller.handleChatModeChange}
 			appSources={controller.appSources}
 			onOpenConnectionsSettings={onOpenConnectionsSettings}
 			editingMessageId={controller.editingMessageId}

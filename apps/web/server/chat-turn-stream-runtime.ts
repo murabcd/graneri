@@ -124,6 +124,7 @@ export type HostedChatTurnAcceptedInput = {
 	steeredUserMessages: UIMessage[];
 	toolApprovalResponse: ToolApprovalResponse | null;
 	turnController: HostedTurnController;
+	userQuestionAnswer: string | null;
 };
 
 export type HostedChatTurnPreparedRun = Pick<
@@ -176,6 +177,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 		steeredUserMessages,
 		toolApprovalResponse,
 		turnController,
+		userQuestionAnswer,
 	} = acceptedInput;
 	const {
 		activeStreamSessions,
@@ -258,6 +260,12 @@ export const runHostedChatTurnStreamRuntime = async ({
 			continueRunId &&
 			queuedInput.hasClaimed,
 	);
+	const isAnsweringUserQuestion = Boolean(
+		continueRunId &&
+			attachableRun?._id === continueRunId &&
+			attachableRun.pendingDecision?.type === "user_question" &&
+			userQuestionAnswer !== null,
+	);
 	const shouldUseConvexProducer =
 		attachableRun?.producer === "convex" ||
 		(!attachableRun && localFolderRoots.length === 0);
@@ -276,14 +284,16 @@ export const runHostedChatTurnStreamRuntime = async ({
 	if (
 		attachableRun?.producer === "convex" &&
 		!toolApprovalResponse &&
-		!isSteeringConvexRun
+		!isSteeringConvexRun &&
+		!isAnsweringUserQuestion
 	) {
 		wideEvent.outcome = "error";
 		wideEvent.status_code = 409;
 		wideEvent.error_code = "convex_run_continuation_invalid";
 		emitWideEvent("error");
 		sendJson(response, 409, {
-			error: "Hosted run continuation requires approved or steered input.",
+			error:
+				"Hosted run continuation requires approved, questionnaire, or steered input.",
 			errorCode: "convex_run_continuation_invalid",
 		});
 		return { activeStreamSession: null, ok: false };
@@ -336,6 +346,33 @@ export const runHostedChatTurnStreamRuntime = async ({
 			return { activeStreamSession: null, ok: false };
 		}
 	}
+	if (isAnsweringUserQuestion) {
+		try {
+			if (!continueRunId || userQuestionAnswer === null) {
+				throw new Error("Question answer requires its pending assistant run.");
+			}
+			await convexClient.mutation(api.assistantRunQuestionAnswers.answer, {
+				workspaceId,
+				chatId,
+				admissionReservationId,
+				runId: continueRunId,
+				nextAssistantMessageId: assistantMessageId,
+				answer: userQuestionAnswer,
+			});
+		} catch (error) {
+			const routeError = getHostedChatConvexRouteError(error);
+			wideEvent.outcome = "error";
+			wideEvent.status_code = routeError?.statusCode ?? 500;
+			wideEvent.error_code =
+				routeError?.errorCode ?? "user_question_answer_persist_failed";
+			emitWideEvent("error");
+			sendJson(response, wideEvent.status_code, {
+				error: routeError?.error ?? "Failed to persist questionnaire answer.",
+				errorCode: routeError?.errorCode,
+			});
+			return { activeStreamSession: null, ok: false };
+		}
+	}
 	if (lastUserMessage) {
 		const isQueuedAccept = isHostedQueuedUserMessageAccept({
 			continueRunId,
@@ -362,11 +399,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 						...args,
 						admissionReservationId,
 					}),
-				appendUserMessageToRun: (args) =>
-					convexClient.mutation(
-						api.assistantRuns.appendUserMessageToAssistantRun,
-						args,
-					),
 				saveMessage: (args) =>
 					convexClient.mutation(api.chats.saveMessage, args),
 			});

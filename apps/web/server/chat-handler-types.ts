@@ -5,6 +5,7 @@ import type { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 
 export type ChatRequestBody = {
+	chatMode?: unknown;
 	id?: string;
 	workspaceId?: string | null;
 	trigger?: "submit-message" | "regenerate-message";

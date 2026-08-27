@@ -601,6 +601,106 @@ describe("chat handler persistence failures", () => {
 		});
 	});
 
+	it("admits a questionnaire tool output before generic input validation", async () => {
+		const questions = [
+			{
+				id: "sources",
+				question: "Which sources may I use?",
+				options: [
+					{ label: "Notes", description: "Use connected notes." },
+					{ label: "Files", description: "Use workspace files." },
+					{ label: "Web", description: "Use online sources." },
+				],
+			},
+		];
+		const pendingQuestionPart = {
+			type: "tool-request_user_input" as const,
+			toolCallId: "question_1",
+			state: "input-available" as const,
+			input: { questions },
+		};
+		const answer = "> Which sources may I use?\nNotes, Web";
+
+		convexMock.query.mockResolvedValueOnce({
+			model: defaultChatModelId,
+			title: "Existing chat",
+		});
+		convexMock.query.mockResolvedValueOnce({
+			_id: "run_1",
+			assistantMessageId: "assistant_1",
+			pendingDecision: {
+				type: "user_question",
+				assistantMessageId: "assistant_1",
+				toolCallId: "question_1",
+				questions,
+			},
+			producer: "convex",
+			status: "waiting_for_user",
+		});
+		convexMock.query.mockResolvedValueOnce([]);
+		convexMock.query.mockResolvedValueOnce(null);
+		convexMock.contextState.mockResolvedValueOnce({
+			compaction: null,
+			hasMoreMessages: false,
+			messages: [
+				{
+					id: "user_1",
+					role: "user",
+					partsJson: JSON.stringify([{ type: "text", text: "Ask me first" }]),
+					createdAt: 1,
+				},
+				{
+					id: "assistant_1",
+					role: "assistant",
+					partsJson: JSON.stringify([pendingQuestionPart]),
+					createdAt: 2,
+				},
+			],
+		});
+		convexMock.mutation.mockRejectedValueOnce(new Error("answer failed"));
+
+		await expect(
+			postChatRequest({
+				id: "chat_1",
+				workspaceId: "workspace_1",
+				convexToken: "token_1",
+				model: defaultChatModelId,
+				appsEnabled: false,
+				continueRunId: "run_1",
+				trigger: "submit-message",
+				messageId: "assistant_1",
+				message: {
+					id: "assistant_1",
+					role: "assistant",
+					parts: [
+						{
+							...pendingQuestionPart,
+							state: "output-available",
+							output: { answer },
+						},
+					],
+				},
+			}),
+		).resolves.toEqual({
+			status: 500,
+			body: { error: "Failed to persist questionnaire answer." },
+		});
+
+		expect(convexMock.mutation).toHaveBeenCalledTimes(1);
+		expect(getFunctionName(convexMock.mutation.mock.calls[0]?.[0])).toBe(
+			"assistantRunQuestionAnswers:answer",
+		);
+		expect(convexMock.mutation.mock.calls[0]?.[1]).toMatchObject({
+			answer,
+			chatId: "chat_1",
+			runId: "run_1",
+			workspaceId: "workspace_1",
+		});
+		expect(convexMock.mutation.mock.calls[0]?.[1]).not.toHaveProperty(
+			"message",
+		);
+	});
+
 	it("fails closed when edited branch preservation fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,

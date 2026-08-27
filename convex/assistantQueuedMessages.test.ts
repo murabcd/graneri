@@ -1,6 +1,10 @@
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
+import {
+	createQueuedRequestBody,
+	createQueuedRequestBodyJson,
+} from "./assistantQueuedMessage.fixtures";
 import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -44,8 +48,16 @@ const userQuestionDecision = (
 	type: "user_question" as const,
 	assistantMessageId,
 	toolCallId: `${assistantMessageId}-question`,
-	question,
-	responseType: "text" as const,
+	questions: [
+		{
+			id: "scope",
+			question,
+			options: [
+				{ label: "Current", description: "Use the current scope." },
+				{ label: "All", description: "Use every available scope." },
+			],
+		},
+	],
 });
 
 const createChat = async ({
@@ -117,10 +129,7 @@ const insertDuplicateActiveRun = async ({
 const queuedMessageInput = (messageId: string, text: string) => ({
 	messageId,
 	text,
-	requestBodyJson: JSON.stringify({
-		model: "gpt-5",
-		timezone: "UTC",
-	}),
+	requestBodyJson: createQueuedRequestBodyJson(),
 });
 type QueuedMessageInput = ReturnType<typeof queuedMessageInput> & {
 	metadataJson?: string;
@@ -235,8 +244,8 @@ test("queued follow-ups reject invalid durable payloads before claim", async () 
 		enqueue({
 			...queuedMessageInput("queued-local-folders", "Valid text"),
 			requestBodyJson: JSON.stringify({
+				...createQueuedRequestBody(),
 				localFolders: [{ id: "folder-1", path: "/tmp" }],
-				model: "gpt-5",
 			}),
 		}),
 	).rejects.toThrow("Queued messages cannot persist local folder selections.");
@@ -542,7 +551,12 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 					type: "tool-request_user_input",
 					toolCallId: `${waitingRun.assistantMessageId}-question`,
 					state: "input-available",
-					input: { question: "Clarify scope", responseType: "text" },
+					input: {
+						questions: userQuestionDecision(
+							waitingRun.assistantMessageId,
+							"Clarify scope",
+						).questions,
+					},
 				},
 			]),
 			text: "",

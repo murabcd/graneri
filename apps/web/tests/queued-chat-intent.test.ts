@@ -1,3 +1,4 @@
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
@@ -17,7 +18,11 @@ const createQueuedMessage = () => ({
 	createdAt: 1,
 	messageId: "queued-message-1",
 	ownerTokenIdentifier: "owner",
-	requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
+	requestBodyJson: JSON.stringify({
+		chatMode: CHAT_MODE.DEFAULT,
+		model: "gpt-5",
+		timezone: "UTC",
+	}),
 	runId,
 	status: "claimed" as const,
 	text: "Queued",
@@ -35,6 +40,7 @@ describe("queued chat intent", () => {
 			}),
 		).resolves.toMatchObject({
 			body: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "fresh-token",
 				model: "gpt-5",
 				replayQueuedMessageId: queuedMessageId,
@@ -56,6 +62,7 @@ describe("queued chat intent", () => {
 			}),
 		).resolves.toMatchObject({
 			body: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "fresh-token",
 				continueRunId: runId,
 				model: "gpt-5",

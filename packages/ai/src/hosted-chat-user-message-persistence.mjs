@@ -34,7 +34,6 @@ const buildSaveMessageArgs = ({
 export const persistHostedChatUserMessage = async ({
 	acceptQueuedUserMessage,
 	acceptSteeredUserMessages,
-	appendUserMessageToRun,
 	chatId,
 	continueRunId,
 	message,
@@ -111,13 +110,11 @@ export const persistHostedChatUserMessage = async ({
 		};
 	}
 
-	await saveMessage(saveMessageArgs);
 	if (continueRunId) {
-		await appendUserMessageToRun({
-			runId: continueRunId,
-			messageId: message.id,
-		});
+		throw new Error("Continued user input must use a claimed queue item.");
 	}
+
+	await saveMessage(saveMessageArgs);
 
 	return {
 		acceptedSteerTurnId: null,

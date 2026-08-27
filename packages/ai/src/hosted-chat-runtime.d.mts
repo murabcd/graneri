@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { ChatMode } from "./chat-mode.mjs";
 import type { StoredUiMessageRole } from "./ui-message-codec.mjs";
 
 export declare const hostedChatSteerAcceptedHeader: "X-Graneri-Steer-Accepted";
@@ -66,6 +67,7 @@ export declare const getHostedChatInputValidationErrorResponse: (
 };
 export declare const validateHostedChatRequestInput: (args: {
 	allowLocalFolderToolContinuation?: boolean;
+	continueRunId?: string | null;
 	message?: UIMessage | null;
 	replayQueuedMessageId?: string | null;
 	steerQueuedMessageId?: string | null;
@@ -182,6 +184,7 @@ export declare const getHostedChatRecipeContext: (
 export declare const buildHostedChatRuntimeInstructions: (args: {
 	automationInstruction?: string;
 	attachedNoteContext?: string;
+	chatMode?: ChatMode;
 	compactionSummary?: string | null;
 	coreToolInstruction?: string;
 	localFolderContext?: string;

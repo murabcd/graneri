@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
+import { parseChatMode } from "@workspace/ai/chat-mode";
 import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
 import {
 	getHostedChatConvexRouteError,
@@ -111,6 +112,7 @@ export const handleChatRequest = async (
 
 	const {
 		id,
+		chatMode: requestedChatMode,
 		trigger,
 		messageId,
 		message,
@@ -132,7 +134,20 @@ export const handleChatRequest = async (
 		supersedeActiveRun = false,
 		steerQueuedMessageId,
 	} = await readJsonBody<ChatRequestBody>(request);
+	const chatMode = parseChatMode(requestedChatMode);
+	if (!chatMode) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = 400;
+		wideEvent.error_code = "chat_mode_invalid";
+		emitWideEvent("error");
+		sendJson(response, 400, {
+			error: "chatMode must be default or plan.",
+			errorCode: "chat_mode_invalid",
+		});
+		return;
+	}
 	wideEvent.chat_id = id ?? null;
+	wideEvent.chat_mode = chatMode;
 	wideEvent.workspace_id = workspaceId ?? null;
 	wideEvent.trigger = trigger ?? null;
 	wideEvent.model = model ?? null;
@@ -186,6 +201,7 @@ export const handleChatRequest = async (
 
 	const inputValidation = validateHostedChatRequestInput({
 		allowLocalFolderToolContinuation: localFolders.length > 0,
+		continueRunId,
 		message,
 		replayQueuedMessageId,
 		steerQueuedMessageId,
@@ -360,6 +376,7 @@ export const handleChatRequest = async (
 		},
 		request: {
 			appsEnabled,
+			chatMode,
 			chatId: id,
 			continueRunId,
 			localFolders,

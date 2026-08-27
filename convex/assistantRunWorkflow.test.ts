@@ -205,7 +205,18 @@ test("user answers resolve the question and continue the durable workflow", asyn
 			type: "tool-request_user_input",
 			toolCallId: "question-1",
 			state: "input-available",
-			input: { question, responseType: "text" },
+			input: {
+				questions: [
+					{
+						id: "scope",
+						question,
+						options: [
+							{ label: "Current", description: "Use the current scope." },
+							{ label: "All", description: "Use every available scope." },
+						],
+					},
+				],
+			},
 		},
 	]);
 	await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
@@ -220,8 +231,16 @@ test("user answers resolve the question and continue the durable workflow", asyn
 			type: "user_question",
 			assistantMessageId: run.assistantMessageId,
 			toolCallId: "question-1",
-			question,
-			responseType: "text",
+			questions: [
+				{
+					id: "scope",
+					question,
+					options: [
+						{ label: "Current", description: "Use the current scope." },
+						{ label: "All", description: "Use every available scope." },
+					],
+				},
+			],
 		},
 	});
 	expect(
@@ -232,47 +251,14 @@ test("user answers resolve the question and continue the durable workflow", asyn
 		}),
 	).toBe("waiting_for_user");
 
-	const queuedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-		{
-			workspaceId,
-			chatId,
-			runId: run._id,
-			message: {
-				messageId: "user-answer-1",
-				text: "Search all meeting notes.",
-				requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
-			},
-		},
-	);
-	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id, queuedMessageId: queuedMessage._id },
-	);
-	if (!claimedMessage) {
-		throw new Error("Expected the question answer to be claimed.");
-	}
 	const admission = await asOwner.mutation(api.aiAccess.authorizeChatTurn);
-	await asOwner.mutation(api.chats.acceptSteeredUserMessages, {
+	await asOwner.mutation(api.assistantRunQuestionAnswers.answer, {
 		workspaceId,
 		chatId,
 		runId: run._id,
 		admissionReservationId: admission.admissionReservationId,
 		nextAssistantMessageId: "assistant-2",
-		messages: [
-			{
-				queuedMessageId: claimedMessage._id,
-				message: {
-					id: "user-answer-1",
-					role: "user",
-					partsJson: JSON.stringify([
-						{ type: "text", text: "Search all meeting notes." },
-					]),
-					text: "Search all meeting notes.",
-					createdAt: 3_000,
-				},
-			},
-		],
+		answer: "> Which scope should I use?\nAll",
 	});
 
 	const state = await t.run(async (ctx) => ({
@@ -302,12 +288,16 @@ test("user answers resolve the question and continue the durable workflow", asyn
 		id: string;
 		parts: Array<{ state?: string; output?: unknown }>;
 	}>;
-	expect(messages.slice(-2)).toMatchObject([
+	expect(messages.slice(-1)).toMatchObject([
 		{
 			id: run.assistantMessageId,
-			parts: [{ state: "output-available", output: { answered: true } }],
+			parts: [
+				{
+					state: "output-available",
+					output: { answer: "> Which scope should I use?\nAll" },
+				},
+			],
 		},
-		{ id: "user-answer-1" },
 	]);
 });
 

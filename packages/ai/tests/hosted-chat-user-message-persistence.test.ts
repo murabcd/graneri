@@ -38,7 +38,6 @@ const createPersistenceArgs = (overrides = {}) => ({
 	steeredUserMessages: [],
 	acceptQueuedUserMessage: vi.fn(async () => null),
 	acceptSteeredUserMessages: vi.fn(async () => null),
-	appendUserMessageToRun: vi.fn(async () => null),
 	saveMessage: vi.fn(async () => null),
 	...overrides,
 });
@@ -73,25 +72,13 @@ describe("hosted chat user message persistence", () => {
 		).toBe(false);
 	});
 
-	it("saves normal user messages and appends continued run events", async () => {
+	it("rejects unclassified input against a continued run", async () => {
 		const args = createPersistenceArgs({ continueRunId: "run-1" });
 
-		await expect(persistHostedChatUserMessage(args)).resolves.toEqual({
-			acceptedSteerTurnId: null,
-			pendingQueuedAcceptanceHeaders: null,
-		});
-		expect(args.saveMessage).toHaveBeenCalledWith(
-			expect.objectContaining({
-				chatId: "chat-1",
-				message: expect.objectContaining({ id: "user-1" }),
-				model: "gpt-5",
-				workspaceId: "workspace-1",
-			}),
+		await expect(persistHostedChatUserMessage(args)).rejects.toThrow(
+			"Continued user input must use a claimed queue item.",
 		);
-		expect(args.appendUserMessageToRun).toHaveBeenCalledWith({
-			runId: "run-1",
-			messageId: "user-1",
-		});
+		expect(args.saveMessage).not.toHaveBeenCalled();
 	});
 
 	it("accepts claimed replay messages with replay headers", async () => {

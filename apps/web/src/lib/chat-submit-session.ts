@@ -10,7 +10,10 @@ import {
 	toQueuedUserMessageInput,
 } from "@/lib/chat-queue";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
-import type { ChatRequestBody } from "@/lib/chat-request-preparation";
+import type {
+	ChatRequestBody,
+	ChatRequestContext,
+} from "@/lib/chat-request-preparation";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export type ActiveRun =
@@ -36,7 +39,7 @@ export type EnqueueQueuedChatTurn = (args: {
 
 export type SendChatTurn = (
 	message: SubmitChatTurnMessage,
-	options: { body: ChatRequestBody },
+	options: { body: ChatRequestBody & ChatRequestContext },
 ) => Promise<unknown> | unknown;
 
 export type SubmitChatTurnResult =
@@ -69,6 +72,7 @@ export const submitChatTurn = async ({
 	attachedFiles,
 	buildRequestBody,
 	chatId,
+	continueRunId,
 	displayActiveRun,
 	editingMessageId,
 	enqueueQueuedMessage,
@@ -84,6 +88,7 @@ export const submitChatTurn = async ({
 	attachedFiles: ChatAttachment[];
 	buildRequestBody: () => Promise<ChatRequestBody>;
 	chatId: string;
+	continueRunId?: Id<"assistantRuns">;
 	displayActiveRun: ActiveRun;
 	editingMessageId: string | null;
 	enqueueQueuedMessage: EnqueueQueuedChatTurn;
@@ -102,7 +107,9 @@ export const submitChatTurn = async ({
 	text: string;
 	workspaceId: Id<"workspaces"> | null;
 }): Promise<SubmitChatTurnResult> => {
-	const queuedActiveRun = queueActiveRun ?? displayActiveRun;
+	const queuedActiveRun = continueRunId
+		? null
+		: (queueActiveRun ?? displayActiveRun);
 	const readyFiles = getReadyFileParts(attachedFiles);
 	const filePayload = readyFiles.length > 0 ? { files: readyFiles } : {};
 	const optimisticMessageId =
@@ -176,7 +183,7 @@ export const submitChatTurn = async ({
 
 	await Promise.resolve(
 		sendMessage(outgoingMessage, {
-			body: requestBody,
+			body: continueRunId ? { ...requestBody, continueRunId } : requestBody,
 		}),
 	);
 	return { status: "sent" };

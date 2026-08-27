@@ -1,5 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { createIdGenerator, generateText } from "ai";
+import { CHAT_MODE, getChatModeInstructions } from "./chat-mode.mjs";
 import {
 	buildChatTitlePrompt,
 	deriveFallbackChatTitle,
@@ -7,6 +8,7 @@ import {
 } from "./chat-titles.mjs";
 import { getConvexErrorData } from "./convex-error.mjs";
 import { buildHostedRoutePath } from "./hosted-route-catalog.mjs";
+import { isHostedUserQuestionAnswerMessage } from "./hosted-user-question.mjs";
 import { isLocalFolderToolContinuationMessage } from "./local-folder-tool-contract.mjs";
 import { aiLogger, serializeError } from "./logger.mjs";
 import {
@@ -352,6 +354,7 @@ export const getHostedChatInputValidationErrorResponse = (error) => {
 
 export const validateHostedChatRequestInput = ({
 	allowLocalFolderToolContinuation = false,
+	continueRunId,
 	message,
 	replayQueuedMessageId,
 	steerQueuedMessageId,
@@ -369,6 +372,7 @@ export const validateHostedChatRequestInput = ({
 	if (
 		message &&
 		!getToolApprovalResponse(message) &&
+		!(continueRunId && isHostedUserQuestionAnswerMessage(message)) &&
 		!(
 			allowLocalFolderToolContinuation &&
 			isLocalFolderToolContinuationMessage(message)
@@ -635,6 +639,7 @@ export const getHostedChatRecipeContext = (selectedRecipe) => {
 export const buildHostedChatRuntimeInstructions = ({
 	automationInstruction = "",
 	attachedNoteContext = "",
+	chatMode = CHAT_MODE.DEFAULT,
 	compactionSummary = null,
 	coreToolInstruction = "",
 	localFolderContext = "",
@@ -643,14 +648,15 @@ export const buildHostedChatRuntimeInstructions = ({
 	selectedAppSourceInstructions = "",
 	userProfileContext,
 	webSearchEnabled = false,
-}) =>
-	`${buildChatInstructions({
+}) => {
+	const chatModeInstructions = getChatModeInstructions(chatMode);
+	return `${buildChatInstructions({
 		notesContext,
 		attachedNoteContext,
 		recipeContext,
 		userProfileContext: userProfileContext ?? undefined,
 		webSearchEnabled,
-	})}${compactionSummary === null ? "" : `\n\n${buildChatHistoryInstructions(compactionSummary)}`}${
+	})}${chatModeInstructions ? `\n\n${chatModeInstructions}` : ""}${compactionSummary === null ? "" : `\n\n${buildChatHistoryInstructions(compactionSummary)}`}${
 		coreToolInstruction ? `\n\n${coreToolInstruction}` : ""
 	}${
 		automationInstruction ? `\n\n${automationInstruction}` : ""
@@ -661,6 +667,7 @@ export const buildHostedChatRuntimeInstructions = ({
 			? "\n\nLocal folder priority: if the user's request is about a local path, shared folder, local file, local text transcript file, screenshot, or image, use the local folder tools first and do not use connected app tools unless the user explicitly asks for connected app data."
 			: ""
 	}\n\nTool recovery policy: when a tool call fails, returns an unavailable result, or does not provide enough information, inspect the error and continue with another relevant available tool or source if that can still satisfy the request. Do not repeat the same failing tool call with the same arguments. If no reliable path remains, explain the specific blocker and the next action needed.`;
+};
 
 export const generateHostedChatTitle = async ({
 	assistantMessage,

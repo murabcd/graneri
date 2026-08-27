@@ -1,3 +1,4 @@
+import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
 import type { DurableQueuedChatRequest } from "@workspace/ai/queued-chat-request";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import type { ReasoningEffort, ServiceTier } from "@/lib/ai/models";
@@ -8,6 +9,7 @@ import {
 } from "@/lib/local-folder-sharing";
 
 type ChatRequestBase = {
+	chatMode: ChatMode;
 	convexToken: string | null;
 	localFolders: DesktopLocalFolder[];
 	model: string;
@@ -73,7 +75,9 @@ const buildChatRequestBase = async ({
 	reasoningEffort,
 	serviceTier,
 	resolveConvexToken,
+	chatMode = CHAT_MODE.DEFAULT,
 }: {
+	chatMode?: ChatMode;
 	localFolders: DesktopLocalFolder[];
 	model: string;
 	recipeSlug: string | null;
@@ -81,6 +85,7 @@ const buildChatRequestBase = async ({
 	serviceTier: ServiceTier;
 	resolveConvexToken: () => Promise<string | null>;
 }): Promise<ChatRequestBase> => ({
+	chatMode,
 	model,
 	recipeSlug,
 	reasoningEffort,
@@ -98,7 +103,9 @@ const resolveChatRequestBase = async ({
 	serviceTier,
 	resolveConvexToken,
 	text,
+	chatMode = CHAT_MODE.DEFAULT,
 }: {
+	chatMode?: ChatMode;
 	localFolderStorageScope: string;
 	model: string;
 	recipeSlug: string | null;
@@ -116,6 +123,7 @@ const resolveChatRequestBase = async ({
 	]);
 
 	return {
+		chatMode,
 		localFolders,
 		model,
 		recipeSlug,
@@ -127,12 +135,14 @@ const resolveChatRequestBase = async ({
 };
 
 export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
+	chatMode,
 	mentions,
 	selectedSourceIds,
 	webSearchEnabled,
 	workspaceId,
 	...baseArgs
 }: {
+	chatMode: ChatMode;
 	localFolders: DesktopLocalFolder[];
 	mentions: string[];
 	model: string;
@@ -145,6 +155,7 @@ export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 	workspaceId: string | null;
 }): Promise<WorkspaceChatRequestBody> => ({
 	...(await buildChatRequestBase(baseArgs)),
+	chatMode,
 	mentions,
 	selectedSourceIds,
 	webSearchEnabled,
@@ -152,12 +163,14 @@ export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 });
 
 export const buildWorkspaceChatRequestBody = async ({
+	chatMode,
 	mentions,
 	selectedSourceIds,
 	webSearchEnabled,
 	workspaceId,
 	...baseArgs
 }: {
+	chatMode: ChatMode;
 	localFolderStorageScope: string;
 	mentions: string[];
 	model: string;
@@ -171,6 +184,7 @@ export const buildWorkspaceChatRequestBody = async ({
 	workspaceId: string | null;
 }): Promise<WorkspaceChatRequestBody> => ({
 	...(await resolveChatRequestBase(baseArgs)),
+	chatMode,
 	mentions,
 	selectedSourceIds,
 	webSearchEnabled,

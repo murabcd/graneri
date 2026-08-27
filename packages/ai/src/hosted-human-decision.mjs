@@ -1,4 +1,7 @@
-import { getHostedUserQuestionRequest } from "./hosted-user-question.mjs";
+import {
+	getHostedUserQuestionRequest,
+	hostedUserQuestionDecisionsMatch,
+} from "./hosted-user-question.mjs";
 import { getToolApprovalRequest } from "./tool-approval-state.mjs";
 
 export const getHostedHumanDecisionRequest = (message) => {
@@ -36,4 +39,46 @@ export const getPendingHostedHumanDecision = (messages) => {
 		}
 	}
 	return null;
+};
+
+const optionalAuthoritiesMatch = (left, right) =>
+	left === right ||
+	(Boolean(left) &&
+		Boolean(right) &&
+		left.access === right.access &&
+		left.approval === right.approval &&
+		left.provider === right.provider);
+
+const humanDecisionMatches = (request, pendingDecision) => {
+	if (
+		request.type !== pendingDecision.type ||
+		request.assistantMessageId !== pendingDecision.assistantMessageId ||
+		request.toolCallId !== pendingDecision.toolCallId
+	) {
+		return false;
+	}
+
+	if (request.type === "user_question") {
+		return hostedUserQuestionDecisionsMatch(request, pendingDecision);
+	}
+
+	return (
+		request.approvalId === pendingDecision.approvalId &&
+		request.toolName === pendingDecision.toolName &&
+		request.consequence === pendingDecision.consequence &&
+		optionalAuthoritiesMatch(request.authority, pendingDecision.authority)
+	);
+};
+
+export const getMatchingPendingHostedHumanDecision = ({
+	messages,
+	pendingDecision,
+}) => {
+	if (!pendingDecision) {
+		return null;
+	}
+	const request = getPendingHostedHumanDecision(messages);
+	return request && humanDecisionMatches(request, pendingDecision)
+		? request
+		: null;
 };

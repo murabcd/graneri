@@ -1,6 +1,8 @@
+import type { ChatMode } from "./chat-mode.mjs";
 import type { ReasoningEffort, ServiceTier } from "./models.mjs";
 
 export type DurableQueuedChatRequest = {
+	chatMode: ChatMode;
 	mentions?: string[];
 	model: string;
 	noteContext?:

@@ -1,5 +1,6 @@
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { PrepareStepFunction, ToolLoopAgent, ToolSet } from "ai";
+import type { ChatMode } from "./chat-mode.mjs";
 
 export type HostedChatRunPlanContext = {
 	attachedNoteContext: string;
@@ -24,6 +25,7 @@ export declare const buildHostedChatRunPlan: (args: {
 	additionalAgentTools?: ToolSet | undefined;
 	appTools?: ToolSet | undefined;
 	automationContext: HostedChatRunPlanAutomationContext;
+	chatMode?: ChatMode;
 	context: HostedChatRunPlanContext;
 	coreToolPolicy: HostedChatRunPlanCoreToolPolicy;
 	emptyToolsWhenNone?: boolean;

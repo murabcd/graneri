@@ -1,3 +1,4 @@
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { describe, expect, it, vi } from "vitest";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import {
@@ -17,7 +18,11 @@ const createQueuedFollowUpMessage = (text: string): QueuedFollowUpMessage =>
 		createdAt: 1,
 		messageId: "queued-user-message-1",
 		ownerTokenIdentifier: "owner",
-		requestBodyJson: JSON.stringify({ model: "gpt-5", timezone: "UTC" }),
+		requestBodyJson: JSON.stringify({
+			chatMode: CHAT_MODE.DEFAULT,
+			model: "gpt-5",
+			timezone: "UTC",
+		}),
 		runId,
 		status: "queued",
 		text,
@@ -189,6 +194,53 @@ describe("chat submit session", () => {
 					text: "Follow up",
 				}),
 			}),
+		);
+	});
+
+	it("continues a waiting run immediately for a human decision", async () => {
+		const enqueueQueuedMessage = vi.fn();
+		const onOptimisticMessage = vi.fn();
+		const sendMessage = vi.fn(async () => undefined);
+
+		const result = await submitChatTurn({
+			attachedFiles: [],
+			buildRequestBody: async () => ({
+				convexToken: "token",
+				localFolders: [],
+				model: "gpt-5",
+				timezone: "UTC",
+			}),
+			chatId: "chat-1",
+			continueRunId: runId,
+			displayActiveRun: { _id: runId },
+			editingMessageId: null,
+			enqueueQueuedMessage,
+			onOptimisticMessage,
+			onRequestPrepared: () => undefined,
+			sendMessage,
+			text: "Current note",
+			workspaceId,
+		});
+
+		expect(result.status).toBe("sent");
+		expect(enqueueQueuedMessage).not.toHaveBeenCalled();
+		expect(onOptimisticMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				parts: [{ text: "Current note", type: "text" }],
+				role: "user",
+			}),
+		);
+		expect(sendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ text: "Current note" }),
+			{
+				body: {
+					continueRunId: runId,
+					convexToken: "token",
+					localFolders: [],
+					model: "gpt-5",
+					timezone: "UTC",
+				},
+			},
 		);
 	});
 

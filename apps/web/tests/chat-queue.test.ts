@@ -1,3 +1,4 @@
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { describe, expect, it } from "vitest";
 import {
 	createQueuedUserMessageId,
@@ -43,6 +44,7 @@ describe("chat queue serialization", () => {
 		expect(() =>
 			toQueuedUserMessageInput({
 				requestBody: {
+					chatMode: CHAT_MODE.DEFAULT,
 					convexToken: "token",
 					localFolders: [
 						{
@@ -64,6 +66,7 @@ describe("chat queue serialization", () => {
 	it("persists only replay-owned request state", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
+				chatMode: CHAT_MODE.PLAN,
 				convexToken: "token",
 				localFolders: [],
 				mentions: ["note-1"],
@@ -79,6 +82,7 @@ describe("chat queue serialization", () => {
 		});
 
 		expect(JSON.parse(queuedMessage.requestBodyJson)).toEqual({
+			chatMode: CHAT_MODE.PLAN,
 			mentions: ["note-1"],
 			model: "gpt-5",
 			reasoningEffort: "high",
@@ -91,6 +95,7 @@ describe("chat queue serialization", () => {
 	it("canonicalizes queued text before it crosses the durable replay boundary", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "token",
 				localFolders: [],
 				model: "gpt-5",
@@ -147,6 +152,7 @@ describe("chat queue serialization", () => {
 		expect(() =>
 			toQueuedUserMessageInput({
 				requestBody: {
+					chatMode: CHAT_MODE.DEFAULT,
 					convexToken: "token",
 					localFolders: [],
 					model: "gpt-5",
@@ -160,6 +166,7 @@ describe("chat queue serialization", () => {
 	it("stores only the note id for persisted note context", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "token",
 				localFolders: [],
 				model: "gpt-5",
@@ -184,6 +191,7 @@ describe("chat queue serialization", () => {
 	it("bounds unsaved note context before durable queue persistence", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "token",
 				localFolders: [],
 				model: "gpt-5",
@@ -209,6 +217,7 @@ describe("chat queue serialization", () => {
 				recipeOnly: false,
 			},
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "stale-token",
 				localFolders: [],
 				model: "gpt-5",
@@ -243,6 +252,7 @@ describe("chat queue serialization", () => {
 	it("rejects queued request replay without a fresh Convex token", async () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "stale-token",
 				localFolders: [],
 				model: "gpt-5",
@@ -268,6 +278,7 @@ describe("chat queue serialization", () => {
 	it("rejects queued request replay without a durable queue id", async () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "stale-token",
 				localFolders: [],
 				model: "gpt-5",
@@ -292,6 +303,7 @@ describe("chat queue serialization", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			messageId: "existing-user-message",
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "stale-token",
 				localFolders: [],
 				model: "gpt-5",
@@ -318,6 +330,7 @@ describe("chat queue serialization", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			messageId,
 			requestBody: {
+				chatMode: CHAT_MODE.DEFAULT,
 				convexToken: "stale-token",
 				localFolders: [],
 				model: "gpt-5",

@@ -10,6 +10,10 @@ export type HostedHumanDecisionRequest =
 	| HostedUserQuestionPendingDecision
 	| HostedToolApprovalRequest;
 
+export type HostedHumanDecisionResponse =
+	| { type: "tool_approval"; approved: boolean }
+	| { type: "user_question"; answer: string };
+
 export type HostedToolApprovalPendingDecision = Omit<
 	HostedToolApprovalRequest,
 	"input"
@@ -30,3 +34,8 @@ export declare const getHostedHumanDecisionPendingDecision: (
 export declare const getPendingHostedHumanDecision: (
 	messages: UIMessage[],
 ) => HostedHumanDecisionRequest | null;
+
+export declare const getMatchingPendingHostedHumanDecision: (args: {
+	messages: UIMessage[];
+	pendingDecision: HostedHumanDecisionPendingDecision | null | undefined;
+}) => HostedHumanDecisionRequest | null;
