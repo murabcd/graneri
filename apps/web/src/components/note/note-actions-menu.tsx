@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { RENAME_POPOVER_SIDE_OFFSET } from "@/components/navigation/rename-popover";
 import { ProjectIcon } from "@/components/projects/project-appearance-picker";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
@@ -571,7 +572,7 @@ export function NoteActionsMenu({
 	renameAnchor,
 	renamePopoverAlign = "start",
 	renamePopoverSide = "bottom",
-	renamePopoverSideOffset = 8,
+	renamePopoverSideOffset = RENAME_POPOVER_SIDE_OFFSET,
 	renamePopoverClassName,
 	align = "start",
 	side = "bottom",

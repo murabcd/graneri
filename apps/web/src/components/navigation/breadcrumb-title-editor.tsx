@@ -19,6 +19,7 @@ import {
 import type { ProjectAppearancePreview } from "@/components/projects/project-appearance-preview";
 import { useProjectIdentityEditor } from "@/components/projects/use-project-identity-editor";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import { RENAME_POPOVER_SIDE_OFFSET } from "./rename-popover";
 import type { BreadcrumbChatTitleEditorController } from "./use-breadcrumb-chat-title-editor";
 
 function BreadcrumbTitlePopover({
@@ -65,7 +66,7 @@ function BreadcrumbTitlePopover({
 			<PopoverContent
 				align="start"
 				side="bottom"
-				sideOffset={6}
+				sideOffset={RENAME_POPOVER_SIDE_OFFSET}
 				className="w-85 rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
 				onOpenAutoFocus={onOpenAutoFocus}
 			>
