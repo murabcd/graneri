@@ -658,9 +658,6 @@ function StarredNoteItem({
 				align="start"
 				side="right"
 				renameAnchor={renameAnchor}
-				renamePopoverAlign="start"
-				renamePopoverSide="bottom"
-				renamePopoverClassName="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
 				onRenamePreviewChange={isActive ? onNoteTitleChange : undefined}
 			>
 				<SidebarMenuAction

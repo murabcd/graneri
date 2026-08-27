@@ -1,9 +1,5 @@
 import { BreadcrumbPage } from "@workspace/ui/components/breadcrumb";
-import {
-	Popover,
-	PopoverAnchor,
-	PopoverContent,
-} from "@workspace/ui/components/popover";
+import { Popover, PopoverAnchor } from "@workspace/ui/components/popover";
 import {
 	Tooltip,
 	TooltipContent,
@@ -19,7 +15,7 @@ import {
 import type { ProjectAppearancePreview } from "@/components/projects/project-appearance-preview";
 import { useProjectIdentityEditor } from "@/components/projects/use-project-identity-editor";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
-import { RENAME_POPOVER_SIDE_OFFSET } from "./rename-popover";
+import { RenamePopoverContent } from "./rename-popover";
 import type { BreadcrumbChatTitleEditorController } from "./use-breadcrumb-chat-title-editor";
 
 function BreadcrumbTitlePopover({
@@ -37,7 +33,7 @@ function BreadcrumbTitlePopover({
 	itemLabel: "chat" | "note" | "project";
 	onOpen: () => void;
 	onOpenAutoFocus?: React.ComponentProps<
-		typeof PopoverContent
+		typeof RenamePopoverContent
 	>["onOpenAutoFocus"];
 	onOpenChange: (open: boolean) => void;
 	open: boolean;
@@ -63,15 +59,9 @@ function BreadcrumbTitlePopover({
 				</TooltipTrigger>
 				<TooltipContent>{`Rename ${itemLabel}`}</TooltipContent>
 			</Tooltip>
-			<PopoverContent
-				align="start"
-				side="bottom"
-				sideOffset={RENAME_POPOVER_SIDE_OFFSET}
-				className="w-85 rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
-				onOpenAutoFocus={onOpenAutoFocus}
-			>
+			<RenamePopoverContent onOpenAutoFocus={onOpenAutoFocus}>
 				{children}
-			</PopoverContent>
+			</RenamePopoverContent>
 		</Popover>
 	);
 }

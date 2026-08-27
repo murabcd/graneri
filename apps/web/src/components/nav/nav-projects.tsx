@@ -19,11 +19,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import {
-	Popover,
-	PopoverAnchor,
-	PopoverContent,
-} from "@workspace/ui/components/popover";
+import { Popover, PopoverAnchor } from "@workspace/ui/components/popover";
 import {
 	SidebarMenu,
 	SidebarMenuAction,
@@ -60,7 +56,7 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
-import { RENAME_POPOVER_SIDE_OFFSET } from "@/components/navigation/rename-popover";
+import { RenamePopoverContent } from "@/components/navigation/rename-popover";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import {
 	ProjectIcon,
@@ -1035,11 +1031,7 @@ function ProjectSidebarRow({
 					{rowActions}
 				</div>
 			</PopoverAnchor>
-			<PopoverContent
-				align="start"
-				side="bottom"
-				sideOffset={RENAME_POPOVER_SIDE_OFFSET}
-				className="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
+			<RenamePopoverContent
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					requestAnimationFrame(() => {
@@ -1064,7 +1056,7 @@ function ProjectSidebarRow({
 					}}
 					onCancel={identityEditor.cancel}
 				/>
-			</PopoverContent>
+			</RenamePopoverContent>
 		</Popover>
 	);
 }

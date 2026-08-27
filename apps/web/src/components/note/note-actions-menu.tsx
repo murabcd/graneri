@@ -34,11 +34,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import {
-	Popover,
-	PopoverAnchor,
-	PopoverContent,
-} from "@workspace/ui/components/popover";
+import { Popover, PopoverAnchor } from "@workspace/ui/components/popover";
 import {
 	Tooltip,
 	TooltipContent,
@@ -62,7 +58,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { RENAME_POPOVER_SIDE_OFFSET } from "@/components/navigation/rename-popover";
+import { RenamePopoverContent } from "@/components/navigation/rename-popover";
 import { ProjectIcon } from "@/components/projects/project-appearance-picker";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
@@ -255,10 +251,6 @@ type NoteActionsMenuProps = {
 	children: React.ReactNode;
 	triggerTooltip?: React.ReactNode;
 	renameAnchor?: React.ReactNode;
-	renamePopoverAlign?: "start" | "center" | "end";
-	renamePopoverSide?: "top" | "right" | "bottom" | "left";
-	renamePopoverSideOffset?: number;
-	renamePopoverClassName?: string;
 	onRenamePreviewChange?: (title: string) => void;
 	align?: "start" | "center" | "end";
 	side?: "top" | "right" | "bottom" | "left";
@@ -570,10 +562,6 @@ export function NoteActionsMenu({
 	children,
 	triggerTooltip,
 	renameAnchor,
-	renamePopoverAlign = "start",
-	renamePopoverSide = "bottom",
-	renamePopoverSideOffset = RENAME_POPOVER_SIDE_OFFSET,
-	renamePopoverClassName,
 	align = "start",
 	side = "bottom",
 	showRename = true,
@@ -662,10 +650,6 @@ export function NoteActionsMenu({
 			usePopover={Boolean(renameAnchor)}
 			renameOpen={renameOpen}
 			onRenameOpenChange={handleRenameOpenChange}
-			renamePopoverAlign={renamePopoverAlign}
-			renamePopoverSide={renamePopoverSide}
-			renamePopoverSideOffset={renamePopoverSideOffset}
-			renamePopoverClassName={renamePopoverClassName}
 			renameInputRef={renameInputRef}
 			renameValue={renameValue}
 			onRenameValueChange={handleRenameValueChange}
@@ -742,10 +726,6 @@ function NoteRenameEditor({
 	usePopover,
 	renameOpen,
 	onRenameOpenChange,
-	renamePopoverAlign,
-	renamePopoverSide,
-	renamePopoverSideOffset,
-	renamePopoverClassName,
 	renameInputRef,
 	renameValue,
 	onRenameValueChange,
@@ -756,10 +736,6 @@ function NoteRenameEditor({
 	usePopover: boolean;
 	renameOpen: boolean;
 	onRenameOpenChange: (open: boolean) => void;
-	renamePopoverAlign: "start" | "center" | "end";
-	renamePopoverSide: "top" | "right" | "bottom" | "left";
-	renamePopoverSideOffset: number;
-	renamePopoverClassName?: string;
 	renameInputRef: React.RefObject<HTMLInputElement | null>;
 	renameValue: string;
 	onRenameValueChange: (value: string) => void;
@@ -769,11 +745,7 @@ function NoteRenameEditor({
 }) {
 	if (usePopover) {
 		return (
-			<PopoverContent
-				align={renamePopoverAlign}
-				side={renamePopoverSide}
-				sideOffset={renamePopoverSideOffset}
-				className={cn("w-96 rounded-lg p-2", renamePopoverClassName)}
+			<RenamePopoverContent
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					requestAnimationFrame(() => {
@@ -798,7 +770,7 @@ function NoteRenameEditor({
 						onCancel={onRenameCancel}
 					/>
 				</div>
-			</PopoverContent>
+			</RenamePopoverContent>
 		);
 	}
 
