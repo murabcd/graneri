@@ -16,9 +16,10 @@ This is the React renderer for both desktop and browser. Desktop releases still 
 the Vite bundle, so renderer constants are part of desktop release correctness.
 `useRendererChatSession` is the renderer boundary for AI SDK transport, desktop
 local-tool handoff, active-run resume, persisted-message reseeding and merging,
-and durable follow-up drain and controls. Full chat and note chat remain view
-adapters: they own composer and presentation behavior but must not assemble
-parallel stream, recovery, or queue lifecycles.
+durable follow-up drain and controls, and chat interaction commands. Full chat
+and note chat remain view adapters: they provide request-body builders and
+presentation callbacks, but must not assemble parallel submit, approval,
+regeneration, branch-replacement, stream, recovery, or queue lifecycles.
 
 ## Application navigation session
 
@@ -50,10 +51,14 @@ Renderer chat interaction ownership is shared across workspace and note chat
 surfaces. `use-chat-interaction-session.ts` owns request-preparation leases and
 atomic optimistic message commit, rollback, and active-branch replacement;
 `use-renderer-chat-session.ts` composes that state with AI SDK streaming,
-durable queued follow-ups, and stop arbitration. Persisted/external/local stop
+durable queued follow-ups, branch persistence, stop arbitration, and intent-level
+submit, queued-edit, approval, delete, and regenerate commands. Prepared
+operations release their lease on both success and failure, optimistic submit
+rollback stays inside the session, and pending branch replacement is reconciled
+before persisted messages enter the controller. Persisted/external/local stop
 ordering enters through `chat-interaction-session.ts`. Chat surfaces provide
-request-body and presentation adapters, but must not maintain parallel pending
-or optimistic-message state.
+request-body and presentation adapters, but must not maintain parallel pending,
+optimistic-message, queued-edit, or branch-replacement state.
 Note-scoped discussion ownership is layered on top of the shared renderer
 interaction session by `use-note-discussion-session.ts`. It owns draft/stored
 chat identity, note chat list/session/run snapshots, prefetching, selector

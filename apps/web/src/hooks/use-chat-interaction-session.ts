@@ -35,6 +35,17 @@ export const useChatInteractionSession = ({
 			setPreparingRequestCount((count) => Math.max(0, count - 1));
 		};
 	}, []);
+	const runPreparedRequest = React.useCallback(
+		async <Result>(operation: () => Promise<Result>) => {
+			const finishRequestPreparation = beginRequestPreparation();
+			try {
+				return await operation();
+			} finally {
+				finishRequestPreparation();
+			}
+		},
+		[beginRequestPreparation],
+	);
 
 	const commitOptimisticMessage = React.useCallback(
 		({ message }: { message: UIMessage }) => {
@@ -89,11 +100,11 @@ export const useChatInteractionSession = ({
 	);
 
 	return {
-		beginRequestPreparation,
 		commitOptimisticMessage,
 		isPreparingRequest: preparingRequestCount > 0,
 		localOptimisticMessages,
 		rollbackOptimisticMessage,
+		runPreparedRequest,
 		branchMessagesFrom,
 	};
 };

@@ -14,9 +14,6 @@ import type { UIMessage } from "ai";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronDown, ChevronUp, FileText, Search, X } from "lucide-react";
 import * as React from "react";
-// Optimistic message insertion must commit before follow-up DOM measurement/paint.
-// react-doctor-disable-next-line react-doctor/no-flush-sync -- submitChatTurn continues into imperative request/paint work that must observe the committed optimistic message.
-import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
@@ -81,17 +78,12 @@ import {
 	type ChatPluginPrefill,
 	createChatPluginDraft,
 } from "@/lib/chat-plugin-prefill";
-import {
-	getQueuedChatComposerEditDraft,
-	toQueuedUserMessageInput,
-} from "@/lib/chat-queue";
+import { getQueuedChatComposerEditDraft } from "@/lib/chat-queue";
 import {
 	buildWorkspaceChatRequestBody,
 	buildWorkspaceChatRequestBodyFromLocalFolders,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
-import { regenerateChatTurn, submitChatTurn } from "@/lib/chat-submit-session";
-import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
@@ -321,15 +313,8 @@ const useChatPageController = ({
 		},
 		[setDraftMetadata],
 	);
-	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const persistChatSettings = useMutation(api.chats.setChatSettings);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
-	const enqueueQueuedMessage = useMutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-	);
-	const updateQueuedMessage = useMutation(
-		api.assistantQueuedMessages.updateQueued,
-	);
 	const stopAutomationRun = useMutation(api.automations.stopRun);
 	const userPreferences = useQuery(api.userPreferences.get, {});
 	const {
@@ -361,27 +346,9 @@ const useChatPageController = ({
 		});
 		return true;
 	}, [runningAutomationRun, stopAutomationRun]);
-	// Branch replacement is local optimistic state reconciled with persisted messages.
-	const [pendingBranchMessageId, setPendingBranchMessageId] = React.useState<
-		string | null
-	>(null);
-
 	const persistedMessages = React.useMemo(
 		() => toStoredChatMessages(storedMessages),
 		[storedMessages],
-	);
-	const activePendingBranchMessageId =
-		pendingBranchMessageId &&
-		persistedMessages.some((message) => message.id === pendingBranchMessageId)
-			? pendingBranchMessageId
-			: null;
-	const visiblePersistedMessages = React.useMemo(
-		() =>
-			applyPendingBranchReplacement(
-				persistedMessages,
-				activePendingBranchMessageId,
-			),
-		[activePendingBranchMessageId, persistedMessages],
 	);
 
 	React.useEffect(() => {
@@ -394,33 +361,25 @@ const useChatPageController = ({
 
 	const isAutomationRunning = Boolean(runningAutomationRun);
 	const {
-		beginRequestPreparation,
 		canStop,
-		commitOptimisticMessage,
+		deleteMessage,
 		displayActiveRun,
 		displayMessages,
 		error,
-		finishQueuedMessageEdit,
 		hasLocallyCompletedAssistantMessage,
 		handleStop,
-		isAiRequestPending,
 		isChatRequestPending,
-		isChatUiPending,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
-		latestRequestBodyRef,
 		pendingToolApproval,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
-		regenerate,
-		respondToToolApproval,
+		regenerateTurn,
 		restoreEditedQueuedMessage,
-		rollbackOptimisticMessage,
-		sendMessage,
-		setQueuedMessages,
-		stopCurrentStream,
 		streamingMessageIds,
-		branchMessagesFrom,
+		submitToolApproval,
+		submitTurn,
+		updateQueuedTurn,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
 		activeRun,
@@ -436,7 +395,7 @@ const useChatPageController = ({
 			);
 			setAttachedFiles([]);
 		},
-		persistedMessages: visiblePersistedMessages,
+		persistedMessages,
 		stopExternalRun: stopRunningAutomation,
 		workspaceId: activeWorkspaceId,
 	});
@@ -586,9 +545,6 @@ const useChatPageController = ({
 			return;
 		}
 
-		let optimisticMessageId: string | null = null;
-		const finishRequestPreparation = beginRequestPreparation();
-
 		try {
 			const submission = prepareChatComposerSubmission({
 				draft: draftText,
@@ -610,40 +566,29 @@ const useChatPageController = ({
 				getWorkspaceChatMentionContext(mentions);
 
 			if (queuedMessageEditDraft) {
-				if (!activeWorkspaceId) {
-					throw new Error("Cannot edit queued message without a workspace.");
-				}
-
-				const requestBody = await buildWorkspaceChatRequestBody({
-					localFolderStorageScope,
-					mentions: mentionIds,
-					model: selectedModel.model,
-					recipeSlug: submission.recipeSlug,
-					reasoningEffort: selectedReasoningEffort,
-					serviceTier: selectedServiceTier,
-					resolveConvexToken: getCachedConvexToken,
-					selectedSourceIds: requestSelectedSourceIds,
+				const didUpdateCurrentEdit = await updateQueuedTurn({
+					buildRequestBody: () =>
+						buildWorkspaceChatRequestBody({
+							localFolderStorageScope,
+							mentions: mentionIds,
+							model: selectedModel.model,
+							recipeSlug: submission.recipeSlug,
+							reasoningEffort: selectedReasoningEffort,
+							serviceTier: selectedServiceTier,
+							resolveConvexToken: getCachedConvexToken,
+							selectedSourceIds: requestSelectedSourceIds,
+							text: submission.displayText,
+							webSearchEnabled,
+							workspaceId: activeWorkspaceId,
+						}),
+					metadata,
 					text: submission.displayText,
-					webSearchEnabled,
-					workspaceId: activeWorkspaceId,
-				});
-				const updatedQueuedMessage = await updateQueuedMessage({
-					workspaceId: activeWorkspaceId,
-					chatId,
-					queuedMessageId: queuedMessageEditDraft.message._id,
-					message: toQueuedUserMessageInput({
-						messageId: queuedMessageEditDraft.message.messageId,
-						metadata,
-						requestBody,
-						text: submission.displayText,
-					}),
 				});
 
-				if (!finishQueuedMessageEdit(updatedQueuedMessage)) {
+				if (!didUpdateCurrentEdit) {
 					return;
 				}
 
-				latestRequestBodyRef.current = requestBody;
 				setEditingMessageId((currentEditingMessageId) =>
 					currentEditingMessageId === queuedMessageEditDraft.message._id
 						? null
@@ -656,7 +601,7 @@ const useChatPageController = ({
 
 			chatPersistedCallback?.(chatId);
 
-			const result = await submitChatTurn({
+			const result = await submitTurn({
 				attachedFiles,
 				buildRequestBody: () =>
 					buildWorkspaceChatRequestBody({
@@ -672,36 +617,15 @@ const useChatPageController = ({
 						webSearchEnabled,
 						workspaceId: activeWorkspaceId,
 					}),
-				chatId,
-				displayActiveRun,
 				editingMessageId,
-				enqueueQueuedMessage,
 				metadata,
-				onOptimisticMessage: (message) => {
-					optimisticMessageId = message.id;
-					flushSync(() => {
-						commitOptimisticMessage({ message });
-					});
-				},
-				onRequestPrepared: ({ localFolders, requestBody }) => {
-					latestRequestBodyRef.current = requestBody;
+				onRequestPrepared: ({ localFolders }) => {
 					setEditingMessageId(null);
 					clearDraft();
 					setAttachedFiles([]);
 					reconcileSharedLocalFolders(localFolders);
 				},
-				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
-					setQueuedMessages((messages) =>
-						messages.map((message) =>
-							message._id === optimisticMessageId ? queuedMessage : message,
-						),
-					);
-				},
-				queueActiveRun:
-					displayActiveRun ?? (isAiRequestPending ? activeRun : null),
-				sendMessage,
 				text: submission.displayText,
-				workspaceId: activeWorkspaceId,
 			});
 
 			if (result.status === "queued") {
@@ -719,9 +643,6 @@ const useChatPageController = ({
 					? error.message
 					: "Failed to prepare chat request",
 			);
-			if (optimisticMessageId) {
-				rollbackOptimisticMessage(optimisticMessageId);
-			}
 			if (
 				queuedMessageEditDraft &&
 				!isQueuedMessageEditCurrent(queuedMessageEditDraft.message._id)
@@ -732,26 +653,18 @@ const useChatPageController = ({
 			setDraft(draftText);
 			setDraftMetadata(mentions.length > 0 ? { mentions } : null);
 			setAttachedFiles(attachedFiles);
-		} finally {
-			finishRequestPreparation();
 		}
 	}, [
 		activeWorkspaceId,
 		activeRun,
 		attachedFiles,
-		beginRequestPreparation,
 		chatId,
-		commitOptimisticMessage,
 		displayActiveRun,
 		editingMessageId,
-		enqueueQueuedMessage,
-		finishQueuedMessageEdit,
 		getDraftSnapshot,
-		isAiRequestPending,
 		isAutomationRunning,
 		isChatRequestPending,
 		isQueuedMessageEditCurrent,
-		latestRequestBodyRef,
 		localFolderStorageScope,
 		reconcileSharedLocalFolders,
 		mentions,
@@ -759,16 +672,14 @@ const useChatPageController = ({
 		chatPersistedCallback,
 		queuedMessageEditDraft,
 		recipes,
-		rollbackOptimisticMessage,
 		clearDraft,
 		setDraft,
 		setDraftMetadata,
 		selectedReasoningEffort,
 		selectedServiceTier,
 		selectedModel.model,
-		sendMessage,
-		setQueuedMessages,
-		updateQueuedMessage,
+		submitTurn,
+		updateQueuedTurn,
 		webSearchEnabled,
 	]);
 
@@ -859,17 +770,10 @@ const useChatPageController = ({
 	]);
 	const handleToolApprovalResponse = React.useCallback(
 		async (approved: boolean) => {
-			if (!pendingToolApproval || isPreparingRequest) {
-				return;
-			}
-
-			const finishRequestPreparation = beginRequestPreparation();
 			try {
-				const requestBody = await buildRequestBody();
-				await respondToToolApproval({
-					approval: pendingToolApproval,
+				await submitToolApproval({
 					approved,
-					requestBody,
+					buildRequestBody,
 				});
 			} catch (error) {
 				logError({
@@ -882,74 +786,37 @@ const useChatPageController = ({
 						? error.message
 						: "Failed to submit tool approval",
 				);
-			} finally {
-				finishRequestPreparation();
 			}
 		},
-		[
-			beginRequestPreparation,
-			buildRequestBody,
-			isPreparingRequest,
-			pendingToolApproval,
-			respondToToolApproval,
-		],
+		[buildRequestBody, submitToolApproval],
 	);
 
 	const handleDeleteMessage = React.useCallback(
 		(messageId: string) => {
-			if (canStop) {
-				handleStop();
-			}
-
-			setPendingBranchMessageId(() => messageId);
-			branchMessagesFrom({ messageId });
 			setEditingMessageId(null);
 			clearDraft();
-
-			if (!activeWorkspaceId) {
-				return;
-			}
-
-			void branchFromMessage({
-				workspaceId: activeWorkspaceId,
-				chatId,
-				messageId,
-			}).catch((error) => {
+			void deleteMessage(messageId).catch((error) => {
 				logError({
 					event: "client.error",
 					error: error,
 					message: "Failed to delete message",
 				});
 				toast.error("Failed to delete message");
-				setPendingBranchMessageId(null);
 			});
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[
-			activeWorkspaceId,
-			chatId,
-			handleStop,
-			canStop,
-			branchMessagesFrom,
-			clearDraft,
-			branchFromMessage,
-		],
+		[clearDraft, deleteMessage],
 	);
 
 	const handleRegenerateMessage = React.useCallback(
 		async (assistantMessageId: string) => {
 			try {
-				await regenerateChatTurn({
+				await regenerateTurn({
 					assistantMessageId,
-					beginRequestPreparation,
 					buildRequestBody,
-					onRequestPrepared: (requestBody) => {
-						latestRequestBodyRef.current = requestBody;
+					onRequestPrepared: () => {
 						setEditingMessageId(null);
 						clearDraft();
 					},
-					regenerate,
-					...(canStop && { stopActiveRun: stopCurrentStream }),
 				});
 			} catch (error) {
 				logError({
@@ -964,16 +831,7 @@ const useChatPageController = ({
 				);
 			}
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[
-			buildRequestBody,
-			beginRequestPreparation,
-			clearDraft,
-			canStop,
-			latestRequestBodyRef,
-			regenerate,
-			stopCurrentStream,
-		],
+		[buildRequestBody, clearDraft, regenerateTurn],
 	);
 	const handleForkedChat = React.useCallback(
 		(forkChatId: string) => {
@@ -1029,7 +887,7 @@ const useChatPageController = ({
 		activeStreamingChatIds: visibleActiveStreamingChatIds,
 		canStop,
 		compactionActivity,
-		isLoading: isChatUiPending,
+		isLoading: canStop,
 		hasEarlierMessages,
 		historyMarkerState:
 			currentChat?.forkedFromChatId !== undefined

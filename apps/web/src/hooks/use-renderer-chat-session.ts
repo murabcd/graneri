@@ -1,14 +1,15 @@
 import { useChat } from "@ai-sdk/react";
-import {
-	getPendingToolApproval,
-	type ToolApprovalRequest,
-} from "@workspace/ai/tool-approval-state";
+import { getPendingToolApproval } from "@workspace/ai/tool-approval-state";
 import type { ChatAddToolOutputFunction, UIMessage } from "ai";
 import {
 	lastAssistantMessageIsCompleteWithApprovalResponses,
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
+import { useMutation } from "convex/react";
 import * as React from "react";
+// Optimistic insertion must commit before submit continues into DOM measurement.
+// react-doctor-disable-next-line react-doctor/no-flush-sync -- the interaction owner guarantees the optimistic message is visible before submit continues.
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import { stopActiveChatStream } from "@/lib/chat-active-stream";
@@ -17,17 +18,23 @@ import {
 	appendLocalOptimisticChatMessages,
 	normalizeChatMessages,
 } from "@/lib/chat-message-state";
+import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getUIMessageSeedKey } from "@/lib/chat-snapshot";
 import { CHAT_STREAM_UI_THROTTLE_MS } from "@/lib/chat-streaming-performance";
-import { removeChatMessageById } from "@/lib/chat-submit-session";
+import {
+	removeChatMessageById,
+	submitChatTurn,
+} from "@/lib/chat-submit-session";
+import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { createDesktopLocalToolCallHandler } from "@/lib/desktop-local-tool-call";
 import { logError } from "@/lib/logger";
 import {
 	mergeRendererChatSessionMessages,
 	resolveRendererChatRunState,
 } from "@/lib/renderer-chat-session";
+import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useChatInteractionSession } from "./use-chat-interaction-session";
 import { useLocalFileStorage } from "./use-local-file-storage";
@@ -37,6 +44,37 @@ import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
 import { useWorkspaceChatTransport } from "./use-workspace-chat-transport";
 
 const EMPTY_STREAMING_MESSAGE_IDS = new Set<string>();
+
+type SubmitRendererChatTurnInput = Omit<
+	Parameters<typeof submitChatTurn>[0],
+	| "chatId"
+	| "displayActiveRun"
+	| "enqueueQueuedMessage"
+	| "onOptimisticMessage"
+	| "onQueuedMessageSaved"
+	| "queueActiveRun"
+	| "sendMessage"
+	| "workspaceId"
+>;
+
+type UpdateQueuedRendererChatTurnInput = Pick<
+	SubmitRendererChatTurnInput,
+	"buildRequestBody" | "metadata" | "text"
+> & {
+	onRequestPrepared?: SubmitRendererChatTurnInput["onRequestPrepared"];
+};
+
+type RegenerateRendererChatTurnInput = Pick<
+	SubmitRendererChatTurnInput,
+	"buildRequestBody"
+> & {
+	assistantMessageId: string;
+	onRequestPrepared: (
+		requestBody: Awaited<
+			ReturnType<SubmitRendererChatTurnInput["buildRequestBody"]>
+		>,
+	) => void;
+};
 
 const shouldAutomaticallyContinueChat = (args: { messages: UIMessage[] }) =>
 	lastAssistantMessageIsCompleteWithApprovalResponses(args) ||
@@ -65,6 +103,29 @@ export const useRendererChatSession = ({
 }) => {
 	const attachableActiveRun =
 		activeRun && activeRun.status !== "stopping" ? activeRun : null;
+	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
+	const enqueueQueuedMessage = useMutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+	);
+	const updateQueuedMessage = useMutation(
+		api.assistantQueuedMessages.updateQueued,
+	);
+	const [pendingBranchMessageId, setPendingBranchMessageId] = React.useState<
+		string | null
+	>(null);
+	const activePendingBranchMessageId =
+		pendingBranchMessageId &&
+		persistedMessages.some((message) => message.id === pendingBranchMessageId)
+			? pendingBranchMessageId
+			: null;
+	const sessionPersistedMessages = React.useMemo(
+		() =>
+			applyPendingBranchReplacement(
+				persistedMessages,
+				activePendingBranchMessageId,
+			),
+		[activePendingBranchMessageId, persistedMessages],
+	);
 	const transport = useWorkspaceChatTransport(workspaceId);
 	const localFileStorage = useLocalFileStorage();
 	const latestRequestBodyRef = React.useRef<ChatRequestContext | null>(null);
@@ -96,17 +157,17 @@ export const useRendererChatSession = ({
 	} = useChat({
 		id: chatId,
 		throttle: CHAT_STREAM_UI_THROTTLE_MS,
-		messages: persistedMessages,
+		messages: sessionPersistedMessages,
 		transport,
 		onToolCall: handleToolCall,
 		sendAutomaticallyWhen: shouldAutomaticallyContinueChat,
 	});
 	const {
-		beginRequestPreparation,
 		commitOptimisticMessage,
 		isPreparingRequest,
 		localOptimisticMessages,
 		rollbackOptimisticMessage,
+		runPreparedRequest,
 		branchMessagesFrom,
 	} = useChatInteractionSession({ chatId, setMessages });
 	React.useEffect(() => {
@@ -135,13 +196,13 @@ export const useRendererChatSession = ({
 				activeRun: attachableActiveRun,
 				controllerMessages,
 				isAiRequestPending,
-				persistedMessages,
+				persistedMessages: sessionPersistedMessages,
 			}),
 		[
 			attachableActiveRun,
 			controllerMessages,
 			isAiRequestPending,
-			persistedMessages,
+			sessionPersistedMessages,
 		],
 	);
 	const steerHandoffStreamingMessageIds =
@@ -157,8 +218,8 @@ export const useRendererChatSession = ({
 	});
 
 	const persistedMessagesSeedKey = React.useMemo(
-		() => getUIMessageSeedKey(persistedMessages),
-		[persistedMessages],
+		() => getUIMessageSeedKey(sessionPersistedMessages),
+		[sessionPersistedMessages],
 	);
 	const appliedPersistedMessagesSeedKeyRef = React.useRef(
 		persistedMessagesSeedKey,
@@ -169,7 +230,7 @@ export const useRendererChatSession = ({
 		if (previousChatIdRef.current !== chatId) {
 			previousChatIdRef.current = chatId;
 			appliedPersistedMessagesSeedKeyRef.current = persistedMessagesSeedKey;
-			setMessages(persistedMessages);
+			setMessages(sessionPersistedMessages);
 			return;
 		}
 
@@ -180,8 +241,11 @@ export const useRendererChatSession = ({
 		setMessages((currentMessages) => {
 			const currentMessagesSeedKey = getUIMessageSeedKey(currentMessages);
 			const nextPersistedMessages = activeAssistantMessageId
-				? removeChatMessageById(persistedMessages, activeAssistantMessageId)
-				: persistedMessages;
+				? removeChatMessageById(
+						sessionPersistedMessages,
+						activeAssistantMessageId,
+					)
+				: sessionPersistedMessages;
 			const shouldUsePersistedMessages =
 				currentMessages.length === 0 ||
 				currentMessagesSeedKey === appliedPersistedMessagesSeedKeyRef.current ||
@@ -200,7 +264,7 @@ export const useRendererChatSession = ({
 		activeAssistantMessageId,
 		chatId,
 		isChatRequestPending,
-		persistedMessages,
+		sessionPersistedMessages,
 		persistedMessagesSeedKey,
 		setMessages,
 	]);
@@ -211,13 +275,13 @@ export const useRendererChatSession = ({
 				activeAssistantMessageId,
 				controllerMessages,
 				displayActiveRun,
-				persistedMessages,
+				persistedMessages: sessionPersistedMessages,
 			}),
 		[
 			activeAssistantMessageId,
 			controllerMessages,
 			displayActiveRun,
-			persistedMessages,
+			sessionPersistedMessages,
 		],
 	);
 	const displayMessages = React.useMemo(
@@ -228,42 +292,18 @@ export const useRendererChatSession = ({
 					localOptimisticMessages?.chatId === chatId
 						? localOptimisticMessages.messages
 						: [],
-				resolvedMessages: persistedMessages,
+				resolvedMessages: sessionPersistedMessages,
 			}),
-		[chatId, localOptimisticMessages, mergedDisplayMessages, persistedMessages],
+		[
+			chatId,
+			localOptimisticMessages,
+			mergedDisplayMessages,
+			sessionPersistedMessages,
+		],
 	);
 	const pendingToolApproval = React.useMemo(
 		() => getPendingToolApproval(displayMessages),
 		[displayMessages],
-	);
-	const respondToToolApproval = React.useCallback(
-		async ({
-			approval,
-			approved,
-			requestBody,
-		}: {
-			approval: ToolApprovalRequest;
-			approved: boolean;
-			requestBody: ChatRequestContext;
-		}) => {
-			if (!displayActiveRun) {
-				throw new Error("Tool approval requires an active assistant run.");
-			}
-
-			latestRequestBodyRef.current = requestBody;
-			await addToolApprovalResponse({
-				id: approval.approvalId,
-				approved,
-				reason: approved ? "Approved by user." : "Denied by user.",
-				options: {
-					body: {
-						...requestBody,
-						continueRunId: displayActiveRun._id,
-					},
-				},
-			});
-		},
-		[addToolApprovalResponse, displayActiveRun],
 	);
 	const localMessageIds = React.useMemo(
 		() =>
@@ -386,35 +426,220 @@ export const useRendererChatSession = ({
 		queuedMessages,
 		stopCurrentStream,
 	]);
+	const submitTurn = React.useCallback(
+		(input: SubmitRendererChatTurnInput) =>
+			runPreparedRequest(async () => {
+				let optimisticMessageId: string | null = null;
+				try {
+					return await submitChatTurn({
+						...input,
+						chatId,
+						displayActiveRun,
+						enqueueQueuedMessage,
+						onOptimisticMessage: (message) => {
+							optimisticMessageId = message.id;
+							flushSync(() => {
+								commitOptimisticMessage({ message });
+							});
+						},
+						onQueuedMessageSaved: ({
+							optimisticMessageId: savedOptimisticMessageId,
+							queuedMessage,
+						}) => {
+							setQueuedMessages((currentMessages) =>
+								currentMessages.map((message) =>
+									message._id === savedOptimisticMessageId
+										? queuedMessage
+										: message,
+								),
+							);
+						},
+						queueActiveRun:
+							displayActiveRun ?? (isAiRequestPending ? activeRun : null),
+						sendMessage,
+						workspaceId,
+					});
+				} catch (error) {
+					if (optimisticMessageId) {
+						rollbackOptimisticMessage(optimisticMessageId);
+					}
+					throw error;
+				}
+			}),
+		[
+			activeRun,
+			chatId,
+			commitOptimisticMessage,
+			displayActiveRun,
+			enqueueQueuedMessage,
+			isAiRequestPending,
+			rollbackOptimisticMessage,
+			runPreparedRequest,
+			sendMessage,
+			setQueuedMessages,
+			workspaceId,
+		],
+	);
+	const updateQueuedTurn = React.useCallback(
+		(input: UpdateQueuedRendererChatTurnInput) =>
+			runPreparedRequest(async () => {
+				const editDraft = queuedFollowUpControls.editDraft;
+				if (!editDraft || !workspaceId) {
+					throw new Error("Cannot edit queued message without a workspace.");
+				}
+
+				const requestBody = await input.buildRequestBody();
+				const updatedQueuedMessage = await updateQueuedMessage({
+					workspaceId,
+					chatId,
+					queuedMessageId: editDraft.message._id,
+					message: toQueuedUserMessageInput({
+						messageId: editDraft.message.messageId,
+						metadata: input.metadata,
+						requestBody,
+						text: input.text,
+					}),
+				});
+				if (
+					!queuedFollowUpControls.finishQueuedMessageEdit(updatedQueuedMessage)
+				) {
+					return false;
+				}
+
+				latestRequestBodyRef.current = requestBody;
+				input.onRequestPrepared?.({
+					localFolders: requestBody.localFolders,
+					requestBody,
+				});
+				return true;
+			}),
+		[
+			chatId,
+			queuedFollowUpControls.editDraft,
+			queuedFollowUpControls.finishQueuedMessageEdit,
+			runPreparedRequest,
+			updateQueuedMessage,
+			workspaceId,
+		],
+	);
+	const submitToolApproval = React.useCallback(
+		({
+			approved,
+			buildRequestBody,
+			onRequestPrepared,
+		}: {
+			approved: boolean;
+			buildRequestBody: SubmitRendererChatTurnInput["buildRequestBody"];
+			onRequestPrepared?: (requestBody: ChatRequestContext) => void;
+		}) => {
+			if (!pendingToolApproval || isPreparingRequest) {
+				return Promise.resolve(false);
+			}
+			if (!displayActiveRun) {
+				return Promise.reject(
+					new Error("Tool approval requires an active assistant run."),
+				);
+			}
+
+			return runPreparedRequest(async () => {
+				const requestBody = await buildRequestBody();
+				latestRequestBodyRef.current = requestBody;
+				onRequestPrepared?.(requestBody);
+				await addToolApprovalResponse({
+					id: pendingToolApproval.approvalId,
+					approved,
+					reason: approved ? "Approved by user." : "Denied by user.",
+					options: {
+						body: {
+							...requestBody,
+							continueRunId: displayActiveRun._id,
+						},
+					},
+				});
+				return true;
+			});
+		},
+		[
+			addToolApprovalResponse,
+			displayActiveRun,
+			isPreparingRequest,
+			pendingToolApproval,
+			runPreparedRequest,
+		],
+	);
+	const deleteMessage = React.useCallback(
+		async (messageId: string) => {
+			if (isChatUiPending) {
+				handleStop();
+			}
+
+			setPendingBranchMessageId(messageId);
+			branchMessagesFrom({ messageId });
+			if (!workspaceId) {
+				return;
+			}
+
+			try {
+				await branchFromMessage({ workspaceId, chatId, messageId });
+			} catch (error) {
+				setPendingBranchMessageId(null);
+				throw error;
+			}
+		},
+		[
+			branchFromMessage,
+			branchMessagesFrom,
+			chatId,
+			handleStop,
+			isChatUiPending,
+			workspaceId,
+		],
+	);
+	const regenerateTurn = React.useCallback(
+		async (input: RegenerateRendererChatTurnInput) => {
+			if (isChatUiPending) {
+				await stopCurrentStream();
+			}
+
+			await runPreparedRequest(async () => {
+				const requestBody = await input.buildRequestBody();
+				latestRequestBodyRef.current = requestBody;
+				input.onRequestPrepared(requestBody);
+				await Promise.resolve(
+					regenerate({
+						body: requestBody,
+						messageId: input.assistantMessageId,
+					}),
+				);
+			});
+		},
+		[isChatUiPending, regenerate, runPreparedRequest, stopCurrentStream],
+	);
 
 	return {
-		activeAssistantMessageId,
-		beginRequestPreparation,
-		commitOptimisticMessage,
 		canStop: isChatUiPending,
-		controllerMessages,
+		deleteMessage,
 		displayActiveRun,
 		displayMessages,
+		editDraft: queuedFollowUpControls.editDraft,
 		error,
-		hasLocallyCompletedAssistantMessage,
 		handleStop,
-		isAiRequestPending,
+		hasLocallyCompletedAssistantMessage,
 		isChatRequestPending,
-		isChatUiPending,
 		isPreparingRequest,
-		latestRequestBodyRef,
+		isQueuedMessageEditCurrent:
+			queuedFollowUpControls.isQueuedMessageEditCurrent,
+		onQueuedFollowUpsReorder: queuedFollowUpControls.onQueuedFollowUpsReorder,
 		pendingToolApproval,
-		queuedMessages,
-		...queuedFollowUpControls,
-		regenerate,
-		respondToToolApproval,
-		rollbackOptimisticMessage,
-		sendMessage,
+		queuedFollowUps: queuedFollowUpControls.queuedFollowUps,
+		regenerateTurn,
+		restoreEditedQueuedMessage:
+			queuedFollowUpControls.restoreEditedQueuedMessage,
 		setMessages,
-		setQueuedMessages,
 		status,
-		stopCurrentStream,
 		streamingMessageIds,
-		branchMessagesFrom,
+		submitToolApproval,
+		submitTurn,
+		updateQueuedTurn,
 	};
 };

@@ -20,24 +20,50 @@ const useTestSession = () => {
 	};
 };
 
-it("keeps preparation pending until every lease finishes", () => {
+it("keeps preparation pending until every prepared operation finishes", async () => {
 	const { result } = renderHook(useTestSession);
 	let finishFirst = () => undefined;
 	let finishSecond = () => undefined;
+	const firstOperation = new Promise<void>((resolve) => {
+		finishFirst = resolve;
+	});
+	const secondOperation = new Promise<void>((resolve) => {
+		finishSecond = resolve;
+	});
+	let firstRequest: Promise<void> | undefined;
+	let secondRequest: Promise<void> | undefined;
 
 	act(() => {
-		finishFirst = result.current.beginRequestPreparation();
-		finishSecond = result.current.beginRequestPreparation();
+		firstRequest = result.current.runPreparedRequest(() => firstOperation);
+		secondRequest = result.current.runPreparedRequest(() => secondOperation);
 	});
 	expect(result.current.isPreparingRequest).toBe(true);
 
-	act(() => finishFirst());
-	expect(result.current.isPreparingRequest).toBe(true);
-
-	act(() => {
+	await act(async () => {
 		finishFirst();
-		finishSecond();
+		await firstRequest;
 	});
+	expect(result.current.isPreparingRequest).toBe(true);
+
+	await act(async () => {
+		finishSecond();
+		await secondRequest;
+	});
+	expect(result.current.isPreparingRequest).toBe(false);
+});
+
+it("releases preparation state when a prepared operation rejects", async () => {
+	const { result } = renderHook(useTestSession);
+	const failure = new Error("request failed");
+
+	await act(async () => {
+		await expect(
+			result.current.runPreparedRequest(async () => {
+				throw failure;
+			}),
+		).rejects.toBe(failure);
+	});
+
 	expect(result.current.isPreparingRequest).toBe(false);
 });
 

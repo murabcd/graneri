@@ -134,14 +134,11 @@ import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import { useSharedLocalFolderSession } from "@/hooks/use-shared-local-folder-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
-import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import {
 	buildNoteChatRequestBody,
 	buildNoteChatRequestBodyFromLocalFolders,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
-import { regenerateChatTurn, submitChatTurn } from "@/lib/chat-submit-session";
-import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
@@ -492,13 +489,6 @@ const useNoteComposerController = ({
 	const { reconcileSharedLocalFolders, sharedLocalFolders } =
 		useSharedLocalFolderSession(localFolderStorageScope);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
-	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
-	const enqueueQueuedMessage = useMutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-	);
-	const updateQueuedMessage = useMutation(
-		api.assistantQueuedMessages.updateQueued,
-	);
 	const recipeData = useQuery(
 		api.recipes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -583,50 +573,26 @@ const useNoteComposerController = ({
 		() => toStoredChatMessages(storedMessages ?? []),
 		[storedMessages],
 	);
-	const [pendingBranchMessageId, setPendingBranchMessageId] = React.useState<
-		string | null
-	>(null);
-	const activePendingBranchMessageId =
-		pendingBranchMessageId &&
-		initialMessages.some((message) => message.id === pendingBranchMessageId)
-			? pendingBranchMessageId
-			: null;
-	const visibleInitialMessages = React.useMemo(
-		() =>
-			applyPendingBranchReplacement(
-				initialMessages,
-				activePendingBranchMessageId,
-			),
-		[activePendingBranchMessageId, initialMessages],
-	);
 	const {
-		beginRequestPreparation,
 		canStop,
-		commitOptimisticMessage,
+		deleteMessage,
 		displayActiveRun,
 		displayMessages: displayChatMessages,
 		error: chatError,
-		finishQueuedMessageEdit,
 		handleStop,
-		isAiRequestPending,
-		isChatUiPending,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
-		latestRequestBodyRef,
 		pendingToolApproval,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
-		regenerate,
-		respondToToolApproval,
+		regenerateTurn,
 		restoreEditedQueuedMessage,
-		rollbackOptimisticMessage,
-		sendMessage,
 		setMessages,
-		setQueuedMessages,
 		status: chatStatus,
-		stopCurrentStream,
 		streamingMessageIds,
-		branchMessagesFrom,
+		submitToolApproval,
+		submitTurn,
+		updateQueuedTurn,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
 		activeRun,
@@ -639,7 +605,7 @@ const useNoteComposerController = ({
 			setAttachedFiles([]);
 			pendingComposerFocusRef.current = true;
 		},
-		persistedMessages: visibleInitialMessages,
+		persistedMessages: initialMessages,
 		resumeEnabled: hasStoredCurrentChat,
 		workspaceId: activeWorkspaceId,
 	});
@@ -1193,9 +1159,6 @@ const useNoteComposerController = ({
 			return;
 		}
 
-		let optimisticMessageId: string | null = null;
-		const finishRequestPreparation = beginRequestPreparation();
-
 		try {
 			const outgoingText = nextMessage || selectedRecipe?.name || "";
 			const recipeMetadata: ChatMessageMetadata | undefined = selectedRecipe
@@ -1208,42 +1171,31 @@ const useNoteComposerController = ({
 					}
 				: undefined;
 			if (queuedMessageEditDraft) {
-				if (!activeWorkspaceId) {
-					throw new Error("Cannot edit queued message without a workspace.");
-				}
-
 				const currentNoteContext = readNoteContext();
-				const requestBody = await buildNoteChatRequestBody({
-					localFolderStorageScope,
-					model: selectedModel.model,
-					noteContext: {
-						noteId: currentNoteContext.noteId,
-						title: currentNoteContext.title,
-						text: currentNoteContext.text,
-					},
-					reasoningEffort: selectedReasoningEffort,
-					serviceTier: selectedServiceTier,
-					recipeSlug: selectedRecipe?.slug ?? null,
-					resolveConvexToken: getCachedConvexToken,
+				const didUpdateCurrentEdit = await updateQueuedTurn({
+					buildRequestBody: () =>
+						buildNoteChatRequestBody({
+							localFolderStorageScope,
+							model: selectedModel.model,
+							noteContext: {
+								noteId: currentNoteContext.noteId,
+								title: currentNoteContext.title,
+								text: currentNoteContext.text,
+							},
+							reasoningEffort: selectedReasoningEffort,
+							serviceTier: selectedServiceTier,
+							recipeSlug: selectedRecipe?.slug ?? null,
+							resolveConvexToken: getCachedConvexToken,
+							text: outgoingText,
+						}),
+					metadata: recipeMetadata,
 					text: outgoingText,
 				});
-				const updatedQueuedMessage = await updateQueuedMessage({
-					workspaceId: activeWorkspaceId,
-					chatId: currentChatId,
-					queuedMessageId: queuedMessageEditDraft.message._id,
-					message: toQueuedUserMessageInput({
-						messageId: queuedMessageEditDraft.message.messageId,
-						metadata: recipeMetadata,
-						requestBody,
-						text: outgoingText,
-					}),
-				});
 
-				if (!finishQueuedMessageEdit(updatedQueuedMessage)) {
+				if (!didUpdateCurrentEdit) {
 					return;
 				}
 
-				latestRequestBodyRef.current = requestBody;
 				setEditingMessageId((currentEditingMessageId) =>
 					currentEditingMessageId === queuedMessageEditDraft.message._id
 						? null
@@ -1263,7 +1215,7 @@ const useNoteComposerController = ({
 			}
 
 			const currentNoteContext = readNoteContext();
-			const result = await submitChatTurn({
+			const result = await submitTurn({
 				attachedFiles,
 				buildRequestBody: () =>
 					buildNoteChatRequestBody({
@@ -1280,19 +1232,9 @@ const useNoteComposerController = ({
 						resolveConvexToken: getCachedConvexToken,
 						text: outgoingText,
 					}),
-				chatId: currentChatId,
-				displayActiveRun,
 				editingMessageId,
-				enqueueQueuedMessage,
 				metadata: recipeMetadata,
-				onOptimisticMessage: (message) => {
-					optimisticMessageId = message.id;
-					flushSync(() => {
-						commitOptimisticMessage({ message });
-					});
-				},
-				onRequestPrepared: ({ localFolders, requestBody }) => {
-					latestRequestBodyRef.current = requestBody;
+				onRequestPrepared: ({ localFolders }) => {
 					setEditingMessageId(null);
 					clearDraft();
 					setAttachedFiles([]);
@@ -1300,18 +1242,7 @@ const useNoteComposerController = ({
 					reconcileSharedLocalFolders(localFolders);
 					requestComposerFocus();
 				},
-				onQueuedMessageSaved: ({ optimisticMessageId, queuedMessage }) => {
-					setQueuedMessages((messages) =>
-						messages.map((message) =>
-							message._id === optimisticMessageId ? queuedMessage : message,
-						),
-					);
-				},
-				queueActiveRun:
-					displayActiveRun ?? (isAiRequestPending ? activeRun : null),
-				sendMessage,
 				text: outgoingText,
-				workspaceId: activeWorkspaceId,
 			});
 
 			if (result.status === "queued") {
@@ -1329,9 +1260,6 @@ const useNoteComposerController = ({
 					? error.message
 					: "Failed to prepare note chat request",
 			);
-			if (optimisticMessageId) {
-				rollbackOptimisticMessage(optimisticMessageId);
-			}
 			if (
 				queuedMessageEditDraft &&
 				!isQueuedMessageEditCurrent(queuedMessageEditDraft.message._id)
@@ -1343,27 +1271,17 @@ const useNoteComposerController = ({
 			setAttachedFiles(attachedFiles);
 			resetTextareaHeight();
 			requestComposerFocus();
-		} finally {
-			finishRequestPreparation();
 		}
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		activeRun,
-		activeWorkspaceId,
 		attachedFiles,
-		beginRequestPreparation,
 		chatStatus,
 		clearDraft,
-		commitOptimisticMessage,
-		currentChatId,
 		displayActiveRun,
-		enqueueQueuedMessage,
-		finishQueuedMessageEdit,
-		isAiRequestPending,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
 		getDraftSnapshot,
-		latestRequestBodyRef,
 		localFolderStorageScope,
 		reconcileSharedLocalFolders,
 		openRightSidebar,
@@ -1376,13 +1294,11 @@ const useNoteComposerController = ({
 		selectedServiceTier,
 		editingMessageId,
 		selectedModel.model,
-		sendMessage,
 		setPanelMode,
 		setMessage,
-		setQueuedMessages,
-		updateQueuedMessage,
 		requestComposerFocus,
-		rollbackOptimisticMessage,
+		submitTurn,
+		updateQueuedTurn,
 	]);
 
 	const handleSubmit = async (event: React.FormEvent) => {
@@ -1473,7 +1389,6 @@ const useNoteComposerController = ({
 				return;
 			}
 
-			const finishRequestPreparation = beginRequestPreparation();
 			if (presentationMode === "inline") {
 				setPanelMode("chat");
 			} else {
@@ -1481,11 +1396,9 @@ const useNoteComposerController = ({
 			}
 
 			try {
-				const requestBody = await buildRequestBody();
-				await respondToToolApproval({
-					approval: pendingToolApproval,
+				await submitToolApproval({
 					approved,
-					requestBody,
+					buildRequestBody,
 				});
 			} catch (error) {
 				logError({
@@ -1499,65 +1412,38 @@ const useNoteComposerController = ({
 						: "Failed to submit tool approval",
 				);
 			} finally {
-				finishRequestPreparation();
 				requestComposerFocus();
 			}
 		},
 		[
-			beginRequestPreparation,
 			buildRequestBody,
 			isPreparingRequest,
 			openRightSidebar,
 			pendingToolApproval,
 			presentationMode,
 			requestComposerFocus,
-			respondToToolApproval,
+			submitToolApproval,
 			setPanelMode,
 		],
 	);
 
 	const handleDeleteMessage = React.useCallback(
 		(messageId: string) => {
-			if (canStop) {
-				handleStop();
-			}
-
-			setPendingBranchMessageId(() => messageId);
-			branchMessagesFrom({ messageId });
 			setEditingMessageId(null);
 			clearDraft();
 			setAttachedFiles([]);
 			resetTextareaHeight();
 
-			if (!activeWorkspaceId) {
-				return;
-			}
-
-			void branchFromMessage({
-				workspaceId: activeWorkspaceId,
-				chatId: currentChatId,
-				messageId,
-			}).catch((error) => {
+			void deleteMessage(messageId).catch((error) => {
 				logError({
 					event: "client.error",
 					error: error,
 					message: "Failed to delete note chat message",
 				});
 				toast.error("Failed to delete message");
-				setPendingBranchMessageId(null);
 			});
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[
-			activeWorkspaceId,
-			currentChatId,
-			canStop,
-			resetTextareaHeight,
-			clearDraft,
-			handleStop,
-			branchFromMessage,
-			branchMessagesFrom,
-		],
+		[clearDraft, deleteMessage, resetTextareaHeight],
 	);
 
 	const handleRegenerateMessage = React.useCallback(
@@ -1569,18 +1455,14 @@ const useNoteComposerController = ({
 			}
 
 			try {
-				await regenerateChatTurn({
+				await regenerateTurn({
 					assistantMessageId,
-					beginRequestPreparation,
 					buildRequestBody,
-					onRequestPrepared: (requestBody) => {
-						latestRequestBodyRef.current = requestBody;
+					onRequestPrepared: () => {
 						setEditingMessageId(null);
 						clearDraft();
 						resetTextareaHeight();
 					},
-					regenerate,
-					...(canStop && { stopActiveRun: stopCurrentStream }),
 				});
 			} catch (error) {
 				logError({
@@ -1595,19 +1477,14 @@ const useNoteComposerController = ({
 				);
 			}
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			buildRequestBody,
-			beginRequestPreparation,
 			clearDraft,
-			canStop,
-			latestRequestBodyRef,
 			openRightSidebar,
 			presentationMode,
-			regenerate,
+			regenerateTurn,
 			resetTextareaHeight,
 			setPanelMode,
-			stopCurrentStream,
 		],
 	);
 	const handleForkMessage = useAssistantMessageFork({
@@ -1776,7 +1653,7 @@ const useNoteComposerController = ({
 		inlinePanelRef,
 		inlinePanelHeight,
 		canStop,
-		isChatLoading: isChatUiPending,
+		isChatLoading: canStop,
 		isChatOpen,
 		isFloatingPanelResizing,
 		isFloatingPresentation,
