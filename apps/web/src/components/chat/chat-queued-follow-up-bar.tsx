@@ -227,11 +227,15 @@ function SortableQueuedFollowUpRow({
 			{...sortableAttributes}
 			{...listeners}
 		>
-			<div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-				<CornerDownRight className="size-4 shrink-0" aria-hidden="true" />
-				<p className="min-w-0 truncate">
-					<span className="font-medium text-foreground">Queued</span>{" "}
-					<span>{displayText}</span>
+			<div className="flex min-w-0 items-center gap-3 text-muted-foreground">
+				<CornerDownRight
+					data-slot="queued-follow-up-icon"
+					className="size-[18px] shrink-0 text-amber-500"
+					aria-hidden="true"
+				/>
+				<p className="flex min-w-0 items-center gap-3">
+					<span className="shrink-0 font-medium text-foreground">Queued</span>
+					<span className="min-w-0 truncate">{displayText}</span>
 				</p>
 			</div>
 			<div className="flex shrink-0 items-center gap-1">

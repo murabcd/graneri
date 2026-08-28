@@ -3,55 +3,33 @@ import type {
 	HostedHumanDecisionResponse,
 } from "@workspace/ai/hosted-human-decision";
 import { Button } from "@workspace/ui/components/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@workspace/ui/components/card";
-import { Kbd } from "@workspace/ui/components/kbd";
-import { CornerDownLeft, Hand } from "lucide-react";
+import { Card, CardFooter, CardHeader } from "@workspace/ui/components/card";
+import { ListTodo } from "lucide-react";
 import * as React from "react";
-import {
-	formatToolPayload,
-	getToolDisplayName,
-} from "@/components/ai-elements/utils/tool-display";
+import { getToolDisplayName } from "@/components/ai-elements/utils/tool-display";
 import { ChatQuestionnaire } from "@/components/chat/chat-questionnaire";
 
 const isInteractiveTarget = (target: EventTarget | null) =>
 	target instanceof Element &&
 	Boolean(
-		target.closest(
-			'button, summary, input, textarea, select, [contenteditable="true"]',
-		),
+		target.closest('button, input, textarea, select, [contenteditable="true"]'),
 	);
 
 const lowercaseFirst = (value: string) =>
 	value.length > 0 ? `${value[0]?.toLowerCase()}${value.slice(1)}` : value;
 
-const getApprovalCategory = (
+const isInternetApproval = (
 	decision: Extract<HostedHumanDecisionRequest, { type: "tool_approval" }>,
 ) => {
 	const provider = decision.authority?.provider.toLowerCase();
-	if (provider === "web" || provider === "internet") {
-		return "Internet access";
-	}
-	if (decision.authority?.access === "write") {
-		return "Write access";
-	}
-	if (decision.authority?.access === "read") {
-		return "Read access";
-	}
-	return "Action approval";
+	return provider === "web" || provider === "internet";
 };
 
 const getApprovalTitle = (
 	decision: Extract<HostedHumanDecisionRequest, { type: "tool_approval" }>,
 	actionLabel: string,
 ) =>
-	getApprovalCategory(decision) === "Internet access"
+	isInternetApproval(decision)
 		? "Allow Graneri to connect to the internet?"
 		: `Allow Graneri to ${lowercaseFirst(actionLabel)}?`;
 
@@ -65,7 +43,6 @@ function ChatToolApproval({
 	onRespond: (response: HostedHumanDecisionResponse) => void;
 }) {
 	const actionLabel = getToolDisplayName(decision.toolName);
-	const inputText = formatToolPayload(decision.input);
 	const respond = React.useCallback(
 		(approved: boolean) => {
 			if (!disabled) {
@@ -107,35 +84,22 @@ function ChatToolApproval({
 	return (
 		<Card
 			size="sm"
-			className="mx-auto w-[calc(100%-1rem)] max-w-[548px] gap-0 rounded-lg py-0 shadow-lg"
+			className="mx-auto min-h-[132px] w-full max-w-full gap-0 rounded-lg py-0 shadow-lg data-[size=sm]:py-0"
 			role="group"
 			aria-label={`Approve ${actionLabel}`}
 		>
-			<CardHeader className="gap-2 px-4 pt-4 pb-3">
-				<div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-					<Hand
-						data-slot="approval-status-icon"
-						aria-hidden="true"
-						className="size-[18px]"
-					/>
-					<span>{getApprovalCategory(decision)}</span>
-				</div>
-				<CardTitle>{getApprovalTitle(decision, actionLabel)}</CardTitle>
-				<CardDescription>{decision.consequence}</CardDescription>
+			<CardHeader className="flex flex-row items-center gap-3 px-4 pt-3 pb-2">
+				<ListTodo
+					data-slot="approval-status-icon"
+					aria-hidden="true"
+					className="size-[18px] shrink-0 text-emerald-500"
+				/>
+				<span className="shrink-0 font-medium text-foreground">Approval</span>
+				<span className="min-w-0 text-muted-foreground">
+					{getApprovalTitle(decision, actionLabel)}
+				</span>
 			</CardHeader>
-			{inputText ? (
-				<CardContent className="px-4 pb-3">
-					<details>
-						<summary className="cursor-pointer font-medium text-foreground">
-							Review action input
-						</summary>
-						<pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-2 font-mono text-[11px] leading-4 text-foreground">
-							{inputText}
-						</pre>
-					</details>
-				</CardContent>
-			) : null}
-			<CardFooter className="justify-end gap-2 bg-transparent px-4 pt-2 pb-4">
+			<CardFooter className="mt-auto justify-end gap-2 border-t-0 bg-transparent px-4 pt-0 pb-3">
 				<Button
 					type="button"
 					variant="outline"
@@ -145,7 +109,6 @@ function ChatToolApproval({
 					aria-keyshortcuts="Escape"
 				>
 					Deny
-					<Kbd>Esc</Kbd>
 				</Button>
 				<Button
 					type="button"
@@ -155,9 +118,6 @@ function ChatToolApproval({
 					aria-keyshortcuts="Enter"
 				>
 					Allow once
-					<Kbd>
-						<CornerDownLeft aria-label="Enter" />
-					</Kbd>
 				</Button>
 			</CardFooter>
 		</Card>

@@ -221,6 +221,48 @@ describe("hosted user questions", () => {
 		expect(getHostedUserQuestionRequest(invalidMessage)).toBeNull();
 	});
 
+	it("rejects questionnaires with more than three options", () => {
+		expect(
+			getHostedUserQuestionRequest({
+				id: "assistant-too-many-options",
+				role: "assistant",
+				parts: [
+					{
+						type: "tool-request_user_input",
+						toolCallId: "questionnaire-too-many-options",
+						state: "input-available",
+						input: {
+							questions: [
+								{
+									id: "scope",
+									question: "Which scope should I use?",
+									options: [
+										{
+											label: "Current note (Recommended)",
+											description: "Use only the current note.",
+										},
+										{
+											label: "All notes",
+											description: "Use all available notes.",
+										},
+										{
+											label: "Selected notes",
+											description: "Use a selected set of notes.",
+										},
+										{
+											label: "No notes",
+											description: "Do not use notes.",
+										},
+									],
+								},
+							],
+						},
+					},
+				],
+			}),
+		).toBeNull();
+	});
+
 	it("rejects the superseded one-question shape", () => {
 		expect(
 			getHostedUserQuestionRequest({

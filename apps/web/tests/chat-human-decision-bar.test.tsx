@@ -19,7 +19,7 @@ describe("ChatHumanDecisionBar", () => {
 		vi.useRealTimers();
 	});
 
-	it("shows a distinct permission card with reviewable action input", () => {
+	it("shows a compact permission card without implementation details", () => {
 		const onRespond = vi.fn();
 		render(
 			<ChatHumanDecisionBar
@@ -41,27 +41,43 @@ describe("ChatHumanDecisionBar", () => {
 			/>,
 		);
 
-		expect(screen.getByText("Write access")).not.toBeNull();
+		expect(screen.queryByText("Write access")).toBeNull();
 		expect(
 			screen.getByText("Allow Graneri to delete automation?"),
 		).not.toBeNull();
 		expect(
-			screen.getByText("This action will permanently delete the automation."),
-		).not.toBeNull();
-		expect(screen.queryByText("Approval")).toBeNull();
+			screen.queryByText("This action will permanently delete the automation."),
+		).toBeNull();
+		expect(screen.getByText("Approval")).not.toBeNull();
 		expect(screen.queryByText(/Connected service:/u)).toBeNull();
-		fireEvent.click(screen.getByText("Review action input"));
-		expect(screen.getByText(/automation-1/u)).not.toBeNull();
+		expect(screen.queryByText("Review action input")).toBeNull();
+		expect(screen.queryByText(/automation-1/u)).toBeNull();
 		expect(
 			document.querySelector('[data-slot="approval-status-icon"]'),
 		).not.toBeNull();
+		expect(
+			document
+				.querySelector('[data-slot="approval-status-icon"]')
+				?.classList.contains("text-emerald-500"),
+		).toBe(true);
+		expect(
+			screen
+				.getByText("Allow Graneri to delete automation?")
+				.classList.contains("text-muted-foreground"),
+		).toBe(true);
+		expect(
+			screen.getByText("Approval").parentElement?.classList.contains("flex"),
+		).toBe(true);
 
 		const approve = screen.getByRole("button", { name: /Allow once/u });
 		const deny = screen.getByRole("button", { name: /Deny/u });
 		expect(approve.getAttribute("aria-keyshortcuts")).toBe("Enter");
 		expect(deny.getAttribute("aria-keyshortcuts")).toBe("Escape");
+		expect(approve.textContent).toBe("Allow once");
+		expect(deny.textContent).toBe("Deny");
 		expect(approve.parentElement).toBe(deny.parentElement);
 		expect(approve.parentElement?.lastElementChild).toBe(approve);
+		expect(approve.parentElement?.classList.contains("border-t-0")).toBe(true);
 
 		fireEvent.click(approve);
 		expect(onRespond).toHaveBeenCalledWith({
@@ -100,7 +116,20 @@ describe("ChatHumanDecisionBar", () => {
 		expect(
 			screen.getByRole("group", { name: "Which scope should I inspect?" }),
 		).not.toBeNull();
-		expect(screen.queryByText("Question")).toBeNull();
+		expect(screen.getByText("Question")).not.toBeNull();
+		expect(
+			document.querySelector('[data-slot="question-status-icon"]'),
+		).not.toBeNull();
+		expect(
+			document
+				.querySelector('[data-slot="question-status-icon"]')
+				?.classList.contains("text-blue-500"),
+		).toBe(true);
+		expect(
+			screen
+				.getByText("Which scope should I inspect?")
+				.classList.contains("text-muted-foreground"),
+		).toBe(true);
 		expect(screen.getByText("Recommended")).not.toBeNull();
 		expect(screen.getByText("Use only the current folder.")).not.toBeNull();
 		expect(screen.queryByRole("checkbox")).toBeNull();
@@ -120,15 +149,16 @@ describe("ChatHumanDecisionBar", () => {
 			name: "Which scope should I inspect?",
 		});
 		expect(currentFolder.getAttribute("aria-keyshortcuts")).toBe("1");
-		expect(currentFolder.getAttribute("aria-checked")).toBe("true");
-		expect(currentFolder.classList.contains("bg-muted")).toBe(true);
+		expect(currentFolder.getAttribute("aria-checked")).toBe("false");
+		expect(currentFolder.classList.contains("bg-muted")).toBe(false);
 		fireEvent.pointerEnter(allProjects);
 		expect(currentFolder.classList.contains("bg-muted")).toBe(false);
 		expect(allProjects.classList.contains("bg-muted")).toBe(true);
 		fireEvent.pointerLeave(optionGroup);
-		expect(currentFolder.classList.contains("bg-muted")).toBe(true);
+		expect(currentFolder.classList.contains("bg-muted")).toBe(false);
 		expect(allProjects.classList.contains("bg-muted")).toBe(false);
 		fireEvent.click(currentFolder);
+		expect(currentFolder.firstElementChild?.textContent).toBe("1");
 		expect(onRespond).not.toHaveBeenCalled();
 		act(() => vi.advanceTimersByTime(180));
 		expect(onRespond).toHaveBeenCalledWith({
@@ -174,6 +204,9 @@ describe("ChatHumanDecisionBar", () => {
 		const noOption = screen.getByRole("radio", {
 			name: /No.*Do not use/u,
 		});
+		expect(yesOption.getAttribute("aria-checked")).toBe("false");
+		expect(noOption.getAttribute("aria-checked")).toBe("false");
+		fireEvent.keyDown(document, { key: "ArrowDown" });
 		expect(yesOption.getAttribute("aria-checked")).toBe("true");
 		fireEvent.keyDown(document, { key: "ArrowDown" });
 		expect(noOption.getAttribute("aria-checked")).toBe("true");
@@ -188,6 +221,11 @@ describe("ChatHumanDecisionBar", () => {
 				.getByRole("radio", { name: /Yes.*Allow/u })
 				.getAttribute("aria-checked"),
 		).toBe("true");
+		expect(
+			screen
+				.getByRole("radio", { name: /Yes.*Allow/u })
+				.classList.contains("bg-muted"),
+		).toBe(true);
 		fireEvent.click(screen.getByRole("button", { name: "Next question" }));
 
 		fireEvent.click(screen.getByRole("radio", { name: /No.*Do not use/u }));

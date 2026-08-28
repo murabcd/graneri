@@ -416,10 +416,13 @@ approvals remain available in either mode because authorization is an execution
 requirement rather than planning clarification. The shared Human Decision bar
 presents questionnaires and approvals through one interface in chat and note
 composers. Question options include a compact label and concise secondary
-description, and every question includes a free-form `Other` path.
+description. Each question offers two or three mutually exclusive choices; the
+producer puts its recommended choice first and suffixes that label with
+`(Recommended)`, which the renderer presents as a badge. Every question also
+includes a free-form `Other` path.
 The write-in field uses the stable `Something else...` placeholder rather than
 model-generated copy.
-Clicks and their displayed `1`–`9` shortcuts acknowledge the choice, then
+Clicks and their displayed `1`–`3` shortcuts acknowledge the choice, then
 advance or submit directly. `Skip` advances without selecting an option, and
 the close action skips the unresolved questionnaire. Multi-step answers are serialized as quoted
 questions followed by their selected and free-form values. Both producers

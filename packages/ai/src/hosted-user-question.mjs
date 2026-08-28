@@ -16,7 +16,7 @@ const userQuestionSchema = z
 	.object({
 		id: z.string().trim().min(1).max(64),
 		question: z.string().trim().min(1).max(2_000),
-		options: z.array(questionOptionSchema).min(2).max(9),
+		options: z.array(questionOptionSchema).min(2).max(3),
 	})
 	.strict();
 

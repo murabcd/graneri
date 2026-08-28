@@ -11,11 +11,16 @@ import {
 	CardContent,
 	CardFooter,
 	CardHeader,
-	CardTitle,
 } from "@workspace/ui/components/card";
 import { Kbd } from "@workspace/ui/components/kbd";
 import { cn } from "@workspace/ui/lib/utils";
-import { ArrowRight, ChevronLeft, ChevronRight, Pencil, X } from "lucide-react";
+import {
+	ChevronLeft,
+	ChevronRight,
+	MessageCircleQuestionMark,
+	Pencil,
+	X,
+} from "lucide-react";
 import * as React from "react";
 import { getQuestionOptionPresentation } from "@/components/chat/chat-questionnaire-option";
 import { useChatQuestionnaire } from "@/components/chat/use-chat-questionnaire";
@@ -57,26 +62,19 @@ function QuestionOption({
 			aria-keyshortcuts={String(index + 1)}
 			aria-checked={selected}
 			className={cn(
-				"group/option min-h-8 w-full justify-start gap-2 rounded-xl px-2 py-1.5 text-left whitespace-normal",
+				"group/option h-auto min-h-8 w-full justify-start gap-2 rounded-xl px-1 py-0 text-left whitespace-normal",
 				highlighted && "bg-muted",
 			)}
 		>
 			<Kbd
 				className={cn(
-					"size-7 shrink-0 self-start rounded-full border border-border bg-muted p-0",
+					"size-6 shrink-0 rounded-full border border-border bg-muted p-0",
 					advancing && "border-foreground bg-primary text-primary-foreground",
 				)}
 			>
-				{advancing ? (
-					<span
-						aria-hidden="true"
-						className="size-1.5 rounded-full bg-current"
-					/>
-				) : (
-					index + 1
-				)}
+				{index + 1}
 			</Kbd>
-			<span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 max-[440px]:flex-col max-[440px]:items-stretch">
+			<span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 max-[440px]:flex-col max-[440px]:items-stretch">
 				<span className="inline-flex min-w-0 items-center gap-1.5">
 					<span className="min-w-0 text-sm font-medium break-words text-foreground">
 						{presentation.label}
@@ -94,14 +92,6 @@ function QuestionOption({
 					{presentation.description}
 				</span>
 			</span>
-			<ArrowRight
-				data-icon="inline-end"
-				aria-hidden="true"
-				className={cn(
-					"opacity-0 transition-opacity group-hover/option:opacity-100 group-focus-visible/option:opacity-100",
-					highlighted && "opacity-100",
-				)}
-			/>
 		</Button>
 	);
 }
@@ -145,12 +135,22 @@ export function ChatQuestionnaire({
 	return (
 		<Card
 			size="sm"
-			className="mx-auto w-[calc(100%-1rem)] max-w-[548px] gap-0 rounded-lg py-0 shadow-lg"
+			className="mx-auto w-[calc(100%-1rem)] max-w-[548px] gap-0 rounded-lg py-0 shadow-lg data-[size=sm]:py-0"
 			role="group"
 			aria-label={question.question}
 		>
-			<CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pt-4 pr-3 pb-2 pl-4">
-				<CardTitle>{question.question}</CardTitle>
+			<CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 pt-3 pb-2 group-data-[size=sm]/card:px-3">
+				<div className="flex min-w-0 items-center gap-3">
+					<MessageCircleQuestionMark
+						data-slot="question-status-icon"
+						aria-hidden="true"
+						className="size-[18px] shrink-0 text-blue-500"
+					/>
+					<span className="shrink-0 font-medium text-foreground">Question</span>
+					<span className="min-w-0 text-muted-foreground">
+						{question.question}
+					</span>
+				</div>
 				<CardAction className="flex items-center gap-0.5">
 					{hasMultipleQuestions ? (
 						<>
@@ -192,7 +192,7 @@ export function ChatQuestionnaire({
 				</CardAction>
 			</CardHeader>
 			<CardContent
-				className="flex flex-col gap-1 px-2 pt-1 pb-2"
+				className="flex flex-col gap-1 px-2 pt-1 pb-2 group-data-[size=sm]/card:px-2"
 				role="radiogroup"
 				aria-label={question.question}
 				onBlur={(event) => {
@@ -205,11 +205,9 @@ export function ChatQuestionnaire({
 				{question.options.map((option, index) => {
 					const selected = selectedOptionIndex === index;
 					const highlighted =
+						selected ||
 						advancingOptionIndex === index ||
-						(advancingOptionIndex === null &&
-							(hoveredOptionIndex === null
-								? selected
-								: hoveredOptionIndex === index));
+						(advancingOptionIndex === null && hoveredOptionIndex === index);
 
 					return (
 						<QuestionOption
@@ -227,12 +225,12 @@ export function ChatQuestionnaire({
 					);
 				})}
 			</CardContent>
-			<CardFooter className="gap-2 border-t-0 bg-transparent px-2 py-1.5">
+			<CardFooter className="gap-2 border-t-0 bg-transparent px-3 py-1.5 group-data-[size=sm]/card:px-3">
 				<label
 					className="flex min-h-8 min-w-0 flex-1 items-center gap-2"
 					onPointerEnter={() => setHoveredOptionIndex(null)}
 				>
-					<span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">
+					<span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">
 						<Pencil aria-hidden="true" className="size-3.5" />
 					</span>
 					<input

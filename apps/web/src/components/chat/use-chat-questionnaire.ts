@@ -20,8 +20,8 @@ const isTextEntryTarget = (target: EventTarget | null) =>
 const createInitialAnswers = (
 	questions: HostedUserQuestion[],
 ): QuestionnaireAnswer[] =>
-	questions.map((question) => ({
-		selectedOptionIndex: question.options.length > 0 ? 0 : null,
+	questions.map(() => ({
+		selectedOptionIndex: null,
 		freeformText: "",
 	}));
 
