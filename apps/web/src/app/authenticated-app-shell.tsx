@@ -687,9 +687,7 @@ const useAppShellState = ({
 
 	const openStoredChat = React.useCallback(
 		(chatId: string) => {
-			React.startTransition(() => {
-				navigateChat(chatId);
-			});
+			navigateChat(chatId);
 		},
 		[navigateChat],
 	);

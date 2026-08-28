@@ -71,3 +71,8 @@ chat identity, note chat list/session/run snapshots, prefetching, selector
 grouping, title/loading derivation, and model/reasoning persistence. The note
 composer owns only editor, attachment, transcript, focus, and panel-presentation
 adapters; it must not reproduce discussion identity or query orchestration.
+Workspace chat navigation commits the destination route immediately while
+message prefetch continues independently. The workspace composer derives its
+placeholder from the stored chat identity before hydrated messages arrive, so a
+known chat shows follow-up copy from its first destination render while a true
+draft chat keeps the general prompt.

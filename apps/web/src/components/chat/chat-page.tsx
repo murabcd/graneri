@@ -1,5 +1,4 @@
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
-import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
 import { isDesktopRuntime } from "@workspace/platform/desktop";
 import { Button } from "@workspace/ui/components/button";
@@ -99,6 +98,7 @@ import {
 	shouldSendFromKeyboardEvent,
 } from "@/lib/send-shortcut";
 import { createTextMatchRanges } from "@/lib/text-search-ranges";
+import { resolveWorkspaceChatComposerPlaceholder } from "@/lib/workspace-chat-composer-placeholder";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc } from "../../../../../convex/_generated/dataModel";
 import { ChatComposer, type ChatComposerMentionCatalog } from "./chat-composer";
@@ -882,6 +882,7 @@ const useChatPageController = ({
 
 	return {
 		currentChatTitle: currentChat?.title ?? "",
+		hasStoredChat: currentChat !== null,
 		draft,
 		error,
 		attachedFiles,
@@ -1234,13 +1235,11 @@ export function ChatPage({
 		<ChatComposer
 			useCompactLayout={shouldShowActiveChatSurface}
 			draft={controller.draft}
-			placeholder={
-				controller.chatMode === CHAT_MODE.PLAN
-					? "Describe your task to generate a plan..."
-					: controller.hasMessages
-						? "Ask for follow-up"
-						: "Ask anything. @ to use recipes, tools, or notes"
-			}
+			placeholder={resolveWorkspaceChatComposerPlaceholder({
+				chatMode: controller.chatMode,
+				hasMessages: controller.hasMessages,
+				hasStoredChat: controller.hasStoredChat,
+			})}
 			humanDecision={controller.pendingHumanDecision}
 			isHumanDecisionSubmitting={controller.isHumanDecisionSubmitting}
 			onHumanDecisionResponse={controller.onHumanDecisionResponse}
