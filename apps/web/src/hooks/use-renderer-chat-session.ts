@@ -1,11 +1,8 @@
 import { useChat } from "@ai-sdk/react";
-import {
-	getMatchingPendingHostedHumanDecision,
-	type HostedHumanDecisionResponse,
-} from "@workspace/ai/hosted-human-decision";
+import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
 import { HOSTED_REQUEST_USER_INPUT_TOOL_NAME } from "@workspace/ai/hosted-user-question";
 import type { ChatAddToolOutputFunction, UIMessage } from "ai";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import * as React from "react";
 // Optimistic insertion must commit before submit continues into DOM measurement.
 // react-doctor-disable-next-line react-doctor/no-flush-sync -- the interaction owner guarantees the optimistic message is visible before submit continues.
@@ -14,10 +11,7 @@ import { toast } from "sonner";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import { stopActiveChatStream } from "@/lib/chat-active-stream";
 import { stopChatInteraction } from "@/lib/chat-interaction-session";
-import {
-	appendLocalOptimisticChatMessages,
-	normalizeChatMessages,
-} from "@/lib/chat-message-state";
+import { normalizeChatMessages } from "@/lib/chat-message-state";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import type { ChatRequestContext } from "@/lib/chat-request-preparation";
@@ -31,9 +25,7 @@ import { applyPendingBranchReplacement } from "@/lib/chat-thread";
 import { createDesktopLocalToolCallHandler } from "@/lib/desktop-local-tool-call";
 import { logError } from "@/lib/logger";
 import {
-	mergeRendererChatSessionMessages,
 	prepareRendererUserQuestionMessages,
-	resolveRendererChatRunState,
 	shouldAutomaticallyContinueRendererChat,
 } from "@/lib/renderer-chat-session";
 import { api } from "../../../../convex/_generated/api";
@@ -42,10 +34,9 @@ import { useChatInteractionSession } from "./use-chat-interaction-session";
 import { useLocalFileStorage } from "./use-local-file-storage";
 import { useQueuedChatDrain } from "./use-queued-chat-drain";
 import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
+import { useRendererChatPresentation } from "./use-renderer-chat-presentation";
 import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
 import { useWorkspaceChatTransport } from "./use-workspace-chat-transport";
-
-const EMPTY_STREAMING_MESSAGE_IDS = new Set<string>();
 
 type SubmitRendererChatTurnInput = Omit<
 	Parameters<typeof submitChatTurn>[0],
@@ -117,10 +108,6 @@ export const useRendererChatSession = ({
 }) => {
 	const attachableActiveRun =
 		activeRun && activeRun.status !== "stopping" ? activeRun : null;
-	const runPlan = useQuery(
-		api.assistantRunActivity.getActivePlan,
-		attachableActiveRun ? { runId: attachableActiveRun._id } : "skip",
-	);
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
@@ -214,26 +201,22 @@ export const useRendererChatSession = ({
 	const {
 		activeAssistantMessageId,
 		displayActiveRun,
+		displayMessages,
 		hasLocallyCompletedAssistantMessage,
-	} = React.useMemo(
-		() =>
-			resolveRendererChatRunState({
-				activeRun: attachableActiveRun,
-				controllerMessages,
-				isAiRequestPending,
-				persistedMessages: sessionPersistedMessages,
-			}),
-		[
-			attachableActiveRun,
-			controllerMessages,
-			isAiRequestPending,
-			sessionPersistedMessages,
-		],
-	);
-	const steerHandoffStreamingMessageIds =
-		displayActiveRun || isChatRequestPending
-			? activeSteerHandoffStreamingMessageIds
-			: EMPTY_STREAMING_MESSAGE_IDS;
+		localMessageIds,
+		pendingHumanDecision,
+		runPlan,
+		streamingMessageIds,
+	} = useRendererChatPresentation({
+		activeRun: attachableActiveRun,
+		chatId,
+		controllerMessages,
+		isAiRequestPending,
+		isChatRequestPending,
+		localOptimisticMessages,
+		persistedMessages: sessionPersistedMessages,
+		steerHandoffStreamingMessageIds: activeSteerHandoffStreamingMessageIds,
+	});
 	React.useEffect(() => {
 		const rollback = pendingUserQuestionRollbackRef.current;
 		if (!error || !rollback) {
@@ -326,69 +309,6 @@ export const useRendererChatSession = ({
 		persistedMessagesSeedKey,
 		setMessages,
 	]);
-
-	const mergedDisplayMessages = React.useMemo(
-		() =>
-			mergeRendererChatSessionMessages({
-				activeAssistantMessageId,
-				controllerMessages,
-				displayActiveRun,
-				persistedMessages: sessionPersistedMessages,
-			}),
-		[
-			activeAssistantMessageId,
-			controllerMessages,
-			displayActiveRun,
-			sessionPersistedMessages,
-		],
-	);
-	const displayMessages = React.useMemo(
-		() =>
-			appendLocalOptimisticChatMessages({
-				displayMessages: mergedDisplayMessages,
-				localOptimisticMessages:
-					localOptimisticMessages?.chatId === chatId
-						? localOptimisticMessages.messages
-						: [],
-				resolvedMessages: sessionPersistedMessages,
-			}),
-		[
-			chatId,
-			localOptimisticMessages,
-			mergedDisplayMessages,
-			sessionPersistedMessages,
-		],
-	);
-	const pendingHumanDecision = React.useMemo(
-		() =>
-			getMatchingPendingHostedHumanDecision({
-				messages: displayMessages,
-				pendingDecision: displayActiveRun?.pendingDecision,
-			}),
-		[displayActiveRun?.pendingDecision, displayMessages],
-	);
-	const localMessageIds = React.useMemo(
-		() =>
-			new Set([
-				...controllerMessages.map((message) => message.id),
-				...(localOptimisticMessages?.chatId === chatId
-					? localOptimisticMessages.messages.map((message) => message.id)
-					: []),
-			]),
-		[chatId, controllerMessages, localOptimisticMessages],
-	);
-	const streamingMessageIds = React.useMemo(
-		() =>
-			new Set([
-				...steerHandoffStreamingMessageIds,
-				...(displayActiveRun?.interruptedAssistantMessageIds ?? []),
-			]),
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[
-			displayActiveRun?.interruptedAssistantMessageIds,
-			steerHandoffStreamingMessageIds,
-		],
-	);
 
 	const { queuedMessages, setQueuedMessages } = useQueuedChatDrain({
 		activeRun: displayActiveRun,

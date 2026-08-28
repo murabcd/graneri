@@ -28,7 +28,6 @@ import {
 	SourcesTrigger,
 } from "@/components/ai-elements/sources";
 import { ToolGroup } from "@/components/ai-elements/tools/tool-group";
-import { isAssistantWorkPart } from "@/components/ai-elements/tools/tool-part-like";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
@@ -39,6 +38,7 @@ import {
 	USER_CHAT_BUBBLE_CLASS,
 } from "@/components/chat/message-layout";
 import { ChatRecipeReceipt } from "@/components/chat/recipe-receipt";
+import { useChatTurnPresentation } from "@/components/chat/use-chat-turn-presentation";
 import { extractChatChartArtifacts } from "@/lib/chat-chart-artifact";
 import type { ChatMessageMention } from "@/lib/chat-composer-mentions";
 import {
@@ -48,17 +48,11 @@ import {
 	getChatMessageMetadata,
 	getChatText,
 } from "@/lib/chat-message";
-import { normalizeChatMessages } from "@/lib/chat-message-state";
 import { collectMessageSources } from "@/lib/chat-sources";
 import {
 	formatChatMessageTimestamp,
 	getChatMessageTimestamp,
-	getChatMessageTimestampMs,
 } from "@/lib/chat-timestamp";
-import {
-	getLastAssistantHasRenderableContent,
-	groupMessagesIntoTurns,
-} from "@/lib/chat-turns";
 
 export type ChatMessageActionContext = {
 	displayText: string;
@@ -82,8 +76,6 @@ export type ChatCompactionActivity = {
 
 const EMPTY_MESSAGE_PARTS: UIMessage["parts"] = [];
 const EMPTY_CHART_ARTIFACTS: ReturnType<typeof extractChatChartArtifacts> = [];
-const EMPTY_MESSAGE_IDS = new Set<string>();
-
 export function ChatMessageListContent({
 	messages,
 	error,
@@ -127,72 +119,18 @@ export function ChatMessageListContent({
 	onOpenMention?: (noteId: string) => void;
 	streamingMessageIds?: ReadonlySet<string>;
 }) {
-	const normalizedMessages = React.useMemo(
-		() => normalizeChatMessages(messages),
-		[messages],
-	);
-	const displayMessages = React.useMemo(() => {
-		const lastMessage = normalizedMessages[normalizedMessages.length - 1];
-
-		if (!isLoading || lastMessage?.role === "assistant") {
-			return normalizedMessages;
-		}
-
-		return [
-			...normalizedMessages,
-			{
-				id: "pending-assistant-message",
-				role: "assistant" as const,
-				parts: [],
-			},
-		];
-	}, [isLoading, normalizedMessages]);
-	const lastMessage = displayMessages[displayMessages.length - 1];
-	const forcedStreamingMessageIds = streamingMessageIds ?? EMPTY_MESSAGE_IDS;
-	const turns = React.useMemo(
-		() => groupMessagesIntoTurns(displayMessages),
-		[displayMessages],
-	);
-	const lastTurnId = turns.at(-1)?.[0]?.id;
-	const latestTurnHasAssistantWork = (turns.at(-1) ?? []).some(
-		(message) =>
-			message.role === "assistant" && message.parts.some(isAssistantWorkPart),
-	);
-	const [activeRunHasStartedWork, setActiveRunHasStartedWork] =
-		React.useState(false);
-	React.useLayoutEffect(() => {
-		setActiveRunHasStartedWork(
-			(startedWork) =>
-				Boolean(isLoading) && (startedWork || latestTurnHasAssistantWork),
-		);
-	}, [isLoading, latestTurnHasAssistantWork]);
-	const [activeTurnTiming, setActiveTurnTiming] = React.useState<{
-		startedAt: number;
-		turnId: string;
-	} | null>(null);
-	React.useEffect(() => {
-		if (!isLoading || !lastTurnId) {
-			return;
-		}
-
-		setActiveTurnTiming((current) =>
-			current?.turnId === lastTurnId
-				? current
-				: { startedAt: Date.now(), turnId: lastTurnId },
-		);
-	}, [isLoading, lastTurnId]);
-	const showAssistantBreathingSpace =
-		isLoading ||
-		(lastMessage?.role === "assistant" &&
-			getLastAssistantHasRenderableContent(
-				displayMessages,
-				(message) =>
-					getChatText(message).length > 0 ||
-					extractFileParts(message).length > 0 ||
-					extractReasoningParts(message).length > 0 ||
-					extractToolParts(message).length > 0 ||
-					(includeSources && collectMessageSources(message).length > 0),
-			));
+	const {
+		forcedStreamingMessageIds,
+		lastMessageId,
+		showAssistantBreathingSpace,
+		turns,
+	} = useChatTurnPresentation({
+		includeSources,
+		isLoading,
+		messages,
+		scrollAnchorUserMessages,
+		streamingMessageIds,
+	});
 	return (
 		<MessageScrollerContent className={className}>
 			{historyMarkerState?.kind === "fork" ? (
@@ -237,58 +175,15 @@ export function ChatMessageListContent({
 					</Button>
 				</MessageScrollerItem>
 			) : null}
-			{turns.map((turnMessages, turnIndex) => {
-				const isLastTurn = turnIndex === turns.length - 1;
-				const scrollAnchor =
-					scrollAnchorUserMessages && turnMessages[0].role === "user";
-				const assistantMessages = turnMessages.filter(
-					(message) => message.role === "assistant",
-				);
-				const firstAssistantMessageId = assistantMessages[0]?.id;
-				const assistantWorkParts = assistantMessages.flatMap(
-					(message) => message.parts,
-				);
-				const hasCurrentAssistantWork =
-					assistantWorkParts.some(isAssistantWorkPart);
-				const latestAssistantMessage = assistantMessages.at(-1);
-				const assistantTurnStartedAt =
-					getChatMessageTimestampMs(turnMessages[0]) ??
-					(activeTurnTiming?.turnId === turnMessages[0].id
-						? activeTurnTiming.startedAt
-						: null);
-				const assistantTurnCompletedAt = latestAssistantMessage
-					? getChatMessageTimestampMs(latestAssistantMessage)
-					: null;
-				const latestAssistantMetadata = latestAssistantMessage
-					? getChatMessageMetadata(latestAssistantMessage)
-					: null;
-				const isAssistantTurnStreaming = Boolean(
-					isLastTurn &&
-						isLoading &&
-						latestAssistantMessage?.id === lastMessage?.id &&
-						latestAssistantMetadata?.interrupted !== true &&
-						!forcedStreamingMessageIds.has(latestAssistantMessage.id),
-				);
-				const hasAssistantWorkInTurn =
-					hasCurrentAssistantWork ||
-					(isAssistantTurnStreaming && activeRunHasStartedWork);
-				const assistantTurnDurationMs =
-					!isAssistantTurnStreaming &&
-					assistantTurnStartedAt !== null &&
-					assistantTurnCompletedAt !== null
-						? Math.max(1, assistantTurnCompletedAt - assistantTurnStartedAt)
-						: undefined;
-				const showAssistantWorkSummary =
-					hasAssistantWorkInTurn || !isAssistantTurnStreaming;
-
+			{turns.map((turn) => {
 				return (
 					<MessageScrollerItem
-						key={turnMessages[0].id}
-						messageId={turnMessages[0].id}
-						scrollAnchor={scrollAnchor}
-						className={turnClassName?.(isLastTurn)}
+						key={turn.messages[0].id}
+						messageId={turn.messages[0].id}
+						scrollAnchor={turn.scrollAnchor}
+						className={turnClassName?.(turn.isLastTurn)}
 					>
-						{turnMessages.map((message) => (
+						{turn.messages.map((message) => (
 							<React.Fragment key={message.id}>
 								<div
 									data-chat-message-scroll-row={message.id}
@@ -301,21 +196,21 @@ export function ChatMessageListContent({
 								>
 									<ChatMessageListItem
 										assistantTurnWorkParts={
-											message.id === firstAssistantMessageId &&
-											showAssistantWorkSummary
-												? assistantWorkParts
+											message.id === turn.firstAssistantMessageId &&
+											turn.showAssistantWorkSummary
+												? turn.assistantTurnWorkParts
 												: undefined
 										}
-										assistantTurnWorkStatus={
-											isAssistantTurnStreaming ? "streaming" : "ready"
+										assistantTurnWorkStatus={turn.assistantTurnWorkStatus}
+										assistantTurnStartedAt={
+											turn.assistantTurnStartedAt ?? undefined
 										}
-										assistantTurnStartedAt={assistantTurnStartedAt ?? undefined}
-										assistantTurnDurationMs={assistantTurnDurationMs}
-										hasAssistantWorkInTurn={hasAssistantWorkInTurn}
+										assistantTurnDurationMs={turn.assistantTurnDurationMs}
+										hasAssistantWorkInTurn={turn.hasAssistantWorkInTurn}
 										message={message}
 										includeSources={includeSources}
 										isLoading={isLoading}
-										lastMessageId={lastMessage?.id}
+										lastMessageId={lastMessageId}
 										messageStackClassName={messageStackClassName}
 										renderAssistantActions={renderAssistantActions}
 										renderUserActions={renderUserActions}

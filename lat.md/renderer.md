@@ -7,6 +7,8 @@ The renderer presents Graneri in browsers and Electron while delegating durable,
 - [[platform]] exposes desktop capabilities without direct global access.
 - [[apps/web/src/app/application-navigation-session.ts]]
 - [[apps/web/src/hooks/use-renderer-chat-session.ts]]
+- [[apps/web/src/hooks/use-renderer-chat-presentation.ts]]
+- [[apps/web/src/components/chat/use-chat-turn-presentation.ts]]
 
 ## Runtime role
 
@@ -20,6 +22,11 @@ durable follow-up drain and controls, and chat interaction commands. Full chat
 and note chat remain view adapters: they provide request-body builders and
 presentation callbacks, but must not assemble parallel submit, approval,
 regeneration, branch-replacement, stream, recovery, or queue lifecycles.
+`use-renderer-chat-presentation.ts` is the active-turn presentation module. It
+projects the attachable run, durable plan, persisted and controller messages,
+local optimistic messages, interrupted streams, and pending human decision
+into one stable renderer snapshot. The interaction session consumes that
+snapshot instead of independently reconciling those sources.
 
 ## Application navigation session
 
@@ -59,12 +66,15 @@ before persisted messages enter the controller. Persisted/external/local stop
 ordering enters through `chat-interaction-session.ts`. Chat surfaces provide
 request-body and presentation adapters, but must not maintain parallel pending,
 optimistic-message, queued-edit, or branch-replacement state.
-The shared [[apps/web/src/components/chat/message-list.tsx]] renderer owns one
-monotonic activity phase per active turn: it begins with the generic `Thinking`
-placeholder, crosses to `Working` when reasoning or a renderable tool first
-appears, and cannot return to the generic placeholder before the turn ends even
-if a transient stream snapshot has no work parts. Reasoning remains a nested
-`Thinking` or `Thought` disclosure inside that turn-level work group.
+The shared `use-chat-turn-presentation.ts` module projects normalized messages
+into turn-level render snapshots and owns one monotonic activity phase per
+active run lifecycle. It begins with the generic `Thinking` placeholder,
+crosses to `Working` when reasoning or a renderable tool first appears, and
+cannot return to the generic placeholder before the run ends even if optimistic
+and persisted message identifiers reconcile or a transient stream snapshot has
+no work parts. [[apps/web/src/components/chat/message-list.tsx]] renders that
+projection; reasoning remains a nested `Thinking` or `Thought` disclosure
+inside the turn-level work group.
 Note-scoped discussion ownership is layered on top of the shared renderer
 interaction session by `use-note-discussion-session.ts`. It owns draft/stored
 chat identity, note chat list/session/run snapshots, prefetching, selector
