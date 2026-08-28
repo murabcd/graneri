@@ -3,45 +3,30 @@ import {
 	type ChatLatencyLogger,
 	createChatStreamLatencyTracker,
 } from "@workspace/ai/chat-latency-logger";
-import type { ChatMode } from "@workspace/ai/chat-mode";
-import {
-	getHostedChatConvexRouteError,
-	validateHostedChatActiveRunPolicy,
-} from "@workspace/ai/hosted-chat-runtime";
+import { getHostedChatConvexRouteError } from "@workspace/ai/hosted-chat-runtime";
 import {
 	createHostedActiveStreamKey,
 	createHostedAssistantRunFinalizer,
 	createHostedChatRunResponseStream,
-	type createHostedChatTurnInput,
 	type HostedActiveStreamSession,
-	isHostedQueuedUserMessageAccept,
-	persistHostedChatUserMessage,
 	startHostedChatRun,
 } from "@workspace/ai/hosted-chat-turn";
-import type { ReasoningEffort, ServiceTier } from "@workspace/ai/models";
-import type { ToolApprovalResponse } from "@workspace/ai/tool-approval-state";
-import type { UIMessage, UIMessageChunk } from "ai";
+import type { UIMessageChunk } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
+import {
+	acceptHostedChatTurn,
+	createHostedChatTurnPersistence,
+	type HostedChatTurnAcceptancePolicy,
+	type HostedChatTurnAcceptedInput,
+	type HostedChatTurnPreparedPersistence,
+} from "./chat-accepted-turn-transaction.js";
 import type { ServerAssistantRunContext } from "./chat-assistant-run-input.js";
-import type { AttachableAssistantRun } from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import type { SendJson } from "./http-utils.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 import { pipeUiMessageStreamToServerResponse } from "./ui-message-response-stream.js";
-
-type HostedTurnInput = ReturnType<
-	typeof createHostedChatTurnInput<
-		Id<"workspaces">,
-		string,
-		Id<"assistantRuns">,
-		Id<"assistantQueuedMessages">
-	>
->;
-
-type HostedQueuedInput = HostedTurnInput["queuedInput"];
-type HostedTurnController = HostedTurnInput["turnController"];
 
 export type HostedChatTurnStreamRuntimeResult =
 	| {
@@ -117,47 +102,14 @@ export type HostedChatTurnRouteEnvironment = {
 	wideEvent: ServerWideEvent;
 };
 
-export type HostedChatTurnAcceptedInput = {
-	attachableRun: AttachableAssistantRun | null;
-	continueRunId?: Id<"assistantRuns"> | null;
-	queuedInput: HostedQueuedInput;
-	replayQueuedMessageId?: Id<"assistantQueuedMessages"> | null;
-	steeredUserMessages: UIMessage[];
-	toolApprovalResponse: ToolApprovalResponse | null;
-	turnController: HostedTurnController;
-	userQuestionAnswer: string | null;
-};
+export type HostedChatTurnPreparedRun = HostedChatTurnPreparedPersistence &
+	Pick<
+		ServerAssistantRunContext,
+		"agent" | "appConnections" | "finalizedToolSet"
+	>;
 
-export type HostedChatTurnPreparedRun = Pick<
-	ServerAssistantRunContext,
-	| "agent"
-	| "appConnections"
-	| "chatMessages"
-	| "coreToolPolicyState"
-	| "finalizedToolSet"
-	| "instructions"
-	| "localFolderRoots"
-> & {
-	assistantContinuationMessageId?: string;
-	lastUserMessage?: UIMessage;
-	shouldGenerateChatTitle: boolean;
-};
-
-export type HostedChatTurnExecutionPolicy = {
-	admissionReservationId?: Id<"aiAdmissionReservations">;
-	appsEnabled: boolean;
-	chatMode: ChatMode;
-	chatId: string;
-	defaultTimezone: string;
-	model: string;
-	noteId: Id<"notes"> | null;
-	reasoningEffort: ReasoningEffort;
+export type HostedChatTurnExecutionPolicy = HostedChatTurnAcceptancePolicy & {
 	safetyIdentifier: string;
-	selectedSourceIds: string[];
-	serviceTier: ServiceTier;
-	supersedeActiveRun?: boolean;
-	trigger?: "submit-message" | "regenerate-message";
-	workspaceId: Id<"workspaces">;
 };
 
 export const runHostedChatTurnStreamRuntime = async ({
@@ -171,16 +123,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	policy: HostedChatTurnExecutionPolicy;
 	preparedRun: HostedChatTurnPreparedRun;
 }): Promise<HostedChatTurnStreamRuntimeResult> => {
-	const {
-		attachableRun,
-		continueRunId,
-		queuedInput,
-		replayQueuedMessageId,
-		steeredUserMessages,
-		toolApprovalResponse,
-		turnController,
-		userQuestionAnswer,
-	} = acceptedInput;
+	const { attachableRun, continueRunId, turnController } = acceptedInput;
 	const {
 		activeStreamSessions,
 		client: convexClient,
@@ -192,16 +135,11 @@ export const runHostedChatTurnStreamRuntime = async ({
 		wideEvent,
 	} = environment;
 	const {
-		admissionReservationId,
-		appsEnabled,
-		chatMode,
 		chatId,
-		defaultTimezone,
 		model,
 		noteId,
 		reasoningEffort,
 		safetyIdentifier,
-		selectedSourceIds,
 		serviceTier,
 		supersedeActiveRun,
 		trigger,
@@ -210,9 +148,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	const {
 		agent,
 		appConnections,
-		assistantContinuationMessageId,
 		chatMessages,
-		coreToolPolicyState,
 		finalizedToolSet,
 		instructions,
 		lastUserMessage,
@@ -227,296 +163,153 @@ export const runHostedChatTurnStreamRuntime = async ({
 		turnController,
 		wideEvent,
 	});
-	const cleanupClaimedSteerQueuedMessage = async (
-		operation: string,
-		options: { tolerateMissing?: boolean } = {},
-	) =>
-		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(operation, options);
+	const cleanupClaimedSteerQueuedMessage = async (options: {
+		tolerateMissing: boolean;
+	}) =>
+		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(
+			"steer_queue_cleanup",
+			options,
+		);
 
-	const activeRunPolicyError = validateHostedChatActiveRunPolicy({
-		attachableRun,
-		continueRunId,
-		supersedeActiveRun,
-		trigger,
+	const acceptance = await acceptHostedChatTurn({
+		acceptedInput,
+		cleanupClaimedSteerQueuedMessage,
+		onSteerAccepted: setAcceptedSteerTurnId,
+		onUserMessagePersistenceCompleted: (attempted) => {
+			logLatency("convex.user_message_saved", { attempted });
+		},
+		persistence: createHostedChatTurnPersistence(convexClient),
+		policy,
+		preparedRun,
 	});
-	if (activeRunPolicyError) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = activeRunPolicyError.statusCode;
-		wideEvent.error_code = activeRunPolicyError.errorCode;
-		wideEvent.active_run_id = activeRunPolicyError.activeRunId;
-		emitWideEvent("error");
-		sendJson(response, activeRunPolicyError.statusCode, {
-			error: activeRunPolicyError.error,
-		});
-		return { activeStreamSession: null, ok: false };
-	}
-
-	const sameActiveRun = await turnController.requireSameActiveRun({
-		continueRunId,
-	});
-	if (!sameActiveRun.ok) {
-		turnRouteErrors.sendTurnControllerError(sameActiveRun);
-		return { activeStreamSession: null, ok: false };
-	}
-	const isSteeringConvexRun = Boolean(
-		attachableRun?.producer === "convex" &&
-			continueRunId &&
-			queuedInput.hasClaimed,
-	);
-	const isAnsweringUserQuestion = Boolean(
-		continueRunId &&
-			attachableRun?._id === continueRunId &&
-			attachableRun.pendingDecision?.type === "user_question" &&
-			userQuestionAnswer !== null,
-	);
-	const shouldUseConvexProducer =
-		attachableRun?.producer === "convex" ||
-		(!attachableRun && localFolderRoots.length === 0);
-	if (attachableRun?.producer === "convex" && localFolderRoots.length > 0) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 409;
-		wideEvent.error_code = "desktop_local_tools_require_new_run";
-		emitWideEvent("error");
-		sendJson(response, 409, {
-			error:
-				"Desktop local folders cannot be added to an active hosted run. Stop it and send the message again.",
-			errorCode: "desktop_local_tools_require_new_run",
-		});
-		return { activeStreamSession: null, ok: false };
-	}
-	if (
-		attachableRun?.producer === "convex" &&
-		!toolApprovalResponse &&
-		!isSteeringConvexRun &&
-		!isAnsweringUserQuestion
-	) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 409;
-		wideEvent.error_code = "convex_run_continuation_invalid";
-		emitWideEvent("error");
-		sendJson(response, 409, {
-			error:
-				"Hosted run continuation requires approved, questionnaire, or steered input.",
-			errorCode: "convex_run_continuation_invalid",
-		});
-		return { activeStreamSession: null, ok: false };
-	}
-
-	const assistantMessageId =
-		assistantContinuationMessageId ?? `stream-${crypto.randomUUID()}`;
-	let pendingQueuedAcceptanceHeaders: Record<string, string> | null = null;
-	if (toolApprovalResponse) {
-		try {
-			const approvalMessage = chatMessages.at(-1);
-			if (
-				!continueRunId ||
-				!approvalMessage ||
-				approvalMessage.role !== "assistant" ||
-				approvalMessage.id !== toolApprovalResponse.assistantMessageId
-			) {
-				throw new Error(
-					"Tool approval response requires its pending assistant run.",
-				);
-			}
-			await convexClient.mutation(api.toolApprovals.acceptResponse, {
-				workspaceId,
-				chatId,
-				admissionReservationId,
-				message: {
-					id: approvalMessage.id,
-					role: approvalMessage.role,
-					partsJson: JSON.stringify(approvalMessage.parts),
-					metadataJson: approvalMessage.metadata
-						? JSON.stringify(approvalMessage.metadata)
-						: undefined,
-					text: "",
-					createdAt: Date.now(),
-				},
-				runId: continueRunId,
-				nextAssistantMessageId: assistantMessageId,
-			});
-		} catch (error) {
-			const routeError = getHostedChatConvexRouteError(error);
-			wideEvent.outcome = "error";
-			wideEvent.status_code = routeError?.statusCode ?? 500;
-			wideEvent.error_code =
-				routeError?.errorCode ?? "tool_approval_persist_failed";
-			emitWideEvent("error");
-			sendJson(response, wideEvent.status_code, {
-				error: routeError?.error ?? "Failed to persist tool approval response.",
-				errorCode: routeError?.errorCode,
-			});
-			return { activeStreamSession: null, ok: false };
-		}
-	}
-	if (isAnsweringUserQuestion) {
-		try {
-			if (!continueRunId || userQuestionAnswer === null) {
-				throw new Error("Question answer requires its pending assistant run.");
-			}
-			await convexClient.mutation(api.assistantRunQuestionAnswers.answer, {
-				workspaceId,
-				chatId,
-				admissionReservationId,
-				runId: continueRunId,
-				nextAssistantMessageId: assistantMessageId,
-				answer: userQuestionAnswer,
-			});
-		} catch (error) {
-			const routeError = getHostedChatConvexRouteError(error);
-			wideEvent.outcome = "error";
-			wideEvent.status_code = routeError?.statusCode ?? 500;
-			wideEvent.error_code =
-				routeError?.errorCode ?? "user_question_answer_persist_failed";
-			emitWideEvent("error");
-			sendJson(response, wideEvent.status_code, {
-				error: routeError?.error ?? "Failed to persist questionnaire answer.",
-				errorCode: routeError?.errorCode,
-			});
-			return { activeStreamSession: null, ok: false };
-		}
-	}
-	if (lastUserMessage) {
-		const isQueuedAccept = isHostedQueuedUserMessageAccept({
-			continueRunId,
-			queuedInput,
-			replayQueuedMessageId,
-		});
-		try {
-			const persistedUserMessage = await persistHostedChatUserMessage({
-				workspaceId,
-				chatId,
-				noteId,
-				model,
-				nextAssistantMessageId: assistantMessageId,
-				reasoningEffort,
-				message: lastUserMessage,
-				continueRunId,
-				queuedInput,
-				replayQueuedMessageId,
-				steeredUserMessages,
-				acceptQueuedUserMessage: (args) =>
-					convexClient.mutation(api.chats.acceptQueuedUserMessage, args),
-				acceptSteeredUserMessages: (args) =>
-					convexClient.mutation(api.chats.acceptSteeredUserMessages, {
-						...args,
-						admissionReservationId,
-					}),
-				saveMessage: (args) =>
-					convexClient.mutation(api.chats.saveMessage, args),
-			});
-			pendingQueuedAcceptanceHeaders =
-				persistedUserMessage.pendingQueuedAcceptanceHeaders;
-			setAcceptedSteerTurnId(persistedUserMessage.acceptedSteerTurnId);
-		} catch (error) {
-			const routeError = isQueuedAccept
-				? getHostedChatConvexRouteError(error)
-				: null;
-			if (
-				!(await cleanupClaimedSteerQueuedMessage("steer_queue_cleanup", {
-					tolerateMissing: Boolean(routeError),
-				}))
-			) {
-				return { activeStreamSession: null, ok: false };
-			}
-			if (routeError) {
+	if (!acceptance.ok) {
+		const { failure } = acceptance;
+		switch (failure.type) {
+			case "active_run_policy":
 				wideEvent.outcome = "error";
-				wideEvent.status_code = routeError.statusCode;
-				wideEvent.error_code = routeError.errorCode;
+				wideEvent.status_code = failure.error.statusCode;
+				wideEvent.error_code = failure.error.errorCode;
+				wideEvent.active_run_id = failure.error.activeRunId;
 				emitWideEvent("error");
-				sendJson(response, routeError.statusCode, {
-					error: routeError.error,
-					errorCode: routeError.errorCode,
+				sendJson(response, failure.error.statusCode, {
+					error: failure.error.error,
 				});
-				return { activeStreamSession: null, ok: false };
+				break;
+			case "same_active_run":
+				turnRouteErrors.sendTurnControllerError(failure.error);
+				break;
+			case "desktop_local_tools_require_new_run":
+				wideEvent.outcome = "error";
+				wideEvent.status_code = 409;
+				wideEvent.error_code = failure.type;
+				emitWideEvent("error");
+				sendJson(response, 409, {
+					error:
+						"Desktop local folders cannot be added to an active hosted run. Stop it and send the message again.",
+					errorCode: failure.type,
+				});
+				break;
+			case "convex_run_continuation_invalid":
+				wideEvent.outcome = "error";
+				wideEvent.status_code = 409;
+				wideEvent.error_code = failure.type;
+				emitWideEvent("error");
+				sendJson(response, 409, {
+					error:
+						"Hosted run continuation requires approved, questionnaire, or steered input.",
+					errorCode: failure.type,
+				});
+				break;
+			case "local_tool_message_persist":
+				wideEvent.outcome = "error";
+				wideEvent.status_code = 500;
+				wideEvent.error_code = "local_tool_message_persist_failed";
+				recordServerError({
+					error: failure.error,
+					event: wideEvent,
+					operation: "local_tool_message_persist",
+				});
+				emitWideEvent("error");
+				sendJson(response, 500, {
+					error: "Failed to persist local folder tool output.",
+				});
+				break;
+			case "tool_approval_persist":
+			case "user_question_answer_persist": {
+				const routeError = getHostedChatConvexRouteError(failure.error);
+				const isApproval = failure.type === "tool_approval_persist";
+				wideEvent.outcome = "error";
+				wideEvent.status_code = routeError?.statusCode ?? 500;
+				wideEvent.error_code =
+					routeError?.errorCode ??
+					(isApproval
+						? "tool_approval_persist_failed"
+						: "user_question_answer_persist_failed");
+				emitWideEvent("error");
+				sendJson(response, wideEvent.status_code, {
+					error:
+						routeError?.error ??
+						(isApproval
+							? "Failed to persist tool approval response."
+							: "Failed to persist questionnaire answer."),
+					errorCode: routeError?.errorCode,
+				});
+				break;
 			}
-			wideEvent.outcome = "error";
-			wideEvent.status_code = 500;
-			wideEvent.error_code = "user_message_persist_failed";
-			recordServerError({
-				details: {
-					message_id: lastUserMessage.id,
-				},
-				error,
-				event: wideEvent,
-				operation: "user_message_persist",
-			});
-			emitWideEvent("error");
-			sendJson(response, 500, {
-				error: "Failed to persist user chat message.",
-			});
-			return { activeStreamSession: null, ok: false };
-		}
-	}
-	logLatency("convex.user_message_saved", {
-		attempted: Boolean(lastUserMessage),
-	});
-
-	if (shouldUseConvexProducer) {
-		if (!admissionReservationId) {
-			wideEvent.outcome = "error";
-			wideEvent.status_code = 500;
-			wideEvent.error_code = "ai_admission_reservation_missing";
-			emitWideEvent("error");
-			sendJson(
-				response,
-				500,
-				{ error: "Chat admission reservation is missing." },
-				pendingQueuedAcceptanceHeaders,
-			);
-			return { activeStreamSession: null, ok: false };
-		}
-
-		let assistantRunIdentity = attachableRun
-			? {
-					_id: attachableRun._id,
-					assistantMessageId:
-						attachableRun.producer === "convex"
-							? assistantMessageId
-							: attachableRun.assistantMessageId,
+			case "user_message_persist": {
+				const routeError = failure.isQueuedAccept
+					? getHostedChatConvexRouteError(failure.error)
+					: null;
+				if (routeError) {
+					wideEvent.outcome = "error";
+					wideEvent.status_code = routeError.statusCode;
+					wideEvent.error_code = routeError.errorCode;
+					emitWideEvent("error");
+					sendJson(response, routeError.statusCode, {
+						error: routeError.error,
+						errorCode: routeError.errorCode,
+					});
+					break;
 				}
-			: null;
-		if (!assistantRunIdentity) {
-			try {
-				const startedBackgroundRun = await convexClient.mutation(
-					api.assistantRunBackground.start,
-					{
-						workspaceId,
-						chatId,
-						assistantMessageId,
-						admissionReservationId,
-						policy: supersedeActiveRun ? "supersede" : "reject",
-						job: {
-							messagesJson: JSON.stringify(chatMessages),
-							instructions,
-							chatMode,
-							webSearchEnabled: coreToolPolicyState.webSearchEnabled,
-							chartGenerationRequested:
-								coreToolPolicyState.chartGenerationRequested,
-							imageGenerationRequested:
-								coreToolPolicyState.imageGenerationRequested,
-							appToolScope: appsEnabled ? "available" : "disabled",
-							shouldGenerateChatTitle,
-							selectedSourceIds: appsEnabled ? selectedSourceIds : [],
-							defaultTimezone,
-							model,
-							reasoningEffort,
-							serviceTier,
-						},
-					},
+				wideEvent.outcome = "error";
+				wideEvent.status_code = 500;
+				wideEvent.error_code = "user_message_persist_failed";
+				recordServerError({
+					details: lastUserMessage
+						? { message_id: lastUserMessage.id }
+						: undefined,
+					error: failure.error,
+					event: wideEvent,
+					operation: "user_message_persist",
+				});
+				emitWideEvent("error");
+				sendJson(response, 500, {
+					error: "Failed to persist user chat message.",
+				});
+				break;
+			}
+			case "claimed_queue_cleanup_failed":
+				break;
+			case "ai_admission_reservation_missing":
+				wideEvent.outcome = "error";
+				wideEvent.status_code = 500;
+				wideEvent.error_code = failure.type;
+				emitWideEvent("error");
+				sendJson(
+					response,
+					500,
+					{ error: "Chat admission reservation is missing." },
+					failure.pendingQueuedAcceptanceHeaders,
 				);
-				assistantRunIdentity = {
-					_id: startedBackgroundRun._id,
-					assistantMessageId: startedBackgroundRun.assistantMessageId,
-				};
-			} catch (error) {
-				const routeError = getHostedChatConvexRouteError(error);
+				break;
+			case "background_run_start": {
+				const routeError = getHostedChatConvexRouteError(failure.error);
 				wideEvent.outcome = "error";
 				wideEvent.status_code = routeError?.statusCode ?? 500;
 				wideEvent.error_code =
 					routeError?.errorCode ?? "background_run_start_failed";
 				recordServerError({
-					error,
+					error: failure.error,
 					event: wideEvent,
 					operation: "background_run_start",
 				});
@@ -528,17 +321,19 @@ export const runHostedChatTurnStreamRuntime = async ({
 						error: routeError?.error ?? "Failed to start hosted assistant run.",
 						...(routeError && { errorCode: routeError.errorCode }),
 					},
-					pendingQueuedAcceptanceHeaders,
+					failure.pendingQueuedAcceptanceHeaders,
 				);
-				return { activeStreamSession: null, ok: false };
+				break;
 			}
 		}
-		if (!assistantRunIdentity) {
-			throw new Error("Hosted assistant run identity was not created.");
-		}
+		return { activeStreamSession: null, ok: false };
+	}
 
-		wideEvent.assistant_run_id = assistantRunIdentity._id;
-		wideEvent.assistant_message_id = assistantRunIdentity.assistantMessageId;
+	const { assistantMessageId, pendingQueuedAcceptanceHeaders, producer } =
+		acceptance.acceptedTurn;
+	if (producer.type === "convex") {
+		wideEvent.assistant_run_id = producer.assistantRun._id;
+		wideEvent.assistant_message_id = producer.assistantRun.assistantMessageId;
 		wideEvent.tool_count = finalizedToolSet.toolCount;
 		wideEvent.deferred_tool_count = finalizedToolSet.deferredToolCount;
 		wideEvent.local_folder_root_count = 0;
@@ -558,8 +353,8 @@ export const runHostedChatTurnStreamRuntime = async ({
 		emitWideEvent(wideEvent.errors?.length ? "error" : "info");
 		return {
 			activeStreamSession: null,
-			assistantMessageId: assistantRunIdentity.assistantMessageId,
-			assistantRunId: assistantRunIdentity._id,
+			assistantMessageId: producer.assistantRun.assistantMessageId,
+			assistantRunId: producer.assistantRun._id,
 			ok: true,
 		};
 	}

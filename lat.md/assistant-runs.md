@@ -7,6 +7,7 @@ Assistant modules share model preparation, execution, durable lifecycle, streami
 - [[convex/assistantRunStateMachine.ts]]
 - [[convex/assistantRunHumanDecisionResolution.ts]]
 - [[convex/assistantRunActivity.ts]]
+- [[apps/web/server/chat-accepted-turn-transaction.ts]]
 - [producer-neutral execution](../packages/ai/src/hosted-chat-execution.mjs)
 
 ## Shared AI package
@@ -86,28 +87,33 @@ must not attach a fast tee consumer that bypasses response pressure.
 
 ## User message persistence
 
-Every normal, replayed, steered, or continued user message enters the shared persistence helper.
+Every normal, replayed, steered, or continued user message enters one ordered accepted-turn transaction and the shared persistence helper.
 
-The hosted chat route uses the shared user-message persistence helper for normal
-saves, queued replay accepts, queued steer batch accepts, and continued-run
-message appends; the route keeps HTTP telemetry and response formatting while
-shared modules own chat behavior.
+The hosted accepted-turn transaction first validates active-run policy and the
+same-run invariant, then persists local tool output, human decisions, and user
+input in protocol order. Normal saves, queued replay accepts, queued steer batch
+accepts, and continued-run message appends all enter the shared user-message
+persistence helper through a typed Convex persistence port. A producer is chosen
+only after those writes succeed. The route keeps HTTP telemetry and response
+formatting outside this transaction.
 
 ## Hosted stream runtime
 
-The hosted turn executor owns accepted-turn preparation and hands one domain-shaped transaction to the producer runtime.
+The hosted turn executor owns preparation, while one accepted-turn transaction owns validation, persistence, and producer handoff.
 
 The hosted web chat route authenticates the request, resolves stored model
 configuration, and admits the request before delegating to
 [[apps/web/server/chat-turn-execution.ts]]. That executor alone claims queued
 input, prepares branches and compacted context, resolves connected tools and
-local continuations, persists accepted local output, and passes the runtime four
+local continuations, and passes the runtime four
 explicit records: route environment, accepted input, prepared run, and execution
-policy. [[apps/web/server/chat-turn-stream-runtime.ts]] owns producer selection,
-active-run policy, same-run validation, accepted user or approval persistence,
-queued acceptance headers, run start, finalization, and initial streaming.
+policy. The runtime delegates active-run policy, same-run validation, accepted
+local output, decision and user-message persistence, queued acceptance headers,
+and exactly-one producer handoff to
+[[apps/web/server/chat-accepted-turn-transaction.ts]]. It maps typed transaction
+failures to HTTP and telemetry, then owns web-producer streaming and finalization.
 Reconnect streaming remains transport-only and never reconstructs turn
-preparation or producer policy.
+preparation, acceptance ordering, or producer policy.
 
 ## Rolling context compaction
 

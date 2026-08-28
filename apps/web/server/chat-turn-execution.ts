@@ -5,7 +5,6 @@ import {
 	getHostedChatConvexRouteError,
 	getHostedChatInputValidationErrorResponse,
 	getStoredHostedNoteContext,
-	toHostedStoredMessage,
 	validateHostedChatInput,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
@@ -493,31 +492,11 @@ export const executeHostedChatTurn = async ({
 		throw error;
 	}
 
-	if (isLocalFolderToolContinuation) {
-		if (!assistantRun.inputMessage) {
-			throw new Error("Local folder tool continuation was not prepared.");
-		}
-		try {
-			await client.mutation(api.chats.completeLocalFolderToolMessage, {
-				workspaceId,
-				chatId,
-				message: toHostedStoredMessage(assistantRun.inputMessage),
-			});
-		} catch (error) {
-			wideEvent.outcome = "error";
-			wideEvent.status_code = 500;
-			wideEvent.error_code = "local_tool_message_persist_failed";
-			recordServerError({
-				error,
-				event: wideEvent,
-				operation: "local_tool_message_persist",
-			});
-			emitEvent("error");
-			sendJson(response, 500, {
-				error: "Failed to persist local folder tool output.",
-			});
-			return;
-		}
+	const localFolderContinuationMessage = isLocalFolderToolContinuation
+		? assistantRun.inputMessage
+		: undefined;
+	if (isLocalFolderToolContinuation && !localFolderContinuationMessage) {
+		throw new Error("Local folder tool continuation was not prepared.");
 	}
 
 	const lastUserMessage =
@@ -561,6 +540,8 @@ export const executeHostedChatTurn = async ({
 			finalizedToolSet: assistantRun.finalizedToolSet,
 			instructions: assistantRun.instructions,
 			lastUserMessage,
+			localFolderContinuationMessage:
+				localFolderContinuationMessage ?? undefined,
 			localFolderRoots: assistantRun.localFolderRoots,
 			shouldGenerateChatTitle: Boolean(
 				lastUserMessage && model.generateTitleOnFirstUserMessage,
