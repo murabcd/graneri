@@ -26,6 +26,7 @@ import type * as assistantRunCleanup from "../assistantRunCleanup.js";
 import type * as assistantRunEventModel from "../assistantRunEventModel.js";
 import type * as assistantRunEvents from "../assistantRunEvents.js";
 import type * as assistantRunGeneratedImage from "../assistantRunGeneratedImage.js";
+import type * as assistantRunHumanDecisionResolution from "../assistantRunHumanDecisionResolution.js";
 import type * as assistantRunJobModel from "../assistantRunJobModel.js";
 import type * as assistantRunJobState from "../assistantRunJobState.js";
 import type * as assistantRunLifecycle from "../assistantRunLifecycle.js";
@@ -156,6 +157,7 @@ declare const fullApi: ApiFromModules<{
   assistantRunEventModel: typeof assistantRunEventModel;
   assistantRunEvents: typeof assistantRunEvents;
   assistantRunGeneratedImage: typeof assistantRunGeneratedImage;
+  assistantRunHumanDecisionResolution: typeof assistantRunHumanDecisionResolution;
   assistantRunJobModel: typeof assistantRunJobModel;
   assistantRunJobState: typeof assistantRunJobState;
   assistantRunLifecycle: typeof assistantRunLifecycle;

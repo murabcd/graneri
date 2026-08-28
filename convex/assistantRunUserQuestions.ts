@@ -7,7 +7,6 @@ import { decodeStoredUiMessage } from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { upsertAssistantRunJobMessage } from "./assistantRunJobState";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 
 type UserQuestionDecision = Extract<
@@ -73,15 +72,12 @@ export const requireAssistantRunUserQuestion = async (
 	await requireStoredUserQuestion(ctx, run, decision);
 };
 
-export const resolveAssistantRunUserQuestion = async (
+export const persistAssistantRunUserQuestionResolution = async (
 	ctx: MutationCtx,
 	run: Doc<"assistantRuns">,
+	decision: UserQuestionDecision,
 	answer: string,
 ) => {
-	const decision = run.pendingDecision;
-	if (run.status !== "waiting_for_user" || decision?.type !== "user_question") {
-		return false;
-	}
 	if (!answer.trim()) {
 		throw new ConvexError({
 			code: "USER_QUESTION_ANSWER_INVALID",
@@ -127,13 +123,10 @@ export const resolveAssistantRunUserQuestion = async (
 		message: "Chat message exceeds Convex's 1 MiB document limit.",
 	});
 	await ctx.db.replace(storedMessage._id, replacement);
-	if (run.producer === "convex") {
-		await upsertAssistantRunJobMessage(ctx, run._id, {
-			id: storedMessage.messageId,
-			role: "assistant",
-			partsJson,
-			metadataJson: storedMessage.metadataJson,
-		});
-	}
-	return true;
+	return {
+		id: storedMessage.messageId,
+		role: "assistant" as const,
+		partsJson,
+		metadataJson: storedMessage.metadataJson,
+	};
 };

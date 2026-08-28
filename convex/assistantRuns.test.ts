@@ -1714,6 +1714,12 @@ test("a tool answer resolves the question without appending a user message", asy
 		serviceTier: "auto",
 		policy: "reject",
 	});
+	await asOwner.mutation(api.chats.startActiveStream, {
+		workspaceId,
+		chatId: "chat-append-decision",
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
 	await saveUserQuestion({
 		asOwner,
 		assistantMessageId: run.assistantMessageId,
@@ -1746,11 +1752,22 @@ test("a tool answer resolves the question without appending a user message", asy
 		chatId: "chat-append-decision",
 	});
 
-	expect(resumedRun?.status).toBe("running");
+	expect(resumedRun).toMatchObject({
+		status: "running",
+		assistantMessageId: "chat-append-decision-assistant-2",
+	});
 	if (!resumedRun) {
 		throw new Error("Expected the answered assistant run to remain active.");
 	}
 	expect(resumedRun.pendingDecision).toBeUndefined();
+	expect(
+		await t.run(async (ctx) =>
+			ctx.db
+				.query("chatActiveStreams")
+				.withIndex("by_runId", (q) => q.eq("runId", run._id))
+				.unique(),
+		),
+	).toBeNull();
 	const persistedMessages = await t.run(async (ctx) => {
 		const chat = await ctx.db.get(resumedRun.chatId);
 		return chat
@@ -1778,6 +1795,7 @@ test("a tool answer resolves the question without appending a user message", asy
 	]);
 	expect(await listRunEventTypes({ asOwner, runId: run._id })).toEqual([
 		"run.started",
+		"assistant.message.started",
 		"input.requested",
 		"input.resolved",
 	]);

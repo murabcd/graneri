@@ -5,6 +5,7 @@ Assistant modules share model preparation, execution, durable lifecycle, streami
 - [[connected-apps]] assembles provider tools and credentials.
 - [[desktop-ai]] owns the desktop-local tool exception.
 - [[convex/assistantRunStateMachine.ts]]
+- [[convex/assistantRunHumanDecisionResolution.ts]]
 - [[convex/assistantRunActivity.ts]]
 - [producer-neutral execution](../packages/ai/src/hosted-chat-execution.mjs)
 
@@ -431,11 +432,13 @@ without selecting an option, while `Escape` and the close action dismiss the
 unresolved questionnaire. Multi-step answers are serialized as quoted
 questions followed by their selected and free-form values. Both producers
 persist the exact assistant message id, tool call id, ordered prompts, and
-option labels and descriptions as a `user_question` decision. Accepting the direct
-durable answer atomically verifies the stored request, converts the pending
-question tool part in that assistant message to `output-available` with the
-structured answer, records `input.resolved`, rotates the assistant message
-generation, and resumes the same run. Questionnaire answers never create
+option labels and descriptions as a `user_question` decision. Accepting the
+direct durable answer enters `assistantRunHumanDecisionResolution`, the single
+transaction for both human decision variants. It verifies the stored request,
+converts the pending question tool part in that assistant message to
+`output-available` with the structured answer, records `input.resolved`, rotates
+the assistant message generation, cleans the previous generation snapshots,
+and resumes the same producer. Questionnaire answers never create
 synthetic user messages; a normal user message cannot resolve a pending
 questionnaire or bypass a pending tool approval. The renderer dismisses a
 questionnaire as soon as its local tool output is recorded, then restores the
@@ -443,12 +446,15 @@ same pending card if continuation fails before the durable decision resolves.
 Tool approval uses the AI SDK v7 `toolApproval` protocol rather than
 tool-specific confirmation payloads or synthetic user messages. The first
 stream persists the assistant message in `approval-requested` state and moves the run to
-`waiting_for_user` with a `tool_approval` decision. The response mutation must
-atomically verify the approval id, assistant message id, tool call id, and tool
-name, persist the `approval-responded` message, update the next assistant message
-id, and resume that same run before a replacement stream starts.
-`assistantRunStateMachine` owns one producer-neutral decision-resolution
-transition for both variants. `input.requested` journals the full typed decision
+`waiting_for_user` with a `tool_approval` decision. The response mutation
+delegates to the same resolution transaction, which must atomically verify the
+approval id, assistant message id, tool call id, and tool name, persist the
+`approval-responded` message, update the durable background job when present,
+consume admission, clean the previous generation, and resume that same run
+before a replacement stream starts. `assistantRunStateMachine` owns the
+producer-neutral decision-resolution state transition; the Human Decision
+Resolution module owns its ordered persistence and producer-restart protocol
+for both variants. `input.requested` journals the full typed decision
 and `input.resolved` journals the exact approval result or questionnaire answer.
 The decision row does not duplicate tool input: the stored assistant
 message and tool-call journal remain its durable owners.
