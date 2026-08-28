@@ -86,6 +86,51 @@ describe("ChatHumanDecisionBar", () => {
 		});
 	});
 
+	it("supports approval shortcuts without overriding interactive controls", () => {
+		const onRespond = vi.fn();
+		render(
+			<>
+				<input aria-label="Unrelated input" />
+				<ChatHumanDecisionBar
+					decision={{
+						type: "tool_approval",
+						approvalId: "approval-2",
+						assistantMessageId: "assistant-2",
+						authority: {
+							access: "write",
+							approval: "required",
+							provider: "graneri",
+						},
+						consequence: "This action will update the note.",
+						input: { noteId: "note-1" },
+						toolCallId: "call-2",
+						toolName: "update_note",
+					}}
+					onRespond={onRespond}
+				/>
+			</>,
+		);
+
+		const unrelatedInput = screen.getByRole("textbox", {
+			name: "Unrelated input",
+		});
+		fireEvent.keyDown(unrelatedInput, { key: "Enter" });
+		expect(onRespond).not.toHaveBeenCalled();
+
+		fireEvent.keyDown(document, { key: "Enter" });
+		expect(onRespond).toHaveBeenLastCalledWith({
+			type: "tool_approval",
+			approved: true,
+		});
+
+		onRespond.mockClear();
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(onRespond).toHaveBeenCalledWith({
+			type: "tool_approval",
+			approved: false,
+		});
+	});
+
 	it("renders described numbered choices and submits one choice immediately", () => {
 		vi.useFakeTimers();
 		const onRespond = vi.fn();
@@ -269,6 +314,11 @@ describe("ChatHumanDecisionBar", () => {
 		const { unmount } = render(
 			<ChatHumanDecisionBar decision={decision} onRespond={onRespond} />,
 		);
+		const questionnaire = screen.getByRole("group", {
+			name: "Which scope?",
+		});
+		expect(questionnaire).toHaveProperty("tabIndex", 0);
+		expect(document.activeElement).toBe(questionnaire);
 
 		fireEvent.keyDown(document, { key: "2" });
 		act(() => vi.advanceTimersByTime(180));
@@ -284,10 +334,55 @@ describe("ChatHumanDecisionBar", () => {
 		unmount();
 		onRespond.mockClear();
 		render(<ChatHumanDecisionBar decision={decision} onRespond={onRespond} />);
-		fireEvent.click(screen.getByRole("button", { name: "Close questions" }));
+		const close = screen.getByRole("button", { name: "Close questions" });
+		expect(close.getAttribute("aria-keyshortcuts")).toBe("Escape");
+		const otherAnswer = screen.getByRole("textbox", { name: "Other answer" });
+		otherAnswer.focus();
+		fireEvent.keyDown(otherAnswer, { key: "1" });
+		expect(onRespond).not.toHaveBeenCalled();
+		fireEvent.keyDown(otherAnswer, { key: "Escape" });
 		expect(onRespond).toHaveBeenCalledWith({
 			type: "user_question",
 			answer: "> Which scope?\nSkipped\n\n> Which format?\nSkipped",
+		});
+	});
+
+	it("confirms the keyboard-selected question option with Enter", () => {
+		vi.useFakeTimers();
+		const onRespond = vi.fn();
+		render(
+			<ChatHumanDecisionBar
+				decision={{
+					type: "user_question",
+					assistantMessageId: "assistant-5",
+					toolCallId: "question-4",
+					questions: [
+						{
+							id: "scope",
+							question: "Which scope?",
+							options: [
+								option("Current", "Use the current scope."),
+								option("All", "Use every available scope."),
+							],
+						},
+					],
+				}}
+				onRespond={onRespond}
+			/>,
+		);
+
+		fireEvent.keyDown(document, { key: "ArrowDown" });
+		expect(
+			screen
+				.getByRole("radio", { name: /Current.*current scope/u })
+				.getAttribute("aria-checked"),
+		).toBe("true");
+		fireEvent.keyDown(document, { key: "Enter" });
+		expect(onRespond).not.toHaveBeenCalled();
+		act(() => vi.advanceTimersByTime(180));
+		expect(onRespond).toHaveBeenCalledWith({
+			type: "user_question",
+			answer: "> Which scope?\nCurrent",
 		});
 	});
 });

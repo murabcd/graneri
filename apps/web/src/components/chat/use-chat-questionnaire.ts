@@ -211,6 +211,11 @@ export function useChatQuestionnaire({
 				}
 				return;
 			}
+			if (event.key === "Escape") {
+				event.preventDefault();
+				closeQuestionnaire();
+				return;
+			}
 			if (isTextEntryTarget(event.target)) {
 				return;
 			}
@@ -239,11 +244,6 @@ export function useChatQuestionnaire({
 			) {
 				event.preventDefault();
 				goToQuestion(questionIndex + 1);
-				return;
-			}
-			if (event.key === "Escape") {
-				event.preventDefault();
-				closeQuestionnaire();
 				return;
 			}
 			if (event.key === "Enter" && answer.selectedOptionIndex !== null) {

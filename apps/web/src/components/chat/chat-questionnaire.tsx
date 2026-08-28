@@ -130,14 +130,21 @@ export function ChatQuestionnaire({
 	const [hoveredOptionIndex, setHoveredOptionIndex] = React.useState<
 		number | null
 	>(null);
+	const cardRef = React.useRef<HTMLDivElement>(null);
 	const selectedOptionIndex = answer.selectedOptionIndex;
+
+	React.useEffect(() => {
+		cardRef.current?.focus();
+	}, []);
 
 	return (
 		<Card
+			ref={cardRef}
 			size="sm"
-			className="mx-auto w-[calc(100%-1rem)] max-w-[548px] gap-0 rounded-lg py-0 shadow-lg data-[size=sm]:py-0"
+			className="mx-auto w-[calc(100%-1rem)] max-w-[548px] gap-0 rounded-lg py-0 shadow-lg outline-none data-[size=sm]:py-0"
 			role="group"
 			aria-label={question.question}
+			tabIndex={0}
 		>
 			<CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 pt-3 pb-2 group-data-[size=sm]/card:px-3">
 				<div className="flex min-w-0 items-center gap-3">
@@ -186,6 +193,7 @@ export function ChatQuestionnaire({
 						disabled={disabled || advancing}
 						onClick={closeQuestionnaire}
 						aria-label="Close questions"
+						aria-keyshortcuts="Escape"
 					>
 						<X aria-hidden="true" />
 					</Button>

@@ -422,9 +422,13 @@ producer puts its recommended choice first and suffixes that label with
 includes a free-form `Other` path.
 The write-in field uses the stable `Something else...` placeholder rather than
 model-generated copy.
-Clicks and their displayed `1`–`3` shortcuts acknowledge the choice, then
-advance or submit directly. `Skip` advances without selecting an option, and
-the close action skips the unresolved questionnaire. Multi-step answers are serialized as quoted
+The questionnaire takes focus when it appears so its keyboard contract is
+available even when the composer previously held focus. Clicks and their
+displayed `1`–`3` shortcuts acknowledge the choice, then advance or submit
+directly. Arrow keys highlight choices or move between questions, and `Enter`
+confirms the highlighted choice or a focused free-form answer. `Skip` advances
+without selecting an option, while `Escape` and the close action dismiss the
+unresolved questionnaire. Multi-step answers are serialized as quoted
 questions followed by their selected and free-form values. Both producers
 persist the exact assistant message id, tool call id, ordered prompts, and
 option labels and descriptions as a `user_question` decision. Accepting the direct
