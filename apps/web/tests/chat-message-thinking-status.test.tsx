@@ -19,6 +19,19 @@ const streamingReasoningMessage: UIMessage = {
 	],
 };
 
+const streamingToolMessage: UIMessage = {
+	id: streamingReasoningMessage.id,
+	role: "assistant",
+	parts: [
+		{
+			type: "tool-run_local_command",
+			toolCallId: "call-streaming",
+			state: "input-available",
+			input: { command: "pwd" },
+		},
+	],
+};
+
 const completedReasoningMessage: UIMessage = {
 	id: "assistant-2",
 	role: "assistant",
@@ -69,6 +82,24 @@ const assistantContinuationMessage: UIMessage = {
 	parts: [],
 };
 
+const renderMessageList = ({
+	isLoading,
+	messages,
+}: {
+	isLoading?: boolean;
+	messages: UIMessage[];
+}) => (
+	<TooltipProvider>
+		<MessageScrollerProvider autoScroll>
+			<MessageScroller>
+				<MessageScrollerViewport>
+					<ChatMessageListContent isLoading={isLoading} messages={messages} />
+				</MessageScrollerViewport>
+			</MessageScroller>
+		</MessageScrollerProvider>
+	</TooltipProvider>
+);
+
 describe("chat message thinking status", () => {
 	afterEach(() => {
 		cleanup();
@@ -76,27 +107,6 @@ describe("chat message thinking status", () => {
 	});
 
 	it("keeps one work disclosure open for the active turn and collapses it on completion", () => {
-		const renderMessageList = ({
-			isLoading,
-			messages,
-		}: {
-			isLoading?: boolean;
-			messages: UIMessage[];
-		}) => (
-			<TooltipProvider>
-				<MessageScrollerProvider autoScroll>
-					<MessageScroller>
-						<MessageScrollerViewport>
-							<ChatMessageListContent
-								isLoading={isLoading}
-								messages={messages}
-							/>
-						</MessageScrollerViewport>
-					</MessageScroller>
-				</MessageScrollerProvider>
-			</TooltipProvider>
-		);
-
 		const { rerender } = render(
 			renderMessageList({
 				isLoading: true,
@@ -148,6 +158,60 @@ describe("chat message thinking status", () => {
 				.getAttribute("aria-expanded"),
 		).toBe("false");
 		expect(screen.queryByRole("button", { name: "Thought" })).toBeNull();
+	});
+
+	it("never demotes the active turn from Working after agentic work starts", () => {
+		const optimisticUserMessage: UIMessage = {
+			id: "user-optimistic",
+			role: "user",
+			parts: [{ type: "text", text: "Inspect the repository" }],
+		};
+		const persistedUserMessage: UIMessage = {
+			...optimisticUserMessage,
+			id: "user-persisted",
+		};
+		const emptyAssistantMessage: UIMessage = {
+			id: streamingReasoningMessage.id,
+			role: "assistant",
+			parts: [],
+		};
+		const { rerender } = render(
+			renderMessageList({
+				isLoading: true,
+				messages: [optimisticUserMessage, emptyAssistantMessage],
+			}),
+		);
+
+		expect(screen.getByText("Thinking")).not.toBeNull();
+
+		rerender(
+			renderMessageList({
+				isLoading: true,
+				messages: [optimisticUserMessage, streamingToolMessage],
+			}),
+		);
+
+		expect(screen.getByRole("button", { name: /^Working/ })).not.toBeNull();
+
+		rerender(
+			renderMessageList({
+				isLoading: true,
+				messages: [persistedUserMessage, emptyAssistantMessage],
+			}),
+		);
+
+		expect(screen.getByText("Working")).not.toBeNull();
+		expect(screen.queryByText("Thinking")).toBeNull();
+
+		rerender(
+			renderMessageList({
+				isLoading: true,
+				messages: [persistedUserMessage, streamingReasoningMessage],
+			}),
+		);
+
+		expect(screen.getByRole("button", { name: /^Working/ })).not.toBeNull();
+		expect(screen.getByText("Thinking")).not.toBeNull();
 	});
 
 	it("renders the generic status when no reasoning part is streaming", () => {

@@ -3,6 +3,8 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { Reasoning } from "@/components/ai-elements/reasoning";
 import { ToolDetails } from "@/components/ai-elements/tools/tool-details";
 import {
+	type AssistantWorkPart,
+	isAssistantWorkPart,
 	isRenderableToolUiPart,
 	type ToolUiPart,
 	toToolPartLike,
@@ -23,18 +25,6 @@ export type ToolGroupProps = {
 	startedAt?: number;
 	totalDurationMs?: number;
 };
-
-type ReasoningPart = Extract<UIMessage["parts"][number], { type: "reasoning" }>;
-type AssistantWorkPart = ReasoningPart | ToolUiPart;
-
-const isRenderableToolPart = (
-	part: UIMessage["parts"][number],
-): part is ToolUiPart => isRenderableToolUiPart(part);
-
-const isAssistantWorkPart = (
-	part: UIMessage["parts"][number],
-): part is AssistantWorkPart =>
-	part.type === "reasoning" || isRenderableToolPart(part);
 
 const formatCallCount = (count: number) =>
 	`${count} ${count === 1 ? "call" : "calls"}`;
@@ -78,7 +68,7 @@ export const ToolGroup = memo(function ToolGroup({
 		[isWorking, workParts],
 	);
 	const toolParts = useMemo(
-		() => workParts.filter(isRenderableToolPart),
+		() => workParts.filter(isRenderableToolUiPart),
 		[workParts],
 	);
 	const toolStatuses = useMemo(

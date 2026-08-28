@@ -28,7 +28,7 @@ import {
 	SourcesTrigger,
 } from "@/components/ai-elements/sources";
 import { ToolGroup } from "@/components/ai-elements/tools/tool-group";
-import { isRenderableToolUiPart } from "@/components/ai-elements/tools/tool-part-like";
+import { isAssistantWorkPart } from "@/components/ai-elements/tools/tool-part-like";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
@@ -154,6 +154,18 @@ export function ChatMessageListContent({
 		[displayMessages],
 	);
 	const lastTurnId = turns.at(-1)?.[0]?.id;
+	const latestTurnHasAssistantWork = (turns.at(-1) ?? []).some(
+		(message) =>
+			message.role === "assistant" && message.parts.some(isAssistantWorkPart),
+	);
+	const [activeRunHasStartedWork, setActiveRunHasStartedWork] =
+		React.useState(false);
+	React.useLayoutEffect(() => {
+		setActiveRunHasStartedWork(
+			(startedWork) =>
+				Boolean(isLoading) && (startedWork || latestTurnHasAssistantWork),
+		);
+	}, [isLoading, latestTurnHasAssistantWork]);
 	const [activeTurnTiming, setActiveTurnTiming] = React.useState<{
 		startedAt: number;
 		turnId: string;
@@ -236,9 +248,8 @@ export function ChatMessageListContent({
 				const assistantWorkParts = assistantMessages.flatMap(
 					(message) => message.parts,
 				);
-				const hasAssistantWorkInTurn = assistantWorkParts.some(
-					(part) => part.type === "reasoning" || isRenderableToolUiPart(part),
-				);
+				const hasCurrentAssistantWork =
+					assistantWorkParts.some(isAssistantWorkPart);
 				const latestAssistantMessage = assistantMessages.at(-1);
 				const assistantTurnStartedAt =
 					getChatMessageTimestampMs(turnMessages[0]) ??
@@ -258,6 +269,9 @@ export function ChatMessageListContent({
 						latestAssistantMetadata?.interrupted !== true &&
 						!forcedStreamingMessageIds.has(latestAssistantMessage.id),
 				);
+				const hasAssistantWorkInTurn =
+					hasCurrentAssistantWork ||
+					(isAssistantTurnStreaming && activeRunHasStartedWork);
 				const assistantTurnDurationMs =
 					!isAssistantTurnStreaming &&
 					assistantTurnStartedAt !== null &&

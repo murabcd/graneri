@@ -59,6 +59,12 @@ before persisted messages enter the controller. Persisted/external/local stop
 ordering enters through `chat-interaction-session.ts`. Chat surfaces provide
 request-body and presentation adapters, but must not maintain parallel pending,
 optimistic-message, queued-edit, or branch-replacement state.
+The shared [[apps/web/src/components/chat/message-list.tsx]] renderer owns one
+monotonic activity phase per active turn: it begins with the generic `Thinking`
+placeholder, crosses to `Working` when reasoning or a renderable tool first
+appears, and cannot return to the generic placeholder before the turn ends even
+if a transient stream snapshot has no work parts. Reasoning remains a nested
+`Thinking` or `Thought` disclosure inside that turn-level work group.
 Note-scoped discussion ownership is layered on top of the shared renderer
 interaction session by `use-note-discussion-session.ts`. It owns draft/stored
 chat identity, note chat list/session/run snapshots, prefetching, selector

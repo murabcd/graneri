@@ -13,6 +13,9 @@ import {
 } from "@/components/ai-elements/tools/tool-registry";
 
 export type ToolUiPart = ToolUIPart | DynamicToolUIPart;
+export type AssistantWorkPart =
+	| Extract<UIMessage["parts"][number], { type: "reasoning" }>
+	| ToolUiPart;
 
 const toolPayloadSchema = z.json();
 
@@ -36,3 +39,8 @@ export const isRenderableToolUiPart = (
 	part: UIMessage["parts"][number],
 ): part is ToolUiPart =>
 	isToolUIPart(part) && getToolMeta(toToolPartLike(part)) !== null;
+
+export const isAssistantWorkPart = (
+	part: UIMessage["parts"][number],
+): part is AssistantWorkPart =>
+	part.type === "reasoning" || isRenderableToolUiPart(part);
