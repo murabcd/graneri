@@ -76,6 +76,7 @@ import {
 	getWorkspaceChatMentionContext,
 	prepareChatComposerSubmission,
 } from "@/lib/chat-composer-mentions";
+import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
 import { getChatText } from "@/lib/chat-message";
 import {
 	type ChatPluginPrefill,
@@ -555,88 +556,74 @@ const useChatPageController = ({
 		}
 
 		try {
-			const submission = prepareChatComposerSubmission({
-				draft: draftText,
-				mentions,
-				recipes,
-			});
-			const metadata: ChatMessageMetadata | undefined = submission.recipe
-				? {
-						recipe: submission.recipe,
-						recipeOnly: submission.recipeOnly,
-						...(submission.mentionPositions.length > 0 && {
-							mentionPositions: submission.mentionPositions,
-						}),
-					}
-				: submission.mentionPositions.length > 0
-					? { mentionPositions: submission.mentionPositions }
-					: undefined;
-			const { mentionIds, requestSelectedSourceIds } =
-				getWorkspaceChatMentionContext(mentions);
-
-			if (queuedMessageEditDraft) {
-				const didUpdateCurrentEdit = await updateQueuedTurn({
-					buildRequestBody: () =>
-						buildWorkspaceChatRequestBody({
-							chatMode,
-							localFolderStorageScope,
-							mentions: mentionIds,
-							model: selectedModel.model,
-							recipeSlug: submission.recipeSlug,
-							reasoningEffort: selectedReasoningEffort,
-							serviceTier: selectedServiceTier,
-							resolveConvexToken: getCachedConvexToken,
-							selectedSourceIds: requestSelectedSourceIds,
-							text: submission.displayText,
-							webSearchEnabled,
-							workspaceId: activeWorkspaceId,
-						}),
-					metadata,
-					text: submission.displayText,
-				});
-
-				if (!didUpdateCurrentEdit) {
-					return;
-				}
-
-				setEditingMessageId((currentEditingMessageId) =>
-					currentEditingMessageId === queuedMessageEditDraft.message._id
-						? null
-						: currentEditingMessageId,
-				);
-				clearDraft();
-				setAttachedFiles([]);
-				return;
-			}
-
-			chatPersistedCallback?.(chatId);
-
-			const result = await submitTurn({
+			const queuedMessageEditId = queuedMessageEditDraft?.message._id ?? null;
+			const result = await commitChatComposerTurnIntent({
 				attachedFiles,
-				buildRequestBody: () =>
-					buildWorkspaceChatRequestBody({
-						chatMode,
-						localFolderStorageScope,
-						mentions: mentionIds,
-						model: selectedModel.model,
-						recipeSlug: submission.recipeSlug,
-						reasoningEffort: selectedReasoningEffort,
-						serviceTier: selectedServiceTier,
-						resolveConvexToken: getCachedConvexToken,
-						selectedSourceIds: requestSelectedSourceIds,
-						text: submission.displayText,
-						webSearchEnabled,
-						workspaceId: activeWorkspaceId,
-					}),
 				editingMessageId,
-				metadata,
+				isQueuedMessageEditCurrent,
+				onBeforeSubmit: () => {
+					chatPersistedCallback?.(chatId);
+				},
 				onRequestPrepared: ({ localFolders }) => {
-					setEditingMessageId(null);
+					setEditingMessageId((currentEditingMessageId) =>
+						queuedMessageEditId
+							? currentEditingMessageId === queuedMessageEditId
+								? null
+								: currentEditingMessageId
+							: null,
+					);
 					clearDraft();
 					setAttachedFiles([]);
 					reconcileSharedLocalFolders(localFolders);
 				},
-				text: submission.displayText,
+				prepareTurn: () => {
+					const submission = prepareChatComposerSubmission({
+						draft: draftText,
+						mentions,
+						recipes,
+					});
+					const metadata: ChatMessageMetadata | undefined = submission.recipe
+						? {
+								recipe: submission.recipe,
+								recipeOnly: submission.recipeOnly,
+								...(submission.mentionPositions.length > 0 && {
+									mentionPositions: submission.mentionPositions,
+								}),
+							}
+						: submission.mentionPositions.length > 0
+							? { mentionPositions: submission.mentionPositions }
+							: undefined;
+					const { mentionIds, requestSelectedSourceIds } =
+						getWorkspaceChatMentionContext(mentions);
+					return {
+						buildRequestBody: () =>
+							buildWorkspaceChatRequestBody({
+								chatMode,
+								localFolderStorageScope,
+								mentions: mentionIds,
+								model: selectedModel.model,
+								recipeSlug: submission.recipeSlug,
+								reasoningEffort: selectedReasoningEffort,
+								serviceTier: selectedServiceTier,
+								resolveConvexToken: getCachedConvexToken,
+								selectedSourceIds: requestSelectedSourceIds,
+								text: submission.displayText,
+								webSearchEnabled,
+								workspaceId: activeWorkspaceId,
+							}),
+						metadata,
+						text: submission.displayText,
+					};
+				},
+				queuedMessageEditId,
+				restoreDraft: () => {
+					setEditingMessageId(editingMessageId);
+					setDraft(draftText);
+					setDraftMetadata(mentions.length > 0 ? { mentions } : null);
+					setAttachedFiles(attachedFiles);
+				},
+				submitTurn,
+				updateQueuedTurn,
 			});
 
 			if (result.status === "queued") {
@@ -654,16 +641,6 @@ const useChatPageController = ({
 					? error.message
 					: "Failed to prepare chat request",
 			);
-			if (
-				queuedMessageEditDraft &&
-				!isQueuedMessageEditCurrent(queuedMessageEditDraft.message._id)
-			) {
-				return;
-			}
-			setEditingMessageId(editingMessageId);
-			setDraft(draftText);
-			setDraftMetadata(mentions.length > 0 ? { mentions } : null);
-			setAttachedFiles(attachedFiles);
 		}
 	}, [
 		activeWorkspaceId,

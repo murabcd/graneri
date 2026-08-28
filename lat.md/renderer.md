@@ -9,6 +9,7 @@ The renderer presents Graneri in browsers and Electron while delegating durable,
 - [[apps/web/src/hooks/use-renderer-chat-session.ts]]
 - [[apps/web/src/hooks/use-renderer-chat-presentation.ts]]
 - [[apps/web/src/components/chat/use-chat-turn-presentation.ts]]
+- [[apps/web/src/lib/chat-composer-turn-intent.ts]]
 
 ## Runtime role
 
@@ -66,6 +67,13 @@ before persisted messages enter the controller. Persisted/external/local stop
 ordering enters through `chat-interaction-session.ts`. Chat surfaces provide
 request-body and presentation adapters, but must not maintain parallel pending,
 optimistic-message, queued-edit, or branch-replacement state.
+`chat-composer-turn-intent.ts` owns the recoverable commit boundary above those
+commands. It prepares one semantic turn, chooses queued-edit or new-turn
+submission, runs request-prepared effects, fences stale queued edits, and
+restores the captured draft and attachments on current-intent failure.
+Workspace and note composers retain their distinct recipe, mention, note
+context, panel, and focus adapters; they must not reconstruct this commit and
+rollback ordering.
 The shared `use-chat-turn-presentation.ts` module projects normalized messages
 into turn-level render snapshots and owns one monotonic activity phase per
 active run lifecycle. It begins with the generic `Thinking` placeholder,

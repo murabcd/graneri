@@ -136,6 +136,7 @@ import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import { useSharedLocalFolderSession } from "@/hooks/use-shared-local-folder-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
+import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
 import {
 	buildNoteChatRequestBody,
 	buildNoteChatRequestBodyFromLocalFolders,
@@ -1163,89 +1164,75 @@ const useNoteComposerController = ({
 		}
 
 		try {
-			const outgoingText = nextMessage || selectedRecipe?.name || "";
-			const recipeMetadata: ChatMessageMetadata | undefined = selectedRecipe
-				? {
-						recipe: {
-							slug: selectedRecipe.slug,
-							name: selectedRecipe.name,
-						},
-						recipeOnly: nextMessage.length === 0,
-					}
-				: undefined;
-			if (queuedMessageEditDraft) {
-				const currentNoteContext = readNoteContext();
-				const didUpdateCurrentEdit = await updateQueuedTurn({
-					buildRequestBody: () =>
-						buildNoteChatRequestBody({
-							localFolderStorageScope,
-							model: selectedModel.model,
-							noteContext: {
-								noteId: currentNoteContext.noteId,
-								title: currentNoteContext.title,
-								text: currentNoteContext.text,
-							},
-							reasoningEffort: selectedReasoningEffort,
-							serviceTier: selectedServiceTier,
-							recipeSlug: selectedRecipe?.slug ?? null,
-							resolveConvexToken: getCachedConvexToken,
-							text: outgoingText,
-						}),
-					metadata: recipeMetadata,
-					text: outgoingText,
-				});
-
-				if (!didUpdateCurrentEdit) {
-					return;
-				}
-
-				setEditingMessageId((currentEditingMessageId) =>
-					currentEditingMessageId === queuedMessageEditDraft.message._id
-						? null
-						: currentEditingMessageId,
-				);
-				clearDraft();
-				setAttachedFiles([]);
-				resetTextareaHeight();
-				requestComposerFocus();
-				return;
-			}
-
-			if (presentationMode === "inline") {
-				setPanelMode("chat");
-			} else {
-				openRightSidebar(presentationMode);
-			}
-
-			const currentNoteContext = readNoteContext();
-			const result = await submitTurn({
+			const queuedMessageEditId = queuedMessageEditDraft?.message._id ?? null;
+			const result = await commitChatComposerTurnIntent({
 				attachedFiles,
-				buildRequestBody: () =>
-					buildNoteChatRequestBody({
-						localFolderStorageScope,
-						model: selectedModel.model,
-						noteContext: {
-							noteId: currentNoteContext.noteId,
-							title: currentNoteContext.title,
-							text: currentNoteContext.text,
-						},
-						reasoningEffort: selectedReasoningEffort,
-						serviceTier: selectedServiceTier,
-						recipeSlug: selectedRecipe?.slug ?? null,
-						resolveConvexToken: getCachedConvexToken,
-						text: outgoingText,
-					}),
 				editingMessageId,
-				metadata: recipeMetadata,
+				isQueuedMessageEditCurrent,
+				onBeforeSubmit: () => {
+					if (presentationMode === "inline") {
+						setPanelMode("chat");
+					} else {
+						openRightSidebar(presentationMode);
+					}
+				},
 				onRequestPrepared: ({ localFolders }) => {
-					setEditingMessageId(null);
+					setEditingMessageId((currentEditingMessageId) =>
+						queuedMessageEditId
+							? currentEditingMessageId === queuedMessageEditId
+								? null
+								: currentEditingMessageId
+							: null,
+					);
 					clearDraft();
 					setAttachedFiles([]);
 					resetTextareaHeight();
 					reconcileSharedLocalFolders(localFolders);
 					requestComposerFocus();
 				},
-				text: outgoingText,
+				prepareTurn: () => {
+					const outgoingText = nextMessage || selectedRecipe?.name || "";
+					const recipeMetadata: ChatMessageMetadata | undefined = selectedRecipe
+						? {
+								recipe: {
+									slug: selectedRecipe.slug,
+									name: selectedRecipe.name,
+								},
+								recipeOnly: nextMessage.length === 0,
+							}
+						: undefined;
+					return {
+						buildRequestBody: () => {
+							const currentNoteContext = readNoteContext();
+							return buildNoteChatRequestBody({
+								localFolderStorageScope,
+								model: selectedModel.model,
+								noteContext: {
+									noteId: currentNoteContext.noteId,
+									title: currentNoteContext.title,
+									text: currentNoteContext.text,
+								},
+								reasoningEffort: selectedReasoningEffort,
+								serviceTier: selectedServiceTier,
+								recipeSlug: selectedRecipe?.slug ?? null,
+								resolveConvexToken: getCachedConvexToken,
+								text: outgoingText,
+							});
+						},
+						metadata: recipeMetadata,
+						text: outgoingText,
+					};
+				},
+				queuedMessageEditId,
+				restoreDraft: () => {
+					setEditingMessageId(editingMessageId);
+					setMessage(submittedDraftText);
+					setAttachedFiles(attachedFiles);
+					resetTextareaHeight();
+					requestComposerFocus();
+				},
+				submitTurn,
+				updateQueuedTurn,
 			});
 
 			if (result.status === "queued") {
@@ -1263,17 +1250,6 @@ const useNoteComposerController = ({
 					? error.message
 					: "Failed to prepare note chat request",
 			);
-			if (
-				queuedMessageEditDraft &&
-				!isQueuedMessageEditCurrent(queuedMessageEditDraft.message._id)
-			) {
-				return;
-			}
-			setEditingMessageId(editingMessageId);
-			setMessage(submittedDraftText);
-			setAttachedFiles(attachedFiles);
-			resetTextareaHeight();
-			requestComposerFocus();
 		}
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
