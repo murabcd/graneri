@@ -1,8 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-	createHostedRunActivityTool,
-	hostedRunPlanSchema,
-} from "../src/hosted-run-activity.mjs";
+import { describe, expect, it } from "vitest";
+import { hostedRunPlanSchema } from "../src/hosted-run-activity.mjs";
 
 const activePlan = [
 	{ step: "Inspect the current behavior", status: "completed" as const },
@@ -11,17 +8,13 @@ const activePlan = [
 ];
 
 describe("hosted run activity", () => {
-	it("publishes a canonical plan through the AI SDK tool", async () => {
-		const publishPlan = vi.fn();
-		const runActivityTool = createHostedRunActivityTool({ publishPlan });
+	it("normalizes plan steps at the tool-input boundary", () => {
+		const submittedPlan = activePlan.map((step, index) => ({
+			...step,
+			step: index === 0 ? `  ${step.step}  ` : step.step,
+		}));
 
-		await expect(
-			runActivityTool.execute?.(
-				{ plan: activePlan },
-				{ messages: [], toolCallId: "plan-call-1" },
-			),
-		).resolves.toEqual({ updated: true });
-		expect(publishPlan).toHaveBeenCalledWith(activePlan);
+		expect(hostedRunPlanSchema.parse(submittedPlan)).toEqual(activePlan);
 	});
 
 	it("rejects plans whose lifecycle order cannot be rendered predictably", () => {

@@ -12,6 +12,10 @@ export declare const hostedRunPlanSchema: z.ZodType<
 
 export type HostedRunPlan = z.infer<typeof hostedRunPlanSchema>;
 
+export declare const normalizeHostedRunPlan: (
+	plan: ReadonlyArray<HostedRunPlan[number]>,
+) => { ok: false; error: string } | { ok: true; plan: HostedRunPlan };
+
 export declare const createHostedRunActivityTool: (args: {
 	publishPlan: (plan: HostedRunPlan) => Promise<unknown>;
 }) => Tool;

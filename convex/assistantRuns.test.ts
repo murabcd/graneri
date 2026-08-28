@@ -243,7 +243,12 @@ test("run plans project active progress and persist as durable events", async ()
 	const chatId = "chat-run-plan";
 	await createChat({ asOwner, chatId, workspaceId });
 	const run = await startRunWithSnapshots({ asOwner, chatId, workspaceId });
-	const plan = [
+	const submittedPlan = [
+		{ step: "  Inspect current behavior  ", status: "completed" as const },
+		{ step: "Implement the projection", status: "in_progress" as const },
+		{ step: "Verify the result", status: "pending" as const },
+	];
+	const canonicalPlan = [
 		{ step: "Inspect current behavior", status: "completed" as const },
 		{ step: "Implement the projection", status: "in_progress" as const },
 		{ step: "Verify the result", status: "pending" as const },
@@ -251,20 +256,23 @@ test("run plans project active progress and persist as durable events", async ()
 
 	await asOwner.mutation(api.assistantRunActivity.publishPlan, {
 		runId: run._id,
-		plan,
+		plan: submittedPlan,
 	});
 
 	await expect(
 		asOwner.query(api.assistantRunActivity.getActivePlan, {
 			runId: run._id,
 		}),
-	).resolves.toEqual(plan);
+	).resolves.toEqual(canonicalPlan);
 	const planEvent = (
 		await asOwner.query(api.assistantRunEvents.listRunEventsAfter, {
 			runId: run._id,
 		})
 	).find(({ event }) => event.type === "plan.updated");
-	expect(planEvent?.event).toEqual({ type: "plan.updated", plan });
+	expect(planEvent?.event).toEqual({
+		type: "plan.updated",
+		plan: canonicalPlan,
+	});
 
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
