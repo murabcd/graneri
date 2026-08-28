@@ -385,16 +385,19 @@ adds a Lightbulb-labelled `Plan` control to the composer footer; hovering the
 control replaces the Lightbulb with a close affordance, and activating it
 returns the composer to default mode without reopening chat options. The mode
 travels with normal and durable queued requests so replay cannot silently
-change the selected workflow.
+change the selected workflow. Planning mode and web search are browser-level
+composer preferences: both survive page reloads, draft-to-stored chat
+navigation, and movement between chats until the user turns them off.
 
 The shared hosted runtime converts planning mode into trusted instructions
 before either producer starts. Planning mode explores relevant context, asks
 focused questions through `request_user_input` only when missing decisions
 would materially change the plan, returns an ordered plan, and avoids mutation
-until the user asks to proceed. Default mode has no planning mandate; it may
-still use the questionnaire for genuinely necessary clarification. Background
-runs persist the already-resolved instruction set in their job, so the mode
-does not require a second Convex schema field or a parallel prompt path.
+until the user asks to proceed. Default mode receives neither the planning
+instructions nor the structured questionnaire tool; it proceeds from available
+context and reasonable assumptions. Background runs persist the canonical chat
+mode alongside the already-resolved instruction set so retries reconstruct the
+same capability surface instead of inferring behavior from prompt text.
 
 ## Human decisions
 
@@ -405,20 +408,23 @@ Human-blocking assistant work uses `waiting_for_user` plus a typed
 decision instead of creating a second active run. Normal duplicate sends must
 reject before persisting a new user message when a chat already has a
 non-terminal run; clients must queue follow-ups against the active run.
-Generic clarification uses the producer-neutral `request_user_input` tool. It
-asks one to three focused single-select or multi-select questions. The shared
-Human Decision bar presents questionnaires and approvals through one interface
-in chat and note composers. Question options are compact labels without
-secondary descriptions, and every question includes a free-form `Other` path.
+Plan-mode clarification uses the producer-neutral `request_user_input` tool. It
+asks one to three focused single-select questions. Independent multi-choice
+decisions are expressed as a sequence of Yes/No questions, matching the native
+ChatGPT questionnaire contract. Tool
+approvals remain available in either mode because authorization is an execution
+requirement rather than planning clarification. The shared Human Decision bar
+presents questionnaires and approvals through one interface in chat and note
+composers. Question options include a compact label and concise secondary
+description, and every question includes a free-form `Other` path.
 The write-in field uses the stable `Something else...` placeholder rather than
 model-generated copy.
-Single-select clicks and their displayed `1`–`9` shortcuts acknowledge the
-choice, then advance or submit directly; multi-select choices toggle and wait
-for `Next`, `Submit`, `Skip`, or `Enter`, with `Next` reserved for a question
-that has another step. Multi-step answers are serialized as quoted
+Clicks and their displayed `1`–`9` shortcuts acknowledge the choice, then
+advance or submit directly. `Skip` advances without selecting an option, and
+the close action skips the unresolved questionnaire. Multi-step answers are serialized as quoted
 questions followed by their selected and free-form values. Both producers
-persist the exact assistant message id, tool call id, ordered question types,
-prompts, and option labels as a `user_question` decision. Accepting the direct
+persist the exact assistant message id, tool call id, ordered prompts, and
+option labels and descriptions as a `user_question` decision. Accepting the direct
 durable answer atomically verifies the stored request, converts the pending
 question tool part in that assistant message to `output-available` with the
 structured answer, records `input.resolved`, rotates the assistant message
@@ -443,9 +449,10 @@ The [tool-authority module](../packages/ai/src/ai-tool-authority.mjs) is the
 single owner of approval classification and AI SDK approval configuration.
 Every Graneri-owned tool definition declares whether approval is required;
 write-capable automation tools require it, while read-only and generative
-artifacts are classified explicitly. Approval presentation includes the
-authority consequence and stored tool input so the user can review the action
-before responding. Runtime code must not infer approval from a tool name or
+artifacts are classified explicitly. Approval presentation remains distinct
+from the questionnaire: it shows the access category, permission question,
+authority consequence, and stored tool input, with explicit deny and one-time
+approval actions. Runtime code must not infer approval from a tool name or
 maintain a second approval registry.
 Human Decision chat input must never collect passwords, tokens, credentials, or
 other secrets. Secret entry requires a separate encrypted credential boundary;

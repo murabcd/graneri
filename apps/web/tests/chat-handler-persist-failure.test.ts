@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import {
 	hostedChatReplayAcceptedHeader,
 	hostedChatReplayQueuedMessageIdHeader,
@@ -380,6 +381,7 @@ describe("chat handler persistence failures", () => {
 
 	it.each([
 		{
+			chatMode: CHAT_MODE.DEFAULT,
 			expectedTitleGeneration: false,
 			label: "existing titled chat",
 			storedChat: {
@@ -388,11 +390,13 @@ describe("chat handler persistence failures", () => {
 			},
 		},
 		{
+			chatMode: CHAT_MODE.PLAN,
 			expectedTitleGeneration: true,
 			label: "new chat without a stored session",
 			storedChat: null,
 		},
 	])("starts a durable background run for an $label without a web stream or web key", async ({
+		chatMode,
 		expectedTitleGeneration,
 		storedChat,
 	}) => {
@@ -415,6 +419,7 @@ describe("chat handler persistence failures", () => {
 				convexToken: "token_1",
 				model: defaultChatModelId,
 				appsEnabled: false,
+				chatMode,
 				message: {
 					id: "message_1",
 					role: "user",
@@ -431,6 +436,7 @@ describe("chat handler persistence failures", () => {
 			admissionReservationId: "admission_1",
 			chatId: "chat_1",
 			job: {
+				chatMode,
 				model: defaultChatModelId,
 				shouldGenerateChatTitle: expectedTitleGeneration,
 			},

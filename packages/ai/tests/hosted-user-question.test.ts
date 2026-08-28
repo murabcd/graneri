@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { CHAT_MODE } from "../src/chat-mode.mjs";
 import {
-	createHostedRequestUserInputTool,
+	createHostedUserQuestionTools,
 	getHostedUserQuestionAnswer,
 	getHostedUserQuestionRequest,
 	isHostedUserQuestionAnswerMessage,
@@ -33,12 +34,21 @@ const questionMessage = {
 
 describe("hosted user questions", () => {
 	it("defines a client-resolved questionnaire tool", () => {
-		const questionTool = createHostedRequestUserInputTool();
+		const questionTool = createHostedUserQuestionTools(
+			CHAT_MODE.PLAN,
+		).request_user_input;
 
-		expect(questionTool.execute).toBeUndefined();
-		expect(questionTool.metadata).toMatchObject({
+		expect(questionTool?.execute).toBeUndefined();
+		expect(questionTool?.metadata).toMatchObject({
 			ui: { running: "Waiting for your answer" },
 		});
+	});
+
+	it("exposes questionnaires only in Plan mode", () => {
+		expect(createHostedUserQuestionTools(CHAT_MODE.DEFAULT)).toEqual({});
+		expect(createHostedUserQuestionTools(CHAT_MODE.PLAN)).toHaveProperty(
+			"request_user_input",
+		);
 	});
 
 	it("detects and resolves the exact pending questionnaire", () => {

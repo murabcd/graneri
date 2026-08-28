@@ -1,3 +1,4 @@
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
@@ -1806,6 +1807,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 			job: {
 				messagesJson: "[]",
 				instructions: "Test",
+				chatMode: CHAT_MODE.DEFAULT,
 				webSearchEnabled: false,
 				chartGenerationRequested: false,
 				imageGenerationRequested: false,

@@ -1,4 +1,5 @@
 import { vWorkflowId } from "@convex-dev/workflow";
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { type Infer, v } from "convex/values";
 import {
 	pendingDecisionValidator,
@@ -14,9 +15,15 @@ export const appToolScopeValidator = v.union(
 
 export type AppToolScope = Infer<typeof appToolScopeValidator>;
 
+export const chatModeValidator = v.union(
+	v.literal(CHAT_MODE.DEFAULT),
+	v.literal(CHAT_MODE.PLAN),
+);
+
 export const assistantRunJobValidator = v.object({
 	messagesJson: v.string(),
 	instructions: v.string(),
+	chatMode: chatModeValidator,
 	webSearchEnabled: v.boolean(),
 	chartGenerationRequested: v.boolean(),
 	imageGenerationRequested: v.boolean(),

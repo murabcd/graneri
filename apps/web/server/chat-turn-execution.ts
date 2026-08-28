@@ -537,6 +537,7 @@ export const executeHostedChatTurn = async ({
 		policy: {
 			admissionReservationId: admission.admissionReservationId,
 			appsEnabled,
+			chatMode,
 			chatId,
 			defaultTimezone: model.defaultTimezone,
 			model: model.defaultModel,

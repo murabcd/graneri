@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { CHAT_MODE } from "./chat-mode.mjs";
 import { decodeTrustedStoredUiMessage } from "./ui-message-codec.mjs";
 
 export const HOSTED_REQUEST_USER_INPUT_TOOL_NAME = "request_user_input";
@@ -122,7 +123,7 @@ export const hostedUserQuestionDecisionsMatch = (left, right) =>
 	left.toolCallId === right.toolCallId &&
 	questionsMatch(left.questions, right.questions);
 
-export const createHostedRequestUserInputTool = () =>
+const createHostedRequestUserInputTool = () =>
 	tool({
 		description:
 			"Pause the current run for one to three concise single-choice questions when proceeding would require a consequential guess. When several independent choices may apply, ask one Yes/No question for each choice. Provide two or three mutually exclusive options with a concise description. Put the recommended option first and suffix its label with ' (Recommended)'. The client adds a free-form Other response. Do not request passwords, tokens, credentials, or other secrets in chat.",
@@ -136,6 +137,11 @@ export const createHostedRequestUserInputTool = () =>
 			},
 		},
 	});
+
+export const createHostedUserQuestionTools = (chatMode) =>
+	chatMode === CHAT_MODE.PLAN
+		? { request_user_input: createHostedRequestUserInputTool() }
+		: {};
 
 export const getHostedUserQuestionRequest = (message) => {
 	if (message?.role !== "assistant" || !Array.isArray(message.parts)) {

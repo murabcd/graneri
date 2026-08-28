@@ -1,5 +1,6 @@
 import type { WorkflowCtx } from "@convex-dev/workflow";
 import workflowTest from "@convex-dev/workflow/test";
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -25,6 +26,7 @@ const backgroundJob = {
 		},
 	]),
 	instructions: "Answer clearly.",
+	chatMode: CHAT_MODE.DEFAULT,
 	webSearchEnabled: false,
 	chartGenerationRequested: false,
 	imageGenerationRequested: false,
@@ -157,6 +159,7 @@ test("background runs start with durable workflow ownership", async () => {
 		usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
 	});
 	expect(job?.googleAuthUserId).toBe(ownerIdentity.subject);
+	expect(job?.job.chatMode).toBe(CHAT_MODE.DEFAULT);
 	expect(job?.execution.workflowId).toEqual(expect.any(String));
 });
 

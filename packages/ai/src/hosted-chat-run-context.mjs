@@ -9,7 +9,7 @@ import {
 } from "./hosted-chat-runtime.mjs";
 import { createHostedWaitAgentTool } from "./hosted-chat-wait-agent-tool.mjs";
 import { createHostedRunActivityTool } from "./hosted-run-activity.mjs";
-import { createHostedRequestUserInputTool } from "./hosted-user-question.mjs";
+import { createHostedUserQuestionTools } from "./hosted-user-question.mjs";
 import { MAX_LOCAL_FOLDER_ROOTS } from "./local-folder-tool-definitions.mjs";
 import {
 	buildClientLocalFolderTools,
@@ -130,7 +130,7 @@ export const buildHostedChatRunContext = async ({
 	});
 	const runPlan = buildHostedChatRunPlan({
 		additionalAgentTools: {
-			request_user_input: createHostedRequestUserInputTool(),
+			...createHostedUserQuestionTools(chatMode),
 			update_plan: createHostedRunActivityTool({
 				publishPlan: publishRunPlan,
 			}),

@@ -1,4 +1,5 @@
 import type { Tool, UIMessage } from "ai";
+import type { ChatMode } from "./chat-mode.mjs";
 import type { TrustedStoredUiMessageInput } from "./ui-message-codec.mjs";
 
 export declare const HOSTED_REQUEST_USER_INPUT_TOOL_NAME: "request_user_input";
@@ -21,7 +22,9 @@ export type HostedUserQuestionPendingDecision = {
 	questions: HostedUserQuestion[];
 };
 
-export declare const createHostedRequestUserInputTool: () => Tool;
+export declare const createHostedUserQuestionTools: (
+	chatMode: ChatMode,
+) => Partial<Record<typeof HOSTED_REQUEST_USER_INPUT_TOOL_NAME, Tool>>;
 
 export declare const getHostedUserQuestionRequest: (
 	message: UIMessage,

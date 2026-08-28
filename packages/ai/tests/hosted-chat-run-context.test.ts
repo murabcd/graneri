@@ -106,7 +106,7 @@ describe("hosted chat run context", () => {
 			webSearchEnabled: false,
 		});
 		expect(context.finalizedToolSet.hasTools).toBe(true);
-		expect(context.agentTools?.request_user_input?.execute).toBeUndefined();
+		expect(context.agentTools).not.toHaveProperty("request_user_input");
 		expect(context.agentTools?.wait_agent?.execute).toEqual(
 			expect.any(Function),
 		);

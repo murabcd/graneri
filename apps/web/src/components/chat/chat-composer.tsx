@@ -286,106 +286,120 @@ export function ChatComposer({
 		<div
 			className={`relative mx-auto w-full max-w-full min-w-0 md:max-w-xl ${useCompactLayout ? "mt-auto" : ""}`}
 		>
-			<label htmlFor="chat-prompt" className="sr-only">
-				Prompt
-			</label>
-			<ChatComposerTopAccessory
-				editingMessageId={editingMessageId}
-				onCancelEdit={onCancelEdit}
-				topAccessory={topAccessory}
-			/>
 			{humanDecision ? (
 				<ChatHumanDecisionBar
 					decision={humanDecision}
 					disabled={isHumanDecisionSubmitting}
 					onRespond={(response) => onHumanDecisionResponse?.(response)}
 				/>
-			) : null}
-			{queuedFollowUps.length > 0 ? (
-				<ChatQueuedFollowUpBar
-					queuedFollowUps={queuedFollowUps}
-					onReorder={onQueuedFollowUpsReorder}
-				/>
-			) : null}
-			<InputGroup
-				data-drag-over={attachmentDropzone.isDragOver ? "true" : undefined}
-				className={cn(
-					"min-h-[132px] max-h-[32rem] max-w-full overflow-hidden border-input/30 bg-background bg-clip-padding shadow-sm has-disabled:bg-background has-disabled:opacity-100 data-[drag-over=true]:border-ring data-[drag-over=true]:ring-3 data-[drag-over=true]:ring-ring/50 dark:bg-input/30 dark:has-disabled:bg-input/30",
-					humanDecision || queuedFollowUps.length > 0
-						? "-mt-px rounded-lg"
-						: "rounded-lg",
-				)}
-				{...attachmentDropzone.dropzoneProps}
-			>
-				{showTopAddon ? (
-					<ChatComposerTopAddon
-						useCompactLayout={useCompactLayout}
-						attachedFiles={attachedFiles}
-						onRemoveAttachedFile={(index) =>
-							onAttachedFilesChange(
-								attachedFiles.filter((_, fileIndex) => fileIndex !== index),
-							)
-						}
+			) : (
+				<>
+					<label htmlFor="chat-prompt" className="sr-only">
+						Prompt
+					</label>
+					<ChatComposerTopAccessory
+						editingMessageId={editingMessageId}
+						onCancelEdit={onCancelEdit}
+						topAccessory={topAccessory}
 					/>
-				) : null}
-
-				<ChatComposerTextEditor
-					draft={draft}
-					editingMessageId={editingMessageId}
-					placeholder={placeholder}
-					onCancelEdit={onCancelEdit}
-					onDraftChange={onDraftChange}
-					onDraftKeyDown={onDraftKeyDown}
-					mentions={mentions}
-					noteMentions={noteMentions}
-					recipeMentions={recipeMentions}
-					onMentionsChange={onMentionsChange}
-					appSources={appSources}
-				/>
-
-				<ChatComposerFooter
-					draft={draft}
-					attachedFiles={attachedFiles}
-					canStop={canStop}
-					onAttachmentUploadFailed={handleAttachmentUploadFailed}
-					onAttachmentUploaded={handleAttachmentUploaded}
-					onAttachmentsAdded={handleAttachmentsAdded}
-					onSubmit={onSubmit}
-					onStop={onStop}
-					modelPicker={
-						selectedModel ? (
-							<ChatModelPicker
-								open={modelPopoverOpen}
-								onOpenChange={onModelPopoverOpenChange}
-								selectedModel={selectedModel}
-								onSelectedModelChange={onSelectedModelChange}
-								reasoningEffort={reasoningEffort}
-								onReasoningEffortChange={onReasoningEffortChange}
-								serviceTier={serviceTier}
-								onServiceTierChange={onServiceTierChange}
-							/>
-						) : null
-					}
-					scopePicker={
-						<ScopePicker
-							open={sourcesOpen}
-							onOpenChange={onSourcesOpenChange}
-							webSearchEnabled={webSearchEnabled}
-							onWebSearchEnabledChange={onWebSearchEnabledChange}
-							chatMode={chatMode}
-							onChatModeChange={onChatModeChange}
-							onOpenConnectionsSettings={onOpenConnectionsSettings}
+					{queuedFollowUps.length > 0 ? (
+						<ChatQueuedFollowUpBar
+							queuedFollowUps={queuedFollowUps}
+							onReorder={onQueuedFollowUpsReorder}
 						/>
-					}
-					modeIndicator={
-						chatMode === CHAT_MODE.PLAN ? (
-							<PlanModeIndicator
-								onDisable={() => onChatModeChange(CHAT_MODE.DEFAULT)}
+					) : null}
+					<InputGroup
+						data-drag-over={attachmentDropzone.isDragOver ? "true" : undefined}
+						className={cn(
+							"min-h-[132px] max-h-[32rem] max-w-full overflow-hidden border-input/30 bg-background bg-clip-padding shadow-sm has-disabled:bg-background has-disabled:opacity-100 data-[drag-over=true]:border-ring data-[drag-over=true]:ring-3 data-[drag-over=true]:ring-ring/50 dark:bg-input/30 dark:has-disabled:bg-input/30",
+							queuedFollowUps.length > 0 ? "-mt-px rounded-lg" : "rounded-lg",
+						)}
+						{...attachmentDropzone.dropzoneProps}
+					>
+						{showTopAddon ? (
+							<ChatComposerTopAddon
+								useCompactLayout={useCompactLayout}
+								attachedFiles={attachedFiles}
+								onRemoveAttachedFile={(index) =>
+									onAttachedFilesChange(
+										attachedFiles.filter((_, fileIndex) => fileIndex !== index),
+									)
+								}
 							/>
-						) : null
-					}
-				/>
-			</InputGroup>
+						) : null}
+
+						<ChatComposerTextEditor
+							draft={draft}
+							editingMessageId={editingMessageId}
+							placeholder={placeholder}
+							onCancelEdit={onCancelEdit}
+							onDraftChange={onDraftChange}
+							onDraftKeyDown={onDraftKeyDown}
+							mentions={mentions}
+							noteMentions={noteMentions}
+							recipeMentions={recipeMentions}
+							onMentionsChange={onMentionsChange}
+							appSources={appSources}
+						/>
+
+						<ChatComposerFooter
+							draft={draft}
+							attachedFiles={attachedFiles}
+							canStop={canStop}
+							onAttachmentUploadFailed={handleAttachmentUploadFailed}
+							onAttachmentUploaded={handleAttachmentUploaded}
+							onAttachmentsAdded={handleAttachmentsAdded}
+							onSubmit={onSubmit}
+							onStop={onStop}
+							modelPicker={
+								selectedModel ? (
+									<ChatModelPicker
+										open={modelPopoverOpen}
+										onOpenChange={onModelPopoverOpenChange}
+										selectedModel={selectedModel}
+										onSelectedModelChange={onSelectedModelChange}
+										reasoningEffort={reasoningEffort}
+										onReasoningEffortChange={onReasoningEffortChange}
+										serviceTier={serviceTier}
+										onServiceTierChange={onServiceTierChange}
+									/>
+								) : null
+							}
+							scopePicker={
+								<ScopePicker
+									open={sourcesOpen}
+									onOpenChange={onSourcesOpenChange}
+									webSearchEnabled={webSearchEnabled}
+									onWebSearchEnabledChange={onWebSearchEnabledChange}
+									chatMode={chatMode}
+									onChatModeChange={onChatModeChange}
+									onOpenConnectionsSettings={onOpenConnectionsSettings}
+								/>
+							}
+							activeOptionIndicators={
+								<>
+									{webSearchEnabled ? (
+										<ActiveOptionIndicator
+											disableLabel="Turn off Web search"
+											icon={Globe}
+											label="Web"
+											onDisable={() => onWebSearchEnabledChange(false)}
+										/>
+									) : null}
+									{chatMode === CHAT_MODE.PLAN ? (
+										<ActiveOptionIndicator
+											disableLabel="Turn off Plan mode"
+											icon={Lightbulb}
+											label="Plan"
+											onDisable={() => onChatModeChange(CHAT_MODE.DEFAULT)}
+										/>
+									) : null}
+								</>
+							}
+						/>
+					</InputGroup>
+				</>
+			)}
 		</div>
 	);
 }
@@ -1289,7 +1303,7 @@ function ChatComposerFooter({
 	onStop,
 	modelPicker,
 	scopePicker,
-	modeIndicator,
+	activeOptionIndicators,
 }: {
 	draft: string;
 	attachedFiles: ChatAttachment[];
@@ -1301,7 +1315,7 @@ function ChatComposerFooter({
 	onStop: () => void;
 	modelPicker: React.ReactNode;
 	scopePicker: React.ReactNode;
-	modeIndicator: React.ReactNode;
+	activeOptionIndicators: React.ReactNode;
 }) {
 	const hasDraftText = draft.trim().length > 0;
 	const hasSendableInput =
@@ -1321,7 +1335,7 @@ function ChatComposerFooter({
 				onFilesAdded={onAttachmentsAdded}
 			/>
 			{scopePicker}
-			{modeIndicator}
+			{activeOptionIndicators}
 			<div className="ml-auto flex min-w-0 items-center gap-1">
 				{modelPicker}
 			</div>
@@ -1350,24 +1364,38 @@ function ChatComposerFooter({
 	);
 }
 
-function PlanModeIndicator({ onDisable }: { onDisable: () => void }) {
+function ActiveOptionIndicator({
+	disableLabel,
+	icon: Icon,
+	label,
+	onDisable,
+}: {
+	disableLabel: string;
+	icon: LucideIcon;
+	label: string;
+	onDisable: () => void;
+}) {
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
 				<InputGroupButton
-					aria-label="Turn off Plan mode"
-					className="group text-muted-foreground hover:text-foreground"
+					aria-label={disableLabel}
+					className="group size-6 rounded-full p-0 text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent sm:w-auto"
 					onClick={onDisable}
 				>
-					<Lightbulb
-						aria-hidden="true"
-						className="shrink-0 group-hover:hidden"
-					/>
-					<X aria-hidden="true" className="hidden shrink-0 group-hover:block" />
-					<span>Plan</span>
+					<span
+						data-slot="active-option-glyph"
+						className="flex size-6 shrink-0 items-center justify-center rounded-full group-hover:bg-muted dark:group-hover:bg-muted/50"
+					>
+						<Icon aria-hidden="true" className="group-hover:hidden" />
+						<X aria-hidden="true" className="hidden group-hover:block" />
+					</span>
+					<span data-slot="active-option-label" className="hidden sm:inline">
+						{label}
+					</span>
 				</InputGroupButton>
 			</TooltipTrigger>
-			<TooltipContent>Turn off Plan mode</TooltipContent>
+			<TooltipContent>{disableLabel}</TooltipContent>
 		</Tooltip>
 	);
 }

@@ -1,4 +1,5 @@
 import workflowTest from "@convex-dev/workflow/test";
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
@@ -178,6 +179,7 @@ const backgroundJob = {
 		},
 	]),
 	instructions: "Answer clearly.",
+	chatMode: CHAT_MODE.DEFAULT,
 	webSearchEnabled: false,
 	chartGenerationRequested: false,
 	imageGenerationRequested: false,

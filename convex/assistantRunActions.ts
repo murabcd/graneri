@@ -10,12 +10,12 @@ import {
 	prepareHostedAssistantExecution,
 	startHostedAssistantExecution,
 } from "@workspace/ai/hosted-assistant-execution";
-import { createHostedRunActivityTool } from "@workspace/ai/hosted-run-activity";
 import {
 	generateHostedChatTitle,
 	getHostedChatMessageText,
 } from "@workspace/ai/hosted-chat-runtime";
-import { createHostedRequestUserInputTool } from "@workspace/ai/hosted-user-question";
+import { createHostedRunActivityTool } from "@workspace/ai/hosted-run-activity";
+import { createHostedUserQuestionTools } from "@workspace/ai/hosted-user-question";
 import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
 import { getOpenAiModelProviderOptions } from "@workspace/ai/models";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
@@ -344,7 +344,7 @@ export const runStep = internalAction({
 			);
 			const { agent } = prepareHostedAssistantExecution({
 				additionalAgentTools: {
-					request_user_input: createHostedRequestUserInputTool(),
+					...createHostedUserQuestionTools(context.job.chatMode),
 					update_plan: createHostedRunActivityTool({
 						publishPlan: (plan) =>
 							ctx.runMutation(

@@ -1,4 +1,5 @@
 import { CHAT_CONTEXT_POLICY } from "@workspace/ai/chat-context-policy";
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import {
 	BASE_CHAT_INSTRUCTIONS,
 	buildChatHistoryInstructions,
@@ -218,6 +219,7 @@ const startAutomationAssistantRun = async (
 				compactionSummary,
 				notes,
 			}),
+			chatMode: CHAT_MODE.DEFAULT,
 			webSearchEnabled: args.automation.webSearchEnabled ?? false,
 			chartGenerationRequested: false,
 			imageGenerationRequested: false,

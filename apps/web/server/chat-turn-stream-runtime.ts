@@ -3,6 +3,7 @@ import {
 	type ChatLatencyLogger,
 	createChatStreamLatencyTracker,
 } from "@workspace/ai/chat-latency-logger";
+import type { ChatMode } from "@workspace/ai/chat-mode";
 import {
 	getHostedChatConvexRouteError,
 	validateHostedChatActiveRunPolicy,
@@ -145,6 +146,7 @@ export type HostedChatTurnPreparedRun = Pick<
 export type HostedChatTurnExecutionPolicy = {
 	admissionReservationId?: Id<"aiAdmissionReservations">;
 	appsEnabled: boolean;
+	chatMode: ChatMode;
 	chatId: string;
 	defaultTimezone: string;
 	model: string;
@@ -192,6 +194,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	const {
 		admissionReservationId,
 		appsEnabled,
+		chatMode,
 		chatId,
 		defaultTimezone,
 		model,
@@ -486,6 +489,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 						job: {
 							messagesJson: JSON.stringify(chatMessages),
 							instructions,
+							chatMode,
 							webSearchEnabled: coreToolPolicyState.webSearchEnabled,
 							chartGenerationRequested:
 								coreToolPolicyState.chartGenerationRequested,
