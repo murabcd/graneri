@@ -243,7 +243,6 @@ export const buildJiraToolDefinitions = (connection) => [
 			approval: "not_required",
 			capability: "search",
 			provider: "jira",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.jira_search,
 		execute: async ({ query, limit }) =>
@@ -261,7 +260,6 @@ export const buildJiraToolDefinitions = (connection) => [
 			approval: "not_required",
 			capability: "read",
 			provider: "jira",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.jira_get_issue,
 		execute: async ({ issueKey }) => await getJiraIssue(connection, issueKey),

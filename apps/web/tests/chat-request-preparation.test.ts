@@ -1,7 +1,10 @@
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { describe, expect, it } from "vitest";
 import { defaultChatModel } from "@/lib/ai/models";
-import { buildWorkspaceChatRequestBodyFromLocalFolders } from "@/lib/chat-request-preparation";
+import {
+	buildNoteChatRequestBodyFromLocalFolders,
+	buildWorkspaceChatRequestBodyFromLocalFolders,
+} from "@/lib/chat-request-preparation";
 
 describe("workspace chat request preparation", () => {
 	it("carries the selected recipe through the canonical workspace request", async () => {
@@ -28,5 +31,23 @@ describe("workspace chat request preparation", () => {
 			serviceTier: "priority",
 			workspaceId: "workspace-1",
 		});
+	});
+
+	it("uses the canonical default mode for note chat requests", async () => {
+		const request = await buildNoteChatRequestBodyFromLocalFolders({
+			localFolders: [],
+			model: defaultChatModel.model,
+			noteContext: {
+				noteId: "note-1",
+				title: "Meeting notes",
+				text: "Decisions",
+			},
+			recipeSlug: null,
+			reasoningEffort: "medium",
+			resolveConvexToken: async () => null,
+			serviceTier: "auto",
+		});
+
+		expect(request.chatMode).toBe(CHAT_MODE.DEFAULT);
 	});
 });

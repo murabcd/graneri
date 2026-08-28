@@ -19,7 +19,6 @@ export const buildGoogleCalendarToolDefinitions = ({
 			approval: "not_required",
 			capability: "read",
 			provider: "google-calendar",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.google_calendar_list_events,
 		execute: async ({ limit, meetingsOnly }) =>
@@ -39,7 +38,6 @@ export const buildGoogleCalendarToolDefinitions = ({
 			approval: "not_required",
 			capability: "search",
 			provider: "google-calendar",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.google_calendar_search_events,
 		execute: async ({ query, limit, meetingsOnly }) =>

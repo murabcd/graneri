@@ -5,7 +5,6 @@ export type AiToolPolicy = {
 	approval: "not_required" | "required";
 	capability: "create" | "generate" | "read" | "search" | "write";
 	provider: string;
-	requiresConnection?: boolean;
 };
 
 export type AiToolUi = {

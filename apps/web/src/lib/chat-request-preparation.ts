@@ -75,9 +75,9 @@ const buildChatRequestBase = async ({
 	reasoningEffort,
 	serviceTier,
 	resolveConvexToken,
-	chatMode = CHAT_MODE.DEFAULT,
+	chatMode,
 }: {
-	chatMode?: ChatMode;
+	chatMode: ChatMode;
 	localFolders: DesktopLocalFolder[];
 	model: string;
 	recipeSlug: string | null;
@@ -103,9 +103,9 @@ const resolveChatRequestBase = async ({
 	serviceTier,
 	resolveConvexToken,
 	text,
-	chatMode = CHAT_MODE.DEFAULT,
+	chatMode,
 }: {
-	chatMode?: ChatMode;
+	chatMode: ChatMode;
 	localFolderStorageScope: string;
 	model: string;
 	recipeSlug: string | null;
@@ -154,8 +154,7 @@ export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 	webSearchEnabled: boolean;
 	workspaceId: string | null;
 }): Promise<WorkspaceChatRequestBody> => ({
-	...(await buildChatRequestBase(baseArgs)),
-	chatMode,
+	...(await buildChatRequestBase({ ...baseArgs, chatMode })),
 	mentions,
 	selectedSourceIds,
 	webSearchEnabled,
@@ -183,8 +182,7 @@ export const buildWorkspaceChatRequestBody = async ({
 	webSearchEnabled: boolean;
 	workspaceId: string | null;
 }): Promise<WorkspaceChatRequestBody> => ({
-	...(await resolveChatRequestBase(baseArgs)),
-	chatMode,
+	...(await resolveChatRequestBase({ ...baseArgs, chatMode })),
 	mentions,
 	selectedSourceIds,
 	webSearchEnabled,
@@ -204,7 +202,10 @@ export const buildNoteChatRequestBody = async ({
 	resolveConvexToken: () => Promise<string | null>;
 	text: string;
 }): Promise<NoteChatRequestBody> => ({
-	...(await resolveChatRequestBase(baseArgs)),
+	...(await resolveChatRequestBase({
+		...baseArgs,
+		chatMode: CHAT_MODE.DEFAULT,
+	})),
 	noteContext,
 });
 
@@ -220,6 +221,6 @@ export const buildNoteChatRequestBodyFromLocalFolders = async ({
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 }): Promise<NoteChatRequestBody> => ({
-	...(await buildChatRequestBase(baseArgs)),
+	...(await buildChatRequestBase({ ...baseArgs, chatMode: CHAT_MODE.DEFAULT })),
 	noteContext,
 });

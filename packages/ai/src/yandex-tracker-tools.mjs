@@ -175,7 +175,6 @@ const buildYandexTrackerToolDefinitionsWithAdapter = (adapter) => [
 			approval: "not_required",
 			capability: "search",
 			provider: "yandex-tracker",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.yandex_tracker_search,
 		execute: async ({ query, limit }) =>
@@ -193,7 +192,6 @@ const buildYandexTrackerToolDefinitionsWithAdapter = (adapter) => [
 			approval: "not_required",
 			capability: "read",
 			provider: "yandex-tracker",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.yandex_tracker_get_issue,
 		execute: async ({ issueKey }) => await adapter.getIssue({ issueKey }),

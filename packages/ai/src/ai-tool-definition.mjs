@@ -35,15 +35,3 @@ export const buildAiToolSet = (definitions) =>
 	Object.fromEntries(
 		definitions.map((definition) => [definition.name, definition.toAITool()]),
 	);
-
-export const buildAiToolMetadata = (definitions) =>
-	Object.fromEntries(
-		definitions.map((definition) => [
-			definition.name,
-			{
-				description: definition.description,
-				policy: definition.policy,
-				ui: definition.ui,
-			},
-		]),
-	);

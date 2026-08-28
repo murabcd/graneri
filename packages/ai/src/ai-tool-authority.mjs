@@ -25,13 +25,6 @@ const requireValidAiToolPolicy = (policy) => {
 	if (typeof policy.provider !== "string" || !policy.provider.trim()) {
 		throw new Error("AI tool policy requires a provider.");
 	}
-	if (
-		policy.requiresConnection !== undefined &&
-		typeof policy.requiresConnection !== "boolean"
-	) {
-		throw new Error("AI tool connection policy must be a boolean.");
-	}
-
 	return policy;
 };
 

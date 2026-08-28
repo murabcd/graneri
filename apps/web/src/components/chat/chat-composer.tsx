@@ -1,43 +1,20 @@
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Tiptap, useEditor } from "@tiptap/react";
-import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
+import type { ChatMode } from "@workspace/ai/chat-mode";
 import type {
 	HostedHumanDecisionRequest,
 	HostedHumanDecisionResponse,
 } from "@workspace/ai/hosted-human-decision";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu";
 import {
 	InputGroup,
 	InputGroupAddon,
 	InputGroupButton,
 } from "@workspace/ui/components/input-group";
 import { Kbd } from "@workspace/ui/components/kbd";
-import { Switch } from "@workspace/ui/components/switch";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
-import {
-	ArrowUp,
-	Globe,
-	Lightbulb,
-	type LucideIcon,
-	Plus,
-	Settings2,
-	Square,
-	X,
-} from "lucide-react";
+import { ArrowUp, type LucideIcon, Square } from "lucide-react";
 import * as React from "react";
 import {
 	FileAttachmentButton,
@@ -50,6 +27,7 @@ import {
 } from "@/components/ai-elements/file-attachment-utils";
 import { useFileAttachmentDropzone } from "@/components/ai-elements/use-file-attachments";
 import { AppSourceIcon } from "@/components/app-source-icon";
+import { ChatComposerOptions } from "@/components/chat/chat-composer-options";
 import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
 import {
 	ChatQueuedFollowUpBar,
@@ -175,11 +153,11 @@ type ChatComposerProps = {
 	editingMessageId?: string | null;
 	placeholder: string;
 	topAccessory?: React.ReactNode;
-	humanDecision?: HostedHumanDecisionRequest | null;
-	isHumanDecisionSubmitting?: boolean;
+	humanDecision: HostedHumanDecisionRequest | null;
+	isHumanDecisionSubmitting: boolean;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 	onQueuedFollowUpsReorder?: (ids: Array<string>) => void;
-	onHumanDecisionResponse?: (response: HostedHumanDecisionResponse) => void;
+	onHumanDecisionResponse: (response: HostedHumanDecisionResponse) => void;
 	onDraftChange: (value: string) => void;
 	onDraftKeyDown: (event: KeyboardEvent) => void;
 	onCancelEdit?: () => void;
@@ -290,7 +268,7 @@ export function ChatComposer({
 				<ChatHumanDecisionBar
 					decision={humanDecision}
 					disabled={isHumanDecisionSubmitting}
-					onRespond={(response) => onHumanDecisionResponse?.(response)}
+					onRespond={onHumanDecisionResponse}
 				/>
 			) : (
 				<>
@@ -365,8 +343,8 @@ export function ChatComposer({
 									/>
 								) : null
 							}
-							scopePicker={
-								<ScopePicker
+							options={
+								<ChatComposerOptions
 									open={sourcesOpen}
 									onOpenChange={onSourcesOpenChange}
 									webSearchEnabled={webSearchEnabled}
@@ -375,26 +353,6 @@ export function ChatComposer({
 									onChatModeChange={onChatModeChange}
 									onOpenConnectionsSettings={onOpenConnectionsSettings}
 								/>
-							}
-							activeOptionIndicators={
-								<>
-									{webSearchEnabled ? (
-										<ActiveOptionIndicator
-											disableLabel="Turn off Web search"
-											icon={Globe}
-											label="Web"
-											onDisable={() => onWebSearchEnabledChange(false)}
-										/>
-									) : null}
-									{chatMode === CHAT_MODE.PLAN ? (
-										<ActiveOptionIndicator
-											disableLabel="Turn off Plan mode"
-											icon={Lightbulb}
-											label="Plan"
-											onDisable={() => onChatModeChange(CHAT_MODE.DEFAULT)}
-										/>
-									) : null}
-								</>
 							}
 						/>
 					</InputGroup>
@@ -1302,8 +1260,7 @@ function ChatComposerFooter({
 	onSubmit,
 	onStop,
 	modelPicker,
-	scopePicker,
-	activeOptionIndicators,
+	options,
 }: {
 	draft: string;
 	attachedFiles: ChatAttachment[];
@@ -1314,8 +1271,7 @@ function ChatComposerFooter({
 	onSubmit: () => void | Promise<void>;
 	onStop: () => void;
 	modelPicker: React.ReactNode;
-	scopePicker: React.ReactNode;
-	activeOptionIndicators: React.ReactNode;
+	options: React.ReactNode;
 }) {
 	const hasDraftText = draft.trim().length > 0;
 	const hasSendableInput =
@@ -1334,8 +1290,7 @@ function ChatComposerFooter({
 				onFileUploaded={onAttachmentUploaded}
 				onFilesAdded={onAttachmentsAdded}
 			/>
-			{scopePicker}
-			{activeOptionIndicators}
+			{options}
 			<div className="ml-auto flex min-w-0 items-center gap-1">
 				{modelPicker}
 			</div>
@@ -1361,127 +1316,5 @@ function ChatComposerFooter({
 				)}
 			</InputGroupButton>
 		</InputGroupAddon>
-	);
-}
-
-function ActiveOptionIndicator({
-	disableLabel,
-	icon: Icon,
-	label,
-	onDisable,
-}: {
-	disableLabel: string;
-	icon: LucideIcon;
-	label: string;
-	onDisable: () => void;
-}) {
-	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<InputGroupButton
-					aria-label={disableLabel}
-					className="group size-6 rounded-full p-0 text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent sm:w-auto"
-					onClick={onDisable}
-				>
-					<span
-						data-slot="active-option-glyph"
-						className="flex size-6 shrink-0 items-center justify-center rounded-full group-hover:bg-muted dark:group-hover:bg-muted/50"
-					>
-						<Icon aria-hidden="true" className="group-hover:hidden" />
-						<X aria-hidden="true" className="hidden group-hover:block" />
-					</span>
-					<span data-slot="active-option-label" className="hidden sm:inline">
-						{label}
-					</span>
-				</InputGroupButton>
-			</TooltipTrigger>
-			<TooltipContent>{disableLabel}</TooltipContent>
-		</Tooltip>
-	);
-}
-
-function ScopePicker({
-	open,
-	onOpenChange,
-	webSearchEnabled,
-	onWebSearchEnabledChange,
-	chatMode,
-	onChatModeChange,
-	onOpenConnectionsSettings,
-}: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	webSearchEnabled: boolean;
-	onWebSearchEnabledChange: (value: boolean) => void;
-	chatMode: ChatMode;
-	onChatModeChange: (mode: ChatMode) => void;
-	onOpenConnectionsSettings: () => void;
-}) {
-	return (
-		<DropdownMenu open={open} onOpenChange={onOpenChange}>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<DropdownMenuTrigger asChild>
-						<InputGroupButton
-							aria-label="Chat options"
-							size="icon-sm"
-							className="group rounded-full"
-						>
-							<Settings2 className="text-muted-foreground transition-colors group-hover:text-foreground group-data-[state=open]:text-foreground" />
-						</InputGroupButton>
-					</DropdownMenuTrigger>
-				</TooltipTrigger>
-				<TooltipContent>Chat options</TooltipContent>
-			</Tooltip>
-			<DropdownMenuContent
-				side="bottom"
-				align="start"
-				sideOffset={4}
-				className="w-56"
-			>
-				<DropdownMenuGroup>
-					<DropdownMenuItem
-						asChild
-						onSelect={(event) => event.preventDefault()}
-					>
-						<label htmlFor="web-search">
-							<Globe className="text-foreground" /> Web search
-							<Switch
-								id="web-search"
-								className="ml-auto"
-								checked={webSearchEnabled}
-								onCheckedChange={onWebSearchEnabledChange}
-							/>
-						</label>
-					</DropdownMenuItem>
-					<DropdownMenuItem
-						asChild
-						onSelect={(event) => event.preventDefault()}
-					>
-						<label htmlFor="plan-mode">
-							<Lightbulb className="text-foreground" /> Plan mode
-							<Switch
-								id="plan-mode"
-								className="ml-auto"
-								checked={chatMode === CHAT_MODE.PLAN}
-								onCheckedChange={(enabled) =>
-									onChatModeChange(enabled ? CHAT_MODE.PLAN : CHAT_MODE.DEFAULT)
-								}
-							/>
-						</label>
-					</DropdownMenuItem>
-				</DropdownMenuGroup>
-				<DropdownMenuSeparator />
-				<DropdownMenuGroup>
-					<DropdownMenuItem
-						aria-label="Connect plugins"
-						onClick={onOpenConnectionsSettings}
-					>
-						<Plus aria-hidden="true" />
-						<span>Connect plugins</span>
-					</DropdownMenuItem>
-				</DropdownMenuGroup>
-			</DropdownMenuContent>
-		</DropdownMenu>
 	);
 }

@@ -18,7 +18,6 @@ export const buildMeetingToolDefinitions = ({ searchMeetings }) => [
 			approval: "not_required",
 			capability: "search",
 			provider: "graneri-meetings",
-			requiresConnection: false,
 		},
 		ui: toolUiMetadata.search_meeting_notes,
 		execute: async (input) => await searchMeetings(input),

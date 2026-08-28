@@ -1,4 +1,4 @@
-export type CalendarReadErrorStatus = "not_connected" | "unavailable";
+type CalendarReadErrorStatus = "not_connected" | "unavailable";
 
 export const classifyCalendarReadError = (
 	error: unknown,

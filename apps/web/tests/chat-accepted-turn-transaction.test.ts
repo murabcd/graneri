@@ -206,4 +206,58 @@ describe("accepted chat turn transaction", () => {
 		});
 		expect(mutationNames).toEqual([]);
 	});
+
+	it("resolves a pending question against its exact durable run", async () => {
+		const answerUserQuestion = vi.fn(async () => {});
+		const attachableRun: AttachableRun = {
+			...createAttachableRun(),
+			producer: "convex",
+			status: "waiting_for_user",
+			pendingDecision: {
+				type: "user_question",
+				assistantMessageId: "assistant-existing",
+				toolCallId: "question-1",
+				questions: [
+					{
+						id: "scope",
+						question: "Which scope?",
+						options: [
+							{
+								label: "Current note",
+								description: "Use only the open note.",
+							},
+							{
+								label: "All notes",
+								description: "Search the workspace.",
+							},
+						],
+					},
+				],
+			},
+		};
+		const args = createAcceptanceArgs({
+			attachableRun,
+			persistence: createPersistence({ answerUserQuestion }),
+		});
+		args.acceptedInput.continueRunId = attachableRun._id;
+		args.acceptedInput.userQuestionAnswer = "Current note";
+
+		const result = await acceptHostedChatTurn(args);
+
+		expect(answerUserQuestion).toHaveBeenCalledWith(
+			expect.objectContaining({
+				answer: "Current note",
+				runId: attachableRun._id,
+			}),
+		);
+		expect(result).toMatchObject({
+			ok: true,
+			acceptedTurn: {
+				producer: {
+					type: "convex",
+					assistantRun: { _id: attachableRun._id },
+				},
+			},
+		});
+	});
 });

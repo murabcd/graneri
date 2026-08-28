@@ -387,14 +387,17 @@ normal chat send endpoint.
 Planning mode is an explicit composer and request contract, not a visual-only preference.
 
 The chat composer owns a `default` or `plan` selection from the shared
-[chat mode contract](../packages/ai/src/chat-mode.mjs). Selecting planning mode
-adds a Lightbulb-labelled `Plan` control to the composer footer; hovering the
-control replaces the Lightbulb with a close affordance, and activating it
-returns the composer to default mode without reopening chat options. The mode
-travels with normal and durable queued requests so replay cannot silently
-change the selected workflow. Planning mode and web search are browser-level
-composer preferences: both survive page reloads, draft-to-stored chat
-navigation, and movement between chats until the user turns them off.
+[chat mode contract](../packages/ai/src/chat-mode.mjs).
+[[apps/web/src/hooks/use-chat-composer-options.ts]] owns the persisted option
+state, while [[apps/web/src/components/chat/chat-composer-options.tsx]] owns the
+footer controls. Selecting planning mode adds a Lightbulb-labelled `Plan`
+control to the composer footer; hovering the control replaces the Lightbulb
+with a close affordance, and activating it returns the composer to default mode
+without reopening chat options. The mode travels with normal and durable queued
+requests so replay cannot silently change the selected workflow. Planning mode
+and web search are browser-level composer preferences: both survive page
+reloads, draft-to-stored chat navigation, and movement between chats until the
+user turns them off.
 
 The shared hosted runtime converts planning mode into trusted instructions
 before either producer starts. Planning mode explores relevant context, asks

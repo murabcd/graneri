@@ -47,7 +47,7 @@ type MutationCall<Mutation extends FunctionReference<"mutation">> = (
 	args: FunctionArgs<Mutation>,
 ) => Promise<FunctionReturnType<Mutation>>;
 
-export type HostedChatTurnPersistence = {
+type HostedChatTurnPersistence = {
 	acceptQueuedUserMessage: MutationCommand<
 		typeof api.chats.acceptQueuedUserMessage
 	>;
@@ -161,7 +161,7 @@ type HostedAssistantRunIdentity = {
 	assistantMessageId: string;
 };
 
-export type HostedChatAcceptedTurn = {
+type HostedChatAcceptedTurn = {
 	assistantMessageId: string;
 	pendingQueuedAcceptanceHeaders: Record<string, string> | null;
 	producer:
@@ -172,7 +172,7 @@ export type HostedChatAcceptedTurn = {
 		  };
 };
 
-export type HostedChatTurnAcceptanceResult =
+type HostedChatTurnAcceptanceResult =
 	| { ok: true; acceptedTurn: HostedChatAcceptedTurn }
 	| { ok: false; failure: HostedChatTurnAcceptanceFailure };
 
@@ -261,12 +261,13 @@ export const acceptHostedChatTurn = async ({
 			continueRunId &&
 			queuedInput.hasClaimed,
 	);
-	const isAnsweringUserQuestion = Boolean(
+	const userQuestionResolution =
 		continueRunId &&
-			attachableRun?._id === continueRunId &&
-			attachableRun.pendingDecision?.type === "user_question" &&
-			userQuestionAnswer !== null,
-	);
+		attachableRun?._id === continueRunId &&
+		attachableRun.pendingDecision?.type === "user_question" &&
+		userQuestionAnswer !== null
+			? { answer: userQuestionAnswer, runId: continueRunId }
+			: null;
 	const shouldUseConvexProducer =
 		attachableRun?.producer === "convex" ||
 		(!attachableRun && localFolderRoots.length === 0);
@@ -281,7 +282,7 @@ export const acceptHostedChatTurn = async ({
 		attachableRun?.producer === "convex" &&
 		!toolApprovalResponse &&
 		!isSteeringConvexRun &&
-		!isAnsweringUserQuestion
+		!userQuestionResolution
 	) {
 		return {
 			ok: false,
@@ -345,18 +346,15 @@ export const acceptHostedChatTurn = async ({
 		}
 	}
 
-	if (isAnsweringUserQuestion) {
+	if (userQuestionResolution) {
 		try {
-			if (!continueRunId || userQuestionAnswer === null) {
-				throw new Error("Question answer requires its pending assistant run.");
-			}
 			await persistence.answerUserQuestion({
 				workspaceId,
 				chatId,
 				admissionReservationId,
-				runId: continueRunId,
+				runId: userQuestionResolution.runId,
 				nextAssistantMessageId: assistantMessageId,
-				answer: userQuestionAnswer,
+				answer: userQuestionResolution.answer,
 			});
 		} catch (error) {
 			return {
@@ -439,16 +437,13 @@ export const acceptHostedChatTurn = async ({
 		};
 	}
 
-	let assistantRun: HostedAssistantRunIdentity | null = attachableRun
-		? {
-				_id: attachableRun._id,
-				assistantMessageId:
-					attachableRun.producer === "convex"
-						? assistantMessageId
-						: attachableRun.assistantMessageId,
-			}
-		: null;
-	if (!assistantRun) {
+	let assistantRun: HostedAssistantRunIdentity;
+	if (attachableRun) {
+		assistantRun = {
+			_id: attachableRun._id,
+			assistantMessageId,
+		};
+	} else {
 		try {
 			const startedRun = await persistence.startBackgroundRun({
 				workspaceId,

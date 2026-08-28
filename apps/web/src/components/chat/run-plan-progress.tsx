@@ -9,7 +9,7 @@ import type { FunctionReturnType } from "convex/server";
 import { CheckCircle2, Circle } from "lucide-react";
 import type { api } from "../../../../../convex/_generated/api";
 
-export type ActiveRunPlan = NonNullable<
+type ActiveRunPlan = NonNullable<
 	FunctionReturnType<typeof api.assistantRunActivity.getActivePlan>
 >;
 

@@ -19,7 +19,6 @@ export const buildYandexCalendarToolDefinitions = ({
 			approval: "not_required",
 			capability: "read",
 			provider: "yandex-calendar",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.yandex_calendar_list_events,
 		execute: async ({ limit, meetingsOnly }) =>
@@ -39,7 +38,6 @@ export const buildYandexCalendarToolDefinitions = ({
 			approval: "not_required",
 			capability: "search",
 			provider: "yandex-calendar",
-			requiresConnection: true,
 		},
 		ui: toolUiMetadata.yandex_calendar_search_events,
 		execute: async ({ query, limit, meetingsOnly }) =>

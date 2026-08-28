@@ -24,14 +24,3 @@ export declare function defineAiTool<TInput, TOutput extends object>(args: {
 export declare function buildAiToolSet(
 	definitions: AiToolDefinition[],
 ): ToolSet;
-
-export declare function buildAiToolMetadata(
-	definitions: AiToolDefinition[],
-): Record<
-	string,
-	{
-		description: string;
-		policy: AiToolPolicy;
-		ui: AiToolUi;
-	}
->;
