@@ -129,6 +129,46 @@ describe("useUpcomingCalendar", () => {
 		});
 	});
 
+	it("treats an explicit provider outage as an error without dropping the last snapshot", async () => {
+		const workspaceId =
+			"upcoming-calendar-unavailable-workspace" as Id<"workspaces">;
+		listUpcomingCalendarEvents.mockResolvedValueOnce({
+			status: "ready",
+			connectedCalendarCount: 1,
+			events: [calendarEvent],
+		});
+		const { result } = renderHook(() =>
+			useUpcomingCalendar({
+				accountId: "account-id",
+				currentDayKey: "2026-7-26",
+				isAuthenticated: true,
+				workspaceId,
+			}),
+		);
+		await waitFor(() =>
+			expect(result.current).toEqual({
+				status: "ready",
+				events: [calendarEvent],
+			}),
+		);
+		listUpcomingCalendarEvents.mockResolvedValueOnce({
+			status: "unavailable",
+		});
+
+		act(() => invalidateCalendarSnapshots(workspaceId));
+
+		await waitFor(() =>
+			expect(result.current).toEqual({
+				status: "error",
+				events: [calendarEvent],
+			}),
+		);
+		expect(syncReadyDesktopTrayCalendar).toHaveBeenLastCalledWith({
+			connectedCalendarCount: 1,
+			events: [calendarEvent],
+		});
+	});
+
 	it("does not project a retained snapshot into another day", async () => {
 		const workspaceId =
 			"upcoming-calendar-day-scope-workspace" as Id<"workspaces">;

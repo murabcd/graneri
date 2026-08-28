@@ -23,9 +23,13 @@ export type NavigableAppView = Exclude<AppView, "notFound">;
 type UpcomingCalendarEventsResponse = FunctionReturnType<
 	typeof api.calendar.listUpcomingCalendarEvents
 >;
+type ReadyUpcomingCalendarEventsResponse = Extract<
+	UpcomingCalendarEventsResponse,
+	{ status: "ready" }
+>;
 
 export type UpcomingCalendarEvent =
-	UpcomingCalendarEventsResponse["events"][number];
+	ReadyUpcomingCalendarEventsResponse["events"][number];
 
 export type UpcomingCalendarState =
 	| { status: "checking"; events: [] }

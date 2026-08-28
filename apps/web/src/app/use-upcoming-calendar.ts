@@ -160,6 +160,22 @@ export const useUpcomingCalendar = ({
 					syncDisconnectedDesktopTrayCalendar();
 					return;
 				}
+				if (result.status === "unavailable") {
+					setSession({
+						scope: activeScope,
+						snapshot: retainedSnapshot,
+						state: {
+							status: "error",
+							events: retainedSnapshot?.events ?? [],
+						},
+					});
+					if (retainedSnapshot) {
+						syncReadyDesktopTrayCalendar(retainedSnapshot);
+					} else {
+						syncErrorDesktopTrayCalendar();
+					}
+					return;
+				}
 
 				setSession({
 					scope: activeScope,

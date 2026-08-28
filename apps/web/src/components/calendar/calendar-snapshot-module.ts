@@ -107,6 +107,7 @@ type CalendarSnapshotListener = () => void;
 type CalendarSnapshotLoadResult<Snapshot> =
 	| { status: "not_connected" }
 	| { status: "obsolete" }
+	| { status: "unavailable" }
 	| { snapshot: Snapshot; status: "ready" };
 
 const snapshotCache = createSessionSnapshotCache<CalendarSnapshotEntry>({
@@ -295,6 +296,9 @@ export const loadCalendarAgendaSnapshot = ({
 	return loadSnapshot({
 		activeRequests: agendaRequests,
 		commit: (result): CalendarSnapshotLoadResult<CalendarAgendaSnapshot> => {
+			if (result.status === "unavailable") {
+				return { status: "unavailable" };
+			}
 			if (result.status === "not_connected") {
 				snapshotCache.delete(scopeKey);
 				return { status: "not_connected" };
@@ -336,6 +340,9 @@ export const loadUpcomingCalendarSnapshot = ({
 	return loadSnapshot({
 		activeRequests: upcomingRequests,
 		commit: (result): CalendarSnapshotLoadResult<UpcomingCalendarSnapshot> => {
+			if (result.status === "unavailable") {
+				return { status: "unavailable" };
+			}
 			if (result.status === "not_connected") {
 				snapshotCache.delete(scopeKey);
 				return { status: "not_connected" };

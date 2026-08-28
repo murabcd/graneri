@@ -110,9 +110,12 @@ provider contract.
 Calendar reads are complete snapshots with coalescing, generation-fenced invalidation, retained successful data, and shared projections.
 
 Provider reads are complete-snapshot operations: a
-failed calendar read rejects the refresh instead of caching a partial agenda,
-so the renderer retains the last successful snapshot while provider reads and
-writes refresh. `calendarSnapshotModule` is the renderer authority for
+failed provider read never caches a partial agenda. Transient provider-network
+failures cross the public read boundary as an explicit unavailable result,
+while authentication failures cross it as not connected; unexpected failures
+still reject. The renderer retains the last successful snapshot for an
+unavailable or rejected refresh while provider reads and writes refresh.
+`calendarSnapshotModule` is the renderer authority for
 workspace-scoped Calendar Snapshot persistence, request coalescing, provider
 source changes, and generation-fenced invalidation. Agenda windows and Home-day
 windows remain distinct Calendar Scopes inside that module; Agenda, Home, and

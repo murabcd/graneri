@@ -755,6 +755,23 @@ describe("CalendarPage loading", () => {
 		expect(screen.getByText("Planning")).not.toBeNull();
 	});
 
+	it("keeps the complete agenda when the provider is temporarily unavailable", async () => {
+		const user = userEvent.setup();
+		renderCalendarPageWithNewEventTrigger(workspaceId);
+		await screen.findByText("Planning");
+		listCalendarEvents.mockResolvedValueOnce({ status: "unavailable" });
+
+		await user.click(screen.getByRole("button", { name: "New event" }));
+		await user.type(
+			await screen.findByRole("textbox", { name: "Title" }),
+			"Product sync",
+		);
+		await user.click(screen.getByRole("button", { name: "Create" }));
+
+		expect(await screen.findByRole("button", { name: "Retry" })).not.toBeNull();
+		expect(screen.getByText("Planning")).not.toBeNull();
+	});
+
 	it("does not offer read-only calendars for event creation", async () => {
 		const user = userEvent.setup();
 		listCalendarEvents.mockResolvedValue({

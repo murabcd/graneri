@@ -141,6 +141,51 @@ describe("calendar snapshot module", () => {
 		).toBeNull();
 	});
 
+	it("retains complete Agenda and Home snapshots during provider unavailability", async () => {
+		const workspaceId =
+			"snapshot-module-provider-unavailable" as Id<"workspaces">;
+		const agendaScope = createAgendaScope(workspaceId);
+		const upcomingScope = createUpcomingScope(workspaceId);
+		const agendaEvent = createEvent("retained-agenda");
+		const upcomingEvent = createEvent("retained-upcoming");
+		const generation = readCalendarSnapshotGeneration(workspaceId);
+
+		await loadCalendarAgendaSnapshot({
+			generation,
+			load: () => readyAgenda(agendaEvent),
+			scope: agendaScope,
+		});
+		await loadUpcomingCalendarSnapshot({
+			generation,
+			load: () => readyUpcoming(upcomingEvent),
+			scope: upcomingScope,
+		});
+
+		await expect(
+			loadCalendarAgendaSnapshot({
+				generation,
+				load: () => Promise.resolve({ status: "unavailable" as const }),
+				scope: agendaScope,
+			}),
+		).resolves.toEqual({ status: "unavailable" });
+		await expect(
+			loadUpcomingCalendarSnapshot({
+				generation,
+				load: () => Promise.resolve({ status: "unavailable" as const }),
+				scope: upcomingScope,
+			}),
+		).resolves.toEqual({ status: "unavailable" });
+
+		expect(readCalendarAgendaSnapshot(agendaScope)).toEqual({
+			calendars: [calendar],
+			events: [agendaEvent],
+		});
+		expect(readUpcomingCalendarSnapshot(upcomingScope)).toEqual({
+			connectedCalendarCount: 1,
+			events: [upcomingEvent],
+		});
+	});
+
 	it("invalidates every persisted projection for a workspace", async () => {
 		const workspaceId = "snapshot-module-invalidation" as Id<"workspaces">;
 		const agendaScope = createAgendaScope(workspaceId);

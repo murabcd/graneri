@@ -227,6 +227,16 @@ export function useCalendarAgendaSession(accountId: string | null) {
 					});
 					return;
 				}
+				if (result.status === "unavailable") {
+					setState((current) =>
+						retainAgendaState(current, {
+							status: "error",
+							visibleWindow: targetWindow,
+							workspaceId: activeWorkspaceId,
+						}),
+					);
+					return;
+				}
 
 				setState(createReadyState(targetScope, result.snapshot));
 				if (!snapshot) {

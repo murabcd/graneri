@@ -140,6 +140,9 @@ export const calendarProviderValidator = v.union(
 
 export const upcomingEventsResponseValidator = v.union(
 	v.object({
+		status: v.literal("unavailable"),
+	}),
+	v.object({
 		events: v.array(upcomingCalendarEventValidator),
 		status: v.literal("not_connected"),
 	}),
@@ -151,6 +154,9 @@ export const upcomingEventsResponseValidator = v.union(
 );
 
 export const calendarEventsResponseValidator = v.union(
+	v.object({
+		status: v.literal("unavailable"),
+	}),
 	v.object({
 		calendars: v.array(calendarSourceValidator),
 		events: v.array(upcomingCalendarEventValidator),

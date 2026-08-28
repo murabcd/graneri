@@ -13,6 +13,7 @@ import {
 	createWorkspaceCalendarProviderAdapters,
 } from "./calendarProviderAdapters";
 import { createCalendarProviderModule } from "./calendarProviderModule";
+import { classifyCalendarReadError } from "./calendarReadError";
 import { runCalendarToolQuery } from "./calendarToolQuery";
 import type {
 	CalendarEventsFetchResult,
@@ -226,11 +227,15 @@ export const listUpcomingCalendarEvents = action({
 				connectedCalendarCount: result.connectedCalendarCount,
 			};
 		} catch (error) {
-			if (error instanceof Error && "status" in error && error.status === 401) {
+			const errorStatus = classifyCalendarReadError(error);
+			if (errorStatus === "not_connected") {
 				return {
 					status: "not_connected" as const,
 					events: [],
 				};
+			}
+			if (errorStatus === "unavailable") {
+				return { status: "unavailable" as const };
 			}
 
 			throw error;
@@ -293,12 +298,16 @@ export const listCalendarEvents = action({
 				),
 			};
 		} catch (error) {
-			if (error instanceof Error && "status" in error && error.status === 401) {
+			const errorStatus = classifyCalendarReadError(error);
+			if (errorStatus === "not_connected") {
 				return {
 					status: "not_connected",
 					calendars: [],
 					events: [],
 				};
+			}
+			if (errorStatus === "unavailable") {
+				return { status: "unavailable" };
 			}
 
 			throw error;
