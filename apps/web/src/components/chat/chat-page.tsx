@@ -1230,12 +1230,6 @@ export function ChatPage({
 		},
 		[handleMessageSearchNext, handleMessageSearchPrevious],
 	);
-	// The shell header is outside this scroll viewport. Short active chats still
-	// need to fill the remaining viewport so the sticky composer dock lands at
-	// the same position as long chats without forcing empty-chat overflow.
-	const chatSurfaceMinHeightClass = isDesktopMac
-		? "min-h-[calc(100dvh-4rem)] md:min-h-[calc(100dvh-3.5rem)]"
-		: "min-h-[calc(100dvh-4rem)] md:min-h-[calc(100dvh-4rem)]";
 	const composer = (
 		<ChatComposer
 			useCompactLayout={shouldShowActiveChatSurface}
@@ -1289,7 +1283,7 @@ export function ChatPage({
 		/>
 	);
 	const scrollContent = (
-		<div className="box-border flex w-full max-w-full min-w-0 flex-1 justify-center px-4 md:px-6">
+		<div className="box-border flex min-h-full w-full max-w-full min-w-0 flex-1 justify-center px-4 md:px-6">
 			<div
 				className={cn(
 					"relative flex min-h-0 w-full min-w-0 max-w-5xl flex-1 flex-col",
@@ -1297,12 +1291,7 @@ export function ChatPage({
 				)}
 			>
 				{shouldShowActiveChatSurface ? (
-					<div
-						className={cn(
-							"relative mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl",
-							chatSurfaceMinHeightClass,
-						)}
-					>
+					<div className="relative mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl">
 						{messageSearch.open ? (
 							<ChatMessageSearchBar
 								inputRef={searchInputRef}
@@ -1362,12 +1351,7 @@ export function ChatPage({
 						</div>
 					</div>
 				) : (
-					<div
-						className={cn(
-							"mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl",
-							chatSurfaceMinHeightClass,
-						)}
-					>
+					<div className="mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl">
 						<div className="flex flex-1 flex-col gap-6 pb-8">
 							<PageTitle isDesktopMac={isDesktopMac} className="w-full">
 								Ask anything
