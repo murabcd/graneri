@@ -1,3 +1,4 @@
+import { isNoteChatSettings } from "@workspace/ai/chat-settings";
 import { createCanonicalLocalFolderToolContinuation } from "@workspace/ai/local-folder-tool-contract";
 import {
 	normalizeStoredUiMessage,
@@ -49,6 +50,7 @@ import {
 } from "./chatAttachmentReferences";
 import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
+import { upsertChatPreferences } from "./chatPreferences";
 import {
 	type ChatSettings,
 	chatSettingsFields,
@@ -221,6 +223,18 @@ const resolveChatSettingsForSave = (
 		serviceTier: existingChat.serviceTier,
 		webSearchEnabled: existingChat.webSearchEnabled,
 	};
+};
+
+const requireValidNoteChatSettings = (
+	noteId: Id<"notes"> | undefined,
+	settings: ChatSettings,
+) => {
+	if (noteId && !isNoteChatSettings(settings)) {
+		throw new ConvexError({
+			code: "INVALID_NOTE_CHAT_SETTINGS",
+			message: "Note chats require default mode with web search disabled.",
+		});
+	}
 };
 
 const moveAutomationToFreshChat = async (
@@ -657,6 +671,10 @@ export const saveMessageForOwnerInternal = async (
 		storedChatId,
 	);
 	const chatSettings = resolveChatSettingsForSave(existingChat, args.settings);
+	requireValidNoteChatSettings(
+		existingChat?.noteId ?? storedNoteId,
+		chatSettings,
+	);
 
 	const chatId =
 		existingChat?._id ??
@@ -1767,6 +1785,7 @@ export const setChatSettings = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
+		nextChatSettings: chatSettingsValidator,
 		settings: chatSettingsValidator,
 	},
 	returns: v.null(),
@@ -1783,11 +1802,17 @@ export const setChatSettings = mutation({
 		if (!chat) {
 			return null;
 		}
+		requireValidNoteChatSettings(chat.noteId, args.settings);
 
 		await ctx.db.patch(chat._id, {
 			...args.settings,
 			updatedAt: Date.now(),
 		});
+		await upsertChatPreferences(
+			ctx,
+			ownerTokenIdentifier,
+			args.nextChatSettings,
+		);
 
 		return null;
 	},

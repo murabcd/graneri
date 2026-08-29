@@ -118,11 +118,7 @@ export function ChatModelPicker({
 				</TooltipTrigger>
 				<TooltipContent>Select model</TooltipContent>
 			</Tooltip>
-			<DropdownMenuContent
-				side="top"
-				align="start"
-				className={contentClassName}
-			>
+			<DropdownMenuContent side="top" align="end" className={contentClassName}>
 				<DropdownMenuGroup className={contentClassName ? undefined : "w-42"}>
 					<DropdownMenuLabel className="text-muted-foreground text-xs">
 						{menuLabel}

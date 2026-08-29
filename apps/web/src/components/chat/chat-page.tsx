@@ -369,7 +369,7 @@ const useChatPageController = ({
 	const hasMessages = displayMessages.length > 0 || isAutomationRunning;
 	const isNotesLoading = notes === undefined;
 	const isRecipesLoading = recipeData === undefined;
-	const { settings, updateSettings } = useChatSettings({
+	const { isSettingsLoading, settings, updateSettings } = useChatSettings({
 		chatId,
 		storedSettings: currentChat ?? null,
 		workspaceId: activeWorkspaceId,
@@ -382,7 +382,8 @@ const useChatPageController = ({
 	} = settings;
 	const selectedModel = getChatModel(settings.model);
 	// Model resolving is derived from query state and drives rendering only.
-	const isModelResolving = isChatsLoading && !currentChat;
+	const isModelResolving =
+		(isChatsLoading && !currentChat) || (!currentChat && isSettingsLoading);
 	const handleSelectedModelChange = React.useCallback(
 		(model: ChatModel) => {
 			updateSettings({ model: model.model });

@@ -61,6 +61,13 @@ async function openSubmenu(name: string) {
 }
 
 describe("chat model picker", () => {
+	it("keeps the root menu anchored to the trigger's stable end edge", async () => {
+		render(<ModelPickerHarness />);
+		await openPicker();
+
+		expect(screen.getByRole("menu").getAttribute("data-align")).toBe("end");
+	});
+
 	it("stays open after changing the model and closes on outside click", async () => {
 		render(<ModelPickerHarness />);
 		const user = await openPicker();

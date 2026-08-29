@@ -214,9 +214,15 @@ test("chat settings persist on creation and update as one record", async () => {
 		serviceTier: "auto" as const,
 		webSearchEnabled: false,
 	};
+	const nextChatSettings = {
+		...updatedSettings,
+		chatMode: CHAT_MODE.PLAN,
+		webSearchEnabled: true,
+	};
 	await asOwner.mutation(api.chats.setChatSettings, {
 		workspaceId,
 		chatId: "chat-settings",
+		nextChatSettings,
 		settings: updatedSettings,
 	});
 	await expect(
@@ -225,6 +231,70 @@ test("chat settings persist on creation and update as one record", async () => {
 			chatId: "chat-settings",
 		}),
 	).resolves.toMatchObject(updatedSettings);
+	await expect(asOwner.query(api.chatPreferences.get, {})).resolves.toEqual(
+		nextChatSettings,
+	);
+});
+
+test("note chats reject capabilities that their composer does not expose", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const noteId = await t.run(async (ctx) =>
+		ctx.db.insert("notes", {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			workspaceId,
+			isStarred: false,
+			starredSortOrder: 1_000,
+			title: "Note",
+			content: JSON.stringify({ type: "doc", content: [] }),
+			searchableText: "",
+			visibility: "private",
+			isArchived: false,
+			createdAt: 1_000,
+			updatedAt: 1_000,
+		}),
+	);
+	const invalidSettings = {
+		...DEFAULT_CHAT_SETTINGS,
+		chatMode: CHAT_MODE.PLAN,
+		webSearchEnabled: true,
+	};
+	const message = {
+		id: "user-1",
+		role: "user" as const,
+		partsJson: JSON.stringify([{ type: "text", text: "Prompt" }]),
+		text: "Prompt",
+		createdAt: 2_000,
+	};
+
+	await expect(
+		asOwner.mutation(api.chats.saveMessage, {
+			workspaceId,
+			chatId: "note-chat-settings",
+			noteId,
+			settings: invalidSettings,
+			message,
+		}),
+	).rejects.toThrow(
+		"Note chats require default mode with web search disabled.",
+	);
+
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "note-chat-settings",
+		noteId,
+		settings: DEFAULT_CHAT_SETTINGS,
+		message,
+	});
+	await expect(
+		asOwner.mutation(api.chats.setChatSettings, {
+			workspaceId,
+			chatId: "note-chat-settings",
+			nextChatSettings: invalidSettings,
+			settings: invalidSettings,
+		}),
+	).rejects.toThrow(
+		"Note chats require default mode with web search disabled.",
+	);
 });
 
 test("oversized user messages are rejected before chat persistence", async () => {

@@ -73,6 +73,7 @@ import type * as chatAttachments from "../chatAttachments.js";
 import type * as chatBranches from "../chatBranches.js";
 import type * as chatContextCompactions from "../chatContextCompactions.js";
 import type * as chatFormatting from "../chatFormatting.js";
+import type * as chatPreferences from "../chatPreferences.js";
 import type * as chatSettingsModel from "../chatSettingsModel.js";
 import type * as chatThreads from "../chatThreads.js";
 import type * as chatToolCalls from "../chatToolCalls.js";
@@ -205,6 +206,7 @@ declare const fullApi: ApiFromModules<{
   chatBranches: typeof chatBranches;
   chatContextCompactions: typeof chatContextCompactions;
   chatFormatting: typeof chatFormatting;
+  chatPreferences: typeof chatPreferences;
   chatSettingsModel: typeof chatSettingsModel;
   chatThreads: typeof chatThreads;
   chatToolCalls: typeof chatToolCalls;

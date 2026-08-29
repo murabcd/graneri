@@ -4,7 +4,7 @@ import {
 	prefetchChatMessagesSnapshot,
 	useChatMessagesSnapshot,
 } from "@/hooks/use-chat-messages-snapshot";
-import { useChatSettings } from "@/hooks/use-chat-settings";
+import { useNoteChatSettings } from "@/hooks/use-chat-settings";
 import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import {
 	type ChatModel,
@@ -124,8 +124,9 @@ export const useNoteDiscussionSession = ({
 	const selectedNoteChat =
 		(noteChats ?? []).find((chat) => chat.chatId === currentChatId) ?? null;
 	const storedChat = currentChatSession ?? selectedNoteChat;
-	const { settings, updateSettings } = useChatSettings({
+	const { isSettingsLoading, settings, updateSettings } = useNoteChatSettings({
 		chatId: currentChatId,
+		noteId,
 		storedSettings: storedChat,
 		workspaceId: activeWorkspaceId,
 	});
@@ -215,6 +216,7 @@ export const useNoteDiscussionSession = ({
 					}
 				: { kind: "original" as const },
 		isLoadingEarlierMessages,
+		isSettingsLoading,
 		latestNoteChat,
 		loadEarlierMessages,
 		noteChats,

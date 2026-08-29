@@ -23,6 +23,35 @@ export const DEFAULT_CHAT_SETTINGS = Object.freeze({
 	webSearchEnabled: false,
 });
 
+export const selectChatSettings = (settings) => ({
+	chatMode: settings.chatMode,
+	model: settings.model,
+	reasoningEffort: settings.reasoningEffort,
+	serviceTier: settings.serviceTier,
+	webSearchEnabled: settings.webSearchEnabled,
+});
+
+export const selectNoteChatSettings = (settings) => ({
+	chatMode: CHAT_MODE.DEFAULT,
+	model: settings.model,
+	reasoningEffort: settings.reasoningEffort,
+	serviceTier: settings.serviceTier,
+	webSearchEnabled: false,
+});
+
+export const isNoteChatSettings = (settings) =>
+	settings.chatMode === CHAT_MODE.DEFAULT && !settings.webSearchEnabled;
+
+export const mergeNoteChatSettingsIntoDefaults = (
+	rememberedSettings,
+	noteSettings,
+) => ({
+	...rememberedSettings,
+	model: noteSettings.model,
+	reasoningEffort: noteSettings.reasoningEffort,
+	serviceTier: noteSettings.serviceTier,
+});
+
 export const parseChatSettings = (value) => {
 	const result = chatSettingsSchema.safeParse(value);
 	return result.success ? result.data : null;

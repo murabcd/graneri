@@ -144,6 +144,12 @@ export default defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
+	chatPreferences: defineTable({
+		ownerTokenIdentifier: v.string(),
+		...chatSettingsFields,
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
 	notificationPreferences: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

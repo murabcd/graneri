@@ -384,18 +384,29 @@ normal chat send endpoint.
 
 ## Chat settings and planning mode
 
-One required chat-owned settings snapshot controls every turn while draft composers begin from explicit product defaults.
+One required chat-owned settings snapshot controls every turn while account-scoped last-used settings seed new draft composers.
 
 The shared [chat-settings contract](../packages/ai/src/chat-settings.mjs) groups
 mode, web search, model, reasoning effort, and service tier. A new draft starts
-from `DEFAULT_CHAT_SETTINGS`; it does not inherit browser or user-preference
-state. [[apps/web/src/hooks/use-chat-settings.ts]] scopes unsaved choices to the
-draft chat id. The first accepted user message persists the complete snapshot
-atomically with chat creation. Opening a stored chat restores its required
-fields, subsequent control changes replace the complete stored snapshot, and a
-fork copies that snapshot to the new chat. Assistant-message persistence never
-changes it. There are no optional-field, browser-storage, or user-preference
-fallbacks for stored chat settings.
+from the account-scoped last-used settings in [[convex/chatPreferences.ts]],
+which returns `DEFAULT_CHAT_SETTINGS` before the account has selected anything.
+Every control change replaces those next-chat defaults.
+[[apps/web/src/hooks/use-chat-settings.ts]] still treats a stored chat as the
+authority for its own settings. The first accepted user message persists the
+complete snapshot atomically with chat creation. Opening a stored chat restores
+its required fields, subsequent control changes atomically replace both that
+chat's snapshot and the account's next-chat defaults, and a fork copies the
+source snapshot to the new chat. Assistant-message persistence never changes
+it. There are no optional-field or browser-storage fallbacks for stored chat
+settings.
+
+Note discussions share the remembered model, reasoning effort, and service tier
+but have a narrower capability boundary: their persisted and request snapshots
+always use default mode with web search disabled. Changing a visible note-chat
+setting updates those three account defaults without replacing the hidden Plan
+or Web choices last selected in Ask AI. This keeps new note discussions
+convenient while preventing unavailable controls from silently changing either
+surface.
 
 The footer controls remain owned by
 [[apps/web/src/components/chat/chat-composer-options.tsx]]. Selecting planning

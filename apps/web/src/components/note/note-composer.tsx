@@ -473,6 +473,7 @@ const useNoteComposerController = ({
 		hasEarlierMessages,
 		historyMarkerState,
 		isLoadingEarlierMessages,
+		isSettingsLoading,
 		latestNoteChat,
 		loadEarlierMessages,
 		noteChats,
@@ -851,7 +852,8 @@ const useNoteComposerController = ({
 	const selectedRecipe =
 		recipes.find((recipe) => recipe.slug === selectedRecipeSlug) ?? null;
 	const canSendMessage =
-		hasMessage || selectedRecipe !== null || attachedFiles.length > 0;
+		!isSettingsLoading &&
+		(hasMessage || selectedRecipe !== null || attachedFiles.length > 0);
 
 	const setRightSidebarOpen = React.useCallback(
 		(open: boolean) => {
@@ -1151,6 +1153,7 @@ const useNoteComposerController = ({
 		);
 
 		if (
+			isSettingsLoading ||
 			(!nextMessage && !selectedRecipe && attachedFiles.length === 0) ||
 			hasUploadingAttachments(attachedFiles) ||
 			((chatStatus === "submitted" || chatStatus === "streaming") &&
@@ -1257,6 +1260,7 @@ const useNoteComposerController = ({
 		displayActiveRun,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
+		isSettingsLoading,
 		getDraftSnapshot,
 		localFolderStorageScope,
 		reconcileSharedLocalFolders,
@@ -1623,6 +1627,7 @@ const useNoteComposerController = ({
 		isGeneratingNotes: transcriptSession.isGeneratingNotes,
 		isMobile,
 		isSidebarPresentation,
+		isSettingsLoading,
 		hasAdjacentInsetPanel,
 		isSpeechListening: isCurrentNoteSpeechListening,
 		isStoredTranscriptLoading: transcriptSession.isStoredTranscriptLoading,
@@ -3032,7 +3037,10 @@ function ChatComposerForm({
 					canStop: controller.canStop,
 					isChatLoading: controller.isChatLoading,
 					isSidebarCompact: controller.isSidebarPresentation,
-					showModelPicker: controller.isChatOpen && !activateInlineOnFocus,
+					showModelPicker:
+						controller.isChatOpen &&
+						!controller.isSettingsLoading &&
+						!activateInlineOnFocus,
 				}}
 				editingMessageId={controller.editingMessageId}
 				message={controller.message}
