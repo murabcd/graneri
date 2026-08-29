@@ -9,6 +9,14 @@ import { logError } from "@/lib/logger";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
+const selectChatSettings = (settings: ChatSettings): ChatSettings => ({
+	chatMode: settings.chatMode,
+	model: settings.model,
+	reasoningEffort: settings.reasoningEffort,
+	serviceTier: settings.serviceTier,
+	webSearchEnabled: settings.webSearchEnabled,
+});
+
 export const useChatSettings = ({
 	chatId,
 	storedSettings,
@@ -23,10 +31,14 @@ export const useChatSettings = ({
 		chatId: string;
 		settings: ChatSettings;
 	} | null>(null);
+	const persistedSettings = React.useMemo(
+		() => (storedSettings ? selectChatSettings(storedSettings) : null),
+		[storedSettings],
+	);
 	const resolvedSettings =
 		override?.chatId === chatId
 			? override.settings
-			: (storedSettings ?? DEFAULT_CHAT_SETTINGS);
+			: (persistedSettings ?? DEFAULT_CHAT_SETTINGS);
 	const currentRef = React.useRef({ chatId, settings: resolvedSettings });
 	currentRef.current = { chatId, settings: resolvedSettings };
 
@@ -35,11 +47,11 @@ export const useChatSettings = ({
 			const current =
 				currentRef.current.chatId === chatId
 					? currentRef.current.settings
-					: (storedSettings ?? DEFAULT_CHAT_SETTINGS);
+					: (persistedSettings ?? DEFAULT_CHAT_SETTINGS);
 			const settings = { ...current, ...update };
 			currentRef.current = { chatId, settings };
 			setOverride({ chatId, settings });
-			if (workspaceId && storedSettings) {
+			if (workspaceId && persistedSettings) {
 				void persistSettings({ chatId, settings, workspaceId }).catch(
 					(error) => {
 						logError({
@@ -52,7 +64,7 @@ export const useChatSettings = ({
 				);
 			}
 		},
-		[chatId, persistSettings, storedSettings, workspaceId],
+		[chatId, persistSettings, persistedSettings, workspaceId],
 	);
 
 	return { settings: resolvedSettings, updateSettings };

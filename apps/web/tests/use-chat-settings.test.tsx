@@ -32,6 +32,12 @@ describe("per-chat settings", () => {
 			serviceTier: "priority",
 			webSearchEnabled: true,
 		};
+		const storedChat = {
+			...storedSettings,
+			_creationTime: 1,
+			_id: "chat-1" as Id<"chats">,
+			title: "Stored chat",
+		};
 		const hook = renderHook(
 			({ chatId, stored }: { chatId: string; stored: ChatSettings | null }) =>
 				useChatSettings({
@@ -55,7 +61,7 @@ describe("per-chat settings", () => {
 		});
 		expect(persistSettings).not.toHaveBeenCalled();
 
-		hook.rerender({ chatId: "stored-1", stored: storedSettings });
+		hook.rerender({ chatId: "stored-1", stored: storedChat });
 		expect(hook.result.current.settings).toEqual(storedSettings);
 
 		act(() => {

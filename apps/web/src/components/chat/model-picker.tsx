@@ -34,6 +34,7 @@ export type ChatModel = (typeof chatModels)[number];
 export type { ReasoningEffort, ServiceTier };
 
 const getSelectedModelDisplayName = (name: string) => name.replace(/^GPT-/, "");
+const keepModelPickerOpen = (event: Event) => event.preventDefault();
 
 type ChatModelPickerProps = {
 	open: boolean;
@@ -130,6 +131,7 @@ export function ChatModelPicker({
 						<DropdownMenuCheckboxItem
 							key={model.id}
 							checked={model.id === selectedModel.id}
+							onSelect={keepModelPickerOpen}
 							onCheckedChange={(checked) => {
 								if (checked) {
 									onSelectedModelChange(model);
@@ -166,6 +168,7 @@ export function ChatModelPicker({
 											<DropdownMenuRadioItem
 												key={effort.id}
 												value={effort.id}
+												onSelect={keepModelPickerOpen}
 												className="pl-2 pr-8 *:[span:first-child]:right-2 *:[span:first-child]:left-auto"
 											>
 												{effort.name}
@@ -194,6 +197,7 @@ export function ChatModelPicker({
 											<DropdownMenuRadioItem
 												key={tier.id}
 												value={tier.id}
+												onSelect={keepModelPickerOpen}
 												className="pl-2 pr-8 *:[span:first-child]:right-2 *:[span:first-child]:left-auto"
 											>
 												{tier.name}
