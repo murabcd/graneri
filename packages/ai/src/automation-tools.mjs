@@ -366,6 +366,7 @@ const createUpdateAutomationTool = ({
 				prompt: prompt ?? currentAutomation.prompt,
 				model: currentAutomation.model,
 				reasoningEffort: currentAutomation.reasoningEffort,
+				serviceTier: currentAutomation.serviceTier,
 				webSearchEnabled: currentAutomation.webSearchEnabled,
 				appsEnabled: selectedAppSources.length > 0,
 				appSources: selectedAppSources,

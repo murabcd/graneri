@@ -229,6 +229,7 @@ describe("chat automation tools", () => {
 		prompt: "Review the workspace.",
 		model: "gpt-5",
 		reasoningEffort: "medium",
+		serviceTier: "priority" as const,
 		webSearchEnabled: false,
 		appsEnabled: true,
 		appSources: [],
@@ -272,6 +273,7 @@ describe("chat automation tools", () => {
 			chatId: "chat-1",
 			defaultModel: "gpt-5",
 			defaultReasoningEffort: "medium",
+			defaultServiceTier: "auto",
 			defaultTimezone: "UTC",
 			webSearchEnabled: false,
 		});
@@ -355,6 +357,7 @@ describe("chat automation tools", () => {
 				automationId: "automation-1",
 				title: "Updated review",
 				prompt: automation.prompt,
+				serviceTier: automation.serviceTier,
 				schedule: automation.schedule,
 			}),
 		]);

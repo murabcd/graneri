@@ -45,7 +45,14 @@ those lifecycle steps independently. Automation runs therefore inherit
 the same rich message snapshots, approvals, focused user-question pauses,
 idempotent tool receipts, three-attempt action retries, and twenty-step logical
 limit as interactive hosted chat. `current_chat` destinations continue from the
-selected conversation; `standalone` destinations own a dedicated result chat.
+selected conversation and capture that chat's live mode, model, reasoning
+effort, service tier, and Web setting when each run is reserved. Appending an
+automation turn must not replace the attached chat's settings or title.
+`standalone` destinations own a dedicated result chat and run in Default mode
+with the automation definition's model, effort, service tier, Web setting, and
+selected app sources. The same definition settings become the standalone
+configuration if deleting an attached chat moves its automations to fresh
+result chats.
 Multiple task definitions may use one chat, but the one-active-run-per-chat
 invariant still serializes their execution. The minute reconciliation cron
 retries a due task whose scheduled function was lost or could not reserve the

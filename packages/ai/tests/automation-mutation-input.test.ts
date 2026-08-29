@@ -9,6 +9,7 @@ const automation: AutomationToolInput = {
 	prompt: "Summarize the note",
 	model: "gpt-5.6-luna",
 	reasoningEffort: "low",
+	serviceTier: "priority",
 	webSearchEnabled: false,
 	appsEnabled: true,
 	appSources: [
@@ -64,6 +65,7 @@ describe("automation mutation input normalization", () => {
 			prompt: automation.prompt,
 			model: automation.model,
 			reasoningEffort: automation.reasoningEffort,
+			serviceTier: automation.serviceTier,
 			webSearchEnabled: automation.webSearchEnabled,
 			appsEnabled: automation.appsEnabled,
 			appSources: automation.appSources,

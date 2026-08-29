@@ -1,6 +1,11 @@
 import workflowTest from "@convex-dev/workflow/test";
+import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
-import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
+import {
+	DEFAULT_CHAT_MODEL_ID,
+	GPT_5_6_LUNA_MODEL_ID,
+	GPT_5_6_TERRA_MODEL_ID,
+} from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -8,6 +13,7 @@ import {
 	failAutomationDelivery,
 	syncAutomationRunFromAssistant,
 } from "./automationRunStateMachine";
+import type { ChatSettings } from "./chatSettingsModel";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -77,6 +83,32 @@ const createAutomation = async (
 		stopCondition: options.stopCondition,
 		schedule,
 		target: { kind: "workspace" },
+	});
+
+const readAutomationRuntime = async (
+	fixture: Fixture,
+	automationId: Awaited<ReturnType<typeof createAutomation>>["id"],
+) =>
+	await fixture.t.run(async (ctx) => {
+		const run = await ctx.db
+			.query("automationRuns")
+			.withIndex("by_automationId_and_scheduledFor", (q) =>
+				q.eq("automationId", automationId),
+			)
+			.first();
+		const assistantRunId = run?.assistantRunId;
+		const assistantRun = assistantRunId
+			? await ctx.db.get(assistantRunId)
+			: null;
+		const chat = assistantRun ? await ctx.db.get(assistantRun.chatId) : null;
+		const job = assistantRunId
+			? await ctx.db
+					.query("assistantRunJobs")
+					.withIndex("by_runId", (q) => q.eq("runId", assistantRunId))
+					.unique()
+			: null;
+
+		return { assistantRun, chat, job };
 	});
 
 const insertActiveAutomations = async (fixture: Fixture, count: number) =>
@@ -665,4 +697,116 @@ test("a chat can own multiple automations", async () => {
 	expect(automations.every((item) => item.chatId === createArgs.chatId)).toBe(
 		true,
 	);
+});
+
+test("standalone automation runs use definition settings in Default mode", async () => {
+	const fixture = await createFixture();
+	const automation = await fixture.asOwner.mutation(api.automations.create, {
+		workspaceId: fixture.workspaceId,
+		title: "Standalone settings",
+		prompt: "Review the workspace.",
+		model: GPT_5_6_LUNA_MODEL_ID,
+		reasoningEffort: "high",
+		serviceTier: "priority",
+		webSearchEnabled: true,
+		appsEnabled: true,
+		appSources: [],
+		destination: "standalone",
+		deliveryPolicy: "always",
+		schedule,
+		target: { kind: "workspace" },
+	});
+	await fixture.asOwner.mutation(api.automations.runNow, {
+		automationId: automation.id,
+	});
+
+	const runtime = await readAutomationRuntime(fixture, automation.id);
+	const expectedSettings = {
+		chatMode: CHAT_MODE.DEFAULT,
+		model: GPT_5_6_LUNA_MODEL_ID,
+		reasoningEffort: "high",
+		serviceTier: "priority",
+		webSearchEnabled: true,
+	} satisfies ChatSettings;
+	expect(runtime.chat).toMatchObject(expectedSettings);
+	expect(runtime.assistantRun).toMatchObject({
+		model: expectedSettings.model,
+		reasoningEffort: expectedSettings.reasoningEffort,
+		serviceTier: expectedSettings.serviceTier,
+	});
+	expect(runtime.job?.job).toMatchObject(expectedSettings);
+});
+
+test.each([
+	"manual",
+	"scheduled",
+] as const)("%s current-chat automation runs inherit live chat settings", async (reason) => {
+	const fixture = await createFixture();
+	const chatId = `live-settings-${reason}`;
+	const liveSettings = {
+		chatMode: CHAT_MODE.PLAN,
+		model: GPT_5_6_TERRA_MODEL_ID,
+		reasoningEffort: "xhigh",
+		serviceTier: "priority",
+		webSearchEnabled: true,
+	} satisfies ChatSettings;
+	await fixture.asOwner.mutation(api.chats.saveMessage, {
+		settings: liveSettings,
+		workspaceId: fixture.workspaceId,
+		chatId,
+		title: "Automation chat",
+		message: {
+			id: "live-settings-user",
+			role: "user",
+			partsJson: JSON.stringify([
+				{ type: "text", text: "Keep this chat configuration." },
+			]),
+			text: "Keep this chat configuration.",
+			createdAt: Date.now(),
+		},
+	});
+	const automation = await fixture.asOwner.mutation(api.automations.create, {
+		workspaceId: fixture.workspaceId,
+		title: "Different automation title",
+		prompt: "Review the workspace.",
+		model: GPT_5_6_LUNA_MODEL_ID,
+		reasoningEffort: "low",
+		serviceTier: "auto",
+		webSearchEnabled: false,
+		appsEnabled: true,
+		appSources: [],
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule,
+		target: { kind: "workspace" },
+		chatId,
+	});
+
+	if (reason === "manual") {
+		await fixture.asOwner.mutation(api.automations.runNow, {
+			automationId: automation.id,
+		});
+	} else {
+		if (automation.nextRunAt === null) {
+			throw new Error("Expected a scheduled automation run.");
+		}
+		await fixture.t.mutation(internal.automations.startScheduledRun, {
+			automationId: automation.id,
+			scheduledFor: automation.nextRunAt,
+		});
+	}
+
+	const runtime = await readAutomationRuntime(fixture, automation.id);
+
+	expect(runtime.chat).toMatchObject({
+		title: "Automation chat",
+		...liveSettings,
+	});
+	expect(runtime.assistantRun).toMatchObject({
+		model: liveSettings.model,
+		reasoningEffort: liveSettings.reasoningEffort,
+		serviceTier: liveSettings.serviceTier,
+	});
+	expect(runtime.job?.job).toMatchObject(liveSettings);
+	expect(runtime.job?.job.instructions).toContain("Web search is enabled.");
 });

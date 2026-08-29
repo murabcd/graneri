@@ -70,14 +70,6 @@ const chatHasActiveAssistantRun = async (
 	return runs.some(Boolean);
 };
 
-const automationChatHasActiveAssistantRun = async (
-	ctx: MutationCtx,
-	automation: Doc<"automations">,
-) => {
-	const chat = await getAutomationChat(ctx, automation);
-	return chat ? await chatHasActiveAssistantRun(ctx, chat._id) : false;
-};
-
 export const reserveAutomationRun = async (
 	ctx: MutationCtx,
 	args: ReserveAutomationRunArgs,
@@ -100,7 +92,8 @@ export const reserveAutomationRun = async (
 		return { status: "skipped" as const };
 	}
 
-	if (await automationChatHasActiveAssistantRun(ctx, automation)) {
+	const chat = await getAutomationChat(ctx, automation);
+	if (chat && (await chatHasActiveAssistantRun(ctx, chat._id))) {
 		return { status: "chat_busy" as const, chatId: automation.chatId };
 	}
 
@@ -139,7 +132,7 @@ export const reserveAutomationRun = async (
 		updatedAt: now,
 	});
 
-	return { status: "reserved" as const, automation, runId };
+	return { status: "reserved" as const, automation, chat, runId };
 };
 
 export const stopAutomationRun = async (
