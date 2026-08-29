@@ -14,6 +14,8 @@ const AUTOMATION_MODEL_STORAGE_KEY = "graneri:automation-model";
 const AUTOMATION_REASONING_EFFORT_STORAGE_KEY =
 	"graneri:automation-reasoning-effort";
 const AUTOMATION_SERVICE_TIER_STORAGE_KEY = "graneri:automation-service-tier";
+const AUTOMATION_WEB_SEARCH_ENABLED_STORAGE_KEY =
+	"graneri:automation-web-search-enabled";
 
 export const getStoredAutomationModel = () => {
 	if (typeof window === "undefined") {
@@ -60,4 +62,22 @@ export const getStoredAutomationServiceTier = (): ServiceTier => {
 
 export const storeAutomationServiceTier = (value: ServiceTier) => {
 	window.localStorage.setItem(AUTOMATION_SERVICE_TIER_STORAGE_KEY, value);
+};
+
+export const getStoredAutomationWebSearchEnabled = () => {
+	if (typeof window === "undefined") {
+		return false;
+	}
+
+	return (
+		window.localStorage.getItem(AUTOMATION_WEB_SEARCH_ENABLED_STORAGE_KEY) ===
+		"true"
+	);
+};
+
+export const storeAutomationWebSearchEnabled = (value: boolean) => {
+	window.localStorage.setItem(
+		AUTOMATION_WEB_SEARCH_ENABLED_STORAGE_KEY,
+		String(value),
+	);
 };

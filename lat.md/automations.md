@@ -51,6 +51,17 @@ invariant still serializes their execution. The minute reconciliation cron
 retries a due task whose scheduled function was lost or could not reserve the
 busy chat.
 
+The automation composer remembers model, reasoning effort, service tier, and
+Web search as defaults for the next new definition. Editing an existing
+automation hydrates that definition's own stored settings instead. Enabled Web
+search is visible beside the scope picker and can be disabled directly without
+reopening the menu. [[apps/web/src/lib/ai/automation-settings.ts]] and
+[[apps/web/src/components/automations/create-automation-dialog.tsx]] own this
+definition-composer behavior.
+The Automations route preloads the dialog entry after the page commits, keeping
+the dependency graph out of unrelated initial routes while allowing the first
+open on the Automations page to bypass the lazy Suspense boundary.
+
 ## Results and delivery
 
 Automation runs form a durable result inbox with explicit classification, unread state, delivery leases, notifications, and stop conditions.

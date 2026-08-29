@@ -2220,6 +2220,13 @@ export function AuthenticatedAppShell({
 		() => controller.handleViewChange("home"),
 		[controller.handleViewChange],
 	);
+	React.useEffect(() => {
+		if (controller.currentView !== "automation") {
+			return;
+		}
+
+		void CreateAutomationDialogEntry.preload().catch(() => undefined);
+	}, [controller.currentView]);
 	const appShellContentView = createAppShellContentView({
 		controller,
 		handleGoHome,

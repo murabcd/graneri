@@ -48,9 +48,11 @@ import {
 	getStoredAutomationModel,
 	getStoredAutomationReasoningEffort,
 	getStoredAutomationServiceTier,
+	getStoredAutomationWebSearchEnabled,
 	storeAutomationModel,
 	storeAutomationReasoningEffort,
 	storeAutomationServiceTier,
+	storeAutomationWebSearchEnabled,
 } from "@/lib/ai/automation-settings";
 import { defaultChatModel, findChatModel } from "@/lib/ai/models";
 import { getAppSourceLabel } from "@/lib/chat-source-display";
@@ -130,7 +132,7 @@ const createEmptyAutomationDialogState = (): AutomationDialogState => {
 		deliveryPolicy: "always",
 		stopCondition: "",
 		target: null,
-		webSearchEnabled: false,
+		webSearchEnabled: getStoredAutomationWebSearchEnabled(),
 		appsEnabled: true,
 		selectedConnectedAppIds: [],
 		selectedNoteIds: [],
@@ -318,6 +320,11 @@ function useCreateAutomationDialogElement({
 		},
 		[closeAutomationPickers],
 	);
+
+	const handleWebSearchEnabledChange = React.useCallback((value: boolean) => {
+		storeAutomationWebSearchEnabled(value);
+		updateDialogState({ webSearchEnabled: value });
+	}, []);
 
 	const handlePromptChange = React.useCallback(
 		(value: string, mentions: AutomationPromptMention[]) => {
@@ -548,9 +555,7 @@ function useCreateAutomationDialogElement({
 									open={appSourcesPickerOpen}
 									onOpenChange={handleAppSourcesPickerOpenChange}
 									webSearchEnabled={webSearchEnabled}
-									onWebSearchEnabledChange={(value) =>
-										updateDialogState({ webSearchEnabled: value })
-									}
+									onWebSearchEnabledChange={handleWebSearchEnabledChange}
 									onOpenConnectionsSettings={onOpenConnectionsSettings}
 								/>
 								<div className="ml-auto flex min-w-0 items-center gap-1">

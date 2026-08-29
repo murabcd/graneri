@@ -14,14 +14,8 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import {
-	Globe,
-	Lightbulb,
-	type LucideIcon,
-	Plus,
-	Settings2,
-	X,
-} from "lucide-react";
+import { Globe, Lightbulb, Plus, Settings2 } from "lucide-react";
+import { ActiveComposerOption } from "@/components/ai-elements/active-composer-option";
 
 type ChatComposerOptionsProps = {
 	open: boolean;
@@ -54,7 +48,7 @@ export function ChatComposerOptions({
 				onOpenConnectionsSettings={onOpenConnectionsSettings}
 			/>
 			{webSearchEnabled ? (
-				<ActiveOptionIndicator
+				<ActiveComposerOption
 					disableLabel="Turn off Web search"
 					icon={Globe}
 					label="Web"
@@ -62,7 +56,7 @@ export function ChatComposerOptions({
 				/>
 			) : null}
 			{chatMode === CHAT_MODE.PLAN ? (
-				<ActiveOptionIndicator
+				<ActiveComposerOption
 					disableLabel="Turn off Plan mode"
 					icon={Lightbulb}
 					label="Plan"
@@ -70,42 +64,6 @@ export function ChatComposerOptions({
 				/>
 			) : null}
 		</>
-	);
-}
-
-function ActiveOptionIndicator({
-	disableLabel,
-	icon: Icon,
-	label,
-	onDisable,
-}: {
-	disableLabel: string;
-	icon: LucideIcon;
-	label: string;
-	onDisable: () => void;
-}) {
-	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<InputGroupButton
-					aria-label={disableLabel}
-					className="group size-6 rounded-full p-0 text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent sm:w-auto"
-					onClick={onDisable}
-				>
-					<span
-						data-slot="active-option-glyph"
-						className="flex size-6 shrink-0 items-center justify-center rounded-full group-hover:bg-muted dark:group-hover:bg-muted/50"
-					>
-						<Icon aria-hidden="true" className="group-hover:hidden" />
-						<X aria-hidden="true" className="hidden group-hover:block" />
-					</span>
-					<span data-slot="active-option-label" className="hidden sm:inline">
-						{label}
-					</span>
-				</InputGroupButton>
-			</TooltipTrigger>
-			<TooltipContent>{disableLabel}</TooltipContent>
-		</Tooltip>
 	);
 }
 
