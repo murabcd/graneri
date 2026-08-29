@@ -6,6 +6,7 @@ Desktop AI modules preserve hosted model ownership while routing authenticated t
 - [[transcription]] owns dictation and realtime capture.
 - [hosted route catalog](../packages/ai/src/hosted-route-catalog.mjs)
 - [local workspace session](../packages/ai/src/local-workspace-session.mjs)
+- [desktop local-folder picker](../apps/desktop/src/desktop-local-folder-picker.mjs)
 
 ## Loopback routes
 
@@ -158,7 +159,7 @@ must not require another parallel name or metadata registry.
 `createLocalWorkspaceSession` is the canonical owner of shared-root validation,
 root lookup, symlink-safe containment, no-follow file access, traversal limits,
 ignored-directory policy, and media-aware local search. Shared roots are
-canonical real paths, one chat may expose at most four unique roots, and an
+canonical real paths, one chat may expose one root, and an
 invalid or stale root fails the request visibly instead of being dropped. The
 AI SDK tool builder is only an adapter over this workspace interface and the
 desktop file-storage and command capabilities. `read_local_file` has one
@@ -221,6 +222,12 @@ Renderer chat surfaces use `useSharedLocalFolderSession` as the canonical owner
 of scope-tagged folder state, storage hydration, cancellation, error clearing,
 and request-prepared reconciliation. A late hydration result must never replace
 newer request state or expose folders from the previously active chat scope.
+In the desktop Ask AI composer, `Add local folder` opens the native single-directory
+picker and registers the selected root through that same session. The active
+root appears beside the Web and Plan controls as a removable folder chip. The
+picker or a local path referenced in a later message replaces the active root.
+The browser composer does not expose the picker, and neither picker state nor
+local paths cross into Convex chat settings or durable queued input.
 
 ## Proxy response integrity
 

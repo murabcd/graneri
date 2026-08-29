@@ -47,4 +47,20 @@ describe("HoverScrollTitle", () => {
 				.keepFadeOnHover,
 		).toBe("true");
 	});
+
+	it("keeps overflow fading static when hover scrolling is disabled", () => {
+		render(
+			<div data-hover-scroll-title-row>
+				<HoverScrollTitle scrollOnHover={false}>
+					Long static title
+				</HoverScrollTitle>
+			</div>,
+		);
+
+		expect(
+			screen
+				.getByText("Long static title")
+				.parentElement?.hasAttribute("data-scroll-on-hover"),
+		).toBe(false);
+	});
 });

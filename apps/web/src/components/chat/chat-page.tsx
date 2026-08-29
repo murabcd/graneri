@@ -262,8 +262,12 @@ const useChatPageController = ({
 	);
 	// Preparing state tracks async request construction started by submit handlers.
 	const localFolderStorageScope = `chat:${chatId}`;
-	const { reconcileSharedLocalFolders, sharedLocalFolders } =
-		useSharedLocalFolderSession(localFolderStorageScope);
+	const {
+		chooseSharedLocalFolder,
+		clearSharedLocalFolderSelection,
+		reconcileSharedLocalFolders,
+		sharedLocalFolders,
+	} = useSharedLocalFolderSession(localFolderStorageScope);
 	const notes = useQuery(
 		api.notes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -788,6 +792,9 @@ const useChatPageController = ({
 		summaryOpen,
 		webSearchEnabled,
 		chatMode,
+		localFolder: sharedLocalFolders[0] ?? null,
+		onChooseLocalFolder: chooseSharedLocalFolder,
+		onClearLocalFolder: clearSharedLocalFolderSelection,
 		workspaceSources,
 		appSources,
 		pendingHumanDecision,
@@ -1133,6 +1140,9 @@ export function ChatPage({
 			onWebSearchEnabledChange={controller.handleWebSearchEnabledChange}
 			chatMode={controller.chatMode}
 			onChatModeChange={controller.handleChatModeChange}
+			localFolder={controller.localFolder}
+			onChooseLocalFolder={controller.onChooseLocalFolder}
+			onClearLocalFolder={controller.onClearLocalFolder}
 			appSources={controller.appSources}
 			onOpenConnectionsSettings={onOpenConnectionsSettings}
 			editingMessageId={controller.editingMessageId}

@@ -10,18 +10,14 @@ import {
 import { createHostedWaitAgentTool } from "./hosted-chat-wait-agent-tool.mjs";
 import { createHostedRunActivityTool } from "./hosted-run-activity.mjs";
 import { createHostedUserQuestionTools } from "./hosted-user-question.mjs";
-import { MAX_LOCAL_FOLDER_ROOTS } from "./local-folder-tool-definitions.mjs";
+import { assertLocalFolderRootLimit } from "./local-folder-tool-definitions.mjs";
 import {
 	buildClientLocalFolderTools,
 	buildLocalFolderSystemContext,
 } from "./local-folder-tools.mjs";
 
 const buildClientLocalFolderRoots = (localFolders) => {
-	if (localFolders.length > MAX_LOCAL_FOLDER_ROOTS) {
-		throw new Error(
-			`At most ${MAX_LOCAL_FOLDER_ROOTS} local folders can be shared with one chat.`,
-		);
-	}
+	assertLocalFolderRootLimit(localFolders);
 
 	return localFolders.map((folder) => {
 		if (

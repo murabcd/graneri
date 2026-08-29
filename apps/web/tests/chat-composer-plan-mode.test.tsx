@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
 import type { HostedHumanDecisionRequest } from "@workspace/ai/hosted-human-decision";
+import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import * as React from "react";
@@ -10,8 +11,12 @@ import type { ChatAttachment } from "@/components/ai-elements/file-attachment-ut
 import { ChatComposer } from "@/components/chat/chat-composer";
 
 const convexClient = new ConvexReactClient("https://test.convex.cloud");
+const originalDesktopBridge = window.graneriDesktop;
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	window.graneriDesktop = originalDesktopBridge;
+});
 
 function ActiveOptionComposer({
 	draft = "",
@@ -28,6 +33,8 @@ function ActiveOptionComposer({
 	const [chatMode, setChatMode] = React.useState<ChatMode>(CHAT_MODE.DEFAULT);
 	const [sourcesOpen, setSourcesOpen] = React.useState(false);
 	const [webSearchEnabled, setWebSearchEnabled] = React.useState(false);
+	const [localFolder, setLocalFolder] =
+		React.useState<DesktopLocalFolder | null>(null);
 
 	return (
 		<ConvexProvider client={convexClient}>
@@ -65,6 +72,15 @@ function ActiveOptionComposer({
 					onWebSearchEnabledChange={setWebSearchEnabled}
 					chatMode={chatMode}
 					onChatModeChange={setChatMode}
+					localFolder={localFolder}
+					onChooseLocalFolder={() =>
+						setLocalFolder({
+							id: "folder-graneri",
+							name: "graneri",
+							path: "/Users/test/Documents/graneri",
+						})
+					}
+					onClearLocalFolder={() => setLocalFolder(null)}
 					appSources={[]}
 					onOpenConnectionsSettings={vi.fn()}
 					humanDecision={humanDecision}
@@ -194,6 +210,58 @@ describe("chat composer active options", () => {
 
 		expect(
 			screen.queryByRole("button", { name: "Turn off Web search" }),
+		).toBeNull();
+	});
+
+	it("adds desktop local folders and removes their footer chips directly", async () => {
+		const user = userEvent.setup();
+		window.graneriDesktop = {
+			platform: "darwin",
+		} as Window["graneriDesktop"];
+		render(<ActiveOptionComposer />);
+
+		await user.click(screen.getByRole("button", { name: "Chat options" }));
+		await user.click(
+			screen.getByRole("menuitem", { name: "Add local folder" }),
+		);
+
+		const folderControl = screen.getByRole("button", {
+			name: "Remove graneri",
+		});
+		expect(folderControl.textContent).toContain("graneri");
+		const folderLabel = folderControl.querySelector(
+			'[data-slot="active-option-label"]',
+		);
+		expect(folderLabel?.classList.contains("truncate")).toBe(false);
+		expect(
+			folderLabel
+				?.querySelector(".hover-scroll-title-viewport")
+				?.hasAttribute("data-scroll-on-hover"),
+		).toBe(false);
+		await user.hover(folderControl);
+		expect(
+			await screen.findByRole("tooltip", {
+				name: "Remove /Users/test/Documents/graneri",
+			}),
+		).toBeTruthy();
+		await user.click(screen.getByRole("button", { name: "Chat options" }));
+		expect(
+			screen.getByRole("menuitem", { name: "Change local folder" }),
+		).toBeTruthy();
+		await user.keyboard("{Escape}");
+
+		await user.click(folderControl);
+		expect(screen.queryByRole("button", { name: "Remove graneri" })).toBeNull();
+	});
+
+	it("does not offer local folder selection in the browser", async () => {
+		const user = userEvent.setup();
+		window.graneriDesktop = undefined;
+		render(<ActiveOptionComposer />);
+
+		await user.click(screen.getByRole("button", { name: "Chat options" }));
+		expect(
+			screen.queryByRole("menuitem", { name: "Add local folder" }),
 		).toBeNull();
 	});
 });

@@ -26,6 +26,7 @@ export const desktopIpcContract = Object.freeze({
 		openExternalUrl: "app:open-external-url",
 		openPermissionSettings: "app:open-permission-settings",
 		openSoundSettings: "app:open-sound-settings",
+		pickLocalFolder: "app:pick-local-folder",
 		refreshTrayCalendar: "app:refresh-tray-calendar",
 		requestPermission: "app:request-permission",
 		requestTranscriptionSystemAudio: "app:request-transcription-system-audio",

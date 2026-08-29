@@ -106,7 +106,7 @@ test("replaces the shared-root session atomically and rejects invalid paths", as
 
 	const first = await storage.shareLocalFolders([firstDir]);
 	await assert.rejects(
-		storage.shareLocalFolders([secondDir, ""]),
+		storage.shareLocalFolders([""]),
 		/Local folder paths must be non-empty strings/u,
 	);
 	assert.deepEqual(storage.getSharedLocalFolders([first.folders[0].id]), [
@@ -122,13 +122,7 @@ test("replaces the shared-root session atomically and rejects invalid paths", as
 		second.folders[0],
 	]);
 	await assert.rejects(
-		storage.shareLocalFolders([
-			firstDir,
-			secondDir,
-			firstDir,
-			secondDir,
-			firstDir,
-		]),
-		/At most 4 local folders/u,
+		storage.shareLocalFolders([firstDir, secondDir]),
+		/Only one local folder/u,
 	);
 });

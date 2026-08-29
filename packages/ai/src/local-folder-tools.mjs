@@ -2,9 +2,9 @@ import { tool } from "ai";
 import { MAX_LOCAL_FILE_UPLOADS } from "./local-folder-file-contract.mjs";
 import { parseLocalCommandExecutionResult } from "./local-folder-tool-contract.mjs";
 import {
+	assertLocalFolderRootLimit,
 	buildLocalFolderToolConfigs,
 	MAX_LOCAL_FILE_READ_BYTES,
-	MAX_LOCAL_FOLDER_ROOTS,
 } from "./local-folder-tool-definitions.mjs";
 import { createLocalWorkspaceSession } from "./local-workspace-session.mjs";
 
@@ -186,11 +186,7 @@ export const buildClientLocalFolderTools = (roots) => {
 	if (roots.length === 0) {
 		return {};
 	}
-	if (roots.length > MAX_LOCAL_FOLDER_ROOTS) {
-		throw new Error(
-			`At most ${MAX_LOCAL_FOLDER_ROOTS} local folders can be shared with one chat.`,
-		);
-	}
+	assertLocalFolderRootLimit(roots);
 
 	const configs = buildLocalFolderToolConfigs(roots, {
 		maxImageSearchResults: MAX_LOCAL_FILE_UPLOADS,

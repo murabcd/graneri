@@ -1,4 +1,6 @@
 import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
+import { isDesktopRuntime } from "@workspace/platform/desktop";
+import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -14,8 +16,16 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import { Globe, Lightbulb, Plus, Settings2 } from "lucide-react";
+import {
+	Folder,
+	FolderPlus,
+	Globe,
+	Lightbulb,
+	Plus,
+	Settings2,
+} from "lucide-react";
 import { ActiveComposerOption } from "@/components/ai-elements/active-composer-option";
+import { HoverScrollTitle } from "@/components/hover-scroll-title";
 
 type ChatComposerOptionsProps = {
 	open: boolean;
@@ -24,6 +34,9 @@ type ChatComposerOptionsProps = {
 	onWebSearchEnabledChange: (value: boolean) => void;
 	chatMode: ChatMode;
 	onChatModeChange: (mode: ChatMode) => void;
+	localFolder: DesktopLocalFolder | null;
+	onChooseLocalFolder: () => void;
+	onClearLocalFolder: () => void;
 	onOpenConnectionsSettings: () => void;
 };
 
@@ -34,6 +47,9 @@ export function ChatComposerOptions({
 	onWebSearchEnabledChange,
 	chatMode,
 	onChatModeChange,
+	localFolder,
+	onChooseLocalFolder,
+	onClearLocalFolder,
 	onOpenConnectionsSettings,
 }: ChatComposerOptionsProps) {
 	return (
@@ -45,6 +61,9 @@ export function ChatComposerOptions({
 				onWebSearchEnabledChange={onWebSearchEnabledChange}
 				chatMode={chatMode}
 				onChatModeChange={onChatModeChange}
+				localFolder={localFolder}
+				onChooseLocalFolder={onChooseLocalFolder}
+				onClearLocalFolder={onClearLocalFolder}
 				onOpenConnectionsSettings={onOpenConnectionsSettings}
 			/>
 			{webSearchEnabled ? (
@@ -63,6 +82,20 @@ export function ChatComposerOptions({
 					onDisable={() => onChatModeChange(CHAT_MODE.DEFAULT)}
 				/>
 			) : null}
+			{localFolder ? (
+				<ActiveComposerOption
+					disableLabel={`Remove ${localFolder.name}`}
+					icon={Folder}
+					label={
+						<HoverScrollTitle className="max-w-28" scrollOnHover={false}>
+							{localFolder.name}
+						</HoverScrollTitle>
+					}
+					labelClassName="min-w-0"
+					onDisable={onClearLocalFolder}
+					tooltipLabel={`Remove ${localFolder.path}`}
+				/>
+			) : null}
 		</>
 	);
 }
@@ -74,8 +107,12 @@ function ScopePicker({
 	onWebSearchEnabledChange,
 	chatMode,
 	onChatModeChange,
+	localFolder,
+	onChooseLocalFolder,
 	onOpenConnectionsSettings,
 }: ChatComposerOptionsProps) {
+	const canSelectLocalFolders = isDesktopRuntime();
+
 	return (
 		<DropdownMenu open={open} onOpenChange={onOpenChange}>
 			<Tooltip>
@@ -129,6 +166,14 @@ function ScopePicker({
 							/>
 						</label>
 					</DropdownMenuItem>
+					{canSelectLocalFolders ? (
+						<DropdownMenuItem onSelect={onChooseLocalFolder}>
+							<FolderPlus className="text-foreground" />
+							<span>
+								{localFolder ? "Change local folder" : "Add local folder"}
+							</span>
+						</DropdownMenuItem>
+					) : null}
 				</DropdownMenuGroup>
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>

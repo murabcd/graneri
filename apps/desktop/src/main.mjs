@@ -40,6 +40,7 @@ import { createDesktopContentSecurityPolicy } from "./desktop-content-security-p
 import { createDesktopDiagnostics } from "./desktop-diagnostics.mjs";
 import { createDesktopDiagnosticsPaths } from "./desktop-diagnostics-paths.mjs";
 import { createDesktopDictationTranscription } from "./desktop-dictation-transcription.mjs";
+import { pickDesktopLocalFolder } from "./desktop-local-folder-picker.mjs";
 import { createDesktopNavigationState } from "./desktop-navigation-state.mjs";
 import { createDesktopPreferencesStore } from "./desktop-preferences.mjs";
 import { createDesktopRealtimeTransport } from "./desktop-realtime-transport.mjs";
@@ -2658,6 +2659,17 @@ registerDesktopInvokeHandler("clearNoteDraft", async (_event, noteKey) => {
 
 registerDesktopInvokeHandler("shareLocalFolders", async (_event, paths) => {
 	return await desktopStorage.shareLocalFolders(paths);
+});
+
+registerDesktopInvokeHandler("pickLocalFolder", async () => {
+	return await pickDesktopLocalFolder({
+		shareLocalFolders: desktopStorage.shareLocalFolders,
+		showOpenDialog: async (options) =>
+			await dialog.showOpenDialog(
+				getExistingMainWindow() ?? undefined,
+				options,
+			),
+	});
 });
 
 registerDesktopInvokeHandler(

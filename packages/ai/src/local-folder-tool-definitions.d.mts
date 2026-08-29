@@ -16,6 +16,9 @@ export type LocalFolderToolRoot = {
 export declare const MAX_LOCAL_FOLDER_ROOTS: number;
 export declare const MAX_LOCAL_FILE_READ_BYTES: number;
 export declare const MAX_LOCAL_COMMAND_LENGTH: number;
+export declare const assertLocalFolderRootLimit: (roots: {
+	readonly length: number;
+}) => void;
 
 export declare const LOCAL_FOLDER_TOOL_NAMES: readonly string[];
 export declare const LOCAL_FOLDER_TOOL_UI_METADATA: Readonly<

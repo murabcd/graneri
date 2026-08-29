@@ -219,6 +219,10 @@ export type DesktopLocalFolder = {
 	path: string;
 };
 
+export type DesktopLocalFolderPickerResult =
+	| { canceled: true }
+	| { canceled: false; folder: DesktopLocalFolder };
+
 export interface GraneriDesktopBridge {
 	platform: DesktopPlatform;
 	getMeta: () => Promise<{
@@ -351,6 +355,7 @@ export interface GraneriDesktopBridge {
 		draft: Omit<DesktopNoteDraft, "version" | "noteId" | "updatedAt">,
 	) => Promise<{ ok: boolean }>;
 	clearNoteDraft: (noteKey: string) => Promise<{ ok: boolean }>;
+	pickLocalFolder: () => Promise<DesktopLocalFolderPickerResult>;
 	shareLocalFolders: (paths: string[]) => Promise<{
 		folders: DesktopLocalFolder[];
 	}>;

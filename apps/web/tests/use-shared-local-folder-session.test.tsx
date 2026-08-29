@@ -70,4 +70,52 @@ describe("shared local folder session", () => {
 		});
 		expect(result.current.sharedLocalFolders).toEqual([folderC]);
 	});
+
+	it("chooses, replaces, and removes one folder through the desktop picker", async () => {
+		const folder = {
+			id: "folder_graneri",
+			name: "graneri",
+			path: "/Users/test/Documents/graneri",
+		};
+		const replacementFolder = {
+			id: "folder_fluently",
+			name: "fluently",
+			path: "/Users/test/Documents/fluently",
+		};
+		const pickLocalFolder = vi
+			.fn()
+			.mockResolvedValueOnce({ canceled: false, folder })
+			.mockResolvedValueOnce({
+				canceled: false,
+				folder: replacementFolder,
+			});
+		const shareLocalFolders = vi.fn().mockResolvedValue({ folders: [] });
+		window.graneriDesktop = {
+			platform: "darwin",
+			pickLocalFolder,
+			shareLocalFolders,
+		} as Window["graneriDesktop"];
+
+		const { result } = renderHook(() =>
+			useSharedLocalFolderSession("chat:graneri"),
+		);
+
+		await act(async () => result.current.chooseSharedLocalFolder());
+		expect(pickLocalFolder).toHaveBeenCalledWith();
+		expect(result.current.sharedLocalFolders).toEqual([folder]);
+		expect(
+			JSON.parse(
+				window.localStorage.getItem(
+					"graneri.sharedLocalFolders.chat:graneri",
+				) ?? "null",
+			),
+		).toEqual([folder]);
+
+		await act(async () => result.current.chooseSharedLocalFolder());
+		expect(result.current.sharedLocalFolders).toEqual([replacementFolder]);
+
+		await act(async () => result.current.clearSharedLocalFolderSelection());
+		expect(shareLocalFolders).toHaveBeenCalledWith([]);
+		expect(result.current.sharedLocalFolders).toEqual([]);
+	});
 });

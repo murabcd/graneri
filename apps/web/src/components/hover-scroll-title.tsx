@@ -33,10 +33,12 @@ export function HoverScrollTitle({
 	children,
 	className,
 	keepFadeOnHover = false,
+	scrollOnHover = true,
 }: {
 	children: React.ReactNode;
 	className?: string;
 	keepFadeOnHover?: boolean;
+	scrollOnHover?: boolean;
 }) {
 	const viewportRef = React.useRef<HTMLSpanElement>(null);
 	const trackRef = React.useRef<HTMLSpanElement>(null);
@@ -96,6 +98,7 @@ export function HoverScrollTitle({
 			)}
 			data-overflowing={scrollMetrics !== null || undefined}
 			data-keep-fade-on-hover={keepFadeOnHover || undefined}
+			data-scroll-on-hover={scrollOnHover || undefined}
 			draggable={false}
 		>
 			<span

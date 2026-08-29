@@ -3,8 +3,8 @@ import { open, readdir, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { MAX_LOCAL_FILE_UPLOADS } from "./local-folder-file-contract.mjs";
 import {
+	assertLocalFolderRootLimit,
 	MAX_LOCAL_FILE_READ_BYTES,
-	MAX_LOCAL_FOLDER_ROOTS,
 } from "./local-folder-tool-definitions.mjs";
 import {
 	assertModelFileMedia,
@@ -46,11 +46,7 @@ const validateRoots = (roots) => {
 	if (!Array.isArray(roots) || roots.length === 0) {
 		throw new Error("At least one shared local folder is required.");
 	}
-	if (roots.length > MAX_LOCAL_FOLDER_ROOTS) {
-		throw new Error(
-			`At most ${MAX_LOCAL_FOLDER_ROOTS} local folders can be shared with one chat.`,
-		);
-	}
+	assertLocalFolderRootLimit(roots);
 
 	const seen = new Set();
 	return roots.map((root) => {

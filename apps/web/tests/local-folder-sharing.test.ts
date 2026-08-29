@@ -80,7 +80,7 @@ describe("local folder sharing", () => {
 		]);
 	});
 
-	it("registers the complete canonical folder set when adding a path", async () => {
+	it("replaces the current folder when the prompt references another path", async () => {
 		const existingFolder = {
 			id: "folder_1",
 			name: "one",
@@ -92,7 +92,7 @@ describe("local folder sharing", () => {
 			path: "/Users/test/Documents/two",
 		};
 		const shareLocalFolders = vi.fn().mockResolvedValue({
-			folders: [existingFolder, addedFolder],
+			folders: [addedFolder],
 		});
 		window.graneriDesktop = {
 			platform: "darwin",
@@ -105,11 +105,10 @@ describe("local folder sharing", () => {
 				text: "compare with /Users/test/Documents/two",
 			}),
 		).resolves.toEqual({
-			allFolders: [existingFolder, addedFolder],
+			allFolders: [addedFolder],
 			newFolders: [addedFolder],
 		});
 		expect(shareLocalFolders).toHaveBeenCalledWith([
-			"/Users/test/Documents/one",
 			"/Users/test/Documents/two",
 		]);
 	});

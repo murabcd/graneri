@@ -9,7 +9,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { MAX_LOCAL_FOLDER_ROOTS } from "@workspace/ai/local-folder-tool-definitions";
+import { assertLocalFolderRootLimit } from "@workspace/ai/local-folder-tool-definitions";
 import { logError } from "./logger.mjs";
 
 const transcriptDraftStorageVersion = 1;
@@ -181,11 +181,7 @@ export const createDesktopStorage = ({
 				throw new Error("Local folder paths must be an array.");
 			}
 
-			if (paths.length > MAX_LOCAL_FOLDER_ROOTS) {
-				throw new Error(
-					`At most ${MAX_LOCAL_FOLDER_ROOTS} local folders can be shared at once.`,
-				);
-			}
+			assertLocalFolderRootLimit(paths);
 
 			const foldersById = new Map();
 

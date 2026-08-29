@@ -1,5 +1,8 @@
 import { extractLocalPathReferences } from "@workspace/ai/local-path-references";
-import { shareDesktopLocalFolders } from "@workspace/platform/desktop";
+import {
+	pickDesktopLocalFolder,
+	shareDesktopLocalFolders,
+} from "@workspace/platform/desktop";
 import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 
 const STORAGE_KEY_PREFIX = "graneri.sharedLocalFolders";
@@ -54,6 +57,16 @@ export const storeSharedLocalFolders = (
 	}
 };
 
+const requireDesktopFolderResult = <Result>(result: Result | null): Result => {
+	if (!result) {
+		throw new Error(
+			"Desktop local folder sharing is unavailable. Restart the desktop app, then try again.",
+		);
+	}
+
+	return result;
+};
+
 export const requireRehydratedSharedLocalFolders = async (
 	scope: string,
 ): Promise<DesktopLocalFolder[]> => {
@@ -76,14 +89,17 @@ export const requireRehydratedSharedLocalFolders = async (
 		);
 	}
 
-	if (!result) {
-		throw new Error(
-			"Desktop local folder sharing is unavailable. Restart the desktop app, then try again.",
-		);
-	}
+	const registeredFolders = requireDesktopFolderResult(result);
 
-	storeSharedLocalFolders(scope, result.folders);
-	return result.folders;
+	storeSharedLocalFolders(scope, registeredFolders.folders);
+	return registeredFolders.folders;
+};
+
+export const pickSharedLocalFolder = async () =>
+	requireDesktopFolderResult(await pickDesktopLocalFolder());
+
+export const clearSharedLocalFolder = async () => {
+	requireDesktopFolderResult(await shareDesktopLocalFolders([]));
 };
 
 export const shareLocalFoldersFromText = async ({
@@ -103,9 +119,7 @@ export const shareLocalFoldersFromText = async ({
 	}
 
 	const currentFolderIds = new Set(currentFolders.map((folder) => folder.id));
-	const requestedPaths = Array.from(
-		new Set([...currentFolders.map((folder) => folder.path), ...paths]),
-	);
+	const requestedPaths = Array.from(new Set(paths));
 	const result = await shareDesktopLocalFolders(requestedPaths).catch(
 		(error: unknown) => {
 			throw new Error(
@@ -116,14 +130,10 @@ export const shareLocalFoldersFromText = async ({
 		},
 	);
 
-	if (!result) {
-		throw new Error(
-			"Desktop local folder sharing is unavailable. Restart the desktop app, then try again.",
-		);
-	}
+	const registeredFolders = requireDesktopFolderResult(result);
 	return {
-		allFolders: result.folders,
-		newFolders: result.folders.filter(
+		allFolders: registeredFolders.folders,
+		newFolders: registeredFolders.folders.filter(
 			(folder) => !currentFolderIds.has(folder.id),
 		),
 	};

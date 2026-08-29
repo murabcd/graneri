@@ -6,6 +6,7 @@ import type {
 	HostedHumanDecisionRequest,
 	HostedHumanDecisionResponse,
 } from "@workspace/ai/hosted-human-decision";
+import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import {
 	InputGroup,
 	InputGroupAddon,
@@ -185,6 +186,9 @@ type ChatComposerProps = {
 	onWebSearchEnabledChange: (value: boolean) => void;
 	chatMode: ChatMode;
 	onChatModeChange: (mode: ChatMode) => void;
+	localFolder: DesktopLocalFolder | null;
+	onChooseLocalFolder: () => void;
+	onClearLocalFolder: () => void;
 	appSources: AppSource[];
 	onOpenConnectionsSettings: () => void;
 };
@@ -231,6 +235,9 @@ export function ChatComposer({
 	onWebSearchEnabledChange,
 	chatMode,
 	onChatModeChange,
+	localFolder,
+	onChooseLocalFolder,
+	onClearLocalFolder,
 	appSources,
 	onOpenConnectionsSettings,
 }: ChatComposerProps) {
@@ -355,6 +362,9 @@ export function ChatComposer({
 										onWebSearchEnabledChange={onWebSearchEnabledChange}
 										chatMode={chatMode}
 										onChatModeChange={onChatModeChange}
+										localFolder={localFolder}
+										onChooseLocalFolder={onChooseLocalFolder}
+										onClearLocalFolder={onClearLocalFolder}
 										onOpenConnectionsSettings={onOpenConnectionsSettings}
 									/>
 								)

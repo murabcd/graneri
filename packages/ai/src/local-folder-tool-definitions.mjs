@@ -5,9 +5,15 @@ import {
 	searchLocalFilesOutputForModel,
 } from "./local-folder-file-contract.mjs";
 
-export const MAX_LOCAL_FOLDER_ROOTS = 4;
+export const MAX_LOCAL_FOLDER_ROOTS = 1;
 export const MAX_LOCAL_FILE_READ_BYTES = 120_000;
 export const MAX_LOCAL_COMMAND_LENGTH = 8_000;
+
+export const assertLocalFolderRootLimit = (roots) => {
+	if (roots.length > MAX_LOCAL_FOLDER_ROOTS) {
+		throw new Error("Only one local folder can be shared.");
+	}
+};
 
 const localFolderToolCatalog = Object.freeze({
 	list_local_directory: {

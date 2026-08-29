@@ -310,6 +310,16 @@ export const saveDesktopTextFile = async (
 	return await bridge.saveTextFile(defaultFileName, content);
 };
 
+export const pickDesktopLocalFolder = async () => {
+	const bridge = getDesktopBridge();
+
+	if (!bridge?.pickLocalFolder) {
+		return null;
+	}
+
+	return await bridge.pickLocalFolder();
+};
+
 export const shareDesktopLocalFolders = async (paths: string[]) => {
 	const bridge = getDesktopBridge();
 
