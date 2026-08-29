@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
@@ -64,6 +65,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			updatedAt: 5_000,
 		});
 		const expiredLinkedChatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			chatId: "expired-linked-chat",
@@ -199,6 +201,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 		});
 
 		const expiredStandaloneChatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			chatId: "expired-standalone-chat",
@@ -222,6 +225,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 		});
 
 		const recentStandaloneChatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			chatId: "recent-standalone-chat",
@@ -235,6 +239,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			lastMessageAt: 15_000,
 		});
 		const recentOldUpdatedStandaloneChatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			chatId: "recent-old-updated-standalone-chat",
@@ -250,6 +255,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 		const expiredRecentlyUpdatedStandaloneChatId = await ctx.db.insert(
 			"chats",
 			{
+				...DEFAULT_CHAT_SETTINGS,
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				workspaceId: cleanupWorkspaceId,
 				chatId: "expired-recently-updated-standalone-chat",

@@ -14,9 +14,13 @@ const convexClient = new ConvexReactClient("https://test.convex.cloud");
 afterEach(cleanup);
 
 function ActiveOptionComposer({
+	draft = "",
 	humanDecision,
+	isSettingsLoading = false,
 }: {
+	draft?: string;
 	humanDecision?: HostedHumanDecisionRequest;
+	isSettingsLoading?: boolean;
 }) {
 	const [attachedFiles, setAttachedFiles] = React.useState<ChatAttachment[]>(
 		[],
@@ -30,7 +34,7 @@ function ActiveOptionComposer({
 			<TooltipProvider>
 				<ChatComposer
 					useCompactLayout={false}
-					draft=""
+					draft={draft}
 					placeholder={
 						chatMode === CHAT_MODE.PLAN
 							? "Describe your task to generate a plan..."
@@ -65,6 +69,7 @@ function ActiveOptionComposer({
 					onOpenConnectionsSettings={vi.fn()}
 					humanDecision={humanDecision}
 					isHumanDecisionSubmitting={false}
+					isSettingsLoading={isSettingsLoading}
 					onHumanDecisionResponse={vi.fn()}
 				/>
 			</TooltipProvider>
@@ -73,6 +78,15 @@ function ActiveOptionComposer({
 }
 
 describe("chat composer active options", () => {
+	it("blocks sends and settings controls while stored settings load", () => {
+		render(<ActiveOptionComposer draft="Prompt" isSettingsLoading />);
+
+		expect(screen.queryByRole("button", { name: "Chat options" })).toBeNull();
+		expect(
+			screen.getByRole("button", { name: "Send" }).hasAttribute("disabled"),
+		).toBe(true);
+	});
+
 	it("replaces the composer with a pending human decision", () => {
 		const { container } = render(
 			<ActiveOptionComposer

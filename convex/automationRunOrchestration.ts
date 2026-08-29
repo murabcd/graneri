@@ -1,5 +1,7 @@
 import { CHAT_CONTEXT_POLICY } from "@workspace/ai/chat-context-policy";
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
+import { findChatModel } from "@workspace/ai/models";
 import {
 	BASE_CHAT_INSTRUCTIONS,
 	buildChatHistoryInstructions,
@@ -157,7 +159,7 @@ const startAutomationAssistantRun = async (
 		reason: Doc<"automationRuns">["reason"];
 	},
 ) => {
-	const model = args.automation.model;
+	const model = findChatModel(args.automation.model)?.model;
 	const reasoningEffort = args.automation.reasoningEffort;
 	const serviceTier = args.automation.serviceTier;
 	if (!model || !reasoningEffort || !serviceTier) {
@@ -182,8 +184,12 @@ const startAutomationAssistantRun = async (
 		chatId: args.automation.chatId,
 		title: args.automation.title,
 		preview: args.automation.prompt,
-		model,
-		reasoningEffort,
+		settings: {
+			...DEFAULT_CHAT_SETTINGS,
+			model,
+			reasoningEffort,
+			serviceTier,
+		},
 		forceTitle: true,
 		message: createTextMessage({
 			id: userMessageId,
@@ -220,7 +226,7 @@ const startAutomationAssistantRun = async (
 				notes,
 			}),
 			chatMode: CHAT_MODE.DEFAULT,
-			webSearchEnabled: args.automation.webSearchEnabled ?? false,
+			webSearchEnabled: args.automation.webSearchEnabled,
 			chartGenerationRequested: false,
 			imageGenerationRequested: false,
 			appToolScope: args.automation.appsEnabled ? "selected" : "disabled",

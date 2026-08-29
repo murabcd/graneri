@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import {
 	hostedChatReplayAcceptedHeader,
 	hostedChatReplayQueuedMessageIdHeader,
@@ -115,7 +116,7 @@ const postChatRequest = async (
 		const response = await fetch(`http://127.0.0.1:${address.port}/api/chat`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(body),
+			body: JSON.stringify({ ...DEFAULT_CHAT_SETTINGS, ...body }),
 		});
 
 		const responseText = await response.text();

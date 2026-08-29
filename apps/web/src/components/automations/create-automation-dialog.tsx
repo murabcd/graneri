@@ -44,13 +44,15 @@ import {
 } from "@/components/chat/model-picker";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { type AppSource, useAppSources } from "@/hooks/use-app-sources";
-import { getStoredChatModel, storeChatModel } from "@/lib/ai/chat-model";
-import { defaultChatModel, findChatModel } from "@/lib/ai/models";
 import {
-	getStoredReasoningEffort,
-	storeReasoningEffort,
-} from "@/lib/ai/reasoning-effort";
-import { getStoredServiceTier, storeServiceTier } from "@/lib/ai/service-tier";
+	getStoredAutomationModel,
+	getStoredAutomationReasoningEffort,
+	getStoredAutomationServiceTier,
+	storeAutomationModel,
+	storeAutomationReasoningEffort,
+	storeAutomationServiceTier,
+} from "@/lib/ai/automation-settings";
+import { defaultChatModel, findChatModel } from "@/lib/ai/models";
 import { getAppSourceLabel } from "@/lib/chat-source-display";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
@@ -121,9 +123,9 @@ const createEmptyAutomationDialogState = (): AutomationDialogState => {
 		title: "",
 		prompt: "",
 		promptMentions: [],
-		selectedModel: getStoredChatModel(),
-		reasoningEffort: getStoredReasoningEffort(),
-		serviceTier: getStoredServiceTier(),
+		selectedModel: getStoredAutomationModel(),
+		reasoningEffort: getStoredAutomationReasoningEffort(),
+		serviceTier: getStoredAutomationServiceTier(),
 		schedule: createDefaultAutomationScheduleDraft(),
 		deliveryPolicy: "always",
 		stopCondition: "",
@@ -557,17 +559,17 @@ function useCreateAutomationDialogElement({
 										onOpenChange={handleModelPickerOpenChange}
 										selectedModel={selectedModel}
 										onSelectedModelChange={(value) => {
-											storeChatModel(value);
+											storeAutomationModel(value);
 											updateDialogState({ selectedModel: value });
 										}}
 										reasoningEffort={reasoningEffort}
 										onReasoningEffortChange={(value) => {
-											storeReasoningEffort(value);
+											storeAutomationReasoningEffort(value);
 											updateDialogState({ reasoningEffort: value });
 										}}
 										serviceTier={serviceTier}
 										onServiceTierChange={(value) => {
-											storeServiceTier(value);
+											storeAutomationServiceTier(value);
 											updateDialogState({ serviceTier: value });
 										}}
 										triggerClassName="text-muted-foreground hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"

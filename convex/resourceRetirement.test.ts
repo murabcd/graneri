@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
@@ -30,6 +31,7 @@ test("chat retirement reports progress and retries exact message batches", async
 	const { t, workspaceId } = await createWorkspace();
 	const chatId = await t.run(async (ctx) => {
 		const chatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier,
 			workspaceId,
 			chatId: "large-chat",
@@ -85,6 +87,7 @@ test("chat retirement deletes preserved branch messages and metadata", async () 
 	const { t, workspaceId } = await createWorkspace();
 	const { branchId, chatId } = await t.run(async (ctx) => {
 		const chatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier,
 			workspaceId,
 			chatId: "branched-chat",
@@ -162,6 +165,7 @@ test("note retirement owns linked chat continuation and is idempotent", async ()
 		for (let index = 0; index < 26; index += 1) {
 			chatIds.push(
 				await ctx.db.insert("chats", {
+					...DEFAULT_CHAT_SETTINGS,
 					ownerTokenIdentifier,
 					workspaceId,
 					chatId: `note-chat-${index}`,

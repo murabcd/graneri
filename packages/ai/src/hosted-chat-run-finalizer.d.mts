@@ -37,14 +37,9 @@ type LogLatencyDetails = Record<
 type SaveAssistantMessageForRunArgs<
 	WorkspaceId extends string,
 	NoteId extends string,
-	ReasoningEffort extends string,
 	AssistantRunId extends string,
 > = ReturnType<
-	typeof HostedChatRuntime.buildHostedChatSaveMessageArgs<
-		WorkspaceId,
-		NoteId,
-		ReasoningEffort
-	>
+	typeof HostedChatRuntime.buildHostedChatSaveMessageArgs<WorkspaceId, NoteId>
 > & {
 	runId: AssistantRunId;
 };
@@ -52,7 +47,6 @@ type SaveAssistantMessageForRunArgs<
 export declare const createHostedAssistantRunFinalizer: <
 	WorkspaceId extends string,
 	NoteId extends string,
-	ReasoningEffort extends string,
 	AssistantRunId extends string,
 >(args: {
 	activeStreamSession: HostedActiveStreamSessionLike;
@@ -70,7 +64,6 @@ export declare const createHostedAssistantRunFinalizer: <
 		terminalization: HostedAssistantRunTerminalization;
 	}) => void;
 	logLatency: (stage: string, details?: LogLatencyDetails) => void;
-	model: string;
 	noteId?: NoteId | null;
 	onCompleted?: () => void;
 	onFailed?: () => void;
@@ -83,15 +76,9 @@ export declare const createHostedAssistantRunFinalizer: <
 		error: unknown;
 		responseMessage: UIMessage;
 	}) => void;
-	reasoningEffort: ReasoningEffort;
 	safetyIdentifier: string;
 	saveAssistantMessageForRun: (
-		args: SaveAssistantMessageForRunArgs<
-			WorkspaceId,
-			NoteId,
-			ReasoningEffort,
-			AssistantRunId
-		>,
+		args: SaveAssistantMessageForRunArgs<WorkspaceId, NoteId, AssistantRunId>,
 	) => Promise<unknown | null>;
 	shouldGenerateChatTitle: boolean;
 	updateChatTitle: (args: {

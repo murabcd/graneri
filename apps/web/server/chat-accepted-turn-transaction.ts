@@ -1,4 +1,4 @@
-import type { ChatMode } from "@workspace/ai/chat-mode";
+import type { ChatSettings } from "@workspace/ai/chat-settings";
 import {
 	getHostedChatConvexRouteError,
 	toHostedStoredMessage,
@@ -9,7 +9,6 @@ import {
 	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,
 } from "@workspace/ai/hosted-chat-turn";
-import type { ReasoningEffort, ServiceTier } from "@workspace/ai/models";
 import type { ToolApprovalResponse } from "@workspace/ai/tool-approval-state";
 import type { UIMessage } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
@@ -116,14 +115,11 @@ export type HostedChatTurnPreparedPersistence = Pick<
 export type HostedChatTurnAcceptancePolicy = {
 	admissionReservationId?: Id<"aiAdmissionReservations">;
 	appsEnabled: boolean;
-	chatMode: ChatMode;
 	chatId: string;
 	defaultTimezone: string;
-	model: string;
 	noteId: Id<"notes"> | null;
-	reasoningEffort: ReasoningEffort;
 	selectedSourceIds: string[];
-	serviceTier: ServiceTier;
+	settings: ChatSettings;
 	supersedeActiveRun?: boolean;
 	trigger?: "submit-message" | "regenerate-message";
 	workspaceId: Id<"workspaces">;
@@ -210,14 +206,11 @@ export const acceptHostedChatTurn = async ({
 	const {
 		admissionReservationId,
 		appsEnabled,
-		chatMode,
 		chatId,
 		defaultTimezone,
-		model,
 		noteId,
-		reasoningEffort,
 		selectedSourceIds,
-		serviceTier,
+		settings,
 		supersedeActiveRun,
 		trigger,
 		workspaceId,
@@ -376,9 +369,8 @@ export const acceptHostedChatTurn = async ({
 				workspaceId,
 				chatId,
 				noteId,
-				model,
+				settings,
 				nextAssistantMessageId: assistantMessageId,
-				reasoningEffort,
 				message: lastUserMessage,
 				continueRunId,
 				queuedInput,
@@ -454,7 +446,7 @@ export const acceptHostedChatTurn = async ({
 				job: {
 					messagesJson: JSON.stringify(chatMessages),
 					instructions,
-					chatMode,
+					chatMode: settings.chatMode,
 					webSearchEnabled: coreToolPolicyState.webSearchEnabled,
 					chartGenerationRequested:
 						coreToolPolicyState.chartGenerationRequested,
@@ -464,9 +456,9 @@ export const acceptHostedChatTurn = async ({
 					shouldGenerateChatTitle,
 					selectedSourceIds: appsEnabled ? selectedSourceIds : [],
 					defaultTimezone,
-					model,
-					reasoningEffort,
-					serviceTier,
+					model: settings.model,
+					reasoningEffort: settings.reasoningEffort,
+					serviceTier: settings.serviceTier,
 				},
 			});
 			assistantRun = {

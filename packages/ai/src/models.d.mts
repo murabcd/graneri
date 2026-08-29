@@ -1,22 +1,29 @@
+export type ChatModelId = "gpt-5.6-sol" | "gpt-5.6-terra" | "gpt-5.6-luna";
+
 export type ChatModel = {
-	id: string;
+	id: ChatModelId;
 	name: string;
-	model: string;
+	model: ChatModelId;
 };
 
 export declare const CHAT_MODELS: readonly ChatModel[];
-export declare const DEFAULT_CHAT_MODEL_ID: string;
-export declare const NOTE_GENERATION_MODEL_ID: string;
-export declare const PROJECT_DESCRIPTION_MODEL_ID: string;
-export declare const CHAT_TITLE_MODEL_ID: string;
-export declare const CONTEXT_COMPACTION_MODEL_ID: string;
-export declare const AUTOMATION_DELIVERY_MODEL_ID: string;
+export declare const GPT_5_6_SOL_MODEL_ID: "gpt-5.6-sol";
+export declare const GPT_5_6_TERRA_MODEL_ID: "gpt-5.6-terra";
+export declare const GPT_5_6_LUNA_MODEL_ID: "gpt-5.6-luna";
+export declare const DEFAULT_CHAT_MODEL_ID: ChatModelId;
+export declare const NOTE_GENERATION_MODEL_ID: ChatModelId;
+export declare const PROJECT_DESCRIPTION_MODEL_ID: ChatModelId;
+export declare const CHAT_TITLE_MODEL_ID: ChatModelId;
+export declare const CONTEXT_COMPACTION_MODEL_ID: ChatModelId;
+export declare const AUTOMATION_DELIVERY_MODEL_ID: ChatModelId;
 export declare const defaultChatModel: ChatModel;
 export declare const findChatModel: (
 	value?: string | null,
 ) => ChatModel | undefined;
 export declare const getChatModel: (value: string) => ChatModel;
-export declare const isSupportedChatModel: (value?: string | null) => boolean;
+export declare const isSupportedChatModel: (
+	value?: string | null,
+) => value is ChatModelId;
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 export type ReasoningEffortOption = {
 	id: ReasoningEffort;

@@ -83,14 +83,17 @@ const createAcceptanceArgs = ({
 		policy: {
 			admissionReservationId: "admission-1" as Id<"aiAdmissionReservations">,
 			appsEnabled: false,
-			chatMode: "default",
 			chatId,
 			defaultTimezone: "UTC",
-			model: "gpt-5.6-sol",
 			noteId: null,
-			reasoningEffort: "medium",
 			selectedSourceIds: [],
-			serviceTier: "auto",
+			settings: {
+				chatMode: "default",
+				model: "gpt-5.6-sol",
+				reasoningEffort: "medium",
+				serviceTier: "auto",
+				webSearchEnabled: false,
+			},
 			workspaceId,
 		},
 		preparedRun: {

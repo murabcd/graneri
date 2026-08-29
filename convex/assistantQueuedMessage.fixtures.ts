@@ -1,11 +1,10 @@
-import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import type { DurableQueuedChatRequest } from "@workspace/ai/queued-chat-request";
 
 export const createQueuedRequestBody = (
 	overrides: Partial<DurableQueuedChatRequest> = {},
 ): DurableQueuedChatRequest => ({
-	chatMode: CHAT_MODE.DEFAULT,
-	model: "gpt-5",
+	...DEFAULT_CHAT_SETTINGS,
 	timezone: "UTC",
 	...overrides,
 });

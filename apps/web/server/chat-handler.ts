@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createChatLatencyLogger } from "@workspace/ai/chat-latency-logger";
-import { parseChatMode } from "@workspace/ai/chat-mode";
+import { parseChatSettings } from "@workspace/ai/chat-settings";
 import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat-http";
 import {
 	getHostedChatConvexRouteError,
@@ -17,10 +17,8 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 import {
-	findChatModel,
+	getChatModel,
 	getOpenAiModelProviderOptions,
-	normalizeReasoningEffort,
-	normalizeServiceTier,
 } from "../src/lib/ai/models.js";
 import type {
 	AttachableAssistantRun,
@@ -116,11 +114,11 @@ export const handleChatRequest = async (
 		trigger,
 		messageId,
 		message,
-		model,
-		reasoningEffort,
-		serviceTier,
+		model: requestedModel,
+		reasoningEffort: requestedReasoningEffort,
+		serviceTier: requestedServiceTier,
 		workspaceId,
-		webSearchEnabled = false,
+		webSearchEnabled: requestedWebSearchEnabled,
 		appsEnabled = true,
 		mentions,
 		selectedSourceIds,
@@ -134,25 +132,33 @@ export const handleChatRequest = async (
 		supersedeActiveRun = false,
 		steerQueuedMessageId,
 	} = await readJsonBody<ChatRequestBody>(request);
-	const chatMode = parseChatMode(requestedChatMode);
-	if (!chatMode) {
+	const settings = parseChatSettings({
+		chatMode: requestedChatMode,
+		model: requestedModel,
+		reasoningEffort: requestedReasoningEffort,
+		serviceTier: requestedServiceTier,
+		webSearchEnabled: requestedWebSearchEnabled,
+	});
+	if (!settings) {
 		wideEvent.outcome = "error";
 		wideEvent.status_code = 400;
-		wideEvent.error_code = "chat_mode_invalid";
+		wideEvent.error_code = "chat_settings_invalid";
 		emitWideEvent("error");
 		sendJson(response, 400, {
-			error: "chatMode must be default or plan.",
-			errorCode: "chat_mode_invalid",
+			error: "Complete valid chat settings are required.",
+			errorCode: "chat_settings_invalid",
 		});
 		return;
 	}
+	const { chatMode, model, reasoningEffort, serviceTier, webSearchEnabled } =
+		settings;
 	wideEvent.chat_id = id ?? null;
 	wideEvent.chat_mode = chatMode;
 	wideEvent.workspace_id = workspaceId ?? null;
 	wideEvent.trigger = trigger ?? null;
-	wideEvent.model = model ?? null;
-	wideEvent.reasoning_effort = reasoningEffort ?? null;
-	wideEvent.service_tier = serviceTier ?? null;
+	wideEvent.model = model;
+	wideEvent.reasoning_effort = reasoningEffort;
+	wideEvent.service_tier = serviceTier;
 	wideEvent.is_steer_route = options.isSteerRoute === true;
 	wideEvent.continue_run_id = continueRunId ?? null;
 	wideEvent.replay_queued_message_id = replayQueuedMessageId ?? null;
@@ -230,9 +236,7 @@ export const handleChatRequest = async (
 		auth: convexToken,
 	});
 	let storedChat: {
-		model?: string | null;
 		noteId?: Id<"notes"> | null;
-		reasoningEffort?: string | null;
 		title?: string | null;
 	} | null;
 	try {
@@ -258,38 +262,7 @@ export const handleChatRequest = async (
 	logLatency("convex.session_loaded", {
 		hasStoredChat: Boolean(storedChat),
 	});
-	const requestedModel = model ?? storedChat?.model ?? null;
-
-	if (!requestedModel) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 400;
-		wideEvent.error_code = "model_missing";
-		emitWideEvent("error");
-		sendJson(response, 400, {
-			error: "model is required.",
-		});
-		return;
-	}
-
-	const resolvedModel = findChatModel(requestedModel);
-
-	if (!resolvedModel) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 400;
-		wideEvent.error_code = "model_unsupported";
-		wideEvent.requested_model = requestedModel;
-		emitWideEvent("error");
-		sendJson(response, 400, {
-			error: `Unsupported model: ${requestedModel}.`,
-		});
-		return;
-	}
-	const requestedReasoningEffort =
-		reasoningEffort ?? storedChat?.reasoningEffort ?? undefined;
-	const resolvedReasoningEffort = normalizeReasoningEffort(
-		requestedReasoningEffort,
-	);
-	const resolvedServiceTier = normalizeServiceTier(serviceTier);
+	const resolvedModel = getChatModel(model);
 	const resolvedNoteId =
 		(noteContext?.noteId as Id<"notes"> | null | undefined) ??
 		storedChat?.noteId ??
@@ -336,15 +309,15 @@ export const handleChatRequest = async (
 		return;
 	}
 	const providerOptions = getOpenAiModelProviderOptions(resolvedModel.model, {
-		reasoningEffort: resolvedReasoningEffort,
+		reasoningEffort,
 		safetyIdentifier: admission.safetyIdentifier,
-		serviceTier: resolvedServiceTier,
+		serviceTier,
 	});
 	logLatency("chat.model_resolved", {
 		hasProviderOptions: Boolean(providerOptions),
 		model: resolvedModel.model,
-		reasoningEffort: resolvedReasoningEffort,
-		serviceTier: resolvedServiceTier,
+		reasoningEffort,
+		serviceTier,
 	});
 	await executeHostedChatTurn({
 		admission: {
@@ -365,9 +338,6 @@ export const handleChatRequest = async (
 			wideEvent,
 		},
 		model: {
-			defaultModel: resolvedModel.model,
-			defaultReasoningEffort: resolvedReasoningEffort,
-			defaultServiceTier: resolvedServiceTier,
 			defaultTimezone: resolvedTimezone,
 			generateTitleOnFirstUserMessage:
 				!storedChat || storedChat.title === "New chat",
@@ -376,7 +346,6 @@ export const handleChatRequest = async (
 		},
 		request: {
 			appsEnabled,
-			chatMode,
 			chatId: id,
 			continueRunId,
 			localFolders,
@@ -390,9 +359,9 @@ export const handleChatRequest = async (
 			steerQueuedMessageId,
 			supersedeActiveRun,
 			trigger,
-			webSearchEnabled,
 			workspaceId: resolvedWorkspaceId,
 		},
+		settings,
 	});
 };
 

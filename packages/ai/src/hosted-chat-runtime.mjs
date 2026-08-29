@@ -471,9 +471,7 @@ export const toHostedStoredMessage = (message) => ({
 export const buildHostedChatSaveMessageArgs = ({
 	chatId,
 	message,
-	model,
 	noteId,
-	reasoningEffort,
 	title,
 	workspaceId,
 }) => ({
@@ -482,8 +480,6 @@ export const buildHostedChatSaveMessageArgs = ({
 	noteId: noteId ?? undefined,
 	title,
 	preview: getHostedChatPreviewFromMessage(message),
-	model,
-	reasoningEffort,
 	message: toHostedStoredMessage(message),
 });
 

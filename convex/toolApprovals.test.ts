@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
@@ -24,6 +25,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 	);
 	const chatId = "chat-tool-approval";
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
 		message: {

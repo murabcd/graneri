@@ -17,19 +17,18 @@ export const isHostedQueuedUserMessageAccept = ({
 const buildSaveMessageArgs = ({
 	chatId,
 	message,
-	model,
 	noteId,
-	reasoningEffort,
+	settings,
 	workspaceId,
-}) =>
-	buildHostedChatSaveMessageArgs({
+}) => ({
+	...buildHostedChatSaveMessageArgs({
 		workspaceId,
 		chatId,
 		noteId,
-		model,
-		reasoningEffort,
 		message,
-	});
+	}),
+	settings,
+});
 
 export const persistHostedChatUserMessage = async ({
 	acceptQueuedUserMessage,
@@ -37,13 +36,12 @@ export const persistHostedChatUserMessage = async ({
 	chatId,
 	continueRunId,
 	message,
-	model,
 	nextAssistantMessageId,
 	noteId,
 	queuedInput,
-	reasoningEffort,
 	replayQueuedMessageId,
 	saveMessage,
+	settings,
 	steeredUserMessages,
 	workspaceId,
 }) => {
@@ -51,8 +49,7 @@ export const persistHostedChatUserMessage = async ({
 		workspaceId,
 		chatId,
 		noteId,
-		model,
-		reasoningEffort,
+		settings,
 		message,
 	});
 
@@ -68,8 +65,7 @@ export const persistHostedChatUserMessage = async ({
 			noteId: saveMessageArgs.noteId,
 			title: saveMessageArgs.title,
 			preview: saveMessageArgs.preview,
-			model: saveMessageArgs.model,
-			reasoningEffort: saveMessageArgs.reasoningEffort,
+			settings: saveMessageArgs.settings,
 			runId: continueRunId,
 			nextAssistantMessageId,
 			messages: steeredUserMessages.map((steeredMessage, index) => ({
@@ -78,8 +74,7 @@ export const persistHostedChatUserMessage = async ({
 					workspaceId,
 					chatId,
 					noteId,
-					model,
-					reasoningEffort,
+					settings,
 					message: steeredMessage,
 				}).message,
 			})),

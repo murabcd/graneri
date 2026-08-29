@@ -15,12 +15,12 @@ const durableQueuedChatRequestSchema = z.strictObject({
 	mentions: z.array(z.string()).optional(),
 	model: z.string().min(1),
 	noteContext: queuedNoteContextSchema.optional(),
-	reasoningEffort: z.enum(["low", "medium", "high", "xhigh"]).optional(),
+	reasoningEffort: z.enum(["low", "medium", "high", "xhigh"]),
 	recipeSlug: z.string().nullable().optional(),
 	selectedSourceIds: z.array(z.string()).optional(),
-	serviceTier: z.enum(["auto", "priority"]).optional(),
+	serviceTier: z.enum(["auto", "priority"]),
 	timezone: z.string().min(1),
-	webSearchEnabled: z.boolean().optional(),
+	webSearchEnabled: z.boolean(),
 });
 
 export const parseDurableQueuedChatRequest = (value) => {

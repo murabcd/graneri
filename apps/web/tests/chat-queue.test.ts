@@ -1,4 +1,5 @@
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { describe, expect, it } from "vitest";
 import {
 	createQueuedUserMessageId,
@@ -44,7 +45,7 @@ describe("chat queue serialization", () => {
 		expect(() =>
 			toQueuedUserMessageInput({
 				requestBody: {
-					chatMode: CHAT_MODE.DEFAULT,
+					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "token",
 					localFolders: [
 						{
@@ -53,7 +54,6 @@ describe("chat queue serialization", () => {
 							path: "/Users/example/Documents",
 						},
 					],
-					model: "gpt-5",
 					timezone: "UTC",
 				},
 				text: "Use this folder next",
@@ -70,10 +70,11 @@ describe("chat queue serialization", () => {
 				convexToken: "token",
 				localFolders: [],
 				mentions: ["note-1"],
-				model: "gpt-5",
+				model: DEFAULT_CHAT_SETTINGS.model,
 				reasoningEffort: "high",
 				replayQueuedMessageId: "stale-replay",
 				selectedSourceIds: ["source-1"],
+				serviceTier: "priority",
 				timezone: "UTC",
 				webSearchEnabled: true,
 				workspaceId: "workspace-1",
@@ -84,9 +85,10 @@ describe("chat queue serialization", () => {
 		expect(JSON.parse(queuedMessage.requestBodyJson)).toEqual({
 			chatMode: CHAT_MODE.PLAN,
 			mentions: ["note-1"],
-			model: "gpt-5",
+			model: DEFAULT_CHAT_SETTINGS.model,
 			reasoningEffort: "high",
 			selectedSourceIds: ["source-1"],
+			serviceTier: "priority",
 			timezone: "UTC",
 			webSearchEnabled: true,
 		});
@@ -95,10 +97,9 @@ describe("chat queue serialization", () => {
 	it("canonicalizes queued text before it crosses the durable replay boundary", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
 				localFolders: [],
-				model: "gpt-5",
 				timezone: "UTC",
 			},
 			text: "  Follow   this\n\nup  ",
@@ -152,10 +153,9 @@ describe("chat queue serialization", () => {
 		expect(() =>
 			toQueuedUserMessageInput({
 				requestBody: {
-					chatMode: CHAT_MODE.DEFAULT,
+					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "token",
 					localFolders: [],
-					model: "gpt-5",
 					timezone: "UTC",
 				},
 				text: "   ",
@@ -166,10 +166,9 @@ describe("chat queue serialization", () => {
 	it("stores only the note id for persisted note context", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
 				localFolders: [],
-				model: "gpt-5",
 				noteContext: {
 					noteId: "note-1",
 					title: "Meeting",
@@ -191,10 +190,9 @@ describe("chat queue serialization", () => {
 	it("bounds unsaved note context before durable queue persistence", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
 				localFolders: [],
-				model: "gpt-5",
 				noteContext: {
 					noteId: null,
 					title: "t".repeat(20_000),
@@ -217,10 +215,9 @@ describe("chat queue serialization", () => {
 				recipeOnly: false,
 			},
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
-				model: "gpt-5",
 				timezone: "UTC",
 			},
 			text: "Follow up",
@@ -237,7 +234,7 @@ describe("chat queue serialization", () => {
 
 		expect(prepared.body).toMatchObject({
 			convexToken: "fresh-token",
-			model: "gpt-5",
+			model: DEFAULT_CHAT_SETTINGS.model,
 			replayQueuedMessageId: "queued-message-1",
 			workspaceId,
 		});
@@ -252,10 +249,9 @@ describe("chat queue serialization", () => {
 	it("rejects queued request replay without a fresh Convex token", async () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
-				model: "gpt-5",
 				timezone: "UTC",
 			},
 			text: "Follow up",
@@ -278,10 +274,9 @@ describe("chat queue serialization", () => {
 	it("rejects queued request replay without a durable queue id", async () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
-				model: "gpt-5",
 				timezone: "UTC",
 			},
 			text: "Follow up",
@@ -303,10 +298,9 @@ describe("chat queue serialization", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			messageId: "existing-user-message",
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
-				model: "gpt-5",
 				timezone: "UTC",
 			},
 			text: "Edited follow up",
@@ -330,10 +324,9 @@ describe("chat queue serialization", () => {
 		const queuedMessage = toQueuedUserMessageInput({
 			messageId,
 			requestBody: {
-				chatMode: CHAT_MODE.DEFAULT,
+				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
-				model: "gpt-5",
 				timezone: "UTC",
 			},
 			text: "Visible follow up",

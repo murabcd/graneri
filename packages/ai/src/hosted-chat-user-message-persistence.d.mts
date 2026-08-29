@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { ChatSettings } from "./chat-settings.mjs";
 import type { createHostedChatQueuedInput } from "./hosted-chat-queued-input.mjs";
 import type { toHostedStoredMessage } from "./hosted-chat-runtime.mjs";
 
@@ -20,13 +21,11 @@ type SaveMessageArgs<
 	WorkspaceId extends string,
 	ChatId extends string,
 	NoteId extends string,
-	ReasoningEffort extends string,
 > = {
 	chatId: ChatId;
 	message: UIMessage;
-	model: string;
 	noteId: NoteId | null;
-	reasoningEffort: ReasoningEffort;
+	settings: ChatSettings;
 	workspaceId: WorkspaceId;
 };
 
@@ -34,12 +33,14 @@ type BuiltSaveMessageArgs<
 	WorkspaceId extends string,
 	ChatId extends string,
 	NoteId extends string,
-	ReasoningEffort extends string,
-> = SaveMessageArgs<WorkspaceId, ChatId, NoteId, ReasoningEffort> & {
+> = {
+	chatId: ChatId;
 	message: ReturnType<typeof toHostedStoredMessage>;
 	noteId: NoteId | undefined;
 	preview: string;
+	settings: ChatSettings;
 	title?: string;
+	workspaceId: WorkspaceId;
 };
 
 export declare const isHostedQueuedUserMessageAccept: <
@@ -55,18 +56,12 @@ export declare const persistHostedChatUserMessage: <
 	WorkspaceId extends string,
 	ChatId extends string,
 	NoteId extends string,
-	ReasoningEffort extends string,
 	RunId extends string,
 	QueuedMessageId extends string,
 >(
-	args: SaveMessageArgs<WorkspaceId, ChatId, NoteId, ReasoningEffort> & {
+	args: SaveMessageArgs<WorkspaceId, ChatId, NoteId> & {
 		acceptQueuedUserMessage: (
-			args: BuiltSaveMessageArgs<
-				WorkspaceId,
-				ChatId,
-				NoteId,
-				ReasoningEffort
-			> & {
+			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId> & {
 				queuedMessageId: QueuedMessageId;
 			},
 		) => Promise<unknown>;
@@ -76,9 +71,8 @@ export declare const persistHostedChatUserMessage: <
 			noteId: NoteId | undefined;
 			title?: string;
 			preview: string;
-			model: string;
 			nextAssistantMessageId: string;
-			reasoningEffort: ReasoningEffort;
+			settings: ChatSettings;
 			runId: RunId;
 			messages: Array<{
 				queuedMessageId: QueuedMessageId;
@@ -90,7 +84,7 @@ export declare const persistHostedChatUserMessage: <
 		queuedInput: QueuedInput<WorkspaceId, ChatId, RunId, QueuedMessageId>;
 		replayQueuedMessageId?: QueuedMessageId | null;
 		saveMessage: (
-			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId, ReasoningEffort>,
+			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId>,
 		) => Promise<unknown>;
 		steeredUserMessages: UIMessage[];
 	},

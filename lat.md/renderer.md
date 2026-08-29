@@ -86,9 +86,12 @@ inside the turn-level work group.
 Note-scoped discussion ownership is layered on top of the shared renderer
 interaction session by `use-note-discussion-session.ts`. It owns draft/stored
 chat identity, note chat list/session/run snapshots, prefetching, selector
-grouping, title/loading derivation, and model/reasoning persistence. The note
-composer owns only editor, attachment, transcript, focus, and panel-presentation
-adapters; it must not reproduce discussion identity or query orchestration.
+grouping, title/loading derivation, and the same required five-field chat
+settings snapshot used by workspace chat. The note surface exposes model,
+reasoning, and speed controls while retaining the note chat's mode and web-search
+values in every request. The note composer owns only editor, attachment,
+transcript, focus, and panel-presentation adapters; it must not reproduce
+discussion identity, settings ownership, or query orchestration.
 Workspace chat navigation commits the destination route immediately while
 message prefetch continues independently. The workspace composer derives its
 placeholder from the stored chat identity before hydrated messages arrive, so a

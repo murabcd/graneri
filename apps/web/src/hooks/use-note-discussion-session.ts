@@ -1,31 +1,17 @@
-import { useConvex, useMutation, useQuery } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import * as React from "react";
-import { toast } from "sonner";
 import {
 	prefetchChatMessagesSnapshot,
 	useChatMessagesSnapshot,
 } from "@/hooks/use-chat-messages-snapshot";
+import { useChatSettings } from "@/hooks/use-chat-settings";
 import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import {
 	type ChatModel,
-	getStoredChatModel as getStoredLocalChatModel,
-	storeChatModel,
-} from "@/lib/ai/chat-model";
-import { findChatModel, findReasoningEffort } from "@/lib/ai/models";
-import {
-	getStoredChatReasoningEffort,
-	getStoredReasoningEffort,
-	getStoredReasoningEffortOverride,
+	getChatModel,
 	type ReasoningEffort,
-	resolveReasoningEffortPreference,
-	storeChatReasoningEffort,
-	storeReasoningEffort,
-} from "@/lib/ai/reasoning-effort";
-import {
-	getStoredServiceTier,
 	type ServiceTier,
-	storeServiceTier,
-} from "@/lib/ai/service-tier";
+} from "@/lib/ai/models";
 import { isSameCalendarDay } from "@/lib/calendar-day";
 import { logError } from "@/lib/logger";
 import { api } from "../../../../convex/_generated/api";
@@ -37,20 +23,18 @@ export type NoteChatSummary = Pick<
 	| "_creationTime"
 	| "chatId"
 	| "createdAt"
+	| "chatMode"
+	| "forkedFromChatId"
+	| "historyOmittedBefore"
 	| "model"
+	| "reasoningEffort"
+	| "serviceTier"
 	| "title"
 	| "updatedAt"
+	| "webSearchEnabled"
 >;
 
 const createDraftChatId = () => crypto.randomUUID();
-
-const getStoredChatModel = (model: string | undefined): ChatModel | null =>
-	model ? (findChatModel(model) ?? null) : null;
-
-const getPersistedChatReasoningEffort = (
-	reasoningEffort: string | undefined,
-): ReasoningEffort | null =>
-	reasoningEffort ? (findReasoningEffort(reasoningEffort)?.id ?? null) : null;
 
 export const groupNoteChatsForSelector = (chats: NoteChatSummary[]) => {
 	const now = new Date();
@@ -93,26 +77,13 @@ export const resolveNoteComposerPlaceholder = (
 export const useNoteDiscussionSession = ({
 	activeWorkspaceId,
 	noteId,
-	userPreferenceReasoningEffort,
-	userPreferenceServiceTier,
 }: {
 	activeWorkspaceId: Id<"workspaces"> | null;
 	noteId: Id<"notes"> | null;
-	userPreferenceReasoningEffort?: ReasoningEffort | null;
-	userPreferenceServiceTier?: ServiceTier | null;
 }) => {
 	const convex = useConvex();
 	const [currentChatId, setCurrentChatId] =
 		React.useState<string>(createDraftChatId);
-	const [selectedModelOverride, setSelectedModelOverride] = React.useState<{
-		chatId: string;
-		model: ChatModel;
-	} | null>(null);
-	const [reasoningEffort, setReasoningEffort] = React.useState<ReasoningEffort>(
-		getStoredReasoningEffort,
-	);
-	const [serviceTier, setServiceTier] =
-		React.useState<ServiceTier>(getStoredServiceTier);
 	const noteChats = useQuery(
 		api.chats.listForNote,
 		noteId && activeWorkspaceId
@@ -150,109 +121,32 @@ export const useNoteDiscussionSession = ({
 			? { workspaceId: activeWorkspaceId, chatId: currentChatId }
 			: "skip",
 	);
-	const persistChatSettings = useMutation(api.chats.setChatSettings);
-	const updateUserPreferences = useMutation(api.userPreferences.update);
 	const selectedNoteChat =
 		(noteChats ?? []).find((chat) => chat.chatId === currentChatId) ?? null;
-	const selectedModel =
-		(selectedModelOverride?.chatId === currentChatId
-			? selectedModelOverride.model
-			: null) ??
-		getStoredChatModel(selectedNoteChat?.model ?? currentChatSession?.model) ??
-		getStoredLocalChatModel();
-	const selectedReasoningEffort = resolveReasoningEffortPreference({
-		persistedChatReasoningEffort: getPersistedChatReasoningEffort(
-			selectedNoteChat?.reasoningEffort ?? currentChatSession?.reasoningEffort,
-		),
-		chatReasoningEffortOverride: getStoredChatReasoningEffort(currentChatId),
-		globalReasoningEffortOverride: getStoredReasoningEffortOverride(),
-		userPreferenceReasoningEffort,
-		fallbackReasoningEffort: reasoningEffort,
+	const storedChat = currentChatSession ?? selectedNoteChat;
+	const { settings, updateSettings } = useChatSettings({
+		chatId: currentChatId,
+		storedSettings: storedChat,
+		workspaceId: activeWorkspaceId,
 	});
-	const selectedServiceTier = userPreferenceServiceTier ?? serviceTier;
+	const selectedModel = getChatModel(settings.model);
 	const handleSelectedModelChange = React.useCallback(
 		(model: ChatModel) => {
-			setSelectedModelOverride({ chatId: currentChatId, model });
-			storeChatModel(model);
-
-			if (!activeWorkspaceId || currentChatSession?.model === model.model) {
-				return;
-			}
-
-			void persistChatSettings({
-				workspaceId: activeWorkspaceId,
-				chatId: currentChatId,
-				model: model.model,
-			}).catch((error) => {
-				logError({
-					event: "client.error",
-					error,
-					message: "Failed to persist note chat model",
-				});
-				toast.error("Failed to save model");
-			});
+			updateSettings({ model: model.model });
 		},
-		[
-			activeWorkspaceId,
-			currentChatId,
-			currentChatSession?.model,
-			persistChatSettings,
-		],
+		[updateSettings],
 	);
 	const handleReasoningEffortChange = React.useCallback(
 		(value: ReasoningEffort) => {
-			setReasoningEffort(() => value);
-			storeReasoningEffort(value);
-			storeChatReasoningEffort(currentChatId, value);
-
-			void updateUserPreferences({ reasoningEffort: value }).catch((error) => {
-				logError({
-					event: "client.error",
-					error,
-					message: "Failed to persist default reasoning effort",
-				});
-			});
-
-			if (!activeWorkspaceId || currentChatSession?.reasoningEffort === value) {
-				return;
-			}
-
-			void persistChatSettings({
-				workspaceId: activeWorkspaceId,
-				chatId: currentChatId,
-				reasoningEffort: value,
-			}).catch((error) => {
-				logError({
-					event: "client.error",
-					error,
-					message: "Failed to persist note chat reasoning effort",
-				});
-				toast.error("Failed to save reasoning");
-			});
+			updateSettings({ reasoningEffort: value });
 		},
-		[
-			activeWorkspaceId,
-			currentChatId,
-			currentChatSession?.reasoningEffort,
-			persistChatSettings,
-			updateUserPreferences,
-		],
+		[updateSettings],
 	);
 	const handleServiceTierChange = React.useCallback(
 		(value: ServiceTier) => {
-			setServiceTier(() => value);
-			storeServiceTier(value);
-
-			void updateUserPreferences({ serviceTier: value }).catch((error) => {
-				logError({
-					event: "client.error",
-					error,
-					message: "Failed to persist default speed",
-				});
-				toast.error("Failed to save speed");
-			});
+			updateSettings({ serviceTier: value });
 		},
-		[updateUserPreferences],
+		[updateSettings],
 	);
 	const prefetchNoteChat = React.useCallback(
 		(chatId: string) => {
@@ -297,6 +191,7 @@ export const useNoteDiscussionSession = ({
 
 	return {
 		activeRun,
+		chatSettings: settings,
 		compactionActivity,
 		chatTitle:
 			selectedNoteChat?.title?.trim() ||
@@ -327,8 +222,8 @@ export const useNoteDiscussionSession = ({
 		prefetchNoteChat,
 		selectChat,
 		selectedModel,
-		selectedReasoningEffort,
-		selectedServiceTier,
+		selectedReasoningEffort: settings.reasoningEffort,
+		selectedServiceTier: settings.serviceTier,
 		storedMessages,
 	};
 };

@@ -1,6 +1,6 @@
-const GPT_5_6_SOL_MODEL_ID = "gpt-5.6-sol";
-const GPT_5_6_TERRA_MODEL_ID = "gpt-5.6-terra";
-const GPT_5_6_LUNA_MODEL_ID = "gpt-5.6-luna";
+export const GPT_5_6_SOL_MODEL_ID = "gpt-5.6-sol";
+export const GPT_5_6_TERRA_MODEL_ID = "gpt-5.6-terra";
+export const GPT_5_6_LUNA_MODEL_ID = "gpt-5.6-luna";
 
 export const CHAT_MODELS = Object.freeze([
 	{

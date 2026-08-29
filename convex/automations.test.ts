@@ -1,4 +1,5 @@
 import workflowTest from "@convex-dev/workflow/test";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -81,6 +82,32 @@ const readChatMessages = async (
 			paginationOpts: { cursor: null, numItems: 100 },
 		})
 	).page;
+
+const saveChatMessage = async ({
+	asOwner,
+	chatId,
+	text,
+	workspaceId,
+}: {
+	asOwner: WorkspaceFixture["asOwner"];
+	chatId: string;
+	text: string;
+	workspaceId: WorkspaceFixture["workspaceId"];
+}) =>
+	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
+		workspaceId,
+		chatId,
+		title: "Automation chat",
+		preview: text,
+		message: {
+			id: "msg-user",
+			role: "user",
+			partsJson: JSON.stringify([{ type: "text", text }]),
+			text,
+			createdAt: 1_500,
+		},
+	});
 
 test("owner-scoped automation adapters reuse the authenticated CRUD boundary", async () => {
 	const { t, workspaceId } = await createWorkspace();
@@ -168,20 +195,11 @@ test("owner-scoped automation adapters reject a mismatched workspace owner", asy
 test("creating an automation leaves existing chat messages unchanged", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
-	await asOwner.mutation(api.chats.saveMessage, {
-		workspaceId,
+	await saveChatMessage({
+		asOwner,
 		chatId: "chat-existing",
-		title: "Create automation",
-		preview: "Create an automation",
-		message: {
-			id: "msg-user",
-			role: "user",
-			partsJson: JSON.stringify([
-				{ type: "text", text: "Create an automation" },
-			]),
-			text: "Create an automation",
-			createdAt: 1_500,
-		},
+		text: "Create an automation",
+		workspaceId,
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
@@ -261,20 +279,11 @@ test("creating a workspace automation does not seed a chat transcript", async ()
 test("creating a chat automation keeps the existing chat transcript unchanged", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
-	await asOwner.mutation(api.chats.saveMessage, {
-		workspaceId,
+	await saveChatMessage({
+		asOwner,
 		chatId: "chat-ai-created",
-		title: "Create automation",
-		preview: "everyday at 9am greet me",
-		message: {
-			id: "msg-user",
-			role: "user",
-			partsJson: JSON.stringify([
-				{ type: "text", text: "everyday at 9am greet me" },
-			]),
-			text: "everyday at 9am greet me",
-			createdAt: 1_500,
-		},
+		text: "everyday at 9am greet me",
+		workspaceId,
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
@@ -431,20 +440,11 @@ test("runNow reserves a manual automation run before the action executes", async
 
 test("runNow does not start while the automation chat has an active assistant run", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await asOwner.mutation(api.chats.saveMessage, {
-		workspaceId,
+	await saveChatMessage({
+		asOwner,
 		chatId: "chat-with-active-assistant-run",
-		title: "Automation chat",
-		preview: "Create an automation",
-		message: {
-			id: "msg-user",
-			role: "user",
-			partsJson: JSON.stringify([
-				{ type: "text", text: "Create an automation" },
-			]),
-			text: "Create an automation",
-			createdAt: 1_500,
-		},
+		text: "Create an automation",
+		workspaceId,
 	});
 	const automation = await asOwner.mutation(api.automations.create, {
 		workspaceId,
@@ -635,20 +635,11 @@ test("automation run transitions reject mismatched automation and run ids", asyn
 test("moving a chat to trash pauses its automation and restoring resumes it", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
-	await asOwner.mutation(api.chats.saveMessage, {
-		workspaceId,
+	await saveChatMessage({
+		asOwner,
 		chatId: "chat-with-automation",
-		title: "Automation chat",
-		preview: "Create an automation",
-		message: {
-			id: "msg-user",
-			role: "user",
-			partsJson: JSON.stringify([
-				{ type: "text", text: "Create an automation" },
-			]),
-			text: "Create an automation",
-			createdAt: 1_500,
-		},
+		text: "Create an automation",
+		workspaceId,
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
@@ -710,20 +701,11 @@ test("moving a chat to trash pauses its automation and restoring resumes it", as
 test("deleting a chat moves its automation to a fresh chat", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
-	await asOwner.mutation(api.chats.saveMessage, {
-		workspaceId,
+	await saveChatMessage({
+		asOwner,
 		chatId: "chat-to-delete",
-		title: "Automation chat",
-		preview: "Create an automation",
-		message: {
-			id: "msg-user",
-			role: "user",
-			partsJson: JSON.stringify([
-				{ type: "text", text: "Create an automation" },
-			]),
-			text: "Create an automation",
-			createdAt: 1_500,
-		},
+		text: "Create an automation",
+		workspaceId,
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
@@ -773,20 +755,11 @@ test("deleting a chat moves its automation to a fresh chat", async () => {
 test("deleting an automation leaves its chat", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
-	await asOwner.mutation(api.chats.saveMessage, {
-		workspaceId,
+	await saveChatMessage({
+		asOwner,
 		chatId: "chat-kept-after-automation-delete",
-		title: "Automation chat",
-		preview: "Create an automation",
-		message: {
-			id: "msg-user",
-			role: "user",
-			partsJson: JSON.stringify([
-				{ type: "text", text: "Create an automation" },
-			]),
-			text: "Create an automation",
-			createdAt: 1_500,
-		},
+		text: "Create an automation",
+		workspaceId,
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {

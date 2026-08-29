@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
@@ -23,6 +24,7 @@ test("context compaction advances a verified chat message boundary", async () =>
 			updatedAt: 1_000,
 		});
 		const chatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: "chat-context",
@@ -249,6 +251,7 @@ test("context compaction activity is cancelled or expires without a completed ma
 			updatedAt: 1_000,
 		});
 		await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: "chat-activity-cleanup",

@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
@@ -67,6 +68,7 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 	const { asOwner, t, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-tools",
 		preview: "Search for a note",
@@ -201,6 +203,7 @@ test("active stream tool calls reject stale run ids", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-tools-stale",
 		preview: "Search for a note",

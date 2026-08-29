@@ -16,10 +16,7 @@ const MAX_CHAT_TITLE_LENGTH = 80;
 
 const storedUiMessageValidator = v.object({
 	id: v.string(),
-	role: v.union(
-		v.literal("user"),
-		v.literal("assistant"),
-	),
+	role: v.union(v.literal("user"), v.literal("assistant")),
 	partsJson: v.string(),
 	metadataJson: v.optional(v.string()),
 	text: v.string(),
@@ -117,13 +114,11 @@ export const forkFromAssistantMessage = mutation({
 		}
 		const existingForkChat = await ctx.db
 			.query("chats")
-			.withIndex(
-				"by_ownerTokenIdentifier_and_workspaceId_and_chatId",
-				(q) =>
-					q
-						.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-						.eq("workspaceId", args.workspaceId)
-						.eq("chatId", forkChatId),
+			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("chatId", forkChatId),
 			)
 			.unique();
 		if (existingForkChat) {
@@ -139,7 +134,7 @@ export const forkFromAssistantMessage = mutation({
 				q.eq("chatId", sourceChat._id).eq("messageId", messageId),
 			)
 			.unique();
-		if (!targetMessage || targetMessage.role !== "assistant") {
+		if (targetMessage?.role !== "assistant") {
 			throw new ConvexError({
 				code: "CHAT_FORK_TARGET_INVALID",
 				message: "Chat can only continue from a stored assistant message.",
@@ -190,8 +185,11 @@ export const forkFromAssistantMessage = mutation({
 			starredSortOrder: now,
 			title,
 			preview: normalizeChatPreview(targetMessage.text),
+			chatMode: sourceChat.chatMode,
 			model: sourceChat.model,
 			reasoningEffort: sourceChat.reasoningEffort,
+			serviceTier: sourceChat.serviceTier,
+			webSearchEnabled: sourceChat.webSearchEnabled,
 			isArchived: false,
 			archivedAt: undefined,
 			createdAt: now,

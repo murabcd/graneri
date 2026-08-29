@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -44,6 +45,7 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 			updatedAt: now,
 		});
 		const chatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: "chat-1",

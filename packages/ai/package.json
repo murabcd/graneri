@@ -54,6 +54,10 @@
       "types": "./src/chat-message-metadata.d.mts",
       "import": "./src/chat-message-metadata.mjs"
     },
+    "./chat-settings": {
+      "types": "./src/chat-settings.d.mts",
+      "import": "./src/chat-settings.mjs"
+    },
     "./chat-mode": {
       "types": "./src/chat-mode.d.mts",
       "import": "./src/chat-mode.mjs"

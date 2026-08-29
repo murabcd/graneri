@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
@@ -35,6 +36,7 @@ test("chat thread pages expose complete history newest first", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await t.run(async (ctx) => {
 		const chatId = await ctx.db.insert("chats", {
+			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: "long-chat",
@@ -98,12 +100,15 @@ test("chat thread pages expose complete history newest first", async () => {
 		"message-0",
 	]);
 
-	const fork = await asOwner.mutation(api.chatThreads.forkFromAssistantMessage, {
-		workspaceId,
-		chatId: "long-chat",
-		messageId: "message-203",
-		forkChatId: "bounded-fork",
-	});
+	const fork = await asOwner.mutation(
+		api.chatThreads.forkFromAssistantMessage,
+		{
+			workspaceId,
+			chatId: "long-chat",
+			messageId: "message-203",
+			forkChatId: "bounded-fork",
+		},
+	);
 	expect(fork).toEqual({
 		chatId: "bounded-fork",
 		copiedMessageCount: 200,
@@ -119,6 +124,14 @@ test("chat thread pages expose complete history newest first", async () => {
 
 test("assistant message forks preserve source history and lineage", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
+	const sourceSettings = {
+		...DEFAULT_CHAT_SETTINGS,
+		chatMode: "plan" as const,
+		model: "gpt-5.6-terra" as const,
+		reasoningEffort: "high" as const,
+		serviceTier: "priority" as const,
+		webSearchEnabled: true,
+	};
 	for (const message of [
 		{ id: "user-1", role: "user" as const, text: "First prompt" },
 		{ id: "assistant-1", role: "assistant" as const, text: "First answer" },
@@ -126,6 +139,7 @@ test("assistant message forks preserve source history and lineage", async () => 
 		{ id: "assistant-2", role: "assistant" as const, text: "Second answer" },
 	]) {
 		await asOwner.mutation(api.chats.saveMessage, {
+			settings: sourceSettings,
 			workspaceId,
 			chatId: "source-chat",
 			preview: message.text,
@@ -176,6 +190,7 @@ test("assistant message forks preserve source history and lineage", async () => 
 		"user-1",
 	]);
 	expect(forkSession).toMatchObject({
+		...sourceSettings,
 		forkedFromChatId: "source-chat",
 		forkedFromMessageId: "assistant-1",
 		historyOmittedBefore: false,
@@ -185,6 +200,7 @@ test("assistant message forks preserve source history and lineage", async () => 
 test("chat forks reject user-message targets", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "source-chat",
 		preview: "Prompt",
@@ -214,6 +230,7 @@ test("forked chats retain shared attachments until the last chat is removed", as
 		ctx.storage.store(new Blob(["attachment"], { type: "text/plain" })),
 	);
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "source-chat",
 		preview: "Attachment",
@@ -234,6 +251,7 @@ test("forked chats retain shared attachments until the last chat is removed", as
 		},
 	});
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "source-chat",
 		preview: "Answer",

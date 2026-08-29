@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleChatRequest } from "../server/chat-handler";
 
@@ -73,10 +74,10 @@ const postSteerRequestWithMockedConvex = async () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
+					...DEFAULT_CHAT_SETTINGS,
 					id: "chat-1",
 					workspaceId: "workspace-1",
 					convexToken: "token",
-					model: "gpt-5",
 					continueRunId: "run-1",
 					steerQueuedMessageId: "queued-1",
 				}),

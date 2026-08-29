@@ -49,6 +49,11 @@ import {
 } from "./chatAttachmentReferences";
 import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
+import {
+	type ChatSettings,
+	chatSettingsFields,
+	chatSettingsValidator,
+} from "./chatSettingsModel";
 import { clearUnreadAssistantCompletion } from "./chatUnreadState";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
@@ -61,13 +66,6 @@ import {
 } from "./domain";
 
 const chatRoleValidator = v.union(v.literal("user"), v.literal("assistant"));
-
-const reasoningEffortValidator = v.union(
-	v.literal("low"),
-	v.literal("medium"),
-	v.literal("high"),
-	v.literal("xhigh"),
-);
 
 const chatFields = {
 	_id: v.id("chats"),
@@ -84,8 +82,7 @@ const chatFields = {
 	starredSortOrder: v.number(),
 	title: v.string(),
 	preview: v.string(),
-	model: v.optional(v.string()),
-	reasoningEffort: v.optional(reasoningEffortValidator),
+	...chatSettingsFields,
 	unreadAssistantCompletedAt: v.optional(v.number()),
 	isArchived: v.boolean(),
 	archivedAt: v.optional(v.number()),
@@ -202,6 +199,29 @@ const getOwnedChatById = async (
 				.eq("chatId", chatId),
 		)
 		.unique();
+
+const resolveChatSettingsForSave = (
+	existingChat: Doc<"chats"> | null,
+	settings: ChatSettings | undefined,
+): ChatSettings => {
+	if (settings) {
+		return settings;
+	}
+	if (!existingChat) {
+		throw new ConvexError({
+			code: "CHAT_SETTINGS_REQUIRED",
+			message: "New chats require explicit chat settings.",
+		});
+	}
+
+	return {
+		chatMode: existingChat.chatMode,
+		model: existingChat.model,
+		reasoningEffort: existingChat.reasoningEffort,
+		serviceTier: existingChat.serviceTier,
+		webSearchEnabled: existingChat.webSearchEnabled,
+	};
+};
 
 const moveAutomationToFreshChat = async (
 	ctx: MutationCtx,
@@ -587,8 +607,7 @@ export const saveMessageForOwnerInternal = async (
 		noteId?: Id<"notes">;
 		title?: string;
 		preview?: string;
-		model?: string;
-		reasoningEffort?: "low" | "medium" | "high" | "xhigh";
+		settings?: ChatSettings;
 		forceTitle?: boolean;
 		message: {
 			id: string;
@@ -637,6 +656,7 @@ export const saveMessageForOwnerInternal = async (
 		args.workspaceId,
 		storedChatId,
 	);
+	const chatSettings = resolveChatSettingsForSave(existingChat, args.settings);
 
 	const chatId =
 		existingChat?._id ??
@@ -650,8 +670,7 @@ export const saveMessageForOwnerInternal = async (
 			starredSortOrder: now,
 			title: normalizedTitle ?? "New chat",
 			preview: normalizedPreview,
-			model: args.model,
-			reasoningEffort: args.reasoningEffort,
+			...chatSettings,
 			isArchived: false,
 			archivedAt: undefined,
 			createdAt: now,
@@ -673,8 +692,7 @@ export const saveMessageForOwnerInternal = async (
 			workspaceId: args.workspaceId,
 			title: nextTitle,
 			preview: normalizedPreview,
-			model: args.model ?? existingChat.model,
-			reasoningEffort: args.reasoningEffort ?? existingChat.reasoningEffort,
+			...chatSettings,
 			isArchived: false,
 			archivedAt: undefined,
 			updatedAt: now,
@@ -1064,8 +1082,7 @@ export const saveMessage = mutation({
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
+		settings: chatSettingsValidator,
 		forceTitle: v.optional(v.boolean()),
 		message: chatMessageInputValidator,
 	},
@@ -1084,8 +1101,7 @@ export const saveMessage = mutation({
 			noteId: args.noteId,
 			title: args.title,
 			preview: args.preview,
-			model: args.model,
-			reasoningEffort: args.reasoningEffort,
+			settings: args.settings,
 			message: args.message,
 		});
 	},
@@ -1215,8 +1231,7 @@ export const acceptSteeredUserMessages = mutation({
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
+		settings: chatSettingsValidator,
 	},
 	returns: v.array(
 		v.object({
@@ -1288,8 +1303,6 @@ export const acceptSteeredUserMessages = mutation({
 						workspaceId: args.workspaceId,
 						authorName: getAuthorName(identity),
 						chatId: args.chatId,
-						model: run.model,
-						reasoningEffort: run.reasoningEffort,
 						message: {
 							id: stream.assistantMessageId,
 							role: "assistant",
@@ -1321,8 +1334,7 @@ export const acceptSteeredUserMessages = mutation({
 					noteId: args.noteId,
 					title: args.title,
 					preview: args.preview,
-					model: args.model,
-					reasoningEffort: args.reasoningEffort,
+					settings: args.settings,
 					message,
 				});
 				savedMessages.push(savedMessage);
@@ -1380,8 +1392,7 @@ export const acceptQueuedUserMessage = mutation({
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
+		settings: chatSettingsValidator,
 		message: chatMessageInputValidator,
 	},
 	returns: v.object({
@@ -1425,8 +1436,7 @@ export const acceptQueuedUserMessage = mutation({
 					noteId: args.noteId,
 					title: args.title,
 					preview: args.preview,
-					model: args.model,
-					reasoningEffort: args.reasoningEffort,
+					settings: args.settings,
 					message: args.message,
 				}),
 		});
@@ -1544,8 +1554,6 @@ export const saveAssistantMessageForRun = mutation({
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
 		forceTitle: v.optional(v.boolean()),
 		message: chatMessageInputValidator,
 	},
@@ -1589,8 +1597,6 @@ export const saveAssistantMessageForRun = mutation({
 			noteId: args.noteId,
 			title: args.title,
 			preview: args.preview,
-			model: args.model,
-			reasoningEffort: args.reasoningEffort,
 			forceTitle: args.forceTitle,
 			message: {
 				...args.message,
@@ -1657,8 +1663,6 @@ export const stopActiveStream = mutation({
 				ownerTokenIdentifier,
 				workspaceId: args.workspaceId,
 				chatId: args.chatId,
-				model: run.model,
-				reasoningEffort: run.reasoningEffort,
 				message: {
 					id: stream.assistantMessageId,
 					role: "assistant",
@@ -1678,27 +1682,6 @@ export const stopActiveStream = mutation({
 
 		return null;
 	},
-});
-
-export const saveMessageForOwner = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		authorName: v.optional(v.string()),
-		chatId: v.string(),
-		noteId: v.optional(v.id("notes")),
-		title: v.optional(v.string()),
-		preview: v.optional(v.string()),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
-		forceTitle: v.optional(v.boolean()),
-		message: chatMessageInputValidator,
-	},
-	returns: v.object({
-		chat: chatValidator,
-		message: chatMessageValidator,
-	}),
-	handler: async (ctx, args) => await saveMessageForOwnerInternal(ctx, args),
 });
 
 export const updateTitle = mutation({
@@ -1784,8 +1767,7 @@ export const setChatSettings = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(reasoningEffortValidator),
+		settings: chatSettingsValidator,
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
@@ -1803,11 +1785,7 @@ export const setChatSettings = mutation({
 		}
 
 		await ctx.db.patch(chat._id, {
-			model:
-				args.model === undefined
-					? chat.model
-					: clampWhitespace(args.model) || chat.model,
-			reasoningEffort: args.reasoningEffort ?? chat.reasoningEffort,
+			...args.settings,
 			updatedAt: Date.now(),
 		});
 

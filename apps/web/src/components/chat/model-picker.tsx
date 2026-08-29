@@ -20,9 +20,13 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { chatModels, reasoningEfforts, serviceTiers } from "@/lib/ai/models";
-import type { ReasoningEffort } from "@/lib/ai/reasoning-effort";
-import type { ServiceTier } from "@/lib/ai/service-tier";
+import {
+	chatModels,
+	type ReasoningEffort,
+	reasoningEfforts,
+	type ServiceTier,
+	serviceTiers,
+} from "@/lib/ai/models";
 
 const OpenAILogo = Icons.codexLogo;
 

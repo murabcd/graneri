@@ -8,12 +8,12 @@ export type DurableQueuedChatRequest = {
 	noteContext?:
 		| { noteId: string }
 		| { noteId: null; text: string; title: string };
-	reasoningEffort?: ReasoningEffort;
+	reasoningEffort: ReasoningEffort;
 	recipeSlug?: string | null;
 	selectedSourceIds?: string[];
-	serviceTier?: ServiceTier;
+	serviceTier: ServiceTier;
 	timezone: string;
-	webSearchEnabled?: boolean;
+	webSearchEnabled: boolean;
 };
 
 export declare const parseDurableQueuedChatRequest: (

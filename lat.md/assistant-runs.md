@@ -101,8 +101,8 @@ formatting outside this transaction.
 
 The hosted turn executor owns preparation, while one accepted-turn transaction owns validation, persistence, and producer handoff.
 
-The hosted web chat route authenticates the request, resolves stored model
-configuration, and admits the request before delegating to
+The hosted web chat route authenticates the request, parses the complete
+client-supplied chat-settings snapshot, and admits the request before delegating to
 [[apps/web/server/chat-turn-execution.ts]]. That executor alone claims queued
 input, prepares branches and compacted context, resolves connected tools and
 local continuations, and passes the runtime four
@@ -382,22 +382,28 @@ of HTTP SSE attachment. Resume request preparation must fail when required
 workspace or authentication state is unavailable; it must not fall back to the
 normal chat send endpoint.
 
-## Composer planning mode
+## Chat settings and planning mode
 
-Planning mode is an explicit composer and request contract, not a visual-only preference.
+One required chat-owned settings snapshot controls every turn while draft composers begin from explicit product defaults.
 
-The chat composer owns a `default` or `plan` selection from the shared
-[chat mode contract](../packages/ai/src/chat-mode.mjs).
-[[apps/web/src/hooks/use-chat-composer-options.ts]] owns the persisted option
-state, while [[apps/web/src/components/chat/chat-composer-options.tsx]] owns the
-footer controls. Selecting planning mode adds a Lightbulb-labelled `Plan`
-control to the composer footer; hovering the control replaces the Lightbulb
-with a close affordance, and activating it returns the composer to default mode
-without reopening chat options. The mode travels with normal and durable queued
-requests so replay cannot silently change the selected workflow. Planning mode
-and web search are browser-level composer preferences: both survive page
-reloads, draft-to-stored chat navigation, and movement between chats until the
-user turns them off.
+The shared [chat-settings contract](../packages/ai/src/chat-settings.mjs) groups
+mode, web search, model, reasoning effort, and service tier. A new draft starts
+from `DEFAULT_CHAT_SETTINGS`; it does not inherit browser or user-preference
+state. [[apps/web/src/hooks/use-chat-settings.ts]] scopes unsaved choices to the
+draft chat id. The first accepted user message persists the complete snapshot
+atomically with chat creation. Opening a stored chat restores its required
+fields, subsequent control changes replace the complete stored snapshot, and a
+fork copies that snapshot to the new chat. Assistant-message persistence never
+changes it. There are no optional-field, browser-storage, or user-preference
+fallbacks for stored chat settings.
+
+The footer controls remain owned by
+[[apps/web/src/components/chat/chat-composer-options.tsx]]. Selecting planning
+mode adds a Lightbulb-labelled `Plan` control to the composer footer; hovering
+the control replaces the Lightbulb with a close affordance, and activating it
+returns only that chat or draft to default mode. All five settings travel with
+normal and durable queued requests, so replay and steering cannot silently
+change the selected runtime configuration.
 
 The shared hosted runtime converts planning mode into trusted instructions
 before either producer starts. Planning mode explores relevant context, asks

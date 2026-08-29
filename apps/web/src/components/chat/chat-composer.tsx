@@ -155,6 +155,7 @@ type ChatComposerProps = {
 	topAccessory?: React.ReactNode;
 	humanDecision: HostedHumanDecisionRequest | null;
 	isHumanDecisionSubmitting: boolean;
+	isSettingsLoading: boolean;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 	onQueuedFollowUpsReorder?: (ids: Array<string>) => void;
 	onHumanDecisionResponse: (response: HostedHumanDecisionResponse) => void;
@@ -200,6 +201,7 @@ export function ChatComposer({
 	topAccessory,
 	humanDecision,
 	isHumanDecisionSubmitting,
+	isSettingsLoading,
 	queuedFollowUps = EMPTY_QUEUED_FOLLOW_UPS,
 	onQueuedFollowUpsReorder,
 	onHumanDecisionResponse,
@@ -324,6 +326,7 @@ export function ChatComposer({
 							draft={draft}
 							attachedFiles={attachedFiles}
 							canStop={canStop}
+							disabled={isSettingsLoading}
 							onAttachmentUploadFailed={handleAttachmentUploadFailed}
 							onAttachmentUploaded={handleAttachmentUploaded}
 							onAttachmentsAdded={handleAttachmentsAdded}
@@ -344,15 +347,17 @@ export function ChatComposer({
 								) : null
 							}
 							options={
-								<ChatComposerOptions
-									open={sourcesOpen}
-									onOpenChange={onSourcesOpenChange}
-									webSearchEnabled={webSearchEnabled}
-									onWebSearchEnabledChange={onWebSearchEnabledChange}
-									chatMode={chatMode}
-									onChatModeChange={onChatModeChange}
-									onOpenConnectionsSettings={onOpenConnectionsSettings}
-								/>
+								isSettingsLoading ? null : (
+									<ChatComposerOptions
+										open={sourcesOpen}
+										onOpenChange={onSourcesOpenChange}
+										webSearchEnabled={webSearchEnabled}
+										onWebSearchEnabledChange={onWebSearchEnabledChange}
+										chatMode={chatMode}
+										onChatModeChange={onChatModeChange}
+										onOpenConnectionsSettings={onOpenConnectionsSettings}
+									/>
+								)
 							}
 						/>
 					</InputGroup>
@@ -1254,6 +1259,7 @@ function ChatComposerFooter({
 	draft,
 	attachedFiles,
 	canStop,
+	disabled,
 	onAttachmentUploadFailed,
 	onAttachmentUploaded,
 	onAttachmentsAdded,
@@ -1265,6 +1271,7 @@ function ChatComposerFooter({
 	draft: string;
 	attachedFiles: ChatAttachment[];
 	canStop: boolean;
+	disabled: boolean;
 	onAttachmentUploadFailed: (id: string) => void;
 	onAttachmentUploaded: (id: string, file: FileUIPart) => void;
 	onAttachmentsAdded: (files: ChatAttachment[]) => void;
@@ -1278,7 +1285,7 @@ function ChatComposerFooter({
 		(canStop ? hasDraftText : hasDraftText || attachedFiles.length > 0) &&
 		!hasUploadingAttachments(attachedFiles);
 	const shouldShowStop = canStop && !hasSendableInput;
-	const isSendDisabled = !shouldShowStop && !hasSendableInput;
+	const isSendDisabled = !shouldShowStop && (disabled || !hasSendableInput);
 
 	return (
 		<InputGroupAddon

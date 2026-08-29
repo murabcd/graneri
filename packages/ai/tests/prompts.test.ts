@@ -389,8 +389,6 @@ describe("prompt helpers", () => {
 			chatId: "chat-1",
 			noteId: null,
 			title: "Generated title",
-			model: "gpt-5",
-			reasoningEffort: "medium",
 			message: {
 				id: "msg-1",
 				role: "user",
@@ -403,8 +401,6 @@ describe("prompt helpers", () => {
 		expect(saved.noteId).toBeUndefined();
 		expect(saved.title).toBe("Generated title");
 		expect(saved.preview).toBe("Hello from Graneri");
-		expect(saved.model).toBe("gpt-5");
-		expect(saved.reasoningEffort).toBe("medium");
 		expect(saved.message.id).toBe("msg-1");
 		expect(saved.message.text).toBe("Hello from Graneri");
 	});

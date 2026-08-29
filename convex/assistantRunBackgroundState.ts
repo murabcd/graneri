@@ -84,8 +84,6 @@ const saveActiveAssistantMessage = async (
 		workspaceId: run.workspaceId,
 		authorName: context.runJob.authorName,
 		chatId: context.chat.chatId,
-		model: run.model,
-		reasoningEffort: run.reasoningEffort,
 		message: {
 			id: run.assistantMessageId,
 			role: "assistant",

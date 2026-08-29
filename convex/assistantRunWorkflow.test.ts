@@ -1,6 +1,7 @@
 import type { WorkflowCtx } from "@convex-dev/workflow";
 import workflowTest from "@convex-dev/workflow/test";
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -54,6 +55,7 @@ const createBackgroundRun = async () => {
 	);
 	const chatId = "workflow-chat";
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
 		message: {

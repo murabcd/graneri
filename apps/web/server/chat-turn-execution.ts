@@ -1,5 +1,5 @@
 import { getSelectedNoteSourceIds } from "@workspace/ai/capability-metadata";
-import type { ChatMode } from "@workspace/ai/chat-mode";
+import type { ChatSettings } from "@workspace/ai/chat-settings";
 import {
 	buildHostedNotesContext,
 	getHostedChatConvexRouteError,
@@ -55,20 +55,14 @@ type HostedChatTurnRequest = Pick<
 	| "steerQueuedMessageId"
 	| "supersedeActiveRun"
 	| "trigger"
-	| "webSearchEnabled"
 > & {
-	chatMode: ChatMode;
 	chatId: string;
 	workspaceId: Id<"workspaces">;
 };
 
 type HostedChatTurnModel = Pick<
 	ServerAssistantRunCompletionInput,
-	| "defaultModel"
-	| "defaultReasoningEffort"
-	| "defaultServiceTier"
-	| "defaultTimezone"
-	| "providerOptions"
+	"defaultTimezone" | "providerOptions"
 > & {
 	generateTitleOnFirstUserMessage: boolean;
 	noteId: Id<"notes"> | null;
@@ -85,6 +79,7 @@ type ExecuteHostedChatTurnArgs = {
 	environment: HostedChatTurnRouteEnvironment;
 	model: HostedChatTurnModel;
 	request: HostedChatTurnRequest;
+	settings: ChatSettings;
 };
 
 const loadNotesContext = async ({
@@ -172,6 +167,7 @@ export const executeHostedChatTurn = async ({
 	environment,
 	model,
 	request,
+	settings,
 }: ExecuteHostedChatTurnArgs) => {
 	const {
 		activeStreamSessions,
@@ -184,7 +180,6 @@ export const executeHostedChatTurn = async ({
 	} = environment;
 	const {
 		appsEnabled = true,
-		chatMode,
 		chatId,
 		continueRunId,
 		localFolders = [],
@@ -198,9 +193,9 @@ export const executeHostedChatTurn = async ({
 		steerQueuedMessageId,
 		supersedeActiveRun,
 		trigger,
-		webSearchEnabled = false,
 		workspaceId,
 	} = request;
+	const { chatMode, webSearchEnabled } = settings;
 	const pendingUserQuestion =
 		attachableRun?.pendingDecision?.type === "user_question"
 			? attachableRun.pendingDecision
@@ -404,9 +399,9 @@ export const executeHostedChatTurn = async ({
 			chatAttachmentsApi: api.chatAttachments,
 			chatId,
 			convexClient: client,
-			defaultModel: model.defaultModel,
-			defaultReasoningEffort: model.defaultReasoningEffort,
-			defaultServiceTier: model.defaultServiceTier,
+			defaultModel: settings.model,
+			defaultReasoningEffort: settings.reasoningEffort,
+			defaultServiceTier: settings.serviceTier,
 			defaultTimezone: model.defaultTimezone,
 			getActiveStreamSession: () => activeStreamSession,
 			getNotesContext: () =>
@@ -516,15 +511,12 @@ export const executeHostedChatTurn = async ({
 		policy: {
 			admissionReservationId: admission.admissionReservationId,
 			appsEnabled,
-			chatMode,
 			chatId,
 			defaultTimezone: model.defaultTimezone,
-			model: model.defaultModel,
 			noteId: model.noteId,
-			reasoningEffort: model.defaultReasoningEffort,
 			safetyIdentifier: admission.safetyIdentifier,
 			selectedSourceIds: appsEnabled ? (selectedSourceIds ?? []) : [],
-			serviceTier: model.defaultServiceTier,
+			settings,
 			supersedeActiveRun,
 			trigger,
 			workspaceId,

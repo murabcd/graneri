@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useQueuedFollowUpControls } from "../src/hooks/use-queued-follow-up-controls";
@@ -35,8 +35,7 @@ const createQueuedMessage = ({
 		messageId,
 		ownerTokenIdentifier: "owner",
 		requestBodyJson: JSON.stringify({
-			chatMode: CHAT_MODE.DEFAULT,
-			model: "gpt-5",
+			...DEFAULT_CHAT_SETTINGS,
 			timezone: "UTC",
 		}),
 		runId,
@@ -95,10 +94,9 @@ describe("useQueuedFollowUpControls", () => {
 			expect.objectContaining({ text: "Steer now" }),
 			{
 				body: {
-					chatMode: CHAT_MODE.DEFAULT,
+					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "fresh-token",
 					continueRunId: runId,
-					model: "gpt-5",
 					steerQueuedMessageId: "queued-1",
 					timezone: "UTC",
 					workspaceId,
@@ -253,10 +251,9 @@ describe("useQueuedFollowUpControls", () => {
 			expect.objectContaining({ text: "First steer" }),
 			{
 				body: {
-					chatMode: CHAT_MODE.DEFAULT,
+					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "fresh-token",
 					continueRunId: runId,
-					model: "gpt-5",
 					steerQueuedMessageId: "queued-1",
 					timezone: "UTC",
 					workspaceId,
@@ -276,10 +273,9 @@ describe("useQueuedFollowUpControls", () => {
 			expect.objectContaining({ text: "Second steer" }),
 			{
 				body: {
-					chatMode: CHAT_MODE.DEFAULT,
+					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "fresh-token",
 					continueRunId: runId,
-					model: "gpt-5",
 					steerQueuedMessageId: "queued-2",
 					timezone: "UTC",
 					workspaceId,

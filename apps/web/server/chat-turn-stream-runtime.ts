@@ -136,15 +136,14 @@ export const runHostedChatTurnStreamRuntime = async ({
 	} = environment;
 	const {
 		chatId,
-		model,
 		noteId,
-		reasoningEffort,
 		safetyIdentifier,
-		serviceTier,
+		settings,
 		supersedeActiveRun,
 		trigger,
 		workspaceId,
 	} = policy;
+	const { model, reasoningEffort, serviceTier } = settings;
 	const {
 		agent,
 		appConnections,
@@ -456,7 +455,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 			});
 		},
 		logLatency,
-		model,
 		noteId,
 		onCompleted: () => {
 			wideEvent.outcome = "success";
@@ -491,7 +489,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 				operation: "chat_title_generate",
 			});
 		},
-		reasoningEffort,
 		safetyIdentifier,
 		saveAssistantMessageForRun: (args) =>
 			convexClient.mutation(api.chats.saveAssistantMessageForRun, args),

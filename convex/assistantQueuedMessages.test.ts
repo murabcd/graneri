@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
@@ -70,6 +71,7 @@ const createChat = async ({
 	workspaceId: WorkspaceId;
 }) => {
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
 		preview: "Prompt",
@@ -541,6 +543,7 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 		message: queuedMessageInput("queued-waiting", "Wait"),
 	});
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-non-running-claim",
 		message: {

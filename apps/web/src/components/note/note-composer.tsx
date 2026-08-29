@@ -461,6 +461,7 @@ const useNoteComposerController = ({
 	const userPreferences = useQuery(api.userPreferences.get, {});
 	const {
 		activeRun,
+		chatSettings,
 		chatTitle,
 		compactionActivity,
 		currentChatId,
@@ -485,8 +486,6 @@ const useNoteComposerController = ({
 	} = useNoteDiscussionSession({
 		activeWorkspaceId,
 		noteId,
-		userPreferenceReasoningEffort: userPreferences?.reasoningEffort,
-		userPreferenceServiceTier: userPreferences?.serviceTier,
 	});
 	const localFolderStorageScope = `note-chat:${currentChatId}`;
 	const { reconcileSharedLocalFolders, sharedLocalFolders } =
@@ -1206,16 +1205,14 @@ const useNoteComposerController = ({
 							const currentNoteContext = readNoteContext();
 							return buildNoteChatRequestBody({
 								localFolderStorageScope,
-								model: selectedModel.model,
 								noteContext: {
 									noteId: currentNoteContext.noteId,
 									title: currentNoteContext.title,
 									text: currentNoteContext.text,
 								},
-								reasoningEffort: selectedReasoningEffort,
-								serviceTier: selectedServiceTier,
 								recipeSlug: selectedRecipe?.slug ?? null,
 								resolveConvexToken: getCachedConvexToken,
+								settings: chatSettings,
 								text: outgoingText,
 							});
 						},
@@ -1268,11 +1265,9 @@ const useNoteComposerController = ({
 		queuedMessageEditDraft,
 		readNoteContext,
 		resetTextareaHeight,
+		chatSettings,
 		selectedRecipe,
-		selectedReasoningEffort,
-		selectedServiceTier,
 		editingMessageId,
-		selectedModel.model,
 		setPanelMode,
 		setMessage,
 		requestComposerFocus,
@@ -1343,25 +1338,16 @@ const useNoteComposerController = ({
 
 		return await buildNoteChatRequestBodyFromLocalFolders({
 			localFolders: sharedLocalFolders,
-			model: selectedModel.model,
 			noteContext: {
 				noteId: currentNoteContext.noteId,
 				title: currentNoteContext.title,
 				text: currentNoteContext.text,
 			},
-			reasoningEffort: selectedReasoningEffort,
-			serviceTier: selectedServiceTier,
 			recipeSlug: selectedRecipe?.slug ?? null,
 			resolveConvexToken: getCachedConvexToken,
+			settings: chatSettings,
 		});
-	}, [
-		readNoteContext,
-		selectedReasoningEffort,
-		selectedServiceTier,
-		selectedModel.model,
-		selectedRecipe?.slug,
-		sharedLocalFolders,
-	]);
+	}, [chatSettings, readNoteContext, selectedRecipe?.slug, sharedLocalFolders]);
 	const handleHumanDecisionResponse = React.useCallback(
 		async (response: HostedHumanDecisionResponse) => {
 			if (isPreparingRequest) {

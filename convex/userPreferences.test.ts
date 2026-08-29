@@ -18,12 +18,11 @@ const createClient = () => {
 	return t.withIdentity(ownerIdentity);
 };
 
-test("user preferences default reasoning effort to medium", async () => {
+test("user preferences use the default send shortcut", async () => {
 	const asOwner = createClient();
 
 	const preferences = await asOwner.query(api.userPreferences.get, {});
 
-	expect(preferences.reasoningEffort).toBe("medium");
 	expect(preferences.sendShortcut).toBe("enter");
 });
 
@@ -38,23 +37,4 @@ test("user preferences persist the send shortcut", async () => {
 	expect((await asOwner.query(api.userPreferences.get, {})).sendShortcut).toBe(
 		"command-enter",
 	);
-});
-
-test("user preferences persist reasoning effort independently", async () => {
-	const asOwner = createClient();
-
-	const updated = await asOwner.mutation(api.userPreferences.update, {
-		reasoningEffort: "high",
-	});
-
-	expect(updated).toMatchObject({
-		reasoningEffort: "high",
-		transcriptionLanguage: null,
-		jobTitle: null,
-		companyName: null,
-	});
-
-	const preferences = await asOwner.query(api.userPreferences.get, {});
-
-	expect(preferences.reasoningEffort).toBe("high");
 });

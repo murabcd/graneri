@@ -1,5 +1,6 @@
 import workflowTest from "@convex-dev/workflow/test";
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
@@ -76,6 +77,7 @@ const saveUserQuestion = async ({
 	workspaceId: WorkspaceId;
 }) =>
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
 		message: {
@@ -111,6 +113,7 @@ const createChat = async ({
 	workspaceId: WorkspaceId;
 }) => {
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
 		preview: "Prompt",
@@ -725,6 +728,7 @@ test("background steering checkpoints the interrupted generation and continues t
 		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	const acceptArgs = {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
 		runId: run._id,
@@ -1633,6 +1637,7 @@ test("assistant runs preserve bounded choice questions in state and events", asy
 		],
 	};
 	await asOwner.mutation(api.chats.saveMessage, {
+		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
 		message: {

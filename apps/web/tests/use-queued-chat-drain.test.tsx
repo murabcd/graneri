@@ -1,5 +1,5 @@
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
-import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useQueuedChatDrain } from "../src/hooks/use-queued-chat-drain";
@@ -49,8 +49,7 @@ describe("useQueuedChatDrain", () => {
 				messageId: "queued-message-1",
 				ownerTokenIdentifier: "owner",
 				requestBodyJson: JSON.stringify({
-					chatMode: CHAT_MODE.DEFAULT,
-					model: "gpt-5",
+					...DEFAULT_CHAT_SETTINGS,
 					timezone: "UTC",
 				}),
 				runId: "run-1",
@@ -127,9 +126,8 @@ describe("useQueuedChatDrain", () => {
 			}),
 			{
 				body: {
-					chatMode: CHAT_MODE.DEFAULT,
+					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "fresh-token",
-					model: "gpt-5",
 					replayQueuedMessageId: "queued-1",
 					timezone: "UTC",
 					workspaceId: "workspace-1",

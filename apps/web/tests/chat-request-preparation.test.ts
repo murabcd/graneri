@@ -1,6 +1,6 @@
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { describe, expect, it } from "vitest";
-import { defaultChatModel } from "@/lib/ai/models";
 import {
 	buildNoteChatRequestBodyFromLocalFolders,
 	buildWorkspaceChatRequestBodyFromLocalFolders,
@@ -9,16 +9,17 @@ import {
 describe("workspace chat request preparation", () => {
 	it("carries the selected recipe through the canonical workspace request", async () => {
 		const request = await buildWorkspaceChatRequestBodyFromLocalFolders({
-			chatMode: CHAT_MODE.PLAN,
 			localFolders: [],
 			mentions: ["note-1"],
-			model: defaultChatModel.model,
 			recipeSlug: "write-weekly-recap",
-			reasoningEffort: "high",
 			resolveConvexToken: async () => "convex-token",
 			selectedSourceIds: ["app:notion"],
-			serviceTier: "priority",
-			webSearchEnabled: false,
+			settings: {
+				...DEFAULT_CHAT_SETTINGS,
+				chatMode: CHAT_MODE.PLAN,
+				reasoningEffort: "high",
+				serviceTier: "priority",
+			},
 			workspaceId: "workspace-1",
 		});
 
@@ -33,21 +34,24 @@ describe("workspace chat request preparation", () => {
 		});
 	});
 
-	it("uses the canonical default mode for note chat requests", async () => {
+	it("keeps a note chat's mode and web setting in its request", async () => {
 		const request = await buildNoteChatRequestBodyFromLocalFolders({
 			localFolders: [],
-			model: defaultChatModel.model,
 			noteContext: {
 				noteId: "note-1",
 				title: "Meeting notes",
 				text: "Decisions",
 			},
 			recipeSlug: null,
-			reasoningEffort: "medium",
 			resolveConvexToken: async () => null,
-			serviceTier: "auto",
+			settings: {
+				...DEFAULT_CHAT_SETTINGS,
+				chatMode: CHAT_MODE.PLAN,
+				webSearchEnabled: true,
+			},
 		});
 
-		expect(request.chatMode).toBe(CHAT_MODE.DEFAULT);
+		expect(request.chatMode).toBe(CHAT_MODE.PLAN);
+		expect(request.webSearchEnabled).toBe(true);
 	});
 });

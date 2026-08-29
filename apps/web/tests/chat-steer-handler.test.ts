@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { afterEach, describe, expect, it } from "vitest";
 import { handleChatRequest } from "../server/chat-handler";
 
@@ -51,7 +52,7 @@ const postChatRequest = async ({
 		const response = await fetch(`http://127.0.0.1:${address.port}${path}`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(body),
+			body: JSON.stringify({ ...DEFAULT_CHAT_SETTINGS, ...body }),
 		});
 
 		return {
@@ -73,7 +74,7 @@ const postChatRequest = async ({
 };
 
 describe("chat steer HTTP contract", () => {
-	it("rejects an unknown chat mode before starting a turn", async () => {
+	it("rejects invalid chat settings before starting a turn", async () => {
 		await expect(
 			postChatRequest({
 				body: { chatMode: "planning" },
@@ -81,8 +82,8 @@ describe("chat steer HTTP contract", () => {
 		).resolves.toEqual({
 			status: 400,
 			body: {
-				error: "chatMode must be default or plan.",
-				errorCode: "chat_mode_invalid",
+				error: "Complete valid chat settings are required.",
+				errorCode: "chat_settings_invalid",
 			},
 		});
 	});

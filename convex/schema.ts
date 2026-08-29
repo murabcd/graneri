@@ -1,8 +1,8 @@
 import { vWorkflowId } from "@convex-dev/workflow";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { assistantRunEventValidator } from "./assistantRunEventModel";
 import { assistantRunPlanValidator } from "./assistantRunActivityModel";
+import { assistantRunEventValidator } from "./assistantRunEventModel";
 import {
 	assistantRunExecutionValidator,
 	assistantRunJobValidator,
@@ -28,6 +28,7 @@ import {
 	calendarAttendeeResponseStatusValidator,
 	calendarEventSnapshotValidator,
 } from "./calendarValidators";
+import { chatSettingsFields } from "./chatSettingsModel";
 import {
 	projectColorValidator,
 	projectIconValidator,
@@ -138,15 +139,6 @@ export default defineSchema({
 			v.literal("off"),
 		),
 		translucentSidebar: v.boolean(),
-		reasoningEffort: v.optional(
-			v.union(
-				v.literal("low"),
-				v.literal("medium"),
-				v.literal("high"),
-				v.literal("xhigh"),
-			),
-		),
-		serviceTier: v.optional(serviceTierValidator),
 		sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 		avatarStorageId: v.optional(v.id("_storage")),
 		createdAt: v.number(),
@@ -585,15 +577,7 @@ export default defineSchema({
 		starredSortOrder: v.number(),
 		title: v.string(),
 		preview: v.string(),
-		model: v.optional(v.string()),
-		reasoningEffort: v.optional(
-			v.union(
-				v.literal("low"),
-				v.literal("medium"),
-				v.literal("high"),
-				v.literal("xhigh"),
-			),
-		),
+		...chatSettingsFields,
 		unreadAssistantCompletedAt: v.optional(v.number()),
 		isArchived: v.boolean(),
 		archivedAt: v.optional(v.number()),
@@ -864,7 +848,7 @@ export default defineSchema({
 		model: v.string(),
 		reasoningEffort: reasoningEffortValidator,
 		serviceTier: serviceTierValidator,
-		webSearchEnabled: v.optional(v.boolean()),
+		webSearchEnabled: v.boolean(),
 		appsEnabled: v.optional(v.boolean()),
 		appSources: v.optional(
 			v.array(
