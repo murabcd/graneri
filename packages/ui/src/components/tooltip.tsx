@@ -1,6 +1,42 @@
 import { cn } from "@workspace/ui/lib/utils";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
-import type * as React from "react";
+import * as React from "react";
+
+type InputModality = "keyboard" | "pointer";
+
+let currentInputModality: InputModality = "keyboard";
+let inputModalitySubscriberCount = 0;
+
+const handleDocumentKeyDown = () => {
+	currentInputModality = "keyboard";
+};
+
+const handleDocumentPointerDown = () => {
+	currentInputModality = "pointer";
+};
+
+function subscribeToInputModality() {
+	inputModalitySubscriberCount += 1;
+	if (inputModalitySubscriberCount === 1) {
+		document.addEventListener("keydown", handleDocumentKeyDown, true);
+		document.addEventListener("pointerdown", handleDocumentPointerDown, true);
+	}
+
+	return () => {
+		inputModalitySubscriberCount -= 1;
+		if (inputModalitySubscriberCount > 0) {
+			return;
+		}
+
+		document.removeEventListener("keydown", handleDocumentKeyDown, true);
+		document.removeEventListener(
+			"pointerdown",
+			handleDocumentPointerDown,
+			true,
+		);
+		currentInputModality = "keyboard";
+	};
+}
 
 function TooltipProvider({
 	delayDuration = 300,
@@ -24,9 +60,29 @@ function Tooltip({
 }
 
 function TooltipTrigger({
+	onFocus,
 	...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-	return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+	React.useEffect(() => {
+		if (typeof document === "undefined") {
+			return;
+		}
+
+		return subscribeToInputModality();
+	}, []);
+
+	return (
+		<TooltipPrimitive.Trigger
+			data-slot="tooltip-trigger"
+			onFocus={(event) => {
+				onFocus?.(event);
+				if (!event.defaultPrevented && currentInputModality === "pointer") {
+					event.preventDefault();
+				}
+			}}
+			{...props}
+		/>
+	);
 }
 
 function TooltipContent({
