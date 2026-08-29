@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
 import type { HostedHumanDecisionRequest } from "@workspace/ai/hosted-human-decision";
@@ -7,6 +7,7 @@ import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ComposerProjectOption } from "@/components/ai-elements/composer-project-picker";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { ChatComposer } from "@/components/chat/chat-composer";
 
@@ -35,6 +36,22 @@ function ActiveOptionComposer({
 	const [webSearchEnabled, setWebSearchEnabled] = React.useState(false);
 	const [localFolder, setLocalFolder] =
 		React.useState<DesktopLocalFolder | null>(null);
+	const projects = [
+		{
+			_id: "project-graneri",
+			name: "Research activities",
+			icon: "flask",
+			color: "orange",
+		},
+		{
+			_id: "project-ai-studio",
+			name: "AI Studio",
+			icon: "brain",
+			color: "purple",
+		},
+	] satisfies ComposerProjectOption[];
+	const [selectedProject, setSelectedProject] =
+		React.useState<ComposerProjectOption | null>(null);
 
 	return (
 		<ConvexProvider client={convexClient}>
@@ -81,6 +98,10 @@ function ActiveOptionComposer({
 						})
 					}
 					onClearLocalFolder={() => setLocalFolder(null)}
+					projects={projects}
+					projectsStatus="ready"
+					selectedProject={selectedProject}
+					onSelectedProjectChange={setSelectedProject}
 					appSources={[]}
 					onOpenConnectionsSettings={vi.fn()}
 					humanDecision={humanDecision}
@@ -163,7 +184,11 @@ describe("chat composer active options", () => {
 		expect(label?.classList.contains("sm:inline")).toBe(true);
 		expect(label?.classList.contains("sm:group-hover:invisible")).toBe(false);
 		expect(icons).toHaveLength(2);
-		expect(icons[0]?.classList.contains("group-hover:hidden")).toBe(true);
+		expect(
+			planControl
+				.querySelector('[data-slot="active-option-icon"]')
+				?.classList.contains("group-hover:hidden"),
+		).toBe(true);
 		expect(icons[1]?.classList.contains("group-hover:block")).toBe(true);
 		expect(
 			container.querySelector(
@@ -203,13 +228,45 @@ describe("chat composer active options", () => {
 		expect(label?.classList.contains("sm:inline")).toBe(true);
 		expect(label?.classList.contains("sm:group-hover:invisible")).toBe(false);
 		expect(icons).toHaveLength(2);
-		expect(icons[0]?.classList.contains("group-hover:hidden")).toBe(true);
+		expect(
+			webControl
+				.querySelector('[data-slot="active-option-icon"]')
+				?.classList.contains("group-hover:hidden"),
+		).toBe(true);
 		expect(icons[1]?.classList.contains("group-hover:block")).toBe(true);
 
 		await user.click(webControl);
 
 		expect(
 			screen.queryByRole("button", { name: "Turn off Web search" }),
+		).toBeNull();
+	});
+
+	it("selects one project and carries its icon and color into the chip", async () => {
+		const user = userEvent.setup();
+		render(<ActiveOptionComposer />);
+
+		await user.click(screen.getByRole("button", { name: "Chat options" }));
+		const chooseProject = screen.getByRole("menuitem", {
+			name: "Choose project",
+		});
+		expect(chooseProject.querySelector(".lucide-folder-closed")).not.toBeNull();
+		await user.click(chooseProject);
+		expect(screen.getByPlaceholderText("Search projects")).not.toBeNull();
+		fireEvent.click(
+			screen.getByRole("option", { name: "Research activities" }),
+		);
+
+		const projectChip = screen.getByRole("button", {
+			name: "Remove Research activities",
+		});
+		const projectIcon = projectChip.querySelector(".lucide-flask-conical");
+		expect(projectChip.textContent).toContain("Research activities");
+		expect(projectIcon?.classList.contains("text-orange-500")).toBe(true);
+
+		await user.click(projectChip);
+		expect(
+			screen.queryByRole("button", { name: "Remove Research activities" }),
 		).toBeNull();
 	});
 
@@ -221,14 +278,17 @@ describe("chat composer active options", () => {
 		render(<ActiveOptionComposer />);
 
 		await user.click(screen.getByRole("button", { name: "Chat options" }));
-		await user.click(
-			screen.getByRole("menuitem", { name: "Add local folder" }),
-		);
+		const addLocalFolder = screen.getByRole("menuitem", {
+			name: "Add local folder",
+		});
+		expect(addLocalFolder.querySelector(".lucide-database")).not.toBeNull();
+		await user.click(addLocalFolder);
 
 		const folderControl = screen.getByRole("button", {
 			name: "Remove graneri",
 		});
 		expect(folderControl.textContent).toContain("graneri");
+		expect(folderControl.querySelector(".lucide-database")).not.toBeNull();
 		const folderLabel = folderControl.querySelector(
 			'[data-slot="active-option-label"]',
 		);

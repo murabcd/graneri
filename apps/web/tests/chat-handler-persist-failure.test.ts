@@ -116,7 +116,11 @@ const postChatRequest = async (
 		const response = await fetch(`http://127.0.0.1:${address.port}/api/chat`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ ...DEFAULT_CHAT_SETTINGS, ...body }),
+			body: JSON.stringify({
+				...DEFAULT_CHAT_SETTINGS,
+				projectId: null,
+				...body,
+			}),
 		});
 
 		const responseText = await response.text();

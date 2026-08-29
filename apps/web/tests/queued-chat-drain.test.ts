@@ -16,6 +16,7 @@ const createQueuedMessage = () => ({
 	ownerTokenIdentifier: "owner",
 	requestBodyJson: JSON.stringify({
 		...DEFAULT_CHAT_SETTINGS,
+		projectId: null,
 		timezone: "UTC",
 	}),
 	runId: "run-1" as Id<"assistantRuns">,
@@ -69,6 +70,7 @@ describe("queued chat drain", () => {
 		expect(args.setLatestRequestBody).toHaveBeenCalledWith({
 			...DEFAULT_CHAT_SETTINGS,
 			convexToken: "fresh-token",
+			projectId: null,
 			replayQueuedMessageId: queuedMessageId,
 			timezone: "UTC",
 			workspaceId,
@@ -81,6 +83,7 @@ describe("queued chat drain", () => {
 				body: {
 					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "fresh-token",
+					projectId: null,
 					replayQueuedMessageId: queuedMessageId,
 					timezone: "UTC",
 					workspaceId,

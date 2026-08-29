@@ -24,6 +24,7 @@ test("context compaction advances a verified chat message boundary", async () =>
 			updatedAt: 1_000,
 		});
 		const chatId = await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
@@ -251,6 +252,7 @@ test("context compaction activity is cancelled or expires without a completed ma
 			updatedAt: 1_000,
 		});
 		await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,

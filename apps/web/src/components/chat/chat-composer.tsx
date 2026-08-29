@@ -17,6 +17,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
 import { ArrowUp, type LucideIcon, Square } from "lucide-react";
 import * as React from "react";
+import type { ComposerProjectOption } from "@/components/ai-elements/composer-project-picker";
 import {
 	FileAttachmentButton,
 	FileAttachmentChips,
@@ -189,6 +190,10 @@ type ChatComposerProps = {
 	localFolder: DesktopLocalFolder | null;
 	onChooseLocalFolder: () => void;
 	onClearLocalFolder: () => void;
+	projects: ComposerProjectOption[];
+	projectsStatus: "loading" | "ready";
+	selectedProject: ComposerProjectOption | null;
+	onSelectedProjectChange: (project: ComposerProjectOption | null) => void;
 	appSources: AppSource[];
 	onOpenConnectionsSettings: () => void;
 };
@@ -238,6 +243,10 @@ export function ChatComposer({
 	localFolder,
 	onChooseLocalFolder,
 	onClearLocalFolder,
+	projects,
+	projectsStatus,
+	selectedProject,
+	onSelectedProjectChange,
 	appSources,
 	onOpenConnectionsSettings,
 }: ChatComposerProps) {
@@ -365,6 +374,10 @@ export function ChatComposer({
 										localFolder={localFolder}
 										onChooseLocalFolder={onChooseLocalFolder}
 										onClearLocalFolder={onClearLocalFolder}
+										projects={projects}
+										projectsStatus={projectsStatus}
+										selectedProject={selectedProject}
+										onSelectedProjectChange={onSelectedProjectChange}
 										onOpenConnectionsSettings={onOpenConnectionsSettings}
 									/>
 								)

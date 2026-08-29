@@ -227,7 +227,10 @@ picker and registers the selected root through that same session. The active
 root appears beside the Web and Plan controls as a removable folder chip. The
 picker or a local path referenced in a later message replaces the active root.
 The browser composer does not expose the picker, and neither picker state nor
-local paths cross into Convex chat settings or durable queued input.
+local paths cross into Convex chat settings or durable queued input. A Graneri
+cloud project may be selected beside this control, but it is a separate durable
+relationship used for project-owned resources; it does not grant filesystem
+access and cannot replace the Electron-owned local-folder capability.
 
 ## Proxy response integrity
 

@@ -18,6 +18,7 @@ import {
 	serviceTierValidator,
 } from "./assistantRunModel";
 import { requireAutomationCapacity } from "./automationLimits";
+import { requireValidAutomationProject } from "./automationProjectState";
 import {
 	removeAllAutomationsForOwner,
 	removeOrphanedAutomationRuns,
@@ -53,6 +54,7 @@ type AutomationAppSource = Infer<typeof automationAppSourceValidator>;
 
 const automationListItemValidator = v.object({
 	id: v.id("automations"),
+	projectId: v.union(v.id("projects"), v.null()),
 	title: v.string(),
 	prompt: v.string(),
 	model: v.string(),
@@ -147,6 +149,7 @@ const automationTargetValidator = v.union(
 
 const automationCreateArgs = {
 	workspaceId: v.id("workspaces"),
+	projectId: v.union(v.id("projects"), v.null()),
 	title: v.string(),
 	prompt: v.string(),
 	model: v.string(),
@@ -165,6 +168,7 @@ const automationCreateArgs = {
 
 const automationUpdateArgs = {
 	automationId: v.id("automations"),
+	projectId: v.union(v.id("projects"), v.null()),
 	title: v.string(),
 	prompt: v.string(),
 	model: v.string(),
@@ -185,6 +189,8 @@ const automationIdArgs = {
 
 const automationCreateValidator = v.object(automationCreateArgs);
 const automationUpdateValidator = v.object(automationUpdateArgs);
+const automationAssistantUpdateArgs =
+	automationUpdateValidator.omit("projectId").fields;
 
 const { requireIdentity } = createResourceAccess("automations");
 
@@ -398,6 +404,7 @@ const normalizeSchedule = (schedule: AutomationSchedule) => {
 
 const toListItem = (automation: Doc<"automations">) => ({
 	id: automation._id,
+	projectId: automation.projectId,
 	title: automation.title,
 	prompt: automation.prompt,
 	model: automation.model,
@@ -488,6 +495,7 @@ const createAutomationForOwner = async (
 		args.workspaceId,
 		args.target,
 	);
+	const projectId = await requireValidAutomationProject(ctx, args);
 	const now = Date.now();
 	const prompt = normalizePrompt(args.prompt);
 	const appSources = normalizeAppSources(args.appSources);
@@ -540,6 +548,7 @@ const createAutomationForOwner = async (
 	const automationId = await ctx.db.insert("automations", {
 		ownerTokenIdentifier: args.ownerTokenIdentifier,
 		workspaceId: args.workspaceId,
+		projectId,
 		authorName: args.authorName,
 		title: normalizeTitle(args.title),
 		prompt,
@@ -603,6 +612,12 @@ const updateAutomationForOwner = async (
 		automation.workspaceId,
 		args.target,
 	);
+	const projectId = await requireValidAutomationProject(ctx, {
+		ownerTokenIdentifier: args.ownerTokenIdentifier,
+		workspaceId: automation.workspaceId,
+		destination: automation.destination,
+		projectId: args.projectId,
+	});
 	await cancelAutomationSchedule(ctx, automation.scheduledFunctionId);
 	const now = Date.now();
 	const prompt = normalizePrompt(args.prompt);
@@ -626,6 +641,7 @@ const updateAutomationForOwner = async (
 		: undefined;
 
 	await ctx.db.patch(automation._id, {
+		projectId,
 		title: normalizeTitle(args.title),
 		prompt,
 		model: normalizeModel(args.model),
@@ -955,6 +971,25 @@ export const updateForOwner = internalMutation({
 	},
 	returns: automationListItemValidator,
 	handler: async (ctx, args) => await updateAutomationForOwner(ctx, args),
+});
+
+export const updateFromAssistantForOwner = internalMutation({
+	args: {
+		ownerTokenIdentifier: v.string(),
+		...automationAssistantUpdateArgs,
+	},
+	returns: automationListItemValidator,
+	handler: async (ctx, args) => {
+		const automation = await requireOwnedAutomation(
+			ctx,
+			args.ownerTokenIdentifier,
+			args.automationId,
+		);
+		return await updateAutomationForOwner(ctx, {
+			...args,
+			projectId: automation.projectId,
+		});
+	},
 });
 
 export const togglePausedForOwner = internalMutation({

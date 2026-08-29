@@ -426,6 +426,33 @@ context and reasonable assumptions. Background runs persist the canonical chat
 mode alongside the already-resolved instruction set so retries reconstruct the
 same capability surface instead of inferring behavior from prompt text.
 
+## Chat project scope
+
+One required nullable project relationship makes a cloud project the durable container for a workspace chat without conflating it with runtime settings or desktop-local access.
+
+Workspace chats persist `projectId` independently from the five-field chat
+settings snapshot. A new draft begins with no project, a stored chat remains
+authoritative for its own project, the first accepted turn persists the draft
+selection atomically with chat creation, later changes enter through the
+project-scoped chat mutation, and forks copy the source relationship.
+[[apps/web/src/hooks/use-chat-project.ts]] owns the renderer selection lifecycle,
+while [[convex/chatProjectState.ts]] validates that both the chat and selected
+project belong to the authenticated workspace.
+
+Project membership grants access to project-owned notes without injecting every
+note into every prompt. The assistant receives bounded `search_project_notes`
+and `get_project_note` tools from
+[project-note-tools.mjs](../packages/ai/src/project-note-tools.mjs); the Convex
+executors in [[convex/chatProjectNotes.ts]] derive scope from the persisted chat,
+enforce workspace ownership again, and return only requested note content.
+Search results and reads are bounded; long reads return an explicit continuation
+offset so the model can retrieve the rest without mistaking a clipped excerpt
+for the complete note.
+Project scope is available to normal, queued, steered, and background turns.
+It does not include or persist a desktop filesystem path: the local-folder
+capability remains an independent Electron-owned source and cannot enter a
+durable queue.
+
 ## Human decisions
 
 Questions and tool approvals persist typed pending decisions and resume the same run through atomic validation.

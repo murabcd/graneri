@@ -25,6 +25,7 @@ test("branching distinguishes an old target from a missing target", async () => 
 	);
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-oversized-branch",

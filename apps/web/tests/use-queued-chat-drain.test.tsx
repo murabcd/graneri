@@ -50,6 +50,7 @@ describe("useQueuedChatDrain", () => {
 				ownerTokenIdentifier: "owner",
 				requestBodyJson: JSON.stringify({
 					...DEFAULT_CHAT_SETTINGS,
+					projectId: null,
 					timezone: "UTC",
 				}),
 				runId: "run-1",
@@ -128,6 +129,7 @@ describe("useQueuedChatDrain", () => {
 				body: {
 					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "fresh-token",
+					projectId: null,
 					replayQueuedMessageId: "queued-1",
 					timezone: "UTC",
 					workspaceId: "workspace-1",

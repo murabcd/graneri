@@ -25,6 +25,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 	);
 	const chatId = "chat-tool-approval";
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,

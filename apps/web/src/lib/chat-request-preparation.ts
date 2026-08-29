@@ -23,11 +23,13 @@ export type ChatRequestContext = {
 
 export type WorkspaceChatRequestBody = ChatRequestBase & {
 	mentions: string[];
+	projectId: string | null;
 	selectedSourceIds: string[];
 	workspaceId: string | null;
 };
 
 export type NoteChatRequestBody = ChatRequestBase & {
+	projectId: null;
 	noteContext: {
 		noteId: string | null;
 		title: string;
@@ -112,12 +114,14 @@ const resolveChatRequestBase = async ({
 
 export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 	mentions,
+	projectId,
 	selectedSourceIds,
 	workspaceId,
 	...baseArgs
 }: {
 	localFolders: DesktopLocalFolder[];
 	mentions: string[];
+	projectId: string | null;
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
@@ -126,18 +130,21 @@ export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
 }): Promise<WorkspaceChatRequestBody> => ({
 	...(await buildChatRequestBase(baseArgs)),
 	mentions,
+	projectId,
 	selectedSourceIds,
 	workspaceId,
 });
 
 export const buildWorkspaceChatRequestBody = async ({
 	mentions,
+	projectId,
 	selectedSourceIds,
 	workspaceId,
 	...baseArgs
 }: {
 	localFolderStorageScope: string;
 	mentions: string[];
+	projectId: string | null;
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 	selectedSourceIds: string[];
@@ -147,6 +154,7 @@ export const buildWorkspaceChatRequestBody = async ({
 }): Promise<WorkspaceChatRequestBody> => ({
 	...(await resolveChatRequestBase(baseArgs)),
 	mentions,
+	projectId,
 	selectedSourceIds,
 	workspaceId,
 });
@@ -163,6 +171,7 @@ export const buildNoteChatRequestBody = async ({
 	text: string;
 }): Promise<NoteChatRequestBody> => ({
 	...(await resolveChatRequestBase(baseArgs)),
+	projectId: null,
 	noteContext,
 });
 
@@ -177,5 +186,6 @@ export const buildNoteChatRequestBodyFromLocalFolders = async ({
 	settings: ChatSettings;
 }): Promise<NoteChatRequestBody> => ({
 	...(await buildChatRequestBase(baseArgs)),
+	projectId: null,
 	noteContext,
 });

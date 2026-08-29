@@ -52,6 +52,10 @@ import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
 import { upsertChatPreferences } from "./chatPreferences";
 import {
+	requireValidNoteChatProject,
+	resolveChatProjectIdForSave,
+} from "./chatProjectState";
+import {
 	type ChatSettings,
 	chatSettingsFields,
 	chatSettingsValidator,
@@ -66,6 +70,7 @@ import {
 	truncate,
 	uppercaseFirstCharacter,
 } from "./domain";
+import { requireOwnedProjectForOwner } from "./projects";
 
 const chatRoleValidator = v.union(v.literal("user"), v.literal("assistant"));
 
@@ -74,6 +79,7 @@ const chatFields = {
 	_creationTime: v.number(),
 	ownerTokenIdentifier: v.string(),
 	workspaceId: v.id("workspaces"),
+	projectId: v.union(v.id("projects"), v.null()),
 	authorName: v.optional(v.string()),
 	chatId: v.string(),
 	noteId: v.optional(v.id("notes")),
@@ -247,6 +253,7 @@ const moveAutomationToFreshChat = async (
 		chat.ownerTokenIdentifier,
 		chat.workspaceId,
 		chat.chatId,
+		chat.projectId,
 		now,
 	);
 };
@@ -618,6 +625,7 @@ export const saveMessageForOwnerInternal = async (
 		workspaceId: Id<"workspaces">;
 		authorName?: string;
 		chatId: string;
+		projectId?: Id<"projects"> | null;
 		noteId?: Id<"notes">;
 		title?: string;
 		preview?: string;
@@ -670,10 +678,21 @@ export const saveMessageForOwnerInternal = async (
 		args.workspaceId,
 		storedChatId,
 	);
+	const storedProjectId = await resolveChatProjectIdForSave(
+		ctx,
+		existingChat,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		args.projectId,
+	);
 	const chatSettings = resolveChatSettingsForSave(existingChat, args.settings);
 	requireValidNoteChatSettings(
 		existingChat?.noteId ?? storedNoteId,
 		chatSettings,
+	);
+	requireValidNoteChatProject(
+		existingChat?.noteId ?? storedNoteId,
+		storedProjectId,
 	);
 
 	const chatId =
@@ -681,6 +700,7 @@ export const saveMessageForOwnerInternal = async (
 		(await ctx.db.insert("chats", {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
+			projectId: storedProjectId,
 			authorName: args.authorName,
 			chatId: storedChatId,
 			noteId: storedNoteId,
@@ -705,6 +725,7 @@ export const saveMessageForOwnerInternal = async (
 
 		await ctx.db.patch(existingChat._id, {
 			chatId: storedChatId,
+			projectId: storedProjectId,
 			noteId: existingChat.noteId ?? storedNoteId,
 			authorName: existingChat.authorName ?? args.authorName,
 			workspaceId: args.workspaceId,
@@ -716,6 +737,9 @@ export const saveMessageForOwnerInternal = async (
 			updatedAt: now,
 			lastMessageAt: messageCreatedAt,
 		});
+		if (existingChat.projectId !== storedProjectId) {
+			await clearChatContextState(ctx, existingChat._id);
+		}
 	}
 
 	const existingMessage = await ctx.db
@@ -1097,6 +1121,7 @@ export const saveMessage = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
+		projectId: v.union(v.id("projects"), v.null()),
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
@@ -1116,6 +1141,7 @@ export const saveMessage = mutation({
 			workspaceId: args.workspaceId,
 			authorName: getAuthorName(identity),
 			chatId: args.chatId,
+			projectId: args.projectId,
 			noteId: args.noteId,
 			title: args.title,
 			preview: args.preview,
@@ -1246,6 +1272,7 @@ export const acceptSteeredUserMessages = mutation({
 				message: chatMessageInputValidator,
 			}),
 		),
+		projectId: v.union(v.id("projects"), v.null()),
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
@@ -1349,6 +1376,7 @@ export const acceptSteeredUserMessages = mutation({
 					workspaceId: args.workspaceId,
 					authorName: getAuthorName(identity),
 					chatId: args.chatId,
+					projectId: args.projectId,
 					noteId: args.noteId,
 					title: args.title,
 					preview: args.preview,
@@ -1407,6 +1435,7 @@ export const acceptQueuedUserMessage = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		queuedMessageId: v.id("assistantQueuedMessages"),
+		projectId: v.union(v.id("projects"), v.null()),
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
@@ -1451,6 +1480,7 @@ export const acceptQueuedUserMessage = mutation({
 					workspaceId: args.workspaceId,
 					authorName: getAuthorName(identity),
 					chatId: args.chatId,
+					projectId: args.projectId,
 					noteId: args.noteId,
 					title: args.title,
 					preview: args.preview,
@@ -1815,6 +1845,53 @@ export const setChatSettings = mutation({
 		);
 
 		return null;
+	},
+});
+
+export const setProject = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+		projectId: v.union(v.id("projects"), v.null()),
+	},
+	returns: v.object({
+		projectId: v.union(v.id("projects"), v.null()),
+	}),
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
+		const chat = await getOwnedChatById(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			clampWhitespace(args.chatId),
+		);
+		if (!chat || chat.isArchived) {
+			throw new ConvexError({
+				code: "CHAT_NOT_FOUND",
+				message: "Chat not found.",
+			});
+		}
+		if (args.projectId !== null) {
+			await requireOwnedProjectForOwner(
+				ctx,
+				args.projectId,
+				ownerTokenIdentifier,
+				args.workspaceId,
+			);
+		}
+		requireValidNoteChatProject(chat.noteId, args.projectId);
+		if (chat.projectId === args.projectId) {
+			return { projectId: chat.projectId };
+		}
+
+		await ctx.db.patch(chat._id, {
+			projectId: args.projectId,
+			updatedAt: Date.now(),
+		});
+		await clearChatContextState(ctx, chat._id);
+
+		return { projectId: args.projectId };
 	},
 });
 

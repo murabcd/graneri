@@ -6,6 +6,7 @@ const requestBody = {
 	convexToken: "token",
 	localFolders: [],
 	model: "gpt-5.6-sol",
+	projectId: null,
 	recipeSlug: null,
 	reasoningEffort: "medium" as const,
 	selectedSourceIds: [],

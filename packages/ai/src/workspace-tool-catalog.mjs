@@ -48,8 +48,8 @@ export const loadWorkspaceToolConnections = async (sources) => {
 
 export const buildWorkspaceToolCatalog = async ({
 	adapters,
+	builtInTools = {},
 	connections,
-	meetingTools = {},
 	scope,
 	selectedSourceIds = [],
 }) => {
@@ -74,6 +74,6 @@ export const buildWorkspaceToolCatalog = async ({
 		selectedConnections,
 		selectedSourceInstructions:
 			buildSelectedAppSourceInstructions(selectedConnections),
-		tools: { ...meetingTools, ...capabilityTools },
+		tools: { ...builtInTools, ...capabilityTools },
 	};
 };

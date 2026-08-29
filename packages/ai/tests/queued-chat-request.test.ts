@@ -9,6 +9,7 @@ describe("durable queued chat requests", () => {
 			mentions: ["note-1"],
 			model: "gpt-5.6-sol",
 			noteContext: { noteId: null, text: "Body", title: "Plan" },
+			projectId: "project-1",
 			reasoningEffort: "high",
 			recipeSlug: "review",
 			selectedSourceIds: ["source-1"],

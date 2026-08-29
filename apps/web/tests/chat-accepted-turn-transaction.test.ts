@@ -86,6 +86,7 @@ const createAcceptanceArgs = ({
 			chatId,
 			defaultTimezone: "UTC",
 			noteId: null,
+			projectId: null,
 			selectedSourceIds: [],
 			settings: {
 				chatMode: "default",

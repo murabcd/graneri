@@ -118,6 +118,7 @@ export type HostedChatTurnAcceptancePolicy = {
 	chatId: string;
 	defaultTimezone: string;
 	noteId: Id<"notes"> | null;
+	projectId: Id<"projects"> | null;
 	selectedSourceIds: string[];
 	settings: ChatSettings;
 	supersedeActiveRun?: boolean;
@@ -209,6 +210,7 @@ export const acceptHostedChatTurn = async ({
 		chatId,
 		defaultTimezone,
 		noteId,
+		projectId,
 		selectedSourceIds,
 		settings,
 		supersedeActiveRun,
@@ -369,6 +371,7 @@ export const acceptHostedChatTurn = async ({
 				workspaceId,
 				chatId,
 				noteId,
+				projectId,
 				settings,
 				nextAssistantMessageId: assistantMessageId,
 				message: lastUserMessage,

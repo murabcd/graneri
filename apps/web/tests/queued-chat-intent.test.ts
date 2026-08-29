@@ -20,6 +20,7 @@ const createQueuedMessage = () => ({
 	ownerTokenIdentifier: "owner",
 	requestBodyJson: JSON.stringify({
 		...DEFAULT_CHAT_SETTINGS,
+		projectId: null,
 		timezone: "UTC",
 	}),
 	runId,
@@ -41,6 +42,7 @@ describe("queued chat intent", () => {
 			body: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "fresh-token",
+				projectId: null,
 				replayQueuedMessageId: queuedMessageId,
 				workspaceId,
 			},
@@ -63,6 +65,7 @@ describe("queued chat intent", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "fresh-token",
 				continueRunId: runId,
+				projectId: null,
 				steerQueuedMessageId: queuedMessageId,
 				workspaceId,
 			},

@@ -58,13 +58,27 @@ invariant still serializes their execution. The minute reconciliation cron
 retries a due task whose scheduled function was lost or could not reserve the
 busy chat.
 
+Each automation also stores one required nullable cloud `projectId`, separate
+from its model and capability settings. A standalone run assigns that project
+to its dedicated destination chat before execution, so project-note tools can
+retrieve relevant notes on demand. Creating a standalone definition from chat
+copies the source chat's project, while the automation dialog stores its
+explicit selection. A `current_chat` run instead uses the attached chat's live
+project relationship at reservation time; changing a definition cannot
+silently replace the container of an existing chat. Project deletion clears
+affected automation relationships through the same retirement path that clears
+chat relationships.
+
 The automation composer remembers model, reasoning effort, service tier, and
 Web search as defaults for the next new definition. Editing an existing
 automation hydrates that definition's own stored settings instead. Enabled Web
 search is visible beside the scope picker and can be disabled directly without
 reopening the menu. [[apps/web/src/lib/ai/automation-settings.ts]] and
 [[apps/web/src/components/automations/create-automation-dialog.tsx]] own this
-definition-composer behavior.
+definition-composer behavior. The same dialog exposes the searchable cloud
+project selector used by chat composers and renders the chosen project's own
+icon and color as a removable chip. The selection persists with the definition;
+it is never interpreted as a desktop-local folder capability.
 The Automations route preloads the dialog entry after the page commits, keeping
 the dependency graph out of unrelated initial routes while allowing the first
 open on the Automations page to bypass the lazy Suspense boundary.

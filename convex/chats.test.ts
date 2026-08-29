@@ -99,6 +99,7 @@ const saveUserQuestion = async ({
 	workspaceId: WorkspaceId;
 }) =>
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -151,6 +152,7 @@ test("chat titles preserve organization and person name capitalization", async (
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-1",
@@ -188,6 +190,7 @@ test("chat settings persist on creation and update as one record", async () => {
 	};
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: initialSettings,
 		workspaceId,
 		chatId: "chat-settings",
@@ -268,6 +271,7 @@ test("note chats reject capabilities that their composer does not expose", async
 
 	await expect(
 		asOwner.mutation(api.chats.saveMessage, {
+			projectId: null,
 			workspaceId,
 			chatId: "note-chat-settings",
 			noteId,
@@ -279,12 +283,24 @@ test("note chats reject capabilities that their composer does not expose", async
 	);
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		workspaceId,
 		chatId: "note-chat-settings",
 		noteId,
 		settings: DEFAULT_CHAT_SETTINGS,
 		message,
 	});
+	const project = await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Project",
+	});
+	await expect(
+		asOwner.mutation(api.chats.setProject, {
+			workspaceId,
+			chatId: "note-chat-settings",
+			projectId: project._id,
+		}),
+	).rejects.toThrow("Note chats cannot belong to a project");
 	await expect(
 		asOwner.mutation(api.chats.setChatSettings, {
 			workspaceId,
@@ -303,6 +319,7 @@ test("oversized user messages are rejected before chat persistence", async () =>
 
 	await expect(
 		asOwner.mutation(api.chats.saveMessage, {
+			projectId: null,
 			settings: DEFAULT_CHAT_SETTINGS,
 			workspaceId,
 			chatId: "chat-large-input",
@@ -321,6 +338,7 @@ test("oversized user messages are rejected before chat persistence", async () =>
 test("local folder tool completion canonically updates the stored assistant message", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-local-tool",
@@ -433,6 +451,7 @@ test("local file tool continuations retain and release stored document bytes", a
 	);
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-local-file",
@@ -510,6 +529,7 @@ test("new chats use one placeholder title before generated title arrives", async
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-title-lifecycle",
@@ -533,6 +553,7 @@ test("new chats use one placeholder title before generated title arrives", async
 	expect(session?.title).toBe("New chat");
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-title-lifecycle",
@@ -561,6 +582,7 @@ test("explicit chat renames persist after saving", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-rename",
@@ -596,6 +618,7 @@ test("chat star state toggles and persists", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-star",
@@ -638,6 +661,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 	const { asOwner, t, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-edit",
@@ -651,6 +675,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 		},
 	});
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-edit",
@@ -664,6 +689,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 		},
 	});
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-edit",
@@ -876,6 +902,7 @@ test("branching fails closed when the target is unavailable", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-stale-branch",
@@ -909,6 +936,7 @@ test("updateActiveStream rejects missing snapshots for detached running streams"
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-missing-stream",
@@ -945,6 +973,7 @@ test("updateActiveStream exposes complete in-progress assistant state", async ()
 	const chatId = "chat-active-parts";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -991,6 +1020,7 @@ test("updateActiveStream rejects malformed snapshots", async () => {
 	const chatId = "chat-invalid-active-parts";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1020,6 +1050,7 @@ test("stopActiveStream rejects a run from another chat", async () => {
 
 	for (const chatId of ["chat-stop-owner", "chat-stop-other"]) {
 		await asOwner.mutation(api.chats.saveMessage, {
+			projectId: null,
 			settings: DEFAULT_CHAT_SETTINGS,
 			workspaceId,
 			chatId,
@@ -1064,6 +1095,7 @@ test("stopActiveStream saves interrupted assistant text before deleting the snap
 	const chatId = "chat-stop-save-partial";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1152,6 +1184,7 @@ test("stopActiveStream deletes stale terminal snapshots without saving interrupt
 	const chatId = "chat-stop-terminal-snapshot";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1243,6 +1276,7 @@ test("an interrupted run can continue with a new assistant message", async () =>
 	const chatId = "chat-same-run-steer";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1297,6 +1331,7 @@ test("an interrupted run can continue with a new assistant message", async () =>
 	}
 
 	await asOwner.mutation(api.chats.acceptSteeredUserMessages, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1446,6 +1481,7 @@ test("accepting a steered user message requires the claimed queued payload", asy
 	const chatId = "chat-steer-payload-match";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1489,6 +1525,7 @@ test("accepting a steered user message requires the claimed queued payload", asy
 
 	await expect(
 		asOwner.mutation(api.chats.acceptSteeredUserMessages, {
+			projectId: null,
 			settings: DEFAULT_CHAT_SETTINGS,
 			workspaceId,
 			chatId,
@@ -1543,6 +1580,7 @@ test("a steered user message cannot replace a pending questionnaire answer", asy
 	const chatId = "chat-steer-waiting-run";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1600,6 +1638,7 @@ test("a steered user message cannot replace a pending questionnaire answer", asy
 
 	await expect(
 		asOwner.mutation(api.chats.acceptSteeredUserMessages, {
+			projectId: null,
 			settings: DEFAULT_CHAT_SETTINGS,
 			workspaceId,
 			chatId,
@@ -1663,6 +1702,7 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 	const chatId = "chat-steer-batch";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1712,6 +1752,7 @@ test("accepting steered user messages atomically saves and deletes a ready batch
 		},
 	);
 	await asOwner.mutation(api.chats.acceptSteeredUserMessages, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1787,6 +1828,7 @@ test("accepting a queued user message atomically saves and deletes the claim", a
 	const chatId = "chat-queued-replay-accept";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1829,6 +1871,7 @@ test("accepting a queued user message atomically saves and deletes the claim", a
 	}
 
 	await asOwner.mutation(api.chats.acceptQueuedUserMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1874,6 +1917,7 @@ test("accepting a queued user message requires the claimed queued payload", asyn
 	const chatId = "chat-queued-replay-payload-match";
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1914,6 +1958,7 @@ test("accepting a queued user message requires the claimed queued payload", asyn
 
 	await expect(
 		asOwner.mutation(api.chats.acceptQueuedUserMessage, {
+			projectId: null,
 			settings: DEFAULT_CHAT_SETTINGS,
 			workspaceId,
 			chatId,
@@ -1934,6 +1979,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-remove-runtime",
@@ -2028,6 +2074,7 @@ test("saving a chat fails closed on malformed attachment storage ids", async () 
 
 	await expect(
 		asOwner.mutation(api.chats.saveMessage, {
+			projectId: null,
 			settings: DEFAULT_CHAT_SETTINGS,
 			workspaceId,
 			chatId: "chat-with-invalid-attachment",
@@ -2061,6 +2108,7 @@ test("message snapshots return only replay fields", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-snapshot",

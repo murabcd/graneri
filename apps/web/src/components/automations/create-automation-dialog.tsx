@@ -89,6 +89,7 @@ export type CreateAutomationDialogProps = {
 	onCreateAutomation: (automation: AutomationDraft) => void | Promise<void>;
 	onDisableAutomation?: () => void | Promise<void>;
 	onOpenConnectionsSettings: () => void;
+	projectSelectionEnabled?: boolean;
 	initialAutomation?: AutomationDraft | null;
 	initialTitle?: string;
 };
@@ -111,6 +112,7 @@ type AutomationDialogState = {
 	appsEnabled: boolean;
 	selectedConnectedAppIds: string[];
 	selectedNoteIds: Array<Id<"notes">>;
+	selectedProjectId: Id<"projects"> | null;
 };
 
 type AutomationDialogStateUpdate =
@@ -136,6 +138,7 @@ const createEmptyAutomationDialogState = (): AutomationDialogState => {
 		appsEnabled: true,
 		selectedConnectedAppIds: [],
 		selectedNoteIds: [],
+		selectedProjectId: null,
 	};
 };
 
@@ -179,6 +182,7 @@ const createAutomationDialogState = (
 			initialAutomation.target.kind === "notes"
 				? initialAutomation.target.noteIds
 				: [],
+		selectedProjectId: initialAutomation.projectId,
 	};
 };
 
@@ -196,6 +200,7 @@ function useCreateAutomationDialogElement({
 	onCreateAutomation,
 	onDisableAutomation,
 	onOpenConnectionsSettings,
+	projectSelectionEnabled = true,
 	initialAutomation = null,
 	initialTitle = "",
 }: CreateAutomationDialogProps) {
@@ -203,6 +208,12 @@ function useCreateAutomationDialogElement({
 	const notes = useQuery(
 		api.notes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+	);
+	const projects = useQuery(
+		api.projects.list,
+		activeWorkspaceId && projectSelectionEnabled
+			? { workspaceId: activeWorkspaceId }
+			: "skip",
 	);
 	const connectedAppSources = useAppSources(activeWorkspaceId);
 	const noteSources = React.useMemo<AutomationNoteSource[]>(
@@ -239,6 +250,7 @@ function useCreateAutomationDialogElement({
 		appsEnabled,
 		selectedConnectedAppIds,
 		selectedNoteIds,
+		selectedProjectId,
 	} = dialogState;
 	const promptRef = React.useRef(prompt);
 	const promptMentionsRef = React.useRef(promptMentions);
@@ -279,6 +291,18 @@ function useCreateAutomationDialogElement({
 				: { selectedNoteIds: nextIds };
 		});
 	}, [noteSources]);
+
+	React.useEffect(() => {
+		updateDialogState((currentState) =>
+			currentState.selectedProjectId &&
+			projects &&
+			!projects.some(
+				(project) => project._id === currentState.selectedProjectId,
+			)
+				? { selectedProjectId: null }
+				: {},
+		);
+	}, [projects]);
 
 	const closeAutomationPickers = React.useCallback(() => {
 		updateDialogState({
@@ -433,6 +457,7 @@ function useCreateAutomationDialogElement({
 			await onCreateAutomation({
 				title: trimmedTitle,
 				prompt: trimmedPrompt,
+				projectId: projectSelectionEnabled ? selectedProjectId : null,
 				model: selectedModel.model,
 				reasoningEffort,
 				serviceTier,
@@ -460,6 +485,7 @@ function useCreateAutomationDialogElement({
 		connectedAppSources,
 		noteSources,
 		onCreateAutomation,
+		projectSelectionEnabled,
 		schedule,
 		deliveryPolicy,
 		stopCondition,
@@ -468,6 +494,7 @@ function useCreateAutomationDialogElement({
 		reasoningEffort,
 		serviceTier,
 		selectedNoteIds,
+		selectedProjectId,
 		target,
 		title,
 		webSearchEnabled,
@@ -557,6 +584,19 @@ function useCreateAutomationDialogElement({
 									webSearchEnabled={webSearchEnabled}
 									onWebSearchEnabledChange={handleWebSearchEnabledChange}
 									onOpenConnectionsSettings={onOpenConnectionsSettings}
+									projects={projects ?? []}
+									projectsStatus={projects === undefined ? "loading" : "ready"}
+									selectedProject={
+										projects?.find(
+											(project) => project._id === selectedProjectId,
+										) ?? null
+									}
+									onSelectedProjectChange={(project) =>
+										updateDialogState({
+											selectedProjectId: project?._id ?? null,
+										})
+									}
+									projectSelectionEnabled={projectSelectionEnabled}
 								/>
 								<div className="ml-auto flex min-w-0 items-center gap-1">
 									<ChatModelPicker

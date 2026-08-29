@@ -219,6 +219,7 @@ const startAutomationAssistantRun = async (
 		workspaceId: args.automation.workspaceId,
 		authorName: args.automation.authorName,
 		chatId: args.automation.chatId,
+		projectId: ownsDestinationChat ? args.automation.projectId : undefined,
 		title: ownsDestinationChat ? args.automation.title : undefined,
 		preview: args.automation.prompt,
 		settings: ownsDestinationChat ? settings : undefined,

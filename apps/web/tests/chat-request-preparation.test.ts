@@ -11,6 +11,7 @@ describe("workspace chat request preparation", () => {
 		const request = await buildWorkspaceChatRequestBodyFromLocalFolders({
 			localFolders: [],
 			mentions: ["note-1"],
+			projectId: "project-1",
 			recipeSlug: "write-weekly-recap",
 			resolveConvexToken: async () => "convex-token",
 			selectedSourceIds: ["app:notion"],
@@ -27,6 +28,7 @@ describe("workspace chat request preparation", () => {
 			chatMode: CHAT_MODE.PLAN,
 			convexToken: "convex-token",
 			mentions: ["note-1"],
+			projectId: "project-1",
 			recipeSlug: "write-weekly-recap",
 			selectedSourceIds: ["app:notion"],
 			serviceTier: "priority",

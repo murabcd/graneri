@@ -22,6 +22,7 @@ const toAutomationMutationTarget = (target: AutomationDraft["target"]) =>
 const toAutomationMutationInput = (automation: AutomationDraft) => ({
 	title: automation.title,
 	prompt: automation.prompt,
+	projectId: automation.projectId,
 	model: automation.model,
 	reasoningEffort: automation.reasoningEffort,
 	serviceTier: automation.serviceTier,

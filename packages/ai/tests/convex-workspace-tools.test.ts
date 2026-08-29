@@ -36,6 +36,7 @@ describe("hosted Convex workspace tools", () => {
 		);
 		const workspaceId = "workspace-id" as never;
 		const catalog = await buildConvexWorkspaceToolSet({
+			chatId: "chat-1",
 			connections: [
 				{
 					id: "app:notion-id",
@@ -87,6 +88,7 @@ describe("hosted Convex workspace tools", () => {
 		);
 		const workspaceId = "workspace-id" as never;
 		const catalog = await buildConvexWorkspaceToolSet({
+			chatId: "chat-1",
 			connections: [
 				{
 					id: "app:tracker-id",

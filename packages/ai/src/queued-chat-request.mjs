@@ -15,6 +15,7 @@ const durableQueuedChatRequestSchema = z.strictObject({
 	mentions: z.array(z.string()).optional(),
 	model: z.string().min(1),
 	noteContext: queuedNoteContextSchema.optional(),
+	projectId: z.string().min(1).nullable(),
 	reasoningEffort: z.enum(["low", "medium", "high", "xhigh"]),
 	recipeSlug: z.string().nullable().optional(),
 	selectedSourceIds: z.array(z.string()).optional(),

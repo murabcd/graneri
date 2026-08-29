@@ -68,6 +68,7 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 	const { asOwner, t, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-tools",
@@ -203,6 +204,7 @@ test("active stream tool calls reject stale run ids", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-tools-stale",

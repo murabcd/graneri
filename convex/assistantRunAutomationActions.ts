@@ -3,6 +3,7 @@
 import {
 	type AutomationActions,
 	createAutomationMutationInputNormalizer,
+	resolveAutomationProjectIdForCreate,
 } from "@workspace/ai/automation-tools";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -22,15 +23,27 @@ export const createAssistantRunAutomationActions = (
 		ownerTokenIdentifier: string;
 		authorName: string;
 		workspaceId: Id<"workspaces">;
+		chatId: string;
 	},
 ): AutomationActions => ({
-	createAutomation: async (automation) =>
-		await ctx.runMutation(internal.automations.createForOwner, {
+	createAutomation: async (automation) => {
+		const projectId = await resolveAutomationProjectIdForCreate({
+			destination: automation.destination,
+			loadSourceProjectId: async () =>
+				await ctx.runQuery(internal.chatProjectState.getForOwner, {
+					ownerTokenIdentifier: args.ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+					chatId: args.chatId,
+				}),
+		});
+		return await ctx.runMutation(internal.automations.createForOwner, {
+			projectId,
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
 			authorName: args.authorName,
 			workspaceId: args.workspaceId,
 			...automationMutationInput.create(automation),
-		}),
+		});
+	},
 	deleteAutomation: async ({ automationId }) =>
 		await ctx.runMutation(internal.automations.removeForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
@@ -57,7 +70,7 @@ export const createAssistantRunAutomationActions = (
 			automationId: automationMutationInput.automationId(automationId),
 		}),
 	updateAutomation: async (automation) =>
-		await ctx.runMutation(internal.automations.updateForOwner, {
+		await ctx.runMutation(internal.automations.updateFromAssistantForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
 			...automationMutationInput.update(automation),
 		}),

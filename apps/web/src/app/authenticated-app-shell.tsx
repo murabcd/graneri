@@ -1355,6 +1355,9 @@ const useAppShellState = ({
 		automationDialogOpen,
 		automations,
 		automationChatTitle,
+		automationProjectSelectionEnabled:
+			automationChatId === null &&
+			editingAutomation?.destination !== "current_chat",
 		currentChatHasAutomation,
 		editingAutomation,
 		isDesktopMac,
@@ -2315,6 +2318,7 @@ export function AuthenticatedAppShell({
 							: undefined
 					}
 					onOpenConnectionsSettings={handleOpenConnectionsSettings}
+					projectSelectionEnabled={controller.automationProjectSelectionEnabled}
 					initialAutomation={controller.editingAutomation}
 					initialTitle={controller.automationChatTitle}
 				/>

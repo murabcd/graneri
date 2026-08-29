@@ -166,6 +166,10 @@
       "types": "./src/project-description-contract.d.mts",
       "import": "./src/project-description-contract.mjs"
     },
+    "./project-note-tools": {
+      "types": "./src/project-note-tools.d.mts",
+      "import": "./src/project-note-tools.mjs"
+    },
     "./pcm16-resampler": {
       "types": "./src/pcm16-resampler.d.mts",
       "import": "./src/pcm16-resampler.mjs"

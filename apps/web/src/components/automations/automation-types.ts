@@ -38,6 +38,7 @@ export type AutomationAppSource = {
 export type AutomationDraft = {
 	title: string;
 	prompt: string;
+	projectId: Id<"projects"> | null;
 	model: string;
 	reasoningEffort: "low" | "medium" | "high" | "xhigh";
 	serviceTier: ServiceTier;

@@ -282,6 +282,7 @@ export const runStep = internalAction({
 				await buildServerWorkspaceTools(ctx, {
 					ownerTokenIdentifier: context.ownerTokenIdentifier,
 					workspaceId: context.workspaceId,
+					chatId: context.chatId,
 					googleAuthUserId: context.googleAuthUserId,
 					appToolScope: context.job.appToolScope,
 					selectedSourceIds: context.job.selectedSourceIds,
@@ -292,6 +293,7 @@ export const runStep = internalAction({
 					ownerTokenIdentifier: context.ownerTokenIdentifier,
 					authorName: context.authorName,
 					workspaceId: context.workspaceId,
+					chatId: context.chatId,
 				}),
 				chatId: context.chatId,
 				defaultModel: context.model,

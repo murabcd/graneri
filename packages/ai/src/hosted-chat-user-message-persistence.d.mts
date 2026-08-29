@@ -21,10 +21,12 @@ type SaveMessageArgs<
 	WorkspaceId extends string,
 	ChatId extends string,
 	NoteId extends string,
+	ProjectId extends string,
 > = {
 	chatId: ChatId;
 	message: UIMessage;
 	noteId: NoteId | null;
+	projectId: ProjectId | null;
 	settings: ChatSettings;
 	workspaceId: WorkspaceId;
 };
@@ -33,10 +35,12 @@ type BuiltSaveMessageArgs<
 	WorkspaceId extends string,
 	ChatId extends string,
 	NoteId extends string,
+	ProjectId extends string,
 > = {
 	chatId: ChatId;
 	message: ReturnType<typeof toHostedStoredMessage>;
 	noteId: NoteId | undefined;
+	projectId: ProjectId | null;
 	preview: string;
 	settings: ChatSettings;
 	title?: string;
@@ -56,12 +60,13 @@ export declare const persistHostedChatUserMessage: <
 	WorkspaceId extends string,
 	ChatId extends string,
 	NoteId extends string,
+	ProjectId extends string,
 	RunId extends string,
 	QueuedMessageId extends string,
 >(
-	args: SaveMessageArgs<WorkspaceId, ChatId, NoteId> & {
+	args: SaveMessageArgs<WorkspaceId, ChatId, NoteId, ProjectId> & {
 		acceptQueuedUserMessage: (
-			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId> & {
+			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId, ProjectId> & {
 				queuedMessageId: QueuedMessageId;
 			},
 		) => Promise<unknown>;
@@ -69,6 +74,7 @@ export declare const persistHostedChatUserMessage: <
 			workspaceId: WorkspaceId;
 			chatId: ChatId;
 			noteId: NoteId | undefined;
+			projectId: ProjectId | null;
 			title?: string;
 			preview: string;
 			nextAssistantMessageId: string;
@@ -84,7 +90,7 @@ export declare const persistHostedChatUserMessage: <
 		queuedInput: QueuedInput<WorkspaceId, ChatId, RunId, QueuedMessageId>;
 		replayQueuedMessageId?: QueuedMessageId | null;
 		saveMessage: (
-			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId>,
+			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId, ProjectId>,
 		) => Promise<unknown>;
 		steeredUserMessages: UIMessage[];
 	},

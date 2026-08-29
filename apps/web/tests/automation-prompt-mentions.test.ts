@@ -256,7 +256,9 @@ describe("automation prompt mentions", () => {
 			title: "Weekly review",
 			prompt: "Summarize @PostHog and @Launch. Then compare @PostHog again.",
 			model: "gpt-5",
+			projectId: null,
 			reasoningEffort: "medium",
+			serviceTier: "auto",
 			appSources: [
 				{
 					id: "app:posthog",

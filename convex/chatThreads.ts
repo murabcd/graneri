@@ -175,6 +175,7 @@ export const forkFromAssistantMessage = mutation({
 		const forkId = await ctx.db.insert("chats", {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
+			projectId: sourceChat.projectId,
 			authorName: sourceChat.authorName,
 			chatId: forkChatId,
 			noteId: sourceChat.noteId,

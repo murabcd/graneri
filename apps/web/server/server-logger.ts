@@ -45,6 +45,7 @@ export type ServerWideEvent = {
 	outcome?: "error" | "success";
 	path?: string;
 	project_name_length?: number;
+	project_id?: string | null;
 	raw_notes_length?: number;
 	reasoning_effort?: string | null;
 	replay_queued_message_id?: string | null;

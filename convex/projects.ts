@@ -10,6 +10,7 @@ import {
 	projectColorValidator,
 	projectIconValidator,
 } from "./projectAppearance";
+import { clearProjectRelationships } from "./projectRelationshipCleanup";
 import {
 	assertSidebarReorderInputSize,
 	assertSidebarStoredReorderSize,
@@ -81,15 +82,52 @@ export const getOwnedProjectIfExists = async (
 ) => {
 	const identity = await requireIdentity(ctx);
 	await requireOwnedWorkspace(ctx, identity.tokenIdentifier, workspaceId);
+	return await getOwnedProjectForOwner(
+		ctx,
+		id,
+		identity.tokenIdentifier,
+		workspaceId,
+	);
+};
+
+export const getOwnedProjectForOwner = async (
+	ctx: QueryCtx | MutationCtx,
+	id: Id<"projects">,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+) => {
 	const project = await ctx.db.get(id);
 
 	return project
 		? ensureProjectOwnership({
 				project,
-				ownerTokenIdentifier: identity.tokenIdentifier,
+				ownerTokenIdentifier,
 				workspaceId,
 			})
 		: null;
+};
+
+export const requireOwnedProjectForOwner = async (
+	ctx: QueryCtx | MutationCtx,
+	id: Id<"projects">,
+	ownerTokenIdentifier: string,
+	workspaceId: Id<"workspaces">,
+) => {
+	const project = await getOwnedProjectForOwner(
+		ctx,
+		id,
+		ownerTokenIdentifier,
+		workspaceId,
+	);
+
+	if (!project) {
+		throw new ConvexError({
+			code: "PROJECT_NOT_FOUND",
+			message: "Project not found.",
+		});
+	}
+
+	return project;
 };
 
 export const requireOwnedProject = async (
@@ -207,47 +245,6 @@ const updateProjectIdentityRecord = async (
 	}
 
 	return withProjectDefaults(updatedProject);
-};
-
-const clearProjectNotes = async (
-	ctx: MutationCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	projectId: Id<"projects">,
-) => {
-	const now = Date.now();
-
-	for (const isArchived of [false, true] as const) {
-		while (true) {
-			const notes = await ctx.db
-				.query("notes")
-				.withIndex("by_owner_ws_project_arch_upd", (q) =>
-					q
-						.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-						.eq("workspaceId", workspaceId)
-						.eq("projectId", projectId)
-						.eq("isArchived", isArchived),
-				)
-				.take(REMOVE_PROJECT_NOTES_BATCH_SIZE);
-
-			if (notes.length === 0) {
-				break;
-			}
-
-			await Promise.all(
-				notes.map((note) =>
-					ctx.db.patch(note._id, {
-						projectId: undefined,
-						updatedAt: now,
-					}),
-				),
-			);
-
-			if (notes.length < REMOVE_PROJECT_NOTES_BATCH_SIZE) {
-				break;
-			}
-		}
-	}
 };
 
 const moveProjectNotesToTrash = async (
@@ -568,12 +565,11 @@ export const remove = mutation({
 		const identity = await requireIdentity(ctx);
 		const project = await requireOwnedProject(ctx, args.id, args.workspaceId);
 
-		await clearProjectNotes(
-			ctx,
-			identity.tokenIdentifier,
-			args.workspaceId,
-			project._id,
-		);
+		await clearProjectRelationships(ctx, {
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			workspaceId: args.workspaceId,
+			projectId: project._id,
+		});
 		await ctx.db.delete(project._id);
 
 		return null;

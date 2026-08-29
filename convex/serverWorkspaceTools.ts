@@ -6,6 +6,7 @@ import type {
 	YandexCalendarToolConnection,
 } from "@workspace/ai/capability-registry";
 import { buildMeetingTools } from "@workspace/ai/meeting-tools";
+import { buildProjectNoteTools } from "@workspace/ai/project-note-tools";
 import {
 	buildWorkspaceToolCatalog,
 	loadWorkspaceToolConnections,
@@ -77,11 +78,59 @@ export const buildServerWorkspaceTools = async (
 	args: {
 		ownerTokenIdentifier: string;
 		workspaceId: Id<"workspaces">;
+		chatId: string;
 		googleAuthUserId: string | null;
 		appToolScope: AppToolScope;
 		selectedSourceIds: string[];
 	},
 ) => {
+	const projectNoteTools = buildProjectNoteTools({
+		searchProjectNotes: async ({ query: searchQuery, limit }) => {
+			const queryArgs = {
+				ownerTokenIdentifier: args.ownerTokenIdentifier,
+				workspaceId: args.workspaceId,
+				chatId: args.chatId,
+				searchQuery,
+			};
+			const result =
+				limit === undefined
+					? await ctx.runQuery(
+							internal.chatProjectNotes.searchForOwner,
+							queryArgs,
+						)
+					: await ctx.runQuery(internal.chatProjectNotes.searchForOwner, {
+							...queryArgs,
+							limit,
+						});
+			return {
+				hasMore: result.hasMore,
+				notes: result.notes.map((note) => ({
+					noteId: note.id,
+					title: note.title,
+					preview: note.preview,
+					updatedAt: note.updatedAt,
+				})),
+			};
+		},
+		getProjectNote: async ({ noteId, offset }) => {
+			const note = await ctx.runQuery(internal.chatProjectNotes.getForOwner, {
+				ownerTokenIdentifier: args.ownerTokenIdentifier,
+				workspaceId: args.workspaceId,
+				chatId: args.chatId,
+				noteId,
+				...(typeof offset === "number" && { offset }),
+			});
+			return note
+				? {
+						noteId: note.id,
+						nextOffset: note.nextOffset,
+						title: note.title,
+						text: note.text,
+						updatedAt: note.updatedAt,
+					}
+				: null;
+		},
+	});
 	const meetingTools = buildMeetingTools({
 		searchMeetings: async ({ query, from, to, limit }) =>
 			await ctx.runQuery(
@@ -154,8 +203,8 @@ export const buildServerWorkspaceTools = async (
 				}
 			: undefined;
 	const catalog = await buildWorkspaceToolCatalog({
+		builtInTools: { ...meetingTools, ...projectNoteTools },
 		connections,
-		meetingTools,
 		scope: args.appToolScope,
 		selectedSourceIds: args.selectedSourceIds,
 		adapters: {

@@ -370,11 +370,21 @@ export default defineSchema({
 		])
 		.searchIndex("search_title", {
 			searchField: "title",
-			filterFields: ["ownerTokenIdentifier", "workspaceId", "isArchived"],
+			filterFields: [
+				"ownerTokenIdentifier",
+				"workspaceId",
+				"projectId",
+				"isArchived",
+			],
 		})
 		.searchIndex("search_text", {
 			searchField: "searchableText",
-			filterFields: ["ownerTokenIdentifier", "workspaceId", "isArchived"],
+			filterFields: [
+				"ownerTokenIdentifier",
+				"workspaceId",
+				"projectId",
+				"isArchived",
+			],
 		})
 		.index("by_owner_visibility_archived_updatedAt", [
 			"ownerTokenIdentifier",
@@ -573,6 +583,7 @@ export default defineSchema({
 	chats: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
+		projectId: v.union(v.id("projects"), v.null()),
 		authorName: v.optional(v.string()),
 		chatId: v.string(),
 		noteId: v.optional(v.id("notes")),
@@ -612,6 +623,13 @@ export default defineSchema({
 			"ownerTokenIdentifier",
 			"workspaceId",
 			"noteId",
+			"isArchived",
+			"updatedAt",
+		])
+		.index("by_owner_ws_project_arch_upd", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"projectId",
 			"isArchived",
 			"updatedAt",
 		])
@@ -848,6 +866,7 @@ export default defineSchema({
 	automations: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
+		projectId: v.union(v.id("projects"), v.null()),
 		authorName: v.optional(v.string()),
 		title: v.string(),
 		prompt: v.string(),
@@ -891,6 +910,12 @@ export default defineSchema({
 		.index("by_ownerTokenIdentifier_and_workspaceId_and_updatedAt", [
 			"ownerTokenIdentifier",
 			"workspaceId",
+			"updatedAt",
+		])
+		.index("by_owner_workspace_project_updatedAt", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+			"projectId",
 			"updatedAt",
 		])
 		.index("by_isPaused_and_nextRunAt", ["isPaused", "nextRunAt"])

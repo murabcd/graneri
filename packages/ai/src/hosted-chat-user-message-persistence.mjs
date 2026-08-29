@@ -18,6 +18,7 @@ const buildSaveMessageArgs = ({
 	chatId,
 	message,
 	noteId,
+	projectId,
 	settings,
 	workspaceId,
 }) => ({
@@ -27,6 +28,7 @@ const buildSaveMessageArgs = ({
 		noteId,
 		message,
 	}),
+	projectId,
 	settings,
 });
 
@@ -38,6 +40,7 @@ export const persistHostedChatUserMessage = async ({
 	message,
 	nextAssistantMessageId,
 	noteId,
+	projectId,
 	queuedInput,
 	replayQueuedMessageId,
 	saveMessage,
@@ -49,6 +52,7 @@ export const persistHostedChatUserMessage = async ({
 		workspaceId,
 		chatId,
 		noteId,
+		projectId,
 		settings,
 		message,
 	});
@@ -63,6 +67,7 @@ export const persistHostedChatUserMessage = async ({
 			workspaceId: saveMessageArgs.workspaceId,
 			chatId: saveMessageArgs.chatId,
 			noteId: saveMessageArgs.noteId,
+			projectId: saveMessageArgs.projectId,
 			title: saveMessageArgs.title,
 			preview: saveMessageArgs.preview,
 			settings: saveMessageArgs.settings,
@@ -74,6 +79,7 @@ export const persistHostedChatUserMessage = async ({
 					workspaceId,
 					chatId,
 					noteId,
+					projectId,
 					settings,
 					message: steeredMessage,
 				}).message,

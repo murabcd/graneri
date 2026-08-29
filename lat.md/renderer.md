@@ -97,3 +97,18 @@ message prefetch continues independently. The workspace composer derives its
 placeholder from the stored chat identity before hydrated messages arrive, so a
 known chat shows follow-up copy from its first destination render while a true
 draft chat keeps the general prompt.
+
+## Workspace chat project selection
+
+One renderer hook keeps cloud project identity stable across draft creation, stored-chat navigation, and explicit reassignment.
+
+[[apps/web/src/hooks/use-chat-project.ts]] separates the nullable project
+relationship from remembered chat settings. A draft workspace chat starts
+without a project, the selected project travels with the accepted request, and
+a stored chat's persisted `projectId` wins when that chat is opened again.
+[[apps/web/src/components/ai-elements/composer-project-picker.tsx]] supplies the
+shared searchable selector used by chat and automation composers. The active
+chip renders the project's configured icon and color, while the generic picker
+entry uses a neutral closed-folder icon. Desktop-local folder selection remains
+a separate database-labelled option because it grants a process-local
+capability rather than cloud resource ownership.

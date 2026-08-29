@@ -97,6 +97,7 @@ const sanitizeQueuedRequestBody = (
 		chatMode: requestBody.chatMode,
 		mentions: requestBody.mentions,
 		model: requestBody.model,
+		projectId: requestBody.projectId,
 		reasoningEffort: requestBody.reasoningEffort,
 		serviceTier: requestBody.serviceTier,
 		recipeSlug: requestBody.recipeSlug,

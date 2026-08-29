@@ -71,6 +71,7 @@ const createChat = async ({
 	workspaceId: WorkspaceId;
 }) => {
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -543,6 +544,7 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 		message: queuedMessageInput("queued-waiting", "Wait"),
 	});
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-non-running-claim",

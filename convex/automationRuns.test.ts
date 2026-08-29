@@ -9,6 +9,7 @@ import {
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import {
 	failAutomationDelivery,
 	syncAutomationRunFromAssistant,
@@ -64,11 +65,13 @@ const createAutomation = async (
 	options: {
 		title?: string;
 		prompt?: string;
+		projectId?: Id<"projects"> | null;
 		deliveryPolicy?: "always" | "failed_runs_only" | "meaningful_change";
 		stopCondition?: string;
 	} = {},
 ) =>
 	await fixture.asOwner.mutation(api.automations.create, {
+		projectId: options.projectId ?? null,
 		workspaceId: fixture.workspaceId,
 		title: options.title ?? "Daily review",
 		prompt: options.prompt ?? "Review the workspace.",
@@ -116,6 +119,7 @@ const insertActiveAutomations = async (fixture: Fixture, count: number) =>
 		const now = Date.now();
 		for (let index = 0; index < count; index += 1) {
 			await ctx.db.insert("automations", {
+				projectId: null,
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				workspaceId: fixture.workspaceId,
 				title: `Active ${index + 1}`,
@@ -614,6 +618,7 @@ test("one-time automations complete after their scheduled assistant run", async 
 	const scheduledFor = Date.now() + 60_000;
 	const resultText = "x".repeat(65_000);
 	const automation = await fixture.asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId: fixture.workspaceId,
 		title: "One-time review",
 		prompt: "Review the workspace once.",
@@ -655,6 +660,7 @@ test("one-time automations complete after their scheduled assistant run", async 
 test("a chat can own multiple automations", async () => {
 	const fixture = await createFixture();
 	await fixture.asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId: fixture.workspaceId,
 		chatId: "shared-automation-chat",
@@ -682,10 +688,12 @@ test("a chat can own multiple automations", async () => {
 		chatId: "shared-automation-chat",
 	};
 	await fixture.asOwner.mutation(api.automations.create, {
+		projectId: null,
 		...createArgs,
 		title: "First task",
 	});
 	await fixture.asOwner.mutation(api.automations.create, {
+		projectId: null,
 		...createArgs,
 		title: "Second task",
 	});
@@ -701,7 +709,12 @@ test("a chat can own multiple automations", async () => {
 
 test("standalone automation runs use definition settings in Default mode", async () => {
 	const fixture = await createFixture();
+	const project = await fixture.asOwner.mutation(api.projects.create, {
+		workspaceId: fixture.workspaceId,
+		name: "Automation project",
+	});
 	const automation = await fixture.asOwner.mutation(api.automations.create, {
+		projectId: project._id,
 		workspaceId: fixture.workspaceId,
 		title: "Standalone settings",
 		prompt: "Review the workspace.",
@@ -728,7 +741,10 @@ test("standalone automation runs use definition settings in Default mode", async
 		serviceTier: "priority",
 		webSearchEnabled: true,
 	} satisfies ChatSettings;
-	expect(runtime.chat).toMatchObject(expectedSettings);
+	expect(runtime.chat).toMatchObject({
+		...expectedSettings,
+		projectId: project._id,
+	});
 	expect(runtime.assistantRun).toMatchObject({
 		model: expectedSettings.model,
 		reasoningEffort: expectedSettings.reasoningEffort,
@@ -742,6 +758,10 @@ test.each([
 	"scheduled",
 ] as const)("%s current-chat automation runs inherit live chat settings", async (reason) => {
 	const fixture = await createFixture();
+	const project = await fixture.asOwner.mutation(api.projects.create, {
+		workspaceId: fixture.workspaceId,
+		name: `Live project ${reason}`,
+	});
 	const chatId = `live-settings-${reason}`;
 	const liveSettings = {
 		chatMode: CHAT_MODE.PLAN,
@@ -751,6 +771,7 @@ test.each([
 		webSearchEnabled: true,
 	} satisfies ChatSettings;
 	await fixture.asOwner.mutation(api.chats.saveMessage, {
+		projectId: project._id,
 		settings: liveSettings,
 		workspaceId: fixture.workspaceId,
 		chatId,
@@ -766,6 +787,7 @@ test.each([
 		},
 	});
 	const automation = await fixture.asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId: fixture.workspaceId,
 		title: "Different automation title",
 		prompt: "Review the workspace.",
@@ -800,6 +822,7 @@ test.each([
 
 	expect(runtime.chat).toMatchObject({
 		title: "Automation chat",
+		projectId: project._id,
 		...liveSettings,
 	});
 	expect(runtime.assistantRun).toMatchObject({

@@ -65,6 +65,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			updatedAt: 5_000,
 		});
 		const expiredLinkedChatId = await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
@@ -201,6 +202,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 		});
 
 		const expiredStandaloneChatId = await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
@@ -225,6 +227,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 		});
 
 		const recentStandaloneChatId = await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
@@ -239,6 +242,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			lastMessageAt: 15_000,
 		});
 		const recentOldUpdatedStandaloneChatId = await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
@@ -255,6 +259,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 		const expiredRecentlyUpdatedStandaloneChatId = await ctx.db.insert(
 			"chats",
 			{
+				projectId: null,
 				...DEFAULT_CHAT_SETTINGS,
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				workspaceId: cleanupWorkspaceId,

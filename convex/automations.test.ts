@@ -95,6 +95,7 @@ const saveChatMessage = async ({
 	workspaceId: WorkspaceFixture["workspaceId"];
 }) =>
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -112,6 +113,7 @@ const saveChatMessage = async ({
 test("owner-scoped automation adapters reuse the authenticated CRUD boundary", async () => {
 	const { t, workspaceId } = await createWorkspace();
 	const automation = await t.mutation(internal.automations.createForOwner, {
+		projectId: null,
 		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 		authorName: "Background agent",
 		workspaceId,
@@ -138,6 +140,7 @@ test("owner-scoped automation adapters reuse the authenticated CRUD boundary", a
 		automationId: automation.id,
 	});
 	const updated = await t.mutation(internal.automations.updateForOwner, {
+		projectId: null,
 		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 		automationId: automation.id,
 		title: "Weekday review",
@@ -192,6 +195,126 @@ test("owner-scoped automation adapters reject a mismatched workspace owner", asy
 	).rejects.toThrow("Workspace not found.");
 });
 
+test("standalone automations persist only owned workspace projects", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const project = await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Research",
+	});
+	const otherWorkspaceId = await t.run(
+		async (ctx) =>
+			await ctx.db.insert("workspaces", {
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				name: "Other workspace",
+				normalizedName: "other workspace",
+				createdAt: 1_000,
+				updatedAt: 1_000,
+			}),
+	);
+	const otherProject = await asOwner.mutation(api.projects.create, {
+		workspaceId: otherWorkspaceId,
+		name: "Other project",
+	});
+	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: project._id,
+		workspaceId,
+		title: "Project review",
+		prompt: "Review the project.",
+		model: DEFAULT_CHAT_MODEL_ID,
+		reasoningEffort: "medium",
+		serviceTier: "auto",
+		webSearchEnabled: false,
+		appsEnabled: true,
+		appSources: [],
+		destination: "standalone",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
+		target: { kind: "workspace" },
+	});
+	expect(automation.projectId).toBe(project._id);
+	const assistantUpdated = await t.mutation(
+		internal.automations.updateFromAssistantForOwner,
+		{
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			automationId: automation.id,
+			title: "Updated project review",
+			prompt: automation.prompt,
+			model: automation.model,
+			reasoningEffort: automation.reasoningEffort,
+			serviceTier: automation.serviceTier,
+			webSearchEnabled: automation.webSearchEnabled,
+			appsEnabled: automation.appsEnabled,
+			appSources: automation.appSources,
+			schedule: automation.schedule,
+			deliveryPolicy: automation.deliveryPolicy,
+			target: { kind: "workspace" },
+		},
+	);
+	expect(assistantUpdated).toMatchObject({
+		projectId: project._id,
+		title: "Updated project review",
+	});
+	await expect(
+		asOwner.mutation(api.automations.update, {
+			automationId: automation.id,
+			projectId: otherProject._id,
+			title: automation.title,
+			prompt: automation.prompt,
+			model: automation.model,
+			reasoningEffort: automation.reasoningEffort,
+			serviceTier: automation.serviceTier,
+			webSearchEnabled: automation.webSearchEnabled,
+			appsEnabled: automation.appsEnabled,
+			appSources: automation.appSources,
+			schedule: automation.schedule,
+			deliveryPolicy: automation.deliveryPolicy,
+			target: { kind: "workspace" },
+		}),
+	).rejects.toThrow("You do not have access to this project");
+
+	await asOwner.mutation(api.projects.remove, {
+		workspaceId,
+		id: project._id,
+	});
+	await expect(
+		asOwner.query(api.automations.get, { automationId: automation.id }),
+	).resolves.toMatchObject({ projectId: null });
+});
+
+test("current-chat automations cannot store a project snapshot", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const project = await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Research",
+	});
+	await saveChatMessage({
+		asOwner,
+		chatId: "project-chat",
+		text: "Create an automation",
+		workspaceId,
+	});
+
+	await expect(
+		asOwner.mutation(api.automations.create, {
+			projectId: project._id,
+			workspaceId,
+			title: "Project review",
+			prompt: "Review the project.",
+			model: DEFAULT_CHAT_MODEL_ID,
+			reasoningEffort: "medium",
+			serviceTier: "auto",
+			webSearchEnabled: false,
+			appsEnabled: true,
+			appSources: [],
+			destination: "current_chat",
+			deliveryPolicy: "always",
+			schedule: dailySchedule,
+			target: { kind: "workspace" },
+			chatId: "project-chat",
+		}),
+	).rejects.toThrow("inherit the chat project");
+});
+
 test("creating an automation leaves existing chat messages unchanged", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
@@ -203,6 +326,7 @@ test("creating an automation leaves existing chat messages unchanged", async () 
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Gmail high-value triage",
 		prompt: "Check Gmail for high-value items.",
@@ -239,6 +363,7 @@ test("creating a workspace automation does not seed a chat transcript", async ()
 	const prompt = "Check my DAUs @PostHog on a schedule.";
 
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "DAUs review",
 		prompt,
@@ -287,6 +412,7 @@ test("creating a chat automation keeps the existing chat transcript unchanged", 
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Daily greeting",
 		prompt: "Greet me.",
@@ -339,6 +465,7 @@ test("creating a note automation does not seed a chat transcript", async () => {
 
 	const prompt = "Review @DAU Notes every morning.";
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "DAU notes review",
 		prompt,
@@ -369,6 +496,7 @@ test("creating a note automation does not seed a chat transcript", async () => {
 test("runNow reserves a manual automation run before the action executes", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Manual review",
 		prompt: "Review the workspace.",
@@ -447,6 +575,7 @@ test("runNow does not start while the automation chat has an active assistant ru
 		workspaceId,
 	});
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Daily review",
 		prompt: "Review the workspace.",
@@ -515,6 +644,7 @@ test("runNow does not start while the automation chat has an active assistant ru
 test("stopping an automation run prevents late completion from winning", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Manual review",
 		prompt: "Review the workspace.",
@@ -588,10 +718,12 @@ test("automation run transitions reject mismatched automation and run ids", asyn
 		target: { kind: "workspace" as const },
 	};
 	const firstAutomation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		...createArgs,
 		title: "First automation",
 	});
 	const secondAutomation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		...createArgs,
 		title: "Second automation",
 	});
@@ -643,6 +775,7 @@ test("moving a chat to trash pauses its automation and restoring resumes it", as
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Daily review",
 		prompt: "Review the workspace.",
@@ -700,6 +833,10 @@ test("moving a chat to trash pauses its automation and restoring resumes it", as
 
 test("deleting a chat moves its automation to a fresh chat", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
+	const project = await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Chat project",
+	});
 
 	await saveChatMessage({
 		asOwner,
@@ -707,8 +844,14 @@ test("deleting a chat moves its automation to a fresh chat", async () => {
 		text: "Create an automation",
 		workspaceId,
 	});
+	await asOwner.mutation(api.chats.setProject, {
+		workspaceId,
+		chatId: "chat-to-delete",
+		projectId: project._id,
+	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Daily review",
 		prompt: "Review the workspace.",
@@ -748,6 +891,7 @@ test("deleting a chat moves its automation to a fresh chat", async () => {
 	expect(deletedChat).toBeNull();
 	expect(movedAutomation?.chatId).not.toBe(automation.chatId);
 	expect(movedAutomation?.chatId).toMatch(/^automation-/);
+	expect(movedAutomation?.projectId).toBe(project._id);
 	expect(movedAutomation?.isPaused).toBe(false);
 	expect(movedAutomation?.nextRunAt).not.toBeNull();
 });
@@ -763,6 +907,7 @@ test("deleting an automation leaves its chat", async () => {
 	});
 
 	const automation = await asOwner.mutation(api.automations.create, {
+		projectId: null,
 		workspaceId,
 		title: "Daily review",
 		prompt: "Review the workspace.",
@@ -802,6 +947,7 @@ test("owner cleanup removes automations and automation runs", async () => {
 
 	await t.run(async (ctx) => {
 		const automationId = await ctx.db.insert("automations", {
+			projectId: null,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			title: "Daily review",
@@ -856,6 +1002,7 @@ test("removeOrphanedRuns deletes automation runs after automation is gone", asyn
 	const { t, workspaceId } = await createWorkspace();
 	const automationId = await t.run(async (ctx) => {
 		const automationId = await ctx.db.insert("automations", {
+			projectId: null,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			title: "Daily review",
@@ -916,6 +1063,7 @@ test("removeOrphanedRuns leaves automation runs while automation exists", async 
 	const { t, workspaceId } = await createWorkspace();
 	const automationId = await t.run(async (ctx) => {
 		const automationId = await ctx.db.insert("automations", {
+			projectId: null,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			title: "Daily review",

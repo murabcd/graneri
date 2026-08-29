@@ -55,6 +55,7 @@ const createBackgroundRun = async () => {
 	);
 	const chatId = "workflow-chat";
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,

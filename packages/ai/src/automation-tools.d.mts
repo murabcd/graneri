@@ -83,6 +83,11 @@ export type AutomationActions = {
 	) => Promise<AutomationToolResult>;
 };
 
+export declare function resolveAutomationProjectIdForCreate<ProjectId>(args: {
+	destination: AutomationToolInput["destination"];
+	loadSourceProjectId: () => Promise<ProjectId | null>;
+}): Promise<ProjectId | null>;
+
 type AutomationMutationTarget<NoteId> =
 	| {
 			kind: "workspace";

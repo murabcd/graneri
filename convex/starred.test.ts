@@ -49,6 +49,7 @@ test("starred.reorder persists mixed starred item order", async () => {
 		id: project._id,
 	});
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "chat-1",

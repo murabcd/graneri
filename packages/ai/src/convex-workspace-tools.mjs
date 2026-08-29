@@ -1,5 +1,6 @@
 import { api } from "../../../convex/_generated/api.js";
 import { buildMeetingTools } from "./meeting-tools.mjs";
+import { buildProjectNoteTools } from "./project-note-tools.mjs";
 import { buildRemoteMcpProxyTools } from "./remote-mcp-tools.mjs";
 import {
 	buildWorkspaceToolCatalog,
@@ -12,6 +13,7 @@ const hasConnection = (connections, provider) =>
 	connections.some((connection) => connection.provider === provider);
 
 export const buildConvexWorkspaceToolSet = async ({
+	chatId,
 	connections,
 	convexClient,
 	scope = "available",
@@ -35,6 +37,48 @@ export const buildConvexWorkspaceToolSet = async ({
 					),
 			})
 		: {};
+	const projectNoteTools =
+		canUseWorkspaceTools && chatId
+			? buildProjectNoteTools({
+					searchProjectNotes: async ({ query, limit }) => {
+						const result = await convexClient.query(
+							api.chatProjectNotes.search,
+							{
+								workspaceId,
+								chatId,
+								searchQuery: query,
+								...(typeof limit === "number" && { limit }),
+							},
+						);
+						return {
+							hasMore: result.hasMore,
+							notes: result.notes.map((note) => ({
+								noteId: note.id,
+								preview: note.preview,
+								title: note.title,
+								updatedAt: note.updatedAt,
+							})),
+						};
+					},
+					getProjectNote: async ({ noteId, offset }) => {
+						const note = await convexClient.query(api.chatProjectNotes.get, {
+							workspaceId,
+							chatId,
+							noteId,
+							...(typeof offset === "number" && { offset }),
+						});
+						return note
+							? {
+									noteId: note.id,
+									nextOffset: note.nextOffset,
+									text: note.text,
+									title: note.title,
+									updatedAt: note.updatedAt,
+								}
+							: null;
+					},
+				})
+			: {};
 	const adapters = {
 		...(hasConnection(connections, "google-calendar") &&
 			convexClient &&
@@ -158,8 +202,8 @@ export const buildConvexWorkspaceToolSet = async ({
 
 	return await buildWorkspaceToolCatalog({
 		adapters,
+		builtInTools: { ...meetingTools, ...projectNoteTools },
 		connections,
-		meetingTools,
 		scope,
 		selectedSourceIds,
 	});

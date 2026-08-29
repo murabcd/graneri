@@ -44,6 +44,7 @@ import { PageTitle } from "@/components/layout/page-title";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useAppSources } from "@/hooks/use-app-sources";
 import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
+import { useChatProject } from "@/hooks/use-chat-project";
 import { useChatSettings } from "@/hooks/use-chat-settings";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
@@ -379,6 +380,17 @@ const useChatPageController = ({
 		workspaceId: activeWorkspaceId,
 	});
 	const {
+		projectId,
+		projects,
+		projectsStatus,
+		selectedProject,
+		setSelectedProject,
+	} = useChatProject({
+		chatId,
+		storedChat: currentChat,
+		workspaceId: activeWorkspaceId,
+	});
+	const {
 		chatMode,
 		reasoningEffort: selectedReasoningEffort,
 		serviceTier: selectedServiceTier,
@@ -509,6 +521,7 @@ const useChatPageController = ({
 							buildWorkspaceChatRequestBody({
 								localFolderStorageScope,
 								mentions: mentionIds,
+								projectId,
 								recipeSlug: submission.recipeSlug,
 								resolveConvexToken: getCachedConvexToken,
 								selectedSourceIds: requestSelectedSourceIds,
@@ -562,6 +575,7 @@ const useChatPageController = ({
 		localFolderStorageScope,
 		reconcileSharedLocalFolders,
 		mentions,
+		projectId,
 		// The submit callback must capture the latest parent persistence callback.
 		chatPersistedCallback,
 		queuedMessageEditDraft,
@@ -637,13 +651,14 @@ const useChatPageController = ({
 		return await buildWorkspaceChatRequestBodyFromLocalFolders({
 			localFolders: sharedLocalFolders,
 			mentions: mentionIds,
+			projectId,
 			recipeSlug,
 			resolveConvexToken: getCachedConvexToken,
 			selectedSourceIds: requestSelectedSourceIds,
 			settings,
 			workspaceId: activeWorkspaceId,
 		});
-	}, [activeWorkspaceId, mentions, settings, sharedLocalFolders]);
+	}, [activeWorkspaceId, mentions, projectId, settings, sharedLocalFolders]);
 	const handleHumanDecisionResponse = React.useCallback(
 		async (response: HostedHumanDecisionResponse) => {
 			try {
@@ -795,6 +810,10 @@ const useChatPageController = ({
 		localFolder: sharedLocalFolders[0] ?? null,
 		onChooseLocalFolder: chooseSharedLocalFolder,
 		onClearLocalFolder: clearSharedLocalFolderSelection,
+		projects: projects ?? [],
+		projectsStatus,
+		selectedProject,
+		onSelectedProjectChange: setSelectedProject,
 		workspaceSources,
 		appSources,
 		pendingHumanDecision,
@@ -1143,6 +1162,10 @@ export function ChatPage({
 			localFolder={controller.localFolder}
 			onChooseLocalFolder={controller.onChooseLocalFolder}
 			onClearLocalFolder={controller.onClearLocalFolder}
+			projects={controller.projects}
+			projectsStatus={controller.projectsStatus}
+			selectedProject={controller.selectedProject}
+			onSelectedProjectChange={controller.onSelectedProjectChange}
 			appSources={controller.appSources}
 			onOpenConnectionsSettings={onOpenConnectionsSettings}
 			editingMessageId={controller.editingMessageId}

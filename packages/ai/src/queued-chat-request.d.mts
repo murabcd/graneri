@@ -8,6 +8,7 @@ export type DurableQueuedChatRequest = {
 	noteContext?:
 		| { noteId: string }
 		| { noteId: null; text: string; title: string };
+	projectId: string | null;
 	reasoningEffort: ReasoningEffort;
 	recipeSlug?: string | null;
 	selectedSourceIds?: string[];

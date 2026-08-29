@@ -47,6 +47,7 @@ describe("chat queue serialization", () => {
 				requestBody: {
 					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "token",
+					projectId: null,
 					localFolders: [
 						{
 							id: "folder-1",
@@ -73,6 +74,7 @@ describe("chat queue serialization", () => {
 				model: DEFAULT_CHAT_SETTINGS.model,
 				reasoningEffort: "high",
 				replayQueuedMessageId: "stale-replay",
+				projectId: "project-1",
 				selectedSourceIds: ["source-1"],
 				serviceTier: "priority",
 				timezone: "UTC",
@@ -86,6 +88,7 @@ describe("chat queue serialization", () => {
 			chatMode: CHAT_MODE.PLAN,
 			mentions: ["note-1"],
 			model: DEFAULT_CHAT_SETTINGS.model,
+			projectId: "project-1",
 			reasoningEffort: "high",
 			selectedSourceIds: ["source-1"],
 			serviceTier: "priority",
@@ -99,6 +102,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
+				projectId: null,
 				localFolders: [],
 				timezone: "UTC",
 			},
@@ -155,6 +159,7 @@ describe("chat queue serialization", () => {
 				requestBody: {
 					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "token",
+					projectId: null,
 					localFolders: [],
 					timezone: "UTC",
 				},
@@ -168,6 +173,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
+				projectId: null,
 				localFolders: [],
 				noteContext: {
 					noteId: "note-1",
@@ -192,6 +198,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
+				projectId: null,
 				localFolders: [],
 				noteContext: {
 					noteId: null,
@@ -217,6 +224,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
+				projectId: null,
 				localFolders: [],
 				timezone: "UTC",
 			},
@@ -252,6 +260,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
+				projectId: null,
 				timezone: "UTC",
 			},
 			text: "Follow up",
@@ -277,6 +286,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
+				projectId: null,
 				timezone: "UTC",
 			},
 			text: "Follow up",
@@ -301,6 +311,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
+				projectId: null,
 				timezone: "UTC",
 			},
 			text: "Edited follow up",
@@ -327,6 +338,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				localFolders: [],
+				projectId: null,
 				timezone: "UTC",
 			},
 			text: "Visible follow up",

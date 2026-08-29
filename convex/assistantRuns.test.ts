@@ -77,6 +77,7 @@ const saveUserQuestion = async ({
 	workspaceId: WorkspaceId;
 }) =>
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -113,6 +114,7 @@ const createChat = async ({
 	workspaceId: WorkspaceId;
 }) => {
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -728,6 +730,7 @@ test("background steering checkpoints the interrupted generation and continues t
 		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	const acceptArgs = {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,
@@ -1637,6 +1640,7 @@ test("assistant runs preserve bounded choice questions in state and events", asy
 		],
 	};
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId,

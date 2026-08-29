@@ -45,6 +45,7 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 			updatedAt: now,
 		});
 		const chatId = await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,

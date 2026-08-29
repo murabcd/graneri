@@ -16,15 +16,13 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import {
-	Folder,
-	FolderPlus,
-	Globe,
-	Lightbulb,
-	Plus,
-	Settings2,
-} from "lucide-react";
+import { Database, Globe, Lightbulb, Plus, Settings2 } from "lucide-react";
 import { ActiveComposerOption } from "@/components/ai-elements/active-composer-option";
+import {
+	ActiveComposerProjectOption,
+	type ComposerProjectOption,
+	ComposerProjectPicker,
+} from "@/components/ai-elements/composer-project-picker";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
 
 type ChatComposerOptionsProps = {
@@ -37,8 +35,29 @@ type ChatComposerOptionsProps = {
 	localFolder: DesktopLocalFolder | null;
 	onChooseLocalFolder: () => void;
 	onClearLocalFolder: () => void;
+	projects: ComposerProjectOption[];
+	projectsStatus: "loading" | "ready";
+	selectedProject: ComposerProjectOption | null;
+	onSelectedProjectChange: (project: ComposerProjectOption | null) => void;
 	onOpenConnectionsSettings: () => void;
 };
+
+type ScopePickerProps = Pick<
+	ChatComposerOptionsProps,
+	| "chatMode"
+	| "localFolder"
+	| "onChatModeChange"
+	| "onChooseLocalFolder"
+	| "onOpenChange"
+	| "onOpenConnectionsSettings"
+	| "onSelectedProjectChange"
+	| "onWebSearchEnabledChange"
+	| "open"
+	| "projects"
+	| "projectsStatus"
+	| "selectedProject"
+	| "webSearchEnabled"
+>;
 
 export function ChatComposerOptions({
 	open,
@@ -50,6 +69,10 @@ export function ChatComposerOptions({
 	localFolder,
 	onChooseLocalFolder,
 	onClearLocalFolder,
+	projects,
+	projectsStatus,
+	selectedProject,
+	onSelectedProjectChange,
 	onOpenConnectionsSettings,
 }: ChatComposerOptionsProps) {
 	return (
@@ -63,13 +86,16 @@ export function ChatComposerOptions({
 				onChatModeChange={onChatModeChange}
 				localFolder={localFolder}
 				onChooseLocalFolder={onChooseLocalFolder}
-				onClearLocalFolder={onClearLocalFolder}
+				projects={projects}
+				projectsStatus={projectsStatus}
+				selectedProject={selectedProject}
+				onSelectedProjectChange={onSelectedProjectChange}
 				onOpenConnectionsSettings={onOpenConnectionsSettings}
 			/>
 			{webSearchEnabled ? (
 				<ActiveComposerOption
 					disableLabel="Turn off Web search"
-					icon={Globe}
+					icon={<Globe aria-hidden="true" />}
 					label="Web"
 					onDisable={() => onWebSearchEnabledChange(false)}
 				/>
@@ -77,15 +103,21 @@ export function ChatComposerOptions({
 			{chatMode === CHAT_MODE.PLAN ? (
 				<ActiveComposerOption
 					disableLabel="Turn off Plan mode"
-					icon={Lightbulb}
+					icon={<Lightbulb aria-hidden="true" />}
 					label="Plan"
 					onDisable={() => onChatModeChange(CHAT_MODE.DEFAULT)}
+				/>
+			) : null}
+			{selectedProject ? (
+				<ActiveComposerProjectOption
+					project={selectedProject}
+					onRemove={() => onSelectedProjectChange(null)}
 				/>
 			) : null}
 			{localFolder ? (
 				<ActiveComposerOption
 					disableLabel={`Remove ${localFolder.name}`}
-					icon={Folder}
+					icon={<Database aria-hidden="true" />}
 					label={
 						<HoverScrollTitle className="max-w-28" scrollOnHover={false}>
 							{localFolder.name}
@@ -109,8 +141,12 @@ function ScopePicker({
 	onChatModeChange,
 	localFolder,
 	onChooseLocalFolder,
+	projects,
+	projectsStatus,
+	selectedProject,
+	onSelectedProjectChange,
 	onOpenConnectionsSettings,
-}: ChatComposerOptionsProps) {
+}: ScopePickerProps) {
 	const canSelectLocalFolders = isDesktopRuntime();
 
 	return (
@@ -166,9 +202,18 @@ function ScopePicker({
 							/>
 						</label>
 					</DropdownMenuItem>
+					<ComposerProjectPicker
+						projects={projects}
+						projectsStatus={projectsStatus}
+						selectedProject={selectedProject}
+						onSelectedProjectChange={(project) => {
+							onSelectedProjectChange(project);
+							onOpenChange(false);
+						}}
+					/>
 					{canSelectLocalFolders ? (
 						<DropdownMenuItem onSelect={onChooseLocalFolder}>
-							<FolderPlus className="text-foreground" />
+							<Database className="text-foreground" />
 							<span>
 								{localFolder ? "Change local folder" : "Add local folder"}
 							</span>

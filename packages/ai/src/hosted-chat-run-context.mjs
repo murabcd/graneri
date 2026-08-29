@@ -83,6 +83,7 @@ export const buildHostedChatRunContext = async ({
 		? await getAppConnections({ workspaceId })
 		: [];
 	const workspaceToolCatalog = await buildConvexWorkspaceToolSet({
+		chatId,
 		connections: appConnections,
 		convexClient,
 		scope: appsEnabled ? "available" : "disabled",

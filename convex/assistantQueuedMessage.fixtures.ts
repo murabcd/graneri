@@ -7,6 +7,7 @@ export const createQueuedRequestBody = (
 	...DEFAULT_CHAT_SETTINGS,
 	timezone: "UTC",
 	...overrides,
+	projectId: overrides.projectId ?? null,
 });
 
 export const createQueuedRequestBodyJson = (

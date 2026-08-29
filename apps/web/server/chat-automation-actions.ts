@@ -1,6 +1,7 @@
 import {
 	type AutomationActions,
 	createAutomationMutationInputNormalizer,
+	resolveAutomationProjectIdForCreate,
 } from "@workspace/ai/automation-tools";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
@@ -15,17 +16,31 @@ const automationMutationInput = createAutomationMutationInputNormalizer<
 });
 
 export const createHostedChatAutomationActions = ({
+	chatId,
 	convexClient,
 	workspaceId,
 }: {
+	chatId: string;
 	convexClient: ConvexHttpClient;
 	workspaceId: Id<"workspaces">;
 }): AutomationActions => ({
-	createAutomation: async (automation) =>
-		await convexClient.mutation(api.automations.create, {
+	createAutomation: async (automation) => {
+		const projectId = await resolveAutomationProjectIdForCreate({
+			destination: automation.destination,
+			loadSourceProjectId: async () => {
+				const sourceChat = await convexClient.query(api.chats.getSession, {
+					workspaceId,
+					chatId,
+				});
+				return sourceChat?.projectId ?? null;
+			},
+		});
+		return await convexClient.mutation(api.automations.create, {
 			workspaceId,
 			...automationMutationInput.create(automation),
-		}),
+			projectId,
+		});
+	},
 	deleteAutomation: async ({ automationId }) =>
 		await convexClient.mutation(api.automations.remove, {
 			automationId: automationMutationInput.automationId(automationId),
@@ -44,9 +59,16 @@ export const createHostedChatAutomationActions = ({
 		await convexClient.mutation(api.automations.togglePaused, {
 			automationId: automationMutationInput.automationId(automationId),
 		}),
-	updateAutomation: async (automation) =>
-		await convexClient.mutation(
-			api.automations.update,
-			automationMutationInput.update(automation),
-		),
+	updateAutomation: async (automation) => {
+		const automationId = automationMutationInput.automationId(
+			automation.automationId,
+		);
+		const existing = await convexClient.query(api.automations.get, {
+			automationId,
+		});
+		return await convexClient.mutation(api.automations.update, {
+			...automationMutationInput.update(automation),
+			projectId: existing?.projectId ?? null,
+		});
+	},
 });

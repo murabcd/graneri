@@ -5,6 +5,7 @@ import type { WorkspaceToolConnection } from "./capability-registry.mjs";
 import type { WorkspaceToolScope } from "./workspace-tool-catalog.mjs";
 
 export declare function buildConvexWorkspaceToolSet(args: {
+	chatId: string | null;
 	connections: WorkspaceToolConnection[];
 	convexClient: ConvexHttpClient | null;
 	scope?: WorkspaceToolScope;

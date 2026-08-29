@@ -76,6 +76,7 @@ const postSteerRequestWithMockedConvex = async () => {
 				body: JSON.stringify({
 					...DEFAULT_CHAT_SETTINGS,
 					id: "chat-1",
+					projectId: null,
 					workspaceId: "workspace-1",
 					convexToken: "token",
 					continueRunId: "run-1",

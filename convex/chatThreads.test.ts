@@ -36,6 +36,7 @@ test("chat thread pages expose complete history newest first", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await t.run(async (ctx) => {
 		const chatId = await ctx.db.insert("chats", {
+			projectId: null,
 			...DEFAULT_CHAT_SETTINGS,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
@@ -139,6 +140,7 @@ test("assistant message forks preserve source history and lineage", async () => 
 		{ id: "assistant-2", role: "assistant" as const, text: "Second answer" },
 	]) {
 		await asOwner.mutation(api.chats.saveMessage, {
+			projectId: null,
 			settings: sourceSettings,
 			workspaceId,
 			chatId: "source-chat",
@@ -200,6 +202,7 @@ test("assistant message forks preserve source history and lineage", async () => 
 test("chat forks reject user-message targets", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "source-chat",
@@ -230,6 +233,7 @@ test("forked chats retain shared attachments until the last chat is removed", as
 		ctx.storage.store(new Blob(["attachment"], { type: "text/plain" })),
 	);
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "source-chat",
@@ -251,6 +255,7 @@ test("forked chats retain shared attachments until the last chat is removed", as
 		},
 	});
 	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
 		workspaceId,
 		chatId: "source-chat",

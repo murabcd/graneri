@@ -15,6 +15,11 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { Globe, Plus, Settings2 } from "lucide-react";
 import { ActiveComposerOption } from "@/components/ai-elements/active-composer-option";
+import {
+	ActiveComposerProjectOption,
+	type ComposerProjectOption,
+	ComposerProjectPicker,
+} from "@/components/ai-elements/composer-project-picker";
 
 export function AppSourcesPicker({
 	open,
@@ -22,12 +27,22 @@ export function AppSourcesPicker({
 	webSearchEnabled,
 	onWebSearchEnabledChange,
 	onOpenConnectionsSettings,
+	projects,
+	projectsStatus,
+	selectedProject,
+	onSelectedProjectChange,
+	projectSelectionEnabled,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	webSearchEnabled: boolean;
 	onWebSearchEnabledChange: (value: boolean) => void;
 	onOpenConnectionsSettings: () => void;
+	projects: ComposerProjectOption[];
+	projectsStatus: "loading" | "ready";
+	selectedProject: ComposerProjectOption | null;
+	onSelectedProjectChange: (project: ComposerProjectOption | null) => void;
+	projectSelectionEnabled: boolean;
 }) {
 	return (
 		<>
@@ -64,6 +79,17 @@ export function AppSourcesPicker({
 								/>
 							</label>
 						</DropdownMenuItem>
+						{projectSelectionEnabled ? (
+							<ComposerProjectPicker
+								projects={projects}
+								projectsStatus={projectsStatus}
+								selectedProject={selectedProject}
+								onSelectedProjectChange={(project) => {
+									onSelectedProjectChange(project);
+									onOpenChange(false);
+								}}
+							/>
+						) : null}
 					</DropdownMenuGroup>
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
@@ -81,9 +107,15 @@ export function AppSourcesPicker({
 			{webSearchEnabled ? (
 				<ActiveComposerOption
 					disableLabel="Turn off Web search"
-					icon={Globe}
+					icon={<Globe aria-hidden="true" />}
 					label="Web"
 					onDisable={() => onWebSearchEnabledChange(false)}
+				/>
+			) : null}
+			{projectSelectionEnabled && selectedProject ? (
+				<ActiveComposerProjectOption
+					project={selectedProject}
+					onRemove={() => onSelectedProjectChange(null)}
 				/>
 			) : null}
 		</>

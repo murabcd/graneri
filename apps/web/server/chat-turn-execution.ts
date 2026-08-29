@@ -57,6 +57,7 @@ type HostedChatTurnRequest = Pick<
 	| "trigger"
 > & {
 	chatId: string;
+	projectId: Id<"projects"> | null;
 	workspaceId: Id<"workspaces">;
 };
 
@@ -187,6 +188,7 @@ export const executeHostedChatTurn = async ({
 		message,
 		messageId,
 		noteContext,
+		projectId,
 		recipeSlug,
 		replayQueuedMessageId,
 		selectedSourceIds,
@@ -393,6 +395,7 @@ export const executeHostedChatTurn = async ({
 			appsEnabled,
 			chatMode,
 			automationActions: createHostedChatAutomationActions({
+				chatId,
 				convexClient: client,
 				workspaceId,
 			}),
@@ -514,6 +517,7 @@ export const executeHostedChatTurn = async ({
 			chatId,
 			defaultTimezone: model.defaultTimezone,
 			noteId: model.noteId,
+			projectId,
 			safetyIdentifier: admission.safetyIdentifier,
 			selectedSourceIds: appsEnabled ? (selectedSourceIds ?? []) : [],
 			settings,

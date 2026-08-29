@@ -117,6 +117,7 @@ export const handleChatRequest = async (
 		model: requestedModel,
 		reasoningEffort: requestedReasoningEffort,
 		serviceTier: requestedServiceTier,
+		projectId: requestedProjectId,
 		workspaceId,
 		webSearchEnabled: requestedWebSearchEnabled,
 		appsEnabled = true,
@@ -155,6 +156,7 @@ export const handleChatRequest = async (
 	wideEvent.chat_id = id ?? null;
 	wideEvent.chat_mode = chatMode;
 	wideEvent.workspace_id = workspaceId ?? null;
+	wideEvent.project_id = requestedProjectId ?? null;
 	wideEvent.trigger = trigger ?? null;
 	wideEvent.model = model;
 	wideEvent.reasoning_effort = reasoningEffort;
@@ -203,6 +205,12 @@ export const handleChatRequest = async (
 
 	const resolvedWorkspaceId =
 		(workspaceId as Id<"workspaces"> | null | undefined) ?? null;
+	const resolvedProjectId =
+		requestedProjectId === null
+			? null
+			: typeof requestedProjectId === "string" && requestedProjectId.trim()
+				? (requestedProjectId as Id<"projects">)
+				: undefined;
 	const resolvedTimezone = timezone?.trim() || "UTC";
 
 	const inputValidation = validateHostedChatRequestInput({
@@ -221,13 +229,19 @@ export const handleChatRequest = async (
 		return;
 	}
 
-	if (!id || !convexToken || !resolvedWorkspaceId) {
+	if (
+		!id ||
+		!convexToken ||
+		!resolvedWorkspaceId ||
+		resolvedProjectId === undefined
+	) {
 		wideEvent.outcome = "error";
 		wideEvent.status_code = 400;
 		wideEvent.error_code = "chat_auth_context_missing";
 		emitWideEvent("error");
 		sendJson(response, 400, {
-			error: "chat id, convexToken, and workspaceId are required.",
+			error:
+				"chat id, convexToken, workspaceId, and an explicit project selection are required.",
 		});
 		return;
 	}
@@ -353,6 +367,7 @@ export const handleChatRequest = async (
 			message,
 			messageId,
 			noteContext,
+			projectId: resolvedProjectId,
 			recipeSlug,
 			replayQueuedMessageId,
 			selectedSourceIds,

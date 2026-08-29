@@ -26,8 +26,8 @@ export declare function loadWorkspaceToolConnections(
 
 export declare function buildWorkspaceToolCatalog(args: {
 	adapters?: GraneriCapabilityAdapters;
+	builtInTools?: ToolSet;
 	connections: WorkspaceToolConnection[];
-	meetingTools?: ToolSet;
 	scope: WorkspaceToolScope;
 	selectedSourceIds?: string[];
 }): Promise<{

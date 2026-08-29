@@ -30,6 +30,7 @@ const createPersistenceArgs = (overrides = {}) => ({
 	workspaceId: "workspace-1",
 	chatId: "chat-1",
 	noteId: null,
+	projectId: null,
 	nextAssistantMessageId: "assistant-2",
 	settings: {
 		chatMode: "default",

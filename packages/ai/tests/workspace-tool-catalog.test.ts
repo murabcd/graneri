@@ -30,13 +30,13 @@ describe("workspace tool catalog", () => {
 	});
 
 	it("keeps workspace tools when connected apps are disabled", async () => {
-		const meetingTool = { description: "Search notes" };
+		const builtInTool = { description: "Search notes" };
 		const catalog = await buildWorkspaceToolCatalog({
+			builtInTools: { search_meeting_notes: builtInTool },
 			connections,
-			meetingTools: { search_meeting_notes: meetingTool },
 			scope: "disabled",
 		});
 
-		expect(catalog.tools).toEqual({ search_meeting_notes: meetingTool });
+		expect(catalog.tools).toEqual({ search_meeting_notes: builtInTool });
 	});
 });

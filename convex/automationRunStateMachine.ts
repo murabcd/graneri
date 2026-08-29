@@ -583,6 +583,7 @@ export const moveLinkedAutomationToFreshChat = async (
 	ownerTokenIdentifier: string,
 	workspaceId: Id<"workspaces">,
 	chatId: string,
+	projectId: Id<"projects"> | null,
 	now: number,
 ) => {
 	const automations = await getLinkedAutomations(
@@ -606,6 +607,7 @@ export const moveLinkedAutomationToFreshChat = async (
 		await ctx.db.patch(automation._id, {
 			chatId: createAutomationChatId(),
 			destination: "standalone",
+			projectId,
 			isPaused: nextRunAt === undefined,
 			isCompleted: nextRunAt === undefined,
 			nextRunAt,

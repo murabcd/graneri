@@ -5,19 +5,19 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { type LucideIcon, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function ActiveComposerOption({
 	disableLabel,
-	icon: Icon,
+	icon,
 	label,
 	labelClassName,
 	onDisable,
 	tooltipLabel = disableLabel,
 }: {
 	disableLabel: string;
-	icon: LucideIcon;
+	icon: ReactNode;
 	label: ReactNode;
 	labelClassName?: string;
 	onDisable: () => void;
@@ -36,7 +36,12 @@ export function ActiveComposerOption({
 						data-slot="active-option-glyph"
 						className="flex size-6 shrink-0 items-center justify-center rounded-full group-hover:bg-muted dark:group-hover:bg-muted/50"
 					>
-						<Icon aria-hidden="true" className="group-hover:hidden" />
+						<span
+							data-slot="active-option-icon"
+							className="flex group-hover:hidden"
+						>
+							{icon}
+						</span>
 						<X aria-hidden="true" className="hidden group-hover:block" />
 					</span>
 					<span
