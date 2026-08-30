@@ -23,6 +23,7 @@ import {
 	type HostedChatTurnPreparedPersistence,
 } from "./chat-accepted-turn-transaction.js";
 import type { ServerAssistantRunContext } from "./chat-assistant-run-input.js";
+import type { ChatRequestBody } from "./chat-handler-types.js";
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import type { SendJson } from "./http-utils.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
@@ -109,6 +110,9 @@ export type HostedChatTurnPreparedRun = HostedChatTurnPreparedPersistence &
 	>;
 
 export type HostedChatTurnExecutionPolicy = HostedChatTurnAcceptancePolicy & {
+	localCapabilitySession: NonNullable<
+		ChatRequestBody["localCapabilitySession"]
+	> | null;
 	safetyIdentifier: string;
 };
 
@@ -136,6 +140,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 	} = environment;
 	const {
 		chatId,
+		localCapabilitySession,
 		noteId,
 		safetyIdentifier,
 		settings,
@@ -362,6 +367,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 		workspaceId,
 		chatId,
 		assistantMessageId,
+		localCapabilitySession,
 		attachableRun,
 		continueRunId,
 		model,

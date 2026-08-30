@@ -20,6 +20,7 @@ const createQueuedFollowUpMessage = (text: string): QueuedFollowUpMessage =>
 		ownerTokenIdentifier: "owner",
 		requestBodyJson: JSON.stringify({
 			chatMode: CHAT_MODE.DEFAULT,
+			localCapabilitySession: null,
 			model: "gpt-5",
 			timezone: "UTC",
 		}),
@@ -50,7 +51,7 @@ describe("chat submit session", () => {
 			],
 			buildRequestBody: async () => ({
 				convexToken: "token",
-				localFolders: [],
+				localCapabilitySession: null,
 				model: "gpt-5",
 				timezone: "UTC",
 			}),
@@ -80,10 +81,10 @@ describe("chat submit session", () => {
 		expect(optimisticMessages).toHaveLength(1);
 		expect(preparedRequests).toEqual([
 			{
-				localFolders: [],
+				localCapabilitySession: null,
 				requestBody: {
 					convexToken: "token",
-					localFolders: [],
+					localCapabilitySession: null,
 					model: "gpt-5",
 					timezone: "UTC",
 				},
@@ -108,7 +109,7 @@ describe("chat submit session", () => {
 			{
 				body: {
 					convexToken: "token",
-					localFolders: [],
+					localCapabilitySession: null,
 					model: "gpt-5",
 					timezone: "UTC",
 				},
@@ -127,7 +128,7 @@ describe("chat submit session", () => {
 		await submitChatTurn({
 			attachedFiles: [],
 			buildRequestBody: async () => ({
-				localFolders: [],
+				localCapabilitySession: null,
 				model: "gpt-5",
 			}),
 			chatId: "chat-1",
@@ -167,7 +168,7 @@ describe("chat submit session", () => {
 			attachedFiles: [],
 			buildRequestBody: async () => ({
 				convexToken: "token",
-				localFolders: [],
+				localCapabilitySession: null,
 				model: "gpt-5",
 				timezone: "UTC",
 			}),
@@ -206,7 +207,7 @@ describe("chat submit session", () => {
 			attachedFiles: [],
 			buildRequestBody: async () => ({
 				convexToken: "token",
-				localFolders: [],
+				localCapabilitySession: null,
 				model: "gpt-5",
 				timezone: "UTC",
 			}),
@@ -236,7 +237,7 @@ describe("chat submit session", () => {
 				body: {
 					continueRunId: runId,
 					convexToken: "token",
-					localFolders: [],
+					localCapabilitySession: null,
 					model: "gpt-5",
 					timezone: "UTC",
 				},
@@ -256,7 +257,7 @@ describe("chat submit session", () => {
 			attachedFiles: [],
 			buildRequestBody: async () => ({
 				convexToken: "token",
-				localFolders: [],
+				localCapabilitySession: null,
 				model: "gpt-5",
 				timezone: "UTC",
 			}),
@@ -311,7 +312,7 @@ describe("chat submit session", () => {
 			attachedFiles: [],
 			buildRequestBody: async () => ({
 				convexToken: "token",
-				localFolders: [],
+				localCapabilitySession: null,
 				model: "gpt-5",
 				timezone: "UTC",
 			}),
@@ -344,7 +345,7 @@ describe("chat submit session", () => {
 			{
 				body: {
 					convexToken: "token",
-					localFolders: [],
+					localCapabilitySession: null,
 					model: "gpt-5",
 					timezone: "UTC",
 				},
@@ -363,7 +364,7 @@ describe("chat submit session", () => {
 				attachedFiles: [],
 				buildRequestBody: async () => ({
 					convexToken: "token",
-					localFolders: [],
+					localCapabilitySession: null,
 					model: "gpt-5",
 					timezone: "UTC",
 				}),
@@ -388,7 +389,7 @@ describe("chat submit session", () => {
 			attachedFiles: [],
 			buildRequestBody: async () => ({
 				convexToken: "token",
-				localFolders: [],
+				localCapabilitySession: null,
 				model: "gpt-5",
 				timezone: "UTC",
 			}),
@@ -408,10 +409,10 @@ describe("chat submit session", () => {
 		expect(result.status).toBe("sent");
 		expect(preparedRequests).toEqual([
 			{
-				localFolders: [],
+				localCapabilitySession: null,
 				requestBody: {
 					convexToken: "token",
-					localFolders: [],
+					localCapabilitySession: null,
 					model: "gpt-5",
 					timezone: "UTC",
 				},

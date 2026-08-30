@@ -7,6 +7,7 @@ Desktop AI modules preserve hosted model ownership while routing authenticated t
 - [hosted route catalog](../packages/ai/src/hosted-route-catalog.mjs)
 - [local workspace session](../packages/ai/src/local-workspace-session.mjs)
 - [desktop local-folder picker](../apps/desktop/src/desktop-local-folder-picker.mjs)
+- [local capability session](../apps/desktop/src/local-capability-session.mjs)
 
 ## Loopback routes
 
@@ -119,25 +120,49 @@ not re-export those request helpers; server consumers import each interface by
 its runtime responsibility. Bearer-token parsing is
 the separate `@workspace/ai/hosted-chat-http` transport utility.
 
-## Local-folder bridge
+## Local capability session
 
-The hosted model and installed desktop exchange declared calls and validated outputs while one workspace session enforces shared-root containment.
+Electron owns durable local authorization and idempotent execution while hosted and Convex state carry only an opaque descriptor.
 
 Local-folder chat uses a hosted-model, desktop-tool bridge:
 
-1. The hosted web AI route owns the OpenAI key and model loop.
-2. The hosted web AI route declares local folder tools without server-side executors.
-3. The desktop renderer receives client-side local tool calls.
-4. The renderer executes those calls through the desktop local server against
-   folders explicitly shared through the desktop bridge.
-5. The renderer attaches tool output and lets the AI SDK resubmit the
-   conversation to the hosted web producer for the same run.
+1. Electron authorizes one canonical root for a renderer scope and persists its
+   path behind a random capability id.
+2. The renderer, hosted web route, durable queue, and Convex run store only the
+   strict `{ id, label }` descriptor; local paths never cross IPC responses or
+   enter hosted/Convex state.
+3. The hosted web AI route owns the OpenAI key and declares local tools without
+   server-side executors.
+4. The desktop renderer receives client-side calls and sends the capability id,
+   tool-call id, input, and upload URLs to the authenticated loopback route.
+5. Electron resolves the id to its private root, validates the tool input, and
+   executes it through the shared-root workspace adapter.
+6. The renderer attaches the output with the same run id and run-bound
+   capability descriptor so the hosted producer continues one canonical turn.
 
-Client-side local tool outputs must resubmit with the same chat request body,
-including `localFolders`, so subsequent hosted model steps keep the same desktop
-tool context. Durable queued replay and steer are the exception: queued request
-state is stored in Convex and must reject non-empty `localFolders` rather than
-persisting local filesystem selections.
+`apps/desktop/src/local-capability-session.mjs` is the deep native module for
+authorization, revocation, durable path ownership, and execution receipts.
+Receipts bind one tool-call id to the hash of its capability, tool, and input.
+Completed calls return their stored output across renderer or application
+restarts. Receipts remain for the lifetime of the capability rather than using
+a count-based eviction policy that could permit an old continuation to execute
+twice. An execution that reached `started` without a durable result is never
+repeated after restart; it fails explicitly so future native tools cannot apply
+one action twice. Replacing or revoking a scope removes its mapping before any
+later request can resolve it and deletes its receipts. The module does not run
+while Graneri is completely quit; background-daemon execution is a separate
+product capability.
+
+Convex binds the descriptor to `assistantRuns` and projects pending local calls
+from durable `chatToolCalls`. On renderer reattachment, the shared recovery
+module executes each pending call through Electron and continues the original
+run. The renderer and reconnect route do not attempt HTTP stream attachment or
+orphan cleanup while a pending local call is waiting for its desktop executor.
+Every continuation must present exactly the descriptor bound at run creation;
+neither adding a capability to a capability-free run nor omitting a run-bound
+capability is allowed.
+Durable queued follow-ups may retain the opaque descriptor because it carries no
+path and Electron revalidates the capability at execution time.
 The shared local-folder tool contract owns tool names and completed-output
 validation across the renderer, hosted route, and Convex. A desktop tool
 continuation is an assistant message, not an empty user input or an edited
@@ -156,7 +181,7 @@ input validation, model-facing description, multimodal output conversion, and
 UI metadata. Hosted declarations, continuation recognition, desktop executor
 attachment, and tool presentation derive from that catalog; adding a local tool
 must not require another parallel name or metadata registry.
-`createLocalWorkspaceSession` is the canonical owner of shared-root validation,
+`createLocalWorkspaceSession` remains the canonical owner of shared-root validation,
 root lookup, symlink-safe containment, no-follow file access, traversal limits,
 ignored-directory policy, and media-aware local search. Shared roots are
 canonical real paths, one chat may expose one root, and an
@@ -211,23 +236,26 @@ unsandboxed fallback.
 
 ## Desktop-local availability
 
-Desktop-only capabilities require the real bridge and one scope-aware shared-folder session; unavailable or stale state fails visibly.
+Desktop-only capabilities require the real bridge and one scope-aware local capability session; unavailable, revoked, or stale state fails visibly.
 
 Hosted handlers must never claim direct access to the user's Mac filesystem.
 Desktop-local capabilities must fail visibly when the desktop bridge contract is
 unavailable. Local path references must be registered through
-`shareLocalFolders` before they reach `/api/chat`, or request preparation must
-fail with an actionable error.
-Renderer chat surfaces use `useSharedLocalFolderSession` as the canonical owner
-of scope-tagged folder state, storage hydration, cancellation, error clearing,
-and request-prepared reconciliation. A late hydration result must never replace
-newer request state or expose folders from the previously active chat scope.
+`authorizeLocalCapabilitySession` before they reach `/api/chat`, or request
+preparation must fail with an actionable error.
+Renderer chat surfaces use `useLocalCapabilitySession` as the scope-aware
+adapter over Electron authorization, selection, revocation, and descriptor
+loading. The renderer does not persist paths or duplicate native capability
+state. A late load result must never replace newer request state or expose the
+descriptor from the previously active chat scope.
 In the desktop Ask AI composer, `Add local folder` opens the native single-directory
 picker and registers the selected root through that same session. The active
 root appears beside the Web and Plan controls as a removable folder chip. The
 picker or a local path referenced in a later message replaces the active root.
-The browser composer does not expose the picker, and neither picker state nor
-local paths cross into Convex chat settings or durable queued input. A Graneri
+The browser composer does not expose the picker, and browser requests report the
+native capability as unavailable. Neither picker state nor local paths cross
+into Convex chat settings or durable queued input; queued input stores only an
+opaque run-replay descriptor. A Graneri
 cloud project may be selected beside this control, but it is a separate durable
 relationship used for project-owned resources; it does not grant filesystem
 access and cannot replace the Electron-owned local-folder capability.

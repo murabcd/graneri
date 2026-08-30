@@ -66,6 +66,7 @@ import { createDesktopWindow } from "./desktop-window.mjs";
 import { loadRootEnv } from "./env.mjs";
 import { createGlobalDictation } from "./global-dictation.mjs";
 import { getDictationPreferencePatchForHotkeyMode } from "./global-dictation-policy.mjs";
+import { createLocalCapabilitySession } from "./local-capability-session.mjs";
 import { startLocalServer } from "./local-server.mjs";
 import {
 	emitWideEvent,
@@ -119,6 +120,14 @@ const transcriptDraftsDirPath = join(
 	"transcript-drafts",
 );
 const noteDraftsDirPath = join(app.getPath("userData"), "note-drafts");
+const localCapabilitySessionsPath = join(
+	app.getPath("userData"),
+	"local-capability-sessions.json",
+);
+const localCapabilityExecutionsPath = join(
+	app.getPath("userData"),
+	"local-capability-executions",
+);
 const desktopDiagnosticsPaths = createDesktopDiagnosticsPaths({
 	userDataPath: app.getPath("userData"),
 });
@@ -236,6 +245,10 @@ const desktopPreferencesStore = createDesktopPreferencesStore({
 const desktopStorage = createDesktopStorage({
 	noteDraftsDirPath,
 	transcriptDraftsDirPath,
+});
+const localCapabilitySession = createLocalCapabilitySession({
+	executionsDirPath: localCapabilityExecutionsPath,
+	sessionsFilePath: localCapabilitySessionsPath,
 });
 const desktopRecordingPowerSaveBlocker = createDesktopRecordingPowerSaveBlocker(
 	{
@@ -929,6 +942,7 @@ const closeLocalServer = async () => {
 const ensureLocalServer = async () => {
 	if (!localServer) {
 		localServer = await startLocalServer({
+			executeLocalFolderTool: localCapabilitySession.executeLocalFolderTool,
 			getAllowedOrigins: () => {
 				if (app.isPackaged === true) {
 					return [appRendererOrigin];
@@ -945,7 +959,6 @@ const ensureLocalServer = async () => {
 					return [];
 				}
 			},
-			getSharedLocalFolders: desktopStorage.getSharedLocalFolders,
 			onAuthCallback: handleDesktopAuthCallback,
 		});
 	}
@@ -2657,13 +2670,28 @@ registerDesktopInvokeHandler("clearNoteDraft", async (_event, noteKey) => {
 	return await desktopStorage.clearNoteDraft(noteKey.trim());
 });
 
-registerDesktopInvokeHandler("shareLocalFolders", async (_event, paths) => {
-	return await desktopStorage.shareLocalFolders(paths);
-});
+registerDesktopInvokeHandler(
+	"getLocalCapabilitySession",
+	async (_event, scope) => await localCapabilitySession.getSession(scope),
+);
 
-registerDesktopInvokeHandler("pickLocalFolder", async () => {
+registerDesktopInvokeHandler(
+	"authorizeLocalCapabilitySession",
+	async (_event, scope, path) =>
+		await localCapabilitySession.authorizeFolder({ path, scope }),
+);
+
+registerDesktopInvokeHandler(
+	"revokeLocalCapabilitySession",
+	async (_event, scope) => {
+		return await localCapabilitySession.revokeSession(scope);
+	},
+);
+
+registerDesktopInvokeHandler("pickLocalFolder", async (_event, scope) => {
 	return await pickDesktopLocalFolder({
-		shareLocalFolders: desktopStorage.shareLocalFolders,
+		authorizeFolder: localCapabilitySession.authorizeFolder,
+		scope,
 		showOpenDialog: async (options) =>
 			await dialog.showOpenDialog(
 				getExistingMainWindow() ?? undefined,

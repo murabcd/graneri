@@ -1,9 +1,12 @@
 import {
+	type LocalCapabilitySession,
+	parseLocalCapabilitySession,
+} from "@workspace/ai/local-capability-session";
+import {
 	getLocalFileUploadCount,
 	resolveLocalFileToolOutput,
 } from "@workspace/ai/local-folder-file-contract";
 import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import type {
 	ChatAddToolOutputFunction,
 	ChatOnToolCallCallback,
@@ -15,7 +18,7 @@ import { logError } from "@/lib/logger";
 import { getLocalFolderToolApiUrl } from "@/lib/runtime-config";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-type LocalToolCall = {
+export type LocalToolCall = {
 	toolCallId: string;
 	toolName: string;
 	input: unknown;
@@ -28,7 +31,7 @@ type LocalToolRequestOptions =
 	| undefined;
 
 type DesktopLocalToolRequestBody = {
-	localFolders?: DesktopLocalFolder[];
+	localCapabilitySession?: LocalCapabilitySession | null;
 };
 
 const localToolErrorResponseSchema = z.object({
@@ -48,18 +51,7 @@ export type LocalFileStorage = {
 	getUrl: (storageId: Id<"_storage">) => Promise<string | null>;
 };
 
-export const isDesktopLocalFolderArray = (
-	value: unknown,
-): value is DesktopLocalFolder[] =>
-	Array.isArray(value) &&
-	value.every(
-		(folder) =>
-			typeof folder?.id === "string" &&
-			typeof folder.name === "string" &&
-			typeof folder.path === "string",
-	);
-
-const getRequestLocalFolders = (
+const getRequestLocalCapabilitySession = (
 	requestBody: DesktopLocalToolRequestBody | null,
 ) => {
 	if (!requestBody) {
@@ -68,27 +60,30 @@ const getRequestLocalFolders = (
 		);
 	}
 
-	if (!isDesktopLocalFolderArray(requestBody.localFolders)) {
+	const session = parseLocalCapabilitySession(
+		requestBody.localCapabilitySession,
+	);
+	if (!session) {
 		throw new Error(
-			"Desktop local tool request is missing shared local folders.",
+			"Desktop local tool request is missing its capability session.",
 		);
 	}
 
-	return requestBody.localFolders;
+	return session;
 };
 
 const getErrorMessage = (error: unknown, fallback: string) =>
 	error instanceof Error ? error.message : fallback;
 
-const executeDesktopLocalToolCall = async ({
+export const executeDesktopLocalToolCall = async ({
 	fetchImpl,
 	fileStorage,
-	localFolders,
+	localCapabilitySession,
 	toolCall,
 }: {
 	fetchImpl: typeof fetch;
 	fileStorage: LocalFileStorage;
-	localFolders: DesktopLocalFolder[];
+	localCapabilitySession: LocalCapabilitySession;
 	toolCall: LocalToolCall;
 }) => {
 	const apiUrl = getLocalFolderToolApiUrl();
@@ -115,7 +110,7 @@ const executeDesktopLocalToolCall = async ({
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
 			fileUploadUrls,
-			localFolders,
+			sessionId: localCapabilitySession.id,
 			toolCallId: toolCall.toolCallId,
 			toolName: toolCall.toolName,
 			input: toolCall.input,
@@ -159,7 +154,7 @@ const submitDesktopLocalToolCall = async ({
 		const output = await executeDesktopLocalToolCall({
 			fetchImpl,
 			fileStorage,
-			localFolders: getRequestLocalFolders(requestBody),
+			localCapabilitySession: getRequestLocalCapabilitySession(requestBody),
 			toolCall,
 		});
 		addToolOutputRef.current?.({

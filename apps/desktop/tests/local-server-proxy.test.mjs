@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import test from "node:test";
 import { startLocalServer } from "../src/local-server.mjs";
 
 const startTestLocalServer = (options = {}) =>
 	startLocalServer({
-		getSharedLocalFolders: () => [],
+		executeLocalFolderTool: async () => null,
 		...options,
 	});
 
@@ -197,7 +194,10 @@ test("desktop streaming AI routes always proxy to the web server", async () => {
 			headers: requestHeaders,
 			body: JSON.stringify({
 				id: "chat_1",
-				localFolders: [{ id: "folder_1", name: "graneri" }],
+				localCapabilitySession: {
+					id: "capability_1",
+					label: "graneri",
+				},
 			}),
 		});
 		await originalFetch(`${server.origin}/api/chat/steer`, {
@@ -238,7 +238,10 @@ test("desktop streaming AI routes always proxy to the web server", async () => {
 			{
 				body: {
 					id: "chat_1",
-					localFolders: [{ id: "folder_1", name: "graneri" }],
+					localCapabilitySession: {
+						id: "capability_1",
+						label: "graneri",
+					},
 				},
 				method: "POST",
 				path: "/api/chat",
@@ -312,26 +315,15 @@ test("desktop chat requires SITE_URL even when a local OpenAI key exists", async
 	}
 });
 
-test("local folder tool requests execute against shared desktop folders", async () => {
-	const temporaryRootPath = await mkdtemp(
-		join(tmpdir(), "graneri-local-tool-"),
-	);
-	const rootPath = await realpath(temporaryRootPath);
-	await writeFile(join(rootPath, "note.txt"), "hello", "utf8");
-	let requestedFolderIds = null;
+test("local folder tool requests delegate to the capability executor", async () => {
+	let requestedToolCall = null;
 	let server = null;
 
 	try {
 		server = await startTestLocalServer({
-			getSharedLocalFolders: (folderIds) => {
-				requestedFolderIds = folderIds;
-				return [
-					{
-						id: "folder_1",
-						name: "graneri",
-						path: rootPath,
-					},
-				];
+			executeLocalFolderTool: async (request) => {
+				requestedToolCall = request;
+				return { entries: [{ name: "note.txt" }], path: "." };
 			},
 		});
 
@@ -350,7 +342,7 @@ test("local folder tool requests execute against shared desktop folders", async 
 						rootIndex: 0,
 						relativePath: ".",
 					},
-					localFolders: [{ id: "folder_1", name: "graneri" }],
+					sessionId: "capability_1",
 					toolCallId: "tool_call_1",
 					toolName: "list_local_directory",
 				}),
@@ -358,12 +350,20 @@ test("local folder tool requests execute against shared desktop folders", async 
 		);
 
 		assert.equal(response.status, 200);
-		assert.deepEqual(requestedFolderIds, ["folder_1"]);
+		assert.deepEqual(requestedToolCall, {
+			fileUploadUrls: [],
+			input: {
+				rootIndex: 0,
+				relativePath: ".",
+			},
+			sessionId: "capability_1",
+			toolCallId: "tool_call_1",
+			toolName: "list_local_directory",
+		});
 		const payload = await response.json();
 		assert.equal(payload.output.path, ".");
 		assert.equal(payload.output.entries[0].name, "note.txt");
 	} finally {
 		await server?.close();
-		await rm(temporaryRootPath, { force: true, recursive: true });
 	}
 });

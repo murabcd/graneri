@@ -5,6 +5,7 @@ export const createQueuedRequestBody = (
 	overrides: Partial<DurableQueuedChatRequest> = {},
 ): DurableQueuedChatRequest => ({
 	...DEFAULT_CHAT_SETTINGS,
+	localCapabilitySession: null,
 	timezone: "UTC",
 	...overrides,
 	projectId: overrides.projectId ?? null,

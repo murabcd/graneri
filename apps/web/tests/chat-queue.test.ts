@@ -41,27 +41,28 @@ const createQueuedFollowUp = (
 	}) as QueuedFollowUpMessage;
 
 describe("chat queue serialization", () => {
-	it("does not persist desktop local folder scope in durable queued messages", () => {
-		expect(() =>
-			toQueuedUserMessageInput({
-				requestBody: {
-					...DEFAULT_CHAT_SETTINGS,
-					convexToken: "token",
-					projectId: null,
-					localFolders: [
-						{
-							id: "folder-1",
-							name: "Documents",
-							path: "/Users/example/Documents",
-						},
-					],
-					timezone: "UTC",
+	it("persists an opaque local capability without its Electron-owned path", () => {
+		const queuedMessage = toQueuedUserMessageInput({
+			requestBody: {
+				...DEFAULT_CHAT_SETTINGS,
+				convexToken: "token",
+				projectId: null,
+				localCapabilitySession: {
+					id: "capability-1",
+					label: "Documents",
 				},
-				text: "Use this folder next",
-			}),
-		).toThrow(
-			"Wait for the current answer before sending follow-ups that use local folders.",
-		);
+				timezone: "UTC",
+			},
+			text: "Use this folder next",
+		});
+
+		expect(JSON.parse(queuedMessage.requestBodyJson)).toMatchObject({
+			localCapabilitySession: {
+				id: "capability-1",
+				label: "Documents",
+			},
+		});
+		expect(queuedMessage.requestBodyJson).not.toContain("/Users/");
 	});
 
 	it("persists only replay-owned request state", () => {
@@ -69,7 +70,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				chatMode: CHAT_MODE.PLAN,
 				convexToken: "token",
-				localFolders: [],
+				localCapabilitySession: null,
 				mentions: ["note-1"],
 				model: DEFAULT_CHAT_SETTINGS.model,
 				reasoningEffort: "high",
@@ -86,6 +87,7 @@ describe("chat queue serialization", () => {
 
 		expect(JSON.parse(queuedMessage.requestBodyJson)).toEqual({
 			chatMode: CHAT_MODE.PLAN,
+			localCapabilitySession: null,
 			mentions: ["note-1"],
 			model: DEFAULT_CHAT_SETTINGS.model,
 			projectId: "project-1",
@@ -103,7 +105,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
 				projectId: null,
-				localFolders: [],
+				localCapabilitySession: null,
 				timezone: "UTC",
 			},
 			text: "  Follow   this\n\nup  ",
@@ -160,7 +162,7 @@ describe("chat queue serialization", () => {
 					...DEFAULT_CHAT_SETTINGS,
 					convexToken: "token",
 					projectId: null,
-					localFolders: [],
+					localCapabilitySession: null,
 					timezone: "UTC",
 				},
 				text: "   ",
@@ -174,7 +176,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
 				projectId: null,
-				localFolders: [],
+				localCapabilitySession: null,
 				noteContext: {
 					noteId: "note-1",
 					title: "Meeting",
@@ -199,7 +201,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "token",
 				projectId: null,
-				localFolders: [],
+				localCapabilitySession: null,
 				noteContext: {
 					noteId: null,
 					title: "t".repeat(20_000),
@@ -225,7 +227,7 @@ describe("chat queue serialization", () => {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
 				projectId: null,
-				localFolders: [],
+				localCapabilitySession: null,
 				timezone: "UTC",
 			},
 			text: "Follow up",
@@ -259,7 +261,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
-				localFolders: [],
+				localCapabilitySession: null,
 				projectId: null,
 				timezone: "UTC",
 			},
@@ -285,7 +287,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
-				localFolders: [],
+				localCapabilitySession: null,
 				projectId: null,
 				timezone: "UTC",
 			},
@@ -310,7 +312,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
-				localFolders: [],
+				localCapabilitySession: null,
 				projectId: null,
 				timezone: "UTC",
 			},
@@ -337,7 +339,7 @@ describe("chat queue serialization", () => {
 			requestBody: {
 				...DEFAULT_CHAT_SETTINGS,
 				convexToken: "stale-token",
-				localFolders: [],
+				localCapabilitySession: null,
 				projectId: null,
 				timezone: "UTC",
 			},

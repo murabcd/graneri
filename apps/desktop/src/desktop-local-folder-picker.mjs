@@ -1,5 +1,6 @@
 export const pickDesktopLocalFolder = async ({
-	shareLocalFolders,
+	authorizeFolder,
+	scope,
 	showOpenDialog,
 }) => {
 	const result = await showOpenDialog({
@@ -13,12 +14,6 @@ export const pickDesktopLocalFolder = async ({
 		return { canceled: true };
 	}
 
-	const { folders } = await shareLocalFolders([folderPath]);
-	const [folder] = folders;
-
-	if (!folder) {
-		throw new Error("The selected local folder could not be registered.");
-	}
-
-	return { canceled: false, folder };
+	const { session } = await authorizeFolder({ path: folderPath, scope });
+	return { canceled: false, session };
 };

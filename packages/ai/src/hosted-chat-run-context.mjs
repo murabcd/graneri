@@ -10,34 +10,10 @@ import {
 import { createHostedWaitAgentTool } from "./hosted-chat-wait-agent-tool.mjs";
 import { createHostedRunActivityTool } from "./hosted-run-activity.mjs";
 import { createHostedUserQuestionTools } from "./hosted-user-question.mjs";
-import { assertLocalFolderRootLimit } from "./local-folder-tool-definitions.mjs";
 import {
 	buildClientLocalFolderTools,
 	buildLocalFolderSystemContext,
 } from "./local-folder-tools.mjs";
-
-const buildClientLocalFolderRoots = (localFolders) => {
-	assertLocalFolderRootLimit(localFolders);
-
-	return localFolders.map((folder) => {
-		if (
-			typeof folder?.id !== "string" ||
-			!folder.id.trim() ||
-			typeof folder.name !== "string" ||
-			!folder.name.trim() ||
-			typeof folder.path !== "string" ||
-			!folder.path.trim()
-		) {
-			throw new Error("Shared local folder metadata is invalid.");
-		}
-
-		return {
-			id: folder.id.trim(),
-			name: folder.name.trim(),
-			path: folder.path.trim(),
-		};
-	});
-};
 
 export const buildHostedChatRunContext = async ({
 	appsEnabled = false,
@@ -57,7 +33,7 @@ export const buildHostedChatRunContext = async ({
 	getSelectedRecipe,
 	getStoredNoteContext,
 	getUserProfileContext,
-	localFolders = [],
+	localCapabilitySession = null,
 	logLatency,
 	message,
 	noteContext,
@@ -102,7 +78,14 @@ export const buildHostedChatRunContext = async ({
 		hasRecipeContext: recipeContext.length > 0,
 		hasUserProfileContext: Boolean(userProfileContext),
 	});
-	const localFolderRoots = buildClientLocalFolderRoots(localFolders);
+	const localFolderRoots = localCapabilitySession
+		? [
+				{
+					id: localCapabilitySession.id,
+					name: localCapabilitySession.label,
+				},
+			]
+		: [];
 	const localFolderContext = buildLocalFolderSystemContext(localFolderRoots);
 	logLatency("tools.workspace_ready", {
 		appToolCount: Object.keys(appTools).length,

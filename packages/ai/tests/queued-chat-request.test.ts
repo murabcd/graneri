@@ -6,6 +6,7 @@ describe("durable queued chat requests", () => {
 	it("parses the complete canonical request", () => {
 		const request = {
 			chatMode: CHAT_MODE.PLAN,
+			localCapabilitySession: { id: "capability-1", label: "Project" },
 			mentions: ["note-1"],
 			model: "gpt-5.6-sol",
 			noteContext: { noteId: null, text: "Body", title: "Plan" },
@@ -25,6 +26,7 @@ describe("durable queued chat requests", () => {
 		expect(
 			parseDurableQueuedChatRequest({
 				chatMode: CHAT_MODE.DEFAULT,
+				localCapabilitySession: null,
 				localFolders: [{ id: "folder-1", path: "/tmp" }],
 				model: "gpt-5.6-sol",
 				timezone: "UTC",
@@ -33,6 +35,7 @@ describe("durable queued chat requests", () => {
 		expect(
 			parseDurableQueuedChatRequest({
 				chatMode: CHAT_MODE.DEFAULT,
+				localCapabilitySession: null,
 				model: "gpt-5.6-sol",
 				text: "legacy duplicate",
 				timezone: "UTC",
@@ -44,12 +47,14 @@ describe("durable queued chat requests", () => {
 		expect(
 			parseDurableQueuedChatRequest({
 				chatMode: CHAT_MODE.DEFAULT,
+				localCapabilitySession: null,
 				model: "gpt-5.6-sol",
 			}),
 		).toBeNull();
 		expect(
 			parseDurableQueuedChatRequest({
 				chatMode: CHAT_MODE.DEFAULT,
+				localCapabilitySession: null,
 				model: "",
 				timezone: "UTC",
 			}),

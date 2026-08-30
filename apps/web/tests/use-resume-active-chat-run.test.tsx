@@ -73,4 +73,37 @@ describe("useResumeActiveChatRun", () => {
 
 		expect(resumeStream).not.toHaveBeenCalled();
 	});
+
+	it("does not reconnect until a pending local capability call is recovered", async () => {
+		const resumeStream = vi.fn().mockResolvedValue(undefined);
+		const pendingRun = {
+			...createActiveRun("running"),
+			pendingLocalCapabilityToolCalls: [
+				{
+					inputJson: "{}",
+					toolCallId: "tool-call-1",
+					toolName: "list_local_directory",
+				},
+			],
+		} satisfies ResumableActiveRun;
+		const { rerender } = renderHook(
+			({ activeRun }: { activeRun: ResumableActiveRun }) =>
+				useResumeActiveChatRun({
+					activeRun,
+					chatId: "chat_1",
+					resumeStream,
+					workspaceId: "workspace_1" as Id<"workspaces">,
+				}),
+			{ initialProps: { activeRun: pendingRun } },
+		);
+
+		expect(resumeStream).not.toHaveBeenCalled();
+		rerender({
+			activeRun: {
+				...pendingRun,
+				pendingLocalCapabilityToolCalls: [],
+			},
+		});
+		await waitFor(() => expect(resumeStream).toHaveBeenCalledOnce());
+	});
 });

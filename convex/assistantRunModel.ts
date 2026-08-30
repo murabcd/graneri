@@ -13,6 +13,11 @@ export const serviceTierValidator = v.union(
 	v.literal("priority"),
 );
 
+export const localCapabilitySessionValidator = v.object({
+	id: v.string(),
+	label: v.string(),
+});
+
 export const assistantRunStatusValidator = v.union(
 	v.literal("running"),
 	v.literal("waiting_for_user"),
@@ -100,7 +105,17 @@ export const assistantRunValidator = v.object({
 	chatId: v.id("chats"),
 	assistantMessageId: v.string(),
 	producer: assistantRunProducerValidator,
+	localCapabilitySession: v.union(localCapabilitySessionValidator, v.null()),
 	interruptedAssistantMessageIds: v.optional(v.array(v.string())),
+	pendingLocalCapabilityToolCalls: v.optional(
+		v.array(
+			v.object({
+				inputJson: v.string(),
+				toolCallId: v.string(),
+				toolName: v.string(),
+			}),
+		),
+	),
 	status: assistantRunStatusValidator,
 	model: v.string(),
 	reasoningEffort: v.optional(reasoningEffortValidator),

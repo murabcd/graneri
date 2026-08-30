@@ -83,7 +83,7 @@ describe("hosted chat run context", () => {
 			}),
 			getStoredNoteContext: async () => "stored note",
 			getUserProfileContext: async () => ({ name: "Murad" }),
-			localFolders: [{ id: "folder-1", name: "Project", path: "/tmp/project" }],
+			localCapabilitySession: { id: "folder-1", label: "Project" },
 			logLatency: (stage) => latencyStages.push(stage),
 			message: {
 				id: "message-1",
@@ -96,7 +96,7 @@ describe("hosted chat run context", () => {
 		});
 
 		expect(context.localFolderRoots).toEqual([
-			{ id: "folder-1", name: "Project", path: "/tmp/project" },
+			{ id: "folder-1", name: "Project" },
 		]);
 		expect(context.appConnections).toHaveLength(0);
 		expect(context.coreToolPolicyState).toEqual({
@@ -150,7 +150,7 @@ describe("hosted chat run context", () => {
 			getStoredNoteContext: async () => "",
 			getUserProfileContext: async () => null,
 			compactionSummary: null,
-			localFolders: [{ id: "folder-1", name: "Project", path: "/tmp/project" }],
+			localCapabilitySession: { id: "folder-1", label: "Project" },
 			logLatency: () => {},
 			message: {
 				id: "message-1",
@@ -161,7 +161,7 @@ describe("hosted chat run context", () => {
 		});
 
 		expect(context.localFolderRoots).toEqual([
-			{ id: "folder-1", name: "Project", path: "/tmp/project" },
+			{ id: "folder-1", name: "Project" },
 		]);
 		expect(context.instructions).toContain("Project");
 		expect(context.tools.read_local_file?.execute).toBeUndefined();

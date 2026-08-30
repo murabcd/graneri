@@ -99,6 +99,7 @@ const startRun = async ({
 		workspaceId,
 		chatId,
 		assistantMessageId: `${chatId}-assistant-1`,
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -115,6 +116,7 @@ const insertDuplicateActiveRun = async ({
 }) => {
 	await t.run(async (ctx) => {
 		await ctx.db.insert("assistantRuns", {
+			localCapabilitySession: null,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: run.chatId,
@@ -251,7 +253,7 @@ test("queued follow-ups reject invalid durable payloads before claim", async () 
 				localFolders: [{ id: "folder-1", path: "/tmp" }],
 			}),
 		}),
-	).rejects.toThrow("Queued messages cannot persist local folder selections.");
+	).rejects.toThrow("Queued message request body is invalid.");
 });
 
 test("claimNextForRun claims one pending follow-up per run", async () => {
@@ -375,6 +377,7 @@ test("queued follow-ups only attach to the current active run", async () => {
 		workspaceId,
 		chatId: "chat-current-active-queue",
 		assistantMessageId: "chat-current-active-queue-assistant-2",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "supersede",
@@ -415,6 +418,7 @@ test("claimNextForRun only claims for the current active run", async () => {
 		workspaceId,
 		chatId: "chat-current-active-claim",
 		assistantMessageId: "chat-current-active-claim-assistant-2",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "supersede",

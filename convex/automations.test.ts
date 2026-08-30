@@ -608,6 +608,7 @@ test("runNow does not start while the automation chat has an active assistant ru
 		}
 
 		await ctx.db.insert("assistantRuns", {
+			localCapabilitySession: null,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: chat._id,

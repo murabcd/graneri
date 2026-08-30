@@ -41,6 +41,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 		workspaceId,
 		chatId,
 		assistantMessageId: "stream-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",

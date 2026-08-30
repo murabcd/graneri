@@ -237,6 +237,7 @@ const startAutomationAssistantRun = async (
 		chatId: args.automation.chatId,
 		assistantMessageId,
 		producer: "convex",
+		localCapabilitySession: null,
 		model: settings.model,
 		reasoningEffort: settings.reasoningEffort,
 		serviceTier: settings.serviceTier,

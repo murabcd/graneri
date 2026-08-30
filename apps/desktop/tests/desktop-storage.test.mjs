@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -61,68 +61,4 @@ test("stores and clears note drafts", async () => {
 
 	await storage.clearNoteDraft(noteKey);
 	assert.deepEqual(await storage.loadNoteDraft(noteKey), { draft: null });
-});
-
-test("shares local folders and returns shared folders by id", async () => {
-	const { rootDir, storage } = await createTestStorage();
-	const sharedDir = join(rootDir, "shared");
-	await mkdir(sharedDir);
-	const sharedRealPath = await realpath(sharedDir);
-
-	const result = await storage.shareLocalFolders([sharedDir]);
-	assert.equal(result.folders.length, 1);
-	assert.equal(result.folders[0].name, "shared");
-	assert.equal(result.folders[0].path, sharedRealPath);
-
-	assert.deepEqual(storage.getSharedLocalFolders([result.folders[0].id]), [
-		result.folders[0],
-	]);
-});
-
-test("shares a file path by registering its parent folder", async () => {
-	const { rootDir, storage } = await createTestStorage();
-	const sharedDir = join(rootDir, "shared");
-	const sharedFile = join(sharedDir, "local-smoke.txt");
-	await mkdir(sharedDir);
-	await writeFile(sharedFile, "Graneri local file smoke token: alpha-7429");
-	const sharedRealPath = await realpath(sharedDir);
-
-	const result = await storage.shareLocalFolders([sharedFile]);
-	assert.equal(result.folders.length, 1);
-	assert.equal(result.folders[0].name, "shared");
-	assert.equal(result.folders[0].path, sharedRealPath);
-
-	assert.deepEqual(storage.getSharedLocalFolders([result.folders[0].id]), [
-		result.folders[0],
-	]);
-});
-
-test("replaces the shared-root session atomically and rejects invalid paths", async () => {
-	const { rootDir, storage } = await createTestStorage();
-	const firstDir = join(rootDir, "first");
-	const secondDir = join(rootDir, "second");
-	await mkdir(firstDir);
-	await mkdir(secondDir);
-
-	const first = await storage.shareLocalFolders([firstDir]);
-	await assert.rejects(
-		storage.shareLocalFolders([""]),
-		/Local folder paths must be non-empty strings/u,
-	);
-	assert.deepEqual(storage.getSharedLocalFolders([first.folders[0].id]), [
-		first.folders[0],
-	]);
-
-	const second = await storage.shareLocalFolders([secondDir]);
-	assert.throws(
-		() => storage.getSharedLocalFolders([first.folders[0].id]),
-		/Shared local folder is no longer registered/u,
-	);
-	assert.deepEqual(storage.getSharedLocalFolders([second.folders[0].id]), [
-		second.folders[0],
-	]);
-	await assert.rejects(
-		storage.shareLocalFolders([firstDir, secondDir]),
-		/Only one local folder/u,
-	);
 });

@@ -175,7 +175,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"Use structured local tools for direct folder listing, automatic supported-file reading, and file search. read_local_file detects UTF-8 text, images, PDF, DOCX, XLSX, and PPTX from file bytes. Use byte ranges when a text file is larger than one response.",
 				"For a specific local image or document, use read_local_file directly. Use search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"Shared local folders:",
-				...roots.map((root, index) => `${index}: ${root.name} (${root.path})`),
+				...roots.map((root, index) => `${index}: ${root.name}`),
 			].join("\n");
 
 export const buildLocalFolderToolConfigs = (

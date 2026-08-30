@@ -1,3 +1,4 @@
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { CalendarEventPayload } from "./calendar-event-navigation.mjs";
 
 export type DesktopPermissionId = "microphone" | "systemAudio";
@@ -213,15 +214,9 @@ export type DesktopNoteDraft = {
 	searchableText: string;
 };
 
-export type DesktopLocalFolder = {
-	id: string;
-	name: string;
-	path: string;
-};
-
-export type DesktopLocalFolderPickerResult =
+export type DesktopLocalCapabilityPickerResult =
 	| { canceled: true }
-	| { canceled: false; folder: DesktopLocalFolder };
+	| { canceled: false; session: LocalCapabilitySession };
 
 export interface GraneriDesktopBridge {
 	platform: DesktopPlatform;
@@ -355,10 +350,17 @@ export interface GraneriDesktopBridge {
 		draft: Omit<DesktopNoteDraft, "version" | "noteId" | "updatedAt">,
 	) => Promise<{ ok: boolean }>;
 	clearNoteDraft: (noteKey: string) => Promise<{ ok: boolean }>;
-	pickLocalFolder: () => Promise<DesktopLocalFolderPickerResult>;
-	shareLocalFolders: (paths: string[]) => Promise<{
-		folders: DesktopLocalFolder[];
-	}>;
+	getLocalCapabilitySession: (
+		scope: string,
+	) => Promise<{ session: LocalCapabilitySession | null }>;
+	authorizeLocalCapabilitySession: (
+		scope: string,
+		path: string,
+	) => Promise<{ session: LocalCapabilitySession }>;
+	pickLocalFolder: (
+		scope: string,
+	) => Promise<DesktopLocalCapabilityPickerResult>;
+	revokeLocalCapabilitySession: (scope: string) => Promise<{ ok: true }>;
 	saveTextFile: (
 		defaultFileName: string,
 		content: string,

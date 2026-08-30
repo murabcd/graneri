@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CHAT_MODES } from "./chat-mode.mjs";
+import { localCapabilitySessionSchema } from "./local-capability-session.mjs";
 
 const queuedNoteContextSchema = z.union([
 	z.strictObject({ noteId: z.string().min(1) }),
@@ -12,6 +13,7 @@ const queuedNoteContextSchema = z.union([
 
 const durableQueuedChatRequestSchema = z.strictObject({
 	chatMode: z.enum(CHAT_MODES),
+	localCapabilitySession: localCapabilitySessionSchema.nullable(),
 	mentions: z.array(z.string()).optional(),
 	model: z.string().min(1),
 	noteContext: queuedNoteContextSchema.optional(),

@@ -4,7 +4,7 @@ import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
 const requestBody = {
 	chatMode: "default" as const,
 	convexToken: "token",
-	localFolders: [],
+	localCapabilitySession: null,
 	model: "gpt-5.6-sol",
 	projectId: null,
 	recipeSlug: null,
@@ -44,7 +44,10 @@ describe("chat composer turn intent", () => {
 		});
 		args.submitTurn.mockImplementation(async (input) => {
 			events.push("submit-started");
-			input.onRequestPrepared({ localFolders: [], requestBody });
+			input.onRequestPrepared({
+				localCapabilitySession: null,
+				requestBody,
+			});
 			events.push("submit-finished");
 			return { status: "sent" };
 		});
@@ -73,7 +76,10 @@ describe("chat composer turn intent", () => {
 		const args = createArgs();
 		args.queuedMessageEditId = "queued-1";
 		args.updateQueuedTurn.mockImplementation(async (input) => {
-			input.onRequestPrepared({ localFolders: [], requestBody });
+			input.onRequestPrepared({
+				localCapabilitySession: null,
+				requestBody,
+			});
 			return true;
 		});
 

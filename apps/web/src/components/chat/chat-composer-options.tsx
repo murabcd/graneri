@@ -1,6 +1,6 @@
 import { CHAT_MODE, type ChatMode } from "@workspace/ai/chat-mode";
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import { isDesktopRuntime } from "@workspace/platform/desktop";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -32,7 +32,7 @@ type ChatComposerOptionsProps = {
 	onWebSearchEnabledChange: (value: boolean) => void;
 	chatMode: ChatMode;
 	onChatModeChange: (mode: ChatMode) => void;
-	localFolder: DesktopLocalFolder | null;
+	localFolder: LocalCapabilitySession | null;
 	onChooseLocalFolder: () => void;
 	onClearLocalFolder: () => void;
 	projects: ComposerProjectOption[];
@@ -116,16 +116,16 @@ export function ChatComposerOptions({
 			) : null}
 			{localFolder ? (
 				<ActiveComposerOption
-					disableLabel={`Remove ${localFolder.name}`}
+					disableLabel={`Remove ${localFolder.label}`}
 					icon={<Database aria-hidden="true" />}
 					label={
 						<HoverScrollTitle className="max-w-28" scrollOnHover={false}>
-							{localFolder.name}
+							{localFolder.label}
 						</HoverScrollTitle>
 					}
 					labelClassName="min-w-0"
 					onDisable={onClearLocalFolder}
-					tooltipLabel={`Remove ${localFolder.path}`}
+					tooltipLabel={`Remove ${localFolder.label}`}
 				/>
 			) : null}
 		</>

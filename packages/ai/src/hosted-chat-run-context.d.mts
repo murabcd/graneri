@@ -6,6 +6,7 @@ import type { ChatMode } from "./chat-mode.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 import type { HostedRunPlan } from "./hosted-run-activity.mjs";
 import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
+import type { LocalCapabilitySession } from "./local-capability-session.mjs";
 import type { ReasoningEffort, ServiceTier } from "./models.mjs";
 
 type LogLatencyDetails = Record<
@@ -13,16 +14,9 @@ type LogLatencyDetails = Record<
 	boolean | null | number | string | undefined
 >;
 
-type LocalFolderReference = {
-	id?: string;
-	name?: string;
-	path?: string;
-};
-
-type LocalFolderRoot = {
-	id?: string;
+type LocalFolderDescriptor = {
+	id: string;
 	name: string;
-	path: string;
 };
 
 type Recipe = { name: string; prompt: string } | null;
@@ -53,7 +47,7 @@ export declare const buildHostedChatRunContext: (args: {
 		workspaceId: string;
 	}) => Promise<string>;
 	getUserProfileContext: () => Promise<unknown>;
-	localFolders?: LocalFolderReference[];
+	localCapabilitySession?: LocalCapabilitySession | null;
 	logLatency: (stage: string, details?: LogLatencyDetails) => void;
 	message?: UIMessage | null;
 	noteContext?: {
@@ -84,7 +78,7 @@ export declare const buildHostedChatRunContext: (args: {
 		deferredToolCount: number;
 		hasToolSearch: boolean;
 	};
-	localFolderRoots: LocalFolderRoot[];
+	localFolderRoots: LocalFolderDescriptor[];
 	appConnections: WorkspaceToolConnection[];
 	instructions: string;
 	tools: ToolSet;

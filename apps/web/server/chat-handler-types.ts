@@ -1,3 +1,4 @@
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { ServiceTier } from "@workspace/ai/models";
 import type { UIMessage } from "ai";
 import type { FunctionReturnType } from "convex/server";
@@ -20,7 +21,7 @@ export type ChatRequestBody = {
 	mentions?: string[];
 	selectedSourceIds?: string[];
 	timezone?: string;
-	localFolders?: Array<{ id?: string; name?: string; path?: string }>;
+	localCapabilitySession?: LocalCapabilitySession | null;
 	convexToken?: string | null;
 	recipeSlug?: string | null;
 	noteContext?: {

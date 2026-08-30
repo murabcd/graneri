@@ -7,8 +7,13 @@ export type LocalFolderRoot = {
 	source?: string;
 };
 
+export type LocalFolderDescriptor = {
+	id: string;
+	name: string;
+};
+
 export declare const buildLocalFolderSystemContext: (
-	roots: LocalFolderRoot[],
+	roots: Array<Pick<LocalFolderRoot, "name">>,
 ) => string;
 
 export type ExecuteLocalCommand = (input: {
@@ -28,5 +33,5 @@ export declare const buildLocalFolderTools: (input: {
 }) => ToolSet;
 
 export declare const buildClientLocalFolderTools: (
-	roots: LocalFolderRoot[],
+	roots: LocalFolderDescriptor[],
 ) => ToolSet;

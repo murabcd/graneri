@@ -1,5 +1,5 @@
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import type { ChatRequestBody } from "@/lib/chat-request-preparation";
 import type { SubmitChatTurnResult } from "@/lib/chat-submit-session";
@@ -11,7 +11,7 @@ type PreparedComposerTurn = {
 };
 
 type RequestPrepared = (args: {
-	localFolders: DesktopLocalFolder[];
+	localCapabilitySession: LocalCapabilitySession | null;
 	requestBody: ChatRequestBody;
 }) => void;
 

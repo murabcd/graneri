@@ -57,6 +57,7 @@ export const start = mutation({
 			chatId: args.chatId,
 			assistantMessageId: args.assistantMessageId,
 			producer: "convex",
+			localCapabilitySession: null,
 			model: args.job.model,
 			reasoningEffort: args.job.reasoningEffort,
 			serviceTier: args.job.serviceTier,

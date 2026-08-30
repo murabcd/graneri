@@ -310,22 +310,45 @@ export const saveDesktopTextFile = async (
 	return await bridge.saveTextFile(defaultFileName, content);
 };
 
-export const pickDesktopLocalFolder = async () => {
+export const getDesktopLocalCapabilitySession = async (scope: string) => {
+	const bridge = getDesktopBridge();
+
+	if (!bridge?.getLocalCapabilitySession) {
+		return null;
+	}
+
+	return await bridge.getLocalCapabilitySession(scope);
+};
+
+export const authorizeDesktopLocalCapabilitySession = async (
+	scope: string,
+	path: string,
+) => {
+	const bridge = getDesktopBridge();
+
+	if (!bridge?.authorizeLocalCapabilitySession) {
+		return null;
+	}
+
+	return await bridge.authorizeLocalCapabilitySession(scope, path);
+};
+
+export const pickDesktopLocalFolder = async (scope: string) => {
 	const bridge = getDesktopBridge();
 
 	if (!bridge?.pickLocalFolder) {
 		return null;
 	}
 
-	return await bridge.pickLocalFolder();
+	return await bridge.pickLocalFolder(scope);
 };
 
-export const shareDesktopLocalFolders = async (paths: string[]) => {
+export const revokeDesktopLocalCapabilitySession = async (scope: string) => {
 	const bridge = getDesktopBridge();
 
-	if (!bridge?.shareLocalFolders) {
+	if (!bridge?.revokeLocalCapabilitySession) {
 		return null;
 	}
 
-	return await bridge.shareLocalFolders(paths);
+	return await bridge.revokeLocalCapabilitySession(scope);
 };

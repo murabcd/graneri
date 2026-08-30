@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
+    "@workspace/ai": "workspace:*",
     "zod": "^4.1.12"
   },
   "scripts": {

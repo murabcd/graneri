@@ -203,6 +203,32 @@ const postChatStopRequest = async (body: JsonObject) => {
 };
 
 describe("chat handler persistence failures", () => {
+	it("rejects every present invalid local capability value", async () => {
+		await expect(
+			postChatRequest({
+				id: "chat_1",
+				workspaceId: "workspace_1",
+				convexToken: "token_1",
+				model: defaultChatModelId,
+				appsEnabled: false,
+				localCapabilitySession: "",
+				message: {
+					id: "message_1",
+					role: "user",
+					parts: [{ type: "text", text: "hello" }],
+				},
+			}),
+		).resolves.toEqual({
+			status: 400,
+			body: {
+				error: "Local capability session is invalid.",
+				errorCode: "local_capability_session_invalid",
+			},
+		});
+		expect(convexMock.query).not.toHaveBeenCalled();
+		expect(convexMock.mutation).not.toHaveBeenCalled();
+	});
+
 	it("returns structured queue errors when attachable run lookup fails closed", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,
@@ -475,13 +501,10 @@ describe("chat handler persistence failures", () => {
 				convexToken: "token_1",
 				model: defaultChatModelId,
 				appsEnabled: false,
-				localFolders: [
-					{
-						id: "folder_1",
-						name: "Project",
-						path: "/Users/test/Project",
-					},
-				],
+				localCapabilitySession: {
+					id: "capability_1",
+					label: "Project",
+				},
 				message: {
 					id: "message_1",
 					role: "user",
@@ -503,6 +526,55 @@ describe("chat handler persistence failures", () => {
 			"chats:startActiveStream",
 			"assistantRuns:failAssistantRun",
 		]);
+	});
+
+	it.each([
+		{
+			name: "adding a capability to a capability-free run",
+			requestSession: { id: "capability_1", label: "Project" },
+			runSession: null,
+		},
+		{
+			name: "omitting a run-bound capability",
+			requestSession: null,
+			runSession: { id: "capability_1", label: "Project" },
+		},
+	])("rejects $name", async ({ requestSession, runSession }) => {
+		convexMock.query.mockResolvedValueOnce({
+			model: defaultChatModelId,
+			title: "Existing chat",
+		});
+		convexMock.query.mockResolvedValueOnce({
+			_id: "run_1",
+			assistantMessageId: "assistant_1",
+			localCapabilitySession: runSession,
+			producer: "web",
+			status: "running",
+		});
+
+		await expect(
+			postChatRequest(
+				{
+					id: "chat_1",
+					workspaceId: "workspace_1",
+					convexToken: "token_1",
+					model: defaultChatModelId,
+					appsEnabled: false,
+					continueRunId: "run_1",
+					localCapabilitySession: requestSession,
+					steerQueuedMessageId: "queued_1",
+				},
+				{ isSteerRoute: true },
+			),
+		).resolves.toEqual({
+			status: 409,
+			body: {
+				error: "This run requires its original local capability session.",
+				errorCode: "local_capability_session_mismatch",
+			},
+		});
+		expect(convexMock.authorizeChatTurn).not.toHaveBeenCalled();
+		expect(convexMock.mutation).not.toHaveBeenCalled();
 	});
 
 	it("accepts and persists a completed desktop-local tool continuation", async () => {
@@ -558,13 +630,10 @@ describe("chat handler persistence failures", () => {
 				convexToken: "token_1",
 				model: defaultChatModelId,
 				appsEnabled: false,
-				localFolders: [
-					{
-						id: "folder_1",
-						name: "Project",
-						path: "/Users/test/Project",
-					},
-				],
+				localCapabilitySession: {
+					id: "capability_1",
+					label: "Project",
+				},
 				trigger: "submit-message",
 				messageId: "assistant_1",
 				message: {

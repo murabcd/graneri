@@ -47,9 +47,9 @@ import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
 import { useChatProject } from "@/hooks/use-chat-project";
 import { useChatSettings } from "@/hooks/use-chat-settings";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
+import { useLocalCapabilitySession } from "@/hooks/use-local-capability-session";
 import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
-import { useSharedLocalFolderSession } from "@/hooks/use-shared-local-folder-session";
 import { getChatModel } from "@/lib/ai/models";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { getChatId } from "@/lib/chat";
@@ -70,7 +70,7 @@ import {
 import { getQueuedChatComposerEditDraft } from "@/lib/chat-queue";
 import {
 	buildWorkspaceChatRequestBody,
-	buildWorkspaceChatRequestBodyFromLocalFolders,
+	buildWorkspaceChatRequestBodyFromLocalCapability,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
@@ -262,13 +262,13 @@ const useChatPageController = ({
 		null,
 	);
 	// Preparing state tracks async request construction started by submit handlers.
-	const localFolderStorageScope = `chat:${chatId}`;
+	const localCapabilityScope = `chat:${chatId}`;
 	const {
-		chooseSharedLocalFolder,
-		clearSharedLocalFolderSelection,
-		reconcileSharedLocalFolders,
-		sharedLocalFolders,
-	} = useSharedLocalFolderSession(localFolderStorageScope);
+		chooseLocalCapabilityFolder,
+		localCapabilitySession,
+		reconcileLocalCapabilitySession,
+		revokeLocalCapability,
+	} = useLocalCapabilitySession(localCapabilityScope);
 	const notes = useQuery(
 		api.notes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -345,6 +345,7 @@ const useChatPageController = ({
 		pendingHumanDecision,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
+		recoverPendingLocalCapabilityCalls,
 		runPlan,
 		regenerateTurn,
 		restoreEditedQueuedMessage,
@@ -485,7 +486,7 @@ const useChatPageController = ({
 				onBeforeSubmit: () => {
 					chatPersistedCallback?.(chatId);
 				},
-				onRequestPrepared: ({ localFolders }) => {
+				onRequestPrepared: ({ localCapabilitySession }) => {
 					setEditingMessageId((currentEditingMessageId) =>
 						queuedMessageEditId
 							? currentEditingMessageId === queuedMessageEditId
@@ -495,7 +496,7 @@ const useChatPageController = ({
 					);
 					clearDraft();
 					setAttachedFiles([]);
-					reconcileSharedLocalFolders(localFolders);
+					reconcileLocalCapabilitySession(localCapabilitySession);
 				},
 				prepareTurn: () => {
 					const submission = prepareChatComposerSubmission({
@@ -519,7 +520,7 @@ const useChatPageController = ({
 					return {
 						buildRequestBody: () =>
 							buildWorkspaceChatRequestBody({
-								localFolderStorageScope,
+								localCapabilityScope,
 								mentions: mentionIds,
 								projectId,
 								recipeSlug: submission.recipeSlug,
@@ -572,8 +573,8 @@ const useChatPageController = ({
 		isModelResolving,
 		isChatRequestPending,
 		isQueuedMessageEditCurrent,
-		localFolderStorageScope,
-		reconcileSharedLocalFolders,
+		localCapabilityScope,
+		reconcileLocalCapabilitySession,
 		mentions,
 		projectId,
 		// The submit callback must capture the latest parent persistence callback.
@@ -648,8 +649,8 @@ const useChatPageController = ({
 		const { mentionIds, recipeSlug, requestSelectedSourceIds } =
 			getWorkspaceChatMentionContext(mentions);
 
-		return await buildWorkspaceChatRequestBodyFromLocalFolders({
-			localFolders: sharedLocalFolders,
+		return await buildWorkspaceChatRequestBodyFromLocalCapability({
+			localCapabilitySession,
 			mentions: mentionIds,
 			projectId,
 			recipeSlug,
@@ -658,7 +659,33 @@ const useChatPageController = ({
 			settings,
 			workspaceId: activeWorkspaceId,
 		});
-	}, [activeWorkspaceId, mentions, projectId, settings, sharedLocalFolders]);
+	}, [
+		activeWorkspaceId,
+		localCapabilitySession,
+		mentions,
+		projectId,
+		settings,
+	]);
+	const buildRecoveryRequestBody = React.useCallback(
+		async (session: NonNullable<typeof localCapabilitySession>) => {
+			const { mentionIds, recipeSlug, requestSelectedSourceIds } =
+				getWorkspaceChatMentionContext(mentions);
+			return await buildWorkspaceChatRequestBodyFromLocalCapability({
+				localCapabilitySession: session,
+				mentions: mentionIds,
+				projectId,
+				recipeSlug,
+				resolveConvexToken: getCachedConvexToken,
+				selectedSourceIds: requestSelectedSourceIds,
+				settings,
+				workspaceId: activeWorkspaceId,
+			});
+		},
+		[activeWorkspaceId, mentions, projectId, settings],
+	);
+	React.useEffect(() => {
+		void recoverPendingLocalCapabilityCalls(buildRecoveryRequestBody);
+	}, [buildRecoveryRequestBody, recoverPendingLocalCapabilityCalls]);
 	const handleHumanDecisionResponse = React.useCallback(
 		async (response: HostedHumanDecisionResponse) => {
 			try {
@@ -807,9 +834,9 @@ const useChatPageController = ({
 		summaryOpen,
 		webSearchEnabled,
 		chatMode,
-		localFolder: sharedLocalFolders[0] ?? null,
-		onChooseLocalFolder: chooseSharedLocalFolder,
-		onClearLocalFolder: clearSharedLocalFolderSelection,
+		localFolder: localCapabilitySession,
+		onChooseLocalFolder: chooseLocalCapabilityFolder,
+		onClearLocalFolder: revokeLocalCapability,
 		projects: projects ?? [],
 		projectsStatus,
 		selectedProject,

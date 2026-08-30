@@ -1,32 +1,21 @@
 import { MAX_LOCAL_FILE_UPLOADS } from "@workspace/ai/local-folder-file-contract";
 import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
-import { MAX_LOCAL_FOLDER_ROOTS } from "@workspace/ai/local-folder-tool-definitions";
-import { buildLocalFolderTools } from "@workspace/ai/local-folder-tools";
 import { z } from "zod";
-import { runLocalCommand } from "./local-command-runner.mjs";
-import { createLocalFileStore } from "./local-file-storage.mjs";
 import { readJsonBody, sendJson } from "./local-server-http.mjs";
 
 const localFolderToolRequestSchema = z.object({
 	fileUploadUrls: z.array(z.url()).max(MAX_LOCAL_FILE_UPLOADS).default([]),
 	input: z.unknown(),
-	localFolders: z
-		.array(
-			z.object({
-				id: z.string().min(1),
-			}),
-		)
-		.min(1)
-		.max(MAX_LOCAL_FOLDER_ROOTS),
-	toolCallId: z.string().min(1),
+	sessionId: z.string().min(1).max(128),
+	toolCallId: z.string().min(1).max(512),
 	toolName: z.string().refine(isLocalFolderToolName),
 });
 
 export const createLocalFolderToolRouteHandler = ({
-	getSharedLocalFolders,
+	executeLocalFolderTool,
 }) => {
-	if (typeof getSharedLocalFolders !== "function") {
-		throw new Error("Desktop shared-folder lookup is required.");
+	if (typeof executeLocalFolderTool !== "function") {
+		throw new Error("Desktop local capability executor is required.");
 	}
 
 	return async (request, response) => {
@@ -37,30 +26,7 @@ export const createLocalFolderToolRouteHandler = ({
 			sendJson(response, 400, { error: "Invalid local tool request." });
 			return;
 		}
-		const { fileUploadUrls, input, localFolders, toolCallId, toolName } =
-			parsedRequest.data;
-		const localFolderRoots = getSharedLocalFolders(
-			localFolders.map(({ id }) => id),
-		);
-
-		const toolToExecute = buildLocalFolderTools({
-			executeLocalCommand: runLocalCommand,
-			roots: localFolderRoots,
-			storeLocalFile: createLocalFileStore({
-				uploadUrls: fileUploadUrls,
-			}),
-		})[toolName];
-
-		if (!toolToExecute?.execute) {
-			sendJson(response, 400, { error: `Unknown local tool: ${toolName}.` });
-			return;
-		}
-
-		const parsedInput = await toolToExecute.inputSchema.parseAsync(input);
-		const output = await toolToExecute.execute(parsedInput, {
-			messages: [],
-			toolCallId,
-		});
+		const output = await executeLocalFolderTool(parsedRequest.data);
 		sendJson(response, 200, { output });
 	};
 };

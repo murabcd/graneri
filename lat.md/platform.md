@@ -20,6 +20,11 @@ method parity with that catalog, preload methods are derived from it, and the
 main process fails startup when a required handler is missing, duplicated, or
 unexpected. Desktop builds bundle the preload so the shared catalog does not
 become a packaged runtime dependency.
+Local capability methods follow the same exact catalog: load by renderer scope,
+authorize a typed path reference, open the native folder picker, and revoke.
+Their renderer-safe result is always an opaque `{ id, label }` descriptor.
+Absolute paths and execution receipts remain Electron-owned and are never part
+of the platform bridge response.
 
 ## Native renderer commands
 

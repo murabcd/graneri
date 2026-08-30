@@ -2,22 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { pickDesktopLocalFolder } from "../src/desktop-local-folder-picker.mjs";
 
-test("opens a single-directory picker and registers the selected folder", async () => {
+test("opens a single-directory picker and authorizes a capability session", async () => {
 	const calls = [];
-	const folder = {
+	const session = {
 		id: "folder-graneri",
-		name: "graneri",
-		path: "/Users/test/Documents/graneri",
+		label: "graneri",
 	};
+	const path = "/Users/test/Documents/graneri";
 
 	const result = await pickDesktopLocalFolder({
-		shareLocalFolders: async (paths) => {
-			calls.push({ paths });
-			return { folders: [folder] };
+		authorizeFolder: async (request) => {
+			calls.push({ request });
+			return { session };
 		},
+		scope: "chat:one",
 		showOpenDialog: async (options) => {
 			calls.push({ options });
-			return { canceled: false, filePaths: [folder.path] };
+			return { canceled: false, filePaths: [path] };
 		},
 	});
 
@@ -29,22 +30,23 @@ test("opens a single-directory picker and registers the selected folder", async 
 				title: "Choose local folder",
 			},
 		},
-		{ paths: [folder.path] },
+		{ request: { path, scope: "chat:one" } },
 	]);
-	assert.deepEqual(result, { canceled: false, folder });
+	assert.deepEqual(result, { canceled: false, session });
 });
 
 test("leaves the shared-folder session unchanged when selection is canceled", async () => {
-	let shareCallCount = 0;
+	let authorizeCallCount = 0;
 
 	const result = await pickDesktopLocalFolder({
-		shareLocalFolders: async () => {
-			shareCallCount += 1;
-			return { folders: [] };
+		authorizeFolder: async () => {
+			authorizeCallCount += 1;
+			return { session: { id: "unused", label: "unused" } };
 		},
+		scope: "chat:one",
 		showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
 	});
 
 	assert.deepEqual(result, { canceled: true });
-	assert.equal(shareCallCount, 0);
+	assert.equal(authorizeCallCount, 0);
 });

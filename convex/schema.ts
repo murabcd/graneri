@@ -10,6 +10,7 @@ import {
 import {
 	assistantRunProducerValidator,
 	assistantRunStatusValidator,
+	localCapabilitySessionValidator,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
 	serviceTierValidator,
@@ -736,6 +737,10 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		assistantMessageId: v.string(),
 		producer: assistantRunProducerValidator,
+		localCapabilitySession: v.union(
+			localCapabilitySessionValidator,
+			v.null(),
+		),
 		status: assistantRunStatusValidator,
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),

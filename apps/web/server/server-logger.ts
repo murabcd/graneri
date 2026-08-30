@@ -32,7 +32,7 @@ export type ServerWideEvent = {
 	has_title?: boolean;
 	is_steer_route?: boolean;
 	language?: string | null;
-	local_folder_count?: number;
+	has_local_capability_session?: boolean;
 	local_folder_root_count?: number;
 	method?: string;
 	mention_count?: number;

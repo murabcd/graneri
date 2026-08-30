@@ -14,9 +14,6 @@ import { parseUiMessageMetadataJson } from "@workspace/ai/ui-message-codec";
 import { createChatComposerEditDraft } from "@/lib/chat-composer-mentions";
 import type { QueueableChatRequestBody } from "@/lib/chat-request-preparation";
 
-const hasDurableUnsafeLocalFolders = (requestBody: QueueableChatRequestBody) =>
-	requestBody.localFolders.length > 0;
-
 type QueuedMessage = {
 	_id: string;
 	messageId: string;
@@ -95,6 +92,7 @@ const sanitizeQueuedRequestBody = (
 
 	return {
 		chatMode: requestBody.chatMode,
+		localCapabilitySession: requestBody.localCapabilitySession,
 		mentions: requestBody.mentions,
 		model: requestBody.model,
 		projectId: requestBody.projectId,
@@ -124,12 +122,6 @@ export const toQueuedUserMessageInput = ({
 		throw new Error("Queued chat message cannot be empty.");
 	}
 	const resolvedMessageId = messageId ?? createQueuedUserMessageId();
-
-	if (hasDurableUnsafeLocalFolders(requestBody)) {
-		throw new Error(
-			"Wait for the current answer before sending follow-ups that use local folders.",
-		);
-	}
 
 	return {
 		messageId: resolvedMessageId,

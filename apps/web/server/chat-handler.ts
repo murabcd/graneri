@@ -13,6 +13,7 @@ import {
 	type HostedActiveStreamSession,
 	stopOrphanedHostedAssistantRun,
 } from "@workspace/ai/hosted-chat-turn";
+import { parseLocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
@@ -124,7 +125,7 @@ export const handleChatRequest = async (
 		mentions,
 		selectedSourceIds,
 		timezone,
-		localFolders = [],
+		localCapabilitySession: requestedLocalCapabilitySession = null,
 		convexToken,
 		recipeSlug,
 		noteContext,
@@ -133,6 +134,23 @@ export const handleChatRequest = async (
 		supersedeActiveRun = false,
 		steerQueuedMessageId,
 	} = await readJsonBody<ChatRequestBody>(request);
+	const hasRequestedLocalCapabilitySession =
+		requestedLocalCapabilitySession !== null &&
+		requestedLocalCapabilitySession !== undefined;
+	const localCapabilitySession = hasRequestedLocalCapabilitySession
+		? parseLocalCapabilitySession(requestedLocalCapabilitySession)
+		: null;
+	if (hasRequestedLocalCapabilitySession && !localCapabilitySession) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = 400;
+		wideEvent.error_code = "local_capability_session_invalid";
+		emitWideEvent("error");
+		sendJson(response, 400, {
+			error: "Local capability session is invalid.",
+			errorCode: "local_capability_session_invalid",
+		});
+		return;
+	}
 	const settings = parseChatSettings({
 		chatMode: requestedChatMode,
 		model: requestedModel,
@@ -187,7 +205,7 @@ export const handleChatRequest = async (
 	wideEvent.apps_enabled = appsEnabled;
 	wideEvent.mention_count = mentions?.length ?? 0;
 	wideEvent.selected_source_count = selectedSourceIds?.length ?? 0;
-	wideEvent.local_folder_count = localFolders.length;
+	wideEvent.has_local_capability_session = Boolean(localCapabilitySession);
 	wideEvent.has_note_context = Boolean(noteContext);
 	wideEvent.has_recipe = Boolean(recipeSlug);
 	const logLatency = createChatLatencyLogger({
@@ -214,7 +232,7 @@ export const handleChatRequest = async (
 	const resolvedTimezone = timezone?.trim() || "UTC";
 
 	const inputValidation = validateHostedChatRequestInput({
-		allowLocalFolderToolContinuation: localFolders.length > 0,
+		allowLocalFolderToolContinuation: Boolean(localCapabilitySession),
 		continueRunId,
 		message,
 		replayQueuedMessageId,
@@ -305,6 +323,22 @@ export const handleChatRequest = async (
 		});
 		return;
 	}
+	if (
+		continueRunId &&
+		attachableRun &&
+		(attachableRun.localCapabilitySession?.id ?? null) !==
+			(localCapabilitySession?.id ?? null)
+	) {
+		wideEvent.outcome = "error";
+		wideEvent.status_code = 409;
+		wideEvent.error_code = "local_capability_session_mismatch";
+		emitWideEvent("error");
+		sendJson(response, 409, {
+			error: "This run requires its original local capability session.",
+			errorCode: "local_capability_session_mismatch",
+		});
+		return;
+	}
 	const admission = await admitHostedOpenAiRequest({
 		client: convexClient,
 		onRejected: ({ errorCode, statusCode }) => {
@@ -316,7 +350,7 @@ export const handleChatRequest = async (
 		operation: "chat-turn",
 		request,
 		requireServerApiKey:
-			attachableRun?.producer === "web" || localFolders.length > 0,
+			attachableRun?.producer === "web" || Boolean(localCapabilitySession),
 		response,
 	});
 	if (!admission) {
@@ -362,7 +396,7 @@ export const handleChatRequest = async (
 			appsEnabled,
 			chatId: id,
 			continueRunId,
-			localFolders,
+			localCapabilitySession,
 			mentions,
 			message,
 			messageId,
@@ -516,6 +550,14 @@ export const handleChatReconnectRequest = async (
 	const activeSession = activeChatStreamControllers.get(streamKey);
 
 	if (!activeSession || activeSession.persister.runId !== attachableRun._id) {
+		if (
+			attachableRun.localCapabilitySession &&
+			(attachableRun.pendingLocalCapabilityToolCalls?.length ?? 0) > 0
+		) {
+			response.statusCode = 204;
+			response.end();
+			return;
+		}
 		await stopOrphanedHostedAssistantRun({
 			chatId: id,
 			finishStoppedAssistantRun: (args) =>

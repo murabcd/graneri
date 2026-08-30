@@ -6,14 +6,10 @@ vi.mock("@/lib/runtime-config", () => ({
 		"http://127.0.0.1:42831/api/local-folder-tool",
 }));
 
-const localFolders = [
-	{
-		id: "folder_1",
-		name: "Screens",
-		path: "/Users/test/Screens",
-		source: "path-reference" as const,
-	},
-];
+const localCapabilitySession = {
+	id: "capability_1",
+	label: "Screens",
+};
 
 describe("desktop local tool calls", () => {
 	it("uploads local image bytes through Convex and submits a resolved file output", async () => {
@@ -46,7 +42,7 @@ describe("desktop local tool calls", () => {
 			addToolOutputRef: { current: addToolOutput },
 			fetchImpl: fetchMock,
 			fileStorage: { generateUploadUrl, getUrl },
-			latestRequestBodyRef: { current: { localFolders } },
+			latestRequestBodyRef: { current: { localCapabilitySession } },
 		});
 
 		handler({
@@ -69,11 +65,12 @@ describe("desktop local tool calls", () => {
 		const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 		expect(request).toMatchObject({
 			fileUploadUrls: ["https://example.convex.cloud/api/storage/upload"],
-			localFolders,
+			sessionId: "capability_1",
+			toolCallId: "call-image",
 			toolName: "read_local_file",
 		});
 		expect(addToolOutput).toHaveBeenCalledWith({
-			options: { body: { localFolders } },
+			options: { body: { localCapabilitySession } },
 			output: {
 				file: {
 					filename: "screen.png",
@@ -108,7 +105,7 @@ describe("desktop local tool calls", () => {
 				),
 				getUrl: vi.fn(async () => null),
 			},
-			latestRequestBodyRef: { current: { localFolders } },
+			latestRequestBodyRef: { current: { localCapabilitySession } },
 		});
 
 		handler({

@@ -151,6 +151,7 @@ export const createAssistantRun = async (
 		chatId: Id<"chats">;
 		assistantMessageId: string;
 		producer: AssistantRunProducer;
+		localCapabilitySession: Doc<"assistantRuns">["localCapabilitySession"];
 		model: string;
 		reasoningEffort?: ReasoningEffort;
 		serviceTier: ServiceTier;

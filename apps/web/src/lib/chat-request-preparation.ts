@@ -1,22 +1,21 @@
 import type { ChatSettings } from "@workspace/ai/chat-settings";
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { DurableQueuedChatRequest } from "@workspace/ai/queued-chat-request";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
 import {
-	requireRehydratedSharedLocalFolders,
-	shareLocalFoldersFromText,
-	storeSharedLocalFolders,
-} from "@/lib/local-folder-sharing";
+	authorizeLocalCapabilityFromText,
+	getLocalCapabilitySession,
+} from "@/lib/local-capability-session";
 
 type ChatRequestBase = ChatSettings & {
 	convexToken: string | null;
-	localFolders: DesktopLocalFolder[];
+	localCapabilitySession: LocalCapabilitySession | null;
 	recipeSlug: string | null;
 	timezone: string;
 };
 
 export type ChatRequestContext = {
 	continueRunId?: string;
-	localFolders?: DesktopLocalFolder[];
+	localCapabilitySession?: LocalCapabilitySession | null;
 	replayQueuedMessageId?: string;
 	steerQueuedMessageId?: string;
 };
@@ -40,86 +39,83 @@ export type NoteChatRequestBody = ChatRequestBase & {
 export type ChatRequestBody = WorkspaceChatRequestBody | NoteChatRequestBody;
 
 export type QueueableChatRequestBody = DurableQueuedChatRequest & {
-	localFolders: DesktopLocalFolder[];
+	localCapabilitySession: LocalCapabilitySession | null;
 };
 
-export const prepareSharedLocalFoldersForChatRequest = async ({
-	storageScope,
+export const prepareLocalCapabilitySessionForChatRequest = async ({
+	scope,
 	text,
 }: {
-	storageScope: string;
+	scope: string;
 	text: string;
-}): Promise<DesktopLocalFolder[]> => {
-	const currentSharedLocalFolders =
-		await requireRehydratedSharedLocalFolders(storageScope);
-	const { allFolders } = await shareLocalFoldersFromText({
-		currentFolders: currentSharedLocalFolders,
+}): Promise<LocalCapabilitySession | null> => {
+	const currentSession = await getLocalCapabilitySession(scope);
+	return await authorizeLocalCapabilityFromText({
+		currentSession,
+		scope,
 		text,
 	});
-
-	storeSharedLocalFolders(storageScope, allFolders);
-	return allFolders;
 };
 
 const getTimezone = () =>
 	Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 const buildChatRequestBase = async ({
-	localFolders,
+	localCapabilitySession,
 	recipeSlug,
 	resolveConvexToken,
 	settings,
 }: {
-	localFolders: DesktopLocalFolder[];
+	localCapabilitySession: LocalCapabilitySession | null;
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 	settings: ChatSettings;
 }): Promise<ChatRequestBase> => ({
 	...settings,
 	recipeSlug,
-	localFolders,
+	localCapabilitySession,
 	convexToken: await resolveConvexToken(),
 	timezone: getTimezone(),
 });
 
 const resolveChatRequestBase = async ({
-	localFolderStorageScope,
+	localCapabilityScope,
 	recipeSlug,
 	resolveConvexToken,
 	settings,
 	text,
 }: {
-	localFolderStorageScope: string;
+	localCapabilityScope: string;
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 	settings: ChatSettings;
 	text: string;
 }): Promise<ChatRequestBase> => {
-	const [convexToken, localFolders] = await Promise.all([
+	const [convexToken, localCapabilitySession] = await Promise.all([
 		resolveConvexToken(),
-		prepareSharedLocalFoldersForChatRequest({
-			storageScope: localFolderStorageScope,
+		prepareLocalCapabilitySessionForChatRequest({
+			scope: localCapabilityScope,
 			text,
 		}),
 	]);
 
 	return {
 		...settings,
-		localFolders,
+		localCapabilitySession,
 		recipeSlug,
 		convexToken,
 		timezone: getTimezone(),
 	};
 };
 
-export const buildWorkspaceChatRequestBodyFromLocalFolders = async ({
+export const buildWorkspaceChatRequestBodyFromLocalCapability = async ({
 	mentions,
 	projectId,
 	selectedSourceIds,
 	workspaceId,
 	...baseArgs
 }: {
-	localFolders: DesktopLocalFolder[];
+	localCapabilitySession: LocalCapabilitySession | null;
 	mentions: string[];
 	projectId: string | null;
 	recipeSlug: string | null;
@@ -142,7 +138,7 @@ export const buildWorkspaceChatRequestBody = async ({
 	workspaceId,
 	...baseArgs
 }: {
-	localFolderStorageScope: string;
+	localCapabilityScope: string;
 	mentions: string[];
 	projectId: string | null;
 	recipeSlug: string | null;
@@ -163,7 +159,7 @@ export const buildNoteChatRequestBody = async ({
 	noteContext,
 	...baseArgs
 }: {
-	localFolderStorageScope: string;
+	localCapabilityScope: string;
 	noteContext: NoteChatRequestBody["noteContext"];
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
@@ -175,11 +171,11 @@ export const buildNoteChatRequestBody = async ({
 	noteContext,
 });
 
-export const buildNoteChatRequestBodyFromLocalFolders = async ({
+export const buildNoteChatRequestBodyFromLocalCapability = async ({
 	noteContext,
 	...baseArgs
 }: {
-	localFolders: DesktopLocalFolder[];
+	localCapabilitySession: LocalCapabilitySession | null;
 	noteContext: NoteChatRequestBody["noteContext"];
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;

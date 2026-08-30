@@ -1,6 +1,7 @@
 import { useChat } from "@ai-sdk/react";
 import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
 import { HOSTED_REQUEST_USER_INPUT_TOOL_NAME } from "@workspace/ai/hosted-user-question";
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { ChatAddToolOutputFunction, UIMessage } from "ai";
 import { useMutation } from "convex/react";
 import * as React from "react";
@@ -14,7 +15,10 @@ import { stopChatInteraction } from "@/lib/chat-interaction-session";
 import { normalizeChatMessages } from "@/lib/chat-message-state";
 import { toQueuedUserMessageInput } from "@/lib/chat-queue";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
-import type { ChatRequestContext } from "@/lib/chat-request-preparation";
+import type {
+	ChatRequestBody,
+	ChatRequestContext,
+} from "@/lib/chat-request-preparation";
 import { getUIMessageSeedKey } from "@/lib/chat-snapshot";
 import { CHAT_STREAM_UI_THROTTLE_MS } from "@/lib/chat-streaming-performance";
 import {
@@ -22,7 +26,11 @@ import {
 	submitChatTurn,
 } from "@/lib/chat-submit-session";
 import { applyPendingBranchReplacement } from "@/lib/chat-thread";
-import { createDesktopLocalToolCallHandler } from "@/lib/desktop-local-tool-call";
+import {
+	createDesktopLocalToolCallHandler,
+	executeDesktopLocalToolCall,
+} from "@/lib/desktop-local-tool-call";
+import { recoverPendingLocalCapabilityToolCalls } from "@/lib/local-capability-run-recovery";
 import { logError } from "@/lib/logger";
 import {
 	prepareRendererUserQuestionMessages,
@@ -142,6 +150,7 @@ export const useRendererChatSession = ({
 	} | null>(null);
 	const addToolOutputRef =
 		React.useRef<ChatAddToolOutputFunction<UIMessage> | null>(null);
+	const recoveredLocalToolCallsRef = React.useRef(new Set<string>());
 	const [activeSteerHandoffStreamingMessageIds, setActiveSteerHandoffIds] =
 		React.useState<ReadonlySet<string>>(() => new Set());
 	const handleToolCall = React.useMemo(
@@ -557,7 +566,7 @@ export const useRendererChatSession = ({
 
 				latestRequestBodyRef.current = requestBody;
 				input.onRequestPrepared?.({
-					localFolders: requestBody.localFolders,
+					localCapabilitySession: requestBody.localCapabilitySession,
 					requestBody,
 				});
 				return true;
@@ -686,6 +695,46 @@ export const useRendererChatSession = ({
 		},
 		[isChatUiPending, regenerate, runPreparedRequest, stopCurrentStream],
 	);
+	const recoverPendingLocalCapabilityCalls = React.useCallback(
+		async (
+			buildRequestBody: (
+				session: LocalCapabilitySession,
+			) => Promise<ChatRequestBody>,
+		) => {
+			try {
+				await recoverPendingLocalCapabilityToolCalls({
+					buildRequestBody,
+					claimedRecoveryKeys: recoveredLocalToolCallsRef.current,
+					executeToolCall: ({ localCapabilitySession, toolCall }) =>
+						executeDesktopLocalToolCall({
+							fetchImpl: fetch,
+							fileStorage: localFileStorage,
+							localCapabilitySession,
+							toolCall,
+						}),
+					onExecutionError: (error) => {
+						logError({
+							event: "client.error",
+							error,
+							message: "Failed to recover a local capability tool call",
+						});
+					},
+					run: attachableActiveRun,
+					setLatestRequestBody: (requestBody) => {
+						latestRequestBodyRef.current = requestBody;
+					},
+					submitToolOutput: addToolOutput,
+				});
+			} catch (error) {
+				logError({
+					event: "client.error",
+					error,
+					message: "Failed to continue a recovered local capability run",
+				});
+			}
+		},
+		[addToolOutput, attachableActiveRun, localFileStorage],
+	);
 
 	return {
 		canStop: isChatUiPending,
@@ -705,6 +754,7 @@ export const useRendererChatSession = ({
 		queuedFollowUps: queuedFollowUpControls.queuedFollowUps,
 		runPlan: runPlan ?? null,
 		regenerateTurn,
+		recoverPendingLocalCapabilityCalls,
 		restoreEditedQueuedMessage:
 			queuedFollowUpControls.restoreEditedQueuedMessage,
 		setMessages,

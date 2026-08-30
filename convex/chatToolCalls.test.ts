@@ -51,6 +51,7 @@ const startRunAndStream = async ({
 		workspaceId,
 		chatId,
 		assistantMessageId: "stream-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",

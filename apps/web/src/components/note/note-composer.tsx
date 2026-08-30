@@ -125,6 +125,7 @@ import { NoteGenerateButton } from "@/components/note/note-generate-button";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
+import { useLocalCapabilitySession } from "@/hooks/use-local-capability-session";
 import {
 	type NoteChatGroups,
 	type NoteChatSummary,
@@ -133,13 +134,12 @@ import {
 } from "@/hooks/use-note-discussion-session";
 import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
-import { useSharedLocalFolderSession } from "@/hooks/use-shared-local-folder-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
 import {
 	buildNoteChatRequestBody,
-	buildNoteChatRequestBodyFromLocalFolders,
+	buildNoteChatRequestBodyFromLocalCapability,
 } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
@@ -488,9 +488,9 @@ const useNoteComposerController = ({
 		activeWorkspaceId,
 		noteId,
 	});
-	const localFolderStorageScope = `note-chat:${currentChatId}`;
-	const { reconcileSharedLocalFolders, sharedLocalFolders } =
-		useSharedLocalFolderSession(localFolderStorageScope);
+	const localCapabilityScope = `note-chat:${currentChatId}`;
+	const { localCapabilitySession, reconcileLocalCapabilitySession } =
+		useLocalCapabilitySession(localCapabilityScope);
 	const updateUserPreferences = useMutation(api.userPreferences.update);
 	const recipeData = useQuery(
 		api.recipes.list,
@@ -588,6 +588,7 @@ const useNoteComposerController = ({
 		pendingHumanDecision,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
+		recoverPendingLocalCapabilityCalls,
 		runPlan,
 		regenerateTurn,
 		restoreEditedQueuedMessage,
@@ -1178,7 +1179,7 @@ const useNoteComposerController = ({
 						openRightSidebar(presentationMode);
 					}
 				},
-				onRequestPrepared: ({ localFolders }) => {
+				onRequestPrepared: ({ localCapabilitySession }) => {
 					setEditingMessageId((currentEditingMessageId) =>
 						queuedMessageEditId
 							? currentEditingMessageId === queuedMessageEditId
@@ -1189,7 +1190,7 @@ const useNoteComposerController = ({
 					clearDraft();
 					setAttachedFiles([]);
 					resetTextareaHeight();
-					reconcileSharedLocalFolders(localFolders);
+					reconcileLocalCapabilitySession(localCapabilitySession);
 					requestComposerFocus();
 				},
 				prepareTurn: () => {
@@ -1207,7 +1208,7 @@ const useNoteComposerController = ({
 						buildRequestBody: () => {
 							const currentNoteContext = readNoteContext();
 							return buildNoteChatRequestBody({
-								localFolderStorageScope,
+								localCapabilityScope,
 								noteContext: {
 									noteId: currentNoteContext.noteId,
 									title: currentNoteContext.title,
@@ -1262,8 +1263,8 @@ const useNoteComposerController = ({
 		isQueuedMessageEditCurrent,
 		isSettingsLoading,
 		getDraftSnapshot,
-		localFolderStorageScope,
-		reconcileSharedLocalFolders,
+		localCapabilityScope,
+		reconcileLocalCapabilitySession,
 		openRightSidebar,
 		presentationMode,
 		queuedMessageEditDraft,
@@ -1340,8 +1341,8 @@ const useNoteComposerController = ({
 	const buildRequestBody = React.useCallback(async () => {
 		const currentNoteContext = readNoteContext();
 
-		return await buildNoteChatRequestBodyFromLocalFolders({
-			localFolders: sharedLocalFolders,
+		return await buildNoteChatRequestBodyFromLocalCapability({
+			localCapabilitySession,
 			noteContext: {
 				noteId: currentNoteContext.noteId,
 				title: currentNoteContext.title,
@@ -1351,7 +1352,32 @@ const useNoteComposerController = ({
 			resolveConvexToken: getCachedConvexToken,
 			settings: chatSettings,
 		});
-	}, [chatSettings, readNoteContext, selectedRecipe?.slug, sharedLocalFolders]);
+	}, [
+		chatSettings,
+		localCapabilitySession,
+		readNoteContext,
+		selectedRecipe?.slug,
+	]);
+	const buildRecoveryRequestBody = React.useCallback(
+		async (session: NonNullable<typeof localCapabilitySession>) => {
+			const currentNoteContext = readNoteContext();
+			return await buildNoteChatRequestBodyFromLocalCapability({
+				localCapabilitySession: session,
+				noteContext: {
+					noteId: currentNoteContext.noteId,
+					title: currentNoteContext.title,
+					text: currentNoteContext.text,
+				},
+				recipeSlug: selectedRecipe?.slug ?? null,
+				resolveConvexToken: getCachedConvexToken,
+				settings: chatSettings,
+			});
+		},
+		[chatSettings, readNoteContext, selectedRecipe?.slug],
+	);
+	React.useEffect(() => {
+		void recoverPendingLocalCapabilityCalls(buildRecoveryRequestBody);
+	}, [buildRecoveryRequestBody, recoverPendingLocalCapabilityCalls]);
 	const handleHumanDecisionResponse = React.useCallback(
 		async (response: HostedHumanDecisionResponse) => {
 			if (isPreparingRequest) {

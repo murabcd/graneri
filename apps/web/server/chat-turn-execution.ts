@@ -44,7 +44,7 @@ type HostedChatTurnRequest = Pick<
 	ChatRequestBody,
 	| "appsEnabled"
 	| "continueRunId"
-	| "localFolders"
+	| "localCapabilitySession"
 	| "mentions"
 	| "message"
 	| "messageId"
@@ -183,7 +183,7 @@ export const executeHostedChatTurn = async ({
 		appsEnabled = true,
 		chatId,
 		continueRunId,
-		localFolders = [],
+		localCapabilitySession = null,
 		mentions,
 		message,
 		messageId,
@@ -233,7 +233,7 @@ export const executeHostedChatTurn = async ({
 						message: inputMessage,
 						decision: pendingUserQuestion,
 					}) !== null) ||
-				(localFolders.length > 0 &&
+				(localCapabilitySession &&
 					isLocalFolderToolContinuationMessage(inputMessage))
 			) {
 				return { ok: true };
@@ -290,7 +290,7 @@ export const executeHostedChatTurn = async ({
 	const { effectiveMessage, pendingSteerMessages, steeredUserMessages } =
 		preparedTurnInput;
 	const isLocalFolderToolContinuation =
-		localFolders.length > 0 &&
+		Boolean(localCapabilitySession) &&
 		isLocalFolderToolContinuationMessage(effectiveMessage);
 	const userQuestionAnswer = pendingUserQuestion
 		? getHostedUserQuestionAnswer({
@@ -428,7 +428,7 @@ export const executeHostedChatTurn = async ({
 			},
 			getUserProfileContext: () =>
 				client.query(api.userPreferences.getAiProfileContext, {}),
-			localFolders,
+			localCapabilitySession,
 			logLatency,
 			message: effectiveMessage,
 			noteContext,
@@ -515,6 +515,7 @@ export const executeHostedChatTurn = async ({
 			admissionReservationId: admission.admissionReservationId,
 			appsEnabled,
 			chatId,
+			localCapabilitySession,
 			defaultTimezone: model.defaultTimezone,
 			noteId: model.noteId,
 			projectId,

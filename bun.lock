@@ -159,6 +159,7 @@
       "name": "@workspace/platform",
       "version": "0.0.0",
       "dependencies": {
+        "@workspace/ai": "workspace:*",
         "zod": "^4.1.12",
       },
       "devDependencies": {

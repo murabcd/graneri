@@ -28,6 +28,11 @@ projects the attachable run, durable plan, persisted and controller messages,
 local optimistic messages, interrupted streams, and pending human decision
 into one stable renderer snapshot. The interaction session consumes that
 snapshot instead of independently reconciling those sources.
+`local-capability-run-recovery.ts` owns reattachment to pending desktop-local
+tool calls. It claims each run/tool-call pair once per renderer session, builds
+the continuation from the run-bound capability rather than current composer
+state, executes through Electron, and releases a failed continuation claim so a
+later reactive reattachment can retry delivery.
 
 ## Application navigation session
 

@@ -69,8 +69,8 @@ const emitLocalRequestWideEventOnCompletion = ({
 };
 
 export const startLocalServer = async ({
+	executeLocalFolderTool,
 	getAllowedOrigins,
-	getSharedLocalFolders,
 	onAuthCallback,
 } = {}) => {
 	let localServerOrigin = null;
@@ -78,7 +78,7 @@ export const startLocalServer = async ({
 		[
 			"/api/local-folder-tool",
 			createLocalFolderToolRouteHandler({
-				getSharedLocalFolders,
+				executeLocalFolderTool,
 			}),
 		],
 		["/api/dictation-transcription", handleDictationTranscriptionRequest],

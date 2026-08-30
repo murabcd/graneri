@@ -351,7 +351,7 @@ may close while the scheduled action continues.
 
 ## Reconnect recovery
 
-Reconnect and stop terminalize abandoned web producers without disturbing durable Convex or waiting-for-user runs.
+Reconnect and stop terminalize abandoned web producers without disturbing durable Convex, waiting-for-user, or pending desktop-local runs.
 
 Reconnect recovery follows the same no-leftover rule for `web` producers: when
 a reconnect finds a running web run without a live in-process stream producer,
@@ -360,7 +360,10 @@ snapshot, and terminalize the run in a `finally` path. A `convex` producer is
 already durable and must not be failed merely because no web process owns it. A
 `waiting_for_user` run intentionally has no live stream producer and must remain
 pending across reloads; both the renderer and reconnect route skip stream
-attachment for that state. Snapshot cleanup failures may still surface to the
+attachment for that state. A web run with a bound local capability and pending
+local tool calls is also intentionally detached while Electron executes or
+recovers those calls; reconnect must leave that durable run and its snapshots
+intact. Snapshot cleanup failures may still surface to the
 caller, but they must not leave the run blocking future queue drain or chat
 sends. Manual stop uses the same shape: record durable stop intent before stream
 cleanup, and terminalize in `finally` after cleanup is attempted.
@@ -535,13 +538,15 @@ to stop, so the route may return success without creating synthetic run state.
 
 ## Durable follow-up queue
 
-Queued messages contain canonical bounded input and replay context without credentials, duplicate identity, or desktop-local folder scope.
+Queued messages contain canonical bounded input and replay context without credentials, duplicate identity, or local filesystem paths.
 
 Follow-up queueing is durable run state, not UI-local buffering.
 `assistantQueuedMessages` stores queued user messages and durable request
-context scoped to the active run. It must not persist desktop-local folder
-selections; follow-ups that need local folders must wait for the active answer
-instead of entering the durable queue. Completed runs leave queued follow-ups
+context scoped to the active run. It may persist the strict opaque local
+capability descriptor, but never an Electron path or renderer-owned folder
+record. Follow-ups retain that descriptor so queued replay and steer use the
+same authorized scope; Electron still revalidates the id before every local
+execution. Completed runs leave queued follow-ups
 for the client drain path, which claims the next queued item only after no
 non-terminal run remains for the chat. User input uses upstream app-server input
 gates: HTTP chat routes and client queue serialization reject empty user text
@@ -549,7 +554,7 @@ before it can enter the AI SDK loop or durable queue state. Convex chat and
 queued-message mutations enforce the actual 1 MiB document limit with
 `getDocumentSize` at the write boundary instead of approximating storage size
 from character counts. Queued rows persist one canonical text value plus the
-minimum replay context: they omit credentials, desktop-local folder selections,
+minimum replay context: they omit credentials, local filesystem paths,
 duplicate workspace identity, and note contents that can be reloaded by note ID.
 The renderer and Convex parse that replay context through the single
 `@workspace/ai/queued-chat-request` contract; neither side accepts an arbitrary
@@ -635,9 +640,8 @@ until its owning chat is retired.
 Otherwise stale claimed rows are requeued by Convex claim mutations before the
 next claim attempt, because `claimed` represents an unaccepted in-flight
 operation and must not become an invisible durable leftover after a client or
-transport crash. Durable queued request state must not persist desktop-local
-folder scope or absolute paths; follow-ups that need local-folder tools must
-wait for the current run to finish.
+transport crash. Durable queued request state may retain only the opaque local
+capability descriptor; absolute paths remain Electron-private.
 
 ## Queue behavior reference
 

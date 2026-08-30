@@ -1,5 +1,5 @@
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { FileUIPart, UIMessage } from "ai";
 import { z } from "zod";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
@@ -95,7 +95,7 @@ export const submitChatTurn = async ({
 	metadata?: ChatMessageMetadata;
 	onOptimisticMessage: (message: UIMessage) => void;
 	onRequestPrepared: (args: {
-		localFolders: DesktopLocalFolder[];
+		localCapabilitySession: LocalCapabilitySession | null;
 		requestBody: ChatRequestBody;
 	}) => void;
 	onQueuedMessageSaved?: (args: {
@@ -129,7 +129,7 @@ export const submitChatTurn = async ({
 
 	const requestBody = await buildRequestBody();
 	onRequestPrepared({
-		localFolders: requestBody.localFolders,
+		localCapabilitySession: requestBody.localCapabilitySession,
 		requestBody,
 	});
 

@@ -1,47 +1,18 @@
-import { createHash } from "node:crypto";
 import {
 	mkdir,
 	readdir,
 	readFile,
-	realpath,
 	rm,
 	stat,
 	writeFile,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { assertLocalFolderRootLimit } from "@workspace/ai/local-folder-tool-definitions";
+import { join } from "node:path";
 import { logError } from "./logger.mjs";
 
 const transcriptDraftStorageVersion = 1;
 const transcriptDraftMaxAgeMs = 72 * 60 * 60 * 1000;
 const noteDraftStorageVersion = 1;
 const noteDraftMaxAgeMs = 72 * 60 * 60 * 1000;
-const maxLocalFolderPathLength = 4096;
-
-const createLocalFolderId = (folderPath) =>
-	createHash("sha256").update(folderPath).digest("hex").slice(0, 24);
-
-const toSharedLocalFolderPayload = (folder) => ({
-	id: folder.id,
-	name: folder.name,
-	path: folder.path,
-});
-
-const resolveShareableFolderPath = async (requestedPath) => {
-	const realRequestedPath = await realpath(requestedPath);
-	const requestedStat = await stat(realRequestedPath);
-
-	if (requestedStat.isDirectory()) {
-		return realRequestedPath;
-	}
-
-	if (requestedStat.isFile()) {
-		return dirname(realRequestedPath);
-	}
-
-	throw new Error("Only folders and files can be shared with Ask AI.");
-};
-
 const getDraftPath = ({ draftsDirPath, noteKey }) =>
 	join(
 		draftsDirPath,
@@ -164,99 +135,47 @@ const clearDraft = async ({ draftsDirPath, noteKey }) => {
 export const createDesktopStorage = ({
 	transcriptDraftsDirPath,
 	noteDraftsDirPath,
-}) => {
-	const sharedLocalFolders = new Map();
-
-	return {
-		getSharedLocalFolders: (ids) =>
-			ids.map((id) => {
-				const folder = sharedLocalFolders.get(id);
-				if (!folder) {
-					throw new Error("Shared local folder is no longer registered.");
-				}
-				return toSharedLocalFolderPayload(folder);
-			}),
-		shareLocalFolders: async (paths) => {
-			if (!Array.isArray(paths)) {
-				throw new Error("Local folder paths must be an array.");
-			}
-
-			assertLocalFolderRootLimit(paths);
-
-			const foldersById = new Map();
-
-			for (const value of paths) {
-				if (typeof value !== "string" || !value.trim()) {
-					throw new Error("Local folder paths must be non-empty strings.");
-				}
-
-				const requestedPath = value.trim();
-
-				if (requestedPath.length > maxLocalFolderPathLength) {
-					throw new Error("Local folder path is too long.");
-				}
-
-				const folderPath = await resolveShareableFolderPath(requestedPath);
-
-				const folder = {
-					id: createLocalFolderId(folderPath),
-					name: folderPath.split(/[\\/]/u).filter(Boolean).at(-1) ?? folderPath,
-					path: folderPath,
-				};
-
-				foldersById.set(folder.id, folder);
-			}
-
-			sharedLocalFolders.clear();
-			for (const folder of foldersById.values()) {
-				sharedLocalFolders.set(folder.id, folder);
-			}
-
-			return {
-				folders: Array.from(foldersById.values(), toSharedLocalFolderPayload),
-			};
-		},
-		loadTranscriptDraft: (noteKey) =>
-			loadDraft({
-				draftsDirPath: transcriptDraftsDirPath,
-				label: "transcript",
-				maxAgeMs: transcriptDraftMaxAgeMs,
-				noteKey,
-				storedKeyField: "noteKey",
-				version: transcriptDraftStorageVersion,
-			}),
-		saveTranscriptDraft: ({ noteKey, draft }) =>
-			saveDraft({
-				draft,
-				draftsDirPath: transcriptDraftsDirPath,
-				label: "transcript",
-				maxAgeMs: transcriptDraftMaxAgeMs,
-				noteKey,
-				storedKeyField: "noteKey",
-				version: transcriptDraftStorageVersion,
-			}),
-		clearTranscriptDraft: (noteKey) =>
-			clearDraft({ draftsDirPath: transcriptDraftsDirPath, noteKey }),
-		loadNoteDraft: (noteKey) =>
-			loadDraft({
-				draftsDirPath: noteDraftsDirPath,
-				label: "note",
-				maxAgeMs: noteDraftMaxAgeMs,
-				noteKey,
-				storedKeyField: "noteId",
-				version: noteDraftStorageVersion,
-			}),
-		saveNoteDraft: ({ noteKey, draft }) =>
-			saveDraft({
-				draft,
-				draftsDirPath: noteDraftsDirPath,
-				label: "note",
-				maxAgeMs: noteDraftMaxAgeMs,
-				noteKey,
-				storedKeyField: "noteId",
-				version: noteDraftStorageVersion,
-			}),
-		clearNoteDraft: (noteKey) =>
-			clearDraft({ draftsDirPath: noteDraftsDirPath, noteKey }),
-	};
-};
+}) => ({
+	loadTranscriptDraft: (noteKey) =>
+		loadDraft({
+			draftsDirPath: transcriptDraftsDirPath,
+			label: "transcript",
+			maxAgeMs: transcriptDraftMaxAgeMs,
+			noteKey,
+			storedKeyField: "noteKey",
+			version: transcriptDraftStorageVersion,
+		}),
+	saveTranscriptDraft: ({ noteKey, draft }) =>
+		saveDraft({
+			draft,
+			draftsDirPath: transcriptDraftsDirPath,
+			label: "transcript",
+			maxAgeMs: transcriptDraftMaxAgeMs,
+			noteKey,
+			storedKeyField: "noteKey",
+			version: transcriptDraftStorageVersion,
+		}),
+	clearTranscriptDraft: (noteKey) =>
+		clearDraft({ draftsDirPath: transcriptDraftsDirPath, noteKey }),
+	loadNoteDraft: (noteKey) =>
+		loadDraft({
+			draftsDirPath: noteDraftsDirPath,
+			label: "note",
+			maxAgeMs: noteDraftMaxAgeMs,
+			noteKey,
+			storedKeyField: "noteId",
+			version: noteDraftStorageVersion,
+		}),
+	saveNoteDraft: ({ noteKey, draft }) =>
+		saveDraft({
+			draft,
+			draftsDirPath: noteDraftsDirPath,
+			label: "note",
+			maxAgeMs: noteDraftMaxAgeMs,
+			noteKey,
+			storedKeyField: "noteId",
+			version: noteDraftStorageVersion,
+		}),
+	clearNoteDraft: (noteKey) =>
+		clearDraft({ draftsDirPath: noteDraftsDirPath, noteKey }),
+});

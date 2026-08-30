@@ -1,8 +1,10 @@
 import type { ChatMode } from "./chat-mode.mjs";
+import type { LocalCapabilitySession } from "./local-capability-session.mjs";
 import type { ReasoningEffort, ServiceTier } from "./models.mjs";
 
 export type DurableQueuedChatRequest = {
 	chatMode: ChatMode;
+	localCapabilitySession: LocalCapabilitySession | null;
 	mentions?: string[];
 	model: string;
 	noteContext?:

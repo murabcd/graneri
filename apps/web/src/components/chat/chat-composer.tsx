@@ -6,7 +6,7 @@ import type {
 	HostedHumanDecisionRequest,
 	HostedHumanDecisionResponse,
 } from "@workspace/ai/hosted-human-decision";
-import type { DesktopLocalFolder } from "@workspace/platform/desktop-bridge";
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import {
 	InputGroup,
 	InputGroupAddon,
@@ -187,7 +187,7 @@ type ChatComposerProps = {
 	onWebSearchEnabledChange: (value: boolean) => void;
 	chatMode: ChatMode;
 	onChatModeChange: (mode: ChatMode) => void;
-	localFolder: DesktopLocalFolder | null;
+	localFolder: LocalCapabilitySession | null;
 	onChooseLocalFolder: () => void;
 	onClearLocalFolder: () => void;
 	projects: ComposerProjectOption[];

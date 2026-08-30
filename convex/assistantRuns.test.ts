@@ -142,6 +142,7 @@ const startRunWithSnapshots = async ({
 		workspaceId,
 		chatId,
 		assistantMessageId: `${chatId}-assistant-1`,
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -213,6 +214,26 @@ const listRunEventTypes = async ({
 
 	return events.map((eventRecord) => eventRecord.event.type);
 };
+
+test("run start rejects an invalid local capability descriptor", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	await createChat({ asOwner, chatId: "chat-invalid-capability", workspaceId });
+
+	await expect(
+		asOwner.mutation(api.assistantRuns.startAssistantRun, {
+			workspaceId,
+			chatId: "chat-invalid-capability",
+			assistantMessageId: "assistant-invalid-capability",
+			localCapabilitySession: {
+				id: "capability-1",
+				label: "x".repeat(257),
+			},
+			model: "gpt-5",
+			serviceTier: "auto",
+			policy: "reject",
+		}),
+	).rejects.toThrow("Local capability session is invalid.");
+});
 
 test("finishAssistantRun leaves no snapshots for runId", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
@@ -331,6 +352,7 @@ test("a superseded run cannot publish activity into its replacement", async () =
 			workspaceId,
 			chatId,
 			assistantMessageId: "replacement-assistant-message",
+			localCapabilitySession: null,
 			model: "gpt-5",
 			serviceTier: "auto",
 			policy: "supersede",
@@ -1032,6 +1054,7 @@ test("finishAssistantRun deletes all snapshots for runId without batch caps", as
 		workspaceId,
 		chatId: "chat-complete-many",
 		assistantMessageId: "chat-complete-many-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -1333,6 +1356,7 @@ test("supersede stops old run and deletes old snapshots before creating new run"
 		workspaceId,
 		chatId: "chat-supersede",
 		assistantMessageId: "chat-supersede-assistant-2",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "supersede",
@@ -1382,6 +1406,7 @@ test("assistant runs reject concurrent starts instead of leaving two active runs
 			workspaceId,
 			chatId: "chat-concurrent",
 			assistantMessageId: "chat-concurrent-assistant-2",
+			localCapabilitySession: null,
 			model: "gpt-5",
 			serviceTier: "auto",
 			policy: "reject",
@@ -1417,6 +1442,53 @@ test("assistant runs reject concurrent starts instead of leaving two active runs
 	);
 });
 
+test("attachable runs expose their bound local capability and pending tool input", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-local-capability-recovery";
+	await createChat({ asOwner, chatId, workspaceId });
+	const localCapabilitySession = {
+		id: "capability-1",
+		label: "graneri",
+	};
+	const run = await asOwner.mutation(api.assistantRuns.startAssistantRun, {
+		workspaceId,
+		chatId,
+		assistantMessageId: `${chatId}-assistant-1`,
+		localCapabilitySession,
+		model: "gpt-5",
+		policy: "reject",
+		serviceTier: "auto",
+	});
+	await asOwner.mutation(api.chats.startActiveStream, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+	await asOwner.mutation(api.chatToolCalls.startActiveStreamToolCall, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		inputJson: JSON.stringify({ relativePath: ".", rootIndex: 0 }),
+		toolCallId: "local-tool-1",
+		toolName: "list_local_directory",
+	});
+
+	const attachableRun = await asOwner.query(
+		api.assistantRuns.getAttachableRun,
+		{ workspaceId, chatId },
+	);
+
+	expect(attachableRun?.localCapabilitySession).toEqual(localCapabilitySession);
+	expect(attachableRun?.pendingLocalCapabilityToolCalls).toEqual([
+		{
+			inputJson: JSON.stringify({ relativePath: ".", rootIndex: 0 }),
+			toolCallId: "local-tool-1",
+			toolName: "list_local_directory",
+		},
+	]);
+});
+
 test("attachable run query fails closed when multiple active runs exist", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-multiple-active", workspaceId });
@@ -1428,6 +1500,7 @@ test("attachable run query fails closed when multiple active runs exist", async 
 
 	await t.run(async (ctx) => {
 		await ctx.db.insert("assistantRuns", {
+			localCapabilitySession: null,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			chatId: run.chatId,
@@ -1476,6 +1549,7 @@ test("attachable run query returns only non-terminal runs", async () => {
 		workspaceId,
 		chatId: "chat-attach",
 		assistantMessageId: "chat-attach-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -1508,6 +1582,7 @@ test("active run queries are driven by non-terminal assistant runs", async () =>
 		workspaceId,
 		chatId: "chat-active",
 		assistantMessageId: "chat-active-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -1559,6 +1634,7 @@ test("assistant runs durably wait for user questions", async () => {
 		workspaceId,
 		chatId: "chat-decision",
 		assistantMessageId: "chat-decision-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -1620,6 +1696,7 @@ test("assistant runs preserve bounded choice questions in state and events", asy
 		workspaceId,
 		chatId,
 		assistantMessageId: "chat-choice-decision-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -1683,6 +1760,7 @@ test("assistant runs reject questions that do not match stored assistant input",
 		workspaceId,
 		chatId: "chat-invalid-decision",
 		assistantMessageId: "chat-invalid-decision-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -1719,6 +1797,7 @@ test("a tool answer resolves the question without appending a user message", asy
 		workspaceId,
 		chatId: "chat-append-decision",
 		assistantMessageId: "chat-append-decision-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -1828,6 +1907,7 @@ test("stopping a waiting-for-user run clears the pending decision", async () => 
 		workspaceId,
 		chatId: "chat-stop-decision",
 		assistantMessageId: "chat-stop-decision-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",
@@ -2027,6 +2107,7 @@ test("cleanupExpiredAssistantRuns preserves waiting-for-user runs", async () => 
 		workspaceId,
 		chatId: "chat-waiting-expired",
 		assistantMessageId: "chat-waiting-expired-assistant-1",
+		localCapabilitySession: null,
 		model: "gpt-5",
 		serviceTier: "auto",
 		policy: "reject",

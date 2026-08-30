@@ -1,4 +1,5 @@
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
+import type { LocalCapabilitySession } from "./local-capability-session.mjs";
 
 export declare const getHostedChatRunStartPolicy: (args: {
 	supersedeActiveRun?: boolean;
@@ -42,6 +43,7 @@ export declare const startHostedChatRun: <
 		outputJson?: string;
 		errorText?: string;
 	}) => Promise<unknown>;
+	localCapabilitySession: LocalCapabilitySession | null;
 	model: string;
 	reasoningEffort?: ReasoningEffort;
 	serviceTier: ServiceTier;
@@ -63,6 +65,7 @@ export declare const startHostedChatRun: <
 		workspaceId: WorkspaceId;
 		chatId: ChatId;
 		assistantMessageId: string;
+		localCapabilitySession: LocalCapabilitySession | null;
 		model: string;
 		reasoningEffort?: ReasoningEffort;
 		serviceTier: ServiceTier;

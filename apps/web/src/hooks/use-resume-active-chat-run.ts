@@ -5,7 +5,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 
 export type ResumableActiveRun = Pick<
 	AttachableAssistantRun,
-	"_id" | "producer" | "status"
+	"_id" | "pendingLocalCapabilityToolCalls" | "producer" | "status"
 >;
 
 const resumeRunPromises = new Map<string, Promise<void>>();
@@ -31,6 +31,7 @@ export const useResumeActiveChatRun = ({
 			!workspaceId ||
 			!enabled ||
 			activeRun?.status === "waiting_for_user" ||
+			(activeRun?.pendingLocalCapabilityToolCalls?.length ?? 0) > 0 ||
 			activeRun?.producer === "convex";
 
 		if (shouldResetResumeKey || !activeRun) {

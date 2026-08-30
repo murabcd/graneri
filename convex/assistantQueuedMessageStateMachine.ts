@@ -19,9 +19,6 @@ const modelTextPartSchema = z.object({
 	type: z.literal("text"),
 	text: z.string().refine((text) => text.trim().length > 0),
 });
-const unsafeLocalFolderRequestSchema = z.looseObject({
-	localFolders: z.array(z.unknown()).min(1),
-});
 
 export type QueuedMessageInput = {
 	messageId: string;
@@ -67,12 +64,6 @@ export const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 		throw new ConvexError({
 			code: "QUEUED_MESSAGE_INVALID_REQUEST_BODY",
 			message: "Queued message request body is invalid.",
-		});
-	}
-	if (unsafeLocalFolderRequestSchema.safeParse(requestBody).success) {
-		throw new ConvexError({
-			code: "QUEUED_MESSAGE_LOCAL_FOLDERS_UNSAFE",
-			message: "Queued messages cannot persist local folder selections.",
 		});
 	}
 	const durableRequestBody = parseDurableQueuedChatRequest(requestBody);

@@ -1,3 +1,5 @@
+import { parseLocalCapabilitySession } from "@workspace/ai/local-capability-session";
+import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,6 +13,7 @@ import {
 } from "./assistantRunLifecycle";
 import {
 	assistantRunValidator,
+	localCapabilitySessionValidator,
 	pendingDecisionValidator,
 	reasoningEffortValidator,
 	serviceTierValidator,
@@ -87,12 +90,22 @@ export const startAssistantRunForOwner = async (
 		chatId: string;
 		assistantMessageId: string;
 		producer: Doc<"assistantRuns">["producer"];
+		localCapabilitySession: Doc<"assistantRuns">["localCapabilitySession"];
 		model: string;
 		reasoningEffort?: Doc<"assistantRuns">["reasoningEffort"];
 		serviceTier: Doc<"assistantRuns">["serviceTier"];
 		policy: "reject" | "supersede";
 	},
 ) => {
+	const localCapabilitySession = args.localCapabilitySession
+		? parseLocalCapabilitySession(args.localCapabilitySession)
+		: null;
+	if (args.localCapabilitySession && !localCapabilitySession) {
+		throw new ConvexError({
+			code: "LOCAL_CAPABILITY_SESSION_INVALID",
+			message: "Local capability session is invalid.",
+		});
+	}
 	const chat = await getOwnedActiveChatById(
 		ctx,
 		args.ownerTokenIdentifier,
@@ -129,6 +142,7 @@ export const startAssistantRunForOwner = async (
 		chatId: chat._id,
 		assistantMessageId: args.assistantMessageId,
 		producer: args.producer,
+		localCapabilitySession,
 		model: args.model,
 		reasoningEffort: args.reasoningEffort,
 		serviceTier: args.serviceTier,
@@ -140,6 +154,7 @@ export const startAssistantRun = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		assistantMessageId: v.string(),
+		localCapabilitySession: v.union(localCapabilitySessionValidator, v.null()),
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),
 		serviceTier: serviceTierValidator,
@@ -154,6 +169,7 @@ export const startAssistantRun = mutation({
 			chatId: args.chatId,
 			assistantMessageId: args.assistantMessageId,
 			producer: "web",
+			localCapabilitySession: args.localCapabilitySession,
 			model: args.model,
 			reasoningEffort: args.reasoningEffort,
 			serviceTier: args.serviceTier,
@@ -396,10 +412,30 @@ export const getAttachableRun = query({
 				? [event.event.assistantMessageId]
 				: [],
 		);
+		const toolCalls = run.localCapabilitySession
+			? await ctx.db
+					.query("chatToolCalls")
+					.withIndex("by_runId", (q) => q.eq("runId", run._id))
+					.collect()
+			: [];
+		const pendingLocalCapabilityToolCalls = toolCalls.flatMap((toolCall) =>
+			toolCall.status === "pending" &&
+			isLocalFolderToolName(toolCall.toolName) &&
+			toolCall.inputJson
+				? [
+						{
+							inputJson: toolCall.inputJson,
+							toolCallId: toolCall.toolCallId,
+							toolName: toolCall.toolName,
+						},
+					]
+				: [],
+		);
 
 		return {
 			...run,
 			interruptedAssistantMessageIds,
+			pendingLocalCapabilityToolCalls,
 		};
 	},
 });
