@@ -14,6 +14,7 @@ import { Node as PMNode, Slice } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { NoteComment } from "./note-comment-extension";
+import { NoteFile } from "./note-file-extension";
 import { NoteImage } from "./note-image-extension";
 import { NOTE_IMAGE_MIME_TYPES } from "./note-image-upload";
 import { createNoteSlashCommand } from "./note-slash-command";
@@ -223,6 +224,7 @@ type NoteEditorExtensionsOptions = {
 	onImagePaste?: (files: File[]) => void;
 	onImageDrop?: (files: File[], position: number) => void;
 	onSelectImageCommand?: () => void;
+	onFileDownload?: (noteAttachmentId: string) => Promise<void>;
 };
 
 export const createNoteEditorExtensions = (
@@ -257,6 +259,7 @@ export const createNoteEditorExtensions = (
 		onThreadClick: options.onCommentThreadClick,
 	}),
 	NoteImage,
+	NoteFile.configure({ onDownload: options.onFileDownload }),
 	...(options.onImagePaste || options.onImageDrop
 		? [
 				FileHandler.configure({
@@ -348,6 +351,15 @@ export const parseStoredNoteContent = (content: string, schema: Schema) => {
 				node.attrs.noteImageId.length === 0)
 		) {
 			throw new Error("Stored note images must identify an uploaded image.");
+		}
+		if (
+			node.type.name === "noteFile" &&
+			(typeof node.attrs.noteAttachmentId !== "string" ||
+				node.attrs.noteAttachmentId.length === 0)
+		) {
+			throw new Error(
+				"Stored note files must identify an uploaded attachment.",
+			);
 		}
 	});
 	return document.toJSON() as JSONContent;

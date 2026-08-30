@@ -3,6 +3,11 @@ import { z } from "zod";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import {
+	MAX_NOTE_ATTACHMENTS,
+	type NoteAttachmentAttributes,
+	syncNoteAttachmentDocumentReferences,
+} from "./noteAttachmentReferences";
 import { syncNoteImageReferences } from "./noteImageReferences";
 
 const MAX_IMAGES_PER_NOTE = 50;
@@ -13,6 +18,7 @@ const BLOCK_NODE_TYPES = new Set([
 	"heading",
 	"horizontalRule",
 	"image",
+	"noteFile",
 	"orderedList",
 	"paragraph",
 	"table",
@@ -87,6 +93,7 @@ type NoteCommentAnchor = {
 export type ParsedNoteDocument = {
 	content: string;
 	images: NoteImageReference[];
+	attachments: NoteAttachmentAttributes[];
 	commentAnchors: NoteCommentAnchor[];
 };
 
@@ -241,7 +248,9 @@ const validateNodeContent = (node: NoteDocumentNode) => {
 		return;
 	}
 	if (
-		["hardBreak", "horizontalRule", "image", "text"].includes(node.type) &&
+		["hardBreak", "horizontalRule", "image", "noteFile", "text"].includes(
+			node.type,
+		) &&
 		children.length
 	) {
 		invalidNoteDocument(`${node.type} cannot contain child nodes.`);
@@ -252,11 +261,13 @@ const collectDocumentState = ({
 	node,
 	parentType,
 	images,
+	attachments,
 	commentAnchors,
 }: {
 	node: NoteDocumentNode;
 	parentType: string | null;
 	images: Map<string, string>;
+	attachments: Map<string, NoteAttachmentAttributes>;
 	commentAnchors: Map<string, string>;
 }) => {
 	validateNodeContent(node);
@@ -304,6 +315,48 @@ const collectDocumentState = ({
 		images.set(noteImageId, src);
 	}
 
+	if (node.type === "noteFile") {
+		const noteAttachmentId = node.attrs?.noteAttachmentId;
+		const filename = node.attrs?.filename;
+		const mediaType = node.attrs?.mediaType;
+		const sizeBytes = node.attrs?.sizeBytes;
+		if (
+			typeof noteAttachmentId !== "string" ||
+			!noteAttachmentId.trim() ||
+			typeof filename !== "string" ||
+			!filename.trim() ||
+			typeof mediaType !== "string" ||
+			!mediaType.trim() ||
+			typeof sizeBytes !== "number" ||
+			!Number.isInteger(sizeBytes) ||
+			sizeBytes < 0
+		) {
+			throw new ConvexError({
+				code: "INVALID_NOTE_ATTACHMENT",
+				message: "Note files must identify an uploaded attachment.",
+			});
+		}
+		const attributes = {
+			noteAttachmentId,
+			filename,
+			mediaType,
+			sizeBytes,
+		};
+		const existing = attachments.get(noteAttachmentId);
+		if (
+			existing &&
+			(existing.filename !== attributes.filename ||
+				existing.mediaType !== attributes.mediaType ||
+				existing.sizeBytes !== attributes.sizeBytes)
+		) {
+			throw new ConvexError({
+				code: "INVALID_NOTE_ATTACHMENT",
+				message: "A note file cannot use conflicting metadata.",
+			});
+		}
+		attachments.set(noteAttachmentId, attributes);
+	}
+
 	if (node.text) {
 		for (const mark of node.marks ?? []) {
 			if (!NOTE_MARK_TYPES.has(mark.type)) {
@@ -336,6 +389,7 @@ const collectDocumentState = ({
 			node: child,
 			parentType: node.type,
 			images,
+			attachments,
 			commentAnchors,
 		});
 	}
@@ -362,11 +416,13 @@ export const parseNoteDocument = (content: string): ParsedNoteDocument => {
 	}
 
 	const images = new Map<string, string>();
+	const attachments = new Map<string, NoteAttachmentAttributes>();
 	const commentAnchors = new Map<string, string>();
 	collectDocumentState({
 		node: document,
 		parentType: null,
 		images,
+		attachments,
 		commentAnchors,
 	});
 	if (images.size > MAX_IMAGES_PER_NOTE) {
@@ -375,15 +431,54 @@ export const parseNoteDocument = (content: string): ParsedNoteDocument => {
 			message: `A note can contain up to ${MAX_IMAGES_PER_NOTE} images.`,
 		});
 	}
+	if (attachments.size > MAX_NOTE_ATTACHMENTS) {
+		throw new ConvexError({
+			code: "TOO_MANY_NOTE_ATTACHMENTS",
+			message: `A note can contain up to ${MAX_NOTE_ATTACHMENTS} files.`,
+		});
+	}
 
 	return {
 		content: JSON.stringify(document),
 		images: [...images].map(([noteImageId, src]) => ({ noteImageId, src })),
+		attachments: [...attachments.values()],
 		commentAnchors: [...commentAnchors].flatMap(([threadId, excerpt]) => {
 			const trimmedExcerpt = excerpt.trim();
 			return trimmedExcerpt ? [{ threadId, excerpt: trimmedExcerpt }] : [];
 		}),
 	};
+};
+
+export const appendNoteAttachments = (
+	document: ParsedNoteDocument,
+	attachments: NoteAttachmentAttributes[],
+) => {
+	if (attachments.length === 0) {
+		return document;
+	}
+	const parsedDocument = noteDocumentNodeSchema.parse(
+		JSON.parse(document.content) as unknown,
+	);
+	const content = [...(parsedDocument.content ?? [])];
+	const trailingNode = content.at(-1);
+	const trailingParagraph =
+		trailingNode?.type === "paragraph" && !trailingNode.content?.length
+			? content.pop()
+			: { type: "paragraph" };
+	content.push(
+		...attachments.map((attributes) => ({
+			type: "noteFile",
+			attrs: attributes,
+		})),
+		trailingParagraph ?? { type: "paragraph" },
+	);
+
+	return parseNoteDocument(
+		JSON.stringify({
+			...parsedDocument,
+			content,
+		}),
+	);
 };
 
 export const syncNoteDocumentState = async ({
@@ -402,6 +497,12 @@ export const syncNoteDocumentState = async ({
 		note,
 		revisionId,
 		images: document.images,
+	});
+	await syncNoteAttachmentDocumentReferences({
+		ctx,
+		note,
+		revisionId,
+		attachments: document.attachments,
 	});
 
 	if (revisionId !== null) {

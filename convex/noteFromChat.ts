@@ -6,7 +6,11 @@ import {
 	requireOwnedWorkspace,
 } from "./domain";
 import { copyChatMessageAttachmentsToNote } from "./noteAttachmentReferences";
-import { parseNoteDocument } from "./noteDocument";
+import {
+	appendNoteAttachments,
+	parseNoteDocument,
+	syncNoteDocumentState,
+} from "./noteDocument";
 import { insertNote } from "./noteRecords";
 
 const { requireIdentity } = createResourceAccess("notes");
@@ -70,12 +74,29 @@ export const create = mutation({
 			title: args.title,
 			workspaceId: args.workspaceId,
 		});
-		await copyChatMessageAttachmentsToNote(ctx, {
+		const attachments = await copyChatMessageAttachmentsToNote(ctx, {
 			chatId: chat._id,
 			messageId: message.messageId,
 			noteId,
 			now,
 		});
+		if (attachments.length > 0) {
+			const note = await ctx.db.get(noteId);
+			if (!note) {
+				throw new Error("Inserted note is unavailable.");
+			}
+			const document = appendNoteAttachments(
+				parseNoteDocument(note.content),
+				attachments,
+			);
+			await syncNoteDocumentState({
+				ctx,
+				note,
+				revisionId: null,
+				document,
+			});
+			await ctx.db.patch(noteId, { content: document.content });
+		}
 
 		return noteId;
 	},

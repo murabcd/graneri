@@ -19,7 +19,8 @@ import {
 	requireOwnedWorkspace,
 } from "./domain";
 import {
-	listNoteAttachments,
+	getOwnedNoteAttachment,
+	removeNoteAttachmentDocumentReferences,
 	removeNoteAttachments,
 } from "./noteAttachmentReferences";
 import { parseNoteDocument, syncNoteDocumentState } from "./noteDocument";
@@ -72,6 +73,7 @@ const noteChatContextValidator = v.object({
 });
 
 const noteAttachmentValidator = v.object({
+	id: v.id("noteAttachmentReferences"),
 	filename: v.string(),
 	mediaType: v.string(),
 	sizeBytes: v.number(),
@@ -206,6 +208,11 @@ const pruneNoteRevisions = async ({
 		.slice(0, Math.max(0, revisions.length - MAX_NOTE_REVISIONS));
 
 	for (const revision of revisionsToPrune) {
+		await removeNoteAttachmentDocumentReferences({
+			ctx,
+			noteId,
+			revisionId: revision._id,
+		});
 		await removeNoteImageReferences({
 			ctx,
 			noteId,
@@ -299,6 +306,11 @@ const removeNoteRevisions = async ({
 		.take(MAX_NOTE_REVISIONS);
 
 	for (const revision of revisions) {
+		await removeNoteAttachmentDocumentReferences({
+			ctx,
+			noteId,
+			revisionId: revision._id,
+		});
 		await removeNoteImageReferences({
 			ctx,
 			noteId,
@@ -329,6 +341,11 @@ const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
 		noteId: note._id,
 	});
 	await removeNoteImageReferences({
+		ctx,
+		noteId: note._id,
+		revisionId: null,
+	});
+	await removeNoteAttachmentDocumentReferences({
 		ctx,
 		noteId: note._id,
 		revisionId: null,
@@ -470,19 +487,31 @@ export const get = query({
 	},
 });
 
-export const listAttachments = query({
-	args: {
-		id: v.id("notes"),
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.array(noteAttachmentValidator),
+export const getAttachment = query({
+	args: { id: v.string() },
+	returns: v.union(noteAttachmentValidator, v.null()),
 	handler: async (ctx, args) => {
-		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
-		if (note.isArchived) {
-			return [];
+		const noteAttachmentId = await ctx.db.normalizeId(
+			"noteAttachmentReferences",
+			args.id,
+		);
+		if (!noteAttachmentId) {
+			return null;
 		}
-
-		return await listNoteAttachments(ctx, note._id);
+		const attachment = await getOwnedNoteAttachment(ctx, {
+			noteAttachmentId,
+			ownerTokenIdentifier: await requireTokenIdentifier(ctx),
+		});
+		return attachment
+			? {
+					id: attachment._id,
+					filename: attachment.filename,
+					mediaType: attachment.mediaType,
+					sizeBytes: attachment.sizeBytes,
+					storageId: attachment.storageId,
+					url: attachment.url,
+				}
+			: null;
 	},
 });
 

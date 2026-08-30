@@ -147,6 +147,18 @@
 	margin-bottom: 0;
 }
 
+.note-file-node {
+	width: fit-content;
+	max-width: 100%;
+	margin: 0 0 0.5rem;
+	border-radius: var(--radius-xl);
+}
+
+.note-file-node.ProseMirror-selectednode {
+	outline: 2px solid color-mix(in oklab, var(--ring) 65%, transparent);
+	outline-offset: 2px;
+}
+
 :where(.note-tiptap.ProseMirror) :where(p) {
 	margin: 0 0 0.5rem;
 }

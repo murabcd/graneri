@@ -179,19 +179,55 @@ test("creating a note from an assistant response preserves its stored attachment
 		content: createTextDocument("Created a document"),
 		searchableText: "Created a document",
 	});
-	const attachments = await asOwner.query(api.notes.listAttachments, {
-		workspaceId,
-		id: noteId,
-	});
-	expect(attachments).toHaveLength(1);
-	expect(attachments[0]).toMatchObject({
+	const storedNoteState = await t.run(async (ctx) => ({
+		note: await ctx.db.get(noteId),
+		attachments: await ctx.db
+			.query("noteAttachmentReferences")
+			.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
+			.collect(),
+		documentReferences: await ctx.db
+			.query("noteAttachmentDocumentReferences")
+			.withIndex("by_noteId_and_revisionId", (query) =>
+				query.eq("noteId", noteId).eq("revisionId", null),
+			)
+			.collect(),
+	}));
+	expect(storedNoteState.attachments).toHaveLength(1);
+	const attachment = storedNoteState.attachments[0];
+	if (!attachment) {
+		throw new Error("Expected the copied note attachment.");
+	}
+	expect(attachment).toMatchObject({
 		filename: "report.docx",
 		mediaType:
 			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 		sizeBytes: 8,
 		storageId,
 	});
-	expect(attachments[0]?.url).toContain("/api/storage/");
+	expect(storedNoteState.documentReferences).toMatchObject([
+		{ noteAttachmentId: attachment._id, revisionId: null },
+	]);
+	expect(JSON.parse(storedNoteState.note?.content ?? "{}")).toMatchObject({
+		type: "doc",
+		content: [
+			{
+				type: "paragraph",
+				content: [{ type: "text", text: "Created a document" }],
+			},
+			{
+				type: "noteFile",
+				attrs: {
+					noteAttachmentId: attachment._id,
+					filename: "report.docx",
+				},
+			},
+			{ type: "paragraph" },
+		],
+	});
+	const downloadableAttachment = await asOwner.query(api.notes.getAttachment, {
+		id: attachment._id,
+	});
+	expect(downloadableAttachment?.url).toContain("/api/storage/");
 
 	await asOwner.mutation(api.chats.remove, { workspaceId, chatId });
 	await t.finishAllScheduledFunctions(vi.runAllTimers);
@@ -204,6 +240,16 @@ test("creating a note from an assistant response preserves its stored attachment
 			ctx.db
 				.query("noteAttachmentReferences")
 				.withIndex("by_storageId", (query) => query.eq("storageId", storageId))
+				.collect(),
+		),
+	).toEqual([]);
+	expect(
+		await t.run((ctx) =>
+			ctx.db
+				.query("noteAttachmentDocumentReferences")
+				.withIndex("by_noteId_and_revisionId", (query) =>
+					query.eq("noteId", noteId),
+				)
 				.collect(),
 		),
 	).toEqual([]);

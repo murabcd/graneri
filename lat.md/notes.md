@@ -21,9 +21,9 @@ chat-response capture are explicit ingestion paths that convert to that format
 before saving; stored-content readers do not repair Markdown, malformed JSON,
 unowned images, or legacy document shapes.
 
-## Editor images
+## Editor files and images
 
-Open-source Tiptap extensions own insertion and resizing while Graneri owns authenticated upload, metadata, toolbar, and caption behavior.
+Open-source Tiptap extensions own document flow and image interaction while Graneri owns authenticated storage, file metadata, and custom node views.
 
 The note editor's `/` command menu uses Tiptap's open-source suggestion,
 list/task, table, horizontal-rule, and image extensions for block styling and
@@ -36,6 +36,13 @@ attributes. Graneri owns the free image toolbar and caption node view; Tiptap's
 open-source resizable node view owns drag geometry. Image replacement reuses the
 same Convex uploader and updates the selected node in place, while the normal
 note document session remains the only writer of note content.
+
+Files are Tiptap block atoms inside that same canonical document rather than a
+separate list beneath the editor. A file node persists its durable
+`noteAttachmentId`, filename, media type, and byte size; its signed download URL
+is resolved only after an authenticated click. StarterKit's trailing-node
+extension guarantees a paragraph after a terminal file block, so the normal
+Tiptap cursor and editing commands can continue immediately below it.
 
 ## Table interaction
 
@@ -71,25 +78,27 @@ whole note creation instead of persisting a partial relationship snapshot.
 
 Convex File Storage owns note image and attachment bytes, and every save validates one canonical document before synchronizing references and revisions.
 
-Convex File Storage is the sole owner of note image bytes. `noteImages` binds
+Convex File Storage is the sole owner of note image and file bytes. `noteImages` binds
 each blob to its server-derived owner, workspace, and note; current documents
 and retained `noteRevisions` hold explicit `noteImageReferences`. Every note
 save enters through `convex/noteDocument.ts`, which parses and validates the
 canonical document once, then supplies the same derived image references and
 comment anchors to the transactional save. Malformed documents and invalid
 table geometry fail before note state is changed. Every save validates image
-ids and synchronizes the current reference set, revision
-creation and pruning synchronize revision references, and permanent note
+and file ownership and synchronizes their current reference sets, revision
+creation and pruning synchronize revision-aware references, and permanent note
 retirement removes all remaining bytes. An uploaded image that never reaches a
 saved document is removed by its scheduled one-hour pending-upload cleanup.
 
 Creating a note from an assistant response is one `noteFromChat.create`
 transaction. It validates the owned stored assistant message, creates the
 canonical note document, and copies that message's `chatAttachmentReferences`
-into `noteAttachmentReferences`. Both records point to the same immutable
-Convex `storageId`; signed URLs are derived only when a client lists the note
-attachments. Removing either the chat or note releases only its reference, and
-the shared blob is deleted after the final chat or note reference retires.
+into `noteAttachmentReferences` and appends their `noteFile` nodes to the note
+document. `noteAttachmentDocumentReferences` tracks current and retained
+revision ownership. Both chat and note records point to the same immutable
+Convex `storageId`; signed URLs are derived only for an authorized download.
+Removing either the chat or note releases only its reference, and the shared
+blob is deleted after the final chat or note reference retires.
 
 ## Transcript-driven generation
 

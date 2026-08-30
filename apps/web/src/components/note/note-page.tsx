@@ -65,7 +65,6 @@ import {
 import { createTextMatchRanges } from "@/lib/text-search-ranges";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
-import { NoteAttachments } from "./note-attachments";
 import { readDesktopCommentsPanelPinnedState } from "./note-comments-panel-state";
 import {
 	NoteCommentsSheet,
@@ -80,6 +79,7 @@ import { NoteSelectionMenu } from "./note-selection-menu";
 import { NoteTableMenu } from "./note-table-menu";
 import { NoteTableOfContents } from "./note-table-of-contents";
 import { writeRichTextToClipboard } from "./share-note";
+import { useNoteFileDownload } from "./use-note-file-download";
 import {
 	type NoteImagePickerIntent,
 	NoteImageUploadInput,
@@ -186,6 +186,7 @@ const useNotePageController = ({
 	const convex = useConvex();
 	const saveNote = useMutation(api.notes.save);
 	const imageUpload = useNoteImageUpload({ activeWorkspaceId, noteId });
+	const downloadNoteFile = useNoteFileDownload();
 
 	const editor = useEditor({
 		extensions: createNoteEditorExtensions({
@@ -200,6 +201,7 @@ const useNotePageController = ({
 			},
 			onSelectImageCommand: () =>
 				imageUpload.openImagePicker({ kind: "insert" }),
+			onFileDownload: downloadNoteFile,
 		}),
 		immediatelyRender: false,
 		editorProps: {
@@ -1165,45 +1167,44 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 									}}
 								/>
 
-								{editor ? (
-									<Tiptap editor={editor}>
-										<Tiptap.Content
-											className={cn(
-												"min-h-[320px] text-base text-foreground",
-												"[&_.ProseMirror]:min-h-[320px]",
-												shouldHideEmptyBodyPlaceholder &&
-													"note-editor--hide-placeholder",
-												templateApplyState.isRunning && "hidden",
-											)}
-										/>
+								<div>
+									{editor ? (
+										<Tiptap editor={editor}>
+											<Tiptap.Content
+												className={cn(
+													"min-h-[320px] text-base text-foreground",
+													"[&_.ProseMirror]:min-h-[320px]",
+													shouldHideEmptyBodyPlaceholder &&
+														"note-editor--hide-placeholder",
+													templateApplyState.isRunning && "hidden",
+												)}
+											/>
 
-										<NoteSelectionMenu onComment={onOpenCommentComposer} />
-										<NoteImageMenu
-											onReplace={(position) =>
-												openImagePicker({ kind: "replace", position })
-											}
-										/>
-										<NoteTableMenu />
-									</Tiptap>
-								) : null}
-								{templateApplyState.isRunning ? (
-									templateApplyState.streamedMarkdown.trim().length > 0 ? (
-										<MarkdownStreamEntry
-											className="min-h-[320px] text-base text-foreground"
-											isAnimating
-											mode="streaming"
-										>
-											{templateApplyState.streamedMarkdown}
-										</MarkdownStreamEntry>
-									) : (
-										<div className="min-h-80 text-sm text-muted-foreground">
-											<ShimmerText>Thinking</ShimmerText>
-										</div>
-									)
-								) : null}
-								{composerNoteContext.noteId ? (
-									<NoteAttachments noteId={composerNoteContext.noteId} />
-								) : null}
+											<NoteSelectionMenu onComment={onOpenCommentComposer} />
+											<NoteImageMenu
+												onReplace={(position) =>
+													openImagePicker({ kind: "replace", position })
+												}
+											/>
+											<NoteTableMenu />
+										</Tiptap>
+									) : null}
+									{templateApplyState.isRunning ? (
+										templateApplyState.streamedMarkdown.trim().length > 0 ? (
+											<MarkdownStreamEntry
+												className="min-h-[320px] text-base text-foreground"
+												isAnimating
+												mode="streaming"
+											>
+												{templateApplyState.streamedMarkdown}
+											</MarkdownStreamEntry>
+										) : (
+											<div className="min-h-80 text-sm text-muted-foreground">
+												<ShimmerText>Thinking</ShimmerText>
+											</div>
+										)
+									) : null}
+								</div>
 							</div>
 						</div>
 

@@ -49,6 +49,57 @@ describe("canonical note documents", () => {
 		});
 	});
 
+	test("derives durable file references from canonical note file nodes", () => {
+		const parsed = parseNoteDocument(
+			JSON.stringify({
+				type: "doc",
+				content: [
+					{
+						type: "noteFile",
+						attrs: {
+							noteAttachmentId: "attachment-1",
+							filename: "report.docx",
+							mediaType:
+								"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+							sizeBytes: 128,
+						},
+					},
+					{ type: "paragraph" },
+				],
+			}),
+		);
+
+		expect(parsed.attachments).toEqual([
+			{
+				noteAttachmentId: "attachment-1",
+				filename: "report.docx",
+				mediaType:
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+				sizeBytes: 128,
+			},
+		]);
+	});
+
+	test("rejects note file nodes without complete storage metadata", () => {
+		expect(() =>
+			parseNoteDocument(
+				JSON.stringify({
+					type: "doc",
+					content: [
+						{
+							type: "noteFile",
+							attrs: {
+								filename: "report.docx",
+								mediaType: "application/octet-stream",
+								sizeBytes: 128,
+							},
+						},
+					],
+				}),
+			),
+		).toThrow("identify an uploaded attachment");
+	});
+
 	test("rejects malformed and non-document content", () => {
 		expect(() => parseNoteDocument("legacy markdown")).toThrow(
 			"valid Tiptap JSON",

@@ -14,11 +14,13 @@ import {
 import { downloadUrlAsFile, isDownloadableUrl } from "@/lib/download-file";
 import { logError } from "@/lib/logger";
 
-function DocumentAttachmentCard({
+export function FileAttachmentCard({
 	file,
+	canDownload = isDownloadableUrl(file.url),
 	isDownloading,
 	onDownload,
 }: {
+	canDownload?: boolean;
 	file: FileUIPart;
 	isDownloading: boolean;
 	onDownload: (file: FileUIPart) => void;
@@ -65,7 +67,7 @@ function DocumentAttachmentCard({
 						className="size-4 animate-spin motion-reduce:animate-none"
 					/>
 				</Button>
-			) : isDownloadableUrl(file.url) ? (
+			) : canDownload ? (
 				<Button
 					aria-label={`Download ${filename}`}
 					className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -202,7 +204,7 @@ export function FileAttachmentCards({
 					) : (
 						<div className="flex max-w-full flex-col gap-2">
 							{documentFiles.map((file) => (
-								<DocumentAttachmentCard
+								<FileAttachmentCard
 									key={getChatFileIdentity(file)}
 									file={file}
 									isDownloading={downloadingFileUrls.has(file.url)}

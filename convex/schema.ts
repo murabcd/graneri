@@ -528,6 +528,13 @@ export default defineSchema({
 	})
 		.index("by_noteId", ["noteId"])
 		.index("by_storageId", ["storageId"]),
+	noteAttachmentDocumentReferences: defineTable({
+		noteId: v.id("notes"),
+		revisionId: v.union(v.id("noteRevisions"), v.null()),
+		noteAttachmentId: v.id("noteAttachmentReferences"),
+	})
+		.index("by_noteId_and_revisionId", ["noteId", "revisionId"])
+		.index("by_noteAttachmentId", ["noteAttachmentId"]),
 	noteCommentThreads: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

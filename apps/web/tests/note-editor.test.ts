@@ -97,6 +97,40 @@ describe("note editor markdown bridge", () => {
 		});
 	});
 
+	it("keeps note files in the document flow with a writable paragraph after them", () => {
+		const editor = new Editor({
+			content: EMPTY_DOCUMENT,
+			extensions: createNoteEditorExtensions(),
+		});
+		editor.commands.setContent({
+			type: "doc",
+			content: [
+				{
+					type: "noteFile",
+					attrs: {
+						noteAttachmentId: "attachment_1",
+						filename: "report.docx",
+						mediaType:
+							"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						sizeBytes: 128,
+					},
+				},
+			],
+		});
+
+		expect(editor.getJSON().content?.map((node) => node.type)).toEqual([
+			"noteFile",
+			"paragraph",
+		]);
+		editor.commands.focus("end");
+		editor.commands.insertContent("Written below the file");
+		expect(editor.getJSON().content?.at(-1)).toMatchObject({
+			type: "paragraph",
+			content: [{ type: "text", text: "Written below the file" }],
+		});
+		editor.destroy();
+	});
+
 	it("rejects non-canonical stored content instead of repairing it", () => {
 		expect(() => parseStoredNoteContent("# Legacy markdown", schema)).toThrow();
 		expect(() =>
