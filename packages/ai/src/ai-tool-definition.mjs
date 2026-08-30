@@ -9,6 +9,7 @@ export const defineAiTool = ({
 	inputSchema,
 	name,
 	policy,
+	toModelOutput,
 	ui,
 }) => ({
 	name,
@@ -26,6 +27,7 @@ export const defineAiTool = ({
 					deferLoading,
 				},
 			},
+			toModelOutput,
 			execute: async (input, options) =>
 				await withToolTiming(async () => execute(input, options)),
 		}),

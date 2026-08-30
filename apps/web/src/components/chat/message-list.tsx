@@ -42,7 +42,7 @@ import { useChatTurnPresentation } from "@/components/chat/use-chat-turn-present
 import { extractChatChartArtifacts } from "@/lib/chat-chart-artifact";
 import type { ChatMessageMention } from "@/lib/chat-composer-mentions";
 import {
-	extractFileParts,
+	extractMessageFileParts,
 	extractReasoningParts,
 	extractToolParts,
 	getChatMessageMetadata,
@@ -309,7 +309,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	streamingMessageIds: ReadonlySet<string>;
 	textContainerClassName?: string;
 }) {
-	const fileParts = extractFileParts(message);
+	const fileParts = extractMessageFileParts(message);
 	const toolParts =
 		message.role === "assistant"
 			? filterSupersededChartToolFailures(extractToolParts(message))
@@ -381,10 +381,9 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 				)}
 			>
 				{selectedRecipe ? <ChatRecipeReceipt recipe={selectedRecipe} /> : null}
-				<ChatMessageFileAttachments
-					align={message.role === "user" ? "end" : "start"}
-					files={fileParts}
-				/>
+				{message.role === "user" ? (
+					<ChatMessageFileAttachments align="end" files={fileParts} />
+				) : null}
 				{assistantTurnWorkParts ? (
 					<ToolGroup
 						parts={assistantTurnWorkParts}
@@ -404,6 +403,9 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 					showThinkingPlaceholder={showThinkingPlaceholder}
 					textContainerClassName={textContainerClassName}
 				/>
+				{message.role === "assistant" ? (
+					<ChatMessageFileAttachments files={fileParts} />
+				) : null}
 				{isInterruptedAssistantMessage ? <InterruptedMessageStatus /> : null}
 				{message.role === "assistant" && !isEmpty
 					? renderAssistantActions?.(actionContext)

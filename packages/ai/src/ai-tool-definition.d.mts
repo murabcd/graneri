@@ -1,4 +1,4 @@
-import type { ToolExecutionOptions, ToolSet } from "ai";
+import type { Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { z } from "zod";
 import type { AiToolPolicy, AiToolUi } from "./ai-tool-authority.mjs";
 
@@ -21,6 +21,7 @@ export declare function defineAiTool<TInput, TOutput extends object>(args: {
 	inputSchema: z.ZodType<TInput>;
 	name: string;
 	policy: AiToolPolicy;
+	toModelOutput?: Tool<TInput, TOutput>["toModelOutput"];
 	ui: AiToolUi;
 }): AiToolDefinition<TInput>;
 

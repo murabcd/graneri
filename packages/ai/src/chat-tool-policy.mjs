@@ -87,7 +87,9 @@ export const buildCoreChatToolPolicy = ({
 	return {
 		enabledTools,
 		instruction: [
-			artifactAuthoringEnabled ? buildArtifactAuthoringInstruction() : "",
+			artifactAuthoringEnabled
+				? buildArtifactAuthoringInstruction(message)
+				: "",
 			chartGenerationRequested ? buildChartGenerationInstruction() : "",
 			imageGenerationEnabled ? buildImageGenerationInstruction() : "",
 		]

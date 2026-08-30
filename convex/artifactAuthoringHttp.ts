@@ -75,9 +75,18 @@ export const handleArtifactWorkerCallback = async (
 	}
 
 	if (payload.status === "completed") {
-		await ctx.runMutation(internal.artifactAuthoring.complete, payload);
+		await ctx.runMutation(internal.artifactAuthoring.complete, {
+			callbackToken: payload.callbackToken,
+			jobId: payload.jobId,
+			outputs: payload.outputs,
+		});
 	} else {
-		await ctx.runMutation(internal.artifactAuthoring.fail, payload);
+		await ctx.runMutation(internal.artifactAuthoring.fail, {
+			callbackToken: payload.callbackToken,
+			errorText: payload.errorText,
+			jobId: payload.jobId,
+			outputs: payload.outputs,
+		});
 	}
 	return new Response(null, { status: 204 });
 };

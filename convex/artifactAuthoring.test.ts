@@ -1,6 +1,6 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { afterAll, beforeAll, expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { syncChatMessageAttachmentReferences } from "./chatAttachmentReferences";
@@ -20,6 +20,60 @@ const documentOperation = {
 	},
 	outputs: [{ filename: "report.docx", format: "docx" as const }],
 };
+const workerSecret = "artifact-worker-test-secret-that-is-long-enough";
+const testEnvironment = {
+	CONVEX_SITE_URL: "https://graneri.test",
+	GITHUB_CLIENT_ID: "test-github-client",
+	GITHUB_CLIENT_SECRET: "test-github-secret",
+	GOOGLE_CLIENT_ID: "test-google-client",
+	GOOGLE_CLIENT_SECRET: "test-google-secret",
+};
+const previousEnvironment = Object.fromEntries(
+	Object.keys(testEnvironment).map((name) => [name, process.env[name]]),
+);
+
+beforeAll(() => {
+	Object.assign(process.env, testEnvironment);
+});
+
+afterAll(() => {
+	for (const [name, value] of Object.entries(previousEnvironment)) {
+		if (value === undefined) {
+			delete process.env[name];
+		} else {
+			process.env[name] = value;
+		}
+	}
+});
+
+const postArtifactCallback = async (
+	t: ReturnType<typeof convexTest>,
+	body: string,
+) => {
+	const previousWorkerSecret = process.env.ARTIFACT_WORKER_SECRET;
+	process.env.ARTIFACT_WORKER_SECRET = workerSecret;
+	try {
+		return await t.fetch("/api/artifact-worker/callback", {
+			body,
+			headers: {
+				Authorization: `Bearer ${workerSecret}`,
+				"Content-Type": "application/json",
+			},
+			method: "POST",
+		});
+	} finally {
+		if (previousWorkerSecret === undefined) {
+			delete process.env.ARTIFACT_WORKER_SECRET;
+		} else {
+			process.env.ARTIFACT_WORKER_SECRET = previousWorkerSecret;
+		}
+	}
+};
+
+const storageSha256ToHex = (sha256: string) =>
+	Array.from(atob(sha256), (character) =>
+		character.charCodeAt(0).toString(16).padStart(2, "0"),
+	).join("");
 
 const createArtifactChat = async (t: ReturnType<typeof convexTest>) =>
 	await t.run(async (ctx) => {
@@ -92,19 +146,24 @@ test("artifact jobs validate uploads and transfer storage lifetime to chat refer
 	expect(metadata).toMatchObject({
 		size: 12,
 	});
-	await t.mutation(internal.artifactAuthoring.complete, {
-		jobId: prepared.jobId,
-		callbackToken: prepared.callbackToken,
-		outputs: [
-			{
-				filename: "report.docx",
-				mediaType: documentMediaType,
-				sha256: metadata.sha256,
-				sizeBytes: metadata.size,
-				storageId,
-			},
-		],
-	});
+	const callbackResponse = await postArtifactCallback(
+		t,
+		JSON.stringify({
+			jobId: prepared.jobId,
+			callbackToken: prepared.callbackToken,
+			outputs: [
+				{
+					filename: "report.docx",
+					mediaType: documentMediaType,
+					sha256: storageSha256ToHex(metadata.sha256),
+					sizeBytes: metadata.size,
+					storageId,
+				},
+			],
+			status: "completed",
+		}),
+	);
+	expect(callbackResponse.status).toBe(204);
 
 	const result = await t.query(internal.artifactAuthoring.getResult, {
 		jobId: prepared.jobId,
@@ -165,20 +224,25 @@ test("failed artifact jobs delete partial uploads and expose the worker error", 
 	if (!metadata) {
 		throw new Error("Expected partial artifact metadata.");
 	}
-	await t.mutation(internal.artifactAuthoring.fail, {
-		jobId: prepared.jobId,
-		callbackToken: prepared.callbackToken,
-		errorText: "Artifact validation failed.",
-		outputs: [
-			{
-				filename: "report.docx",
-				mediaType: documentMediaType,
-				sha256: metadata.sha256,
-				sizeBytes: metadata.size,
-				storageId,
-			},
-		],
-	});
+	const callbackResponse = await postArtifactCallback(
+		t,
+		JSON.stringify({
+			jobId: prepared.jobId,
+			callbackToken: prepared.callbackToken,
+			errorText: "Artifact validation failed.",
+			outputs: [
+				{
+					filename: "report.docx",
+					mediaType: documentMediaType,
+					sha256: storageSha256ToHex(metadata.sha256),
+					sizeBytes: metadata.size,
+					storageId,
+				},
+			],
+			status: "failed",
+		}),
+	);
+	expect(callbackResponse.status).toBe(204);
 
 	expect(
 		await t.query(internal.artifactAuthoring.getResult, {

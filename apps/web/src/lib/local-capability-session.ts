@@ -18,8 +18,7 @@ const requireDesktopCapabilityResult = <Result>(
 };
 
 export const getLocalCapabilitySession = async (scope: string) =>
-	requireDesktopCapabilityResult(await getDesktopLocalCapabilitySession(scope))
-		.session;
+	(await getDesktopLocalCapabilitySession(scope))?.session ?? null;
 
 export const pickLocalCapabilityFolder = async (scope: string) =>
 	requireDesktopCapabilityResult(await pickDesktopLocalFolder(scope));

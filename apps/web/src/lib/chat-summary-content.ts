@@ -6,7 +6,7 @@ import {
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import {
 	extractFileParts,
-	extractGeneratedArtifacts,
+	extractMessageFileParts,
 	getChatMessageMetadata,
 } from "@/lib/chat-message";
 
@@ -126,10 +126,7 @@ const collectArtifacts = (messages: UIMessage[]): ChatSummaryArtifact[] => {
 			continue;
 		}
 
-		for (const value of [
-			...extractFileParts(message),
-			...extractGeneratedArtifacts(message),
-		]) {
+		for (const value of extractMessageFileParts(message)) {
 			const artifact = toSummaryArtifact(value);
 			if (seen.has(artifact.url)) {
 				continue;

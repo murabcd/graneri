@@ -24,6 +24,50 @@ DOCUMENT_MEDIA_TYPE = (
 
 
 class ArtifactAuthoringTest(unittest.TestCase):
+    def test_document_create_renders_matching_leading_title_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "report.docx"
+            create_document(
+                {
+                    "title": "Artifact Worker Smoke Test",
+                    "blocks": [
+                        {
+                            "type": "heading",
+                            "level": 1,
+                            "text": "Artifact Worker Smoke Test",
+                        },
+                        {"type": "paragraph", "text": "Pipeline works."},
+                    ],
+                    "orientation": "portrait",
+                    "pageSize": "a4",
+                },
+                destination,
+            )
+
+            document = Document(destination)
+            paragraphs = [paragraph.text for paragraph in document.paragraphs]
+            self.assertEqual(paragraphs.count("Artifact Worker Smoke Test"), 1)
+            self.assertIn("Pipeline works.", paragraphs)
+
+    def test_document_create_preserves_distinct_leading_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "report.docx"
+            create_document(
+                {
+                    "title": "Quarterly Report",
+                    "blocks": [{"type": "heading", "level": 1, "text": "Summary"}],
+                    "orientation": "portrait",
+                    "pageSize": "a4",
+                },
+                destination,
+            )
+
+            document = Document(destination)
+            self.assertEqual(
+                [paragraph.text for paragraph in document.paragraphs],
+                ["Quarterly Report", "Summary"],
+            )
+
     def test_same_output_filename_never_overwrites_the_downloaded_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1,28 +1,17 @@
-import { parseArtifactToolOutput } from "@workspace/ai/artifact-authoring-contract";
+import {
+	type GeneratedArtifact,
+	parseArtifactToolOutput,
+} from "@workspace/ai/artifact-authoring-contract";
 import {
 	type ChatMessageMetadata,
 	parseChatMessageMetadata,
 } from "@workspace/ai/chat-message-metadata";
-import { isToolUIPart, type UIMessage } from "ai";
+import { type FileUIPart, isToolUIPart, type UIMessage } from "ai";
 
 export { type ChatMessageMetadata, parseChatMessageMetadata };
 
-export type ChatGeneratedArtifact = {
-	filename: string;
-	mediaType: string;
-	providerMetadata: {
-		graneri: {
-			generatedBy: "ai";
-			storageId: string;
-		};
-	};
-	sizeBytes: number;
-	url: string;
-};
-
-export const parseGeneratedArtifacts = (
-	value: unknown,
-): ChatGeneratedArtifact[] => parseArtifactToolOutput(value)?.artifacts ?? [];
+export const parseGeneratedArtifacts = (value: unknown): GeneratedArtifact[] =>
+	parseArtifactToolOutput(value)?.artifacts ?? [];
 
 const extractTextParts = (message: UIMessage) =>
 	message.parts.filter(
@@ -45,7 +34,7 @@ export const extractToolParts = (message: UIMessage) =>
 
 export const extractGeneratedArtifacts = (
 	message: UIMessage,
-): ChatGeneratedArtifact[] =>
+): GeneratedArtifact[] =>
 	extractToolParts(message).flatMap((part) => {
 		if (!("state" in part) || part.state !== "output-available") {
 			return [];
@@ -57,6 +46,38 @@ export const extractGeneratedArtifacts = (
 
 		return artifacts;
 	});
+
+const toFilePart = (artifact: GeneratedArtifact): FileUIPart => ({
+	type: "file",
+	filename: artifact.filename,
+	mediaType: artifact.mediaType,
+	providerMetadata: {
+		graneri: {
+			...artifact.providerMetadata.graneri,
+			sizeBytes: artifact.sizeBytes,
+		},
+	},
+	url: artifact.url,
+});
+
+export const extractMessageFileParts = (message: UIMessage): FileUIPart[] => {
+	const files = [
+		...extractFileParts(message),
+		...(message.role === "assistant"
+			? extractGeneratedArtifacts(message).map(toFilePart)
+			: []),
+	];
+	const seenUrls = new Set<string>();
+
+	return files.filter((file) => {
+		if (seenUrls.has(file.url)) {
+			return false;
+		}
+
+		seenUrls.add(file.url);
+		return true;
+	});
+};
 
 export const extractReasoningParts = (message: UIMessage) =>
 	message.parts.filter((part) => part.type === "reasoning");

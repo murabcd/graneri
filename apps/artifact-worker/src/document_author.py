@@ -80,6 +80,19 @@ def add_document_blocks(document: DocumentType, blocks: list[dict[str, Any]]) ->
             raise ValueError(f"Unsupported document block: {block_type}")
 
 
+def _content_blocks(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    blocks = spec["blocks"]
+    if not blocks:
+        return blocks
+    first_block = blocks[0]
+    if (
+        first_block["type"] == "heading"
+        and first_block["text"].strip() == spec["title"].strip()
+    ):
+        return blocks[1:]
+    return blocks
+
+
 def create_document(spec: dict[str, Any], destination: Path) -> None:
     document = Document()
     _configure_document(document, spec)
@@ -90,7 +103,7 @@ def create_document(spec: dict[str, Any], destination: Path) -> None:
     if spec.get("subtitle"):
         subtitle = document.add_paragraph(spec["subtitle"])
         subtitle.style = document.styles["Subtitle"]
-    add_document_blocks(document, spec["blocks"])
+    add_document_blocks(document, _content_blocks(spec))
     document.save(destination)
 
 

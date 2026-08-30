@@ -12,7 +12,9 @@ export type AuthorArtifact = (args: {
 export declare const shouldEnableArtifactAuthoring: (
 	message: UIMessage | null | undefined,
 ) => boolean;
-export declare const buildArtifactAuthoringInstruction: () => string;
+export declare const buildArtifactAuthoringInstruction: (
+	message: UIMessage | undefined,
+) => string;
 export declare const createArtifactAuthoringTool: (args: {
 	authorArtifact: AuthorArtifact;
 }) => Tool;

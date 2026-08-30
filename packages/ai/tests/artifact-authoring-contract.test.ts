@@ -3,7 +3,13 @@ import {
 	artifactAuthoringInputSchema,
 	parseArtifactToolOutput,
 } from "../src/artifact-authoring-contract.mjs";
-import { shouldEnableArtifactAuthoring } from "../src/artifact-authoring-tool.mjs";
+import { selectArtifactAuthoringSkills } from "../src/artifact-authoring-skills.mjs";
+import {
+	buildArtifactAuthoringInstruction,
+	createArtifactAuthoringTool,
+	shouldEnableArtifactAuthoring,
+} from "../src/artifact-authoring-tool.mjs";
+import { buildCoreChatToolPolicy } from "../src/chat-tool-policy.mjs";
 
 describe("artifact authoring contract", () => {
 	it("detects file-first edit wording and office attachments", () => {
@@ -37,6 +43,83 @@ describe("artifact authoring contract", () => {
 				parts: [{ type: "text", text: "Write a launch brief as a DOCX" }],
 			}),
 		).toBe(true);
+	});
+
+	it("loads only the format skills relevant to the current artifact request", () => {
+		expect(
+			selectArtifactAuthoringSkills({
+				id: "message-1",
+				role: "user",
+				parts: [
+					{
+						type: "text",
+						text: "Convert this DOCX to PDF and keep the original DOCX too",
+					},
+				],
+			}),
+		).toEqual(["documents", "pdf"]);
+
+		expect(
+			selectArtifactAuthoringSkills({
+				id: "message-2",
+				role: "user",
+				parts: [
+					{ type: "text", text: "Add the new quarterly totals" },
+					{
+						type: "file",
+						filename: "forecast.xlsx",
+						mediaType:
+							"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+						url: "https://files.example/forecast.xlsx",
+					},
+				],
+			}),
+		).toEqual(["spreadsheets"]);
+	});
+
+	it("adds progressive format guidance without loading unrelated skills", () => {
+		const instruction = buildArtifactAuthoringInstruction({
+			id: "message-1",
+			role: "user",
+			parts: [
+				{
+					type: "text",
+					text: "Create a concise PowerPoint launch presentation",
+				},
+			],
+		});
+
+		expect(instruction).toContain("# Presentations");
+		expect(instruction).toContain("presentation_create");
+		expect(instruction).not.toContain("# Documents");
+		expect(instruction).not.toContain("# Spreadsheets");
+		expect(instruction).not.toContain("# PDF");
+	});
+
+	it("routes the selected skill through the executable chat tool policy", () => {
+		const policy = buildCoreChatToolPolicy({
+			artifactAuthoringApi: { author: {} },
+			chatAttachmentsApi: {},
+			chatId: "chat-1",
+			convexClient: {},
+			message: {
+				id: "message-1",
+				role: "user",
+				parts: [
+					{
+						type: "text",
+						text: "Add a comparison slide to this PPTX",
+					},
+				],
+			},
+			webSearchEnabled: false,
+			workspaceId: "workspace-1",
+		});
+
+		expect(policy.state.artifactAuthoringEnabled).toBe(true);
+		expect(policy.enabledTools).toHaveProperty("author_artifact");
+		expect(policy.instruction).toContain("# Presentations");
+		expect(policy.instruction).not.toContain("# Spreadsheets");
 	});
 	it("normalizes a bounded document request at the model boundary", () => {
 		expect(
@@ -176,6 +259,45 @@ describe("artifact authoring contract", () => {
 		]);
 	});
 
+	it("keeps durable edit metadata while withholding download URLs from the model", async () => {
+		const output = {
+			artifacts: [
+				{
+					filename: "report.docx",
+					mediaType:
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					providerMetadata: {
+						graneri: {
+							generatedBy: "ai" as const,
+							storageId: "storage-docx",
+						},
+					},
+					sizeBytes: 2_483_200,
+					url: "https://files.example/report.docx",
+				},
+			],
+		};
+		const artifactTool = createArtifactAuthoringTool({
+			authorArtifact: async () => output,
+		});
+
+		const modelOutput = await artifactTool.toModelOutput?.({
+			input: {},
+			output,
+			toolCallId: "artifact-call",
+		});
+
+		expect(modelOutput?.type).toBe("text");
+		if (modelOutput?.type !== "text") {
+			throw new Error("Expected text model output.");
+		}
+		expect(modelOutput.value).toContain("storage-docx");
+		expect(modelOutput.value).toContain("file card");
+		expect(modelOutput.value).not.toContain(
+			"https://files.example/report.docx",
+		);
+	});
+
 	it("enables creation and editing language without matching ordinary chat", () => {
 		expect(
 			shouldEnableArtifactAuthoring({
@@ -189,6 +311,13 @@ describe("artifact authoring contract", () => {
 				id: "message-2",
 				role: "user",
 				parts: [{ type: "text", text: "Tell me about spreadsheets" }],
+			}),
+		).toBe(false);
+		expect(
+			shouldEnableArtifactAuthoring({
+				id: "message-3",
+				role: "user",
+				parts: [{ type: "text", text: "Create a file for me" }],
 			}),
 		).toBe(false);
 	});

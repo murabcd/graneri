@@ -165,6 +165,11 @@ const hashRequest = async (inputJson: string) => {
 	).join("");
 };
 
+const storageSha256ToHex = (sha256: string) =>
+	Array.from(atob(sha256), (character) =>
+		character.charCodeAt(0).toString(16).padStart(2, "0"),
+	).join("");
+
 const getOwnedSource = async (
 	ctx: MutationCtx,
 	chatId: Id<"chats">,
@@ -420,7 +425,7 @@ export const complete = internalMutation({
 				!storageId ||
 				!metadata ||
 				metadata.size !== output.sizeBytes ||
-				metadata.sha256 !== output.sha256 ||
+				storageSha256ToHex(metadata.sha256) !== output.sha256 ||
 				(metadata.contentType !== undefined &&
 					metadata.contentType !== output.mediaType)
 			) {
@@ -497,7 +502,7 @@ export const fail = internalMutation({
 			if (
 				storageId &&
 				metadata?.size === output.sizeBytes &&
-				metadata.sha256 === output.sha256 &&
+				storageSha256ToHex(metadata.sha256) === output.sha256 &&
 				(metadata.contentType === undefined ||
 					metadata.contentType === output.mediaType)
 			) {

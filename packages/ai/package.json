@@ -4,10 +4,11 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "check:artifact-skills": "node scripts/generate-artifact-authoring-skills.mjs --check",
     "check:artifact-schema": "node scripts/generate-artifact-worker-schema.mjs --check",
     "lint": "biome lint src tests package.json tsconfig.json",
     "lint:fix": "biome lint --write src tests package.json tsconfig.json",
-    "check": "bun run check:artifact-schema && biome check src tests scripts package.json tsconfig.json",
+    "check": "bun run check:artifact-skills && bun run check:artifact-schema && biome check src tests scripts package.json tsconfig.json",
     "check:fix": "biome check --write src tests scripts package.json tsconfig.json",
     "format": "biome format --write src tests package.json tsconfig.json",
     "test": "vitest run",

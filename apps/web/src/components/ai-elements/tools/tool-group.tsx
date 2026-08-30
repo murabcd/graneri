@@ -9,8 +9,6 @@ import {
 	type ToolUiPart,
 	toToolPartLike,
 } from "@/components/ai-elements/tools/tool-part-like";
-import { ToolPreview } from "@/components/ai-elements/tools/tool-preview";
-import { hasCustomToolPreview } from "@/components/ai-elements/tools/tool-preview-policy";
 import { getToolMeta } from "@/components/ai-elements/tools/tool-registry";
 import { ToolRowBase } from "@/components/ai-elements/tools/tool-row-base";
 import { getToolStatus } from "@/components/ai-elements/utils/format-tool";
@@ -252,9 +250,8 @@ const NestedToolRow = memo(function NestedToolRow({
 	});
 	const durationLabel =
 		durationMs !== null ? formatElapsedTime(Math.max(1, durationMs)) : "";
-	const hasPreview = hasCustomToolPreview({ isError, toolPart });
 	const hasDetails = Boolean(
-		hasPreview || toolPart.input || toolPart.output || toolPart.errorText,
+		toolPart.input || toolPart.output || toolPart.errorText,
 	);
 
 	const meta = getToolMeta(toolPart);
@@ -286,15 +283,11 @@ const NestedToolRow = memo(function NestedToolRow({
 				) : undefined
 			}
 		>
-			{hasPreview ? (
-				<ToolPreview isError={isError} toolPart={toolPart} />
-			) : (
-				<ToolDetails
-					input={toolPart.input}
-					output={toolPart.output}
-					errorText={toolPart.errorText}
-				/>
-			)}
+			<ToolDetails
+				input={toolPart.input}
+				output={toolPart.output}
+				errorText={toolPart.errorText}
+			/>
 		</ToolRowBase>
 	);
 });

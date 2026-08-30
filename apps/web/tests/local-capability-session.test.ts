@@ -14,6 +14,12 @@ afterEach(() => {
 });
 
 describe("local capability sessions", () => {
+	it("has no current session outside desktop", async () => {
+		window.graneriDesktop = undefined;
+
+		await expect(getLocalCapabilitySession("chat:1")).resolves.toBeNull();
+	});
+
 	it("keeps the current session when text contains no local path", async () => {
 		window.graneriDesktop = undefined;
 		const session = { id: "capability-1", label: "graneri" };
