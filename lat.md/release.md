@@ -104,6 +104,16 @@ modules must also be declared there.
 
 The package contains generated artifacts, bundled JavaScript, traced asset-backed runtimes, explicit assets, and declared native dependencies.
 
+The artifact-authoring worker is released as an independent Vercel Fluid
+Compute project rooted at `apps/artifact-worker`. Its pinned
+`Dockerfile.vercel` image owns LibreOffice, Poppler, fonts, and Python authoring
+libraries; none of those dependencies enter the web or desktop bundle. The web
+deployment and artifact-worker deployment require separate verification and
+must never be reported as one release surface. Vercel browser-login protection
+must remain disabled for this dedicated service so Convex can reach it; the
+worker's own shared-secret boundary protects authoring requests and callbacks.
+See [[artifact-authoring]].
+
 The desktop build packages generated runtime artifacts only. Packaged Electron
 main code lives in `dist-electron/main/index.js`, and packaged renderer assets
 live in `dist-app`. Packaged windows load renderer assets through `app://ui`.

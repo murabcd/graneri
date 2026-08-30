@@ -451,6 +451,8 @@ export const acceptHostedChatTurn = async ({
 					instructions,
 					chatMode: settings.chatMode,
 					webSearchEnabled: coreToolPolicyState.webSearchEnabled,
+					artifactAuthoringRequested:
+						coreToolPolicyState.artifactAuthoringRequested,
 					chartGenerationRequested:
 						coreToolPolicyState.chartGenerationRequested,
 					imageGenerationRequested:

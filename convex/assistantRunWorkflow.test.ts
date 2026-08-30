@@ -29,6 +29,7 @@ const backgroundJob = {
 	instructions: "Answer clearly.",
 	chatMode: CHAT_MODE.DEFAULT,
 	webSearchEnabled: false,
+	artifactAuthoringRequested: false,
 	chartGenerationRequested: false,
 	imageGenerationRequested: false,
 	appToolScope: "disabled" as const,

@@ -3,6 +3,7 @@ import type { ToolLoopAgent, ToolSet, UIMessage } from "ai";
 import type { AutomationActions } from "./automation-tools.mjs";
 import type { WorkspaceToolConnection } from "./capability-registry.mjs";
 import type { ChatMode } from "./chat-mode.mjs";
+import type { ArtifactAuthoringApi } from "./chat-tool-policy.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 import type { HostedRunPlan } from "./hosted-run-activity.mjs";
 import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
@@ -23,6 +24,7 @@ type Recipe = { name: string; prompt: string } | null;
 
 export declare const buildHostedChatRunContext: (args: {
 	appsEnabled?: boolean;
+	artifactAuthoringApi: ArtifactAuthoringApi;
 	chatMode?: ChatMode;
 	automationActions?: AutomationActions | null;
 	chatAttachmentsApi: ChatAttachmentsApi;
@@ -65,6 +67,8 @@ export declare const buildHostedChatRunContext: (args: {
 	agent: ToolLoopAgent<never, ToolSet, never>;
 	agentTools: ToolSet | undefined;
 	coreToolPolicyState: {
+		artifactAuthoringEnabled: boolean;
+		artifactAuthoringRequested: boolean;
 		chartGenerationRequested: boolean;
 		imageGenerationEnabled: boolean;
 		imageGenerationRequested: boolean;

@@ -1,6 +1,8 @@
 "use node";
 
 import { openai } from "@ai-sdk/openai";
+import type { ArtifactSource } from "@workspace/ai/artifact-authoring-contract";
+import { createArtifactAuthoringTool } from "@workspace/ai/artifact-authoring-tool";
 import { buildChatAutomationContext } from "@workspace/ai/automation-tools";
 import {
 	buildChartGenerationPrepareStep,
@@ -16,7 +18,10 @@ import {
 } from "@workspace/ai/hosted-chat-runtime";
 import { createHostedRunActivityTool } from "@workspace/ai/hosted-run-activity";
 import { createHostedUserQuestionTools } from "@workspace/ai/hosted-user-question";
-import { createImageGenerationTool } from "@workspace/ai/image-generation-tool";
+import {
+	createImageGenerationTool,
+	downloadSourceImage,
+} from "@workspace/ai/image-generation-tool";
 import { getOpenAiModelProviderOptions } from "@workspace/ai/models";
 import { createSafetyIdentifier } from "@workspace/ai/safety-identifier";
 import {
@@ -36,6 +41,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalAction } from "./_generated/server";
+import { executeArtifactAuthoring } from "./artifactAuthoring";
 import { createAssistantRunAutomationActions } from "./assistantRunAutomationActions";
 import { createAssistantRunGeneratedImageUploader } from "./assistantRunGeneratedImage";
 import type {
@@ -327,10 +333,40 @@ export const runStep = internalAction({
 					}),
 					...(context.job.imageGenerationRequested && {
 						generate_image: createImageGenerationTool({
+							resolveSourceImage: async (source: ArtifactSource) => {
+								const url = await ctx.runQuery(
+									internal.chatAttachments.getOwnedUrlInternal,
+									{
+										ownerTokenIdentifier: context.ownerTokenIdentifier,
+										workspaceId: context.workspaceId,
+										chatId: context.chatId,
+										storageId: source.storageId,
+									},
+								);
+								if (!url) {
+									throw new Error(
+										"The source image is not available in this chat.",
+									);
+								}
+								return await downloadSourceImage({ source, url });
+							},
 							uploadGeneratedImage: createAssistantRunGeneratedImageUploader({
 								requireActiveRun,
 								storage: ctx.storage,
 							}),
+						}),
+					}),
+					...(context.job.artifactAuthoringRequested && {
+						author_artifact: createArtifactAuthoringTool({
+							authorArtifact: ({ idempotencyKey, input }) =>
+								executeArtifactAuthoring(ctx, {
+									ownerTokenIdentifier: context.ownerTokenIdentifier,
+									workspaceId: context.workspaceId,
+									chatId: context.chatId,
+									runId: args.runId,
+									idempotencyKey,
+									input,
+								}),
 						}),
 					}),
 					...automationContext.tools,

@@ -44,6 +44,25 @@ jobs:
       - name: Run tests
         run: bun run test
 
+      - name: Build artifact worker
+        run: docker build --file apps/artifact-worker/Dockerfile.vercel --tag graneri-artifact-worker:test apps/artifact-worker
+
+      - name: Check artifact worker
+        run: |
+          docker run --rm --user root \
+            --env RUFF_CACHE_DIR=/tmp/ruff-cache \
+            --volume "$PWD/apps/artifact-worker:/workspace:ro" \
+            --workdir /workspace \
+            graneri-artifact-worker:test \
+            sh -c 'pip install --no-cache-dir --requirement requirements-dev.txt && ruff check src tests && ruff format --check src tests'
+
+      - name: Test artifact worker
+        run: |
+          docker run --rm \
+            --volume "$PWD/apps/artifact-worker/tests:/app/tests:ro" \
+            graneri-artifact-worker:test \
+            python -m unittest discover --start-directory tests --verbose
+
   deploy:
     needs: validate
     if: github.event_name == 'push'

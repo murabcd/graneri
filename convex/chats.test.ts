@@ -2010,6 +2010,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 				instructions: "Test",
 				chatMode: CHAT_MODE.DEFAULT,
 				webSearchEnabled: false,
+				artifactAuthoringRequested: false,
 				chartGenerationRequested: false,
 				imageGenerationRequested: false,
 				appToolScope: "disabled",

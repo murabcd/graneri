@@ -47,7 +47,7 @@ const chartSeriesConfigSchema = z.object({
 	color: z.string().max(80).optional(),
 });
 
-const chartSpecSchema = z
+const canonicalChartSpecSchema = z
 	.object({
 		chartType: z.enum(["bar", "line", "area", "pie"]),
 		title: z.string().min(1).max(120).optional(),
@@ -81,6 +81,143 @@ const chartSpecSchema = z
 			}),
 		"Every row must include the xKey and finite numeric yKey values.",
 	);
+
+const repairableChartSpecSchema = z
+	.object({
+		chartType: z.string().optional(),
+		type: z.string().optional(),
+		title: z.string().optional(),
+		description: z.string().optional(),
+		xKey: z.string().optional(),
+		x_key: z.string().optional(),
+		categoryKey: z.string().optional(),
+		yKeys: z.union([z.string(), z.array(z.string())]).optional(),
+		yKey: z.string().optional(),
+		valueKey: z.string().optional(),
+		data: z.array(z.record(z.string(), chartDataValueSchema)).min(1).max(80),
+		config: z.record(z.string(), chartSeriesConfigSchema).optional(),
+	})
+	.passthrough();
+
+const normalizeChartType = (value) => {
+	const normalized = value
+		?.trim()
+		.toLowerCase()
+		.replace(/[\s_-]+chart$/u, "");
+	return normalized === "column"
+		? "bar"
+		: normalized === "donut" || normalized === "doughnut"
+			? "pie"
+			: normalized;
+};
+
+const normalizeChartKey = (value) => {
+	const normalized = value
+		.trim()
+		.replace(/[^A-Za-z0-9_-]+/gu, "_")
+		.replace(/^([^A-Za-z])/u, "field_$1")
+		.slice(0, 64);
+	return normalized || "value";
+};
+
+const createChartKeyMap = (sourceKeys) => {
+	const usedKeys = new Set();
+	return Object.fromEntries(
+		sourceKeys.map((sourceKey) => {
+			const baseKey = normalizeChartKey(sourceKey);
+			let key = baseKey;
+			let suffix = 2;
+			while (usedKeys.has(key)) {
+				const suffixText = `_${suffix}`;
+				key = `${baseKey.slice(0, 64 - suffixText.length)}${suffixText}`;
+				suffix += 1;
+			}
+			usedKeys.add(key);
+			return [sourceKey, key];
+		}),
+	);
+};
+
+export const normalizeChartSpecInput = (value) => {
+	const parsed = repairableChartSpecSchema.safeParse(value);
+	if (!parsed.success) {
+		return value;
+	}
+	const raw = parsed.data;
+	const firstRow = raw.data[0];
+	const firstRowKeys = Object.keys(firstRow);
+	const sourceKeys = [...new Set(raw.data.flatMap((row) => Object.keys(row)))];
+	const explicitYKeys = Array.isArray(raw.yKeys)
+		? raw.yKeys
+		: raw.yKeys
+			? [raw.yKeys]
+			: raw.yKey
+				? [raw.yKey]
+				: raw.valueKey
+					? [raw.valueKey]
+					: [];
+	const explicitXKey = raw.xKey ?? raw.x_key ?? raw.categoryKey;
+	const inferredXKey =
+		explicitXKey ??
+		firstRowKeys.find((key) => typeof firstRow[key] === "string") ??
+		firstRowKeys[0];
+	const inferredYKeys =
+		explicitYKeys.length > 0
+			? explicitYKeys
+			: firstRowKeys
+					.filter((key) => key !== inferredXKey)
+					.filter((key) => {
+						const entry = firstRow[key];
+						return (
+							typeof entry === "number" ||
+							(typeof entry === "string" &&
+								entry.trim() !== "" &&
+								Number.isFinite(Number(entry)))
+						);
+					});
+	const keyMap = createChartKeyMap(sourceKeys);
+	const xKey = inferredXKey ? keyMap[inferredXKey] : undefined;
+	const yKeys = inferredYKeys.map(
+		(key) => keyMap[key] ?? normalizeChartKey(key),
+	);
+	const numericKeys = new Set(inferredYKeys);
+	const data = raw.data.map((row) =>
+		Object.fromEntries(
+			Object.entries(row).map(([key, entry]) => {
+				const numericValue =
+					numericKeys.has(key) &&
+					typeof entry === "string" &&
+					entry.trim() !== ""
+						? Number(entry)
+						: entry;
+				return [keyMap[key] ?? normalizeChartKey(key), numericValue];
+			}),
+		),
+	);
+	const config = Object.fromEntries(
+		Object.entries(raw.config ?? {}).map(([key, entry]) => [
+			keyMap[key] ?? normalizeChartKey(key),
+			entry,
+		]),
+	);
+
+	return {
+		chartType: normalizeChartType(raw.chartType ?? raw.type),
+		title: raw.title,
+		description: raw.description,
+		xKey,
+		yKeys,
+		data,
+		config,
+	};
+};
+
+const chartSpecSchema = z.preprocess(
+	normalizeChartSpecInput,
+	canonicalChartSpecSchema,
+);
+
+export const parseChartSpecInput = (value) => chartSpecSchema.parse(value);
 
 export const buildChartGenerationInstruction = () =>
 	[

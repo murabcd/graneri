@@ -1,5 +1,5 @@
 import type { ToolPartLike } from "@/components/ai-elements/tools/tool-registry";
-import { parseGeneratedArtifact } from "@/lib/chat-message";
+import { parseGeneratedArtifacts } from "@/lib/chat-message";
 
 export const hasCustomToolPreview = ({
 	isError,
@@ -9,5 +9,6 @@ export const hasCustomToolPreview = ({
 	toolPart: ToolPartLike;
 }) =>
 	!isError &&
-	toolPart.type === "tool-generate_image" &&
-	Boolean(parseGeneratedArtifact(toolPart.output));
+	(toolPart.type === "tool-generate_image" ||
+		toolPart.type === "tool-author_artifact") &&
+	parseGeneratedArtifacts(toolPart.output).length > 0;

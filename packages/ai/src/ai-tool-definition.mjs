@@ -26,8 +26,8 @@ export const defineAiTool = ({
 					deferLoading,
 				},
 			},
-			execute: async (input) =>
-				await withToolTiming(async () => execute(input)),
+			execute: async (input, options) =>
+				await withToolTiming(async () => execute(input, options)),
 		}),
 });
 

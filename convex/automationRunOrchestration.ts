@@ -262,6 +262,7 @@ const startAutomationAssistantRun = async (
 			}),
 			chatMode: settings.chatMode,
 			webSearchEnabled: settings.webSearchEnabled,
+			artifactAuthoringRequested: false,
 			chartGenerationRequested: false,
 			imageGenerationRequested: false,
 			appToolScope: args.automation.appsEnabled ? "selected" : "disabled",

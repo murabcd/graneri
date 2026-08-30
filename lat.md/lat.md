@@ -8,6 +8,7 @@ This graph is the canonical source for Graneri's architecture, module interfaces
 - [[calendar]] — provider-neutral calendar behavior and authorization
 - [[platform]] — renderer-safe desktop bridge and route contracts
 - [[assistant-runs]] — shared assistant execution, persistence, streaming, and queues
+- [[artifact-authoring]] — validated document, spreadsheet, presentation, PDF, and image artifacts
 - [[connected-apps]] — connected capability catalog and credential seams
 - [[convex]] — backend authorization and resource retirement
 - [[automations]] — schedules, execution, and result delivery

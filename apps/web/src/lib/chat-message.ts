@@ -1,30 +1,28 @@
+import { parseArtifactToolOutput } from "@workspace/ai/artifact-authoring-contract";
 import {
 	type ChatMessageMetadata,
 	parseChatMessageMetadata,
 } from "@workspace/ai/chat-message-metadata";
 import { isToolUIPart, type UIMessage } from "ai";
-import { z } from "zod";
 
 export { type ChatMessageMetadata, parseChatMessageMetadata };
 
 export type ChatGeneratedArtifact = {
-	filename?: string;
+	filename: string;
 	mediaType: string;
+	providerMetadata: {
+		graneri: {
+			generatedBy: "ai";
+			storageId: string;
+		};
+	};
+	sizeBytes: number;
 	url: string;
 };
 
-const generatedArtifactSchema = z.object({
-	filename: z.string().optional(),
-	mediaType: z.string().min(1),
-	url: z.string().min(1),
-});
-
-export const parseGeneratedArtifact = (
+export const parseGeneratedArtifacts = (
 	value: unknown,
-): ChatGeneratedArtifact | null => {
-	const result = generatedArtifactSchema.safeParse(value);
-	return result.success ? result.data : null;
-};
+): ChatGeneratedArtifact[] => parseArtifactToolOutput(value)?.artifacts ?? [];
 
 const extractTextParts = (message: UIMessage) =>
 	message.parts.filter(
@@ -53,11 +51,11 @@ export const extractGeneratedArtifacts = (
 			return [];
 		}
 
-		const artifact = parseGeneratedArtifact(
+		const artifacts = parseGeneratedArtifacts(
 			"output" in part ? part.output : null,
 		);
 
-		return artifact ? [artifact] : [];
+		return artifacts;
 	});
 
 export const extractReasoningParts = (message: UIMessage) =>

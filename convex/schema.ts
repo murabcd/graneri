@@ -704,6 +704,41 @@ export default defineSchema({
 	})
 		.index("by_chatId_and_messageId", ["chatId", "messageId"])
 		.index("by_storageId", ["storageId"]),
+	artifactJobs: defineTable({
+		ownerTokenIdentifier: v.string(),
+		chatId: v.id("chats"),
+		runId: v.optional(v.id("assistantRuns")),
+		idempotencyKey: v.string(),
+		requestHash: v.string(),
+		operationJson: v.string(),
+		callbackToken: v.string(),
+		status: v.union(
+			v.literal("processing"),
+			v.literal("completed"),
+			v.literal("failed"),
+		),
+		errorText: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_owner_chat_idempotency", [
+			"ownerTokenIdentifier",
+			"chatId",
+			"idempotencyKey",
+		])
+		.index("by_runId", ["runId"]),
+	artifactJobOutputs: defineTable({
+		jobId: v.id("artifactJobs"),
+		storageId: v.id("_storage"),
+		filename: v.string(),
+		mediaType: v.string(),
+		sha256: v.string(),
+		sizeBytes: v.number(),
+		claimed: v.boolean(),
+		createdAt: v.number(),
+	})
+		.index("by_jobId", ["jobId"])
+		.index("by_storageId", ["storageId"]),
 	chatBranches: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
@@ -737,10 +772,7 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		assistantMessageId: v.string(),
 		producer: assistantRunProducerValidator,
-		localCapabilitySession: v.union(
-			localCapabilitySessionValidator,
-			v.null(),
-		),
+		localCapabilitySession: v.union(localCapabilitySessionValidator, v.null()),
 		status: assistantRunStatusValidator,
 		model: v.string(),
 		reasoningEffort: v.optional(reasoningEffortValidator),

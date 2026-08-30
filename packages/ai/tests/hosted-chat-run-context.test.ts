@@ -52,6 +52,7 @@ describe("hosted chat run context", () => {
 		}
 		const context = await preparedInput.complete({
 			appsEnabled: false,
+			artifactAuthoringApi: {},
 			automationActions: {
 				createAutomation: async (automation) => {
 					automations.push(automation);
@@ -100,6 +101,8 @@ describe("hosted chat run context", () => {
 		]);
 		expect(context.appConnections).toHaveLength(0);
 		expect(context.coreToolPolicyState).toEqual({
+			artifactAuthoringEnabled: false,
+			artifactAuthoringRequested: false,
 			chartGenerationRequested: false,
 			imageGenerationEnabled: false,
 			imageGenerationRequested: false,
@@ -137,6 +140,7 @@ describe("hosted chat run context", () => {
 	it("builds client-executed tools when local folders belong to the desktop", async () => {
 		const context = await buildHostedChatRunContext({
 			appsEnabled: false,
+			artifactAuthoringApi: {},
 			chatAttachmentsApi: {},
 			chatId: "chat-1",
 			convexClient: { query: async () => null, mutation: async () => null },
@@ -170,6 +174,7 @@ describe("hosted chat run context", () => {
 	it("keeps every connected app searchable while mentions only add guidance", async () => {
 		const context = await buildHostedChatRunContext({
 			appsEnabled: true,
+			artifactAuthoringApi: {},
 			chatAttachmentsApi: {},
 			chatId: "chat-1",
 			compactionSummary: null,

@@ -25,6 +25,7 @@ export const assistantRunJobValidator = v.object({
 	instructions: v.string(),
 	chatMode: chatModeValidator,
 	webSearchEnabled: v.boolean(),
+	artifactAuthoringRequested: v.boolean(),
 	chartGenerationRequested: v.boolean(),
 	imageGenerationRequested: v.boolean(),
 	appToolScope: appToolScopeValidator,

@@ -42,6 +42,7 @@ export const createAssistantRunGeneratedImageUploader =
 						storageId,
 					},
 				},
+				sizeBytes: imageBytes.byteLength,
 				url,
 			};
 		} catch (error) {

@@ -269,13 +269,14 @@ generation-bound failure handling and removes its component journal. Terminal
 run cleanup and chat retirement must delete the job row and tool execution
 receipts; access tokens and connected-app credentials must never enter them.
 
-## Generated image artifacts
+## Generated artifacts
 
-Convex-owned turns save generated images directly to Convex File Storage.
+Convex-owned turns save immutable generated and edited artifacts directly to Convex File Storage.
 
-Convex-owned turns save generated-image artifacts directly through Convex File
-Storage, so those files do not depend on the lifetime of the hosted HTTP
-request.
+Image generation and the validated DOCX, PDF, XLSX, and PPTX authoring path
+return the same storage-backed artifact result shape, so those files do not
+depend on the lifetime of the hosted HTTP request. [[artifact-authoring]] owns
+the durable worker, validation, editing, and multi-output boundary.
 
 ## Convex steering
 

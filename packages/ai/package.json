@@ -4,10 +4,11 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "check:artifact-schema": "node scripts/generate-artifact-worker-schema.mjs --check",
     "lint": "biome lint src tests package.json tsconfig.json",
     "lint:fix": "biome lint --write src tests package.json tsconfig.json",
-    "check": "biome check src tests package.json tsconfig.json",
-    "check:fix": "biome check --write src tests package.json tsconfig.json",
+    "check": "bun run check:artifact-schema && biome check src tests scripts package.json tsconfig.json",
+    "check:fix": "biome check --write src tests scripts package.json tsconfig.json",
     "format": "biome format --write src tests package.json tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -30,6 +31,14 @@
     "vitest": "^4.1.9"
   },
   "exports": {
+    "./artifact-authoring-contract": {
+      "types": "./src/artifact-authoring-contract.d.mts",
+      "import": "./src/artifact-authoring-contract.mjs"
+    },
+    "./artifact-authoring-tool": {
+      "types": "./src/artifact-authoring-tool.d.mts",
+      "import": "./src/artifact-authoring-tool.mjs"
+    },
     "./automation-schedule": {
       "types": "./src/automation-schedule.d.mts",
       "import": "./src/automation-schedule.mjs"

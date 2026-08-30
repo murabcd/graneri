@@ -17,6 +17,7 @@ import {
 
 export const buildHostedChatRunContext = async ({
 	appsEnabled = false,
+	artifactAuthoringApi,
 	chatMode = CHAT_MODE.DEFAULT,
 	automationActions,
 	chatAttachmentsApi,
@@ -93,10 +94,13 @@ export const buildHostedChatRunContext = async ({
 	});
 
 	const coreToolPolicy = buildCoreChatToolPolicy({
+		artifactAuthoringApi,
 		chatAttachmentsApi,
+		chatId,
 		convexClient,
 		message,
 		webSearchEnabled,
+		workspaceId,
 	});
 	const automationContext = buildChatAutomationContext({
 		appConnections: selectedAppConnections,

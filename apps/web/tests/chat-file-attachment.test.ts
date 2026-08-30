@@ -284,4 +284,38 @@ describe("chat file attachments", () => {
 			).toBeTruthy();
 		});
 	});
+
+	it("downloads only the image selected in the preview", async () => {
+		let downloadRequest: { filename: string; url: string } | undefined;
+		const downloadFile = async (request: { filename: string; url: string }) => {
+			downloadRequest = request;
+		};
+
+		render(
+			createElement(ChatMessageFileAttachments, {
+				align: "start",
+				downloadFile,
+				files: [
+					image,
+					{
+						...image,
+						filename: "dashboard.png",
+						url: "data:image/png;base64,dashboard",
+					},
+				],
+			}),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "workspace.png" }));
+		fireEvent.click(
+			screen.getByRole("button", { name: "Download workspace.png" }),
+		);
+
+		await waitFor(() => {
+			expect(downloadRequest).toEqual({
+				filename: "workspace.png",
+				url: image.url,
+			});
+		});
+	});
 });

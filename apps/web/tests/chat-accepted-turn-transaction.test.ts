@@ -100,6 +100,8 @@ const createAcceptanceArgs = ({
 		preparedRun: {
 			chatMessages: [],
 			coreToolPolicyState: {
+				artifactAuthoringEnabled: false,
+				artifactAuthoringRequested: false,
 				chartGenerationRequested: false,
 				imageGenerationEnabled: false,
 				imageGenerationRequested: false,

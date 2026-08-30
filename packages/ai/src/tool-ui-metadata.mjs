@@ -1,6 +1,14 @@
 import { LOCAL_FOLDER_TOOL_UI_METADATA } from "./local-folder-tool-definitions.mjs";
 
 export const toolUiMetadata = {
+	author_artifact: {
+		groupKey: "artifact",
+		icon: "file-text",
+		running: "Authoring file",
+		complete: "Authored file",
+		error: "File authoring failed",
+		subtitleKeys: ["kind", "filename"],
+	},
 	create_automation: {
 		groupKey: "automation",
 		icon: "calendar",

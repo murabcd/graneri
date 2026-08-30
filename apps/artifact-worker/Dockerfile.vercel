@@ -1,0 +1,31 @@
+FROM python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+	PYTHONUNBUFFERED=1 \
+	SAL_USE_VCLPLUGIN=svp
+
+RUN sed -i \
+		-e 's|URIs: http://deb.debian.org/debian$|URIs: https://snapshot.debian.org/archive/debian/20260829T000000Z|' \
+		-e 's|URIs: http://deb.debian.org/debian-security$|URIs: https://snapshot.debian.org/archive/debian-security/20260829T000000Z|' \
+		/etc/apt/sources.list.d/debian.sources \
+	&& apt-get -o Acquire::Check-Valid-Until=false update \
+	&& apt-get install --no-install-recommends --yes \
+		fonts-dejavu-core=2.37-6 \
+		fonts-liberation2=2.1.5-1 \
+		libreoffice-calc=4:7.4.7-1+deb12u14 \
+		libreoffice-impress=4:7.4.7-1+deb12u14 \
+		libreoffice-writer=4:7.4.7-1+deb12u14 \
+		poppler-utils=22.12.0-2+deb12u3 \
+	&& useradd --create-home --uid 10001 artifact \
+	&& rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --requirement requirements.txt
+
+COPY src ./src
+
+USER artifact
+
+CMD ["sh", "-c", "uvicorn src.app:app --host 0.0.0.0 --port ${PORT:-8080}"]

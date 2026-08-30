@@ -17,11 +17,19 @@ const attachmentArtifactSchema = z.object({
 const filePartSchema = attachmentArtifactSchema.extend({
 	type: z.literal("file"),
 });
+const authoredArtifactsOutputSchema = z.object({
+	artifacts: z.array(attachmentArtifactSchema),
+});
 const attachmentBearingToolPartSchema = z.discriminatedUnion("type", [
 	z.object({
-		output: attachmentArtifactSchema,
+		output: authoredArtifactsOutputSchema,
 		state: z.literal("output-available"),
 		type: z.literal("tool-generate_image"),
+	}),
+	z.object({
+		output: authoredArtifactsOutputSchema,
+		state: z.literal("output-available"),
+		type: z.literal("tool-author_artifact"),
 	}),
 	z.object({
 		output: z.object({ file: filePartSchema }),
@@ -82,7 +90,10 @@ const getStorageIdsFromToolPart = (part: unknown) => {
 
 	switch (result.data.type) {
 		case "tool-generate_image":
-			return [getStorageIdFromAttachmentArtifact(result.data.output)];
+		case "tool-author_artifact":
+			return result.data.output.artifacts.map((artifact) =>
+				getStorageIdFromAttachmentArtifact(artifact),
+			);
 		case "tool-read_local_file":
 			return [getStorageIdFromFilePart(result.data.output.file)];
 		case "tool-search_local_files":
@@ -149,6 +160,15 @@ const releaseReference = async (
 		if (metadata) {
 			await ctx.storage.delete(reference.storageId);
 		}
+		const artifactOutput = await ctx.db
+			.query("artifactJobOutputs")
+			.withIndex("by_storageId", (query) =>
+				query.eq("storageId", reference.storageId),
+			)
+			.unique();
+		if (artifactOutput) {
+			await ctx.db.delete(artifactOutput._id);
+		}
 	}
 };
 
@@ -187,6 +207,20 @@ export const syncChatMessageAttachmentReferences = async (
 			messageId: args.messageId,
 			storageId,
 		});
+		const artifactOutput = await ctx.db
+			.query("artifactJobOutputs")
+			.withIndex("by_storageId", (query) => query.eq("storageId", storageId))
+			.unique();
+		if (artifactOutput && !artifactOutput.claimed) {
+			const artifactJob = await ctx.db.get(artifactOutput.jobId);
+			if (!artifactJob || artifactJob.chatId !== args.chatId) {
+				throw new ConvexError({
+					code: "INVALID_ARTIFACT_OUTPUT_OWNER",
+					message: "Authored artifact does not belong to this chat.",
+				});
+			}
+			await ctx.db.patch(artifactOutput._id, { claimed: true });
+		}
 	}
 
 	for (const reference of existingReferences) {

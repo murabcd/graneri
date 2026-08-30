@@ -382,6 +382,7 @@ export const executeHostedChatTurn = async ({
 		}
 		assistantRun = await preparedAssistantRunInput.complete({
 			appsEnabled,
+			artifactAuthoringApi: api.artifactAuthoring,
 			chatMode,
 			automationActions: createHostedChatAutomationActions({
 				chatId,

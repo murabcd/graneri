@@ -1,5 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
+import { handleArtifactWorkerCallback } from "./artifactAuthoringHttp";
 import { authComponent, createAuth } from "./auth";
 import { handleDictationTranscriptionUploadRequest } from "./dictationHttp";
 import { handleJiraWebhookRequest } from "./jiraWebhook";
@@ -13,6 +14,14 @@ import { handleZoomOAuthCallbackRequest } from "./zoomOAuth";
 const http = httpRouter();
 
 authComponent.registerRoutes(http, createAuth, { cors: true });
+
+http.route({
+	path: "/api/artifact-worker/callback",
+	method: "POST",
+	handler: httpAction(
+		async (ctx, request) => await handleArtifactWorkerCallback(ctx, request),
+	),
+});
 
 http.route({
 	path: "/api/dictation-transcription",

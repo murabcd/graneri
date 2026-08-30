@@ -140,14 +140,25 @@ describe("ChatSummarySheet", () => {
 				parts: [
 					{
 						type: "dynamic-tool",
-						toolCallId: "generate-pdf-1",
-						toolName: "generate_pdf",
+						toolCallId: "author-artifact-1",
+						toolName: "author_artifact",
 						state: "output-available",
 						input: { title: "Generated report" },
 						output: {
-							filename: "generated-report.pdf",
-							mediaType: "application/pdf",
-							url: "https://files.example/generated-report.pdf",
+							artifacts: [
+								{
+									filename: "generated-report.pdf",
+									mediaType: "application/pdf",
+									providerMetadata: {
+										graneri: {
+											generatedBy: "ai",
+											storageId: "storage-generated-report",
+										},
+									},
+									sizeBytes: 1024,
+									url: "https://files.example/generated-report.pdf",
+								},
+							],
 						},
 					},
 				],

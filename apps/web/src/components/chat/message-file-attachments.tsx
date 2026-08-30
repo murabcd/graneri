@@ -211,7 +211,15 @@ export function ChatMessageFileAttachments({
 			</div>
 			<AttachmentImagePreviewDialog
 				image={previewImage}
+				isDownloading={
+					previewImage ? downloadingFileUrls.has(previewImage.url) : false
+				}
 				onClose={() => setPreviewImage(null)}
+				onDownload={
+					previewImage && isDownloadableUrl(previewImage.url)
+						? () => handleDownload(previewImage)
+						: undefined
+				}
 			/>
 		</>
 	);

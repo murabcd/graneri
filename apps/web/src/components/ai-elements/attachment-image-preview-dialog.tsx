@@ -1,3 +1,4 @@
+import { Button } from "@workspace/ui/components/button";
 import {
 	Dialog,
 	DialogClose,
@@ -5,7 +6,7 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@workspace/ui/components/dialog";
-import { X } from "lucide-react";
+import { Download, LoaderCircle, X } from "lucide-react";
 import type { CSSProperties } from "react";
 
 export type AttachmentImagePreview = {
@@ -15,10 +16,14 @@ export type AttachmentImagePreview = {
 
 export function AttachmentImagePreviewDialog({
 	image,
+	isDownloading = false,
 	onClose,
+	onDownload,
 }: {
 	image: AttachmentImagePreview | null;
+	isDownloading?: boolean;
 	onClose: () => void;
+	onDownload?: () => void;
 }) {
 	return (
 		<Dialog
@@ -57,10 +62,36 @@ export function AttachmentImagePreviewDialog({
 						className="max-h-full max-w-full object-contain shadow-2xl"
 					/>
 				) : null}
-				<DialogClose className="absolute top-4 right-4 cursor-pointer rounded-full bg-background/90 p-2 text-foreground shadow-lg transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-					<X className="size-5" />
-					<span className="sr-only">Close</span>
-				</DialogClose>
+				<div className="absolute top-4 right-4 flex items-center gap-2">
+					{onDownload && image ? (
+						<Button
+							aria-label={
+								isDownloading
+									? `Downloading ${image.filename || "image"}`
+									: `Download ${image.filename || "image"}`
+							}
+							className="rounded-full bg-background/90 text-foreground shadow-lg hover:bg-background disabled:opacity-100"
+							disabled={isDownloading}
+							onClick={onDownload}
+							size="icon"
+							type="button"
+							variant="ghost"
+						>
+							{isDownloading ? (
+								<LoaderCircle
+									aria-hidden="true"
+									className="size-5 animate-spin motion-reduce:animate-none"
+								/>
+							) : (
+								<Download aria-hidden="true" className="size-5" />
+							)}
+						</Button>
+					) : null}
+					<DialogClose className="cursor-pointer rounded-full bg-background/90 p-2 text-foreground shadow-lg transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+						<X className="size-5" />
+						<span className="sr-only">Close</span>
+					</DialogClose>
+				</div>
 			</DialogContent>
 		</Dialog>
 	);

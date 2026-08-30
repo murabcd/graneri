@@ -14,6 +14,8 @@ import type * as aiRateLimits from "../aiRateLimits.js";
 import type * as appConnectionActions from "../appConnectionActions.js";
 import type * as appConnectionProviders from "../appConnectionProviders.js";
 import type * as appConnections from "../appConnections.js";
+import type * as artifactAuthoring from "../artifactAuthoring.js";
+import type * as artifactAuthoringHttp from "../artifactAuthoringHttp.js";
 import type * as assistantQueuedMessageStateMachine from "../assistantQueuedMessageStateMachine.js";
 import type * as assistantQueuedMessages from "../assistantQueuedMessages.js";
 import type * as assistantRunActions from "../assistantRunActions.js";
@@ -150,6 +152,8 @@ declare const fullApi: ApiFromModules<{
   appConnectionActions: typeof appConnectionActions;
   appConnectionProviders: typeof appConnectionProviders;
   appConnections: typeof appConnections;
+  artifactAuthoring: typeof artifactAuthoring;
+  artifactAuthoringHttp: typeof artifactAuthoringHttp;
   assistantQueuedMessageStateMachine: typeof assistantQueuedMessageStateMachine;
   assistantQueuedMessages: typeof assistantQueuedMessages;
   assistantRunActions: typeof assistantRunActions;
