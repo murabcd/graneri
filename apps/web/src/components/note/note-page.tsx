@@ -65,6 +65,7 @@ import {
 import { createTextMatchRanges } from "@/lib/text-search-ranges";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import { NoteAttachments } from "./note-attachments";
 import { readDesktopCommentsPanelPinnedState } from "./note-comments-panel-state";
 import {
 	NoteCommentsSheet,
@@ -1199,6 +1200,9 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 											<ShimmerText>Thinking</ShimmerText>
 										</div>
 									)
+								) : null}
+								{composerNoteContext.noteId ? (
+									<NoteAttachments noteId={composerNoteContext.noteId} />
 								) : null}
 							</div>
 						</div>

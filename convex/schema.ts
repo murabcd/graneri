@@ -518,6 +518,16 @@ export default defineSchema({
 	})
 		.index("by_noteId_and_revisionId", ["noteId", "revisionId"])
 		.index("by_noteImageId", ["noteImageId"]),
+	noteAttachmentReferences: defineTable({
+		noteId: v.id("notes"),
+		storageId: v.id("_storage"),
+		filename: v.string(),
+		mediaType: v.string(),
+		sizeBytes: v.number(),
+		createdAt: v.number(),
+	})
+		.index("by_noteId", ["noteId"])
+		.index("by_storageId", ["storageId"]),
 	noteCommentThreads: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
@@ -701,6 +711,9 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		messageId: v.string(),
 		storageId: v.id("_storage"),
+		filename: v.string(),
+		mediaType: v.string(),
+		sizeBytes: v.number(),
 	})
 		.index("by_chatId_and_messageId", ["chatId", "messageId"])
 		.index("by_storageId", ["storageId"]),

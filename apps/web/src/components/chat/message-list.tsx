@@ -20,6 +20,7 @@ import {
 	Scissors,
 } from "lucide-react";
 import * as React from "react";
+import { FileAttachmentCards } from "@/components/ai-elements/file-attachment-cards";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 import {
 	Source,
@@ -31,7 +32,6 @@ import { ToolGroup } from "@/components/ai-elements/tools/tool-group";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
-import { ChatMessageFileAttachments } from "@/components/chat/message-file-attachments";
 import {
 	ASSISTANT_CHAT_CONTENT_CLASS,
 	CHAT_MESSAGE_MAX_WIDTH_CLASS,
@@ -382,7 +382,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 			>
 				{selectedRecipe ? <ChatRecipeReceipt recipe={selectedRecipe} /> : null}
 				{message.role === "user" ? (
-					<ChatMessageFileAttachments align="end" files={fileParts} />
+					<FileAttachmentCards align="end" files={fileParts} />
 				) : null}
 				{assistantTurnWorkParts ? (
 					<ToolGroup
@@ -404,7 +404,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 					textContainerClassName={textContainerClassName}
 				/>
 				{message.role === "assistant" ? (
-					<ChatMessageFileAttachments files={fileParts} />
+					<FileAttachmentCards files={fileParts} />
 				) : null}
 				{isInterruptedAssistantMessage ? <InterruptedMessageStatus /> : null}
 				{message.role === "assistant" && !isEmpty

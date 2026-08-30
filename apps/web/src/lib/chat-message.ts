@@ -7,6 +7,7 @@ import {
 	parseChatMessageMetadata,
 } from "@workspace/ai/chat-message-metadata";
 import { type FileUIPart, isToolUIPart, type UIMessage } from "ai";
+import { getChatFileIdentity } from "@/lib/chat-file-attachment";
 
 export { type ChatMessageMetadata, parseChatMessageMetadata };
 
@@ -67,14 +68,15 @@ export const extractMessageFileParts = (message: UIMessage): FileUIPart[] => {
 			? extractGeneratedArtifacts(message).map(toFilePart)
 			: []),
 	];
-	const seenUrls = new Set<string>();
+	const seenIdentities = new Set<string>();
 
 	return files.filter((file) => {
-		if (seenUrls.has(file.url)) {
+		const identity = getChatFileIdentity(file);
+		if (seenIdentities.has(identity)) {
 			return false;
 		}
 
-		seenUrls.add(file.url);
+		seenIdentities.add(identity);
 		return true;
 	});
 };

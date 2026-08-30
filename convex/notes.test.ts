@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -130,6 +131,82 @@ test("notes.save updates content without dropping existing metadata", async () =
 		isArchived: false,
 	});
 	expect(note?.updatedAt).toBe(Date.now());
+});
+
+test("creating a note from an assistant response preserves its stored attachments", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(
+			new Blob(["document"], {
+				type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			}),
+		),
+	);
+	const chatId = "chat-note-attachment";
+	const messageId = "assistant-note-attachment";
+	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
+		settings: DEFAULT_CHAT_SETTINGS,
+		workspaceId,
+		chatId,
+		preview: "Created a document",
+		message: {
+			id: messageId,
+			role: "assistant",
+			partsJson: JSON.stringify([
+				{
+					type: "file",
+					filename: "report.docx",
+					mediaType:
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					providerMetadata: {
+						graneri: { sizeBytes: 8, storageId },
+					},
+					url: "https://files.example.test/report.docx?signature=chat",
+				},
+			]),
+			text: "Created a document",
+			createdAt: 2_000,
+		},
+	});
+
+	const noteId = await asOwner.mutation(api.noteFromChat.create, {
+		workspaceId,
+		chatId,
+		messageId,
+		title: "Created document",
+		content: createTextDocument("Created a document"),
+		searchableText: "Created a document",
+	});
+	const attachments = await asOwner.query(api.notes.listAttachments, {
+		workspaceId,
+		id: noteId,
+	});
+	expect(attachments).toHaveLength(1);
+	expect(attachments[0]).toMatchObject({
+		filename: "report.docx",
+		mediaType:
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		sizeBytes: 8,
+		storageId,
+	});
+	expect(attachments[0]?.url).toContain("/api/storage/");
+
+	await asOwner.mutation(api.chats.remove, { workspaceId, chatId });
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+	expect(await t.run((ctx) => ctx.db.system.get(storageId))).not.toBeNull();
+
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: noteId });
+	expect(await t.run((ctx) => ctx.db.system.get(storageId))).toBeNull();
+	expect(
+		await t.run((ctx) =>
+			ctx.db
+				.query("noteAttachmentReferences")
+				.withIndex("by_storageId", (query) => query.eq("storageId", storageId))
+				.collect(),
+		),
+	).toEqual([]);
 });
 
 test("notes.save rejects non-canonical content without changing note state", async () => {

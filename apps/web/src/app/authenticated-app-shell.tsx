@@ -397,7 +397,7 @@ const useAppShellState = ({
 	const createNoteFromCalendarEvent = useMutation(
 		api.notes.createFromCalendarEvent,
 	);
-	const saveNote = useMutation(api.notes.save);
+	const createNoteFromChatMessage = useMutation(api.noteFromChat.create);
 	const createWorkspace = useMutation(api.workspaces.create);
 	const chats = useQuery(
 		api.chats.list,
@@ -958,7 +958,17 @@ const useAppShellState = ({
 	}, [navigateNote, setCurrentNoteEditorActions]);
 
 	const handleCreateNoteFromChatResponse = React.useCallback(
-		async (title: string, content: string) => {
+		async ({
+			chatId,
+			content,
+			messageId,
+			title,
+		}: {
+			chatId: string;
+			content: string;
+			messageId: string;
+			title: string;
+		}) => {
 			if (!resolvedActiveWorkspaceId || creatingNoteRef.current) {
 				return undefined;
 			}
@@ -969,8 +979,10 @@ const useAppShellState = ({
 			const nextContent = serializeMarkdownToNoteContent(searchableText);
 
 			try {
-				const noteId = await saveNote({
+				const noteId = await createNoteFromChatMessage({
 					workspaceId: resolvedActiveWorkspaceId,
+					chatId,
+					messageId,
 					title: nextTitle,
 					content: nextContent,
 					searchableText,
@@ -992,7 +1004,7 @@ const useAppShellState = ({
 				creatingNoteRef.current = false;
 			}
 		},
-		[openNote, resolvedActiveWorkspaceId, saveNote],
+		[createNoteFromChatMessage, openNote, resolvedActiveWorkspaceId],
 	);
 
 	const handleAutoStartNoteCaptureHandled = React.useCallback(() => {

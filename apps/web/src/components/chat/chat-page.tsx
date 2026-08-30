@@ -100,10 +100,12 @@ export type ChatPageProps = {
 	onChatRemoved: (chatId: string) => void;
 	isDesktopMac: boolean;
 	onOpenConnectionsSettings: () => void;
-	onCreateNoteFromResponse?: (
-		title: string,
-		content: string,
-	) => Promise<"created" | undefined> | "created" | undefined;
+	onCreateNoteFromResponse?: (request: {
+		chatId: string;
+		content: string;
+		messageId: string;
+		title: string;
+	}) => Promise<"created" | undefined> | "created" | undefined;
 	automations?: AutomationListItem[];
 	onAddAutomation?: (chatId: string) => void;
 };
@@ -877,7 +879,7 @@ export function ChatPage({
 		{ open: false, query: "", index: 0 },
 	);
 	const handleCreateNoteFromResponse = React.useCallback(
-		(content: string) => {
+		(message: UIMessage) => {
 			if (!onCreateNoteFromResponse) {
 				return undefined;
 			}
@@ -887,9 +889,15 @@ export function ChatPage({
 				getLatestUserMessageText(controller.messages) ||
 				"New note";
 
-			return onCreateNoteFromResponse(title, content);
+			return onCreateNoteFromResponse({
+				chatId,
+				content: getChatText(message),
+				messageId: message.id,
+				title,
+			});
 		},
 		[
+			chatId,
 			controller.currentChatTitle,
 			controller.messages,
 			onCreateNoteFromResponse,

@@ -18,11 +18,16 @@ import {
 	getAuthorName,
 	requireOwnedWorkspace,
 } from "./domain";
+import {
+	listNoteAttachments,
+	removeNoteAttachments,
+} from "./noteAttachmentReferences";
 import { parseNoteDocument, syncNoteDocumentState } from "./noteDocument";
 import {
 	removeAllNoteImages,
 	removeNoteImageReferences,
 } from "./noteImageReferences";
+import { insertNote } from "./noteRecords";
 import { requireOwnedProject } from "./projects";
 
 const noteVisibilityValidator = v.union(
@@ -64,6 +69,14 @@ const noteChatContextValidator = v.object({
 	id: v.id("notes"),
 	title: v.string(),
 	searchableText: v.string(),
+});
+
+const noteAttachmentValidator = v.object({
+	filename: v.string(),
+	mediaType: v.string(),
+	sizeBytes: v.number(),
+	storageId: v.id("_storage"),
+	url: v.string(),
 });
 
 const removeAllNotesResultValidator = v.object({
@@ -321,6 +334,7 @@ const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
 		revisionId: null,
 	});
 	await removeAllNoteImages(ctx, note);
+	await removeNoteAttachments(ctx, note._id);
 	await removeCalendarNoteRelationships(ctx, note);
 	await ctx.db.delete(note._id);
 };
@@ -453,6 +467,22 @@ export const get = query({
 		}
 
 		return normalizeNote(note);
+	},
+});
+
+export const listAttachments = query({
+	args: {
+		id: v.id("notes"),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.array(noteAttachmentValidator),
+	handler: async (ctx, args) => {
+		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
+		if (note.isArchived) {
+			return [];
+		}
+
+		return await listNoteAttachments(ctx, note._id);
 	},
 });
 
@@ -685,27 +715,22 @@ export const create = mutation({
 			await requireOwnedProject(ctx, args.projectId, args.workspaceId);
 		}
 		const now = Date.now();
+		const content = parseNoteDocument(
+			JSON.stringify({
+				type: "doc",
+				content: [{ type: "paragraph" }],
+			}),
+		);
 
-		return await ctx.db.insert("notes", {
+		return await insertNote(ctx, {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
 			projectId: args.projectId ?? undefined,
 			authorName: getAuthorName(identity),
-			isStarred: false,
-			starredSortOrder: now,
 			title: "",
-			content: JSON.stringify({
-				type: "doc",
-				content: [{ type: "paragraph" }],
-			}),
+			document: content,
 			searchableText: "",
-			visibility: "private",
-			shareId: undefined,
-			sharedAt: undefined,
-			isArchived: false,
-			archivedAt: undefined,
-			createdAt: now,
-			updatedAt: now,
+			now,
 		});
 	},
 });
@@ -743,23 +768,14 @@ export const createFromCalendarEvent = mutation({
 		}
 		const document = parseNoteDocument(args.content);
 
-		const noteId = await ctx.db.insert("notes", {
+		const noteId = await insertNote(ctx, {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
-			projectId: undefined,
 			authorName,
-			isStarred: false,
-			starredSortOrder: now,
 			title: calendarEvent.title.trim(),
-			content: document.content,
+			document,
 			searchableText: args.searchableText,
-			visibility: "private",
-			shareId: undefined,
-			sharedAt: undefined,
-			isArchived: false,
-			archivedAt: undefined,
-			createdAt: now,
-			updatedAt: now,
+			now,
 		});
 		const calendarEventSnapshot = await createCalendarNoteRelationships({
 			ctx,
@@ -770,12 +786,6 @@ export const createFromCalendarEvent = mutation({
 			workspaceId: args.workspaceId,
 		});
 		await ctx.db.patch(noteId, { calendarEvent: calendarEventSnapshot });
-		const note = await ctx.db.get(noteId);
-		if (!note) {
-			throw new Error("Inserted note is unavailable.");
-		}
-		await syncNoteDocumentState({ ctx, note, revisionId: null, document });
-
 		return noteId;
 	},
 });
@@ -851,32 +861,16 @@ export const save = mutation({
 			return args.id;
 		}
 
-		const noteId = await ctx.db.insert("notes", {
+		return await insertNote(ctx, {
 			ownerTokenIdentifier,
 			workspaceId: args.workspaceId,
-			projectId: undefined,
 			authorName,
-			isStarred: false,
-			starredSortOrder: now,
 			title: args.title,
-			content: document.content,
+			document,
 			searchableText: args.searchableText,
 			templateSlug: args.templateSlug ?? undefined,
-			visibility: "private",
-			shareId: undefined,
-			sharedAt: undefined,
-			isArchived: false,
-			archivedAt: undefined,
-			createdAt: now,
-			updatedAt: now,
+			now,
 		});
-		const note = await ctx.db.get(noteId);
-		if (!note) {
-			throw new Error("Inserted note is unavailable.");
-		}
-		await syncNoteDocumentState({ ctx, note, revisionId: null, document });
-
-		return noteId;
 	},
 });
 

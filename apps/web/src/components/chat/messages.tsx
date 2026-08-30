@@ -42,7 +42,7 @@ type ChatMessagesActionProps = {
 	onDeleteMessage?: (messageId: string) => void;
 	onForkMessage?: (messageId: string) => void;
 	onPlusAction?: (
-		content: string,
+		message: UIMessage,
 	) => Promise<"created" | undefined> | "created" | undefined;
 	onRegenerateMessage?: (messageId: string) => void;
 	setMessageIdPendingDelete: React.Dispatch<
@@ -67,7 +67,7 @@ export type ChatMessagesProps = {
 	onDeleteMessage?: (messageId: string) => void;
 	onForkMessage?: (messageId: string) => void;
 	onPlusAction?: (
-		content: string,
+		message: UIMessage,
 	) => Promise<"created" | undefined> | "created" | undefined;
 	onRegenerateMessage?: (messageId: string) => void;
 	onOpenMention?: (noteId: string) => void;
@@ -120,7 +120,7 @@ export default function ChatMessages({
 		}: ChatMessageActionContext) => (
 			<AssistantMessageActions
 				isStreaming={isStreamingAssistantMessage}
-				messageId={message.id}
+				message={message}
 				messageText={messageText}
 				onPlusAction={onPlusAction}
 				onForkMessage={onForkMessage}
@@ -175,7 +175,7 @@ export default function ChatMessages({
 
 function AssistantMessageActions({
 	isStreaming,
-	messageId,
+	message,
 	messageText,
 	onPlusAction,
 	onForkMessage,
@@ -183,7 +183,7 @@ function AssistantMessageActions({
 	timestamp,
 }: {
 	isStreaming: boolean;
-	messageId: string;
+	message: UIMessage;
 	messageText: string;
 	onPlusAction?: ChatMessagesActionProps["onPlusAction"];
 	onForkMessage?: (messageId: string) => void;
@@ -206,7 +206,7 @@ function AssistantMessageActions({
 						className="size-7 text-muted-foreground hover:text-foreground"
 						aria-label="Regenerate"
 						disabled={!onRegenerateMessage}
-						onClick={() => onRegenerateMessage?.(messageId)}
+						onClick={() => onRegenerateMessage?.(message.id)}
 					>
 						<RotateCcw className="size-3.5" />
 					</Button>
@@ -222,7 +222,7 @@ function AssistantMessageActions({
 						className="size-7 text-muted-foreground hover:text-foreground"
 						aria-label="Fork chat"
 						disabled={!onForkMessage || isStreaming}
-						onClick={() => onForkMessage?.(messageId)}
+						onClick={() => onForkMessage?.(message.id)}
 					>
 						<GitBranch className="size-3.5" />
 					</Button>
@@ -230,7 +230,11 @@ function AssistantMessageActions({
 				<TooltipContent>Fork chat</TooltipContent>
 			</Tooltip>
 			<CopyMessageButton text={messageText} />
-			<CreateNoteButton messageText={messageText} onPlusAction={onPlusAction} />
+			<CreateNoteButton
+				isStreaming={isStreaming}
+				message={message}
+				onPlusAction={onPlusAction}
+			/>
 			{timestamp ? (
 				<span className="px-1 text-xs text-muted-foreground/70">
 					{timestamp}
@@ -363,10 +367,12 @@ function CopyMessageButton({ text }: { text: string }) {
 }
 
 function CreateNoteButton({
-	messageText,
+	isStreaming,
+	message,
 	onPlusAction,
 }: {
-	messageText: string;
+	isStreaming: boolean;
+	message: UIMessage;
 	onPlusAction?: ChatMessagesActionProps["onPlusAction"];
 }) {
 	return (
@@ -378,12 +384,12 @@ function CreateNoteButton({
 					size="icon-sm"
 					className="size-7 text-muted-foreground hover:text-foreground"
 					aria-label="Create note"
-					disabled={!onPlusAction}
+					disabled={!onPlusAction || isStreaming}
 					onClick={() => {
 						if (!onPlusAction) {
 							return;
 						}
-						void Promise.resolve(onPlusAction(messageText))
+						void Promise.resolve(onPlusAction(message))
 							.then((result) => {
 								if (result === "created") {
 									toast.success("Note created");

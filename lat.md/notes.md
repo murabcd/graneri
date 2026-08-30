@@ -69,7 +69,7 @@ whole note creation instead of persisting a partial relationship snapshot.
 
 ## File storage and document saves
 
-Convex File Storage owns note image bytes, and every save validates one canonical document before synchronizing references and revisions.
+Convex File Storage owns note image and attachment bytes, and every save validates one canonical document before synchronizing references and revisions.
 
 Convex File Storage is the sole owner of note image bytes. `noteImages` binds
 each blob to its server-derived owner, workspace, and note; current documents
@@ -82,6 +82,14 @@ ids and synchronizes the current reference set, revision
 creation and pruning synchronize revision references, and permanent note
 retirement removes all remaining bytes. An uploaded image that never reaches a
 saved document is removed by its scheduled one-hour pending-upload cleanup.
+
+Creating a note from an assistant response is one `noteFromChat.create`
+transaction. It validates the owned stored assistant message, creates the
+canonical note document, and copies that message's `chatAttachmentReferences`
+into `noteAttachmentReferences`. Both records point to the same immutable
+Convex `storageId`; signed URLs are derived only when a client lists the note
+attachments. Removing either the chat or note releases only its reference, and
+the shared blob is deleted after the final chat or note reference retires.
 
 ## Transcript-driven generation
 

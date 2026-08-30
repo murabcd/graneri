@@ -8,6 +8,7 @@ import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachmen
 import { FileAttachmentGlyph } from "@/components/ai-elements/file-attachment-type-icon";
 import {
 	formatFileSize,
+	getChatFileIdentity,
 	getChatFileSizeBytes,
 } from "@/lib/chat-file-attachment";
 import { downloadUrlAsFile, isDownloadableUrl } from "@/lib/download-file";
@@ -94,7 +95,7 @@ function UserDocumentAttachmentPill({ file }: { file: FileUIPart }) {
 	);
 }
 
-export function ChatMessageFileAttachments({
+export function FileAttachmentCards({
 	align = "start",
 	downloadFile = downloadUrlAsFile,
 	files,
@@ -125,7 +126,7 @@ export function ChatMessageFileAttachments({
 			} catch (error) {
 				logError({
 					error,
-					event: "chat.attachment_download_failed",
+					event: "file_attachment.download_failed",
 				});
 				toast.error("Failed to download file.");
 			} finally {
@@ -168,7 +169,7 @@ export function ChatMessageFileAttachments({
 					>
 						{imageFiles.map((file) => (
 							<button
-								key={file.url}
+								key={getChatFileIdentity(file)}
 								type="button"
 								className={cn(
 									"cursor-zoom-in overflow-hidden border border-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -192,14 +193,17 @@ export function ChatMessageFileAttachments({
 					isUserMessage ? (
 						<div className="flex max-w-full flex-wrap justify-end gap-2 self-end">
 							{documentFiles.map((file) => (
-								<UserDocumentAttachmentPill key={file.url} file={file} />
+								<UserDocumentAttachmentPill
+									key={getChatFileIdentity(file)}
+									file={file}
+								/>
 							))}
 						</div>
 					) : (
 						<div className="flex max-w-full flex-col gap-2">
 							{documentFiles.map((file) => (
 								<DocumentAttachmentCard
-									key={file.url}
+									key={getChatFileIdentity(file)}
 									file={file}
 									isDownloading={downloadingFileUrls.has(file.url)}
 									onDownload={handleDownload}

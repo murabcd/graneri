@@ -112,10 +112,12 @@ export type AppShellContentView =
 			onChatPersisted?: (chatId: string) => void;
 			onChatRemoved: (chatId: string) => void;
 			onCreateChatAutomation: (chatId: string) => void;
-			onCreateNoteFromChatResponse: (
-				title: string,
-				content: string,
-			) => Promise<"created" | undefined> | "created" | undefined;
+			onCreateNoteFromChatResponse: (request: {
+				chatId: string;
+				content: string;
+				messageId: string;
+				title: string;
+			}) => Promise<"created" | undefined> | "created" | undefined;
 			onOpenChat: (chatId: string) => void;
 			onOpenConnectionsSettings: () => void;
 			onPrefetchChat: (chatId: string) => void;

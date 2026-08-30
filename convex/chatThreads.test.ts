@@ -247,7 +247,7 @@ test("forked chats retain shared attachments until the last chat is removed", as
 					mediaType: "text/plain",
 					filename: "attachment.txt",
 					url: "https://example.test/attachment.txt",
-					providerMetadata: { graneri: { storageId } },
+					providerMetadata: { graneri: { sizeBytes: 10, storageId } },
 				},
 			]),
 			text: "Attachment",

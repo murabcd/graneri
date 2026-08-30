@@ -35,7 +35,10 @@ export function ChatSummaryOverview({
 					{content.artifacts.length > 0 ? (
 						<div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
 							{content.artifacts.map((artifact) => (
-								<SummaryArtifactRow key={artifact.url} artifact={artifact} />
+								<SummaryArtifactRow
+									key={artifact.identity}
+									artifact={artifact}
+								/>
 							))}
 						</div>
 					) : (

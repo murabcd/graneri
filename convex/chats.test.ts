@@ -526,6 +526,44 @@ test("local file tool continuations retain and release stored document bytes", a
 	expect(await t.run((ctx) => ctx.db.system.get(storageId))).toBeNull();
 });
 
+test("chat attachment ownership never derives a storage id from its URL", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const storageId = await t.run((ctx) =>
+		ctx.storage.store(new Blob(["attachment"], { type: "text/plain" })),
+	);
+	await asOwner.mutation(api.chats.saveMessage, {
+		projectId: null,
+		settings: DEFAULT_CHAT_SETTINGS,
+		workspaceId,
+		chatId: "chat-url-only-attachment",
+		preview: "URL-only attachment",
+		message: {
+			id: "user-url-only-attachment",
+			role: "user",
+			partsJson: JSON.stringify([
+				{
+					type: "file",
+					filename: "attachment.txt",
+					mediaType: "text/plain",
+					url: `https://files.example.test/api/storage/${storageId}`,
+				},
+			]),
+			text: "URL-only attachment",
+			createdAt: 2_000,
+		},
+	});
+
+	expect(
+		await t.run((ctx) =>
+			ctx.db
+				.query("chatAttachmentReferences")
+				.withIndex("by_storageId", (query) => query.eq("storageId", storageId))
+				.collect(),
+		),
+	).toEqual([]);
+	await t.run((ctx) => ctx.storage.delete(storageId));
+});
+
 test("new chats use one placeholder title before generated title arrives", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 
@@ -2090,6 +2128,9 @@ test("saving a chat fails closed on malformed attachment storage ids", async () 
 						type: "file",
 						mediaType: "text/plain",
 						filename: "invalid.txt",
+						providerMetadata: {
+							graneri: { sizeBytes: 0, storageId: "not-valid" },
+						},
 						url: "https://example.convex.site/api/storage/not-valid",
 					},
 				]),

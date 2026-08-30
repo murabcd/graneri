@@ -3,22 +3,29 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { deleteFileStorageIfUnreferenced } from "./fileStorageReferences";
 
-const CONVEX_STORAGE_PATH_SEGMENT = "/api/storage/";
-
-const attachmentArtifactSchema = z.object({
-	providerMetadata: z
-		.object({
-			graneri: z.object({ storageId: z.string() }).optional(),
-		})
-		.optional(),
-	url: z.string().optional(),
-});
-const filePartSchema = attachmentArtifactSchema.extend({
+const storedFilePartSchema = z.object({
+	filename: z.string().min(1),
+	mediaType: z.string().min(1),
+	providerMetadata: z.object({
+		graneri: z.object({
+			sizeBytes: z.number().int().nonnegative().optional(),
+			storageId: z.string().min(1),
+		}),
+	}),
 	type: z.literal("file"),
 });
+const generatedAttachmentSchema = z.object({
+	filename: z.string().min(1),
+	mediaType: z.string().min(1),
+	providerMetadata: z.object({
+		graneri: z.object({ storageId: z.string().min(1) }),
+	}),
+	sizeBytes: z.number().int().nonnegative(),
+});
 const authoredArtifactsOutputSchema = z.object({
-	artifacts: z.array(attachmentArtifactSchema),
+	artifacts: z.array(generatedAttachmentSchema),
 });
 const attachmentBearingToolPartSchema = z.discriminatedUnion("type", [
 	z.object({
@@ -32,57 +39,53 @@ const attachmentBearingToolPartSchema = z.discriminatedUnion("type", [
 		type: z.literal("tool-author_artifact"),
 	}),
 	z.object({
-		output: z.object({ file: filePartSchema }),
+		output: z.object({
+			file: storedFilePartSchema,
+			sizeBytes: z.number().int().nonnegative(),
+		}),
 		state: z.literal("output-available"),
 		type: z.literal("tool-read_local_file"),
 	}),
 	z.object({
 		output: z.object({
-			results: z.array(z.object({ file: filePartSchema })),
+			results: z.array(
+				z.object({
+					file: storedFilePartSchema,
+					sizeBytes: z.number().int().nonnegative(),
+				}),
+			),
 		}),
 		state: z.literal("output-available"),
 		type: z.literal("tool-search_local_files"),
 	}),
 ]);
 
-const getStorageIdFromAttachmentArtifact = (
-	artifact: z.infer<typeof attachmentArtifactSchema>,
-) => {
-	if (artifact.providerMetadata?.graneri) {
-		return artifact.providerMetadata.graneri.storageId;
-	}
-
-	if (!artifact.url) {
-		return null;
-	}
-	let url: URL;
-	try {
-		url = new URL(artifact.url);
-	} catch {
-		throw new ConvexError({
-			code: "INVALID_CHAT_ATTACHMENT_METADATA",
-			message: "Chat attachment URL is invalid.",
-		});
-	}
-	const storagePathIndex = url.pathname.indexOf(CONVEX_STORAGE_PATH_SEGMENT);
-	if (storagePathIndex === -1) {
-		return null;
-	}
-	return (
-		url.pathname
-			.slice(storagePathIndex + CONVEX_STORAGE_PATH_SEGMENT.length)
-			.split("/")[0] ?? null
-	);
+type UnnormalizedAttachmentReference = {
+	filename: string;
+	mediaType: string;
+	sizeBytes: number;
+	storageId: string;
 };
 
-const getStorageIdFromFilePart = (part: unknown) => {
-	const result = filePartSchema.safeParse(part);
-	return result.success
-		? getStorageIdFromAttachmentArtifact(result.data)
-		: null;
+const toAttachmentReference = (
+	file: z.infer<typeof storedFilePartSchema>,
+	sizeBytes: number | undefined = file.providerMetadata.graneri.sizeBytes,
+): UnnormalizedAttachmentReference | null =>
+	sizeBytes === undefined
+		? null
+		: {
+				filename: file.filename,
+				mediaType: file.mediaType,
+				sizeBytes,
+				storageId: file.providerMetadata.graneri.storageId,
+			};
+
+const getAttachmentReferenceFromFilePart = (part: unknown) => {
+	const result = storedFilePartSchema.safeParse(part);
+	return result.success ? toAttachmentReference(result.data) : null;
 };
 
-const getStorageIdsFromToolPart = (part: unknown) => {
+const getAttachmentReferencesFromToolPart = (part: unknown) => {
 	const result = attachmentBearingToolPartSchema.safeParse(part);
 	if (!result.success) {
 		return [];
@@ -91,22 +94,30 @@ const getStorageIdsFromToolPart = (part: unknown) => {
 	switch (result.data.type) {
 		case "tool-generate_image":
 		case "tool-author_artifact":
-			return result.data.output.artifacts.map((artifact) =>
-				getStorageIdFromAttachmentArtifact(artifact),
-			);
+			return result.data.output.artifacts.map((artifact) => ({
+				filename: artifact.filename,
+				mediaType: artifact.mediaType,
+				sizeBytes: artifact.sizeBytes,
+				storageId: artifact.providerMetadata.graneri.storageId,
+			}));
 		case "tool-read_local_file":
-			return [getStorageIdFromFilePart(result.data.output.file)];
+			return [
+				toAttachmentReference(
+					result.data.output.file,
+					result.data.output.sizeBytes,
+				),
+			];
 		case "tool-search_local_files":
 			return result.data.output.results.map((imageResult) =>
-				getStorageIdFromFilePart(imageResult.file),
+				toAttachmentReference(imageResult.file, imageResult.sizeBytes),
 			);
 	}
 };
 
-const getAttachmentStorageIds = (
+const getAttachmentReferences = (
 	ctx: MutationCtx,
 	partsJson: string,
-): Set<Id<"_storage">> => {
+): Map<Id<"_storage">, Omit<UnnormalizedAttachmentReference, "storageId">> => {
 	let parts: unknown[];
 	try {
 		parts = parseUiMessagePartsJson(partsJson);
@@ -120,27 +131,36 @@ const getAttachmentStorageIds = (
 		});
 	}
 
-	const storageIds = new Set<Id<"_storage">>();
+	const references = new Map<
+		Id<"_storage">,
+		Omit<UnnormalizedAttachmentReference, "storageId">
+	>();
 	for (const part of parts) {
 		const values = [
-			getStorageIdFromFilePart(part),
-			...getStorageIdsFromToolPart(part),
+			getAttachmentReferenceFromFilePart(part),
+			...getAttachmentReferencesFromToolPart(part),
 		];
 		for (const value of values) {
 			if (!value) {
 				continue;
 			}
-			const storageId = ctx.db.system.normalizeId("_storage", value);
+			const storageId = ctx.db.system.normalizeId("_storage", value.storageId);
 			if (!storageId) {
 				throw new ConvexError({
 					code: "INVALID_CHAT_ATTACHMENT_STORAGE_ID",
 					message: "Chat attachment storage id is invalid.",
 				});
 			}
-			storageIds.add(storageId);
+			if (!references.has(storageId)) {
+				references.set(storageId, {
+					filename: value.filename,
+					mediaType: value.mediaType,
+					sizeBytes: value.sizeBytes,
+				});
+			}
 		}
 	}
-	return storageIds;
+	return references;
 };
 
 const releaseReference = async (
@@ -151,25 +171,7 @@ const releaseReference = async (
 	},
 ) => {
 	await ctx.db.delete(reference._id);
-	const remainingReference = await ctx.db
-		.query("chatAttachmentReferences")
-		.withIndex("by_storageId", (q) => q.eq("storageId", reference.storageId))
-		.first();
-	if (!remainingReference) {
-		const metadata = await ctx.db.system.get(reference.storageId);
-		if (metadata) {
-			await ctx.storage.delete(reference.storageId);
-		}
-		const artifactOutput = await ctx.db
-			.query("artifactJobOutputs")
-			.withIndex("by_storageId", (query) =>
-				query.eq("storageId", reference.storageId),
-			)
-			.unique();
-		if (artifactOutput) {
-			await ctx.db.delete(artifactOutput._id);
-		}
-	}
+	await deleteFileStorageIfUnreferenced(ctx, reference.storageId);
 };
 
 export const syncChatMessageAttachmentReferences = async (
@@ -180,23 +182,31 @@ export const syncChatMessageAttachmentReferences = async (
 		partsJson: string;
 	},
 ) => {
-	const nextStorageIds = getAttachmentStorageIds(ctx, args.partsJson);
+	const nextReferences = getAttachmentReferences(ctx, args.partsJson);
 	const existingReferences = await ctx.db
 		.query("chatAttachmentReferences")
 		.withIndex("by_chatId_and_messageId", (q) =>
 			q.eq("chatId", args.chatId).eq("messageId", args.messageId),
 		)
 		.collect();
-	const existingStorageIds = new Set(
-		existingReferences.map((reference) => reference.storageId),
+	const existingByStorageId = new Map(
+		existingReferences.map((reference) => [reference.storageId, reference]),
 	);
 
-	for (const storageId of nextStorageIds) {
-		if (existingStorageIds.has(storageId)) {
+	for (const [storageId, attachment] of nextReferences) {
+		const existingReference = existingByStorageId.get(storageId);
+		if (existingReference) {
+			if (
+				existingReference.filename !== attachment.filename ||
+				existingReference.mediaType !== attachment.mediaType ||
+				existingReference.sizeBytes !== attachment.sizeBytes
+			) {
+				await ctx.db.patch(existingReference._id, attachment);
+			}
 			continue;
 		}
-		const metadata = await ctx.db.system.get(storageId);
-		if (!metadata) {
+		const storageMetadata = await ctx.db.system.get(storageId);
+		if (!storageMetadata) {
 			throw new ConvexError({
 				code: "CHAT_ATTACHMENT_NOT_FOUND",
 				message: "Chat attachment was not found.",
@@ -206,6 +216,7 @@ export const syncChatMessageAttachmentReferences = async (
 			chatId: args.chatId,
 			messageId: args.messageId,
 			storageId,
+			...attachment,
 		});
 		const artifactOutput = await ctx.db
 			.query("artifactJobOutputs")
@@ -224,7 +235,7 @@ export const syncChatMessageAttachmentReferences = async (
 	}
 
 	for (const reference of existingReferences) {
-		if (!nextStorageIds.has(reference.storageId)) {
+		if (!nextReferences.has(reference.storageId)) {
 			await releaseReference(ctx, reference);
 		}
 	}

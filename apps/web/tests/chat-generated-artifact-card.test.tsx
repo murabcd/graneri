@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ChatMessageListContent } from "@/components/chat/message-list";
 
 const artifactUrl = "https://files.example.test/generated-report.docx";
+const refreshedArtifactUrl = `${artifactUrl}?signature=refreshed`;
 
 const generatedArtifactMessage: UIMessage = {
 	id: "assistant-artifact",
@@ -50,7 +51,7 @@ const generatedArtifactMessage: UIMessage = {
 							},
 						},
 						sizeBytes: 2_483_200,
-						url: artifactUrl,
+						url: refreshedArtifactUrl,
 					},
 				],
 			},

@@ -1,17 +1,33 @@
 import type { FileUIPart } from "ai";
 import { z } from "zod";
 
-const graneriFileMetadataSchema = z.object({
+const graneriFileSizeMetadataSchema = z.object({
 	sizeBytes: z.number().int().nonnegative(),
+});
+
+const graneriFileStorageMetadataSchema = z.object({
+	storageId: z.string().min(1),
 });
 
 const FILE_SIZE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
 export const getChatFileSizeBytes = (file: FileUIPart): number | null => {
-	const result = graneriFileMetadataSchema.safeParse(
+	const result = graneriFileSizeMetadataSchema.safeParse(
 		file.providerMetadata?.graneri,
 	);
 	return result.success ? result.data.sizeBytes : null;
+};
+
+export const getChatFileStorageId = (file: FileUIPart): string | null => {
+	const result = graneriFileStorageMetadataSchema.safeParse(
+		file.providerMetadata?.graneri,
+	);
+	return result.success ? result.data.storageId : null;
+};
+
+export const getChatFileIdentity = (file: FileUIPart): string => {
+	const storageId = getChatFileStorageId(file);
+	return storageId ? `storage:${storageId}` : `url:${file.url}`;
 };
 
 export const formatFileSize = (sizeBytes: number): string => {

@@ -8,9 +8,9 @@ import {
 import type { FileUIPart } from "ai";
 import { createElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
+import { FileAttachmentCards } from "@/components/ai-elements/file-attachment-cards";
 import { FileAttachmentChips } from "@/components/ai-elements/file-attachment-controls";
 import { FileAttachmentGlyph } from "@/components/ai-elements/file-attachment-type-icon";
-import { ChatMessageFileAttachments } from "@/components/chat/message-file-attachments";
 import {
 	formatFileSize,
 	getChatFileSizeBytes,
@@ -41,6 +41,12 @@ afterEach(() => {
 describe("chat file attachments", () => {
 	it("reads and formats Graneri file size metadata", () => {
 		expect(getChatFileSizeBytes(file)).toBe(2_483_200);
+		expect(
+			getChatFileSizeBytes({
+				...file,
+				providerMetadata: { graneri: { sizeBytes: 2_483_200 } },
+			}),
+		).toBe(2_483_200);
 		expect(formatFileSize(2_483_200)).toBe("2.4 MB");
 	});
 
@@ -79,7 +85,7 @@ describe("chat file attachments", () => {
 
 	it("renders the file size and an in-card download link", () => {
 		render(
-			createElement(ChatMessageFileAttachments, {
+			createElement(FileAttachmentCards, {
 				align: "start",
 				files: [file],
 			}),
@@ -127,7 +133,7 @@ describe("chat file attachments", () => {
 
 	it("uses bordered image tiles in messages and the composer", () => {
 		const message = render(
-			createElement(ChatMessageFileAttachments, {
+			createElement(FileAttachmentCards, {
 				align: "end",
 				files: [image],
 			}),
@@ -139,7 +145,7 @@ describe("chat file attachments", () => {
 		message.unmount();
 
 		const assistantMessage = render(
-			createElement(ChatMessageFileAttachments, {
+			createElement(FileAttachmentCards, {
 				align: "start",
 				files: [image],
 			}),
@@ -175,7 +181,7 @@ describe("chat file attachments", () => {
 
 	it("wraps multiple user images in a right-aligned group", () => {
 		render(
-			createElement(ChatMessageFileAttachments, {
+			createElement(FileAttachmentCards, {
 				align: "end",
 				files: [
 					image,
@@ -202,7 +208,7 @@ describe("chat file attachments", () => {
 
 	it("groups user images above wrapped right-aligned file pills", () => {
 		render(
-			createElement(ChatMessageFileAttachments, {
+			createElement(FileAttachmentCards, {
 				align: "end",
 				files: [
 					file,
@@ -212,6 +218,12 @@ describe("chat file attachments", () => {
 						filename: "notes.docx",
 						mediaType:
 							"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						providerMetadata: {
+							graneri: {
+								sizeBytes: 2_483_200,
+								storageId: "storage_notes",
+							},
+						},
 						url: "https://files.example.test/notes.docx",
 					},
 				],
@@ -256,7 +268,7 @@ describe("chat file attachments", () => {
 		};
 
 		render(
-			createElement(ChatMessageFileAttachments, {
+			createElement(FileAttachmentCards, {
 				align: "start",
 				downloadFile,
 				files: [file],
@@ -292,7 +304,7 @@ describe("chat file attachments", () => {
 		};
 
 		render(
-			createElement(ChatMessageFileAttachments, {
+			createElement(FileAttachmentCards, {
 				align: "start",
 				downloadFile,
 				files: [

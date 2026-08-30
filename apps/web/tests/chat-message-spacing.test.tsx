@@ -1,4 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
 	MessageScroller,
 	MessageScrollerProvider,
@@ -6,7 +7,7 @@ import {
 } from "@workspace/ui/components/message-scroller";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import type { UIMessage } from "ai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatMessageListContent } from "../src/components/chat/message-list";
 import ChatMessages from "../src/components/chat/messages";
 import NoteChatMessages from "../src/components/note/note-chat-messages";
@@ -88,5 +89,40 @@ describe("chat message spacing", () => {
 		for (const breathingSpace of breathingSpaces) {
 			expect(breathingSpace.classList).toContain("min-h-8");
 		}
+	});
+
+	it("creates notes from the exact completed assistant message", async () => {
+		const user = userEvent.setup();
+		const onPlusAction = vi.fn(async () => "created" as const);
+		const { rerender } = render(
+			<TooltipProvider>
+				<TestMessageScroller>
+					<ChatMessages
+						messages={[assistantMessage]}
+						onPlusAction={onPlusAction}
+					/>
+				</TestMessageScroller>
+			</TooltipProvider>,
+		);
+
+		await user.click(screen.getByRole("button", { name: "Create note" }));
+		expect(onPlusAction).toHaveBeenCalledWith(assistantMessage);
+
+		rerender(
+			<TooltipProvider>
+				<TestMessageScroller>
+					<ChatMessages
+						isLoading
+						messages={[assistantMessage]}
+						onPlusAction={onPlusAction}
+					/>
+				</TestMessageScroller>
+			</TooltipProvider>,
+		);
+		expect(
+			screen
+				.getByRole("button", { name: "Create note" })
+				.hasAttribute("disabled"),
+		).toBe(true);
 	});
 });

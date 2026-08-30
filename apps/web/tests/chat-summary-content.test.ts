@@ -120,6 +120,7 @@ describe("collectChatSummaryContent", () => {
 			artifacts: [
 				{
 					filename: "result.csv",
+					identity: "url:https://files.example/result.csv",
 					mediaType: "text/csv",
 					url: "https://files.example/result.csv",
 				},
@@ -127,6 +128,7 @@ describe("collectChatSummaryContent", () => {
 			sources: [
 				{
 					filename: "brief.pdf",
+					identity: "url:https://files.example/brief.pdf",
 					kind: "file",
 					mediaType: "application/pdf",
 					url: "https://files.example/brief.pdf",
@@ -198,6 +200,7 @@ describe("collectChatSummaryContent", () => {
 		expect(collectChatSummaryContent([message, message])).toEqual({
 			artifacts: [
 				{
+					identity: "url:https://files.example/result.txt",
 					mediaType: "text/plain",
 					url: "https://files.example/result.txt",
 				},

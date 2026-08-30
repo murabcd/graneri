@@ -3,7 +3,8 @@ import {
 	getAppSourceProviderForToolName,
 	getChatAppSourceLabel,
 } from "@workspace/ai/capability-metadata";
-import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { type FileUIPart, getToolName, isToolUIPart, type UIMessage } from "ai";
+import { getChatFileIdentity } from "@/lib/chat-file-attachment";
 import {
 	extractFileParts,
 	extractMessageFileParts,
@@ -12,6 +13,7 @@ import {
 
 export type ChatSummaryArtifact = {
 	filename?: string;
+	identity: string;
 	mediaType: string;
 	url: string;
 };
@@ -43,8 +45,9 @@ const WEB_SEARCH_SOURCE = {
 	title: "Web search",
 } satisfies ChatSummarySource;
 
-const toSummaryArtifact = (artifact: ChatSummaryArtifact) => ({
+const toSummaryArtifact = (artifact: FileUIPart): ChatSummaryArtifact => ({
 	...(artifact.filename && { filename: artifact.filename }),
+	identity: getChatFileIdentity(artifact),
 	mediaType: artifact.mediaType,
 	url: artifact.url,
 });
@@ -54,7 +57,7 @@ export const getChatSummarySourceKey = (source: ChatSummarySource) => {
 		case "app":
 			return `app:${source.provider}`;
 		case "file":
-			return `file:${source.url}`;
+			return `file:${source.identity}`;
 		case "note":
 			return `note:${source.sourceId}`;
 		case "web-search":
@@ -128,11 +131,11 @@ const collectArtifacts = (messages: UIMessage[]): ChatSummaryArtifact[] => {
 
 		for (const value of extractMessageFileParts(message)) {
 			const artifact = toSummaryArtifact(value);
-			if (seen.has(artifact.url)) {
+			if (seen.has(artifact.identity)) {
 				continue;
 			}
 
-			seen.add(artifact.url);
+			seen.add(artifact.identity);
 			artifacts.push(artifact);
 		}
 	}
