@@ -3,7 +3,6 @@ import {
 	type ChatLatencyLogger,
 	createChatStreamLatencyTracker,
 } from "@workspace/ai/chat-latency-logger";
-import { getHostedChatConvexRouteError } from "@workspace/ai/hosted-chat-runtime";
 import {
 	createHostedActiveStreamKey,
 	createHostedAssistantRunFinalizer,
@@ -187,149 +186,10 @@ export const runHostedChatTurnStreamRuntime = async ({
 		preparedRun,
 	});
 	if (!acceptance.ok) {
-		const { failure } = acceptance;
-		switch (failure.type) {
-			case "active_run_policy":
-				wideEvent.outcome = "error";
-				wideEvent.status_code = failure.error.statusCode;
-				wideEvent.error_code = failure.error.errorCode;
-				wideEvent.active_run_id = failure.error.activeRunId;
-				emitWideEvent("error");
-				sendJson(response, failure.error.statusCode, {
-					error: failure.error.error,
-				});
-				break;
-			case "same_active_run":
-				turnRouteErrors.sendTurnControllerError(failure.error);
-				break;
-			case "desktop_local_tools_require_new_run":
-				wideEvent.outcome = "error";
-				wideEvent.status_code = 409;
-				wideEvent.error_code = failure.type;
-				emitWideEvent("error");
-				sendJson(response, 409, {
-					error:
-						"Desktop local folders cannot be added to an active hosted run. Stop it and send the message again.",
-					errorCode: failure.type,
-				});
-				break;
-			case "convex_run_continuation_invalid":
-				wideEvent.outcome = "error";
-				wideEvent.status_code = 409;
-				wideEvent.error_code = failure.type;
-				emitWideEvent("error");
-				sendJson(response, 409, {
-					error:
-						"Hosted run continuation requires approved, questionnaire, or steered input.",
-					errorCode: failure.type,
-				});
-				break;
-			case "local_tool_message_persist":
-				wideEvent.outcome = "error";
-				wideEvent.status_code = 500;
-				wideEvent.error_code = "local_tool_message_persist_failed";
-				recordServerError({
-					error: failure.error,
-					event: wideEvent,
-					operation: "local_tool_message_persist",
-				});
-				emitWideEvent("error");
-				sendJson(response, 500, {
-					error: "Failed to persist local folder tool output.",
-				});
-				break;
-			case "tool_approval_persist":
-			case "user_question_answer_persist": {
-				const routeError = getHostedChatConvexRouteError(failure.error);
-				const isApproval = failure.type === "tool_approval_persist";
-				wideEvent.outcome = "error";
-				wideEvent.status_code = routeError?.statusCode ?? 500;
-				wideEvent.error_code =
-					routeError?.errorCode ??
-					(isApproval
-						? "tool_approval_persist_failed"
-						: "user_question_answer_persist_failed");
-				emitWideEvent("error");
-				sendJson(response, wideEvent.status_code, {
-					error:
-						routeError?.error ??
-						(isApproval
-							? "Failed to persist tool approval response."
-							: "Failed to persist questionnaire answer."),
-					errorCode: routeError?.errorCode,
-				});
-				break;
-			}
-			case "user_message_persist": {
-				const routeError = failure.isQueuedAccept
-					? getHostedChatConvexRouteError(failure.error)
-					: null;
-				if (routeError) {
-					wideEvent.outcome = "error";
-					wideEvent.status_code = routeError.statusCode;
-					wideEvent.error_code = routeError.errorCode;
-					emitWideEvent("error");
-					sendJson(response, routeError.statusCode, {
-						error: routeError.error,
-						errorCode: routeError.errorCode,
-					});
-					break;
-				}
-				wideEvent.outcome = "error";
-				wideEvent.status_code = 500;
-				wideEvent.error_code = "user_message_persist_failed";
-				recordServerError({
-					details: lastUserMessage
-						? { message_id: lastUserMessage.id }
-						: undefined,
-					error: failure.error,
-					event: wideEvent,
-					operation: "user_message_persist",
-				});
-				emitWideEvent("error");
-				sendJson(response, 500, {
-					error: "Failed to persist user chat message.",
-				});
-				break;
-			}
-			case "claimed_queue_cleanup_failed":
-				break;
-			case "ai_admission_reservation_missing":
-				wideEvent.outcome = "error";
-				wideEvent.status_code = 500;
-				wideEvent.error_code = failure.type;
-				emitWideEvent("error");
-				sendJson(
-					response,
-					500,
-					{ error: "Chat admission reservation is missing." },
-					failure.pendingQueuedAcceptanceHeaders,
-				);
-				break;
-			case "background_run_start": {
-				const routeError = getHostedChatConvexRouteError(failure.error);
-				wideEvent.outcome = "error";
-				wideEvent.status_code = routeError?.statusCode ?? 500;
-				wideEvent.error_code =
-					routeError?.errorCode ?? "background_run_start_failed";
-				recordServerError({
-					error: failure.error,
-					event: wideEvent,
-					operation: "background_run_start",
-				});
-				emitWideEvent("error");
-				sendJson(
-					response,
-					wideEvent.status_code,
-					{
-						error: routeError?.error ?? "Failed to start hosted assistant run.",
-						...(routeError && { errorCode: routeError.errorCode }),
-					},
-					failure.pendingQueuedAcceptanceHeaders,
-				);
-				break;
-			}
-		}
+		turnRouteErrors.sendAcceptanceFailure({
+			failure: acceptance.failure,
+			lastUserMessageId: lastUserMessage?.id,
+		});
 		return { activeStreamSession: null, ok: false };
 	}
 
@@ -399,23 +259,13 @@ export const runHostedChatTurnStreamRuntime = async ({
 				operation: "assistant_run_start_failure_terminalize",
 			});
 		}
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 500;
-		wideEvent.error_code = "stream_start_failed";
-		recordServerError({
-			error: startedRun.error,
-			event: wideEvent,
-			operation: "stream_start",
+		turnRouteErrors.send({
+			eventErrorCode: "stream_start_failed",
+			headers: pendingQueuedAcceptanceHeaders,
+			log: { cause: startedRun.error, operation: "stream_start" },
+			payload: { error: "Failed to start assistant stream." },
+			statusCode: 500,
 		});
-		emitWideEvent("error");
-		sendJson(
-			response,
-			500,
-			{
-				error: "Failed to start assistant stream.",
-			},
-			pendingQueuedAcceptanceHeaders,
-		);
 		return {
 			activeStreamSession: startedRun.activeStreamSession,
 			ok: false,

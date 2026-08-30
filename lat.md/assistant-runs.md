@@ -111,7 +111,10 @@ policy. The runtime delegates active-run policy, same-run validation, accepted
 local output, decision and user-message persistence, queued acceptance headers,
 and exactly-one producer handoff to
 [[apps/web/server/chat-accepted-turn-transaction.ts]]. It maps typed transaction
-failures to HTTP and telemetry, then owns web-producer streaming and finalization.
+failures through the single [[apps/web/server/chat-turn-route-errors.ts]] seam,
+which atomically owns error telemetry, structured logging, accepted-queue
+headers, and JSON responses. The runtime then owns web-producer streaming and
+finalization.
 Reconnect streaming remains transport-only and never reconstructs turn
 preparation, acceptance ordering, or producer policy.
 

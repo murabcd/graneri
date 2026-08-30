@@ -38,7 +38,6 @@ import {
 	interruptHostedChatRun,
 	runHostedChatTurnStreamRuntime,
 } from "./chat-turn-stream-runtime.js";
-import { recordServerError } from "./server-logger.js";
 
 type HostedChatTurnRequest = Pick<
 	ChatRequestBody,
@@ -268,18 +267,9 @@ export const executeHostedChatTurn = async ({
 			steerQueuedMessageId,
 		});
 	} catch (error) {
-		const routeError = getHostedChatConvexRouteError(error);
-		if (!routeError) {
+		if (!turnRouteErrors.sendConvexError(error)) {
 			throw error;
 		}
-		wideEvent.outcome = "error";
-		wideEvent.status_code = routeError.statusCode;
-		wideEvent.error_code = routeError.errorCode;
-		emitEvent("error");
-		sendJson(response, routeError.statusCode, {
-			error: routeError.error,
-			errorCode: routeError.errorCode,
-		});
 		return;
 	}
 	if (!preparedTurnInput.ok) {
@@ -299,13 +289,13 @@ export const executeHostedChatTurn = async ({
 			})
 		: null;
 	if (pendingUserQuestion && continueRunId && userQuestionAnswer === null) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 400;
-		wideEvent.error_code = "user_question_answer_invalid";
-		emitEvent("error");
-		sendJson(response, 400, {
-			error: "Questionnaire continuation is missing its tool answer.",
-			errorCode: "user_question_answer_invalid",
+		turnRouteErrors.send({
+			eventErrorCode: "user_question_answer_invalid",
+			payload: {
+				error: "Questionnaire continuation is missing its tool answer.",
+				errorCode: "user_question_answer_invalid",
+			},
+			statusCode: 400,
 		});
 		return;
 	}
@@ -339,20 +329,19 @@ export const executeHostedChatTurn = async ({
 				) {
 					return true;
 				}
-				recordServerError({
-					details: { message_id: branchMessageId },
-					error,
-					event: wideEvent,
-					operation: "branch_create",
-				});
 				const routeError = getHostedChatConvexRouteError(error);
-				wideEvent.outcome = "error";
-				wideEvent.status_code = routeError?.statusCode ?? 500;
-				wideEvent.error_code = routeError?.errorCode ?? "branch_create_failed";
-				emitEvent("error");
-				sendJson(response, routeError?.statusCode ?? 500, {
-					error: routeError?.error ?? "Failed to prepare edited chat branch.",
-					...(routeError && { errorCode: routeError.errorCode }),
+				turnRouteErrors.send({
+					eventErrorCode: routeError?.errorCode ?? "branch_create_failed",
+					log: {
+						cause: error,
+						details: { message_id: branchMessageId },
+						operation: "branch_create",
+					},
+					payload: {
+						error: routeError?.error ?? "Failed to prepare edited chat branch.",
+						...(routeError && { errorCode: routeError.errorCode }),
+					},
+					statusCode: routeError?.statusCode ?? 500,
 				});
 				return true;
 			},
@@ -461,30 +450,15 @@ export const executeHostedChatTurn = async ({
 			) {
 				return;
 			}
-			wideEvent.outcome = "error";
-			wideEvent.status_code = 500;
-			wideEvent.error_code = "steer_preparation_failed";
-			recordServerError({
-				error,
-				event: wideEvent,
-				operation: "steer_run_prepare",
-			});
-			emitEvent("error");
-			sendJson(response, 500, {
-				error: "Failed to prepare steered assistant run.",
+			turnRouteErrors.send({
+				eventErrorCode: "steer_preparation_failed",
+				log: { cause: error, operation: "steer_run_prepare" },
+				payload: { error: "Failed to prepare steered assistant run." },
+				statusCode: 500,
 			});
 			return;
 		}
-		const routeError = getHostedChatConvexRouteError(error);
-		if (routeError) {
-			wideEvent.outcome = "error";
-			wideEvent.status_code = routeError.statusCode;
-			wideEvent.error_code = routeError.errorCode;
-			emitEvent("error");
-			sendJson(response, routeError.statusCode, {
-				error: routeError.error,
-				errorCode: routeError.errorCode,
-			});
+		if (turnRouteErrors.sendConvexError(error)) {
 			return;
 		}
 		throw error;

@@ -126,7 +126,7 @@ export type HostedChatTurnAcceptancePolicy = {
 	workspaceId: Id<"workspaces">;
 };
 
-type HostedChatTurnAcceptanceFailure =
+export type HostedChatTurnAcceptanceFailure =
 	| {
 			type: "active_run_policy";
 			error: NonNullable<ReturnType<typeof validateHostedChatActiveRunPolicy>>;

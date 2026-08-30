@@ -26,6 +26,7 @@ import type {
 	ChatRequestBody,
 } from "./chat-handler-types.js";
 import { executeHostedChatTurn } from "./chat-turn-execution.js";
+import { createHostedChatRouteErrorResponder } from "./chat-turn-route-errors.js";
 import {
 	interruptHostedChatRun,
 	pipeHostedActiveStreamSessionToResponse,
@@ -108,6 +109,12 @@ export const handleChatRequest = async (
 			}
 		},
 	});
+	const routeErrors = createHostedChatRouteErrorResponder({
+		emitWideEvent,
+		response,
+		sendJson,
+		wideEvent,
+	});
 
 	const {
 		id,
@@ -141,13 +148,13 @@ export const handleChatRequest = async (
 		? parseLocalCapabilitySession(requestedLocalCapabilitySession)
 		: null;
 	if (hasRequestedLocalCapabilitySession && !localCapabilitySession) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 400;
-		wideEvent.error_code = "local_capability_session_invalid";
-		emitWideEvent("error");
-		sendJson(response, 400, {
-			error: "Local capability session is invalid.",
-			errorCode: "local_capability_session_invalid",
+		routeErrors.send({
+			eventErrorCode: "local_capability_session_invalid",
+			payload: {
+				error: "Local capability session is invalid.",
+				errorCode: "local_capability_session_invalid",
+			},
+			statusCode: 400,
 		});
 		return;
 	}
@@ -159,13 +166,13 @@ export const handleChatRequest = async (
 		webSearchEnabled: requestedWebSearchEnabled,
 	});
 	if (!settings) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 400;
-		wideEvent.error_code = "chat_settings_invalid";
-		emitWideEvent("error");
-		sendJson(response, 400, {
-			error: "Complete valid chat settings are required.",
-			errorCode: "chat_settings_invalid",
+		routeErrors.send({
+			eventErrorCode: "chat_settings_invalid",
+			payload: {
+				error: "Complete valid chat settings are required.",
+				errorCode: "chat_settings_invalid",
+			},
+			statusCode: 400,
 		});
 		return;
 	}
@@ -191,13 +198,13 @@ export const handleChatRequest = async (
 		steerQueuedMessageId,
 	});
 	if (steerRouteValidation) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = steerRouteValidation.statusCode;
-		wideEvent.error_code = steerRouteValidation.errorCode;
-		emitWideEvent("error");
-		sendJson(response, steerRouteValidation.statusCode, {
-			error: steerRouteValidation.error,
-			errorCode: steerRouteValidation.errorCode,
+		routeErrors.send({
+			eventErrorCode: steerRouteValidation.errorCode,
+			payload: {
+				error: steerRouteValidation.error,
+				errorCode: steerRouteValidation.errorCode,
+			},
+			statusCode: steerRouteValidation.statusCode,
 		});
 		return;
 	}
@@ -239,11 +246,11 @@ export const handleChatRequest = async (
 		steerQueuedMessageId,
 	});
 	if (inputValidation) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = inputValidation.statusCode;
-		wideEvent.error_code = inputValidation.errorCode;
-		emitWideEvent("error");
-		sendJson(response, inputValidation.statusCode, inputValidation.payload);
+		routeErrors.send({
+			eventErrorCode: inputValidation.errorCode,
+			payload: inputValidation.payload,
+			statusCode: inputValidation.statusCode,
+		});
 		return;
 	}
 
@@ -253,13 +260,13 @@ export const handleChatRequest = async (
 		!resolvedWorkspaceId ||
 		resolvedProjectId === undefined
 	) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 400;
-		wideEvent.error_code = "chat_auth_context_missing";
-		emitWideEvent("error");
-		sendJson(response, 400, {
-			error:
-				"chat id, convexToken, workspaceId, and an explicit project selection are required.",
+		routeErrors.send({
+			eventErrorCode: "chat_auth_context_missing",
+			payload: {
+				error:
+					"chat id, convexToken, workspaceId, and an explicit project selection are required.",
+			},
+			statusCode: 400,
 		});
 		return;
 	}
@@ -277,18 +284,9 @@ export const handleChatRequest = async (
 			chatId: id,
 		});
 	} catch (error) {
-		const routeError = getHostedChatConvexRouteError(error);
-		if (!routeError) {
+		if (!routeErrors.sendConvexError(error)) {
 			throw error;
 		}
-		wideEvent.outcome = "error";
-		wideEvent.status_code = routeError.statusCode;
-		wideEvent.error_code = routeError.errorCode;
-		emitWideEvent("error");
-		sendJson(response, routeError.statusCode, {
-			error: routeError.error,
-			errorCode: routeError.errorCode,
-		});
 		return;
 	}
 	logLatency("convex.session_loaded", {
@@ -309,18 +307,9 @@ export const handleChatRequest = async (
 			},
 		);
 	} catch (error) {
-		const routeError = getHostedChatConvexRouteError(error);
-		if (!routeError) {
+		if (!routeErrors.sendConvexError(error)) {
 			throw error;
 		}
-		wideEvent.outcome = "error";
-		wideEvent.status_code = routeError.statusCode;
-		wideEvent.error_code = routeError.errorCode;
-		emitWideEvent("error");
-		sendJson(response, routeError.statusCode, {
-			error: routeError.error,
-			errorCode: routeError.errorCode,
-		});
 		return;
 	}
 	if (
@@ -329,13 +318,13 @@ export const handleChatRequest = async (
 		(attachableRun.localCapabilitySession?.id ?? null) !==
 			(localCapabilitySession?.id ?? null)
 	) {
-		wideEvent.outcome = "error";
-		wideEvent.status_code = 409;
-		wideEvent.error_code = "local_capability_session_mismatch";
-		emitWideEvent("error");
-		sendJson(response, 409, {
-			error: "This run requires its original local capability session.",
-			errorCode: "local_capability_session_mismatch",
+		routeErrors.send({
+			eventErrorCode: "local_capability_session_mismatch",
+			payload: {
+				error: "This run requires its original local capability session.",
+				errorCode: "local_capability_session_mismatch",
+			},
+			statusCode: 409,
 		});
 		return;
 	}
