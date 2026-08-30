@@ -1,4 +1,5 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
+import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
@@ -81,6 +82,105 @@ test("chat retirement reports progress and retries exact message batches", async
 	await expect(
 		t.mutation(internal.resourceRetirement.retireChat, { chatId }),
 	).resolves.toEqual({ retiredCount: 0, hasMore: false });
+});
+
+test("project automation cleanup continues after a bounded batch and is idempotent", async () => {
+	vi.useFakeTimers();
+	const { t, workspaceId } = await createWorkspace();
+	const projectId = await t.run(async (ctx) => {
+		const projectId = await ctx.db.insert("projects", {
+			ownerTokenIdentifier,
+			workspaceId,
+			name: "Automation project",
+			description: "",
+			normalizedName: "automation project",
+			icon: "folder",
+			color: "default",
+			isStarred: false,
+			sortOrder: 0,
+			starredSortOrder: 0,
+			createdAt: 1_000,
+			updatedAt: 1_000,
+		});
+		for (let index = 0; index < 101; index += 1) {
+			await ctx.db.insert("automations", {
+				ownerTokenIdentifier,
+				workspaceId,
+				projectId,
+				title: `Automation ${index}`,
+				prompt: "Review the project.",
+				model: DEFAULT_CHAT_MODEL_ID,
+				reasoningEffort: "medium",
+				serviceTier: "auto",
+				webSearchEnabled: false,
+				appsEnabled: false,
+				appSources: [],
+				schedule: {
+					kind: "once",
+					at: 10_000 + index,
+					timezone: "UTC",
+				},
+				targetKind: "workspace",
+				targetLabel: "Workspace",
+				destination: "standalone",
+				deliveryPolicy: "always",
+				chatId: `automation-${index}`,
+				isPaused: true,
+				isCompleted: false,
+				createdAt: 1_000 + index,
+				updatedAt: 1_000 + index,
+			});
+		}
+		return projectId;
+	});
+
+	const progress = await t.mutation(
+		internal.resourceRetirement.clearProjectAutomationRelationships,
+		{ ownerTokenIdentifier, workspaceId, projectId },
+	);
+	expect(progress).toEqual({ clearedCount: 100, hasMore: true });
+
+	const pendingCount = await t.run(
+		async (ctx) =>
+			(
+				await ctx.db
+					.query("automations")
+					.withIndex("by_owner_workspace_project_updatedAt", (q) =>
+						q
+							.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+							.eq("workspaceId", workspaceId)
+							.eq("projectId", projectId),
+					)
+					.take(2)
+			).length,
+	);
+	expect(pendingCount).toBe(1);
+
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+	const remaining = await t.run(
+		async (ctx) =>
+			await ctx.db
+				.query("automations")
+				.withIndex("by_owner_workspace_project_updatedAt", (q) =>
+					q
+						.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+						.eq("workspaceId", workspaceId)
+						.eq("projectId", projectId),
+				)
+				.take(1),
+	);
+	expect(remaining).toEqual([]);
+	await expect(
+		t.mutation(
+			internal.resourceRetirement.clearProjectAutomationRelationships,
+			{
+				ownerTokenIdentifier,
+				workspaceId,
+				projectId,
+			},
+		),
+	).resolves.toEqual({ clearedCount: 0, hasMore: false });
 });
 
 test("chat retirement deletes preserved branch messages and metadata", async () => {

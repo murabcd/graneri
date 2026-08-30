@@ -114,7 +114,6 @@ import type * as people from "../people.js";
 import type * as peopleDomain from "../peopleDomain.js";
 import type * as projectAppearance from "../projectAppearance.js";
 import type * as projectDescriptions from "../projectDescriptions.js";
-import type * as projectRelationshipCleanup from "../projectRelationshipCleanup.js";
 import type * as projects from "../projects.js";
 import type * as recipes from "../recipes.js";
 import type * as reorderLimits from "../reorderLimits.js";
@@ -251,7 +250,6 @@ declare const fullApi: ApiFromModules<{
   peopleDomain: typeof peopleDomain;
   projectAppearance: typeof projectAppearance;
   projectDescriptions: typeof projectDescriptions;
-  projectRelationshipCleanup: typeof projectRelationshipCleanup;
   projects: typeof projects;
   recipes: typeof recipes;
   reorderLimits: typeof reorderLimits;

@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -11,6 +11,10 @@ const ownerIdentity = {
 	name: "Owner",
 	email: "owner@example.com",
 };
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
@@ -28,6 +32,7 @@ const createWorkspace = async () => {
 
 	return {
 		asOwner,
+		t,
 		workspaceId,
 	};
 };
@@ -345,7 +350,8 @@ test("projects.moveNotesToTrash archives active project notes and keeps the proj
 });
 
 test("projects.remove deletes the project and clears it from assigned notes", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
 
 	const project = await asOwner.mutation(api.projects.create, {
 		workspaceId,
@@ -380,6 +386,21 @@ test("projects.remove deletes the project and clears it from assigned notes", as
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
+		for (let index = 0; index < 100; index += 1) {
+			await ctx.db.insert("notes", {
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				workspaceId,
+				projectId: project._id,
+				starredSortOrder: 0,
+				title: `Batched note ${index}`,
+				content: "",
+				searchableText: "",
+				visibility: "private",
+				isArchived: false,
+				createdAt: 2_000 + index,
+				updatedAt: 2_000 + index,
+			});
+		}
 
 		return { noteId, archivedNoteId };
 	});
@@ -395,10 +416,26 @@ test("projects.remove deletes the project and clears it from assigned notes", as
 	expect(projects).toHaveLength(0);
 
 	const currentNote = await asOwner.run(async (ctx) => ctx.db.get(noteId));
-	const archivedNote = await asOwner.run(async (ctx) =>
-		ctx.db.get(archivedNoteId),
-	);
+	expect(currentNote?.projectId).toBe(project._id);
 
-	expect(currentNote?.projectId).toBeUndefined();
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+	const { archivedNote, clearedCurrentNote, remainingProjectNotes } =
+		await asOwner.run(async (ctx) => ({
+			archivedNote: await ctx.db.get(archivedNoteId),
+			clearedCurrentNote: await ctx.db.get(noteId),
+			remainingProjectNotes: await ctx.db
+				.query("notes")
+				.withIndex("by_owner_ws_project_arch_upd", (q) =>
+					q
+						.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
+						.eq("workspaceId", workspaceId)
+						.eq("projectId", project._id),
+				)
+				.take(1),
+		}));
+
+	expect(clearedCurrentNote?.projectId).toBeUndefined();
 	expect(archivedNote?.projectId).toBeUndefined();
+	expect(remainingProjectNotes).toEqual([]);
 });

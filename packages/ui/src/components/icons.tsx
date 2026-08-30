@@ -54,15 +54,15 @@ const FileWordIcon = ({ ...props }: LucideProps) => (
 	>
 		<path
 			d="M13.0039 2.59375C13.2705 2.59375 13.5415 2.66842 13.8164 2.81836C14.0914 2.96836 14.3995 3.21061 14.7412 3.54395L19.6914 8.44336C20.2331 8.98503 20.5039 9.53542 20.5039 10.0938V17.5439C20.5039 18.2689 20.3251 18.94 19.9668 19.5566C19.6085 20.1649 19.1205 20.6476 18.5039 21.0059C17.8956 21.3642 17.2289 21.5439 16.5039 21.5439H7.50391C6.77891 21.5439 6.10788 21.3642 5.49121 21.0059C4.88307 20.6476 4.39928 20.1648 4.04102 19.5566C3.68271 18.94 3.50394 18.2689 3.50391 17.5439V6.59375C3.50391 5.86882 3.68275 5.20204 4.04102 4.59375C4.39935 3.97708 4.88288 3.48919 5.49121 3.13086C6.10787 2.77254 6.77892 2.59375 7.50391 2.59375H13.0039Z"
-			fill="url(#chatgpt-word-file-base)"
+			fill="url(#word-file-base)"
 		/>
 		<path
 			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
-			fill="url(#chatgpt-word-file-panel)"
+			fill="url(#word-file-panel)"
 		/>
 		<path
 			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
-			fill="url(#chatgpt-word-file-highlight)"
+			fill="url(#word-file-highlight)"
 			fillOpacity="0.65"
 		/>
 		<path
@@ -71,12 +71,12 @@ const FileWordIcon = ({ ...props }: LucideProps) => (
 		/>
 		<path
 			d="M13.0039 2.59375C13.2706 2.59375 13.5414 2.66875 13.8164 2.81875C14.0914 2.96875 14.3997 3.21042 14.7414 3.54375L19.6914 8.44375C20.2331 8.98542 20.5039 9.53542 20.5039 10.0938H15.7164C14.8831 10.0938 14.2206 9.85208 13.7289 9.36875C13.2456 8.87708 13.0039 8.21458 13.0039 7.38125V2.59375Z"
-			fill="url(#chatgpt-word-file-fold)"
+			fill="url(#word-file-fold)"
 		/>
 		<defs>
 			<linearGradient
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-word-file-base"
+				id="word-file-base"
 				x1="4.50391"
 				x2="16.0039"
 				y1="20.5938"
@@ -90,7 +90,7 @@ const FileWordIcon = ({ ...props }: LucideProps) => (
 				cy="0"
 				gradientTransform="translate(7.50391 8.59375) rotate(45) scale(12.7279)"
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-word-file-panel"
+				id="word-file-panel"
 				r="1"
 			>
 				<stop offset="0.0811439" stopColor="#367AF2" />
@@ -101,7 +101,7 @@ const FileWordIcon = ({ ...props }: LucideProps) => (
 				cy="0"
 				gradientTransform="translate(12.0039 13.9937) rotate(90) scale(6.3 7.18031)"
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-word-file-highlight"
+				id="word-file-highlight"
 				r="1"
 			>
 				<stop offset="0.586954" stopColor="#2763E5" stopOpacity="0" />
@@ -109,7 +109,7 @@ const FileWordIcon = ({ ...props }: LucideProps) => (
 			</radialGradient>
 			<linearGradient
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-word-file-fold"
+				id="word-file-fold"
 				x1="16.5039"
 				x2="13.5039"
 				y1="6.09375"
@@ -132,15 +132,15 @@ const FileExcelIcon = ({ ...props }: LucideProps) => (
 	>
 		<path
 			d="M13 2.59375C13.2666 2.59375 13.5376 2.66842 13.8125 2.81836C14.0875 2.96836 14.3956 3.21061 14.7373 3.54395L19.6875 8.44336C20.2292 8.98503 20.5 9.53542 20.5 10.0938V17.5439C20.5 18.2689 20.3212 18.94 19.9629 19.5566C19.6046 20.1649 19.1165 20.6476 18.5 21.0059C17.8917 21.3642 17.225 21.5439 16.5 21.5439H7.5C6.775 21.5439 6.10397 21.3642 5.4873 21.0059C4.87916 20.6476 4.39537 20.1648 4.03711 19.5566C3.67881 18.94 3.50003 18.2689 3.5 17.5439V6.59375C3.5 5.86882 3.67884 5.20204 4.03711 4.59375C4.39544 3.97708 4.87897 3.48919 5.4873 3.13086C6.10396 2.77254 6.77501 2.59375 7.5 2.59375H13Z"
-			fill="url(#chatgpt-excel-file-base)"
+			fill="url(#excel-file-base)"
 		/>
 		<path
 			d="M14.6719 8.59375H9.32812C8.31848 8.59375 7.5 9.41223 7.5 10.4219V15.7656C7.5 16.7753 8.31848 17.5938 9.32812 17.5938H14.6719C15.6815 17.5938 16.5 16.7753 16.5 15.7656V10.4219C16.5 9.41223 15.6815 8.59375 14.6719 8.59375Z"
-			fill="url(#chatgpt-excel-file-panel)"
+			fill="url(#excel-file-panel)"
 		/>
 		<path
 			d="M14.6719 8.59375H9.32812C8.31848 8.59375 7.5 9.41223 7.5 10.4219V15.7656C7.5 16.7753 8.31848 17.5938 9.32812 17.5938H14.6719C15.6815 17.5938 16.5 16.7753 16.5 15.7656V10.4219C16.5 9.41223 15.6815 8.59375 14.6719 8.59375Z"
-			fill="url(#chatgpt-excel-file-highlight)"
+			fill="url(#excel-file-highlight)"
 			fillOpacity="0.3"
 		/>
 		<path
@@ -149,12 +149,12 @@ const FileExcelIcon = ({ ...props }: LucideProps) => (
 		/>
 		<path
 			d="M13 2.59375C13.2667 2.59375 13.5375 2.66875 13.8125 2.81875C14.0875 2.96875 14.3958 3.21042 14.7375 3.54375L19.6875 8.44375C20.2292 8.98542 20.5 9.53542 20.5 10.0938H15.7125C14.8792 10.0938 14.2167 9.85208 13.725 9.36875C13.2417 8.87708 13 8.21458 13 7.38125V2.59375Z"
-			fill="url(#chatgpt-excel-file-fold)"
+			fill="url(#excel-file-fold)"
 		/>
 		<defs>
 			<linearGradient
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-excel-file-base"
+				id="excel-file-base"
 				x1="4.5"
 				x2="16"
 				y1="20.5938"
@@ -168,7 +168,7 @@ const FileExcelIcon = ({ ...props }: LucideProps) => (
 				cy="0"
 				gradientTransform="translate(7.5 8.59375) rotate(45) scale(12.7279 36.2329)"
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-excel-file-panel"
+				id="excel-file-panel"
 				r="1"
 			>
 				<stop stopColor="#20A85E" />
@@ -179,7 +179,7 @@ const FileExcelIcon = ({ ...props }: LucideProps) => (
 				cy="0"
 				gradientTransform="translate(12 13.9937) rotate(90) scale(6.3 7.25625)"
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-excel-file-highlight"
+				id="excel-file-highlight"
 				r="1"
 			>
 				<stop offset="0.580357" stopColor="#33A662" stopOpacity="0" />
@@ -187,7 +187,7 @@ const FileExcelIcon = ({ ...props }: LucideProps) => (
 			</radialGradient>
 			<linearGradient
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-excel-file-fold"
+				id="excel-file-fold"
 				x1="16.5"
 				x2="13.5"
 				y1="6.09375"
@@ -210,15 +210,15 @@ const FilePowerpointIcon = ({ ...props }: LucideProps) => (
 	>
 		<path
 			d="M13.0039 2.59375C13.2705 2.59375 13.5415 2.66842 13.8164 2.81836C14.0914 2.96836 14.3995 3.21061 14.7412 3.54395L19.6914 8.44336C20.2331 8.98503 20.5039 9.53542 20.5039 10.0938V17.5439C20.5039 18.2689 20.3251 18.94 19.9668 19.5566C19.6085 20.1649 19.1205 20.6476 18.5039 21.0059C17.8956 21.3642 17.2289 21.5439 16.5039 21.5439H7.50391C6.77891 21.5439 6.10788 21.3642 5.49121 21.0059C4.88307 20.6476 4.39928 20.1648 4.04102 19.5566C3.68271 18.94 3.50394 18.2689 3.50391 17.5439V6.59375C3.50391 5.86882 3.68275 5.20204 4.04102 4.59375C4.39935 3.97708 4.88288 3.48919 5.49121 3.13086C6.10787 2.77254 6.77892 2.59375 7.50391 2.59375H13.0039Z"
-			fill="url(#chatgpt-powerpoint-file-base)"
+			fill="url(#powerpoint-file-base)"
 		/>
 		<path
 			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
-			fill="url(#chatgpt-powerpoint-file-panel)"
+			fill="url(#powerpoint-file-panel)"
 		/>
 		<path
 			d="M14.6758 8.59375H9.33203C8.32239 8.59375 7.50391 9.41223 7.50391 10.4219V15.7656C7.50391 16.7753 8.32239 17.5938 9.33203 17.5938H14.6758C15.6854 17.5938 16.5039 16.7753 16.5039 15.7656V10.4219C16.5039 9.41223 15.6854 8.59375 14.6758 8.59375Z"
-			fill="url(#chatgpt-powerpoint-file-highlight)"
+			fill="url(#powerpoint-file-highlight)"
 			fillOpacity="0.3"
 		/>
 		<path
@@ -227,12 +227,12 @@ const FilePowerpointIcon = ({ ...props }: LucideProps) => (
 		/>
 		<path
 			d="M13.0039 2.59375C13.2706 2.59375 13.5414 2.66875 13.8164 2.81875C14.0914 2.96875 14.3997 3.21042 14.7414 3.54375L19.6914 8.44375C20.2331 8.98542 20.5039 9.53542 20.5039 10.0938H15.7164C14.8831 10.0938 14.2206 9.85208 13.7289 9.36875C13.2456 8.87708 13.0039 8.21458 13.0039 7.38125V2.59375Z"
-			fill="url(#chatgpt-powerpoint-file-fold)"
+			fill="url(#powerpoint-file-fold)"
 		/>
 		<defs>
 			<linearGradient
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-powerpoint-file-base"
+				id="powerpoint-file-base"
 				x1="4.50391"
 				x2="16.0039"
 				y1="20.5938"
@@ -247,7 +247,7 @@ const FilePowerpointIcon = ({ ...props }: LucideProps) => (
 				cy="0"
 				gradientTransform="translate(7.50281 8.59375) rotate(45) scale(12.7279)"
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-powerpoint-file-panel"
+				id="powerpoint-file-panel"
 				r="1"
 			>
 				<stop stopColor="#F8193E" />
@@ -258,7 +258,7 @@ const FilePowerpointIcon = ({ ...props }: LucideProps) => (
 				cy="0"
 				gradientTransform="translate(12.0028 13.9937) rotate(90) scale(6.3 7.17187)"
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-powerpoint-file-highlight"
+				id="powerpoint-file-highlight"
 				r="1"
 			>
 				<stop offset="0.575893" stopColor="#FFB055" stopOpacity="0" />
@@ -266,7 +266,7 @@ const FilePowerpointIcon = ({ ...props }: LucideProps) => (
 			</radialGradient>
 			<linearGradient
 				gradientUnits="userSpaceOnUse"
-				id="chatgpt-powerpoint-file-fold"
+				id="powerpoint-file-fold"
 				x1="16.5039"
 				x2="13.5039"
 				y1="6.09375"
@@ -289,7 +289,7 @@ export const Icons = {
 	filePowerpoint: FilePowerpointIcon,
 	fileText: FileText,
 	fileWord: FileWordIcon,
-	codexLogo: ({ ...props }: LucideProps) => (
+	openaiLogo: ({ ...props }: LucideProps) => (
 		<svg
 			aria-hidden="true"
 			viewBox="0 0 256 260"

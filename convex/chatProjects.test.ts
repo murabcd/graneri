@@ -1,7 +1,7 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { PROJECT_NOTE_READ_CHUNK_LENGTH } from "@workspace/ai/project-note-tools";
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -21,6 +21,10 @@ const otherIdentity = {
 	tokenIdentifier: "test|other",
 	email: "other@example.com",
 };
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 const createFixture = async () => {
 	const t = convexTest(schema, modules);
@@ -364,6 +368,7 @@ test("project note reads expose an explicit continuation offset", async () => {
 });
 
 test("removing a project clears it from active and archived chats", async () => {
+	vi.useFakeTimers();
 	const { asOwner, ownerWorkspaceId, projectId, t } = await createFixture();
 	await saveMessage({
 		asOwner,
@@ -383,11 +388,38 @@ test("removing a project clears it from active and archived chats", async () => 
 		workspaceId: ownerWorkspaceId,
 		chatId: "archived-chat",
 	});
+	for (let index = 0; index < 25; index += 1) {
+		await saveMessage({
+			asOwner,
+			workspaceId: ownerWorkspaceId,
+			chatId: `batched-active-chat-${index}`,
+			messageId: "first",
+			projectId,
+		});
+	}
 
 	await asOwner.mutation(api.projects.remove, {
 		workspaceId: ownerWorkspaceId,
 		id: projectId,
 	});
+	const pendingChats = await t.run(
+		async (ctx) =>
+			await ctx.db
+				.query("chats")
+				.withIndex(
+					"by_ownerTokenIdentifier_and_workspaceId_and_updatedAt",
+					(q) =>
+						q
+							.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
+							.eq("workspaceId", ownerWorkspaceId),
+				)
+				.take(100),
+	);
+	expect(pendingChats).toHaveLength(27);
+	expect(pendingChats.every((chat) => chat.projectId === projectId)).toBe(true);
+
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+
 	const chats = await t.run(
 		async (ctx) =>
 			await ctx.db
@@ -399,7 +431,8 @@ test("removing a project clears it from active and archived chats", async () => 
 							.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
 							.eq("workspaceId", ownerWorkspaceId),
 				)
-				.take(10),
+				.take(100),
 	);
-	expect(chats.map((chat) => chat.projectId)).toEqual([null, null]);
+	expect(chats).toHaveLength(27);
+	expect(chats.every((chat) => chat.projectId === null)).toBe(true);
 });

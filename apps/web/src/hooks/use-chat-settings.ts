@@ -83,13 +83,17 @@ const useChatSettingsWithPolicy = ({
 		[baseSettings, policy],
 	);
 	const currentRef = React.useRef({ chatId, settings: resolvedSettings });
-	currentRef.current = { chatId, settings: resolvedSettings };
+	React.useEffect(() => {
+		currentRef.current = { chatId, settings: resolvedSettings };
+	}, [chatId, resolvedSettings]);
 	const rememberedRef = React.useRef<ChatSettings>(
 		rememberedSettings ?? DEFAULT_CHAT_SETTINGS,
 	);
-	if (rememberedSettings) {
-		rememberedRef.current = rememberedSettings;
-	}
+	React.useEffect(() => {
+		if (rememberedSettings) {
+			rememberedRef.current = rememberedSettings;
+		}
+	}, [rememberedSettings]);
 
 	const updateSettings = React.useCallback(
 		(update: Partial<ChatSettings>) => {

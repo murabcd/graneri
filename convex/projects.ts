@@ -10,12 +10,12 @@ import {
 	projectColorValidator,
 	projectIconValidator,
 } from "./projectAppearance";
-import { clearProjectRelationships } from "./projectRelationshipCleanup";
 import {
 	assertSidebarReorderInputSize,
 	assertSidebarStoredReorderSize,
 	MAX_SIDEBAR_REORDER_ITEMS,
 } from "./reorderLimits";
+import { scheduleProjectRelationshipRetirement } from "./resourceRetirement";
 
 const projectFields = {
 	_id: v.id("projects"),
@@ -565,7 +565,7 @@ export const remove = mutation({
 		const identity = await requireIdentity(ctx);
 		const project = await requireOwnedProject(ctx, args.id, args.workspaceId);
 
-		await clearProjectRelationships(ctx, {
+		await scheduleProjectRelationshipRetirement(ctx, {
 			ownerTokenIdentifier: identity.tokenIdentifier,
 			workspaceId: args.workspaceId,
 			projectId: project._id,

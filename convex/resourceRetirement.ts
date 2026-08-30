@@ -3,12 +3,19 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
+import { clearChatContextState } from "./chatContextCompactions";
 
 const NOTE_BATCH_SIZE = 100;
 const CHAT_BATCH_SIZE = 25;
+const AUTOMATION_BATCH_SIZE = 100;
 
 const retirementProgressValidator = v.object({
 	retiredCount: v.number(),
+	hasMore: v.boolean(),
+});
+
+const relationshipCleanupProgressValidator = v.object({
+	clearedCount: v.number(),
 	hasMore: v.boolean(),
 });
 
@@ -17,10 +24,32 @@ type RetirementProgress = {
 	hasMore: boolean;
 };
 
+type RelationshipCleanupProgress = {
+	clearedCount: number;
+	hasMore: boolean;
+};
+
 type ChatRetirementBatchResult = {
 	deletedMessageCount: number;
 	hasMore: boolean;
 	retiredChat: boolean;
+};
+
+type ProjectRelationship = {
+	ownerTokenIdentifier: string;
+	workspaceId: Id<"workspaces">;
+	projectId: Id<"projects">;
+};
+
+const projectRelationshipFields = {
+	ownerTokenIdentifier: v.string(),
+	workspaceId: v.id("workspaces"),
+	projectId: v.id("projects"),
+};
+
+const projectArchivedRelationshipFields = {
+	...projectRelationshipFields,
+	isArchived: v.boolean(),
 };
 
 const retireNotes = async (
@@ -88,6 +117,145 @@ const loadChatsForWorkspace = async (
 				.eq("workspaceId", workspaceId),
 		)
 		.take(CHAT_BATCH_SIZE);
+
+export const clearProjectNoteRelationships = internalMutation({
+	args: projectArchivedRelationshipFields,
+	returns: relationshipCleanupProgressValidator,
+	handler: async (ctx, args): Promise<RelationshipCleanupProgress> => {
+		const notes = await ctx.db
+			.query("notes")
+			.withIndex("by_owner_ws_project_arch_upd", (q) =>
+				q
+					.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("projectId", args.projectId)
+					.eq("isArchived", args.isArchived),
+			)
+			.take(NOTE_BATCH_SIZE);
+		const now = Date.now();
+
+		await Promise.all(
+			notes.map((note) =>
+				ctx.db.patch(note._id, { projectId: undefined, updatedAt: now }),
+			),
+		);
+
+		const progress = {
+			clearedCount: notes.length,
+			hasMore: notes.length === NOTE_BATCH_SIZE,
+		};
+		if (progress.hasMore) {
+			await ctx.scheduler.runAfter(
+				0,
+				internal.resourceRetirement.clearProjectNoteRelationships,
+				args,
+			);
+		}
+
+		return progress;
+	},
+});
+
+export const clearProjectChatRelationships = internalMutation({
+	args: projectArchivedRelationshipFields,
+	returns: relationshipCleanupProgressValidator,
+	handler: async (ctx, args): Promise<RelationshipCleanupProgress> => {
+		const chats = await ctx.db
+			.query("chats")
+			.withIndex("by_owner_ws_project_arch_upd", (q) =>
+				q
+					.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("projectId", args.projectId)
+					.eq("isArchived", args.isArchived),
+			)
+			.take(CHAT_BATCH_SIZE);
+		const now = Date.now();
+
+		await Promise.all(
+			chats.map(async (chat) => {
+				await ctx.db.patch(chat._id, { projectId: null, updatedAt: now });
+				await clearChatContextState(ctx, chat._id);
+			}),
+		);
+
+		const progress = {
+			clearedCount: chats.length,
+			hasMore: chats.length === CHAT_BATCH_SIZE,
+		};
+		if (progress.hasMore) {
+			await ctx.scheduler.runAfter(
+				0,
+				internal.resourceRetirement.clearProjectChatRelationships,
+				args,
+			);
+		}
+
+		return progress;
+	},
+});
+
+export const clearProjectAutomationRelationships = internalMutation({
+	args: projectRelationshipFields,
+	returns: relationshipCleanupProgressValidator,
+	handler: async (ctx, args): Promise<RelationshipCleanupProgress> => {
+		const automations = await ctx.db
+			.query("automations")
+			.withIndex("by_owner_workspace_project_updatedAt", (q) =>
+				q
+					.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("projectId", args.projectId),
+			)
+			.take(AUTOMATION_BATCH_SIZE);
+		const now = Date.now();
+
+		await Promise.all(
+			automations.map((automation) =>
+				ctx.db.patch(automation._id, { projectId: null, updatedAt: now }),
+			),
+		);
+
+		const progress = {
+			clearedCount: automations.length,
+			hasMore: automations.length === AUTOMATION_BATCH_SIZE,
+		};
+		if (progress.hasMore) {
+			await ctx.scheduler.runAfter(
+				0,
+				internal.resourceRetirement.clearProjectAutomationRelationships,
+				args,
+			);
+		}
+
+		return progress;
+	},
+});
+
+export const scheduleProjectRelationshipRetirement = async (
+	ctx: MutationCtx,
+	relationship: ProjectRelationship,
+) => {
+	await Promise.all([
+		...([false, true] as const).flatMap((isArchived) => [
+			ctx.scheduler.runAfter(
+				0,
+				internal.resourceRetirement.clearProjectNoteRelationships,
+				{ ...relationship, isArchived },
+			),
+			ctx.scheduler.runAfter(
+				0,
+				internal.resourceRetirement.clearProjectChatRelationships,
+				{ ...relationship, isArchived },
+			),
+		]),
+		ctx.scheduler.runAfter(
+			0,
+			internal.resourceRetirement.clearProjectAutomationRelationships,
+			relationship,
+		),
+	]);
+};
 
 export const retireNote = internalMutation({
 	args: {

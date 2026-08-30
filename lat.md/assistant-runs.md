@@ -471,7 +471,7 @@ non-terminal run; clients must queue follow-ups against the active run.
 Plan-mode clarification uses the producer-neutral `request_user_input` tool. It
 asks one to three focused single-select questions. Independent multi-choice
 decisions are expressed as a sequence of Yes/No questions, matching the native
-ChatGPT questionnaire contract. Tool
+single-select questionnaire contract. Tool
 approvals remain available in either mode because authorization is an execution
 requirement rather than planning clarification. The shared Human Decision bar
 presents questionnaires and approvals through one interface in chat and note

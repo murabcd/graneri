@@ -286,6 +286,14 @@ test("standalone automations persist only owned workspace projects", async () =>
 		workspaceId,
 		id: project._id,
 	});
+	await t.mutation(
+		internal.resourceRetirement.clearProjectAutomationRelationships,
+		{
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			workspaceId,
+			projectId: project._id,
+		},
+	);
 	await expect(
 		asOwner.query(api.automations.get, { automationId: automation.id }),
 	).resolves.toMatchObject({ projectId: null });

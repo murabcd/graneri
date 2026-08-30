@@ -28,7 +28,7 @@ import {
 	serviceTiers,
 } from "@/lib/ai/models";
 
-const OpenAILogo = Icons.codexLogo;
+const OpenAILogo = Icons.openaiLogo;
 
 export type ChatModel = (typeof chatModels)[number];
 export type { ReasoningEffort, ServiceTier };

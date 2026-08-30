@@ -8,7 +8,7 @@ describe("HoverScrollTitle", () => {
 		cleanup();
 	});
 
-	it("uses Codex timing for overflowing titles", () => {
+	it("uses distance-aware timing for overflowing titles", () => {
 		expect(getHoverTitleScrollMetrics(220, 100)).toEqual({
 			delayMs: 150,
 			distance: 120,
