@@ -13,6 +13,7 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
+import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import {
 	reasoningEffortValidator,
 	serviceTierValidator,
@@ -188,9 +189,14 @@ const automationIdArgs = {
 };
 
 const automationCreateValidator = v.object(automationCreateArgs);
+const automationCreateFromChatValidator = automationCreateValidator
+	.omit("projectId")
+	.omit("chatId")
+	.extend({ sourceChatId: v.string() });
 const automationUpdateValidator = v.object(automationUpdateArgs);
-const automationAssistantUpdateArgs =
-	automationUpdateValidator.omit("projectId").fields;
+const automationAssistantUpdateValidator =
+	automationUpdateValidator.omit("projectId");
+const automationAssistantUpdateArgs = automationAssistantUpdateValidator.fields;
 
 const { requireIdentity } = createResourceAccess("automations");
 
@@ -479,6 +485,13 @@ type CreateAutomationForOwnerArgs = Infer<typeof automationCreateValidator> & {
 	authorName: string;
 };
 
+type CreateAutomationFromChatForOwnerArgs = Infer<
+	typeof automationCreateFromChatValidator
+> & {
+	ownerTokenIdentifier: string;
+	authorName: string;
+};
+
 const createAutomationForOwner = async (
 	ctx: MutationCtx,
 	args: CreateAutomationForOwnerArgs,
@@ -593,7 +606,47 @@ const createAutomationForOwner = async (
 	return toListItem(automation);
 };
 
+const createAutomationFromChatForOwner = async (
+	ctx: MutationCtx,
+	args: CreateAutomationFromChatForOwnerArgs,
+) => {
+	const { sourceChatId, ...automation } = args;
+	if (automation.destination === "current_chat") {
+		return await createAutomationForOwner(ctx, {
+			...automation,
+			projectId: null,
+			chatId: sourceChatId,
+		});
+	}
+
+	const sourceChat = await getOwnedActiveChatById(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.workspaceId,
+		sourceChatId,
+	);
+
+	if (!sourceChat) {
+		throw new ConvexError({
+			code: "CHAT_NOT_FOUND",
+			message: "Chat not found.",
+		});
+	}
+
+	return await createAutomationForOwner(ctx, {
+		...automation,
+		projectId: sourceChat.projectId,
+		chatId: undefined,
+	});
+};
+
 type UpdateAutomationForOwnerArgs = Infer<typeof automationUpdateValidator> & {
+	ownerTokenIdentifier: string;
+};
+
+type UpdateAutomationFromAssistantForOwnerArgs = Infer<
+	typeof automationAssistantUpdateValidator
+> & {
 	ownerTokenIdentifier: string;
 };
 
@@ -671,6 +724,21 @@ const updateAutomationForOwner = async (
 	}
 
 	return toListItem(updatedAutomation);
+};
+
+const updateAutomationFromAssistantForOwner = async (
+	ctx: MutationCtx,
+	args: UpdateAutomationFromAssistantForOwnerArgs,
+) => {
+	const automation = await requireOwnedAutomation(
+		ctx,
+		args.ownerTokenIdentifier,
+		args.automationId,
+	);
+	return await updateAutomationForOwner(ctx, {
+		...args,
+		projectId: automation.projectId,
+	});
 };
 
 const toggleAutomationForOwner = async (
@@ -873,12 +941,37 @@ export const create = mutation({
 	},
 });
 
+export const createFromChat = mutation({
+	args: automationCreateFromChatValidator.fields,
+	returns: automationListItemValidator,
+	handler: async (ctx, args) => {
+		const identity = await requireIdentity(ctx);
+		return await createAutomationFromChatForOwner(ctx, {
+			...args,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+			authorName: getAuthorName(identity),
+		});
+	},
+});
+
 export const update = mutation({
 	args: automationUpdateArgs,
 	returns: automationListItemValidator,
 	handler: async (ctx, args) => {
 		const identity = await requireIdentity(ctx);
 		return await updateAutomationForOwner(ctx, {
+			...args,
+			ownerTokenIdentifier: identity.tokenIdentifier,
+		});
+	},
+});
+
+export const updateFromAssistant = mutation({
+	args: automationAssistantUpdateArgs,
+	returns: automationListItemValidator,
+	handler: async (ctx, args) => {
+		const identity = await requireIdentity(ctx);
+		return await updateAutomationFromAssistantForOwner(ctx, {
 			...args,
 			ownerTokenIdentifier: identity.tokenIdentifier,
 		});
@@ -954,23 +1047,15 @@ export const getForOwner = internalQuery({
 		),
 });
 
-export const createForOwner = internalMutation({
+export const createFromChatForOwner = internalMutation({
 	args: {
 		ownerTokenIdentifier: v.string(),
 		authorName: v.string(),
-		...automationCreateArgs,
+		...automationCreateFromChatValidator.fields,
 	},
 	returns: automationListItemValidator,
-	handler: async (ctx, args) => await createAutomationForOwner(ctx, args),
-});
-
-export const updateForOwner = internalMutation({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		...automationUpdateArgs,
-	},
-	returns: automationListItemValidator,
-	handler: async (ctx, args) => await updateAutomationForOwner(ctx, args),
+	handler: async (ctx, args) =>
+		await createAutomationFromChatForOwner(ctx, args),
 });
 
 export const updateFromAssistantForOwner = internalMutation({
@@ -979,17 +1064,8 @@ export const updateFromAssistantForOwner = internalMutation({
 		...automationAssistantUpdateArgs,
 	},
 	returns: automationListItemValidator,
-	handler: async (ctx, args) => {
-		const automation = await requireOwnedAutomation(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.automationId,
-		);
-		return await updateAutomationForOwner(ctx, {
-			...args,
-			projectId: automation.projectId,
-		});
-	},
+	handler: async (ctx, args) =>
+		await updateAutomationFromAssistantForOwner(ctx, args),
 });
 
 export const togglePausedForOwner = internalMutation({

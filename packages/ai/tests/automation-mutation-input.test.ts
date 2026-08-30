@@ -44,13 +44,24 @@ const mutationInput = createAutomationMutationInputNormalizer({
 describe("automation mutation input normalization", () => {
 	it("normalizes create inputs for a transport adapter", () => {
 		expect(mutationInput.create(automation)).toEqual({
-			...automation,
+			title: automation.title,
+			prompt: automation.prompt,
+			model: automation.model,
+			reasoningEffort: automation.reasoningEffort,
+			serviceTier: automation.serviceTier,
+			webSearchEnabled: automation.webSearchEnabled,
+			appsEnabled: automation.appsEnabled,
 			appSources: automation.appSources,
+			schedule: automation.schedule,
+			destination: automation.destination,
+			deliveryPolicy: automation.deliveryPolicy,
+			stopCondition: automation.stopCondition,
 			target: {
 				kind: "notes",
 				noteIds: ["note:note-1", "note:note-2"],
 			},
 		});
+		expect(mutationInput.create(automation)).not.toHaveProperty("chatId");
 	});
 
 	it("emits only fields accepted by update mutations", () => {

@@ -3,7 +3,6 @@
 import {
 	type AutomationActions,
 	createAutomationMutationInputNormalizer,
-	resolveAutomationProjectIdForCreate,
 } from "@workspace/ai/automation-tools";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -26,24 +25,14 @@ export const createAssistantRunAutomationActions = (
 		chatId: string;
 	},
 ): AutomationActions => ({
-	createAutomation: async (automation) => {
-		const projectId = await resolveAutomationProjectIdForCreate({
-			destination: automation.destination,
-			loadSourceProjectId: async () =>
-				await ctx.runQuery(internal.chatProjectState.getForOwner, {
-					ownerTokenIdentifier: args.ownerTokenIdentifier,
-					workspaceId: args.workspaceId,
-					chatId: args.chatId,
-				}),
-		});
-		return await ctx.runMutation(internal.automations.createForOwner, {
-			projectId,
+	createAutomation: async (automation) =>
+		await ctx.runMutation(internal.automations.createFromChatForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,
 			authorName: args.authorName,
 			workspaceId: args.workspaceId,
+			sourceChatId: args.chatId,
 			...automationMutationInput.create(automation),
-		});
-	},
+		}),
 	deleteAutomation: async ({ automationId }) =>
 		await ctx.runMutation(internal.automations.removeForOwner, {
 			ownerTokenIdentifier: args.ownerTokenIdentifier,

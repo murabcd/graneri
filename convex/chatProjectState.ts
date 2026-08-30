@@ -1,7 +1,6 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalQuery, type MutationCtx } from "./_generated/server";
-import { getOwnedActiveChatById } from "./assistantRunLifecycle";
+import type { MutationCtx } from "./_generated/server";
 import { requireOwnedProjectForOwner } from "./projects";
 
 export const requireValidNoteChatProject = (
@@ -43,21 +42,3 @@ export const resolveChatProjectIdForSave = async (
 
 	return projectId;
 };
-
-export const getForOwner = internalQuery({
-	args: {
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		chatId: v.string(),
-	},
-	returns: v.union(v.id("projects"), v.null()),
-	handler: async (ctx, args) => {
-		const chat = await getOwnedActiveChatById(
-			ctx,
-			args.ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-		return chat?.projectId ?? null;
-	},
-});

@@ -122,12 +122,10 @@ const toAutomationAdapterTarget = (target, toNoteId) =>
 const toAutomationAdapterAppSources = (appSources) =>
 	appSources.map((source) => automationAppSourceSchema.parse(source));
 
-export const resolveAutomationProjectIdForCreate = async ({
-	destination,
-	loadSourceProjectId,
-}) => (destination === "current_chat" ? null : await loadSourceProjectId());
-
-const toAutomationCreateMutationInput = (automation, toNoteId) => ({
+const toAutomationCreateMutationInput = (
+	{ chatId: _sourceChatId, ...automation },
+	toNoteId,
+) => ({
 	...automation,
 	appSources: toAutomationAdapterAppSources(automation.appSources),
 	target: toAutomationAdapterTarget(automation.target, toNoteId),

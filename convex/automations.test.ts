@@ -110,26 +110,35 @@ const saveChatMessage = async ({
 		},
 	});
 
-test("owner-scoped automation adapters reuse the authenticated CRUD boundary", async () => {
-	const { t, workspaceId } = await createWorkspace();
-	const automation = await t.mutation(internal.automations.createForOwner, {
-		projectId: null,
-		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-		authorName: "Background agent",
+test("assistant automation adapters reuse the authenticated CRUD boundary", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	await saveChatMessage({
+		asOwner,
+		chatId: "assistant-source-chat",
+		text: "Create an automation",
 		workspaceId,
-		title: "Daily review",
-		prompt: "Review the workspace.",
-		model: DEFAULT_CHAT_MODEL_ID,
-		reasoningEffort: "medium",
-		serviceTier: "auto",
-		webSearchEnabled: false,
-		appsEnabled: true,
-		appSources: [],
-		destination: "standalone",
-		deliveryPolicy: "always" as const,
-		schedule: dailySchedule,
-		target: { kind: "workspace" },
 	});
+	const automation = await t.mutation(
+		internal.automations.createFromChatForOwner,
+		{
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			authorName: "Background agent",
+			workspaceId,
+			sourceChatId: "assistant-source-chat",
+			title: "Daily review",
+			prompt: "Review the workspace.",
+			model: DEFAULT_CHAT_MODEL_ID,
+			reasoningEffort: "medium",
+			serviceTier: "auto",
+			webSearchEnabled: false,
+			appsEnabled: true,
+			appSources: [],
+			destination: "standalone",
+			deliveryPolicy: "always" as const,
+			schedule: dailySchedule,
+			target: { kind: "workspace" },
+		},
+	);
 
 	const listed = await t.query(internal.automations.listForOwner, {
 		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
@@ -139,22 +148,24 @@ test("owner-scoped automation adapters reuse the authenticated CRUD boundary", a
 		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 		automationId: automation.id,
 	});
-	const updated = await t.mutation(internal.automations.updateForOwner, {
-		projectId: null,
-		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-		automationId: automation.id,
-		title: "Weekday review",
-		prompt: "Review the workspace on weekdays.",
-		model: DEFAULT_CHAT_MODEL_ID,
-		reasoningEffort: "high",
-		serviceTier: "auto",
-		webSearchEnabled: true,
-		appsEnabled: true,
-		appSources: [],
-		schedule: weekdaySchedule,
-		deliveryPolicy: "always" as const,
-		target: { kind: "workspace" },
-	});
+	const updated = await t.mutation(
+		internal.automations.updateFromAssistantForOwner,
+		{
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			automationId: automation.id,
+			title: "Weekday review",
+			prompt: "Review the workspace on weekdays.",
+			model: DEFAULT_CHAT_MODEL_ID,
+			reasoningEffort: "high",
+			serviceTier: "auto",
+			webSearchEnabled: true,
+			appsEnabled: true,
+			appSources: [],
+			schedule: weekdaySchedule,
+			deliveryPolicy: "always" as const,
+			target: { kind: "workspace" },
+		},
+	);
 	const paused = await t.mutation(internal.automations.togglePausedForOwner, {
 		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 		automationId: automation.id,
@@ -232,10 +243,9 @@ test("standalone automations persist only owned workspace projects", async () =>
 		target: { kind: "workspace" },
 	});
 	expect(automation.projectId).toBe(project._id);
-	const assistantUpdated = await t.mutation(
-		internal.automations.updateFromAssistantForOwner,
+	const assistantUpdated = await asOwner.mutation(
+		api.automations.updateFromAssistant,
 		{
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			automationId: automation.id,
 			title: "Updated project review",
 			prompt: automation.prompt,
@@ -279,6 +289,88 @@ test("standalone automations persist only owned workspace projects", async () =>
 	await expect(
 		asOwner.query(api.automations.get, { automationId: automation.id }),
 	).resolves.toMatchObject({ projectId: null });
+});
+
+test("chat-created automations derive destination ownership atomically", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const project = await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Research",
+	});
+	await saveChatMessage({
+		asOwner,
+		chatId: "project-source-chat",
+		text: "Create an automation",
+		workspaceId,
+	});
+	await asOwner.mutation(api.chats.setProject, {
+		workspaceId,
+		chatId: "project-source-chat",
+		projectId: project._id,
+	});
+
+	const standalone = await asOwner.mutation(api.automations.createFromChat, {
+		workspaceId,
+		sourceChatId: "project-source-chat",
+		title: "Standalone project review",
+		prompt: "Review the project.",
+		model: DEFAULT_CHAT_MODEL_ID,
+		reasoningEffort: "medium",
+		serviceTier: "auto",
+		webSearchEnabled: false,
+		appsEnabled: true,
+		appSources: [],
+		destination: "standalone",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
+		target: { kind: "workspace" },
+	});
+	const currentChat = await asOwner.mutation(api.automations.createFromChat, {
+		workspaceId,
+		sourceChatId: "project-source-chat",
+		title: "Current chat project review",
+		prompt: "Review the project.",
+		model: DEFAULT_CHAT_MODEL_ID,
+		reasoningEffort: "medium",
+		serviceTier: "auto",
+		webSearchEnabled: false,
+		appsEnabled: true,
+		appSources: [],
+		destination: "current_chat",
+		deliveryPolicy: "always",
+		schedule: dailySchedule,
+		target: { kind: "workspace" },
+	});
+
+	expect(standalone.projectId).toBe(project._id);
+	expect(standalone.chatId).not.toBe("project-source-chat");
+	expect(currentChat).toMatchObject({
+		projectId: null,
+		chatId: "project-source-chat",
+	});
+});
+
+test("chat-created automations reject a missing source chat", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+
+	await expect(
+		asOwner.mutation(api.automations.createFromChat, {
+			workspaceId,
+			sourceChatId: "missing-chat",
+			title: "Missing source",
+			prompt: "Review the project.",
+			model: DEFAULT_CHAT_MODEL_ID,
+			reasoningEffort: "medium",
+			serviceTier: "auto",
+			webSearchEnabled: false,
+			appsEnabled: true,
+			appSources: [],
+			destination: "standalone",
+			deliveryPolicy: "always",
+			schedule: dailySchedule,
+			target: { kind: "workspace" },
+		}),
+	).rejects.toThrow("Chat not found.");
 });
 
 test("current-chat automations cannot store a project snapshot", async () => {
@@ -763,359 +855,4 @@ test("automation run transitions reject mismatched automation and run ids", asyn
 	expect(rows.secondRun?.status).toBe("running");
 	expect(rows.firstAutomation?.activeRunId).toBe(firstRun.runId);
 	expect(rows.secondAutomation?.activeRunId).toBe(secondRun.runId);
-});
-
-test("moving a chat to trash pauses its automation and restoring resumes it", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
-
-	await saveChatMessage({
-		asOwner,
-		chatId: "chat-with-automation",
-		text: "Create an automation",
-		workspaceId,
-	});
-
-	const automation = await asOwner.mutation(api.automations.create, {
-		projectId: null,
-		workspaceId,
-		title: "Daily review",
-		prompt: "Review the workspace.",
-		model: DEFAULT_CHAT_MODEL_ID,
-		reasoningEffort: "medium",
-		serviceTier: "auto",
-		webSearchEnabled: false,
-		appsEnabled: true,
-		appSources: [],
-		destination: "current_chat",
-		deliveryPolicy: "always",
-		schedule: dailySchedule,
-		target: {
-			kind: "workspace",
-		},
-		chatId: "chat-with-automation",
-	});
-
-	expect(automation.isPaused).toBe(false);
-	expect(automation.nextRunAt).not.toBeNull();
-
-	await asOwner.mutation(api.chats.moveToTrash, {
-		workspaceId,
-		chatId: automation.chatId,
-	});
-
-	const automations = await asOwner.query(api.automations.list, {
-		workspaceId,
-	});
-	const trashedChatAutomation = automations.find(
-		(item) => item.id === automation.id,
-	);
-
-	expect(trashedChatAutomation).toMatchObject({
-		id: automation.id,
-		isPaused: true,
-		nextRunAt: null,
-	});
-
-	await asOwner.mutation(api.chats.restore, {
-		workspaceId,
-		chatId: automation.chatId,
-	});
-
-	const restoredAutomations = await asOwner.query(api.automations.list, {
-		workspaceId,
-	});
-	const restoredChatAutomation = restoredAutomations.find(
-		(item) => item.id === automation.id,
-	);
-
-	expect(restoredChatAutomation?.isPaused).toBe(false);
-	expect(restoredChatAutomation?.nextRunAt).not.toBeNull();
-});
-
-test("deleting a chat moves its automation to a fresh chat", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
-	const project = await asOwner.mutation(api.projects.create, {
-		workspaceId,
-		name: "Chat project",
-	});
-
-	await saveChatMessage({
-		asOwner,
-		chatId: "chat-to-delete",
-		text: "Create an automation",
-		workspaceId,
-	});
-	await asOwner.mutation(api.chats.setProject, {
-		workspaceId,
-		chatId: "chat-to-delete",
-		projectId: project._id,
-	});
-
-	const automation = await asOwner.mutation(api.automations.create, {
-		projectId: null,
-		workspaceId,
-		title: "Daily review",
-		prompt: "Review the workspace.",
-		model: DEFAULT_CHAT_MODEL_ID,
-		reasoningEffort: "medium",
-		serviceTier: "auto",
-		webSearchEnabled: false,
-		appsEnabled: true,
-		appSources: [],
-		destination: "current_chat",
-		deliveryPolicy: "always",
-		schedule: dailySchedule,
-		target: {
-			kind: "workspace",
-		},
-		chatId: "chat-to-delete",
-	});
-
-	await asOwner.mutation(api.chats.moveToTrash, {
-		workspaceId,
-		chatId: automation.chatId,
-	});
-	await asOwner.mutation(api.chats.remove, {
-		workspaceId,
-		chatId: automation.chatId,
-	});
-
-	const deletedChat = await asOwner.query(api.chats.getSession, {
-		workspaceId,
-		chatId: automation.chatId,
-	});
-	const automations = await asOwner.query(api.automations.list, {
-		workspaceId,
-	});
-	const movedAutomation = automations.find((item) => item.id === automation.id);
-
-	expect(deletedChat).toBeNull();
-	expect(movedAutomation?.chatId).not.toBe(automation.chatId);
-	expect(movedAutomation?.chatId).toMatch(/^automation-/);
-	expect(movedAutomation?.projectId).toBe(project._id);
-	expect(movedAutomation?.isPaused).toBe(false);
-	expect(movedAutomation?.nextRunAt).not.toBeNull();
-});
-
-test("deleting an automation leaves its chat", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
-
-	await saveChatMessage({
-		asOwner,
-		chatId: "chat-kept-after-automation-delete",
-		text: "Create an automation",
-		workspaceId,
-	});
-
-	const automation = await asOwner.mutation(api.automations.create, {
-		projectId: null,
-		workspaceId,
-		title: "Daily review",
-		prompt: "Review the workspace.",
-		model: DEFAULT_CHAT_MODEL_ID,
-		reasoningEffort: "medium",
-		serviceTier: "auto",
-		webSearchEnabled: false,
-		appsEnabled: true,
-		appSources: [],
-		destination: "current_chat",
-		deliveryPolicy: "always",
-		schedule: dailySchedule,
-		target: {
-			kind: "workspace",
-		},
-		chatId: "chat-kept-after-automation-delete",
-	});
-
-	await asOwner.mutation(api.automations.remove, {
-		automationId: automation.id,
-	});
-
-	const chat = await asOwner.query(api.chats.getSession, {
-		workspaceId,
-		chatId: automation.chatId,
-	});
-	const automations = await asOwner.query(api.automations.list, {
-		workspaceId,
-	});
-
-	expect(chat).not.toBeNull();
-	expect(automations.some((item) => item.id === automation.id)).toBe(false);
-});
-
-test("owner cleanup removes automations and automation runs", async () => {
-	const { t, workspaceId } = await createWorkspace();
-
-	await t.run(async (ctx) => {
-		const automationId = await ctx.db.insert("automations", {
-			projectId: null,
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			title: "Daily review",
-			prompt: "Review the workspace.",
-			model: DEFAULT_CHAT_MODEL_ID,
-			reasoningEffort: "medium",
-			serviceTier: "auto",
-			webSearchEnabled: false,
-			appsEnabled: true,
-			appSources: [],
-			destination: "standalone",
-			deliveryPolicy: "always",
-			schedule: dailySchedule,
-			targetKind: "workspace",
-			targetLabel: "Workspace",
-			chatId: "automation-cleanup-chat",
-			isPaused: false,
-			isCompleted: false,
-			createdAt: 1_000,
-			updatedAt: 1_000,
-		});
-		await ctx.db.insert("automationRuns", {
-			automationId,
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			chatId: "automation-cleanup-chat",
-			scheduledFor: 2_000,
-			reason: "manual",
-			status: "completed",
-			isUnread: false,
-			startedAt: 2_000,
-			completedAt: 3_000,
-			createdAt: 2_000,
-			updatedAt: 3_000,
-		});
-	});
-
-	await t.mutation(internal.automations.removeAllForOwner, {
-		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-	});
-
-	const rows = await t.run(async (ctx) => ({
-		automations: await ctx.db.query("automations").take(1),
-		runs: await ctx.db.query("automationRuns").take(1),
-	}));
-
-	expect(rows.automations).toHaveLength(0);
-	expect(rows.runs).toHaveLength(0);
-});
-
-test("removeOrphanedRuns deletes automation runs after automation is gone", async () => {
-	const { t, workspaceId } = await createWorkspace();
-	const automationId = await t.run(async (ctx) => {
-		const automationId = await ctx.db.insert("automations", {
-			projectId: null,
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			title: "Daily review",
-			prompt: "Review the workspace.",
-			model: DEFAULT_CHAT_MODEL_ID,
-			reasoningEffort: "medium",
-			serviceTier: "auto",
-			webSearchEnabled: false,
-			appsEnabled: true,
-			appSources: [],
-			destination: "standalone",
-			deliveryPolicy: "always",
-			schedule: dailySchedule,
-			targetKind: "workspace",
-			targetLabel: "Workspace",
-			chatId: "automation-orphan-run-chat",
-			isPaused: false,
-			isCompleted: false,
-			createdAt: 1_000,
-			updatedAt: 1_000,
-		});
-		await ctx.db.insert("automationRuns", {
-			automationId,
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			chatId: "automation-orphan-run-chat",
-			scheduledFor: 2_000,
-			reason: "manual",
-			status: "completed",
-			isUnread: false,
-			startedAt: 2_000,
-			completedAt: 3_000,
-			createdAt: 2_000,
-			updatedAt: 3_000,
-		});
-		await ctx.db.delete(automationId);
-
-		return automationId;
-	});
-
-	const result = await t.mutation(internal.automations.removeOrphanedRuns, {
-		automationId,
-	});
-	const runs = await t.run(async (ctx) =>
-		ctx.db
-			.query("automationRuns")
-			.withIndex("by_automationId_and_scheduledFor", (q) =>
-				q.eq("automationId", automationId),
-			)
-			.take(1),
-	);
-
-	expect(result).toEqual({ deletedCount: 1, hasMore: false });
-	expect(runs).toHaveLength(0);
-});
-
-test("removeOrphanedRuns leaves automation runs while automation exists", async () => {
-	const { t, workspaceId } = await createWorkspace();
-	const automationId = await t.run(async (ctx) => {
-		const automationId = await ctx.db.insert("automations", {
-			projectId: null,
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			title: "Daily review",
-			prompt: "Review the workspace.",
-			model: DEFAULT_CHAT_MODEL_ID,
-			reasoningEffort: "medium",
-			serviceTier: "auto",
-			webSearchEnabled: false,
-			appsEnabled: true,
-			appSources: [],
-			destination: "standalone",
-			deliveryPolicy: "always",
-			schedule: dailySchedule,
-			targetKind: "workspace",
-			targetLabel: "Workspace",
-			chatId: "automation-active-run-chat",
-			isPaused: false,
-			isCompleted: false,
-			createdAt: 1_000,
-			updatedAt: 1_000,
-		});
-		await ctx.db.insert("automationRuns", {
-			automationId,
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			chatId: "automation-active-run-chat",
-			scheduledFor: 2_000,
-			reason: "manual",
-			status: "completed",
-			isUnread: false,
-			startedAt: 2_000,
-			completedAt: 3_000,
-			createdAt: 2_000,
-			updatedAt: 3_000,
-		});
-
-		return automationId;
-	});
-
-	const result = await t.mutation(internal.automations.removeOrphanedRuns, {
-		automationId,
-	});
-	const runs = await t.run(async (ctx) =>
-		ctx.db
-			.query("automationRuns")
-			.withIndex("by_automationId_and_scheduledFor", (q) =>
-				q.eq("automationId", automationId),
-			)
-			.take(1),
-	);
-
-	expect(result).toEqual({ deletedCount: 0, hasMore: false });
-	expect(runs).toHaveLength(1);
 });

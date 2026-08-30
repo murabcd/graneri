@@ -62,10 +62,15 @@ Each automation also stores one required nullable cloud `projectId`, separate
 from its model and capability settings. A standalone run assigns that project
 to its dedicated destination chat before execution, so project-note tools can
 retrieve relevant notes on demand. Creating a standalone definition from chat
-copies the source chat's project, while the automation dialog stores its
-explicit selection. A `current_chat` run instead uses the attached chat's live
+copies the source chat's project inside the same [[convex/automations.ts]]
+mutation that creates the definition; both hosted and durable-run adapters pass
+only the source chat identity, so ownership cannot change between a separate
+read and write. The automation dialog stores its explicit selection. A
+`current_chat` run instead uses the attached chat's live
 project relationship at reservation time; changing a definition cannot
-silently replace the container of an existing chat. Project deletion clears
+silently replace the container of an existing chat. Assistant-authored updates
+also preserve the definition's project inside their mutation instead of
+round-tripping the relationship through an adapter. Project deletion clears
 affected automation relationships through the same retirement path that clears
 chat relationships.
 
