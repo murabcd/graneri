@@ -248,6 +248,14 @@ adapter over Electron authorization, selection, revocation, and descriptor
 loading. The renderer does not persist paths or duplicate native capability
 state. A late load result must never replace newer request state or expose the
 descriptor from the previously active chat scope.
+[[apps/web/src/lib/chat-request-preparation.ts]] owns the two explicit sources
+for a request's local capability: authorize references from a new message, or
+reuse an already-authorized opaque session for continuation. Workspace and note
+chat callers use the same request builder for both sources. The existing
+[[apps/web/src/hooks/use-renderer-chat-session.ts]] seam owns continuation
+request preparation and pending local-tool recovery so chat surfaces cannot
+install divergent recovery effects or supply a different continuation policy to
+regeneration and human-decision flows.
 In the desktop Ask AI composer, `Add local folder` opens the native single-directory
 picker and registers the selected root through that same session. The active
 root appears beside the Web and Plan controls as a removable folder chip. The

@@ -68,10 +68,7 @@ import {
 	createChatPluginDraft,
 } from "@/lib/chat-plugin-prefill";
 import { getQueuedChatComposerEditDraft } from "@/lib/chat-queue";
-import {
-	buildWorkspaceChatRequestBody,
-	buildWorkspaceChatRequestBodyFromLocalCapability,
-} from "@/lib/chat-request-preparation";
+import { buildWorkspaceChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
@@ -330,51 +327,6 @@ const useChatPageController = ({
 		void prefetchConvexToken();
 	}, [activeWorkspaceId]);
 
-	const isAutomationRunning = Boolean(runningAutomationRun);
-	const {
-		canStop,
-		deleteMessage,
-		displayActiveRun,
-		displayMessages,
-		error,
-		hasLocallyCompletedAssistantMessage,
-		handleStop,
-		isChatRequestPending,
-		isPreparingRequest,
-		isQueuedMessageEditCurrent,
-		pendingHumanDecision,
-		onQueuedFollowUpsReorder,
-		queuedFollowUps,
-		recoverPendingLocalCapabilityCalls,
-		runPlan,
-		regenerateTurn,
-		restoreEditedQueuedMessage,
-		streamingMessageIds,
-		submitTurn,
-		submitHumanDecision,
-		updateQueuedTurn,
-		editDraft: queuedMessageEditDraft,
-	} = useRendererChatSession({
-		activeRun,
-		chatId,
-		contextLabel: "chat",
-		isExternallyBlocked: isAutomationRunning,
-		onEditQueuedMessage: (queuedMessage) => {
-			const editDraft = getQueuedChatComposerEditDraft(queuedMessage);
-			setEditingMessageId(queuedMessage._id);
-			setDraft(editDraft.text);
-			setDraftMetadata(
-				editDraft.mentions.length > 0 ? { mentions: editDraft.mentions } : null,
-			);
-			setAttachedFiles([]);
-		},
-		persistedMessages,
-		stopExternalRun: stopRunningAutomation,
-		workspaceId: activeWorkspaceId,
-	});
-	const hasMessages = displayMessages.length > 0 || isAutomationRunning;
-	const isNotesLoading = notes === undefined;
-	const isRecipesLoading = recipeData === undefined;
 	const { isSettingsLoading, settings, updateSettings } = useChatSettings({
 		chatId,
 		storedSettings: currentChat ?? null,
@@ -391,6 +343,69 @@ const useChatPageController = ({
 		storedChat: currentChat,
 		workspaceId: activeWorkspaceId,
 	});
+	const buildContinuationRequestBody = React.useCallback(
+		async (session: typeof localCapabilitySession) => {
+			const { mentionIds, recipeSlug, requestSelectedSourceIds } =
+				getWorkspaceChatMentionContext(mentions);
+			return await buildWorkspaceChatRequestBody({
+				localCapability: { source: "session", session },
+				mentions: mentionIds,
+				projectId,
+				recipeSlug,
+				resolveConvexToken: getCachedConvexToken,
+				selectedSourceIds: requestSelectedSourceIds,
+				settings,
+				workspaceId: activeWorkspaceId,
+			});
+		},
+		[activeWorkspaceId, mentions, projectId, settings],
+	);
+	const isAutomationRunning = Boolean(runningAutomationRun);
+	const {
+		canStop,
+		deleteMessage,
+		displayActiveRun,
+		displayMessages,
+		error,
+		hasLocallyCompletedAssistantMessage,
+		handleStop,
+		isChatRequestPending,
+		isPreparingRequest,
+		isQueuedMessageEditCurrent,
+		pendingHumanDecision,
+		onQueuedFollowUpsReorder,
+		queuedFollowUps,
+		runPlan,
+		regenerateTurn,
+		restoreEditedQueuedMessage,
+		streamingMessageIds,
+		submitTurn,
+		submitHumanDecision,
+		updateQueuedTurn,
+		editDraft: queuedMessageEditDraft,
+	} = useRendererChatSession({
+		activeRun,
+		buildContinuationRequestBody,
+		chatId,
+		contextLabel: "chat",
+		isExternallyBlocked: isAutomationRunning,
+		localCapabilitySession,
+		onEditQueuedMessage: (queuedMessage) => {
+			const editDraft = getQueuedChatComposerEditDraft(queuedMessage);
+			setEditingMessageId(queuedMessage._id);
+			setDraft(editDraft.text);
+			setDraftMetadata(
+				editDraft.mentions.length > 0 ? { mentions: editDraft.mentions } : null,
+			);
+			setAttachedFiles([]);
+		},
+		persistedMessages,
+		stopExternalRun: stopRunningAutomation,
+		workspaceId: activeWorkspaceId,
+	});
+	const hasMessages = displayMessages.length > 0 || isAutomationRunning;
+	const isNotesLoading = notes === undefined;
+	const isRecipesLoading = recipeData === undefined;
 	const {
 		chatMode,
 		reasoningEffort: selectedReasoningEffort,
@@ -520,14 +535,17 @@ const useChatPageController = ({
 					return {
 						buildRequestBody: () =>
 							buildWorkspaceChatRequestBody({
-								localCapabilityScope,
+								localCapability: {
+									source: "message",
+									scope: localCapabilityScope,
+									text: submission.displayText,
+								},
 								mentions: mentionIds,
 								projectId,
 								recipeSlug: submission.recipeSlug,
 								resolveConvexToken: getCachedConvexToken,
 								selectedSourceIds: requestSelectedSourceIds,
 								settings,
-								text: submission.displayText,
 								workspaceId: activeWorkspaceId,
 							}),
 						metadata,
@@ -645,51 +663,10 @@ const useChatPageController = ({
 		setAttachedFiles([]);
 	}, [clearDraft, restoreEditedQueuedMessage]);
 
-	const buildRequestBody = React.useCallback(async () => {
-		const { mentionIds, recipeSlug, requestSelectedSourceIds } =
-			getWorkspaceChatMentionContext(mentions);
-
-		return await buildWorkspaceChatRequestBodyFromLocalCapability({
-			localCapabilitySession,
-			mentions: mentionIds,
-			projectId,
-			recipeSlug,
-			resolveConvexToken: getCachedConvexToken,
-			selectedSourceIds: requestSelectedSourceIds,
-			settings,
-			workspaceId: activeWorkspaceId,
-		});
-	}, [
-		activeWorkspaceId,
-		localCapabilitySession,
-		mentions,
-		projectId,
-		settings,
-	]);
-	const buildRecoveryRequestBody = React.useCallback(
-		async (session: NonNullable<typeof localCapabilitySession>) => {
-			const { mentionIds, recipeSlug, requestSelectedSourceIds } =
-				getWorkspaceChatMentionContext(mentions);
-			return await buildWorkspaceChatRequestBodyFromLocalCapability({
-				localCapabilitySession: session,
-				mentions: mentionIds,
-				projectId,
-				recipeSlug,
-				resolveConvexToken: getCachedConvexToken,
-				selectedSourceIds: requestSelectedSourceIds,
-				settings,
-				workspaceId: activeWorkspaceId,
-			});
-		},
-		[activeWorkspaceId, mentions, projectId, settings],
-	);
-	React.useEffect(() => {
-		void recoverPendingLocalCapabilityCalls(buildRecoveryRequestBody);
-	}, [buildRecoveryRequestBody, recoverPendingLocalCapabilityCalls]);
 	const handleHumanDecisionResponse = React.useCallback(
 		async (response: HostedHumanDecisionResponse) => {
 			try {
-				await submitHumanDecision({ response, buildRequestBody });
+				await submitHumanDecision({ response });
 			} catch (error) {
 				logError({
 					event: "client.error",
@@ -703,7 +680,7 @@ const useChatPageController = ({
 				);
 			}
 		},
-		[buildRequestBody, submitHumanDecision],
+		[submitHumanDecision],
 	);
 
 	const handleDeleteMessage = React.useCallback(
@@ -727,7 +704,6 @@ const useChatPageController = ({
 			try {
 				await regenerateTurn({
 					assistantMessageId,
-					buildRequestBody,
 					onRequestPrepared: () => {
 						setEditingMessageId(null);
 						clearDraft();
@@ -746,7 +722,7 @@ const useChatPageController = ({
 				);
 			}
 		},
-		[buildRequestBody, clearDraft, regenerateTurn],
+		[clearDraft, regenerateTurn],
 	);
 	const handleForkedChat = React.useCallback(
 		(forkChatId: string) => {

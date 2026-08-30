@@ -137,10 +137,7 @@ import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
-import {
-	buildNoteChatRequestBody,
-	buildNoteChatRequestBodyFromLocalCapability,
-} from "@/lib/chat-request-preparation";
+import { buildNoteChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
@@ -496,6 +493,17 @@ const useNoteComposerController = ({
 		api.recipes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
 	);
+	const recipes = React.useMemo(
+		() =>
+			(recipeData ?? []).map((recipe) => ({
+				slug: recipe.slug as RecipeSlug,
+				name: recipe.name,
+				prompt: recipe.prompt,
+			})),
+		[recipeData],
+	);
+	const selectedRecipe =
+		recipes.find((recipe) => recipe.slug === selectedRecipeSlug) ?? null;
 	const [isSavingTranscriptionLanguage, setIsSavingTranscriptionLanguage] =
 		React.useState(false);
 	const isTranscriptionLanguageReady = userPreferences !== undefined;
@@ -576,6 +584,23 @@ const useNoteComposerController = ({
 		() => toStoredChatMessages(storedMessages ?? []),
 		[storedMessages],
 	);
+	const buildContinuationRequestBody = React.useCallback(
+		async (session: typeof localCapabilitySession) => {
+			const currentNoteContext = readNoteContext();
+			return await buildNoteChatRequestBody({
+				localCapability: { source: "session", session },
+				noteContext: {
+					noteId: currentNoteContext.noteId,
+					title: currentNoteContext.title,
+					text: currentNoteContext.text,
+				},
+				recipeSlug: selectedRecipe?.slug ?? null,
+				resolveConvexToken: getCachedConvexToken,
+				settings: chatSettings,
+			});
+		},
+		[chatSettings, readNoteContext, selectedRecipe?.slug],
+	);
 	const {
 		canStop,
 		deleteMessage,
@@ -588,7 +613,6 @@ const useNoteComposerController = ({
 		pendingHumanDecision,
 		onQueuedFollowUpsReorder,
 		queuedFollowUps,
-		recoverPendingLocalCapabilityCalls,
 		runPlan,
 		regenerateTurn,
 		restoreEditedQueuedMessage,
@@ -601,8 +625,10 @@ const useNoteComposerController = ({
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
 		activeRun,
+		buildContinuationRequestBody,
 		chatId: currentChatId,
 		contextLabel: "note chat",
+		localCapabilitySession,
 		onEditQueuedMessage: (queuedMessage) => {
 			setEditingMessageId(queuedMessage._id);
 			setMessage(queuedMessage.text);
@@ -841,17 +867,6 @@ const useNoteComposerController = ({
 		isTranscriptSessionReady: transcriptSession.isTranscriptSessionReady,
 	});
 	const composerPlaceholder = resolveNoteComposerPlaceholder(noteChats);
-	const recipes = React.useMemo(
-		() =>
-			(recipeData ?? []).map((recipe) => ({
-				slug: recipe.slug as RecipeSlug,
-				name: recipe.name,
-				prompt: recipe.prompt,
-			})),
-		[recipeData],
-	);
-	const selectedRecipe =
-		recipes.find((recipe) => recipe.slug === selectedRecipeSlug) ?? null;
 	const canSendMessage =
 		!isSettingsLoading &&
 		(hasMessage || selectedRecipe !== null || attachedFiles.length > 0);
@@ -1208,7 +1223,11 @@ const useNoteComposerController = ({
 						buildRequestBody: () => {
 							const currentNoteContext = readNoteContext();
 							return buildNoteChatRequestBody({
-								localCapabilityScope,
+								localCapability: {
+									source: "message",
+									scope: localCapabilityScope,
+									text: outgoingText,
+								},
 								noteContext: {
 									noteId: currentNoteContext.noteId,
 									title: currentNoteContext.title,
@@ -1217,7 +1236,6 @@ const useNoteComposerController = ({
 								recipeSlug: selectedRecipe?.slug ?? null,
 								resolveConvexToken: getCachedConvexToken,
 								settings: chatSettings,
-								text: outgoingText,
 							});
 						},
 						metadata: recipeMetadata,
@@ -1338,46 +1356,6 @@ const useNoteComposerController = ({
 		restoreEditedQueuedMessage,
 	]);
 
-	const buildRequestBody = React.useCallback(async () => {
-		const currentNoteContext = readNoteContext();
-
-		return await buildNoteChatRequestBodyFromLocalCapability({
-			localCapabilitySession,
-			noteContext: {
-				noteId: currentNoteContext.noteId,
-				title: currentNoteContext.title,
-				text: currentNoteContext.text,
-			},
-			recipeSlug: selectedRecipe?.slug ?? null,
-			resolveConvexToken: getCachedConvexToken,
-			settings: chatSettings,
-		});
-	}, [
-		chatSettings,
-		localCapabilitySession,
-		readNoteContext,
-		selectedRecipe?.slug,
-	]);
-	const buildRecoveryRequestBody = React.useCallback(
-		async (session: NonNullable<typeof localCapabilitySession>) => {
-			const currentNoteContext = readNoteContext();
-			return await buildNoteChatRequestBodyFromLocalCapability({
-				localCapabilitySession: session,
-				noteContext: {
-					noteId: currentNoteContext.noteId,
-					title: currentNoteContext.title,
-					text: currentNoteContext.text,
-				},
-				recipeSlug: selectedRecipe?.slug ?? null,
-				resolveConvexToken: getCachedConvexToken,
-				settings: chatSettings,
-			});
-		},
-		[chatSettings, readNoteContext, selectedRecipe?.slug],
-	);
-	React.useEffect(() => {
-		void recoverPendingLocalCapabilityCalls(buildRecoveryRequestBody);
-	}, [buildRecoveryRequestBody, recoverPendingLocalCapabilityCalls]);
 	const handleHumanDecisionResponse = React.useCallback(
 		async (response: HostedHumanDecisionResponse) => {
 			if (isPreparingRequest) {
@@ -1391,7 +1369,7 @@ const useNoteComposerController = ({
 			}
 
 			try {
-				await submitHumanDecision({ response, buildRequestBody });
+				await submitHumanDecision({ response });
 			} catch (error) {
 				logError({
 					event: "client.error",
@@ -1408,7 +1386,6 @@ const useNoteComposerController = ({
 			}
 		},
 		[
-			buildRequestBody,
 			isPreparingRequest,
 			openRightSidebar,
 			presentationMode,
@@ -1448,7 +1425,6 @@ const useNoteComposerController = ({
 			try {
 				await regenerateTurn({
 					assistantMessageId,
-					buildRequestBody,
 					onRequestPrepared: () => {
 						setEditingMessageId(null);
 						clearDraft();
@@ -1469,7 +1445,6 @@ const useNoteComposerController = ({
 			}
 		},
 		[
-			buildRequestBody,
 			clearDraft,
 			openRightSidebar,
 			presentationMode,

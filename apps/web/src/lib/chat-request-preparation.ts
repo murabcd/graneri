@@ -42,61 +42,49 @@ export type QueueableChatRequestBody = DurableQueuedChatRequest & {
 	localCapabilitySession: LocalCapabilitySession | null;
 };
 
-export const prepareLocalCapabilitySessionForChatRequest = async ({
-	scope,
-	text,
-}: {
-	scope: string;
-	text: string;
-}): Promise<LocalCapabilitySession | null> => {
-	const currentSession = await getLocalCapabilitySession(scope);
-	return await authorizeLocalCapabilityFromText({
-		currentSession,
-		scope,
-		text,
-	});
-};
+type ChatRequestLocalCapability =
+	| {
+			source: "message";
+			scope: string;
+			text: string;
+	  }
+	| {
+			source: "session";
+			session: LocalCapabilitySession | null;
+	  };
 
 const getTimezone = () =>
 	Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
-const buildChatRequestBase = async ({
-	localCapabilitySession,
-	recipeSlug,
-	resolveConvexToken,
-	settings,
-}: {
-	localCapabilitySession: LocalCapabilitySession | null;
-	recipeSlug: string | null;
-	resolveConvexToken: () => Promise<string | null>;
-	settings: ChatSettings;
-}): Promise<ChatRequestBase> => ({
-	...settings,
-	recipeSlug,
-	localCapabilitySession,
-	convexToken: await resolveConvexToken(),
-	timezone: getTimezone(),
-});
+const resolveLocalCapabilitySession = async (
+	localCapability: ChatRequestLocalCapability,
+): Promise<LocalCapabilitySession | null> => {
+	if (localCapability.source === "session") {
+		return localCapability.session;
+	}
 
-const resolveChatRequestBase = async ({
-	localCapabilityScope,
+	const currentSession = await getLocalCapabilitySession(localCapability.scope);
+	return await authorizeLocalCapabilityFromText({
+		currentSession,
+		scope: localCapability.scope,
+		text: localCapability.text,
+	});
+};
+
+const buildChatRequestBase = async ({
+	localCapability,
 	recipeSlug,
 	resolveConvexToken,
 	settings,
-	text,
 }: {
-	localCapabilityScope: string;
+	localCapability: ChatRequestLocalCapability;
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;
 	settings: ChatSettings;
-	text: string;
 }): Promise<ChatRequestBase> => {
 	const [convexToken, localCapabilitySession] = await Promise.all([
 		resolveConvexToken(),
-		prepareLocalCapabilitySessionForChatRequest({
-			scope: localCapabilityScope,
-			text,
-		}),
+		resolveLocalCapabilitySession(localCapability),
 	]);
 
 	return {
@@ -108,14 +96,14 @@ const resolveChatRequestBase = async ({
 	};
 };
 
-export const buildWorkspaceChatRequestBodyFromLocalCapability = async ({
+export const buildWorkspaceChatRequestBody = async ({
 	mentions,
 	projectId,
 	selectedSourceIds,
 	workspaceId,
 	...baseArgs
 }: {
-	localCapabilitySession: LocalCapabilitySession | null;
+	localCapability: ChatRequestLocalCapability;
 	mentions: string[];
 	projectId: string | null;
 	recipeSlug: string | null;
@@ -131,51 +119,11 @@ export const buildWorkspaceChatRequestBodyFromLocalCapability = async ({
 	workspaceId,
 });
 
-export const buildWorkspaceChatRequestBody = async ({
-	mentions,
-	projectId,
-	selectedSourceIds,
-	workspaceId,
-	...baseArgs
-}: {
-	localCapabilityScope: string;
-	mentions: string[];
-	projectId: string | null;
-	recipeSlug: string | null;
-	resolveConvexToken: () => Promise<string | null>;
-	selectedSourceIds: string[];
-	settings: ChatSettings;
-	text: string;
-	workspaceId: string | null;
-}): Promise<WorkspaceChatRequestBody> => ({
-	...(await resolveChatRequestBase(baseArgs)),
-	mentions,
-	projectId,
-	selectedSourceIds,
-	workspaceId,
-});
-
 export const buildNoteChatRequestBody = async ({
 	noteContext,
 	...baseArgs
 }: {
-	localCapabilityScope: string;
-	noteContext: NoteChatRequestBody["noteContext"];
-	recipeSlug: string | null;
-	resolveConvexToken: () => Promise<string | null>;
-	settings: ChatSettings;
-	text: string;
-}): Promise<NoteChatRequestBody> => ({
-	...(await resolveChatRequestBase(baseArgs)),
-	projectId: null,
-	noteContext,
-});
-
-export const buildNoteChatRequestBodyFromLocalCapability = async ({
-	noteContext,
-	...baseArgs
-}: {
-	localCapabilitySession: LocalCapabilitySession | null;
+	localCapability: ChatRequestLocalCapability;
 	noteContext: NoteChatRequestBody["noteContext"];
 	recipeSlug: string | null;
 	resolveConvexToken: () => Promise<string | null>;

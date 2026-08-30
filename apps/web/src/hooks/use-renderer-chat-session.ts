@@ -65,39 +65,28 @@ type UpdateQueuedRendererChatTurnInput = Pick<
 	onRequestPrepared?: SubmitRendererChatTurnInput["onRequestPrepared"];
 };
 
-type SubmitUserQuestionAnswerInput = Pick<
-	SubmitRendererChatTurnInput,
-	"buildRequestBody"
-> & {
+type SubmitUserQuestionAnswerInput = {
 	answer: string;
 	onRequestPrepared?: (requestBody: ChatRequestContext) => void;
 };
 
-type SubmitHumanDecisionInput = Pick<
-	SubmitRendererChatTurnInput,
-	"buildRequestBody"
-> & {
+type SubmitHumanDecisionInput = {
 	response: HostedHumanDecisionResponse;
 	onRequestPrepared?: (requestBody: ChatRequestContext) => void;
 };
 
-type RegenerateRendererChatTurnInput = Pick<
-	SubmitRendererChatTurnInput,
-	"buildRequestBody"
-> & {
+type RegenerateRendererChatTurnInput = {
 	assistantMessageId: string;
-	onRequestPrepared: (
-		requestBody: Awaited<
-			ReturnType<SubmitRendererChatTurnInput["buildRequestBody"]>
-		>,
-	) => void;
+	onRequestPrepared: (requestBody: ChatRequestBody) => void;
 };
 
 export const useRendererChatSession = ({
 	activeRun,
+	buildContinuationRequestBody,
 	chatId,
 	contextLabel,
 	isExternallyBlocked = false,
+	localCapabilitySession,
 	onEditQueuedMessage,
 	persistedMessages,
 	resumeEnabled = true,
@@ -105,15 +94,23 @@ export const useRendererChatSession = ({
 	workspaceId,
 }: {
 	activeRun: AttachableAssistantRunQueryResult;
+	buildContinuationRequestBody: (
+		localCapabilitySession: LocalCapabilitySession | null,
+	) => Promise<ChatRequestBody>;
 	chatId: string;
 	contextLabel: string;
 	isExternallyBlocked?: boolean;
+	localCapabilitySession: LocalCapabilitySession | null;
 	onEditQueuedMessage: (message: QueuedFollowUpMessage) => void;
 	persistedMessages: UIMessage[];
 	resumeEnabled?: boolean;
 	stopExternalRun?: () => Promise<boolean>;
 	workspaceId: Id<"workspaces"> | null;
 }) => {
+	const buildCurrentRequestBody = React.useCallback(
+		() => buildContinuationRequestBody(localCapabilitySession),
+		[buildContinuationRequestBody, localCapabilitySession],
+	);
 	const attachableActiveRun =
 		activeRun && activeRun.status !== "stopping" ? activeRun : null;
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
@@ -472,11 +469,7 @@ export const useRendererChatSession = ({
 		],
 	);
 	const submitUserQuestionAnswer = React.useCallback(
-		({
-			answer,
-			buildRequestBody,
-			onRequestPrepared,
-		}: SubmitUserQuestionAnswerInput) => {
+		({ answer, onRequestPrepared }: SubmitUserQuestionAnswerInput) => {
 			if (
 				pendingHumanDecision?.type !== "user_question" ||
 				isPreparingRequest
@@ -490,7 +483,7 @@ export const useRendererChatSession = ({
 			}
 
 			return runPreparedRequest(async () => {
-				const requestBody = await buildRequestBody();
+				const requestBody = await buildCurrentRequestBody();
 				latestRequestBodyRef.current = requestBody;
 				onRequestPrepared?.(requestBody);
 				const pendingMessages = prepareRendererUserQuestionMessages({
@@ -527,6 +520,7 @@ export const useRendererChatSession = ({
 		},
 		[
 			addToolOutput,
+			buildCurrentRequestBody,
 			clearError,
 			chatId,
 			displayActiveRun,
@@ -583,11 +577,9 @@ export const useRendererChatSession = ({
 	const submitToolApproval = React.useCallback(
 		({
 			approved,
-			buildRequestBody,
 			onRequestPrepared,
 		}: {
 			approved: boolean;
-			buildRequestBody: SubmitRendererChatTurnInput["buildRequestBody"];
 			onRequestPrepared?: (requestBody: ChatRequestContext) => void;
 		}) => {
 			if (
@@ -603,7 +595,7 @@ export const useRendererChatSession = ({
 			}
 
 			return runPreparedRequest(async () => {
-				const requestBody = await buildRequestBody();
+				const requestBody = await buildCurrentRequestBody();
 				latestRequestBodyRef.current = requestBody;
 				onRequestPrepared?.(requestBody);
 				await addToolApprovalResponse({
@@ -622,6 +614,7 @@ export const useRendererChatSession = ({
 		},
 		[
 			addToolApprovalResponse,
+			buildCurrentRequestBody,
 			displayActiveRun,
 			isPreparingRequest,
 			pendingHumanDecision,
@@ -629,20 +622,14 @@ export const useRendererChatSession = ({
 		],
 	);
 	const submitHumanDecision = React.useCallback(
-		({
-			buildRequestBody,
-			onRequestPrepared,
-			response,
-		}: SubmitHumanDecisionInput) =>
+		({ onRequestPrepared, response }: SubmitHumanDecisionInput) =>
 			response.type === "user_question"
 				? submitUserQuestionAnswer({
 						answer: response.answer,
-						buildRequestBody,
 						onRequestPrepared,
 					})
 				: submitToolApproval({
 						approved: response.approved,
-						buildRequestBody,
 						onRequestPrepared,
 					}),
 		[submitToolApproval, submitUserQuestionAnswer],
@@ -682,7 +669,7 @@ export const useRendererChatSession = ({
 			}
 
 			await runPreparedRequest(async () => {
-				const requestBody = await input.buildRequestBody();
+				const requestBody = await buildCurrentRequestBody();
 				latestRequestBodyRef.current = requestBody;
 				input.onRequestPrepared(requestBody);
 				await Promise.resolve(
@@ -693,17 +680,19 @@ export const useRendererChatSession = ({
 				);
 			});
 		},
-		[isChatUiPending, regenerate, runPreparedRequest, stopCurrentStream],
+		[
+			buildCurrentRequestBody,
+			isChatUiPending,
+			regenerate,
+			runPreparedRequest,
+			stopCurrentStream,
+		],
 	);
-	const recoverPendingLocalCapabilityCalls = React.useCallback(
-		async (
-			buildRequestBody: (
-				session: LocalCapabilitySession,
-			) => Promise<ChatRequestBody>,
-		) => {
+	React.useEffect(() => {
+		const recoverPendingLocalCapabilityCalls = async () => {
 			try {
 				await recoverPendingLocalCapabilityToolCalls({
-					buildRequestBody,
+					buildRequestBody: buildContinuationRequestBody,
 					claimedRecoveryKeys: recoveredLocalToolCallsRef.current,
 					executeToolCall: ({ localCapabilitySession, toolCall }) =>
 						executeDesktopLocalToolCall({
@@ -732,9 +721,15 @@ export const useRendererChatSession = ({
 					message: "Failed to continue a recovered local capability run",
 				});
 			}
-		},
-		[addToolOutput, attachableActiveRun, localFileStorage],
-	);
+		};
+
+		void recoverPendingLocalCapabilityCalls();
+	}, [
+		addToolOutput,
+		attachableActiveRun,
+		buildContinuationRequestBody,
+		localFileStorage,
+	]);
 
 	return {
 		canStop: isChatUiPending,
@@ -754,7 +749,6 @@ export const useRendererChatSession = ({
 		queuedFollowUps: queuedFollowUpControls.queuedFollowUps,
 		runPlan: runPlan ?? null,
 		regenerateTurn,
-		recoverPendingLocalCapabilityCalls,
 		restoreEditedQueuedMessage:
 			queuedFollowUpControls.restoreEditedQueuedMessage,
 		setMessages,
