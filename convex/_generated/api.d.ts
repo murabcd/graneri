@@ -114,6 +114,8 @@ import type * as noteImageHttp from "../noteImageHttp.js";
 import type * as noteImageReferences from "../noteImageReferences.js";
 import type * as noteImages from "../noteImages.js";
 import type * as noteRecords from "../noteRecords.js";
+import type * as noteVersionPolicy from "../noteVersionPolicy.js";
+import type * as noteVersions from "../noteVersions.js";
 import type * as notes from "../notes.js";
 import type * as notificationPreferences from "../notificationPreferences.js";
 import type * as oauthCallbackHtml from "../oauthCallbackHtml.js";
@@ -258,6 +260,8 @@ declare const fullApi: ApiFromModules<{
   noteImageReferences: typeof noteImageReferences;
   noteImages: typeof noteImages;
   noteRecords: typeof noteRecords;
+  noteVersionPolicy: typeof noteVersionPolicy;
+  noteVersions: typeof noteVersions;
   notes: typeof notes;
   notificationPreferences: typeof notificationPreferences;
   oauthCallbackHtml: typeof oauthCallbackHtml;

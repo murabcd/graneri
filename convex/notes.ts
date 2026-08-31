@@ -40,6 +40,7 @@ import {
 	removeNoteImageReferences,
 } from "./noteImageReferences";
 import { insertNote } from "./noteRecords";
+import { MAX_RETAINED_NOTE_REVISIONS } from "./noteVersionPolicy";
 import { requireOwnedProject } from "./projects";
 
 const noteVisibilityValidator = v.union(
@@ -109,18 +110,7 @@ type RemoveAllNotesResult = {
 };
 
 const MAX_CHAT_CONTEXT_NOTES = 20;
-const MAX_NOTE_REVISIONS = 50;
 const NOTE_REVISION_INTERVAL_MS = 30_000;
-
-const noteVersionValidator = v.object({
-	id: v.union(v.id("noteRevisions"), v.literal("current")),
-	isCurrent: v.boolean(),
-	authorName: v.string(),
-	title: v.string(),
-	content: v.string(),
-	searchableText: v.string(),
-	createdAt: v.number(),
-});
 
 const { requireIdentity, requireTokenIdentifier } =
 	createResourceAccess("notes");
@@ -226,12 +216,12 @@ const pruneNoteRevisions = async ({
 				.eq("noteId", noteId),
 		)
 		.order("desc")
-		.take(MAX_NOTE_REVISIONS + 1);
+		.take(MAX_RETAINED_NOTE_REVISIONS + 1);
 
 	const revisionsToPrune = [...revisions]
 		.reverse()
 		.filter((revision) => revision._id !== preserveRevisionId)
-		.slice(0, Math.max(0, revisions.length - MAX_NOTE_REVISIONS));
+		.slice(0, Math.max(0, revisions.length - MAX_RETAINED_NOTE_REVISIONS));
 
 	for (const revision of revisionsToPrune) {
 		await removeNoteAttachmentDocumentReferences({
@@ -333,7 +323,7 @@ const removeNoteRevisions = async ({
 		.withIndex("by_ownerTokenIdentifier_and_noteId", (q) =>
 			q.eq("ownerTokenIdentifier", ownerTokenIdentifier).eq("noteId", noteId),
 		)
-		.take(MAX_NOTE_REVISIONS);
+		.take(MAX_RETAINED_NOTE_REVISIONS);
 
 	for (const revision of revisions) {
 		await removeNoteAttachmentDocumentReferences({
@@ -529,61 +519,6 @@ export const getAttachment = query({
 					url: attachment.url,
 				}
 			: null;
-	},
-});
-
-export const listVersions = query({
-	args: {
-		id: v.id("notes"),
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.array(noteVersionValidator),
-	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const note = await ctx.db.get(args.id);
-
-		if (
-			!note ||
-			note.ownerTokenIdentifier !== ownerTokenIdentifier ||
-			note.workspaceId !== args.workspaceId ||
-			note.isArchived
-		) {
-			return [];
-		}
-
-		const revisions = await ctx.db
-			.query("noteRevisions")
-			.withIndex("by_owner_ws_note_createdAt", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId)
-					.eq("noteId", args.id),
-			)
-			.order("desc")
-			.take(MAX_NOTE_REVISIONS);
-		const document = await requirePersistedNoteDocument(ctx, note._id);
-
-		return [
-			{
-				id: "current" as const,
-				isCurrent: true,
-				authorName: note.authorName ?? "",
-				title: note.title,
-				content: document.content,
-				searchableText: document.searchableText,
-				createdAt: note.updatedAt,
-			},
-			...revisions.map((revision) => ({
-				id: revision._id,
-				isCurrent: false,
-				authorName: revision.authorName,
-				title: revision.title,
-				content: revision.content,
-				searchableText: revision.searchableText,
-				createdAt: revision.createdAt,
-			})),
-		];
 	},
 });
 

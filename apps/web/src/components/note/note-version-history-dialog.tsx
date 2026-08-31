@@ -21,6 +21,7 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { cn } from "@workspace/ui/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { History, Undo2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -39,15 +40,10 @@ import { getNoteDisplayTitle } from "@/lib/note-title";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-type NoteVersion = {
-	id: Id<"noteRevisions"> | "current";
-	isCurrent: boolean;
-	authorName: string;
-	title: string;
-	content: string;
-	searchableText: string;
-	createdAt: number;
-};
+type NoteVersionMetadata = FunctionReturnType<
+	typeof api.noteVersions.list
+>[number];
+type NoteVersion = NonNullable<FunctionReturnType<typeof api.noteVersions.get>>;
 
 export type NoteVersionHistoryDialogProps = {
 	noteId: Id<"notes">;
@@ -194,7 +190,7 @@ function NoteVersionHistoryDialogContent({
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const restoreVersion = useMutation(api.notes.restoreVersion);
 	const versions = useQuery(
-		api.notes.listVersions,
+		api.noteVersions.list,
 		open && activeWorkspaceId
 			? { workspaceId: activeWorkspaceId, id: noteId }
 			: "skip",
@@ -203,7 +199,8 @@ function NoteVersionHistoryDialogContent({
 		null,
 	);
 	const displayVersions = React.useMemo(
-		() => versions ?? (initialVersion ? [initialVersion] : []),
+		(): NoteVersionMetadata[] =>
+			versions ?? (initialVersion ? [initialVersion] : []),
 		[initialVersion, versions],
 	);
 	const isLoadingVersions = Boolean(
@@ -218,30 +215,50 @@ function NoteVersionHistoryDialogContent({
 			})),
 		[displayVersions],
 	);
-	const selectedVersion =
+	const selectedVersionMetadata =
 		displayVersions.find((version) => version.id === activeVersionId) ??
 		displayVersions[0] ??
 		null;
+	const queriedVersion = useQuery(
+		api.noteVersions.get,
+		open &&
+			activeWorkspaceId &&
+			selectedVersionMetadata &&
+			initialVersion?.id !== selectedVersionMetadata.id
+			? {
+					workspaceId: activeWorkspaceId,
+					id: noteId,
+					versionId: selectedVersionMetadata.id,
+				}
+			: "skip",
+	);
+	const selectedVersion =
+		initialVersion?.id === selectedVersionMetadata?.id
+			? initialVersion
+			: queriedVersion;
+	const isLoadingSelectedVersion = Boolean(
+		selectedVersionMetadata && selectedVersion === undefined,
+	);
 	const [confirmRestoreOpen, setConfirmRestoreOpen] = React.useState(false);
 	const [isRestoring, setIsRestoring] = React.useState(false);
 
 	const handleRestoreRequest = React.useCallback(() => {
 		if (
 			!activeWorkspaceId ||
-			!selectedVersion ||
-			selectedVersion.id === "current"
+			!selectedVersionMetadata ||
+			selectedVersionMetadata.id === "current"
 		) {
 			return;
 		}
 
 		setConfirmRestoreOpen(true);
-	}, [activeWorkspaceId, selectedVersion]);
+	}, [activeWorkspaceId, selectedVersionMetadata]);
 
 	const handleRestore = React.useCallback(async () => {
 		if (
 			!activeWorkspaceId ||
-			!selectedVersion ||
-			selectedVersion.id === "current"
+			!selectedVersionMetadata ||
+			selectedVersionMetadata.id === "current"
 		) {
 			return;
 		}
@@ -251,7 +268,7 @@ function NoteVersionHistoryDialogContent({
 			await restoreVersion({
 				workspaceId: activeWorkspaceId,
 				id: noteId,
-				revisionId: selectedVersion.id,
+				revisionId: selectedVersionMetadata.id,
 			});
 			await removeNoteDraft(noteId);
 			setConfirmRestoreOpen(false);
@@ -272,14 +289,17 @@ function NoteVersionHistoryDialogContent({
 		noteId,
 		onOpenChange,
 		restoreVersion,
-		selectedVersion,
+		selectedVersionMetadata,
 	]);
 
 	return (
 		<VersionHistoryDialogShell
-			activeItemId={selectedVersion?.id ?? null}
+			activeItemId={selectedVersionMetadata?.id ?? null}
 			footerAction={{
-				disabled: !selectedVersion || selectedVersion.isCurrent || isRestoring,
+				disabled:
+					!selectedVersionMetadata ||
+					selectedVersionMetadata.isCurrent ||
+					isRestoring,
 				icon: Undo2,
 				label: isRestoring ? "Restoring..." : "Restore",
 				onClick: handleRestoreRequest,
@@ -287,16 +307,27 @@ function NoteVersionHistoryDialogContent({
 			isLoadingVersions={isLoadingVersions}
 			items={navigationItems}
 			mobileAction={{
-				disabled: !selectedVersion || selectedVersion.isCurrent || isRestoring,
+				disabled:
+					!selectedVersionMetadata ||
+					selectedVersionMetadata.isCurrent ||
+					isRestoring,
 				icon: Undo2,
 				label: isRestoring ? "Restoring..." : "Restore",
 				onClick: handleRestoreRequest,
 			}}
 			onSelect={setActiveVersionId}
 		>
-			{displayVersions.length === 0 || !selectedVersion ? (
+			{displayVersions.length === 0 || !selectedVersionMetadata ? (
 				<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
 					No saved versions yet.
+				</div>
+			) : isLoadingSelectedVersion ? (
+				<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
+					Loading version...
+				</div>
+			) : !selectedVersion ? (
+				<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
+					This version is no longer available.
 				</div>
 			) : (
 				<ScrollArea className="h-full">

@@ -359,7 +359,7 @@ test("notes.save records version history for changed payloads", async () => {
 		searchableText: "new text",
 	});
 
-	const versions = await asOwner.query(api.notes.listVersions, {
+	const versions = await asOwner.query(api.noteVersions.list, {
 		id: noteId,
 		workspaceId,
 	});
@@ -370,16 +370,12 @@ test("notes.save records version history for changed payloads", async () => {
 		isCurrent: true,
 		authorName: "Existing Author",
 		title: "Updated title",
-		content: createTextDocument("new-content"),
-		searchableText: "new text",
 		createdAt: Date.now(),
 	});
 	expect(versions[1]).toMatchObject({
 		isCurrent: false,
 		authorName: "Existing Author",
 		title: "Old title",
-		content: createTextDocument("old-content"),
-		searchableText: "old text",
 		createdAt: Date.now(),
 	});
 });
@@ -408,7 +404,7 @@ test("notes.save groups version history by revision interval", async () => {
 		searchableText: "second text",
 	});
 
-	let versions = await asOwner.query(api.notes.listVersions, {
+	let versions = await asOwner.query(api.noteVersions.list, {
 		id: noteId,
 		workspaceId,
 	});
@@ -416,7 +412,6 @@ test("notes.save groups version history by revision interval", async () => {
 	expect(versions).toHaveLength(2);
 	expect(versions[1]).toMatchObject({
 		title: "Old title",
-		content: createTextDocument("old-content"),
 	});
 
 	vi.setSystemTime(new Date("2026-04-10T18:00:31.000Z"));
@@ -429,7 +424,7 @@ test("notes.save groups version history by revision interval", async () => {
 		searchableText: "third text",
 	});
 
-	versions = await asOwner.query(api.notes.listVersions, {
+	versions = await asOwner.query(api.noteVersions.list, {
 		id: noteId,
 		workspaceId,
 	});
@@ -437,7 +432,6 @@ test("notes.save groups version history by revision interval", async () => {
 	expect(versions).toHaveLength(3);
 	expect(versions[1]).toMatchObject({
 		title: "Second autosave",
-		content: createTextDocument("second-content"),
 	});
 });
 
@@ -455,7 +449,7 @@ test("notes.restoreVersion preserves current note and restores selected revision
 		searchableText: "new text",
 	});
 
-	const versionsBeforeRestore = await asOwner.query(api.notes.listVersions, {
+	const versionsBeforeRestore = await asOwner.query(api.noteVersions.list, {
 		id: noteId,
 		workspaceId,
 	});
@@ -482,15 +476,13 @@ test("notes.restoreVersion preserves current note and restores selected revision
 		searchableText: "old text",
 	});
 
-	const versionsAfterRestore = await asOwner.query(api.notes.listVersions, {
+	const versionsAfterRestore = await asOwner.query(api.noteVersions.list, {
 		id: noteId,
 		workspaceId,
 	});
 	expect(versionsAfterRestore).toHaveLength(3);
 	expect(versionsAfterRestore[1]).toMatchObject({
 		title: "Updated title",
-		content: createTextDocument("new-content"),
-		searchableText: "new text",
 	});
 });
 
@@ -534,7 +526,7 @@ test("notes.save is a no-op when the payload is unchanged", async () => {
 		visibility: "public",
 	});
 
-	const versions = await asOwner.query(api.notes.listVersions, {
+	const versions = await asOwner.query(api.noteVersions.list, {
 		id: noteId,
 		workspaceId,
 	});
@@ -734,12 +726,12 @@ test("note images stay alive through revisions and are deleted with the note", a
 	expect(storedAfterRemoval.storage).not.toBeNull();
 	expect(storedAfterRemoval.references).toHaveLength(1);
 	expect(storedAfterRemoval.references[0]?.revisionId).not.toBeNull();
-	const versions = await asOwner.query(api.notes.listVersions, {
+	const versions = await asOwner.query(api.noteVersions.list, {
 		workspaceId,
 		id: noteId,
 	});
 	const imageRevision = versions.find(
-		(version) => !version.isCurrent && version.content === imageContent,
+		(version) => version.id !== "current" && version.title === "With image",
 	);
 	if (!imageRevision || imageRevision.id === "current") {
 		throw new Error("Expected the image revision to be retained.");

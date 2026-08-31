@@ -136,6 +136,16 @@ workspace ceiling. Opening a note still reads exactly one canonical document,
 while workspace-wide content lookup remains owned by the indexed server search
 path rather than the loaded renderer pages.
 
+## Version history loading
+
+Version history lists bounded revision metadata and loads one document body for the selected version.
+
+[[convex/noteVersions.ts]] returns only revision identity, title, author, and timestamp
+from `noteVersions.list`. The dialog reuses the already-open current document and
+calls `noteVersions.get` only when a historical revision is selected. Revision bodies
+never travel with the history list, and the selected-body query verifies that
+the revision belongs to the owned workspace and note before returning content.
+
 ## Transcript-driven generation
 
 Transcript language and content remain authoritative through initial generation and template rewrites, committed through the document session.

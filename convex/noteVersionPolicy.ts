@@ -1,0 +1,1 @@
+export const MAX_RETAINED_NOTE_REVISIONS = 50;
