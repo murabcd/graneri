@@ -105,7 +105,7 @@ function useNoteStarControl({ noteId }: { noteId: Id<"notes"> }) {
 		(localStore, args) => {
 			const updateNoteList = <T extends Doc<"notes">>(
 				notes: Array<T> | undefined,
-				query: typeof api.notes.list | typeof api.notes.listShared,
+				query: typeof api.notes.list,
 			) => {
 				if (notes === undefined) {
 					return;
@@ -130,13 +130,6 @@ function useNoteStarControl({ noteId }: { noteId: Id<"notes"> }) {
 				}),
 				api.notes.list,
 			);
-			updateNoteList(
-				localStore.getQuery(api.notes.listShared, {
-					workspaceId: args.workspaceId,
-				}),
-				api.notes.listShared,
-			);
-
 			const activeNote = localStore.getQuery(api.notes.get, {
 				workspaceId: args.workspaceId,
 				id: args.id,
@@ -312,23 +305,11 @@ function useNoteActionsMenu({
 			const notes = localStore.getQuery(api.notes.list, {
 				workspaceId: args.workspaceId,
 			});
-			const sharedNotes = localStore.getQuery(api.notes.listShared, {
-				workspaceId: args.workspaceId,
-			});
-
 			if (notes !== undefined) {
 				localStore.setQuery(
 					api.notes.list,
 					{ workspaceId: args.workspaceId },
 					normalizeNoteList(notes.filter((item) => item._id !== args.id)),
-				);
-			}
-
-			if (sharedNotes !== undefined) {
-				localStore.setQuery(
-					api.notes.listShared,
-					{ workspaceId: args.workspaceId },
-					normalizeNoteList(sharedNotes.filter((item) => item._id !== args.id)),
 				);
 			}
 

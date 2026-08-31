@@ -1348,11 +1348,7 @@ function optimisticClearProjectFromNotes(
 	workspaceId: Id<"workspaces">,
 	projectId: Id<"projects">,
 ) {
-	const noteQueries = [
-		api.notes.list,
-		api.notes.listShared,
-		api.notes.listArchived,
-	] as const;
+	const noteQueries = [api.notes.list, api.notes.listArchived] as const;
 	const matchedNoteIds = new Set<Id<"notes">>();
 
 	for (const noteQuery of noteQueries) {

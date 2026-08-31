@@ -10,11 +10,7 @@ export function optimisticPatchNote(
 	noteId: Id<"notes">,
 	patchNote: NotePatcher,
 ) {
-	const noteQueries = [
-		api.notes.list,
-		api.notes.listShared,
-		api.notes.listArchived,
-	] as const;
+	const noteQueries = [api.notes.list, api.notes.listArchived] as const;
 
 	for (const noteQuery of noteQueries) {
 		const notes = localStore.getQuery(noteQuery, { workspaceId });

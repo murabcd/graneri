@@ -420,30 +420,6 @@ export const list = query({
 	},
 });
 
-export const listShared = query({
-	args: {
-		workspaceId: v.id("workspaces"),
-	},
-	returns: v.array(noteValidator),
-	handler: async (ctx, args) => {
-		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
-		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const notes = await ctx.db
-			.query("notes")
-			.withIndex("by_owner_ws_vis_arch_upd", (q) =>
-				q
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", args.workspaceId)
-					.eq("visibility", "public")
-					.eq("isArchived", false),
-			)
-			.order("desc")
-			.take(100);
-
-		return notes.map(normalizeNote);
-	},
-});
-
 export const listArchived = query({
 	args: {
 		workspaceId: v.id("workspaces"),

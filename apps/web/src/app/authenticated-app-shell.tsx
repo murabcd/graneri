@@ -444,11 +444,9 @@ const useAppShellState = ({
 			? { workspaceId: resolvedActiveWorkspaceId }
 			: "skip",
 	);
-	const sharedNotes = useQuery(
-		api.notes.listShared,
-		resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
+	const sharedNotes = React.useMemo(
+		() => notes?.filter((note) => note.visibility === "public"),
+		[notes],
 	);
 	const normalizedRouteNoteId = useQuery(
 		api.notes.normalizeId,

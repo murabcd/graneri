@@ -333,13 +333,6 @@ export default defineSchema({
 			"isArchived",
 			"archivedAt",
 		])
-		.index("by_owner_ws_vis_arch_upd", [
-			"ownerTokenIdentifier",
-			"workspaceId",
-			"visibility",
-			"isArchived",
-			"updatedAt",
-		])
 		.index("by_ownerTokenIdentifier_and_updatedAt", [
 			"ownerTokenIdentifier",
 			"updatedAt",

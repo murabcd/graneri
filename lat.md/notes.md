@@ -118,6 +118,11 @@ for the note. [[apps/web/src/components/note/note-comments-sheet.tsx]] skips bot
 the thread list and expanded-thread reads while the discussion surface is
 closed, so editor navigation does not subscribe to hidden comment data.
 
+The active note list is also the sole source for shared-note navigation.
+[[apps/web/src/app/authenticated-app-shell.tsx]] derives public notes from that
+already-subscribed result instead of issuing a second full-note query for a
+strict subset.
+
 ## Transcript-driven generation
 
 Transcript language and content remain authoritative through initial generation and template rewrites, committed through the document session.
