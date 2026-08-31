@@ -41,17 +41,16 @@ export const backfill = internalMutation({
 		let migratedCount = 0;
 
 		for (const note of page.page) {
-			if (await getPersistedNoteDocument(ctx, note._id)) {
-				continue;
-			}
-			await writePersistedNoteDocument({
+			const result = await writePersistedNoteDocument({
 				ctx,
 				note,
 				document: parseNoteDocument(note.content),
 				searchableText: note.searchableText,
 				now: note.updatedAt,
 			});
-			migratedCount += 1;
+			if (result.changed) {
+				migratedCount += 1;
+			}
 		}
 
 		if (!page.isDone) {

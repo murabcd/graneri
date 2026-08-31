@@ -139,6 +139,7 @@ test("notes.save updates content without dropping existing metadata", async () =
 	);
 	expect(persistedDocument).toMatchObject({
 		noteId,
+		isArchived: false,
 		content: createTextDocument("new-content"),
 		searchableText: "new text",
 		updatedAt: Date.now(),

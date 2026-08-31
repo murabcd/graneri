@@ -121,23 +121,37 @@ export const writePersistedNoteDocument = async ({
 }) => {
 	const existing = await getPersistedNoteDocument(ctx, note._id);
 	if (existing) {
+		if (
+			existing.projectId === note.projectId &&
+			existing.isArchived === note.isArchived &&
+			existing.content === document.content &&
+			existing.searchableText === searchableText &&
+			existing.updatedAt === now
+		) {
+			return { changed: false, id: existing._id };
+		}
 		await ctx.db.patch(existing._id, {
+			projectId: note.projectId,
+			isArchived: note.isArchived,
 			content: document.content,
 			searchableText,
 			updatedAt: now,
 		});
-		return existing._id;
+		return { changed: true, id: existing._id };
 	}
 
-	return await ctx.db.insert("noteDocuments", {
+	const id = await ctx.db.insert("noteDocuments", {
 		ownerTokenIdentifier: note.ownerTokenIdentifier,
 		workspaceId: note.workspaceId,
 		noteId: note._id,
+		projectId: note.projectId,
+		isArchived: note.isArchived,
 		content: document.content,
 		searchableText,
 		createdAt: note.createdAt,
 		updatedAt: now,
 	});
+	return { changed: true, id };
 };
 
 export const commitCurrentNoteDocument = async ({

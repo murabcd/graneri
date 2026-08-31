@@ -27,9 +27,11 @@ widening deployment, [[convex/noteDocument.ts]] atomically mirrors every new or
 changed canonical document into the new table while
 [[convex/noteDocumentMigration.ts]] backfills existing notes in bounded batches
 of five. Readers remain on the old fields until both deployments have completed
-and the backfill is verified; the next deployment switches every reader to the
-new canonical row, and the final deployment removes the temporary mirror and
-migration entrypoint. No permanent dual-read or dual-write path is allowed.
+and the backfill is verified. The document row also carries project and archive
+projections exclusively for its indexed full-text search path. The next
+deployment switches every reader to the new canonical row, and the final
+deployment removes the temporary mirror and migration entrypoint. No permanent
+dual-read or dual-write path is allowed.
 
 ## Editor files and images
 

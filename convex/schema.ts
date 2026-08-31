@@ -391,11 +391,23 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),
 		noteId: v.id("notes"),
+		projectId: v.optional(v.id("projects")),
+		isArchived: v.optional(v.boolean()),
 		content: v.string(),
 		searchableText: v.string(),
 		createdAt: v.number(),
 		updatedAt: v.number(),
-	}).index("by_noteId", ["noteId"]),
+	})
+		.index("by_noteId", ["noteId"])
+		.searchIndex("search_text", {
+			searchField: "searchableText",
+			filterFields: [
+				"ownerTokenIdentifier",
+				"workspaceId",
+				"projectId",
+				"isArchived",
+			],
+		}),
 	people: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

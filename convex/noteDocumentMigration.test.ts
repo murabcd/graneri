@@ -55,6 +55,17 @@ test("note document migration backfills legacy notes in bounded batches", async 
 		}
 		return ids;
 	});
+	await t.run((ctx) =>
+		ctx.db.insert("noteDocuments", {
+			ownerTokenIdentifier,
+			workspaceId,
+			noteId: noteIds[0],
+			content: createTextDocument("legacy-content-1"),
+			searchableText: "legacy text 1",
+			createdAt: 1,
+			updatedAt: 1,
+		}),
+	);
 
 	await t.mutation(internal.noteDocumentMigration.start, {});
 	await t.finishAllScheduledFunctions(vi.runAllTimers);
@@ -66,6 +77,7 @@ test("note document migration backfills legacy notes in bounded batches", async 
 	expect(documents.find((document) => document.noteId === noteIds[0])).toMatchObject(
 		{
 			noteId: noteIds[0],
+			isArchived: false,
 			content: createTextDocument("legacy-content-1"),
 			searchableText: "legacy text 1",
 			createdAt: 1,
