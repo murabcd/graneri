@@ -54,7 +54,7 @@ selected app sources. The same definition settings become the standalone
 configuration if deleting an attached chat moves its automations to fresh
 result chats.
 Multiple task definitions may use one chat, but the one-active-run-per-chat
-invariant still serializes their execution. The minute reconciliation cron
+invariant still serializes their execution. The five-minute reconciliation cron
 retries a due task whose scheduled function was lost or could not reserve the
 busy chat.
 

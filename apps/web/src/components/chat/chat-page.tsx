@@ -96,7 +96,6 @@ export type ChatPageProps = {
 	activeStreamingChatIds: ReadonlySet<string>;
 	activeChatId: string | null;
 	onOpenChat: (chatId: string) => void;
-	onPrefetchChat: (chatId: string) => void;
 	onChatRemoved: (chatId: string) => void;
 	isDesktopMac: boolean;
 	onOpenConnectionsSettings: () => void;
@@ -850,7 +849,6 @@ export function ChatPage({
 	activeStreamingChatIds,
 	activeChatId,
 	onOpenChat,
-	onPrefetchChat,
 	onChatRemoved,
 	isDesktopMac,
 	onOpenConnectionsSettings,
@@ -1271,7 +1269,6 @@ export function ChatPage({
 									isChatsLoading={isChatsLoading}
 									activeChatId={activeChatId}
 									onOpenChat={onOpenChat}
-									onPrefetchChat={onPrefetchChat}
 									onMoveToTrash={onChatRemoved}
 									automationChatIds={automationChatIds}
 									activeStreamingChatIds={chatHistoryStreamingChatIds}

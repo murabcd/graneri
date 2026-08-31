@@ -1,9 +1,5 @@
-import { useConvex, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import * as React from "react";
-import {
-	prefetchChatMessagesSnapshot,
-	useChatMessagesSnapshot,
-} from "@/hooks/use-chat-messages-snapshot";
 import { useNoteChatSettings } from "@/hooks/use-chat-settings";
 import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import {
@@ -13,7 +9,6 @@ import {
 	type ServiceTier,
 } from "@/lib/ai/models";
 import { isSameCalendarDay } from "@/lib/calendar-day";
-import { logError } from "@/lib/logger";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
@@ -81,7 +76,6 @@ export const useNoteDiscussionSession = ({
 	activeWorkspaceId: Id<"workspaces"> | null;
 	noteId: Id<"notes"> | null;
 }) => {
-	const convex = useConvex();
 	const [currentChatId, setCurrentChatId] =
 		React.useState<string>(createDraftChatId);
 	const noteChats = useQuery(
@@ -94,10 +88,6 @@ export const useNoteDiscussionSession = ({
 		() => (noteChats ?? []).some((chat) => chat.chatId === currentChatId),
 		[currentChatId, noteChats],
 	);
-	const { messages: storedMessageSnapshot } = useChatMessagesSnapshot({
-		chatId: hasStoredCurrentChat ? currentChatId : null,
-		workspaceId: activeWorkspaceId,
-	});
 	const {
 		compactionActivity,
 		hasEarlierMessages,
@@ -106,7 +96,6 @@ export const useNoteDiscussionSession = ({
 		messages: storedMessages,
 	} = usePaginatedChatMessages({
 		chatId: hasStoredCurrentChat ? currentChatId : null,
-		fallbackMessages: storedMessageSnapshot,
 		workspaceId: activeWorkspaceId,
 	});
 	const activeRun = useQuery(
@@ -149,26 +138,6 @@ export const useNoteDiscussionSession = ({
 		},
 		[updateSettings],
 	);
-	const prefetchNoteChat = React.useCallback(
-		(chatId: string) => {
-			if (!activeWorkspaceId) {
-				return;
-			}
-
-			void prefetchChatMessagesSnapshot({
-				chatId,
-				convex,
-				workspaceId: activeWorkspaceId,
-			}).catch((error) => {
-				logError({
-					event: "client.error",
-					error,
-					message: "Failed to prefetch note chat snapshot",
-				});
-			});
-		},
-		[activeWorkspaceId, convex],
-	);
 	const openDraftChat = React.useCallback(() => {
 		const chatId = createDraftChatId();
 		setCurrentChatId(chatId);
@@ -179,10 +148,9 @@ export const useNoteDiscussionSession = ({
 				return;
 			}
 
-			prefetchNoteChat(chatId);
 			setCurrentChatId(() => chatId);
 		},
-		[currentChatId, prefetchNoteChat],
+		[currentChatId],
 	);
 	const groupedNoteChats = React.useMemo(
 		() => groupNoteChatsForSelector(noteChats ?? []),
@@ -221,7 +189,6 @@ export const useNoteDiscussionSession = ({
 		loadEarlierMessages,
 		noteChats,
 		openDraftChat,
-		prefetchNoteChat,
 		selectChat,
 		selectedModel,
 		selectedReasoningEffort: settings.reasoningEffort,

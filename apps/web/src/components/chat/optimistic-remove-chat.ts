@@ -20,19 +20,6 @@ export function optimisticRemoveChat(
 		);
 	}
 
-	const currentMessages = localStore.getQuery(api.chats.getMessagesSnapshot, {
-		workspaceId,
-		chatId,
-	});
-
-	if (currentMessages !== undefined) {
-		localStore.setQuery(
-			api.chats.getMessagesSnapshot,
-			{ workspaceId, chatId },
-			[],
-		);
-	}
-
 	const currentSession = localStore.getQuery(api.chats.getSession, {
 		workspaceId,
 		chatId,

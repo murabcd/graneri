@@ -12,14 +12,14 @@ crons.cron(
 
 crons.interval(
 	"reconcile due automations",
-	{ minutes: 1 },
+	{ minutes: 5 },
 	internal.automations.reconcileDueAutomations,
 	{},
 );
 
 crons.interval(
 	"cleanup expired assistant runs",
-	{ minutes: 1 },
+	{ minutes: 5 },
 	internal.assistantRuns.cleanupExpiredAssistantRuns,
 	{},
 );

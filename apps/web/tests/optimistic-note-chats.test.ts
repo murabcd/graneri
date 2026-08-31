@@ -117,11 +117,6 @@ describe("optimistic-note-chats", () => {
 			{ workspaceId, chatId: "chat-1" },
 			linkedChat,
 		);
-		store.seed(
-			api.chats.getMessagesSnapshot,
-			{ workspaceId, chatId: "chat-1" },
-			[{ id: "message-1" }],
-		);
 
 		archiveNoteChats(store, workspaceId, noteId as never);
 
@@ -141,12 +136,6 @@ describe("optimistic-note-chats", () => {
 		expect(
 			store.getQuery(api.chats.getSession, { workspaceId, chatId: "chat-1" }),
 		).toBeNull();
-		expect(
-			store.getQuery(api.chats.getMessagesSnapshot, {
-				workspaceId,
-				chatId: "chat-1",
-			}),
-		).toEqual([]);
 	});
 
 	it("restores note-linked chats back into active and note-specific caches", () => {
@@ -205,11 +194,6 @@ describe("optimistic-note-chats", () => {
 			{ workspaceId, chatId: "chat-1" },
 			linkedChat,
 		);
-		store.seed(
-			api.chats.getMessagesSnapshot,
-			{ workspaceId, chatId: "chat-1" },
-			[{ id: "message-1" }],
-		);
 
 		removeNoteChats(store, workspaceId, noteId as never);
 
@@ -221,11 +205,5 @@ describe("optimistic-note-chats", () => {
 		expect(
 			store.getQuery(api.chats.getSession, { workspaceId, chatId: "chat-1" }),
 		).toBeNull();
-		expect(
-			store.getQuery(api.chats.getMessagesSnapshot, {
-				workspaceId,
-				chatId: "chat-1",
-			}),
-		).toEqual([]);
 	});
 });

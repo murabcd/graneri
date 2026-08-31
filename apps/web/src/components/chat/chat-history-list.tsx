@@ -23,7 +23,6 @@ type ChatHistoryListProps = {
 	isChatsLoading: boolean;
 	activeChatId: string | null;
 	onOpenChat: (chatId: string) => void;
-	onPrefetchChat: (chatId: string) => void;
 	onMoveToTrash: (chatId: string) => void;
 	automationChatIds?: ReadonlySet<string>;
 	activeStreamingChatIds?: ReadonlySet<string>;
@@ -38,7 +37,6 @@ export function ChatHistoryList({
 	isChatsLoading,
 	activeChatId,
 	onOpenChat,
-	onPrefetchChat,
 	onMoveToTrash,
 	automationChatIds,
 	activeStreamingChatIds,
@@ -74,7 +72,6 @@ export function ChatHistoryList({
 												chat={chat}
 												activeChatId={activeChatId}
 												onOpenChat={onOpenChat}
-												onPrefetchChat={onPrefetchChat}
 												onMoveToTrash={onMoveToTrash}
 												hasAutomation={
 													automationChatIds?.has(getChatId(chat)) ?? false
@@ -112,7 +109,6 @@ function ChatHistoryItem({
 	chat,
 	activeChatId,
 	onOpenChat,
-	onPrefetchChat,
 	onMoveToTrash,
 	hasAutomation,
 	isStreaming,
@@ -121,7 +117,6 @@ function ChatHistoryItem({
 	chat: Doc<"chats">;
 	activeChatId: string | null;
 	onOpenChat: (chatId: string) => void;
-	onPrefetchChat: (chatId: string) => void;
 	onMoveToTrash: (chatId: string) => void;
 	hasAutomation: boolean;
 	isStreaming: boolean;
@@ -147,9 +142,6 @@ function ChatHistoryItem({
 			<button
 				type="button"
 				onClick={() => onOpenChat(storedChatId)}
-				onFocus={() => onPrefetchChat(storedChatId)}
-				onMouseEnter={() => onPrefetchChat(storedChatId)}
-				onPointerDown={() => onPrefetchChat(storedChatId)}
 				className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg p-1 text-left"
 			>
 				<div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">

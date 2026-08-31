@@ -44,7 +44,7 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
 	Clock,
 	MoreHorizontal,
@@ -105,7 +105,6 @@ import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { ActiveWorkspaceProvider } from "@/hooks/active-workspace-provider";
 import { useAutomationActions } from "@/hooks/use-automation-actions";
 import { useAutomationNotifications } from "@/hooks/use-automation-notifications";
-import { prefetchChatMessagesSnapshot } from "@/hooks/use-chat-messages-snapshot";
 import { useMarkAssistantCompletionRead } from "@/hooks/use-mark-assistant-completion-read";
 import { useNoteNavigationPreparation } from "@/hooks/use-note-navigation-preparation";
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
@@ -267,7 +266,6 @@ const useAppShellState = ({
 	workspaces: Array<WorkspaceRecord>;
 	initialDesktopMac: boolean;
 }) => {
-	const convex = useConvex();
 	const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
 	const [isDesktopMac, setIsDesktopMac] = React.useState(initialDesktopMac);
 	const [automationDialogOpen, setAutomationDialogOpen] = React.useState(false);
@@ -1197,32 +1195,11 @@ const useAppShellState = ({
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[handleViewChange, resolvedCurrentNoteId, setCurrentNoteEditorActions],
 	);
-	const handlePrefetchChat = React.useCallback(
-		(chatId: string) => {
-			if (!resolvedActiveWorkspaceId) {
-				return;
-			}
-
-			void prefetchChatMessagesSnapshot({
-				chatId,
-				convex,
-				workspaceId: resolvedActiveWorkspaceId,
-			}).catch((error) => {
-				logError({
-					event: "client.error",
-					error: error,
-					message: "Failed to prefetch chat messages snapshot",
-				});
-			});
-		},
-		[convex, resolvedActiveWorkspaceId],
-	);
 	const handleOpenChat = React.useCallback(
 		(chatId: string) => {
-			handlePrefetchChat(chatId);
 			openStoredChat(chatId);
 		},
-		[handlePrefetchChat, openStoredChat],
+		[openStoredChat],
 	);
 
 	const handleNewChat = React.useCallback(() => {
@@ -1353,7 +1330,6 @@ const useAppShellState = ({
 		handleOpenCalendarSettings,
 		handleOpenChat,
 		openProject,
-		handlePrefetchChat,
 		handlePrefetchNote,
 		handleQuickNote,
 		handleRunAutomationNow,
@@ -2201,7 +2177,6 @@ function createAppShellContentView({
 		onCreateNoteFromChatResponse: controller.handleCreateNoteFromChatResponse,
 		onOpenChat: controller.handleOpenChat,
 		onOpenConnectionsSettings: handleOpenConnectionsSettings,
-		onPrefetchChat: controller.handlePrefetchChat,
 	};
 }
 

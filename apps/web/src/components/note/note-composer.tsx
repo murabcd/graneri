@@ -475,7 +475,6 @@ const useNoteComposerController = ({
 		loadEarlierMessages,
 		noteChats,
 		openDraftChat: startDraftChat,
-		prefetchNoteChat: handlePrefetchNoteChat,
 		selectChat: selectNoteChat,
 		selectedModel,
 		selectedReasoningEffort,
@@ -1638,7 +1637,6 @@ const useNoteComposerController = ({
 		message,
 		modelPopoverOpen,
 		noteChats,
-		handlePrefetchNoteChat,
 		orderedTranscriptUtterances: transcriptSession.orderedTranscriptUtterances,
 		openDraftChat,
 		panelMode,
@@ -1821,7 +1819,6 @@ function NoteChatHeader({
 	chatTitle,
 	currentChatId,
 	groupedNoteChats,
-	handlePrefetchNoteChat,
 	noteChats,
 	onHideChat,
 	onNewChat,
@@ -1836,7 +1833,6 @@ function NoteChatHeader({
 	chatTitle: string;
 	currentChatId: string;
 	groupedNoteChats: NoteChatGroups;
-	handlePrefetchNoteChat: (chatId: string) => void;
 	noteChats: NoteChatSummary[] | undefined;
 	onHideChat: () => void;
 	onNewChat: () => void;
@@ -1921,9 +1917,6 @@ function NoteChatHeader({
 											key={chat._id}
 											value={chat.chatId}
 											className="min-w-0"
-											onFocus={() => handlePrefetchNoteChat(chat.chatId)}
-											onMouseEnter={() => handlePrefetchNoteChat(chat.chatId)}
-											onPointerDown={() => handlePrefetchNoteChat(chat.chatId)}
 										>
 											<span className="block min-w-0 max-w-full truncate">
 												{chat.title}
@@ -1940,9 +1933,6 @@ function NoteChatHeader({
 											key={chat._id}
 											value={chat.chatId}
 											className="min-w-0"
-											onFocus={() => handlePrefetchNoteChat(chat.chatId)}
-											onMouseEnter={() => handlePrefetchNoteChat(chat.chatId)}
-											onPointerDown={() => handlePrefetchNoteChat(chat.chatId)}
 										>
 											<span className="block min-w-0 max-w-full truncate">
 												{chat.title}
@@ -3346,7 +3336,6 @@ function NoteComposerPanels({
 			chatTitle={controller.chatTitle}
 			currentChatId={controller.currentChatId}
 			groupedNoteChats={controller.groupedNoteChats}
-			handlePrefetchNoteChat={controller.handlePrefetchNoteChat}
 			noteChats={controller.noteChats}
 			onHideChat={controller.handleHideChat}
 			onNewChat={controller.openDraftChat}

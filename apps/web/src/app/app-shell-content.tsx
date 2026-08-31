@@ -120,7 +120,6 @@ export type AppShellContentView =
 			}) => Promise<"created" | undefined> | "created" | undefined;
 			onOpenChat: (chatId: string) => void;
 			onOpenConnectionsSettings: () => void;
-			onPrefetchChat: (chatId: string) => void;
 	  }
 	| {
 			kind: "notFound";
@@ -267,7 +266,6 @@ export const AppShellContent = React.memo(function AppShellContent({
 			activeStreamingChatIds={view.activeStreamingChatIds}
 			activeChatId={view.currentChatId}
 			onOpenChat={view.onOpenChat}
-			onPrefetchChat={view.onPrefetchChat}
 			onChatRemoved={view.onChatRemoved}
 			isDesktopMac={view.isDesktopMac}
 			onOpenConnectionsSettings={view.onOpenConnectionsSettings}

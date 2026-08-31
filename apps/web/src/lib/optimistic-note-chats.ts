@@ -58,19 +58,6 @@ const clearChatState = (
 	if (session !== undefined) {
 		localStore.setQuery(api.chats.getSession, { workspaceId, chatId }, null);
 	}
-
-	const messages = localStore.getQuery(api.chats.getMessagesSnapshot, {
-		workspaceId,
-		chatId,
-	});
-
-	if (messages !== undefined) {
-		localStore.setQuery(
-			api.chats.getMessagesSnapshot,
-			{ workspaceId, chatId },
-			[],
-		);
-	}
 };
 
 export const archiveNoteChats = (

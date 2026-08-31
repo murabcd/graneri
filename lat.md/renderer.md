@@ -90,15 +90,15 @@ projection; reasoning remains a nested `Thinking` or `Thought` disclosure
 inside the turn-level work group.
 Note-scoped discussion ownership is layered on top of the shared renderer
 interaction session by `use-note-discussion-session.ts`. It owns draft/stored
-chat identity, note chat list/session/run snapshots, prefetching, selector
+chat identity, note chat list/session/run snapshots, cursor-paginated messages, selector
 grouping, title/loading derivation, and the same required five-field chat
 settings snapshot used by workspace chat. The note surface exposes model,
 reasoning, and speed controls while retaining the note chat's mode and web-search
 values in every request. The note composer owns only editor, attachment,
 transcript, focus, and panel-presentation adapters; it must not reproduce
 discussion identity, settings ownership, or query orchestration.
-Workspace chat navigation commits the destination route immediately while
-message prefetch continues independently. The workspace composer derives its
+Workspace chat navigation commits the destination route immediately and lets the
+destination's cursor-paginated subscription load its first bounded page. The workspace composer derives its
 placeholder from the stored chat identity before hydrated messages arrive, so a
 known chat shows follow-up copy from its first destination render while a true
 draft chat keeps the general prompt.
