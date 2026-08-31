@@ -33,13 +33,12 @@ import {
 	removePersistedNoteDocument,
 	requirePersistedNoteDocument,
 	syncNoteDocumentState,
-	updatePersistedNoteDocumentIndex,
 } from "./noteDocument";
 import {
 	removeAllNoteImages,
 	removeNoteImageReferences,
 } from "./noteImageReferences";
-import { insertNote } from "./noteRecords";
+import { insertNote, setNoteArchived, setNoteProject } from "./noteRecords";
 import { MAX_RETAINED_NOTE_REVISIONS } from "./noteVersionPolicy";
 import { requireOwnedProject } from "./projects";
 
@@ -901,17 +900,7 @@ export const setProject = mutation({
 		}
 
 		const now = Date.now();
-		await ctx.db.patch(args.id, {
-			projectId: nextProjectId,
-			updatedAt: now,
-		});
-		await updatePersistedNoteDocumentIndex({
-			ctx,
-			noteId: args.id,
-			projectId: nextProjectId,
-			isArchived: note.isArchived,
-			updatedAt: now,
-		});
+		await setNoteProject(ctx, note, nextProjectId, now);
 
 		return {
 			projectId: args.projectId,
@@ -1062,18 +1051,7 @@ export const moveToTrash = mutation({
 		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
 
 		const now = Date.now();
-		await ctx.db.patch(args.id, {
-			isArchived: true,
-			archivedAt: now,
-			updatedAt: now,
-		});
-		await updatePersistedNoteDocumentIndex({
-			ctx,
-			noteId: args.id,
-			projectId: note.projectId,
-			isArchived: true,
-			updatedAt: now,
-		});
+		await setNoteArchived(ctx, note, true, now);
 		await setCalendarNoteRelationshipsArchived({
 			ctx,
 			isArchived: true,
@@ -1099,18 +1077,7 @@ export const restore = mutation({
 		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
 
 		const now = Date.now();
-		await ctx.db.patch(args.id, {
-			isArchived: false,
-			archivedAt: undefined,
-			updatedAt: now,
-		});
-		await updatePersistedNoteDocumentIndex({
-			ctx,
-			noteId: args.id,
-			projectId: note.projectId,
-			isArchived: false,
-			updatedAt: now,
-		});
+		await setNoteArchived(ctx, note, false, now);
 		await setCalendarNoteRelationshipsArchived({
 			ctx,
 			isArchived: false,

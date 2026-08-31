@@ -1,9 +1,70 @@
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import {
 	commitCurrentNoteDocument,
 	type parseNoteDocument,
+	requirePersistedNoteDocument,
 } from "./noteDocument";
+
+const updateNoteDocumentProjection = async ({
+	ctx,
+	noteId,
+	projectId,
+	isArchived,
+	updatedAt,
+}: {
+	ctx: MutationCtx;
+	noteId: Id<"notes">;
+	projectId: Id<"projects"> | undefined;
+	isArchived: boolean;
+	updatedAt: number;
+}) => {
+	const document = await requirePersistedNoteDocument(ctx, noteId);
+	await ctx.db.patch(document._id, {
+		projectId,
+		isArchived,
+		updatedAt,
+	});
+};
+
+export const setNoteProject = async (
+	ctx: MutationCtx,
+	note: Doc<"notes">,
+	projectId: Id<"projects"> | undefined,
+	now: number,
+) => {
+	await ctx.db.patch(note._id, {
+		projectId,
+		updatedAt: now,
+	});
+	await updateNoteDocumentProjection({
+		ctx,
+		noteId: note._id,
+		projectId,
+		isArchived: note.isArchived,
+		updatedAt: now,
+	});
+};
+
+export const setNoteArchived = async (
+	ctx: MutationCtx,
+	note: Doc<"notes">,
+	isArchived: boolean,
+	now: number,
+) => {
+	await ctx.db.patch(note._id, {
+		isArchived,
+		archivedAt: isArchived ? now : undefined,
+		updatedAt: now,
+	});
+	await updateNoteDocumentProjection({
+		ctx,
+		noteId: note._id,
+		projectId: note.projectId,
+		isArchived,
+		updatedAt: now,
+	});
+};
 
 export const insertNote = async (
 	ctx: MutationCtx,

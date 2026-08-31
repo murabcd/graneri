@@ -203,27 +203,6 @@ export const removePersistedNoteDocument = async (
 	}
 };
 
-export const updatePersistedNoteDocumentIndex = async ({
-	ctx,
-	noteId,
-	projectId,
-	isArchived,
-	updatedAt,
-}: {
-	ctx: MutationCtx;
-	noteId: Id<"notes">;
-	projectId: Id<"projects"> | undefined;
-	isArchived: boolean;
-	updatedAt: number;
-}) => {
-	const document = await requirePersistedNoteDocument(ctx, noteId);
-	await ctx.db.patch(document._id, {
-		projectId,
-		isArchived,
-		updatedAt,
-	});
-};
-
 const invalidNoteDocument = (message: string): never => {
 	throw new ConvexError({
 		code: "INVALID_NOTE_DOCUMENT",

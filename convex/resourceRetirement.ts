@@ -4,7 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { clearChatContextState } from "./chatContextCompactions";
-import { updatePersistedNoteDocumentIndex } from "./noteDocument";
+import { setNoteProject } from "./noteRecords";
 
 const NOTE_BATCH_SIZE = 100;
 const CHAT_BATCH_SIZE = 25;
@@ -136,19 +136,7 @@ export const clearProjectNoteRelationships = internalMutation({
 		const now = Date.now();
 
 		await Promise.all(
-			notes.map(async (note) => {
-				await ctx.db.patch(note._id, {
-					projectId: undefined,
-					updatedAt: now,
-				});
-				await updatePersistedNoteDocumentIndex({
-					ctx,
-					noteId: note._id,
-					projectId: undefined,
-					isArchived: note.isArchived,
-					updatedAt: now,
-				});
-			}),
+			notes.map((note) => setNoteProject(ctx, note, undefined, now)),
 		);
 
 		const progress = {
