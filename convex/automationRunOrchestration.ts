@@ -13,6 +13,7 @@ import type { UIMessage } from "ai";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { requirePersistedNoteDocument } from "./noteDocument";
 import { createAssistantRunJob } from "./assistantRunJobState";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import { createAssistantRunStream } from "./assistantRunStreamState";
@@ -63,19 +64,33 @@ const getAutomationNotes = async (
 	const notes = await Promise.all(
 		(automation.targetNoteIds ?? [])
 			.slice(0, MAX_CONTEXT_NOTES)
-			.map(async (noteId) => await ctx.db.get(noteId)),
+			.map(async (noteId) => {
+				const note = await ctx.db.get(noteId);
+				if (
+					!note ||
+					note.ownerTokenIdentifier !== automation.ownerTokenIdentifier ||
+					note.workspaceId !== automation.workspaceId ||
+					note.isArchived
+				) {
+					return null;
+				}
+				return {
+					note,
+					document: await requirePersistedNoteDocument(ctx, note._id),
+				};
+			}),
 	);
 
-	return notes.flatMap((note) =>
-		note &&
-		note.ownerTokenIdentifier === automation.ownerTokenIdentifier &&
-		note.workspaceId === automation.workspaceId &&
-		!note.isArchived
+	return notes.flatMap((record) =>
+		record
 			? [
 					{
-						title: note.title,
-						text: truncate(note.searchableText, MAX_CONTEXT_NOTE_LENGTH),
-						updatedAt: note.updatedAt,
+						title: record.note.title,
+						text: truncate(
+							record.document.searchableText,
+							MAX_CONTEXT_NOTE_LENGTH,
+						),
+						updatedAt: record.note.updatedAt,
 					},
 				]
 			: [],

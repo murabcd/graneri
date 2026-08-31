@@ -9,6 +9,7 @@ import type { QueryCtx } from "./_generated/server";
 import { internalQuery, query } from "./_generated/server";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import { clampWhitespace, createResourceAccess } from "./domain";
+import { requirePersistedNoteDocument } from "./noteDocument";
 
 const MAX_PROJECT_NOTE_TITLE_LENGTH = 120;
 const MAX_PROJECT_NOTE_PREVIEW_LENGTH = 500;
@@ -44,18 +45,20 @@ const clip = (value: string, maxLength: number) => {
 
 const toProjectNoteSummary = (
 	note: Doc<"notes">,
+	document: Doc<"noteDocuments">,
 ): Infer<typeof projectNoteSummaryValidator> => ({
 	id: note._id,
 	title: clip(note.title, MAX_PROJECT_NOTE_TITLE_LENGTH) || "New note",
-	preview: clip(note.searchableText, MAX_PROJECT_NOTE_PREVIEW_LENGTH),
+	preview: clip(document.searchableText, MAX_PROJECT_NOTE_PREVIEW_LENGTH),
 	updatedAt: note.updatedAt,
 });
 
 const toProjectNoteContent = (
 	note: Doc<"notes">,
+	document: Doc<"noteDocuments">,
 	offset: number,
 ): Infer<typeof projectNoteContentValidator> => {
-	const text = note.searchableText.trim();
+	const text = document.searchableText.trim();
 	const chunkEnd = Math.min(
 		offset + PROJECT_NOTE_READ_CHUNK_LENGTH,
 		text.length,
@@ -146,7 +149,7 @@ const searchProjectNotesForOwner = async (
 			)
 			.take(limit + 1),
 		ctx.db
-			.query("notes")
+			.query("noteDocuments")
 			.withSearchIndex("search_text", (q) =>
 				q
 					.search("searchableText", searchQuery)
@@ -157,17 +160,42 @@ const searchProjectNotesForOwner = async (
 			)
 			.take(limit + 1),
 	]);
-	const notesById = new Map<Id<"notes">, Doc<"notes">>();
-	for (const note of [...titleMatches, ...textMatches]) {
-		if (notesById.size === limit + 1) {
-			break;
+	const [textMatchedNotes, titleMatchedDocuments] = await Promise.all([
+		Promise.all(textMatches.map((document) => ctx.db.get(document.noteId))),
+		Promise.all(
+			titleMatches.map((note) => requirePersistedNoteDocument(ctx, note._id)),
+		),
+	]);
+	const notesById = new Map(titleMatches.map((note) => [note._id, note]));
+	for (const note of textMatchedNotes) {
+		if (
+			note &&
+			note.ownerTokenIdentifier === args.ownerTokenIdentifier &&
+			note.workspaceId === args.workspaceId &&
+			note.projectId === projectId &&
+			!note.isArchived
+		) {
+			notesById.set(note._id, note);
 		}
-		notesById.set(note._id, note);
 	}
+	const documentsByNoteId = new Map(
+		textMatches.map((document) => [document.noteId, document]),
+	);
+	for (const document of titleMatchedDocuments) {
+		documentsByNoteId.set(document.noteId, document);
+	}
+	const records = [...notesById.values()]
+		.flatMap((note) => {
+			const document = documentsByNoteId.get(note._id);
+			return document ? [{ document, note }] : [];
+		})
+		.slice(0, limit + 1);
 
 	return {
-		hasMore: notesById.size > limit,
-		notes: [...notesById.values()].slice(0, limit).map(toProjectNoteSummary),
+		hasMore: records.length > limit,
+		notes: records
+			.slice(0, limit)
+			.map(({ document, note }) => toProjectNoteSummary(note, document)),
 	};
 };
 
@@ -201,7 +229,11 @@ const getProjectNoteForOwner = async (
 		return null;
 	}
 
-	return toProjectNoteContent(note, resolveProjectNoteOffset(args.offset));
+	return toProjectNoteContent(
+		note,
+		await requirePersistedNoteDocument(ctx, note._id),
+		resolveProjectNoteOffset(args.offset),
+	);
 };
 
 export const search = query({

@@ -1,6 +1,7 @@
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -298,26 +299,24 @@ test("projects.moveNotesToTrash archives active project notes and keeps the proj
 	});
 
 	const { activeNoteId, archivedNoteId } = await asOwner.run(async (ctx) => {
-		const activeNoteId = await ctx.db.insert("notes", {
+		const activeNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			projectId: project._id,
 			starredSortOrder: 0,
 			title: "Active note",
-			content: "",
 			searchableText: "",
 			visibility: "private",
 			isArchived: false,
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
-		const archivedNoteId = await ctx.db.insert("notes", {
+		const archivedNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			projectId: project._id,
 			starredSortOrder: 0,
 			title: "Archived note",
-			content: "",
 			searchableText: "",
 			visibility: "private",
 			isArchived: true,
@@ -359,26 +358,24 @@ test("projects.remove deletes the project and clears it from assigned notes", as
 	});
 
 	const { noteId, archivedNoteId } = await asOwner.run(async (ctx) => {
-		const noteId = await ctx.db.insert("notes", {
+		const noteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			projectId: project._id,
 			starredSortOrder: 0,
 			title: "Current note",
-			content: "",
 			searchableText: "",
 			visibility: "private",
 			isArchived: false,
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
-		const archivedNoteId = await ctx.db.insert("notes", {
+		const archivedNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			projectId: project._id,
 			starredSortOrder: 0,
 			title: "Archived note",
-			content: "",
 			searchableText: "",
 			visibility: "private",
 			isArchived: true,
@@ -387,13 +384,12 @@ test("projects.remove deletes the project and clears it from assigned notes", as
 			updatedAt: 1_000,
 		});
 		for (let index = 0; index < 100; index += 1) {
-			await ctx.db.insert("notes", {
+			await insertTestNote(ctx, {
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				workspaceId,
 				projectId: project._id,
 				starredSortOrder: 0,
 				title: `Batched note ${index}`,
-				content: "",
 				searchableText: "",
 				visibility: "private",
 				isArchived: false,

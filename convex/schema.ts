@@ -306,8 +306,8 @@ export default defineSchema({
 		starredSortOrder: v.number(),
 		title: v.string(),
 		templateSlug: v.optional(v.string()),
-		content: v.string(),
-		searchableText: v.string(),
+		content: v.optional(v.string()),
+		searchableText: v.optional(v.string()),
 		visibility: v.union(v.literal("private"), v.literal("public")),
 		shareId: v.optional(v.string()),
 		sharedAt: v.optional(v.number()),
@@ -364,15 +364,6 @@ export default defineSchema({
 		])
 		.searchIndex("search_title", {
 			searchField: "title",
-			filterFields: [
-				"ownerTokenIdentifier",
-				"workspaceId",
-				"projectId",
-				"isArchived",
-			],
-		})
-		.searchIndex("search_text", {
-			searchField: "searchableText",
 			filterFields: [
 				"ownerTokenIdentifier",
 				"workspaceId",

@@ -5,6 +5,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import {
 	getPersistedNoteDocument,
 	parseNoteDocument,
+	requirePersistedNoteDocument,
 	writePersistedNoteDocument,
 } from "./noteDocument";
 
@@ -41,6 +42,9 @@ export const backfill = internalMutation({
 		let migratedCount = 0;
 
 		for (const note of page.page) {
+			if (note.content === undefined || note.searchableText === undefined) {
+				continue;
+			}
 			const result = await writePersistedNoteDocument({
 				ctx,
 				note,
@@ -95,6 +99,64 @@ export const verify = internalQuery({
 			missingNoteIds: page.page.flatMap((note, index) =>
 				documents[index] ? [] : [note._id],
 			),
+			scannedCount: page.page.length,
+		};
+	},
+});
+
+export const startCleanup = internalMutation({
+	args: {},
+	returns: v.null(),
+	handler: async (ctx) => {
+		await ctx.scheduler.runAfter(0, internal.noteDocumentMigration.cleanup, {
+			paginationOpts: {
+				cursor: null,
+				numItems: NOTE_DOCUMENT_MIGRATION_BATCH_SIZE,
+			},
+		});
+		return null;
+	},
+});
+
+export const cleanup = internalMutation({
+	args: {
+		paginationOpts: paginationOptsValidator,
+	},
+	returns: v.object({
+		clearedCount: v.number(),
+		isDone: v.boolean(),
+		scannedCount: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		const page = await ctx.db
+			.query("notes")
+			.order("asc")
+			.paginate(args.paginationOpts);
+		let clearedCount = 0;
+
+		for (const note of page.page) {
+			await requirePersistedNoteDocument(ctx, note._id);
+			if (note.content !== undefined || note.searchableText !== undefined) {
+				await ctx.db.patch(note._id, {
+					content: undefined,
+					searchableText: undefined,
+				});
+				clearedCount += 1;
+			}
+		}
+
+		if (!page.isDone) {
+			await ctx.scheduler.runAfter(0, internal.noteDocumentMigration.cleanup, {
+				paginationOpts: {
+					cursor: page.continueCursor,
+					numItems: NOTE_DOCUMENT_MIGRATION_BATCH_SIZE,
+				},
+			});
+		}
+
+		return {
+			clearedCount,
+			isDone: page.isDone,
 			scannedCount: page.page.length,
 		};
 	},

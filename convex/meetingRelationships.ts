@@ -8,6 +8,7 @@ import {
 	truncate,
 } from "./domain";
 import { searchWorkspaceCompanies } from "./companyDomain";
+import { requirePersistedNoteDocument } from "./noteDocument";
 import { searchWorkspacePeople } from "./peopleDomain";
 
 const MAX_ENTITY_MATCHES = 5;
@@ -338,6 +339,36 @@ const searchMeetingNotesForOwner = async ({
 		MAX_MEETING_NOTE_TEXT_LENGTH,
 		Math.floor(MAX_TOTAL_MEETING_NOTE_TEXT_LENGTH / Math.max(notes.length, 1)),
 	);
+	const meetings = (
+		await Promise.all(
+			notes.map(async ({ match, note }) => {
+				if (
+					!note ||
+					note.isArchived ||
+					note.ownerTokenIdentifier !== ownerTokenIdentifier ||
+					note.workspaceId !== args.workspaceId ||
+					!note.calendarEvent
+				) {
+					return null;
+				}
+				const document = await requirePersistedNoteDocument(ctx, note._id);
+				return {
+					endAt: note.calendarEvent.endAt,
+					htmlLink: note.calendarEvent.htmlLink,
+					matchedCompanies: [...match.companyNames],
+					matchedPeople: [...match.peopleNames],
+					meetingUrl: note.calendarEvent.meetingUrl,
+					noteId: note._id,
+					provider: note.calendarEvent.provider,
+					searchableText: truncate(document.searchableText, noteTextLimit),
+					searchableTextTruncated:
+						document.searchableText.length > noteTextLimit,
+					startAt: note.calendarEvent.startAt,
+					title: note.title.trim() || note.calendarEvent.title,
+				};
+			}),
+		)
+	).flatMap((meeting) => (meeting ? [meeting] : []));
 
 	return {
 		hasMore,
@@ -349,33 +380,7 @@ const searchMeetingNotesForOwner = async ({
 			displayName: person.displayName,
 			email: person.email,
 		})),
-		meetings: notes.flatMap(({ match, note }) => {
-			if (
-				!note ||
-				note.isArchived ||
-				note.ownerTokenIdentifier !== ownerTokenIdentifier ||
-				note.workspaceId !== args.workspaceId ||
-				!note.calendarEvent
-			) {
-				return [];
-			}
-
-			return [
-				{
-					endAt: note.calendarEvent.endAt,
-					htmlLink: note.calendarEvent.htmlLink,
-					matchedCompanies: [...match.companyNames],
-					matchedPeople: [...match.peopleNames],
-					meetingUrl: note.calendarEvent.meetingUrl,
-					noteId: note._id,
-					provider: note.calendarEvent.provider,
-					searchableText: truncate(note.searchableText, noteTextLimit),
-					searchableTextTruncated: note.searchableText.length > noteTextLimit,
-					startAt: note.calendarEvent.startAt,
-					title: note.title.trim() || note.calendarEvent.title,
-				},
-			];
-		}),
+		meetings,
 	};
 };
 

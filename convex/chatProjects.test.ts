@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -241,14 +242,17 @@ test("project note tools search and read only the persisted chat project", async
 				title: string,
 				searchableText: string,
 			) =>
-				await ctx.db.insert("notes", {
+				await insertTestNote(ctx, {
 					ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 					workspaceId: ownerWorkspaceId,
 					projectId: noteProjectId,
 					isStarred: false,
 					starredSortOrder: 1_000,
 					title,
-					content: JSON.stringify({ type: "doc", content: [] }),
+					content: JSON.stringify({
+						type: "doc",
+						content: [{ type: "paragraph" }],
+					}),
 					searchableText,
 					visibility: "private",
 					isArchived: false,
@@ -333,14 +337,17 @@ test("project note reads expose an explicit continuation offset", async () => {
 	const noteText = `${"a".repeat(PROJECT_NOTE_READ_CHUNK_LENGTH)}remaining`;
 	const noteId = await t.run(
 		async (ctx) =>
-			await ctx.db.insert("notes", {
+			await insertTestNote(ctx, {
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				workspaceId: ownerWorkspaceId,
 				projectId,
 				isStarred: false,
 				starredSortOrder: 1_000,
 				title: "Long note",
-				content: JSON.stringify({ type: "doc", content: [] }),
+				content: JSON.stringify({
+					type: "doc",
+					content: [{ type: "paragraph" }],
+				}),
 				searchableText: noteText,
 				visibility: "private",
 				isArchived: false,

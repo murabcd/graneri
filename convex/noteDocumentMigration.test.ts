@@ -84,4 +84,14 @@ test("note document migration backfills legacy notes in bounded batches", async 
 			updatedAt: 1,
 		},
 	);
+
+	await t.mutation(internal.noteDocumentMigration.startCleanup, {});
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+	const cleanedNotes = await t.run((ctx) => ctx.db.query("notes").collect());
+	expect(cleanedNotes).toHaveLength(6);
+	for (const note of cleanedNotes) {
+		expect(note).not.toHaveProperty("content");
+		expect(note).not.toHaveProperty("searchableText");
+	}
 });

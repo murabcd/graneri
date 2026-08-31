@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -30,7 +31,7 @@ const createWorkspaceAndNote = async () => {
 			createdAt,
 			updatedAt: createdAt,
 		});
-		const noteId = await ctx.db.insert("notes", {
+		const noteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			authorName: "Owner",

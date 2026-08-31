@@ -27,8 +27,6 @@ export const insertNote = async (
 		isStarred: false,
 		starredSortOrder: args.now,
 		title: args.title,
-		content: args.document.content,
-		searchableText: args.searchableText,
 		templateSlug: args.templateSlug,
 		visibility: "private",
 		shareId: undefined,

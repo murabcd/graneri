@@ -5,6 +5,7 @@ import {
 } from "@workspace/ai/project-description-contract";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { requirePersistedNoteDocument } from "./noteDocument";
 import { getOwnedProjectIfExists } from "./projects";
 
 const projectDescriptionContextNoteValidator = v.object({
@@ -40,16 +41,21 @@ export const getContext = query({
 			.order("desc")
 			.take(PROJECT_DESCRIPTION_CONTEXT_MAX_NOTES);
 
-		return notes.map((note) => ({
-			title:
-				note.title
-					.trim()
-					.slice(0, PROJECT_DESCRIPTION_CONTEXT_NOTE_TITLE_MAX_LENGTH)
-					.trim() || "New note",
-			text: note.searchableText
-				.trim()
-				.slice(0, PROJECT_DESCRIPTION_CONTEXT_NOTE_TEXT_MAX_LENGTH)
-				.trim(),
-		}));
+		return await Promise.all(
+			notes.map(async (note) => {
+				const document = await requirePersistedNoteDocument(ctx, note._id);
+				return {
+					title:
+						note.title
+							.trim()
+							.slice(0, PROJECT_DESCRIPTION_CONTEXT_NOTE_TITLE_MAX_LENGTH)
+							.trim() || "New note",
+					text: document.searchableText
+						.trim()
+						.slice(0, PROJECT_DESCRIPTION_CONTEXT_NOTE_TEXT_MAX_LENGTH)
+						.trim(),
+				};
+			}),
+		);
 	},
 });

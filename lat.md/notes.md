@@ -21,17 +21,16 @@ chat-response capture are explicit ingestion paths that convert to that format
 before saving; stored-content readers do not repair Markdown, malformed JSON,
 unowned images, or legacy document shapes.
 
-Persisted note bodies are moving from note catalog rows into one
-`noteDocuments` row per note through a widen-migrate-narrow rollout. During the
-widening deployment, [[convex/noteDocument.ts]] atomically mirrors every new or
-changed canonical document into the new table while
-[[convex/noteDocumentMigration.ts]] backfills existing notes in bounded batches
-of five. Readers remain on the old fields until both deployments have completed
-and the backfill is verified. The document row also carries project and archive
-projections exclusively for its indexed full-text search path. The next
-deployment switches every reader to the new canonical row, and the final
-deployment removes the temporary mirror and migration entrypoint. No permanent
-dual-read or dual-write path is allowed.
+Persisted note bodies live in one `noteDocuments` row per note. Note catalog
+queries return metadata only; editor, sharing, chat-context, revision, and
+search readers explicitly load the canonical document they need. The document
+row also carries project and archive projections exclusively for its indexed
+full-text search path, and every metadata mutation updates those projections in
+the same transaction. [[convex/noteDocumentMigration.ts]] temporarily owns the
+bounded five-row cleanup that removes the superseded body fields from migrated
+note catalog rows. Product readers and writers have no compatibility fallback
+or dual-write path; after deployment cleanup is verified, the final narrow
+schema removes the optional legacy fields and migration entrypoint.
 
 ## Editor files and images
 

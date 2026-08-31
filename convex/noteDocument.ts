@@ -106,6 +106,17 @@ export const getPersistedNoteDocument = async (
 		.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
 		.unique();
 
+export const requirePersistedNoteDocument = async (
+	ctx: QueryCtx | MutationCtx,
+	noteId: Id<"notes">,
+) => {
+	const document = await getPersistedNoteDocument(ctx, noteId);
+	if (!document) {
+		throw new Error("Persisted note document is unavailable.");
+	}
+	return document;
+};
+
 export const writePersistedNoteDocument = async ({
 	ctx,
 	note,
@@ -190,6 +201,27 @@ export const removePersistedNoteDocument = async (
 	if (document) {
 		await ctx.db.delete(document._id);
 	}
+};
+
+export const updatePersistedNoteDocumentIndex = async ({
+	ctx,
+	noteId,
+	projectId,
+	isArchived,
+	updatedAt,
+}: {
+	ctx: MutationCtx;
+	noteId: Id<"notes">;
+	projectId: Id<"projects"> | undefined;
+	isArchived: boolean;
+	updatedAt: number;
+}) => {
+	const document = await requirePersistedNoteDocument(ctx, noteId);
+	await ctx.db.patch(document._id, {
+		projectId,
+		isArchived,
+		updatedAt,
+	});
 };
 
 const invalidNoteDocument = (message: string): never => {

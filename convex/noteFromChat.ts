@@ -65,9 +65,10 @@ export const create = mutation({
 		}
 
 		const now = Date.now();
+		const initialDocument = parseNoteDocument(args.content);
 		const noteId = await insertNote(ctx, {
 			authorName: getAuthorName(identity),
-			document: parseNoteDocument(args.content),
+			document: initialDocument,
 			now,
 			ownerTokenIdentifier,
 			searchableText: args.searchableText,
@@ -86,17 +87,16 @@ export const create = mutation({
 				throw new Error("Inserted note is unavailable.");
 			}
 			const document = appendNoteAttachments(
-				parseNoteDocument(note.content),
+				initialDocument,
 				attachments,
 			);
 			await commitCurrentNoteDocument({
 				ctx,
 				note,
 				document,
-				searchableText: note.searchableText,
+				searchableText: args.searchableText,
 				now,
 			});
-			await ctx.db.patch(noteId, { content: document.content });
 		}
 
 		return noteId;

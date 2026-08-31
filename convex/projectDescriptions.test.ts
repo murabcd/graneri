@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -48,13 +49,12 @@ test("project description context is bounded to the latest notes in its project"
 			updatedAt: number;
 			isArchived?: boolean;
 		}) =>
-			ctx.db.insert("notes", {
+			insertTestNote(ctx, {
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				workspaceId,
 				projectId,
 				starredSortOrder: 0,
 				title,
-				content: "{}",
 				searchableText: text,
 				visibility: "private",
 				isArchived,

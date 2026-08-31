@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
+import { updatePersistedNoteDocumentIndex } from "./noteDocument";
 import {
 	DEFAULT_PROJECT_COLOR,
 	DEFAULT_PROJECT_ICON,
@@ -277,6 +278,13 @@ const moveProjectNotesToTrash = async (
 				await ctx.db.patch(note._id, {
 					isArchived: true,
 					archivedAt: now,
+					updatedAt: now,
+				});
+				await updatePersistedNoteDocumentIndex({
+					ctx,
+					noteId: note._id,
+					projectId: note.projectId,
+					isArchived: true,
 					updatedAt: now,
 				});
 				await ctx.runMutation(internal.chats.archiveForNote, {

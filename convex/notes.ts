@@ -27,7 +27,9 @@ import {
 	commitCurrentNoteDocument,
 	parseNoteDocument,
 	removePersistedNoteDocument,
+	requirePersistedNoteDocument,
 	syncNoteDocumentState,
+	updatePersistedNoteDocumentIndex,
 } from "./noteDocument";
 import {
 	removeAllNoteImages,
@@ -41,7 +43,7 @@ const noteVisibilityValidator = v.union(
 	v.literal("public"),
 );
 
-const noteFields = {
+const noteMetadataFields = {
 	_id: v.id("notes"),
 	_creationTime: v.number(),
 	ownerTokenIdentifier: v.string(),
@@ -53,8 +55,6 @@ const noteFields = {
 	starredSortOrder: v.number(),
 	title: v.string(),
 	templateSlug: v.optional(v.string()),
-	content: v.string(),
-	searchableText: v.string(),
 	visibility: noteVisibilityValidator,
 	shareId: v.optional(v.string()),
 	sharedAt: v.optional(v.number()),
@@ -64,10 +64,18 @@ const noteFields = {
 	updatedAt: v.number(),
 };
 
-const noteValidator = v.object(noteFields);
+const noteMetadataValidator = v.object(noteMetadataFields);
+
+const noteValidator = v.object({
+	...noteMetadataFields,
+	content: v.string(),
+	searchableText: v.string(),
+});
 
 const sharedNoteValidator = v.object({
-	...noteFields,
+	...noteMetadataFields,
+	content: v.string(),
+	searchableText: v.string(),
 	isOwner: v.boolean(),
 });
 
@@ -113,12 +121,38 @@ const noteVersionValidator = v.object({
 const { requireIdentity, requireTokenIdentifier } =
 	createResourceAccess("notes");
 
-const normalizeNote = (note: Doc<"notes">) => ({
-	...note,
+const toNoteMetadata = (note: Doc<"notes">) => ({
+	_id: note._id,
+	_creationTime: note._creationTime,
+	ownerTokenIdentifier: note.ownerTokenIdentifier,
+	workspaceId: note.workspaceId,
+	projectId: note.projectId,
+	calendarEvent: note.calendarEvent,
+	authorName: note.authorName,
 	isStarred: note.isStarred ?? false,
+	starredSortOrder: note.starredSortOrder,
+	title: note.title,
 	templateSlug: note.templateSlug,
 	visibility: note.visibility ?? "private",
+	shareId: note.shareId,
+	sharedAt: note.sharedAt,
+	isArchived: note.isArchived,
+	archivedAt: note.archivedAt,
+	createdAt: note.createdAt,
+	updatedAt: note.updatedAt,
 });
+
+const toNoteWithDocument = async (
+	ctx: QueryCtx | MutationCtx,
+	note: Doc<"notes">,
+) => {
+	const document = await requirePersistedNoteDocument(ctx, note._id);
+	return {
+		...toNoteMetadata(note),
+		content: document.content,
+		searchableText: document.searchableText,
+	};
+};
 
 const getNotesByArchivedState = async (
 	ctx: QueryCtx,
@@ -230,11 +264,13 @@ const pruneNoteRevisions = async ({
 const createNoteRevision = async ({
 	ctx,
 	note,
+	currentDocument,
 	now,
 	preserveRevisionId,
 }: {
 	ctx: MutationCtx;
 	note: Doc<"notes">;
+	currentDocument: Doc<"noteDocuments">;
 	now: number;
 	preserveRevisionId?: Id<"noteRevisions">;
 }) => {
@@ -244,15 +280,15 @@ const createNoteRevision = async ({
 		noteId: note._id,
 		authorName: note.authorName ?? "",
 		title: note.title,
-		content: note.content,
-		searchableText: note.searchableText,
+		content: currentDocument.content,
+		searchableText: currentDocument.searchableText,
 		createdAt: now,
 	});
 	await syncNoteDocumentState({
 		ctx,
 		note,
 		revisionId,
-		document: parseNoteDocument(note.content),
+		document: parseNoteDocument(currentDocument.content),
 	});
 
 	await pruneNoteRevisions({
@@ -267,10 +303,12 @@ const createNoteRevision = async ({
 const maybeCreateNoteRevision = async ({
 	ctx,
 	note,
+	currentDocument,
 	now,
 }: {
 	ctx: MutationCtx;
 	note: Doc<"notes">;
+	currentDocument: Doc<"noteDocuments">;
 	now: number;
 }) => {
 	const latestRevision = await ctx.db
@@ -291,7 +329,7 @@ const maybeCreateNoteRevision = async ({
 		return;
 	}
 
-	await createNoteRevision({ ctx, note, now });
+	await createNoteRevision({ ctx, note, currentDocument, now });
 };
 
 const removeNoteRevisions = async ({
@@ -403,7 +441,7 @@ export const getLatest = query({
 			.order("desc")
 			.first();
 
-		return note ? normalizeNote(note) : null;
+		return note ? await toNoteWithDocument(ctx, note) : null;
 	},
 });
 
@@ -411,7 +449,7 @@ export const list = query({
 	args: {
 		workspaceId: v.id("workspaces"),
 	},
-	returns: v.array(noteValidator),
+	returns: v.array(noteMetadataValidator),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
@@ -422,7 +460,7 @@ export const list = query({
 			false,
 		);
 
-		return notes.map(normalizeNote);
+		return notes.map(toNoteMetadata);
 	},
 });
 
@@ -430,7 +468,7 @@ export const listArchived = query({
 	args: {
 		workspaceId: v.id("workspaces"),
 	},
-	returns: v.array(noteValidator),
+	returns: v.array(noteMetadataValidator),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
@@ -441,7 +479,7 @@ export const listArchived = query({
 			true,
 		);
 
-		return notes.map(normalizeNote);
+		return notes.map(toNoteMetadata);
 	},
 });
 
@@ -465,7 +503,7 @@ export const get = query({
 			return null;
 		}
 
-		return normalizeNote(note);
+		return await toNoteWithDocument(ctx, note);
 	},
 });
 
@@ -527,6 +565,7 @@ export const listVersions = query({
 			)
 			.order("desc")
 			.take(MAX_NOTE_REVISIONS);
+		const document = await requirePersistedNoteDocument(ctx, note._id);
 
 		return [
 			{
@@ -534,8 +573,8 @@ export const listVersions = query({
 				isCurrent: true,
 				authorName: note.authorName ?? "",
 				title: note.title,
-				content: note.content,
-				searchableText: note.searchableText,
+				content: document.content,
+				searchableText: document.searchableText,
 				createdAt: note.updatedAt,
 			},
 			...revisions.map((revision) => ({
@@ -583,25 +622,26 @@ export const restoreVersion = mutation({
 
 		const now = Date.now();
 		const restoredDocument = parseNoteDocument(revision.content);
+		const currentDocument = await requirePersistedNoteDocument(ctx, note._id);
+		const restoredNote = { ...note, isArchived: false, updatedAt: now };
 
 		await createNoteRevision({
 			ctx,
 			note,
+			currentDocument,
 			now,
 			preserveRevisionId: revision._id,
 		});
 		await ctx.db.patch(args.id, {
 			authorName: note.authorName ?? getAuthorName(identity),
 			title: revision.title,
-			content: restoredDocument.content,
-			searchableText: revision.searchableText,
 			isArchived: false,
 			archivedAt: undefined,
 			updatedAt: now,
 		});
 		await commitCurrentNoteDocument({
 			ctx,
-			note,
+			note: restoredNote,
 			document: restoredDocument,
 			searchableText: revision.searchableText,
 			now,
@@ -633,24 +673,27 @@ export const getChatContext = query({
 		const uniqueIds = [...new Set(args.ids)].slice(0, 20);
 		const notes = await Promise.all(uniqueIds.map((id) => ctx.db.get(id)));
 
-		return notes.flatMap((note) => {
-			if (
-				!note ||
-				note.isArchived ||
-				note.ownerTokenIdentifier !== ownerTokenIdentifier ||
-				note.workspaceId !== args.workspaceId
-			) {
-				return [];
-			}
+		return (
+			await Promise.all(
+				notes.map(async (note) => {
+					if (
+						!note ||
+						note.isArchived ||
+						note.ownerTokenIdentifier !== ownerTokenIdentifier ||
+						note.workspaceId !== args.workspaceId
+					) {
+						return null;
+					}
+					const document = await requirePersistedNoteDocument(ctx, note._id);
 
-			return [
-				{
-					id: note._id,
-					title: note.title.trim() || "New note",
-					searchableText: note.searchableText.trim(),
-				},
-			];
-		});
+					return {
+						id: note._id,
+						title: note.title.trim() || "New note",
+						searchableText: document.searchableText.trim(),
+					};
+				}),
+			)
+		).flatMap((note) => (note ? [note] : []));
 	},
 });
 
@@ -673,11 +716,16 @@ export const getWorkspaceChatContext = query({
 			.order("desc")
 			.take(MAX_CHAT_CONTEXT_NOTES);
 
-		return notes.map((note) => ({
-			id: note._id,
-			title: note.title,
-			searchableText: note.searchableText,
-		}));
+		return await Promise.all(
+			notes.map(async (note) => {
+				const document = await requirePersistedNoteDocument(ctx, note._id);
+				return {
+					id: note._id,
+					title: note.title,
+					searchableText: document.searchableText,
+				};
+			}),
+		);
 	},
 });
 
@@ -696,7 +744,7 @@ export const getShared = query({
 			return null;
 		}
 
-		const normalizedNote = normalizeNote(note);
+		const normalizedNote = await toNoteWithDocument(ctx, note);
 
 		const identity = await ctx.auth.getUserIdentity();
 		const isOwner =
@@ -826,6 +874,10 @@ export const save = mutation({
 				ownerTokenIdentifier,
 				workspaceId: args.workspaceId,
 			});
+			const existingDocument = await requirePersistedNoteDocument(
+				ctx,
+				existing._id,
+			);
 			const nextTemplateSlug =
 				args.templateSlug === undefined
 					? existing.templateSlug
@@ -833,8 +885,8 @@ export const save = mutation({
 
 			if (
 				existing.title === args.title &&
-				existing.content === document.content &&
-				existing.searchableText === args.searchableText &&
+				existingDocument.content === document.content &&
+				existingDocument.searchableText === args.searchableText &&
 				existing.templateSlug === nextTemplateSlug &&
 				!existing.isArchived
 			) {
@@ -844,11 +896,12 @@ export const save = mutation({
 			await maybeCreateNoteRevision({
 				ctx,
 				note: existing,
+				currentDocument: existingDocument,
 				now,
 			});
 			await commitCurrentNoteDocument({
 				ctx,
-				note: existing,
+				note: { ...existing, isArchived: false, updatedAt: now },
 				document,
 				searchableText: args.searchableText,
 				now,
@@ -860,8 +913,6 @@ export const save = mutation({
 				starredSortOrder: existing.starredSortOrder,
 				projectId: existing.projectId,
 				title: args.title,
-				content: document.content,
-				searchableText: args.searchableText,
 				visibility: existing.visibility ?? "private",
 				templateSlug: nextTemplateSlug,
 				shareId: existing.shareId,
@@ -917,9 +968,17 @@ export const setProject = mutation({
 			};
 		}
 
+		const now = Date.now();
 		await ctx.db.patch(args.id, {
 			projectId: nextProjectId,
-			updatedAt: Date.now(),
+			updatedAt: now,
+		});
+		await updatePersistedNoteDocumentIndex({
+			ctx,
+			noteId: args.id,
+			projectId: nextProjectId,
+			isArchived: note.isArchived,
+			updatedAt: now,
 		});
 
 		return {
@@ -1070,10 +1129,18 @@ export const moveToTrash = mutation({
 	handler: async (ctx, args) => {
 		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
 
+		const now = Date.now();
 		await ctx.db.patch(args.id, {
 			isArchived: true,
-			archivedAt: Date.now(),
-			updatedAt: Date.now(),
+			archivedAt: now,
+			updatedAt: now,
+		});
+		await updatePersistedNoteDocumentIndex({
+			ctx,
+			noteId: args.id,
+			projectId: note.projectId,
+			isArchived: true,
+			updatedAt: now,
 		});
 		await setCalendarNoteRelationshipsArchived({
 			ctx,
@@ -1099,10 +1166,18 @@ export const restore = mutation({
 	handler: async (ctx, args) => {
 		const note = await requireOwnedNote(ctx, args.id, args.workspaceId);
 
+		const now = Date.now();
 		await ctx.db.patch(args.id, {
 			isArchived: false,
 			archivedAt: undefined,
-			updatedAt: Date.now(),
+			updatedAt: now,
+		});
+		await updatePersistedNoteDocumentIndex({
+			ctx,
+			noteId: args.id,
+			projectId: note.projectId,
+			isArchived: false,
+			updatedAt: now,
 		});
 		await setCalendarNoteRelationshipsArchived({
 			ctx,

@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -43,7 +44,7 @@ const createWorkspaceAndNote = async () => {
 			createdAt,
 			updatedAt: createdAt,
 		});
-		const noteId = await ctx.db.insert("notes", {
+		const noteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			authorName: "Existing Author",
@@ -224,8 +225,8 @@ test("creating a note from an assistant response preserves its stored attachment
 	expect(storedNoteState.documentReferences).toMatchObject([
 		{ noteAttachmentId: attachment._id, revisionId: null },
 	]);
-	expect(storedNoteState.document?.content).toBe(storedNoteState.note?.content);
-	expect(JSON.parse(storedNoteState.note?.content ?? "{}")).toMatchObject({
+	expect(storedNoteState.note?.content).toBeUndefined();
+	expect(JSON.parse(storedNoteState.document?.content ?? "{}")).toMatchObject({
 		type: "doc",
 		content: [
 			{
@@ -849,6 +850,10 @@ test("restoring the oldest retained revision preserves its images while pruning"
 	});
 
 	const stored = await t.run(async (ctx) => ({
+		document: await ctx.db
+			.query("noteDocuments")
+			.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
+			.unique(),
 		image: await ctx.db.get(uploaded.noteImageId),
 		note: await ctx.db.get(noteId),
 		references: await ctx.db
@@ -870,7 +875,8 @@ test("restoring the oldest retained revision preserves its images while pruning"
 		storage: await ctx.db.system.get(storageId),
 	}));
 
-	expect(stored.note?.content).toBe(imageContent);
+	expect(stored.note?.content).toBeUndefined();
+	expect(stored.document?.content).toBe(imageContent);
 	expect(stored.image).not.toBeNull();
 	expect(stored.storage).not.toBeNull();
 	expect(stored.revisionCount).toBe(50);

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
+import { requirePersistedNoteDocument } from "./noteDocument";
 
 const { requireIdentity } = createResourceAccess("notes");
 
@@ -86,7 +87,7 @@ export const command = query({
 				.slice(0, MAX_RESULTS);
 		}
 
-		const [notesByTitle, notesByText] = await Promise.all([
+		const [notesByTitle, documentsByText] = await Promise.all([
 			ctx.db
 				.query("notes")
 				.withSearchIndex("search_title", (q) =>
@@ -100,7 +101,7 @@ export const command = query({
 			args.titleOnly
 				? []
 				: ctx.db
-						.query("notes")
+						.query("noteDocuments")
 						.withSearchIndex("search_text", (q) =>
 							q
 								.search("searchableText", queryText)
@@ -110,10 +111,35 @@ export const command = query({
 						)
 						.take(MAX_RESULTS_PER_SOURCE),
 		]);
+		const [textMatchedNotes, titleMatchedDocuments] = await Promise.all([
+			Promise.all(documentsByText.map((document) => ctx.db.get(document.noteId))),
+			Promise.all(
+				notesByTitle.map((note) =>
+					requirePersistedNoteDocument(ctx, note._id),
+				),
+			),
+		]);
+		const notesById = new Map(notesByTitle.map((note) => [note._id, note]));
+		for (const note of textMatchedNotes) {
+			if (
+				note &&
+				note.ownerTokenIdentifier === ownerTokenIdentifier &&
+				note.workspaceId === args.workspaceId &&
+				!note.isArchived
+			) {
+				notesById.set(note._id, note);
+			}
+		}
+		const documentsByNoteId = new Map(
+			documentsByText.map((document) => [document.noteId, document]),
+		);
+		for (const document of titleMatchedDocuments) {
+			documentsByNoteId.set(document.noteId, document);
+		}
 
 		const projectIds = [
 			...new Set(
-				[...notesByTitle, ...notesByText]
+				[...notesById.values()]
 					.map((note) => note.projectId)
 					.filter((projectId) => projectId !== undefined),
 			),
@@ -134,7 +160,11 @@ export const command = query({
 		}
 		const results = new Map<string, SearchResult>();
 
-		for (const note of [...notesByTitle, ...notesByText]) {
+		for (const note of notesById.values()) {
+			const document = documentsByNoteId.get(note._id);
+			if (!document) {
+				throw new Error("Persisted note document is unavailable.");
+			}
 			results.set(`note:${note._id}`, {
 				id: note._id,
 				kind: "note",
@@ -142,7 +172,7 @@ export const command = query({
 				projectName: note.projectId
 					? projectNamesById.get(note.projectId)
 					: undefined,
-				preview: note.searchableText.trim() || undefined,
+				preview: document.searchableText.trim() || undefined,
 				updatedAt: note.updatedAt,
 			});
 		}
