@@ -41,6 +41,7 @@ import {
 } from "@workspace/ui/lib/panel-dimensions";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
+import { useQuery } from "convex/react";
 import { Clock3, FileText, Plus, X } from "lucide-react";
 import * as React from "react";
 import type { AutomationListItem } from "@/components/automations/automation-types";
@@ -74,6 +75,7 @@ import {
 	type SearchCommandItem,
 } from "@/components/search/search-command";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
+import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import {
 	type ChatSummaryContent,
 	collectChatSummaryContent,
@@ -84,6 +86,8 @@ import {
 	parseMarkdownToDocument,
 	parseStoredNoteContent,
 } from "@/lib/note-editor";
+import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import type { ChatSummaryOpenSourceRequest } from "./chat-summary-events";
 
 const CHAT_SUMMARY_PANEL_STORAGE_KEY_DESKTOP =
@@ -94,10 +98,8 @@ const CHAT_SUMMARY_PANEL_PINNED_STORAGE_KEY =
 	"graneri.chat-summary-panel-pinned.desktop";
 
 export type SummaryWorkspaceSource = {
-	id: string;
+	id: Id<"notes">;
 	title: string;
-	preview?: string;
-	content?: string;
 	updatedAt?: number;
 };
 
@@ -106,10 +108,8 @@ type SummaryTab =
 	| {
 			id: string;
 			kind: "file";
-			sourceId: string;
+			sourceId: Id<"notes">;
 			title: string;
-			preview?: string;
-			content?: string;
 	  }
 	| { id: "automation"; kind: "automation"; title: "Automation" };
 
@@ -281,6 +281,7 @@ function ChatSummaryPanel({
 	onClose: () => void;
 	onTogglePinned: () => void;
 }) {
+	const activeWorkspaceId = useActiveWorkspaceId();
 	const [fileTabs, setFileTabs] = React.useState<
 		Extract<SummaryTab, { kind: "file" }>[]
 	>([]);
@@ -304,7 +305,6 @@ function ChatSummaryPanel({
 				title: source.title,
 				kind: "note" as const,
 				icon: FileText,
-				preview: source.preview,
 				updatedAt: source.updatedAt,
 			})),
 		[workspaceSources],
@@ -333,8 +333,6 @@ function ChatSummaryPanel({
 				kind: "file",
 				sourceId: source.id,
 				title: source.title,
-				preview: source.preview,
-				content: source.content,
 			});
 		},
 		[addTab, workspaceSources],
@@ -457,6 +455,7 @@ function ChatSummaryPanel({
 			) : null}
 			<SummaryTabContent
 				activeTab={activeTab}
+				activeWorkspaceId={activeWorkspaceId}
 				automation={automation}
 				chatTitle={chatTitle}
 				content={content}
@@ -609,11 +608,13 @@ function isEditableShortcutTarget(target: EventTarget | null) {
 
 function SummaryTabContent({
 	activeTab,
+	activeWorkspaceId,
 	automation,
 	chatTitle,
 	content,
 }: {
 	activeTab: SummaryTab;
+	activeWorkspaceId: Id<"workspaces"> | null;
 	automation?: AutomationListItem | null;
 	chatTitle: string;
 	content: ChatSummaryContent;
@@ -638,31 +639,52 @@ function SummaryTabContent({
 
 	if (activeTab.kind === "file") {
 		return (
-			<ScrollArea
-				className="min-h-0 flex-1"
-				reserveScrollbarGap
-				viewportClassName="overflow-x-hidden [&>div]:!block [&>div]:!min-w-0 [&>div]:!w-full"
-			>
-				<div className="summary-note-preview-content flex flex-col gap-4 px-5 py-4">
-					<div className="flex items-center gap-2 text-lg font-medium leading-tight tracking-tight">
-						<span className="min-w-0 truncate">{activeTab.title}</span>
-					</div>
-					{activeTab.preview ? (
-						<ReadOnlyNoteContent
-							content={activeTab.content}
-							fallbackText={activeTab.preview}
-						/>
-					) : (
-						<p className="text-xs text-muted-foreground">
-							No preview available.
-						</p>
-					)}
-				</div>
-			</ScrollArea>
+			<SummaryNoteContent
+				activeWorkspaceId={activeWorkspaceId}
+				noteId={activeTab.sourceId}
+				title={activeTab.title}
+			/>
 		);
 	}
 
 	return <ChatSummaryOverview content={content} />;
+}
+
+function SummaryNoteContent({
+	activeWorkspaceId,
+	noteId,
+	title,
+}: {
+	activeWorkspaceId: Id<"workspaces"> | null;
+	noteId: Id<"notes">;
+	title: string;
+}) {
+	const note = useQuery(
+		api.notes.get,
+		activeWorkspaceId ? { workspaceId: activeWorkspaceId, id: noteId } : "skip",
+	);
+
+	return (
+		<ScrollArea
+			className="min-h-0 flex-1"
+			reserveScrollbarGap
+			viewportClassName="overflow-x-hidden [&>div]:!block [&>div]:!min-w-0 [&>div]:!w-full"
+		>
+			<div className="summary-note-preview-content flex flex-col gap-4 px-5 py-4">
+				<div className="flex items-center gap-2 text-lg font-medium leading-tight tracking-tight">
+					<span className="min-w-0 truncate">{title}</span>
+				</div>
+				{note === undefined ? null : note?.searchableText ? (
+					<ReadOnlyNoteContent
+						content={note.content}
+						fallbackText={note.searchableText}
+					/>
+				) : (
+					<p className="text-xs text-muted-foreground">No preview available.</p>
+				)}
+			</div>
+		</ScrollArea>
+	);
 }
 
 const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {

@@ -1,15 +1,73 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import type { UIMessage } from "ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { ChatSummarySheet } from "../src/components/chat/chat-summary-sheet";
+import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
+
+const { useQueryMock } = vi.hoisted(() => ({
+	useQueryMock: vi.fn(),
+}));
+
+vi.mock("convex/react", () => ({
+	useQuery: useQueryMock,
+}));
 
 const CHAT_SUMMARY_PANEL_PINNED_STORAGE_KEY =
 	"graneri.chat-summary-panel-pinned.desktop";
 
 describe("ChatSummarySheet", () => {
+	afterEach(cleanup);
+
 	beforeEach(() => {
 		window.localStorage.clear();
+		useQueryMock.mockReset();
+	});
+
+	it("loads a note document only after opening its metadata source", async () => {
+		const workspaceId = "workspace-1" as Id<"workspaces">;
+		const noteId = "note-1" as Id<"notes">;
+		useQueryMock.mockReturnValue({
+			content: "",
+			searchableText: "Lazy note body",
+		});
+
+		const renderSheet = (requestId?: number) => (
+			<ActiveWorkspaceProvider workspaceId={workspaceId}>
+				<TooltipProvider>
+					<ChatSummarySheet
+						open
+						messages={[]}
+						chatTitle="Test chat"
+						workspaceSources={[
+							{ id: noteId, title: "Lazy note", updatedAt: 1 },
+						]}
+						openSourceRequest={
+							requestId ? { sourceId: noteId, requestId } : null
+						}
+						onOpenChange={vi.fn()}
+					/>
+				</TooltipProvider>
+			</ActiveWorkspaceProvider>
+		);
+		const { rerender } = render(renderSheet());
+
+		expect(useQueryMock).not.toHaveBeenCalled();
+		rerender(renderSheet(1));
+		await waitFor(() => {
+			expect(useQueryMock).toHaveBeenCalledWith(expect.anything(), {
+				workspaceId,
+				id: noteId,
+			});
+		});
 	});
 
 	it("hides and unpins the desktop summary panel", () => {

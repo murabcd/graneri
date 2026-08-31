@@ -426,7 +426,6 @@ function useAppSidebarModel({
 					projectName: note.projectId
 						? projectNamesById.get(note.projectId)
 						: undefined,
-					preview: note.searchableText.trim() || undefined,
 					updatedAt: note.updatedAt,
 				}))
 				.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0)),

@@ -22,6 +22,7 @@ import { ChatPageEntry } from "@/components/chat/chat-page-entry";
 import type { NoteEditorActionsStore } from "@/components/note/note-editor-actions-store";
 import { NotePageEntry } from "@/components/note/note-page-entry";
 import type { ChatPluginPrefill } from "@/lib/chat-plugin-prefill";
+import type { NoteRecord } from "@/lib/note-types";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 type NoteListViewProps = {
@@ -90,7 +91,7 @@ export type AppShellContentView =
 			currentNoteId: Id<"notes"> | null;
 			currentNoteTitle: string;
 			noteCaptureRequestId: string | null;
-			selectedNote: Doc<"notes"> | null | undefined;
+			selectedNote: NoteRecord | null | undefined;
 			user: AppUser;
 			isDesktopMac: boolean;
 			onAutoStartNoteCaptureHandled: () => void;

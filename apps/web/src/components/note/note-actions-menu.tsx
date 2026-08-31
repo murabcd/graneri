@@ -63,6 +63,7 @@ import { ProjectIcon } from "@/components/projects/project-appearance-picker";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
 import { logError } from "@/lib/logger";
+import type { NoteListItem } from "@/lib/note-types";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
@@ -76,22 +77,17 @@ import {
 } from "./share-note";
 import { useNoteTitleEditor } from "./use-note-title-editor";
 
-const ensureNoteHasRequiredFields = <T extends Doc<"notes">>(
-	note: T,
+const ensureNoteHasRequiredFields = (
+	note: NoteListItem,
 	options?: { isStarred?: boolean },
-) =>
-	({
-		...note,
-		isStarred: options?.isStarred ?? note.isStarred ?? false,
-		templateSlug: note.templateSlug ?? undefined,
-		visibility: note.visibility ?? "private",
-	}) as T & {
-		isStarred: boolean;
-		templateSlug: string | undefined;
-		visibility: "private" | "public";
-	};
+) => ({
+	...note,
+	isStarred: options?.isStarred ?? note.isStarred ?? false,
+	templateSlug: note.templateSlug ?? undefined,
+	visibility: note.visibility ?? "private",
+});
 
-const normalizeNoteList = <T extends Doc<"notes">>(notes: Array<T>) =>
+const normalizeNoteList = (notes: NoteListItem[]) =>
 	notes.map((note) => ensureNoteHasRequiredFields(note));
 
 function useNoteStarControl({ noteId }: { noteId: Id<"notes"> }) {
@@ -103,8 +99,8 @@ function useNoteStarControl({ noteId }: { noteId: Id<"notes"> }) {
 	);
 	const toggleStar = useMutation(api.notes.toggleStar).withOptimisticUpdate(
 		(localStore, args) => {
-			const updateNoteList = <T extends Doc<"notes">>(
-				notes: Array<T> | undefined,
+			const updateNoteList = (
+				notes: NoteListItem[] | undefined,
 				query: typeof api.notes.list,
 			) => {
 				if (notes === undefined) {
@@ -329,13 +325,10 @@ function useNoteActionsMenu({
 				workspaceId: args.workspaceId,
 			});
 			if (latestNote?._id === args.id) {
-				const nextLatest =
-					notes?.find((item) => item._id !== args.id) ??
-					(null as Doc<"notes"> | null);
 				localStore.setQuery(
 					api.notes.getLatest,
 					{ workspaceId: args.workspaceId },
-					nextLatest ? ensureNoteHasRequiredFields(nextLatest) : null,
+					null,
 				);
 			}
 

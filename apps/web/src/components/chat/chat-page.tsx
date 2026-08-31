@@ -454,9 +454,6 @@ const useChatPageController = ({
 				id: note._id,
 				title: getNoteDisplayTitle(note.title),
 				icon: FileText,
-				preview: note.searchableText.trim(),
-				content: note.content,
-				updatedAt: note.updatedAt,
 			})),
 		[notes],
 	);
@@ -470,14 +467,12 @@ const useChatPageController = ({
 	);
 	const workspaceSources = React.useMemo(
 		() =>
-			contextPages.map((page) => ({
-				id: page.id,
-				title: page.title,
-				preview: page.preview,
-				content: page.content,
-				updatedAt: page.updatedAt,
+			(notes ?? []).map((note) => ({
+				id: note._id,
+				title: getNoteDisplayTitle(note.title),
+				updatedAt: note.updatedAt,
 			})),
-		[contextPages],
+		[notes],
 	);
 	const handleSubmit = React.useCallback(async () => {
 		const draftText = getDraftSnapshot().text;

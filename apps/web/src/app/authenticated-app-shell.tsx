@@ -470,11 +470,6 @@ const useAppShellState = ({
 		// Route validity is render-time URL/query derivation; navigation is synchronized elsewhere.
 		currentNoteId === null &&
 		normalizedRouteNoteId === null;
-	const listedSelectedNote =
-		currentView === "note" && resolvedCurrentNoteId
-			? (notes?.find((note) => note._id === resolvedCurrentNoteId) ??
-				(notes === undefined ? undefined : null))
-			: undefined;
 	const selectedNote = useQuery(
 		api.notes.get,
 		currentView === "note" &&
@@ -487,7 +482,7 @@ const useAppShellState = ({
 				}
 			: "skip",
 	);
-	const resolvedSelectedNote = selectedNote ?? listedSelectedNote;
+	const resolvedSelectedNote = selectedNote;
 	const currentNoteTitle =
 		currentView === "note"
 			? currentNoteTitleOverride?.noteId === resolvedCurrentNoteId

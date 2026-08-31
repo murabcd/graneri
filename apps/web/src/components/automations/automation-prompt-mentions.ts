@@ -10,7 +10,6 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 export type AutomationNoteSource = {
 	id: Id<"notes">;
 	title: string;
-	preview: string;
 };
 
 export type NoteMentionRange = {
@@ -38,10 +37,7 @@ export const filterAutomationNotes = (
 	}
 
 	return sources.filter((source) =>
-		[source.title, source.preview]
-			.join(" ")
-			.toLowerCase()
-			.includes(normalizedQuery),
+		source.title.toLowerCase().includes(normalizedQuery),
 	);
 };
 

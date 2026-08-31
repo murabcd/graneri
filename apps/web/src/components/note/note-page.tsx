@@ -58,13 +58,14 @@ import {
 	isEnhancedNoteTemplate,
 	type NoteTemplate,
 } from "@/lib/note-templates";
+import type { NoteRecord } from "@/lib/note-types";
 import {
 	structuredNoteToDocument,
 	structuredNoteToSearchableText,
 } from "@/lib/structured-note";
 import { createTextMatchRanges } from "@/lib/text-search-ranges";
 import { api } from "../../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { readDesktopCommentsPanelPinnedState } from "./note-comments-panel-state";
 import {
 	NoteCommentsSheet,
@@ -118,7 +119,7 @@ const useNotePageController = ({
 	onOpenComments,
 }: {
 	noteId: Id<"notes"> | null;
-	note?: Doc<"notes"> | null;
+	note?: NoteRecord | null;
 	externalTitle?: string;
 	onTitleChange?: (title: string) => void;
 	editorActionsStore?: NoteEditorActionsStore;
@@ -1619,7 +1620,7 @@ export type NotePageProps = {
 	noteCaptureRequestId?: string | null;
 	currentUser?: NotePageCurrentUser;
 	noteId: Id<"notes"> | null;
-	note?: Doc<"notes"> | null;
+	note?: NoteRecord | null;
 	externalTitle?: string;
 	onAutoStartTranscriptionHandled?: () => void;
 	onCommentsOpenChange?: (opener: (() => void) | null) => void;

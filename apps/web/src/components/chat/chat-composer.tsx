@@ -79,7 +79,6 @@ type ContextPage = {
 	id: string;
 	title: string;
 	icon: LucideIcon;
-	preview: string;
 };
 
 type AppSource = {
@@ -124,10 +123,7 @@ const filterMentionableDocuments = (
 	}
 
 	return documents.filter((document) =>
-		[document.title, document.preview]
-			.join(" ")
-			.toLowerCase()
-			.includes(normalizedQuery),
+		document.title.toLowerCase().includes(normalizedQuery),
 	);
 };
 

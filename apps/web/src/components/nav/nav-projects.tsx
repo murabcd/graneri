@@ -1455,10 +1455,6 @@ function optimisticMoveProjectNotesToTrash(
 
 	const latestNote = localStore.getQuery(api.notes.getLatest, { workspaceId });
 	if (latestNote && projectNoteIds.has(latestNote._id)) {
-		localStore.setQuery(
-			api.notes.getLatest,
-			{ workspaceId },
-			notes.find((note) => !projectNoteIds.has(note._id)) ?? null,
-		);
+		localStore.setQuery(api.notes.getLatest, { workspaceId }, null);
 	}
 }

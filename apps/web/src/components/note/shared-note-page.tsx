@@ -15,7 +15,7 @@ import {
 	createNoteEditorExtensions,
 	parseStoredNoteContent,
 } from "@/lib/note-editor";
-import type { Doc } from "../../../../../convex/_generated/dataModel";
+import type { SharedNoteRecord } from "@/lib/note-types";
 import { NoteTableOfContents } from "./note-table-of-contents";
 import { useNoteTableOfContents } from "./use-note-table-of-contents";
 
@@ -41,7 +41,7 @@ function SharedNotePageShell({
 }
 
 export type SharedNotePageProps = {
-	note: Doc<"notes"> | null | undefined;
+	note: SharedNoteRecord | null | undefined;
 };
 
 export function SharedNotePage({ note }: SharedNotePageProps) {

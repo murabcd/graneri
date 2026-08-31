@@ -264,11 +264,7 @@ function TrashPopoverContent({
 		}
 
 		return archivedNotes.filter((note) => {
-			const haystack = [
-				note.title,
-				note.searchableText,
-				note.authorName ?? "",
-			].join(" ");
+			const haystack = [note.title, note.authorName ?? ""].join(" ");
 
 			return haystack.toLowerCase().includes(query);
 		});

@@ -221,7 +221,6 @@ function useCreateAutomationDialogElement({
 			(notes ?? []).map((note) => ({
 				id: note._id,
 				title: getNoteDisplayTitle(note.title),
-				preview: note.searchableText.trim(),
 			})),
 		[notes],
 	);

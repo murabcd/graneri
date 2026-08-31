@@ -17,13 +17,11 @@ const noteId = (value: string) => value as Id<"notes">;
 const noteSources: AutomationNoteSource[] = [
 	{
 		id: noteId("note-one"),
-		title: "Launch plan",
-		preview: "Roadmap and milestones",
+		title: "Launch roadmap",
 	},
 	{
 		id: noteId("note-two"),
-		title: "Support log",
-		preview: "PostHog escalation notes",
+		title: "PostHog support log",
 	},
 ];
 
