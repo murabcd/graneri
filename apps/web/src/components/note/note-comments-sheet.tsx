@@ -1095,7 +1095,7 @@ function useNoteCommentsSheetController({
 	const threads = useQuery(
 		api.noteComments.listThreads,
 		// Thread query input follows note/workspace props; no event handler owns route changes.
-		workspaceId && noteId
+		open && workspaceId && noteId
 			? {
 					workspaceId,
 					noteId,
@@ -1105,7 +1105,7 @@ function useNoteCommentsSheetController({
 	);
 	const expandedThread = useQuery(
 		api.noteComments.getThread,
-		workspaceId && noteId && expandedThreadId
+		open && workspaceId && noteId && expandedThreadId
 			? {
 					workspaceId,
 					noteId,

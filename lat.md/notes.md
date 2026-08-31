@@ -109,6 +109,15 @@ Convex `storageId`; signed URLs are derived only for an authorized download.
 Removing either the chat or note releases only its reference, and the shared
 blob is deleted after the final chat or note reference retires.
 
+## Comment loading
+
+Note comment indicators use an indexed existence query, while thread summaries and comment bodies load only while the discussion sheet is open.
+
+[[convex/noteComments.ts]] scopes the header indicator to the first owned thread
+for the note. [[apps/web/src/components/note/note-comments-sheet.tsx]] skips both
+the thread list and expanded-thread reads while the discussion surface is
+closed, so editor navigation does not subscribe to hidden comment data.
+
 ## Transcript-driven generation
 
 Transcript language and content remain authoritative through initial generation and template rewrites, committed through the document session.

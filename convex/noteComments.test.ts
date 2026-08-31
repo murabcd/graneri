@@ -112,6 +112,31 @@ test("noteComments.createThread stores the thread and first comment", async () =
 	expect(inboxItems).toEqual([]);
 });
 
+test("noteComments.hasThreads reads only whether a discussion exists", async () => {
+	const { asOwner, noteId, workspaceId } = await createWorkspaceAndNote();
+
+	expect(
+		await asOwner.query(api.noteComments.hasThreads, {
+			workspaceId,
+			noteId,
+		}),
+	).toBe(false);
+
+	await asOwner.mutation(api.noteComments.createThread, {
+		workspaceId,
+		noteId,
+		excerpt: "Review this section",
+		body: "Can you clarify the decision here?",
+	});
+
+	expect(
+		await asOwner.query(api.noteComments.hasThreads, {
+			workspaceId,
+			noteId,
+		}),
+	).toBe(true);
+});
+
 test("noteComments.addComment reopens a resolved thread", async () => {
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date("2026-04-12T10:00:00.000Z"));

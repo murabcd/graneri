@@ -24,17 +24,16 @@ export function NoteCommentsButton({
 	onOpen: (() => void) | null;
 }) {
 	const workspaceId = useActiveWorkspaceId();
-	const threads = useQuery(
-		api.noteComments.listThreads,
-		workspaceId
-			? {
-					workspaceId,
-					noteId,
-					view: "all",
-				}
-			: "skip",
-	);
-	const hasComments = (threads?.length ?? 0) > 0;
+	const hasComments =
+		useQuery(
+			api.noteComments.hasThreads,
+			workspaceId
+				? {
+						workspaceId,
+						noteId,
+					}
+				: "skip",
+		) === true;
 
 	return (
 		<Tooltip>

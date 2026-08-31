@@ -466,6 +466,34 @@ export const listThreads = query({
 	},
 });
 
+export const hasThreads = query({
+	args: {
+		workspaceId: v.id("workspaces"),
+		noteId: v.id("notes"),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const identity = await requireIdentity(ctx);
+		await requireOwnedWorkspace(
+			ctx,
+			identity.tokenIdentifier,
+			args.workspaceId,
+		);
+
+		const thread = await ctx.db
+			.query("noteCommentThreads")
+			.withIndex("by_owner_ws_note_updatedAt", (q) =>
+				q
+					.eq("ownerTokenIdentifier", identity.tokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("noteId", args.noteId),
+			)
+			.first();
+
+		return thread !== null;
+	},
+});
+
 export const getThread = query({
 	args: {
 		workspaceId: v.id("workspaces"),
