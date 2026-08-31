@@ -1,4 +1,4 @@
-import type { Editor, EditorEvents } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import * as React from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
@@ -7,6 +7,7 @@ import {
 	uploadNoteImage,
 	validateNoteImageFiles,
 } from "@/lib/note-image-upload";
+import { trackNoteUploadPosition } from "@/lib/note-upload-position";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export type NoteImagePickerIntent =
@@ -72,18 +73,12 @@ export function useNoteImageUpload({
 				setActiveUploadCount((count) => count + files.length);
 				uploadCountWasIncremented = true;
 
-				let targetPosition = Math.min(
+				const trackedPosition = trackNoteUploadPosition(
+					editor,
 					intent.kind === "replace"
 						? intent.position
 						: (requestedPosition ?? editor.state.selection.from),
-					editor.state.doc.content.size,
 				);
-				const trackTargetPosition = ({
-					transaction,
-				}: EditorEvents["transaction"]) => {
-					targetPosition = transaction.mapping.map(targetPosition, 1);
-				};
-				editor.on("transaction", trackTargetPosition);
 
 				let uploadedImages: Awaited<ReturnType<typeof uploadNoteImage>>[];
 				try {
@@ -97,8 +92,9 @@ export function useNoteImageUpload({
 						),
 					);
 				} finally {
-					editor.off("transaction", trackTargetPosition);
+					trackedPosition.stop();
 				}
+				const targetPosition = trackedPosition.read();
 
 				if (editor.isDestroyed) {
 					return;

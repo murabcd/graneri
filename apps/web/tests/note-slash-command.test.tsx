@@ -21,15 +21,18 @@ afterEach(() => {
 
 function SlashCommandHarness({
 	onSelectImage,
+	onSelectFile,
 	onEditor,
 }: {
 	onSelectImage: () => void;
+	onSelectFile: () => void;
 	onEditor: (editor: Editor) => void;
 }) {
 	const editor = useEditor({
 		content: EMPTY_DOCUMENT,
 		extensions: createNoteEditorExtensions({
 			onSelectImageCommand: onSelectImage,
+			onSelectFileCommand: onSelectFile,
 		}),
 		immediatelyRender: false,
 		onCreate: ({ editor }) => onEditor(editor),
@@ -44,10 +47,12 @@ function SlashCommandHarness({
 
 const renderSlashCommandHarness = async () => {
 	const onSelectImage = vi.fn();
+	const onSelectFile = vi.fn();
 	let editor: Editor | null = null;
 	render(
 		<SlashCommandHarness
 			onSelectImage={onSelectImage}
+			onSelectFile={onSelectFile}
 			onEditor={(nextEditor) => {
 				editor = nextEditor;
 			}}
@@ -57,7 +62,7 @@ const renderSlashCommandHarness = async () => {
 	if (!editor) {
 		throw new Error("Editor did not initialize");
 	}
-	return { editor, onSelectImage };
+	return { editor, onSelectFile, onSelectImage };
 };
 
 const openSlashCommands = (editor: Editor, query = "") => {
@@ -97,6 +102,7 @@ describe("note slash command", () => {
 			"Table",
 			"Separator",
 			"Image",
+			"File",
 		]) {
 			expect(screen.getByRole("option", { name })).toBeTruthy();
 		}
@@ -115,10 +121,26 @@ describe("note slash command", () => {
 			within(uploadGroup).getByRole("option", { name: "Image" }),
 		).toBeTruthy();
 		expect(
+			within(uploadGroup)
+				.getAllByRole("option")
+				.map((option) => option.textContent),
+		).toEqual(["Image", "File"]);
+		expect(
 			within(insertGroup).queryByRole("option", { name: "Image" }),
 		).toBeNull();
 		expect(commandList.querySelector(".border-t")).toBeNull();
 		fireEvent.keyDown(editor.view.dom, { key: "Escape" });
+	});
+
+	it("opens the file picker from the command below Image", async () => {
+		const { editor, onSelectFile } = await renderSlashCommandHarness();
+		openSlashCommands(editor, "file");
+		expect(await screen.findByRole("option", { name: "File" })).toBeTruthy();
+
+		selectActiveSlashCommand(editor);
+
+		expect(onSelectFile).toHaveBeenCalledOnce();
+		expect(editor.getText()).toBe("");
 	});
 
 	it("opens the image command with slash and selects it with Enter", async () => {

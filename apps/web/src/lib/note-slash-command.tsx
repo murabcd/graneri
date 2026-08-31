@@ -6,7 +6,13 @@ import Suggestion, {
 	type SuggestionProps,
 } from "@tiptap/suggestion";
 import { cn } from "@workspace/ui/lib/utils";
-import { ImagePlus, type LucideIcon, Minus, Table2 } from "lucide-react";
+import {
+	ImagePlus,
+	type LucideIcon,
+	Minus,
+	Paperclip,
+	Table2,
+} from "lucide-react";
 import * as React from "react";
 import {
 	NOTE_BLOCK_STYLE_OPTIONS,
@@ -16,7 +22,7 @@ import {
 type NoteSlashCommandGroup = "Style" | "Insert" | "Upload";
 
 type NoteSlashCommandItem = {
-	key: NoteBlockStyleId | "table" | "separator" | "image";
+	key: NoteBlockStyleId | "table" | "separator" | "image" | "file";
 	group: NoteSlashCommandGroup;
 	title: string;
 	keywords: string[];
@@ -43,6 +49,7 @@ const NOTE_SLASH_COMMAND_MENU_WIDTH = 224;
 
 const createNoteSlashCommands = (
 	onSelectImage: () => void,
+	onSelectFile: () => void,
 ): NoteSlashCommandItem[] => [
 	...NOTE_BLOCK_STYLE_OPTIONS.map((option) => ({
 		key: option.id,
@@ -92,6 +99,17 @@ const createNoteSlashCommands = (
 		execute: (editor, range) => {
 			editor.chain().focus().deleteRange(range).run();
 			onSelectImage();
+		},
+	},
+	{
+		key: "file",
+		group: "Upload",
+		title: "File",
+		keywords: ["attachment", "document", "upload"],
+		icon: Paperclip,
+		execute: (editor, range) => {
+			editor.chain().focus().deleteRange(range).run();
+			onSelectFile();
 		},
 	},
 ];
@@ -250,10 +268,12 @@ const positionMenu = (
 
 export const createNoteSlashCommand = ({
 	onSelectImage,
+	onSelectFile,
 }: {
 	onSelectImage: () => void;
+	onSelectFile: () => void;
 }) => {
-	const commands = createNoteSlashCommands(onSelectImage);
+	const commands = createNoteSlashCommands(onSelectImage, onSelectFile);
 
 	return Extension.create({
 		name: "noteSlashCommand",

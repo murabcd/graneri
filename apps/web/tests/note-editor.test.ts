@@ -131,6 +131,34 @@ describe("note editor markdown bridge", () => {
 		editor.destroy();
 	});
 
+	it("inserts an uploaded file at an empty paragraph without losing the next line", () => {
+		const editor = new Editor({
+			content: "<p>Text above file</p><p></p>",
+			extensions: createNoteEditorExtensions(),
+		});
+		const insertionPosition = editor.state.doc.content.size - 1;
+
+		editor.commands.insertContentAt(insertionPosition, {
+			type: "noteFile",
+			attrs: {
+				noteAttachmentId: "attachment_2",
+				filename: "manual.pdf",
+				mediaType: "application/pdf",
+				sizeBytes: 256,
+			},
+		});
+
+		expect(editor.getJSON().content?.map((node) => node.type)).toEqual([
+			"paragraph",
+			"noteFile",
+			"paragraph",
+		]);
+		editor.commands.focus("end");
+		editor.commands.insertContent("Text below file");
+		expect(editor.getText()).toContain("Text below file");
+		editor.destroy();
+	});
+
 	it("rejects non-canonical stored content instead of repairing it", () => {
 		expect(() => parseStoredNoteContent("# Legacy markdown", schema)).toThrow();
 		expect(() =>

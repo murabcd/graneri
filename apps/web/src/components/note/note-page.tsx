@@ -80,6 +80,7 @@ import { NoteTableMenu } from "./note-table-menu";
 import { NoteTableOfContents } from "./note-table-of-contents";
 import { writeRichTextToClipboard } from "./share-note";
 import { useNoteFileDownload } from "./use-note-file-download";
+import { NoteFileUploadInput, useNoteFileUpload } from "./use-note-file-upload";
 import {
 	type NoteImagePickerIntent,
 	NoteImageUploadInput,
@@ -186,6 +187,7 @@ const useNotePageController = ({
 	const convex = useConvex();
 	const saveNote = useMutation(api.notes.save);
 	const imageUpload = useNoteImageUpload({ activeWorkspaceId, noteId });
+	const fileUpload = useNoteFileUpload({ activeWorkspaceId, noteId });
 	const downloadNoteFile = useNoteFileDownload();
 
 	const editor = useEditor({
@@ -201,6 +203,7 @@ const useNotePageController = ({
 			},
 			onSelectImageCommand: () =>
 				imageUpload.openImagePicker({ kind: "insert" }),
+			onSelectFileCommand: fileUpload.openFilePicker,
 			onFileDownload: downloadNoteFile,
 		}),
 		immediatelyRender: false,
@@ -232,8 +235,12 @@ const useNotePageController = ({
 	});
 	React.useEffect(() => {
 		imageUpload.setEditor(editor);
-		return () => imageUpload.setEditor(null);
-	}, [editor, imageUpload.setEditor]);
+		fileUpload.setEditor(editor);
+		return () => {
+			imageUpload.setEditor(null);
+			fileUpload.setEditor(null);
+		};
+	}, [editor, fileUpload.setEditor, imageUpload.setEditor]);
 
 	const setEditorDocument = React.useCallback(
 		(nextDocument: JSONContent) => {
@@ -779,11 +786,13 @@ const useNotePageController = ({
 	return {
 		appendChatResponseToNote,
 		activeImageUploadCount: imageUpload.activeUploadCount,
+		activeFileUploadCount: fileUpload.activeUploadCount,
 		content,
 		editor,
 		focusEditor,
 		handleEnhanceTranscript,
 		imageInputRef: imageUpload.imageInputRef,
+		fileInputRef: fileUpload.fileInputRef,
 		openImagePicker: imageUpload.openImagePicker,
 		getNoteContext: React.useCallback(
 			() => ({
@@ -804,6 +813,7 @@ const useNotePageController = ({
 		tableOfContents,
 		handleTableOfContentsSelect,
 		uploadSelectedImages: imageUpload.uploadSelectedImages,
+		uploadSelectedFiles: fileUpload.uploadSelectedFiles,
 	};
 };
 
@@ -840,9 +850,12 @@ type NotePageEditorPaneProps = {
 		behavior?: ScrollBehavior,
 	) => void;
 	activeImageUploadCount: number;
+	activeFileUploadCount: number;
 	imageInputRef: React.RefObject<HTMLInputElement | null>;
+	fileInputRef: React.RefObject<HTMLInputElement | null>;
 	openImagePicker: (intent: NoteImagePickerIntent) => void;
 	uploadSelectedImages: (files: File[]) => Promise<void>;
+	uploadSelectedFiles: (files: File[]) => Promise<void>;
 };
 
 type NotePageCommentPanelState = {
@@ -1116,9 +1129,12 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 	isDesktopMac,
 	handleTableOfContentsSelect,
 	activeImageUploadCount,
+	activeFileUploadCount,
 	imageInputRef,
+	fileInputRef,
 	openImagePicker,
 	uploadSelectedImages,
+	uploadSelectedFiles,
 }: NotePageEditorPaneProps) {
 	return (
 		<div className="relative flex min-h-0 w-full max-w-5xl flex-1 flex-col pt-2 md:pt-4">
@@ -1164,6 +1180,13 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 									inputRef={imageInputRef}
 									onSelect={(files) => {
 										void uploadSelectedImages(files);
+									}}
+								/>
+								<NoteFileUploadInput
+									disabled={!editor || activeFileUploadCount > 0}
+									inputRef={fileInputRef}
+									onSelect={(files) => {
+										void uploadSelectedFiles(files);
 									}}
 								/>
 
@@ -1310,9 +1333,12 @@ function NotePageContent({
 				isDesktopMac={isDesktopMac}
 				handleTableOfContentsSelect={controller.handleTableOfContentsSelect}
 				activeImageUploadCount={controller.activeImageUploadCount}
+				activeFileUploadCount={controller.activeFileUploadCount}
 				imageInputRef={controller.imageInputRef}
+				fileInputRef={controller.fileInputRef}
 				openImagePicker={controller.openImagePicker}
 				uploadSelectedImages={controller.uploadSelectedImages}
+				uploadSelectedFiles={controller.uploadSelectedFiles}
 			/>
 
 			<NoteCommentsSheet

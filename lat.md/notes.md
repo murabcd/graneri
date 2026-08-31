@@ -43,6 +43,10 @@ separate list beneath the editor. A file node persists its durable
 is resolved only after an authenticated click. StarterKit's trailing-node
 extension guarantees a paragraph after a terminal file block, so the normal
 Tiptap cursor and editing commands can continue immediately below it.
+The `/` menu places File directly after Image and sends manually selected files
+to the authenticated Convex `/api/note-files` action. That boundary derives the
+media type from the bytes, accepts bounded UTF-8 text, images, PDF, DOCX, XLSX,
+and PPTX inputs, and inserts only the returned durable metadata into the editor.
 
 ## Table interaction
 
@@ -88,7 +92,8 @@ table geometry fail before note state is changed. Every save validates image
 and file ownership and synchronizes their current reference sets, revision
 creation and pruning synchronize revision-aware references, and permanent note
 retirement removes all remaining bytes. An uploaded image that never reaches a
-saved document is removed by its scheduled one-hour pending-upload cleanup.
+saved document is removed by its scheduled one-hour pending-upload cleanup;
+manual file uploads use the same pending-reference retirement rule.
 
 Creating a note from an assistant response is one `noteFromChat.create`
 transaction. It validates the owned stored assistant message, creates the

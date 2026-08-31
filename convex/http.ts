@@ -6,6 +6,10 @@ import { handleDictationTranscriptionUploadRequest } from "./dictationHttp";
 import { handleJiraWebhookRequest } from "./jiraWebhook";
 import { handleMcpOAuthCallbackRequest } from "./mcpOAuth";
 import {
+	handleNoteFileOptionsRequest,
+	handleNoteFileUploadRequest,
+} from "./noteFileHttp";
+import {
 	handleNoteImageOptionsRequest,
 	handleNoteImageUploadRequest,
 } from "./noteImageHttp";
@@ -36,6 +40,20 @@ http.route({
 	path: "/api/note-images",
 	method: "OPTIONS",
 	handler: httpAction(async () => handleNoteImageOptionsRequest()),
+});
+
+http.route({
+	path: "/api/note-files",
+	method: "OPTIONS",
+	handler: httpAction(async () => handleNoteFileOptionsRequest()),
+});
+
+http.route({
+	path: "/api/note-files",
+	method: "POST",
+	handler: httpAction(
+		async (ctx, request) => await handleNoteFileUploadRequest(ctx, request),
+	),
 });
 
 http.route({

@@ -224,6 +224,7 @@ type NoteEditorExtensionsOptions = {
 	onImagePaste?: (files: File[]) => void;
 	onImageDrop?: (files: File[], position: number) => void;
 	onSelectImageCommand?: () => void;
+	onSelectFileCommand?: () => void;
 	onFileDownload?: (noteAttachmentId: string) => Promise<void>;
 };
 
@@ -274,10 +275,11 @@ export const createNoteEditorExtensions = (
 				}),
 			]
 		: []),
-	...(options.onSelectImageCommand
+	...(options.onSelectImageCommand && options.onSelectFileCommand
 		? [
 				createNoteSlashCommand({
 					onSelectImage: options.onSelectImageCommand,
+					onSelectFile: options.onSelectFileCommand,
 				}),
 			]
 		: []),
