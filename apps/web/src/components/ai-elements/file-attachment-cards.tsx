@@ -16,16 +16,73 @@ import { logError } from "@/lib/logger";
 
 export function FileAttachmentCard({
 	file,
-	canDownload = isDownloadableUrl(file.url),
+	canDownload: canDownloadOverride,
 	isDownloading,
 	onDownload,
+	variant = "card",
 }: {
 	canDownload?: boolean;
 	file: FileUIPart;
 	isDownloading: boolean;
-	onDownload: (file: FileUIPart) => void;
+	onDownload?: (file: FileUIPart) => void;
+	variant?: "card" | "pill";
 }) {
 	const filename = file.filename || "Attached file";
+	const canDownload =
+		canDownloadOverride ?? (Boolean(onDownload) && isDownloadableUrl(file.url));
+	const hasDownloadAction =
+		isDownloading || (canDownload && Boolean(onDownload));
+	const downloadAction = isDownloading ? (
+		<Button
+			aria-label={`Downloading ${filename}`}
+			className={cn(
+				"size-8 shrink-0 rounded-full text-muted-foreground disabled:opacity-100",
+				variant === "pill" && "absolute end-1 top-1/2 -translate-y-1/2",
+			)}
+			disabled
+			size="icon-sm"
+			type="button"
+			variant="ghost"
+		>
+			<LoaderCircle
+				aria-hidden="true"
+				className="size-4 animate-spin motion-reduce:animate-none"
+			/>
+		</Button>
+	) : canDownload && onDownload ? (
+		<Button
+			aria-label={`Download ${filename}`}
+			className={cn(
+				"size-8 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
+				variant === "pill" && "absolute end-1 top-1/2 -translate-y-1/2",
+			)}
+			onClick={() => onDownload(file)}
+			size="icon-sm"
+			title={`Download ${filename}`}
+			type="button"
+			variant="ghost"
+		>
+			<Download aria-hidden="true" className="size-4" />
+		</Button>
+	) : null;
+
+	if (variant === "pill") {
+		return (
+			<div className="relative inline-flex max-w-80 min-w-0 items-center gap-1 rounded-full border border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground">
+				<FileAttachmentGlyph file={file} />
+				<span
+					className={cn(
+						"min-w-0 truncate font-medium",
+						hasDownloadAction ? "pe-8" : "pe-1",
+					)}
+					title={filename}
+				>
+					{filename}
+				</span>
+				{downloadAction}
+			</div>
+		);
+	}
 	const sizeBytes = getChatFileSizeBytes(file);
 	const fileDetails = [
 		isDownloading ? "Downloading" : null,
@@ -53,46 +110,7 @@ export function FileAttachmentCard({
 					</p>
 				) : null}
 			</div>
-			{isDownloading ? (
-				<Button
-					aria-label={`Downloading ${filename}`}
-					className="size-8 shrink-0 rounded-full text-muted-foreground disabled:opacity-100"
-					disabled
-					size="icon-sm"
-					type="button"
-					variant="ghost"
-				>
-					<LoaderCircle
-						aria-hidden="true"
-						className="size-4 animate-spin motion-reduce:animate-none"
-					/>
-				</Button>
-			) : canDownload ? (
-				<Button
-					aria-label={`Download ${filename}`}
-					className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-					onClick={() => onDownload(file)}
-					size="icon-sm"
-					title={`Download ${filename}`}
-					type="button"
-					variant="ghost"
-				>
-					<Download aria-hidden="true" className="size-4" />
-				</Button>
-			) : null}
-		</div>
-	);
-}
-
-function UserDocumentAttachmentPill({ file }: { file: FileUIPart }) {
-	const filename = file.filename || "Attached file";
-
-	return (
-		<div className="inline-flex max-w-80 min-w-0 items-center gap-1 rounded-full border border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground">
-			<FileAttachmentGlyph file={file} />
-			<span className="min-w-0 truncate pe-1 font-medium" title={filename}>
-				{filename}
-			</span>
+			{downloadAction}
 		</div>
 	);
 }
@@ -195,9 +213,11 @@ export function FileAttachmentCards({
 					isUserMessage ? (
 						<div className="flex max-w-full flex-wrap justify-end gap-2 self-end">
 							{documentFiles.map((file) => (
-								<UserDocumentAttachmentPill
+								<FileAttachmentCard
 									key={getChatFileIdentity(file)}
 									file={file}
+									isDownloading={false}
+									variant="pill"
 								/>
 							))}
 						</div>

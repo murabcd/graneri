@@ -7,8 +7,11 @@ import {
 } from "@testing-library/react";
 import type { FileUIPart } from "ai";
 import { createElement } from "react";
-import { afterEach, describe, expect, it } from "vitest";
-import { FileAttachmentCards } from "@/components/ai-elements/file-attachment-cards";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	FileAttachmentCard,
+	FileAttachmentCards,
+} from "@/components/ai-elements/file-attachment-cards";
 import { FileAttachmentChips } from "@/components/ai-elements/file-attachment-controls";
 import { FileAttachmentGlyph } from "@/components/ai-elements/file-attachment-type-icon";
 import {
@@ -102,6 +105,35 @@ describe("chat file attachments", () => {
 			name: "Download report.pdf",
 		});
 		expect(downloadButton.getAttribute("title")).toBe("Download report.pdf");
+	});
+
+	it("renders the compact pill as a downloadable attachment", () => {
+		const onDownload = vi.fn();
+		render(
+			createElement(FileAttachmentCard, {
+				canDownload: true,
+				file,
+				isDownloading: false,
+				onDownload,
+				variant: "pill",
+			}),
+		);
+
+		const pill = screen.getByText("report.pdf").parentElement;
+		expect(pill?.classList.contains("inline-flex")).toBe(true);
+		expect(pill?.classList.contains("max-w-80")).toBe(true);
+		expect(pill?.classList.contains("relative")).toBe(true);
+		expect(pill?.classList.contains("rounded-full")).toBe(true);
+		expect(pill?.classList.contains("h-16")).toBe(false);
+		expect(pill?.classList.contains("w-[17rem]")).toBe(false);
+		expect(screen.queryByText("2.4 MB")).toBeNull();
+
+		const downloadButton = screen.getByRole("button", {
+			name: "Download report.pdf",
+		});
+		expect(downloadButton.classList.contains("absolute")).toBe(true);
+		fireEvent.click(downloadButton);
+		expect(onDownload).toHaveBeenCalledWith(file);
 	});
 
 	it("keeps the same file identity in the composer", () => {

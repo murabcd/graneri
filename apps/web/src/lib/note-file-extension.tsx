@@ -83,6 +83,7 @@ const createNoteFileNodeView = (options: NoteFileOptions) =>
 					onDownload={() => {
 						void handleDownload();
 					}}
+					variant="pill"
 				/>
 			</NodeViewWrapper>
 		);
