@@ -22,14 +22,6 @@ import {
 } from "@workspace/ui/components/input-group";
 import { Kbd } from "@workspace/ui/components/kbd";
 import {
-	MessageScroller,
-	MessageScrollerButton,
-	MessageScrollerContent,
-	MessageScrollerItem,
-	MessageScrollerProvider,
-	MessageScrollerViewport,
-} from "@workspace/ui/components/message-scroller";
-import {
 	Select,
 	SelectContent,
 	SelectGroup,
@@ -90,11 +82,6 @@ import {
 } from "@/components/ai-elements/use-file-attachments";
 import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
 import { ChatQueuedFollowUpBar } from "@/components/chat/chat-queued-follow-up-bar";
-import {
-	ASSISTANT_CHAT_CONTENT_CLASS,
-	CHAT_MESSAGE_MAX_WIDTH_CLASS,
-	USER_CHAT_BUBBLE_CLASS,
-} from "@/components/chat/message-layout";
 import {
 	type ChatModel,
 	ChatModelPicker,
@@ -162,7 +149,6 @@ import {
 	renderInlineMentionHTML,
 	TypedMention,
 } from "@/lib/tiptap-mention";
-import { formatTranscriptElapsed } from "@/lib/transcript";
 import {
 	getTranscriptionLanguageSelectValue,
 	OTHER_TRANSCRIPTION_LANGUAGE_OPTIONS,
@@ -201,7 +187,7 @@ import {
 	getMessageTextWithoutRecipeMention,
 	getRecipeSlugFromComposerContent,
 } from "./note-composer-recipe-mentions";
-import { NOTE_POPOVER_SCROLLER_BUTTON_CLASS } from "./note-popover-scroll";
+import { NoteTranscriptPanel } from "./note-transcript-panel";
 
 type NoteChatPresentation = "inline" | "floating" | "sidebar";
 const NOTE_CHAT_FLOATING_WIDTH = "min(28rem, calc(100vw - 2rem))";
@@ -220,8 +206,6 @@ const NOTE_COMPOSER_FOOTER_BODY_SPACER_CLASS =
 const NOTE_COMPOSER_FOOTER_BOTTOM_ROW_CLASS =
 	"min-w-0 flex-wrap gap-1 px-4 pb-2.5";
 const INLINE_POPOVER_FOOTER_DEFAULT_HEIGHT = 120;
-const TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD = 32;
-const TRANSCRIPT_INITIAL_WINDOW_SIZE = 32;
 
 type NoteComposerProps = {
 	noteContext: {
@@ -1624,7 +1608,11 @@ const useNoteComposerController = ({
 		isFloatingPresentation,
 		isSidebarResizing,
 		displayTranscriptEntries: transcriptSession.displayTranscriptEntries,
+		hasMoreStoredTranscriptUtterances:
+			transcriptSession.hasMoreStoredTranscriptUtterances,
 		isGeneratingNotes: transcriptSession.isGeneratingNotes,
+		isLoadingMoreStoredTranscriptUtterances:
+			transcriptSession.isLoadingMoreStoredTranscriptUtterances,
 		isMobile,
 		isSidebarPresentation,
 		isSettingsLoading,
@@ -1634,6 +1622,8 @@ const useNoteComposerController = ({
 		isRecipeLoading: recipeData === undefined,
 		isTranscriptOpen,
 		liveTranscriptEntries: transcriptSession.liveTranscriptEntries,
+		loadMoreStoredTranscriptUtterances:
+			transcriptSession.loadMoreStoredTranscriptUtterances,
 		message,
 		modelPopoverOpen,
 		noteChats,
@@ -3126,6 +3116,10 @@ function TranscriptPanelHeader({
 							type="button"
 							variant="ghost"
 							size="icon-sm"
+							disabled={
+								controller.hasMoreStoredTranscriptUtterances ||
+								controller.isLoadingMoreStoredTranscriptUtterances
+							}
 							className={cn(
 								controller.isSidebarPresentation ? "-mr-1" : "-mr-1.5",
 							)}
@@ -3169,7 +3163,11 @@ function TranscriptPanelHeader({
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent align="end">
-						{isTranscriptCopied ? "Copied" : "Copy transcript"}
+						{controller.hasMoreStoredTranscriptUtterances
+							? "Load the complete transcript before copying"
+							: isTranscriptCopied
+								? "Copied"
+								: "Copy transcript"}
 					</TooltipContent>
 				</Tooltip>
 			</div>
@@ -3259,11 +3257,7 @@ function NoteComposerTranscriptPanelContent({
 }: {
 	controller: NoteComposerController;
 }) {
-	return (
-		<MessageScrollerProvider autoScroll>
-			<NoteComposerTranscriptPanelContentBody controller={controller} />
-		</MessageScrollerProvider>
-	);
+	return <NoteComposerTranscriptPanelContentBody controller={controller} />;
 }
 
 function NoteComposerTranscriptPanelContentBody({
@@ -3294,7 +3288,22 @@ function NoteComposerTranscriptPanelContentBody({
 						: undefined
 				}
 			>
-				<NoteTranscriptPanel controller={controller} />
+				<NoteTranscriptPanel
+					displayTranscriptEntries={controller.displayTranscriptEntries}
+					fullTranscript={controller.fullTranscript}
+					hasMoreStoredTranscriptUtterances={
+						controller.hasMoreStoredTranscriptUtterances
+					}
+					isLoadingMoreStoredTranscriptUtterances={
+						controller.isLoadingMoreStoredTranscriptUtterances
+					}
+					isSpeechListening={controller.isSpeechListening}
+					isStoredTranscriptLoading={controller.isStoredTranscriptLoading}
+					loadMoreStoredTranscriptUtterances={
+						controller.loadMoreStoredTranscriptUtterances
+					}
+					transcriptStartedAt={controller.transcriptStartedAt}
+				/>
 			</CardContent>
 
 			{shouldRenderInlineComposer ? (
@@ -3492,182 +3501,6 @@ function NoteComposerPanelContent({
 			chatPanelBody={chatPanelBody}
 			chatPanelHeader={chatPanelHeader}
 		/>
-	);
-}
-
-function NoteTranscriptPanel({
-	controller,
-}: {
-	controller: NoteComposerController;
-}) {
-	const deferredDisplayTranscriptEntries = React.useDeferredValue(
-		controller.displayTranscriptEntries,
-	);
-	const isDeferringTranscriptEntries =
-		deferredDisplayTranscriptEntries !== controller.displayTranscriptEntries;
-	const transcriptEntryCount = deferredDisplayTranscriptEntries.length;
-	const [
-		fullyRenderedTranscriptEntryCount,
-		setFullyRenderedTranscriptEntryCount,
-	] = React.useReducer(
-		(current: number, next: number | ((current: number) => number)) =>
-			typeof next === "function" ? next(current) : next,
-		transcriptEntryCount > TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD
-			? Math.min(transcriptEntryCount, TRANSCRIPT_INITIAL_WINDOW_SIZE)
-			: transcriptEntryCount,
-	);
-
-	React.useEffect(() => {
-		const currentTranscriptEntryCount = deferredDisplayTranscriptEntries.length;
-		if (
-			currentTranscriptEntryCount <= TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD
-		) {
-			setFullyRenderedTranscriptEntryCount(currentTranscriptEntryCount);
-			return;
-		}
-
-		const promoteFullTranscriptEntries = () => {
-			React.startTransition(() => {
-				setFullyRenderedTranscriptEntryCount(currentTranscriptEntryCount);
-			});
-		};
-
-		if ("requestIdleCallback" in globalThis) {
-			const idleCallbackId = globalThis.requestIdleCallback(
-				promoteFullTranscriptEntries,
-				{
-					timeout: 250,
-				},
-			);
-
-			return () => {
-				globalThis.cancelIdleCallback(idleCallbackId);
-			};
-		}
-
-		const timeoutId = globalThis.setTimeout(promoteFullTranscriptEntries, 32);
-		return () => {
-			globalThis.clearTimeout(timeoutId);
-		};
-	}, [deferredDisplayTranscriptEntries.length]);
-	const renderFullTranscriptEntries =
-		transcriptEntryCount <= TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD ||
-		fullyRenderedTranscriptEntryCount === transcriptEntryCount;
-	const renderedTranscriptEntries = renderFullTranscriptEntries
-		? deferredDisplayTranscriptEntries
-		: deferredDisplayTranscriptEntries.slice(
-				-fullyRenderedTranscriptEntryCount,
-			);
-	const isProgressivelyRenderingTranscript =
-		!renderFullTranscriptEntries &&
-		deferredDisplayTranscriptEntries.length > renderedTranscriptEntries.length;
-	if (
-		controller.isStoredTranscriptLoading &&
-		!controller.fullTranscript &&
-		!controller.isSpeechListening
-	) {
-		return <div className="flex flex-1" aria-hidden="true" />;
-	}
-
-	if (!controller.fullTranscript) {
-		return (
-			<div className="flex flex-1 items-center justify-center">
-				<p className="text-center text-sm font-medium tracking-tight">
-					{controller.isSpeechListening ? "Listening…" : "Transcript paused"}
-				</p>
-			</div>
-		);
-	}
-
-	return (
-		<div className="relative flex min-h-0 w-full flex-1 flex-col">
-			<MessageScroller className="min-h-0 w-full flex-1">
-				<MessageScrollerViewport className="pr-4">
-					<MessageScrollerContent className="gap-4 pb-12">
-						{isDeferringTranscriptEntries &&
-						deferredDisplayTranscriptEntries.length === 0 ? (
-							<MessageScrollerItem
-								aria-hidden="true"
-								className="flex flex-1 py-12"
-								messageId="transcript-deferred-placeholder"
-							/>
-						) : null}
-						{isProgressivelyRenderingTranscript ? (
-							<MessageScrollerItem
-								aria-hidden="true"
-								className="h-4"
-								messageId="transcript-progressive-spacer"
-							/>
-						) : null}
-						{renderedTranscriptEntries.map((utterance) => {
-							const isUserTranscript = utterance.speaker === "you";
-							const elapsed =
-								controller.transcriptStartedAt != null
-									? formatTranscriptElapsed(
-											utterance.startedAt - controller.transcriptStartedAt,
-										)
-									: null;
-
-							return (
-								<MessageScrollerItem
-									key={utterance.id}
-									messageId={utterance.id}
-									className={cn(
-										"group/message flex w-full flex-col gap-1 transition-colors",
-										isUserTranscript ? "items-end" : "items-start",
-									)}
-								>
-									<div
-										className={cn(
-											CHAT_MESSAGE_MAX_WIDTH_CLASS,
-											isUserTranscript
-												? utterance.isLive && !utterance.liveText
-													? cn(
-															USER_CHAT_BUBBLE_CLASS,
-															"bg-secondary/70 text-muted-foreground",
-														)
-													: USER_CHAT_BUBBLE_CLASS
-												: utterance.isLive && !utterance.liveText
-													? cn(
-															ASSISTANT_CHAT_CONTENT_CLASS,
-															"text-muted-foreground",
-														)
-													: ASSISTANT_CHAT_CONTENT_CLASS,
-										)}
-										style={{
-											containIntrinsicSize: "120px",
-											contentVisibility: "auto",
-										}}
-									>
-										{utterance.liveText ? (
-											<p className="whitespace-pre-wrap">
-												{utterance.committedText}{" "}
-												<span className="relative top-[0.5px] text-muted-foreground">
-													{utterance.liveText}
-												</span>
-											</p>
-										) : (
-											<p className="whitespace-pre-wrap">{utterance.text}</p>
-										)}
-									</div>
-									{elapsed ? (
-										<p className="px-1 text-[11px] font-medium tabular-nums text-muted-foreground/65">
-											{elapsed}
-										</p>
-									) : null}
-								</MessageScrollerItem>
-							);
-						})}
-					</MessageScrollerContent>
-				</MessageScrollerViewport>
-				{renderedTranscriptEntries.length > 0 ? (
-					<MessageScrollerButton
-						aria-label="Scroll to latest transcript"
-						className={NOTE_POPOVER_SCROLLER_BUTTON_CLASS}
-					/>
-				) : null}
-			</MessageScroller>
-		</div>
 	);
 }
 

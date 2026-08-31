@@ -594,14 +594,13 @@ const useNotePageController = ({
 			});
 
 			try {
-				const latestTranscriptSession = await convex.query(
-					api.transcriptSessions.getLatestSummaryForNote,
+				const latestTranscript = await convex.query(
+					api.transcriptSessions.getLatestTextForNote,
 					{ noteId },
 				);
-				const transcript =
-					latestTranscriptSession?.finalTranscript?.trim() || undefined;
+				const transcript = latestTranscript?.text.trim() || undefined;
 				const transcriptionLanguage =
-					latestTranscriptSession?.transcriptionLanguage ?? null;
+					latestTranscript?.transcriptionLanguage ?? null;
 				let nextDocument: JSONContent;
 				let nextSearchableText: string;
 				let nextTitle = title;

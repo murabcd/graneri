@@ -7,15 +7,9 @@ import {
 	type LiveTranscriptState,
 	type TranscriptUtterance,
 } from "@/lib/transcript";
-import { createTranscriptText } from "@/lib/transcript-session";
 
 type StoredTranscriptSession = {
-	finalTranscript: string;
 	utterances: TranscriptUtterance[];
-};
-
-type StoredTranscriptSummary = {
-	finalTranscript: string;
 };
 
 type TranscriptSessionLanguage = {
@@ -50,17 +44,6 @@ export const mergeTranscriptUtterances = (
 
 	return sortTranscriptUtterances([...utterancesById.values()]);
 };
-
-export const createStoredTranscriptText = ({
-	session,
-	summary,
-}: {
-	session: StoredTranscriptSession | null | undefined;
-	summary: StoredTranscriptSummary | null | undefined;
-}) =>
-	session
-		? createTranscriptText(session.utterances) || session.finalTranscript
-		: (summary?.finalTranscript ?? "");
 
 export const resolveTranscriptSessionLanguage = ({
 	fallbackLanguage = null,

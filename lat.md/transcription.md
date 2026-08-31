@@ -19,6 +19,23 @@ mode persistence claims. React effects in `use-note-transcript-session.ts`
 adapt this lifecycle to route scope, Convex repositories, and desktop capture;
 they must not recreate temporal ownership with parallel refs.
 
+## Stored transcript loading
+
+Stored transcript metadata, canonical text, and utterance history have separate loading boundaries.
+
+[[convex/transcriptSessions.ts]] returns the latest session's status, language,
+timestamps, transcript availability, and utterance count without reading or
+returning the transcript body. Canonical completed text lives in
+[[convex/transcriptDocument.ts]] and is read only by explicit generation or
+template-rewrite actions. The transcript panel reads
+`transcriptSessions.listUtterances` in chronological cursor pages of 50 and
+offers another page only when one exists. Active capture recovery drains every
+page before publishing a recovered snapshot so a partial history can never
+replace the local draft. Completed history remains demand-loaded, while live
+capture continues to render its local latest tail. Copy stays disabled until
+all visible history pages are loaded; note generation requests the complete
+canonical text server-side and never treats a renderer page as the full source.
+
 ## Desktop-only live transcription
 
 Packaged macOS transcription requires the desktop controller and never falls back to browser capture.

@@ -73,8 +73,15 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 			noteId,
 			transcriptionLanguage: null,
 			startedAt: now,
-			finalTranscript: "Transcript",
 			createdAt: now,
+		});
+		await ctx.db.insert("transcriptDocuments", {
+			sessionId,
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			noteId,
+			text: "Transcript",
+			createdAt: now,
+			updatedAt: now,
 		});
 		await ctx.db.insert("transcriptSessionStates", {
 			sessionId,
@@ -85,6 +92,7 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 			refinementError: undefined,
 			endedAt: now + 10,
 			generatedNoteAt: now + 20,
+			utteranceCount: 1,
 			createdAt: now,
 			updatedAt: now + 20,
 			lastRefinedAt: now + 15,
@@ -94,7 +102,7 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			noteId,
 			utteranceId: "utterance-1",
-			speaker: "Owner",
+			speaker: "you",
 			source: "live",
 			text: "Hello",
 			startedAt: now,
@@ -196,6 +204,8 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 		chatMessages: (await ctx.db.query("chatMessages").take(10)).length,
 		transcriptSessions: (await ctx.db.query("transcriptSessions").take(10))
 			.length,
+		transcriptDocuments: (await ctx.db.query("transcriptDocuments").take(10))
+			.length,
 		transcriptSessionStates: (
 			await ctx.db.query("transcriptSessionStates").take(10)
 		).length,
@@ -221,6 +231,7 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 		chats: 0,
 		chatMessages: 0,
 		transcriptSessions: 0,
+		transcriptDocuments: 0,
 		transcriptSessionStates: 0,
 		transcriptUtterances: 0,
 		appConnections: 0,
@@ -262,7 +273,6 @@ test("transcript sessions read hot state only from transcriptSessionStates", asy
 			noteId,
 			transcriptionLanguage: null,
 			startedAt: now,
-			finalTranscript: undefined,
 			createdAt: now,
 		});
 		await ctx.db.insert("transcriptSessionStates", {
@@ -274,6 +284,7 @@ test("transcript sessions read hot state only from transcriptSessionStates", asy
 			refinementError: undefined,
 			endedAt: undefined,
 			generatedNoteAt: undefined,
+			utteranceCount: 0,
 			createdAt: now,
 			updatedAt: now,
 			lastRefinedAt: undefined,
@@ -288,7 +299,7 @@ test("transcript sessions read hot state only from transcriptSessionStates", asy
 	});
 
 	const latestSession = await asOwner.query(
-		api.transcriptSessions.getStoredTranscriptForNote,
+		api.transcriptSessions.getLatestSummaryForNote,
 		{
 			noteId,
 		},
@@ -306,7 +317,7 @@ test("transcript sessions read hot state only from transcriptSessionStates", asy
 		};
 	});
 
-	expect(latestSession?.session.refinementStatus).toBe("running");
+	expect(latestSession?.refinementStatus).toBe("running");
 	expect(storedState.session).not.toHaveProperty("refinementStatus");
 	expect(storedState.state).toMatchObject({
 		sessionId,
@@ -343,7 +354,6 @@ test("transcript session summaries only reflect the latest session for a note", 
 			noteId,
 			transcriptionLanguage: null,
 			startedAt: now,
-			finalTranscript: "Older transcript",
 			createdAt: now,
 		});
 		await ctx.db.insert("transcriptSessionStates", {
@@ -355,6 +365,7 @@ test("transcript session summaries only reflect the latest session for a note", 
 			refinementError: undefined,
 			endedAt: now + 10,
 			generatedNoteAt: now + 20,
+			utteranceCount: 1,
 			createdAt: now,
 			updatedAt: now + 20,
 			lastRefinedAt: now + 15,
@@ -364,7 +375,6 @@ test("transcript session summaries only reflect the latest session for a note", 
 			noteId,
 			transcriptionLanguage: null,
 			startedAt: now + 100,
-			finalTranscript: "Latest transcript",
 			createdAt: now + 100,
 		});
 		await ctx.db.insert("transcriptSessionStates", {
@@ -376,6 +386,7 @@ test("transcript session summaries only reflect the latest session for a note", 
 			refinementError: undefined,
 			endedAt: undefined,
 			generatedNoteAt: undefined,
+			utteranceCount: 2,
 			createdAt: now + 100,
 			updatedAt: now + 110,
 			lastRefinedAt: undefined,
@@ -392,7 +403,9 @@ test("transcript session summaries only reflect the latest session for a note", 
 	);
 
 	expect(latestSummary?._id).toBe(latestSessionId);
-	expect(latestSummary?.finalTranscript).toBe("Latest transcript");
+	expect(latestSummary).not.toHaveProperty("finalTranscript");
+	expect(latestSummary?.hasTranscript).toBe(true);
+	expect(latestSummary?.utteranceCount).toBe(2);
 	expect(latestSummary?.generatedNoteAt).toBeUndefined();
 	expect(latestSummary?.startedAt).toBe(2_100);
 });

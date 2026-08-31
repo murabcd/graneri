@@ -131,8 +131,15 @@ test("trash cleanup removes expired archived items without touching recent trash
 			noteId: expiredNoteId,
 			transcriptionLanguage: null,
 			startedAt: 5_000,
-			finalTranscript: "Expired transcript",
 			createdAt: 5_000,
+		});
+		await ctx.db.insert("transcriptDocuments", {
+			sessionId: expiredSessionId,
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			noteId: expiredNoteId,
+			text: "Expired transcript",
+			createdAt: 5_000,
+			updatedAt: 5_000,
 		});
 		await ctx.db.insert("transcriptSessionStates", {
 			sessionId: expiredSessionId,
@@ -143,6 +150,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			refinementError: undefined,
 			endedAt: 5_010,
 			generatedNoteAt: 5_020,
+			utteranceCount: 1,
 			createdAt: 5_000,
 			updatedAt: 5_020,
 			lastRefinedAt: 5_015,
@@ -152,7 +160,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			noteId: expiredNoteId,
 			utteranceId: "expired-utterance",
-			speaker: "Owner",
+			speaker: "you",
 			source: "live",
 			text: "Expired utterance",
 			startedAt: 5_000,
@@ -352,6 +360,8 @@ test("trash cleanup removes expired archived items without touching recent trash
 			otherWorkspaceExpiredNote: await ctx.db.get(otherWorkspaceExpiredNoteId),
 			transcriptSessions: (await ctx.db.query("transcriptSessions").take(10))
 				.length,
+			transcriptDocuments: (await ctx.db.query("transcriptDocuments").take(10))
+				.length,
 			transcriptSessionStates: (
 				await ctx.db.query("transcriptSessionStates").take(10)
 			).length,
@@ -393,6 +403,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 	expect(remaining.recentOldUpdatedStandaloneChat).not.toBeNull();
 	expect(remaining.otherWorkspaceExpiredNote).not.toBeNull();
 	expect(remaining.transcriptSessions).toBe(0);
+	expect(remaining.transcriptDocuments).toBe(0);
 	expect(remaining.transcriptSessionStates).toBe(0);
 	expect(remaining.transcriptUtterances).toBe(0);
 	expect(remaining.noteRevisions).toBe(0);

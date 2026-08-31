@@ -1,10 +1,19 @@
 import { createTranscriptBlocksTextFromUtterances } from "@workspace/ai/transcription";
+import {
+	paginationOptsValidator,
+	paginationResultValidator,
+} from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createResourceAccess } from "./domain";
+import {
+	getTranscriptDocument,
+	removeTranscriptDocument,
+	replaceTranscriptDocument,
+} from "./transcriptDocument";
 
 type TranscriptSessionStatus = Doc<"transcriptSessionStates">["status"];
 type TranscriptRefinementStatus =
@@ -36,9 +45,11 @@ const systemAudioSourceModeValidator = v.union(
 	v.literal("unsupported"),
 );
 
+const transcriptSpeakerValidator = v.union(v.literal("you"), v.literal("them"));
+
 const transcriptUtteranceInputValidator = v.object({
 	utteranceId: v.string(),
-	speaker: v.string(),
+	speaker: transcriptSpeakerValidator,
 	source: v.union(v.literal("live"), v.literal("refined")),
 	text: v.string(),
 	startedAt: v.number(),
@@ -52,6 +63,7 @@ const transcriptSessionHotFields = {
 	systemAudioSourceMode: v.optional(systemAudioSourceModeValidator),
 	endedAt: v.optional(v.number()),
 	generatedNoteAt: v.optional(v.number()),
+	utteranceCount: v.number(),
 	updatedAt: v.number(),
 	lastRefinedAt: v.optional(v.number()),
 };
@@ -63,9 +75,9 @@ const transcriptSessionFields = {
 	noteId: v.id("notes"),
 	transcriptionLanguage: v.union(v.string(), v.null()),
 	startedAt: v.number(),
-	finalTranscript: v.optional(v.string()),
 	createdAt: v.number(),
 	...transcriptSessionHotFields,
+	hasTranscript: v.boolean(),
 };
 
 const transcriptUtteranceFields = {
@@ -75,7 +87,7 @@ const transcriptUtteranceFields = {
 	ownerTokenIdentifier: v.string(),
 	noteId: v.id("notes"),
 	utteranceId: v.string(),
-	speaker: v.string(),
+	speaker: transcriptSpeakerValidator,
 	source: v.union(v.literal("live"), v.literal("refined")),
 	text: v.string(),
 	startedAt: v.number(),
@@ -94,19 +106,22 @@ type HydratedTranscriptSession = Doc<"transcriptSessions"> & {
 	systemAudioSourceMode?: SystemAudioSourceMode;
 	endedAt?: number;
 	generatedNoteAt?: number;
+	utteranceCount: number;
+	hasTranscript: boolean;
 	updatedAt: number;
 	lastRefinedAt?: number;
 };
 
-const transcriptSessionWithUtterancesValidator = v.union(
-	v.object({
-		session: transcriptSessionValidator,
-		utterances: v.array(transcriptUtteranceValidator),
-	}),
-	v.null(),
-);
 const transcriptSessionSummaryValidator = v.union(
 	transcriptSessionValidator,
+	v.null(),
+);
+const transcriptTextValidator = v.union(
+	v.object({
+		sessionId: v.id("transcriptSessions"),
+		text: v.string(),
+		transcriptionLanguage: v.union(v.string(), v.null()),
+	}),
 	v.null(),
 );
 
@@ -199,6 +214,8 @@ const hydrateTranscriptSession = (
 	systemAudioSourceMode: state.systemAudioSourceMode,
 	endedAt: state.endedAt,
 	generatedNoteAt: state.generatedNoteAt,
+	hasTranscript: state.utteranceCount > 0,
+	utteranceCount: state.utteranceCount,
 	updatedAt: state.updatedAt,
 	lastRefinedAt: state.lastRefinedAt,
 });
@@ -304,6 +321,7 @@ const deleteSessionCascadeBatch = async (
 		await ctx.db.delete(state._id);
 	}
 
+	await removeTranscriptDocument(ctx, sessionId);
 	await ctx.db.delete(sessionId);
 
 	return { deleted: true, hasMore: false };
@@ -345,6 +363,7 @@ export const removeOrphanedSession = internalMutation({
 		if (state) {
 			await ctx.db.delete(state._id);
 		}
+		const deletedDocument = await removeTranscriptDocument(ctx, args.sessionId);
 
 		if (result.hasMore) {
 			await ctx.scheduler.runAfter(
@@ -357,7 +376,7 @@ export const removeOrphanedSession = internalMutation({
 		}
 
 		return {
-			deleted: result.deletedCount > 0 || Boolean(state),
+			deleted: result.deletedCount > 0 || Boolean(state) || deletedDocument,
 			hasMore: result.hasMore,
 		};
 	},
@@ -376,11 +395,31 @@ export const getLatestSummaryForNote = query({
 	},
 });
 
-export const getStoredTranscriptForNote = query({
+export const listUtterances = query({
+	args: {
+		sessionId: v.id("transcriptSessions"),
+		paginationOpts: paginationOptsValidator,
+	},
+	returns: paginationResultValidator(transcriptUtteranceValidator),
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		await requireOwnedSession(ctx, ownerTokenIdentifier, args.sessionId);
+
+		return await ctx.db
+			.query("transcriptUtterances")
+			.withIndex("by_sessionId_and_startedAt", (query) =>
+				query.eq("sessionId", args.sessionId),
+			)
+			.order("asc")
+			.paginate(args.paginationOpts);
+	},
+});
+
+export const getLatestTextForNote = query({
 	args: {
 		noteId: v.id("notes"),
 	},
-	returns: transcriptSessionWithUtterancesValidator,
+	returns: transcriptTextValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedNote(ctx, ownerTokenIdentifier, args.noteId);
@@ -389,21 +428,19 @@ export const getStoredTranscriptForNote = query({
 			ownerTokenIdentifier,
 			args.noteId,
 		);
-
 		if (!session) {
 			return null;
 		}
 
-		const utterances = await listSessionUtterances(ctx, session._id);
-		const aggregatedFinalTranscript =
-			createTranscriptText(utterances) || session.finalTranscript;
+		const document = await getTranscriptDocument(ctx, session._id);
+		const text =
+			document?.text ??
+			createTranscriptText(await listSessionUtterances(ctx, session._id));
 
 		return {
-			session: {
-				...session,
-				finalTranscript: aggregatedFinalTranscript || undefined,
-			},
-			utterances,
+			sessionId: session._id,
+			text,
+			transcriptionLanguage: session.transcriptionLanguage,
 		};
 	},
 });
@@ -424,7 +461,6 @@ export const startSession = mutation({
 			noteId: args.noteId,
 			transcriptionLanguage: args.transcriptionLanguage,
 			startedAt: now,
-			finalTranscript: undefined,
 			createdAt: now,
 		});
 
@@ -438,6 +474,7 @@ export const startSession = mutation({
 			systemAudioSourceMode: args.systemAudioSourceMode,
 			endedAt: undefined,
 			generatedNoteAt: undefined,
+			utteranceCount: 0,
 			createdAt: now,
 			updatedAt: now,
 			lastRefinedAt: undefined,
@@ -474,6 +511,7 @@ export const appendUtterance = mutation({
 					.eq("utteranceId", args.utterance.utteranceId),
 			)
 			.unique();
+		const state = await requireTranscriptSessionState(ctx, session._id);
 		const now = Date.now();
 
 		if (existing) {
@@ -501,7 +539,8 @@ export const appendUtterance = mutation({
 			});
 		}
 
-		await patchTranscriptSessionState(ctx, session._id, {
+		await ctx.db.patch(state._id, {
+			utteranceCount: state.utteranceCount + (existing ? 0 : 1),
 			updatedAt: now,
 		});
 
@@ -512,7 +551,6 @@ export const appendUtterance = mutation({
 export const completeSession = mutation({
 	args: {
 		sessionId: v.id("transcriptSessions"),
-		finalTranscript: v.optional(v.string()),
 		status: v.optional(terminalTranscriptSessionStatusValidator),
 	},
 	returns: v.null(),
@@ -533,16 +571,20 @@ export const completeSession = mutation({
 			});
 		}
 
+		const finalTranscript = createTranscriptText(
+			await listSessionUtterances(ctx, args.sessionId),
+		);
+		await replaceTranscriptDocument({
+			ctx,
+			noteId: session.noteId,
+			ownerTokenIdentifier,
+			sessionId: session._id,
+			text: finalTranscript,
+		});
 		await ctx.db.patch(state._id, {
 			status: args.status ?? "completed",
 			endedAt: now,
 			updatedAt: now,
-		});
-		const finalTranscript =
-			args.finalTranscript?.trim() ||
-			createTranscriptText(await listSessionUtterances(ctx, args.sessionId));
-		await ctx.db.patch(args.sessionId, {
-			finalTranscript: finalTranscript || undefined,
 		});
 
 		return null;
@@ -667,10 +709,9 @@ export const markGenerated = mutation({
 export const replaceSpeakerUtterances = mutation({
 	args: {
 		sessionId: v.id("transcriptSessions"),
-		targetSpeakers: v.array(v.string()),
+		targetSpeakers: v.array(transcriptSpeakerValidator),
 		targetUtteranceIds: v.optional(v.array(v.string())),
 		utterances: v.array(transcriptUtteranceInputValidator),
-		finalTranscript: v.optional(v.string()),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
@@ -681,25 +722,24 @@ export const replaceSpeakerUtterances = mutation({
 			args.sessionId,
 		);
 		const currentUtterances = await listSessionUtterances(ctx, args.sessionId);
+		const utterancesToDelete = currentUtterances.filter((utterance) =>
+			args.targetUtteranceIds?.length
+				? args.targetUtteranceIds.includes(utterance.utteranceId)
+				: args.targetSpeakers.includes(utterance.speaker),
+		);
+		const replacementUtterances = args.utterances
+			.map((utterance) => ({
+				...utterance,
+				text: utterance.text.trim(),
+			}))
+			.filter((utterance) => utterance.text.length > 0);
 		const now = Date.now();
 
 		await Promise.all(
-			currentUtterances
-				.filter((utterance) =>
-					args.targetUtteranceIds?.length
-						? args.targetUtteranceIds.includes(utterance.utteranceId)
-						: args.targetSpeakers.includes(utterance.speaker),
-				)
-				.map((utterance) => ctx.db.delete(utterance._id)),
+			utterancesToDelete.map((utterance) => ctx.db.delete(utterance._id)),
 		);
 
-		for (const utterance of args.utterances) {
-			const text = utterance.text.trim();
-
-			if (!text) {
-				continue;
-			}
-
+		for (const utterance of replacementUtterances) {
 			await ctx.db.insert("transcriptUtterances", {
 				sessionId: args.sessionId,
 				ownerTokenIdentifier,
@@ -707,7 +747,7 @@ export const replaceSpeakerUtterances = mutation({
 				utteranceId: utterance.utteranceId,
 				speaker: utterance.speaker,
 				source: utterance.source,
-				text,
+				text: utterance.text,
 				startedAt: utterance.startedAt,
 				endedAt: utterance.endedAt,
 				createdAt: now,
@@ -715,14 +755,25 @@ export const replaceSpeakerUtterances = mutation({
 			});
 		}
 
+		const finalTranscript = createTranscriptText(
+			await listSessionUtterances(ctx, args.sessionId),
+		);
+		await replaceTranscriptDocument({
+			ctx,
+			noteId: session.noteId,
+			ownerTokenIdentifier,
+			sessionId: session._id,
+			text: finalTranscript,
+		});
 		await patchTranscriptSessionState(ctx, session._id, {
 			refinementStatus: "completed",
 			refinementError: undefined,
 			lastRefinedAt: now,
+			utteranceCount:
+				currentUtterances.length -
+				utterancesToDelete.length +
+				replacementUtterances.length,
 			updatedAt: now,
-		});
-		await ctx.db.patch(args.sessionId, {
-			finalTranscript: args.finalTranscript?.trim() || undefined,
 		});
 
 		return null;

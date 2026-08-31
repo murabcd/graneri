@@ -58,6 +58,17 @@ const getSessionState = async (
 			.unique(),
 	);
 
+const getSessionDocument = async (
+	t: NoteFixture["t"],
+	sessionId: TranscriptSessionId,
+) =>
+	await t.run(async (ctx) =>
+		ctx.db
+			.query("transcriptDocuments")
+			.withIndex("by_sessionId", (query) => query.eq("sessionId", sessionId))
+			.unique(),
+	);
+
 test("requestStopSession records durable stop intent before capture cleanup", async () => {
 	const { asOwner, noteId, t } = await createNoteFixture();
 	const sessionId = await asOwner.mutation(
@@ -94,18 +105,27 @@ test("completeSession terminalizes a stopping transcript session", async () => {
 	await asOwner.mutation(api.transcriptSessions.requestStopSession, {
 		sessionId,
 	});
+	await asOwner.mutation(api.transcriptSessions.appendUtterance, {
+		sessionId,
+		utterance: {
+			utteranceId: "final",
+			speaker: "you",
+			source: "live",
+			text: " Final transcript ",
+			startedAt: 1_000,
+			endedAt: 1_500,
+		},
+	});
 	await asOwner.mutation(api.transcriptSessions.completeSession, {
 		sessionId,
-		finalTranscript: " Final transcript ",
 	});
 
 	const state = await getSessionState(t, sessionId);
-	const session = await t.run(async (ctx) => await ctx.db.get(sessionId));
+	const document = await getSessionDocument(t, sessionId);
 
 	expect(state?.status).toBe("completed");
 	expect(state?.endedAt).toEqual(expect.any(Number));
-	expect(session?.finalTranscript).toBe("Final transcript");
-	expect(session?.transcriptionLanguage).toBe("en");
+	expect(document?.text).toBe("You: Final transcript");
 });
 
 test("completeSession stores utterance transcript sections when no final text is provided", async () => {
@@ -144,9 +164,9 @@ test("completeSession stores utterance transcript sections when no final text is
 		sessionId,
 	});
 
-	const session = await t.run(async (ctx) => await ctx.db.get(sessionId));
+	const document = await getSessionDocument(t, sessionId);
 
-	expect(session?.finalTranscript).toBe(
+	expect(document?.text).toBe(
 		"You: First captured sentence.\n\nYou: Second captured sentence.",
 	);
 });
@@ -167,7 +187,7 @@ test("completeSession stores readable dynamic transcript sections", async () => 
 		sessionId,
 		utterance: {
 			utteranceId: "u1",
-			speaker: "them",
+			speaker: "them" as const,
 			source: "live",
 			text: firstExplanation,
 			startedAt: 1_000,
@@ -189,9 +209,9 @@ test("completeSession stores readable dynamic transcript sections", async () => 
 		sessionId,
 	});
 
-	const session = await t.run(async (ctx) => await ctx.db.get(sessionId));
+	const document = await getSessionDocument(t, sessionId);
 
-	expect(session?.finalTranscript).toBe(
+	expect(document?.text).toBe(
 		`Them: ${firstExplanation}\n\nThem: The next point is about why the serving cost changes the business model.`,
 	);
 });
@@ -209,7 +229,7 @@ test("completeSession preserves alternating speaker turns in persisted transcrip
 	for (const utterance of [
 		{
 			utteranceId: "them-1",
-			speaker: "them",
+			speaker: "them" as const,
 			source: "live" as const,
 			text: "Can you walk me through the rollout risk?",
 			startedAt: 1_000,
@@ -217,7 +237,7 @@ test("completeSession preserves alternating speaker turns in persisted transcrip
 		},
 		{
 			utteranceId: "you-1",
-			speaker: "you",
+			speaker: "you" as const,
 			source: "live" as const,
 			text: "The main risk is migration timing during active sessions.",
 			startedAt: 2_100,
@@ -225,7 +245,7 @@ test("completeSession preserves alternating speaker turns in persisted transcrip
 		},
 		{
 			utteranceId: "them-2",
-			speaker: "them",
+			speaker: "them" as const,
 			source: "live" as const,
 			text: "What happens if reconnect overlaps with note generation?",
 			startedAt: 3_100,
@@ -233,7 +253,7 @@ test("completeSession preserves alternating speaker turns in persisted transcrip
 		},
 		{
 			utteranceId: "you-2",
-			speaker: "you",
+			speaker: "you" as const,
 			source: "live" as const,
 			text: "We keep the draft append only and regenerate sections from utterances.",
 			startedAt: 4_100,
@@ -250,9 +270,9 @@ test("completeSession preserves alternating speaker turns in persisted transcrip
 		sessionId,
 	});
 
-	const session = await t.run(async (ctx) => await ctx.db.get(sessionId));
+	const document = await getSessionDocument(t, sessionId);
 
-	expect(session?.finalTranscript).toBe(
+	expect(document?.text).toBe(
 		[
 			"Them: Can you walk me through the rollout risk?",
 			"You: The main risk is migration timing during active sessions.",
@@ -303,26 +323,58 @@ test("stored transcript reads utterances from the latest session only", async ()
 			endedAt: 2_500,
 		},
 	});
+	await asOwner.mutation(api.transcriptSessions.appendUtterance, {
+		sessionId: latestSessionId,
+		utterance: {
+			utteranceId: "latest-2",
+			speaker: "them",
+			source: "live",
+			text: "Latest reply text.",
+			startedAt: 3_000,
+			endedAt: 3_500,
+		},
+	});
 	await asOwner.mutation(api.transcriptSessions.completeSession, {
 		sessionId: latestSessionId,
 	});
 
 	const storedTranscript = await asOwner.query(
-		api.transcriptSessions.getStoredTranscriptForNote,
+		api.transcriptSessions.getLatestTextForNote,
 		{
 			noteId,
 		},
 	);
+	const firstUtterancePage = await asOwner.query(
+		api.transcriptSessions.listUtterances,
+		{
+			sessionId: latestSessionId,
+			paginationOpts: { cursor: null, numItems: 1 },
+		},
+	);
+	const secondUtterancePage = await asOwner.query(
+		api.transcriptSessions.listUtterances,
+		{
+			sessionId: latestSessionId,
+			paginationOpts: {
+				cursor: firstUtterancePage.continueCursor,
+				numItems: 1,
+			},
+		},
+	);
+	const summary = await asOwner.query(
+		api.transcriptSessions.getLatestSummaryForNote,
+		{ noteId },
+	);
 
-	expect(storedTranscript?.session._id).toBe(latestSessionId);
-	expect(storedTranscript?.session.finalTranscript).toContain(
-		"Latest recording text.",
-	);
-	expect(storedTranscript?.session.finalTranscript).not.toContain(
-		"Old recording text.",
-	);
-	expect(storedTranscript?.utterances).toHaveLength(1);
-	expect(storedTranscript?.utterances[0]?.sessionId).toBe(latestSessionId);
+	expect(storedTranscript?.sessionId).toBe(latestSessionId);
+	expect(storedTranscript?.text).toContain("Latest recording text.");
+	expect(storedTranscript?.text).not.toContain("Old recording text.");
+	expect(firstUtterancePage.page).toHaveLength(1);
+	expect(firstUtterancePage.isDone).toBe(false);
+	expect(firstUtterancePage.page[0]?.sessionId).toBe(latestSessionId);
+	expect(secondUtterancePage.page[0]?.utteranceId).toBe("latest-2");
+	expect(summary).not.toHaveProperty("finalTranscript");
+	expect(summary).toMatchObject({ hasTranscript: true, utteranceCount: 2 });
 });
 
 test("markGenerated terminalizes a recovered stopping transcript session", async () => {
@@ -387,6 +439,7 @@ test("removeOrphanedSession deletes transcript runtime after its note is gone", 
 			noteId,
 			status: "completed",
 			refinementStatus: "idle",
+			utteranceCount: 1,
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
@@ -450,6 +503,7 @@ test("removeOrphanedSession leaves transcript runtime for an active note", async
 			noteId,
 			status: "completed",
 			refinementStatus: "idle",
+			utteranceCount: 0,
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});

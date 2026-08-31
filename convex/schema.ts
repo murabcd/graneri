@@ -1182,7 +1182,6 @@ export default defineSchema({
 		noteId: v.id("notes"),
 		transcriptionLanguage: v.union(v.string(), v.null()),
 		startedAt: v.number(),
-		finalTranscript: v.optional(v.string()),
 		createdAt: v.number(),
 	})
 		.index("by_ownerTokenIdentifier_and_noteId_and_startedAt", [
@@ -1194,6 +1193,14 @@ export default defineSchema({
 			"ownerTokenIdentifier",
 			"startedAt",
 		]),
+	transcriptDocuments: defineTable({
+		sessionId: v.id("transcriptSessions"),
+		ownerTokenIdentifier: v.string(),
+		noteId: v.id("notes"),
+		text: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_sessionId", ["sessionId"]),
 	transcriptSessionStates: defineTable({
 		sessionId: v.id("transcriptSessions"),
 		ownerTokenIdentifier: v.string(),
@@ -1210,6 +1217,7 @@ export default defineSchema({
 		),
 		endedAt: v.optional(v.number()),
 		generatedNoteAt: v.optional(v.number()),
+		utteranceCount: v.number(),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 		lastRefinedAt: v.optional(v.number()),
@@ -1219,7 +1227,7 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		noteId: v.id("notes"),
 		utteranceId: v.string(),
-		speaker: v.string(),
+		speaker: v.union(v.literal("you"), v.literal("them")),
 		source: v.union(v.literal("live"), v.literal("refined")),
 		text: v.string(),
 		startedAt: v.number(),

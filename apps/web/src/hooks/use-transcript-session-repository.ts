@@ -1,4 +1,9 @@
-import { useConvex, useMutation, useQuery } from "convex/react";
+import {
+	useConvex,
+	useMutation,
+	usePaginatedQuery,
+	useQuery,
+} from "convex/react";
 import * as React from "react";
 import type {
 	LiveTranscriptState,
@@ -13,29 +18,27 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
+const TRANSCRIPT_UTTERANCE_PAGE_SIZE = 50;
+
 type TranscriptDraftRecord = Awaited<ReturnType<typeof loadTranscriptDraft>>;
 type TranscriptSessionStatus = Doc<"transcriptSessionStates">["status"];
 type TranscriptRefinementStatus =
 	Doc<"transcriptSessionStates">["refinementStatus"];
 
 type TranscriptSessionSnapshot = {
-	finalTranscript: string;
 	generatedNoteAt: number | null;
+	hasTranscript: boolean;
 	refinementError: string | null;
 	refinementStatus: TranscriptRefinementStatus;
 	sessionId: Id<"transcriptSessions">;
 	status: TranscriptSessionStatus;
 	transcriptionLanguage: string | null;
 	updatedAt: number;
+	utteranceCount: number;
 	utterances: TranscriptUtterance[];
 };
 
 type TranscriptSessionSummary = Omit<TranscriptSessionSnapshot, "utterances">;
-type LatestTranscriptSessionState = {
-	isFetching: boolean;
-	noteId: Id<"notes"> | null;
-	value: TranscriptSessionSnapshot | null | undefined;
-};
 
 export type TranscriptSessionRepository = ReturnType<
 	typeof useTranscriptSessionRepository
@@ -82,35 +85,16 @@ export const useTranscriptSessionRepository = (
 	);
 	const latestTranscriptSessionSummaryQuery = useQuery(
 		api.transcriptSessions.getLatestSummaryForNote,
-		noteId
-			? {
-					noteId,
-				}
-			: "skip",
+		noteId ? { noteId } : "skip",
 	);
-	const [latestTranscriptSessionState, setLatestTranscriptSessionState] =
-		React.useState<LatestTranscriptSessionState>(() => ({
-			isFetching: false,
-			noteId,
-			value: noteId ? undefined : null,
-		}));
-	const latestTranscriptSessionRequestIdRef = React.useRef(0);
-	const latestTranscriptSession =
-		latestTranscriptSessionState.noteId === noteId
-			? latestTranscriptSessionState.value
-			: noteId
-				? undefined
-				: null;
-	const isFetchingLatestTranscriptSession =
-		latestTranscriptSessionState.noteId === noteId
-			? latestTranscriptSessionState.isFetching
-			: false;
-	const isLatestTranscriptSessionLoading = Boolean(
+	const transcriptUtterancePagination = usePaginatedQuery(
+		api.transcriptSessions.listUtterances,
 		noteId &&
-			(isFetchingLatestTranscriptSession ||
-				(shouldAutoLoadLatestTranscriptSession &&
-					latestTranscriptSessionSummaryQuery !== null &&
-					latestTranscriptSession === undefined)),
+			shouldAutoLoadLatestTranscriptSession &&
+			latestTranscriptSessionSummaryQuery
+			? { sessionId: latestTranscriptSessionSummaryQuery._id }
+			: "skip",
+		{ initialNumItems: TRANSCRIPT_UTTERANCE_PAGE_SIZE },
 	);
 	const latestTranscriptSessionSummary =
 		React.useMemo<TranscriptSessionSummary | null>(
@@ -118,11 +102,9 @@ export const useTranscriptSessionRepository = (
 				latestTranscriptSessionSummaryQuery
 					? {
 							sessionId: latestTranscriptSessionSummaryQuery._id,
-							finalTranscript:
-								latestTranscriptSessionSummaryQuery.finalTranscript?.trim() ||
-								"",
 							generatedNoteAt:
 								latestTranscriptSessionSummaryQuery.generatedNoteAt ?? null,
+							hasTranscript: latestTranscriptSessionSummaryQuery.hasTranscript,
 							refinementError:
 								latestTranscriptSessionSummaryQuery.refinementError ?? null,
 							refinementStatus:
@@ -131,154 +113,95 @@ export const useTranscriptSessionRepository = (
 							transcriptionLanguage:
 								latestTranscriptSessionSummaryQuery.transcriptionLanguage,
 							updatedAt: latestTranscriptSessionSummaryQuery.updatedAt,
+							utteranceCount:
+								latestTranscriptSessionSummaryQuery.utteranceCount,
 						}
 					: null,
 			[latestTranscriptSessionSummaryQuery],
 		);
+	const shouldDrainActiveTranscript = Boolean(
+		latestTranscriptSessionSummary &&
+			(latestTranscriptSessionSummary.status === "capturing" ||
+				latestTranscriptSessionSummary.status === "stopping"),
+	);
+
+	React.useEffect(() => {
+		if (
+			shouldAutoLoadLatestTranscriptSession &&
+			shouldDrainActiveTranscript &&
+			transcriptUtterancePagination.status === "CanLoadMore"
+		) {
+			transcriptUtterancePagination.loadMore(TRANSCRIPT_UTTERANCE_PAGE_SIZE);
+		}
+	}, [
+		shouldAutoLoadLatestTranscriptSession,
+		shouldDrainActiveTranscript,
+		transcriptUtterancePagination,
+	]);
+
 	const isLatestTranscriptSessionSummaryLoading = Boolean(
 		noteId && latestTranscriptSessionSummaryQuery === undefined,
 	);
-
-	const refreshLatestTranscriptSession = React.useCallback(async () => {
-		const requestId = latestTranscriptSessionRequestIdRef.current + 1;
-		latestTranscriptSessionRequestIdRef.current = requestId;
-
-		if (!noteId) {
-			setLatestTranscriptSessionState({
-				isFetching: false,
-				noteId: null,
-				value: null,
-			});
+	const isWaitingForTranscriptUtterances = Boolean(
+		noteId &&
+			shouldAutoLoadLatestTranscriptSession &&
+			latestTranscriptSessionSummary &&
+			(transcriptUtterancePagination.status === "LoadingFirstPage" ||
+				(shouldDrainActiveTranscript &&
+					transcriptUtterancePagination.status !== "Exhausted")),
+	);
+	const latestTranscriptSession = React.useMemo<
+		TranscriptSessionSnapshot | null | undefined
+	>(() => {
+		if (!noteId || latestTranscriptSessionSummaryQuery === null) {
 			return null;
 		}
-
-		setLatestTranscriptSessionState((currentState) => ({
-			isFetching: true,
-			noteId,
-			value: currentState.noteId === noteId ? currentState.value : undefined,
-		}));
-
-		try {
-			const result = await convex.query(
-				api.transcriptSessions.getStoredTranscriptForNote,
-				{
-					noteId,
-				},
-			);
-			const nextValue: TranscriptSessionSnapshot | null = result
-				? {
-						sessionId: result.session._id,
-						finalTranscript: result.session.finalTranscript?.trim() || "",
-						generatedNoteAt: result.session.generatedNoteAt ?? null,
-						refinementError: result.session.refinementError ?? null,
-						refinementStatus: result.session.refinementStatus,
-						status: result.session.status,
-						transcriptionLanguage: result.session.transcriptionLanguage,
-						updatedAt: result.session.updatedAt,
-						utterances: result.utterances.map((utterance) => ({
-							id: utterance.utteranceId,
-							speaker: utterance.speaker as TranscriptUtterance["speaker"],
-							text: utterance.text,
-							startedAt: utterance.startedAt,
-							endedAt: utterance.endedAt,
-						})),
-					}
-				: null;
-
-			if (latestTranscriptSessionRequestIdRef.current === requestId) {
-				React.startTransition(() => {
-					setLatestTranscriptSessionState({
-						isFetching: false,
-						noteId,
-						value: nextValue,
-					});
-				});
-			}
-
-			return nextValue;
-		} catch (error) {
-			if (latestTranscriptSessionRequestIdRef.current === requestId) {
-				setLatestTranscriptSessionState((currentState) => ({
-					isFetching: false,
-					noteId,
-					value:
-						currentState.noteId === noteId ? currentState.value : undefined,
-				}));
-			}
-			throw error;
-		}
-	}, [convex, noteId]);
-
-	React.useEffect(() => {
 		if (
+			latestTranscriptSessionSummaryQuery === undefined ||
 			!shouldAutoLoadLatestTranscriptSession ||
-			!noteId ||
-			latestTranscriptSessionSummaryQuery === undefined
+			isWaitingForTranscriptUtterances ||
+			!latestTranscriptSessionSummary
 		) {
-			return;
+			return undefined;
 		}
 
-		if (latestTranscriptSessionSummary === null) {
-			// The latest-session cache mirrors Convex query state for this note scope.
-			setLatestTranscriptSessionState({
-				isFetching: false,
-				noteId,
-				value: null,
-			});
-			return;
-		}
-
-		if (
-			latestTranscriptSession !== undefined &&
-			latestTranscriptSession?.sessionId ===
-				latestTranscriptSessionSummary.sessionId
-		) {
-			return;
-		}
-
-		void refreshLatestTranscriptSession();
+		return {
+			...latestTranscriptSessionSummary,
+			utterances: transcriptUtterancePagination.results.map((utterance) => ({
+				id: utterance.utteranceId,
+				speaker: utterance.speaker,
+				text: utterance.text,
+				startedAt: utterance.startedAt,
+				endedAt: utterance.endedAt,
+			})),
+		};
 	}, [
-		latestTranscriptSession,
+		isWaitingForTranscriptUtterances,
 		latestTranscriptSessionSummary,
 		latestTranscriptSessionSummaryQuery,
 		noteId,
-		refreshLatestTranscriptSession,
 		shouldAutoLoadLatestTranscriptSession,
+		transcriptUtterancePagination.results,
 	]);
-
-	React.useEffect(() => {
-		if (
-			!noteId ||
-			!latestTranscriptSessionSummary ||
-			latestTranscriptSession === undefined ||
-			latestTranscriptSession === null ||
-			latestTranscriptSession.sessionId !==
-				latestTranscriptSessionSummary.sessionId
-		) {
-			return;
+	const hasMoreLatestTranscriptUtterances =
+		transcriptUtterancePagination.status === "CanLoadMore" ||
+		transcriptUtterancePagination.status === "LoadingMore";
+	const isLoadingMoreLatestTranscriptUtterances =
+		transcriptUtterancePagination.status === "LoadingMore";
+	const loadMoreLatestTranscriptUtterances = React.useCallback(() => {
+		if (transcriptUtterancePagination.status === "CanLoadMore") {
+			transcriptUtterancePagination.loadMore(TRANSCRIPT_UTTERANCE_PAGE_SIZE);
 		}
-
-		if (
-			latestTranscriptSession.finalTranscript ===
-				latestTranscriptSessionSummary.finalTranscript &&
-			latestTranscriptSession.generatedNoteAt ===
-				latestTranscriptSessionSummary.generatedNoteAt &&
-			latestTranscriptSession.refinementStatus ===
-				latestTranscriptSessionSummary.refinementStatus &&
-			latestTranscriptSession.refinementError ===
-				latestTranscriptSessionSummary.refinementError
-		) {
-			return;
-		}
-
-		void refreshLatestTranscriptSession();
-	}, [
-		latestTranscriptSession,
-		latestTranscriptSessionSummary,
-		noteId,
-		refreshLatestTranscriptSession,
-	]);
-
+	}, [transcriptUtterancePagination]);
+	const getLatestTranscriptText = React.useCallback(
+		async () =>
+			noteId
+				? await convex.query(api.transcriptSessions.getLatestTextForNote, {
+						noteId,
+					})
+				: null,
+		[convex, noteId],
+	);
 	const startSession = React.useCallback(
 		async ({
 			noteId,
@@ -296,7 +219,6 @@ export const useTranscriptSessionRepository = (
 			}),
 		[startTranscriptSessionMutation],
 	);
-
 	const appendUtterance = React.useCallback(
 		async ({
 			sessionId,
@@ -313,33 +235,25 @@ export const useTranscriptSessionRepository = (
 			}),
 		[appendTranscriptUtteranceMutation],
 	);
-
 	const completeSession = React.useCallback(
 		async ({
-			finalTranscript,
 			sessionId,
 			status,
 		}: {
-			finalTranscript?: string;
 			sessionId: Id<"transcriptSessions">;
 			status?: "completed" | "failed";
 		}) =>
 			await completeTranscriptSessionMutation({
 				sessionId,
-				finalTranscript,
 				status,
 			}),
 		[completeTranscriptSessionMutation],
 	);
-
 	const requestStopSession = React.useCallback(
 		async ({ sessionId }: { sessionId: Id<"transcriptSessions"> }) =>
-			await requestStopTranscriptSessionMutation({
-				sessionId,
-			}),
+			await requestStopTranscriptSessionMutation({ sessionId }),
 		[requestStopTranscriptSessionMutation],
 	);
-
 	const setSystemAudioSourceMode = React.useCallback(
 		async ({
 			sessionId,
@@ -354,21 +268,16 @@ export const useTranscriptSessionRepository = (
 			}),
 		[setTranscriptSessionSystemAudioSourceModeMutation],
 	);
-
 	const markGenerated = React.useCallback(
 		async ({ sessionId }: { sessionId: Id<"transcriptSessions"> }) =>
-			await markTranscriptSessionGeneratedMutation({
-				sessionId,
-			}),
+			await markTranscriptSessionGeneratedMutation({ sessionId }),
 		[markTranscriptSessionGeneratedMutation],
 	);
-
 	const loadDraft = React.useCallback(
 		async (noteKey: string): Promise<TranscriptDraftRecord> =>
 			await loadTranscriptDraft(noteKey),
 		[],
 	);
-
 	const saveDraft = React.useCallback(
 		async ({
 			liveTranscript,
@@ -389,7 +298,6 @@ export const useTranscriptSessionRepository = (
 			}),
 		[],
 	);
-
 	const clearDraft = React.useCallback(
 		async (noteKey: string) => await clearTranscriptDraft(noteKey),
 		[],
@@ -400,13 +308,19 @@ export const useTranscriptSessionRepository = (
 			appendUtterance,
 			clearDraft,
 			completeSession,
-			isLatestTranscriptSessionLoading,
+			getLatestTranscriptText,
+			hasMoreLatestTranscriptUtterances,
+			isLatestTranscriptSessionLoading:
+				shouldAutoLoadLatestTranscriptSession &&
+				(isLatestTranscriptSessionSummaryLoading ||
+					isWaitingForTranscriptUtterances),
 			isLatestTranscriptSessionSummaryLoading,
+			isLoadingMoreLatestTranscriptUtterances,
 			latestTranscriptSession,
 			latestTranscriptSessionSummary,
 			loadDraft,
+			loadMoreLatestTranscriptUtterances,
 			markGenerated,
-			refreshLatestTranscriptSession,
 			requestStopSession,
 			saveDraft,
 			setSystemAudioSourceMode,
@@ -416,16 +330,20 @@ export const useTranscriptSessionRepository = (
 			appendUtterance,
 			clearDraft,
 			completeSession,
-			isLatestTranscriptSessionLoading,
+			getLatestTranscriptText,
+			hasMoreLatestTranscriptUtterances,
 			isLatestTranscriptSessionSummaryLoading,
+			isLoadingMoreLatestTranscriptUtterances,
+			isWaitingForTranscriptUtterances,
 			latestTranscriptSession,
 			latestTranscriptSessionSummary,
 			loadDraft,
+			loadMoreLatestTranscriptUtterances,
 			markGenerated,
-			refreshLatestTranscriptSession,
 			requestStopSession,
 			saveDraft,
 			setSystemAudioSourceMode,
+			shouldAutoLoadLatestTranscriptSession,
 			startSession,
 		],
 	);

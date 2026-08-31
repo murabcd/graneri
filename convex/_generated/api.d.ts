@@ -134,6 +134,7 @@ import type * as starred from "../starred.js";
 import type * as templates from "../templates.js";
 import type * as toolApproval from "../toolApproval.js";
 import type * as toolApprovals from "../toolApprovals.js";
+import type * as transcriptDocument from "../transcriptDocument.js";
 import type * as transcriptSessions from "../transcriptSessions.js";
 import type * as trash from "../trash.js";
 import type * as userPreferences from "../userPreferences.js";
@@ -280,6 +281,7 @@ declare const fullApi: ApiFromModules<{
   templates: typeof templates;
   toolApproval: typeof toolApproval;
   toolApprovals: typeof toolApprovals;
+  transcriptDocument: typeof transcriptDocument;
   transcriptSessions: typeof transcriptSessions;
   trash: typeof trash;
   userPreferences: typeof userPreferences;
