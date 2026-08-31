@@ -3,6 +3,7 @@ import { TableView } from "@tiptap/extension-table";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import {
 	type Command,
+	NodeSelection,
 	type SelectionBookmark,
 	TextSelection,
 } from "@tiptap/pm/state";
@@ -115,6 +116,7 @@ const getTableContext = (
 	return {
 		map: TableMap.get(table),
 		table,
+		tablePosition: $position.before(tableDepth),
 		tableStart: $position.start(tableDepth),
 	};
 };
@@ -176,6 +178,10 @@ export class NoteTableView extends TableView {
 			this.#handlePointerDown,
 		);
 		this.#addRowButton.addEventListener("pointerdown", this.#handlePointerDown);
+		this.#scrollContainer.addEventListener(
+			"mousedown",
+			this.#handleTableMouseDown,
+		);
 		this.dom.addEventListener("pointerenter", this.#handlePointerEnter);
 		this.dom.addEventListener("pointerleave", this.#scheduleControlsHide);
 		this.#addColumnButton.addEventListener(
@@ -187,7 +193,6 @@ export class NoteTableView extends TableView {
 			this.#cancelControlsHide,
 		);
 		this.table.addEventListener("mousemove", this.#handleTableMouseMove);
-		this.table.addEventListener("mousedown", this.#handleResizeMouseDown);
 		queueMicrotask(this.#positionControls);
 	}
 
@@ -243,10 +248,41 @@ export class NoteTableView extends TableView {
 		return widths.length === columnCount ? widths : null;
 	};
 
-	readonly #handleResizeMouseDown = (event: MouseEvent) => {
+	readonly #handleTableMouseDown = (event: MouseEvent) => {
 		if (!this.#view.editable || event.button !== 0) {
 			return;
 		}
+		if (event.target === this.#scrollContainer) {
+			const context = getTableContext(this.#view, this.contentDOM);
+			if (!context) {
+				return;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+			this.#view.dispatch(
+				this.#view.state.tr.setSelection(
+					NodeSelection.create(this.#view.state.doc, context.tablePosition),
+				),
+			);
+			this.#view.focus();
+			return;
+		}
+
+		const cell =
+			event.target instanceof Element ? event.target.closest("td, th") : null;
+		if (
+			this.#view.state.selection instanceof NodeSelection &&
+			cell instanceof HTMLTableCellElement
+		) {
+			const cellPosition = this.#view.posAtDOM(cell, 0);
+			this.#view.dispatch(
+				this.#view.state.tr.setSelection(
+					TextSelection.near(this.#view.state.doc.resolve(cellPosition + 1)),
+				),
+			);
+		}
+
 		const resizeState = columnResizingPluginKey.getState(this.#view.state);
 		if (!resizeState || resizeState.activeHandle < 0 || resizeState.dragging) {
 			return;
@@ -641,7 +677,10 @@ export class NoteTableView extends TableView {
 		this.dom.removeEventListener("pointerenter", this.#handlePointerEnter);
 		this.dom.removeEventListener("pointerleave", this.#scheduleControlsHide);
 		this.table.removeEventListener("mousemove", this.#handleTableMouseMove);
-		this.table.removeEventListener("mousedown", this.#handleResizeMouseDown);
+		this.#scrollContainer.removeEventListener(
+			"mousedown",
+			this.#handleTableMouseDown,
+		);
 		this.#addColumnButton?.removeEventListener(
 			"pointerenter",
 			this.#cancelControlsHide,

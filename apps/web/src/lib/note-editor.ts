@@ -244,6 +244,7 @@ export const createNoteEditorExtensions = (
 	}),
 	TableKit.configure({
 		table: {
+			allowTableNodeSelection: true,
 			cellMinWidth: 80,
 			handleWidth: NOTE_TABLE_RESIZE_HANDLE_WIDTH,
 			lastColumnResizable: true,

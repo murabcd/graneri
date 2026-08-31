@@ -36,6 +36,8 @@ attributes. Graneri owns the free image toolbar and caption node view; Tiptap's
 open-source resizable node view owns drag geometry. Image replacement reuses the
 same Convex uploader and updates the selected node in place, while the normal
 note document session remains the only writer of note content.
+File and image node selections share one visible block outline so their
+ProseMirror selection state is clear without application-owned selection state.
 
 Files are Tiptap block atoms inside that same canonical document rather than a
 separate list beneath the editor. A file node persists its durable
@@ -58,6 +60,8 @@ resize normalization, menu-target lifecycles, selection preservation, and
 row/column move and duplication semantics. The Tiptap node view and React menu
 portal are rendering adapters over that module; they must not establish
 parallel document listeners, hover timers, geometry models, or command paths.
+The table's outer frame selects its table node and shows the shared block
+outline; clicking a cell remains the canonical path back to cell editing.
 
 ## Calendar-linked relationships
 

@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NodeSelection } from "@tiptap/pm/state";
 import { CellSelection, columnResizingPluginKey } from "@tiptap/pm/tables";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -23,6 +24,34 @@ afterEach(() => {
 });
 
 describe("note tables", () => {
+	it("selects the whole table from its outer frame", async () => {
+		const editor = await renderTable();
+		const scrollContainer = editor.view.dom.querySelector(".note-table-scroll");
+		const wrapper = editor.view.dom.querySelector(".note-table-wrapper");
+		expect(scrollContainer).not.toBeNull();
+		expect(wrapper).not.toBeNull();
+		if (!scrollContainer || !wrapper) {
+			throw new Error("Table frame did not render");
+		}
+
+		fireEvent.mouseDown(scrollContainer, { button: 0 });
+
+		expect(editor.state.selection).toBeInstanceOf(NodeSelection);
+		expect(editor.state.selection.from).toBe(0);
+		expect(wrapper.classList.contains("ProseMirror-selectednode")).toBe(true);
+
+		const firstCell = screen.getAllByRole("cell")[0];
+		if (!firstCell) {
+			throw new Error("Table cell did not render");
+		}
+		mockElementFromPoint(firstCell);
+		fireEvent.mouseDown(firstCell, { button: 0, clientX: 1, clientY: 1 });
+
+		expect(editor.state.selection).not.toBeInstanceOf(NodeSelection);
+		expect(wrapper.classList.contains("ProseMirror-selectednode")).toBe(false);
+		fireEvent.mouseUp(document, { button: 0, clientX: 1, clientY: 1 });
+	});
+
 	it("adds a row or column from the quiet table-edge controls", async () => {
 		const editor = await renderTable();
 		const table = setEdgeDragGeometry(editor);

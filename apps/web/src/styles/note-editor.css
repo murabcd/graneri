@@ -154,7 +154,12 @@
 	border-radius: var(--radius-xl);
 }
 
-.note-file-node.ProseMirror-selectednode {
+.note-tiptap.ProseMirror
+	:is(
+		.note-file-node,
+		.note-image-node,
+		.note-table-wrapper
+	).ProseMirror-selectednode {
 	outline: 2px solid color-mix(in oklab, var(--ring) 65%, transparent);
 	outline-offset: 2px;
 }
@@ -630,6 +635,7 @@
 	max-width: 100%;
 	flex-direction: column;
 	margin: 1.25rem 0;
+	border-radius: var(--radius-lg);
 }
 
 :where(.note-tiptap.ProseMirror) :where(.note-image-node[data-align="center"]) {
@@ -651,10 +657,6 @@
 	max-width: 100%;
 	height: auto;
 	border-radius: var(--radius-lg);
-}
-
-.note-tiptap.ProseMirror .note-image-node.ProseMirror-selectednode {
-	outline: none;
 }
 
 :where(.note-tiptap.ProseMirror) :where(.note-image-resize-handle) {

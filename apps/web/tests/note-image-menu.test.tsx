@@ -76,7 +76,7 @@ function ReadOnlyImageHarness({
 	) : null;
 }
 
-const renderImageMenu = async () => {
+const renderImageEditor = async () => {
 	let editor: Editor | null = null;
 	const onReplace = vi.fn();
 	render(
@@ -91,6 +91,11 @@ const renderImageMenu = async () => {
 	if (!editor) {
 		throw new Error("Editor did not initialize");
 	}
+	return { editor, onReplace };
+};
+
+const renderImageMenu = async () => {
+	const { editor, onReplace } = await renderImageEditor();
 	act(() => {
 		editor.commands.setNodeSelection(0);
 	});
@@ -99,6 +104,19 @@ const renderImageMenu = async () => {
 };
 
 describe("note image options", () => {
+	it("selects an image as one node when clicked", async () => {
+		const { editor } = await renderImageEditor();
+
+		fireEvent.click(screen.getByRole("img", { name: "Diagram.png" }));
+
+		expect(editor.state.selection).toBeInstanceOf(NodeSelection);
+		expect(
+			document
+				.querySelector("figure.note-image-node")
+				?.classList.contains("ProseMirror-selectednode"),
+		).toBe(true);
+	});
+
 	it("does not render resize controls in read-only note previews", async () => {
 		let editor: Editor | null = null;
 		render(
