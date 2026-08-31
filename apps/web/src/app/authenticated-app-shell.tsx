@@ -107,6 +107,7 @@ import { useAutomationActions } from "@/hooks/use-automation-actions";
 import { useAutomationNotifications } from "@/hooks/use-automation-notifications";
 import { useMarkAssistantCompletionRead } from "@/hooks/use-mark-assistant-completion-read";
 import { useNoteNavigationPreparation } from "@/hooks/use-note-navigation-preparation";
+import { usePaginatedNotes } from "@/hooks/use-paginated-notes";
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
 import { type AuthSession, authClient } from "@/lib/auth-client";
 import { getChatId } from "@/lib/chat";
@@ -438,12 +439,12 @@ const useAppShellState = ({
 			? { workspaceId: resolvedActiveWorkspaceId }
 			: "skip",
 	);
-	const notes = useQuery(
-		api.notes.list,
-		resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
-	);
+	const {
+		hasMore: notesHaveMore,
+		isLoadingMore: isLoadingMoreNotes,
+		loadMore: loadMoreNotes,
+		notes,
+	} = usePaginatedNotes(resolvedActiveWorkspaceId);
 	const sharedNotes = React.useMemo(
 		() => notes?.filter((note) => note.visibility === "public"),
 		[notes],
@@ -1345,7 +1346,10 @@ const useAppShellState = ({
 		isResolvingCurrentNoteRoute: isResolvingCurrentNote,
 		isSharedNote,
 		isSigningOut,
+		isLoadingMoreNotes,
+		loadMoreNotes,
 		notes,
+		notesHaveMore,
 		projects,
 		selectedProject,
 		openNote,
@@ -2059,6 +2063,9 @@ function createAppShellContentView({
 			currentWeekdayLabel: controller.currentWeekdayLabel,
 			upcomingCalendar: controller.upcomingCalendar,
 			notes: controller.notes,
+			hasMoreNotes: controller.notesHaveMore,
+			isLoadingMoreNotes: controller.isLoadingMoreNotes,
+			onLoadMoreNotes: controller.loadMoreNotes,
 			currentNoteId: controller.currentNoteId,
 			currentNoteTitle: controller.currentNoteTitle,
 			user: controller.user,
@@ -2088,6 +2095,9 @@ function createAppShellContentView({
 			kind: "shared",
 			isDesktopMac: controller.isDesktopMac,
 			sharedNotes: controller.sharedNotes,
+			hasMoreNotes: controller.notesHaveMore,
+			isLoadingMoreNotes: controller.isLoadingMoreNotes,
+			onLoadMoreNotes: controller.loadMoreNotes,
 			currentNoteId: controller.currentNoteId,
 			currentNoteTitle: controller.currentNoteTitle,
 			user: controller.user,
@@ -2110,6 +2120,9 @@ function createAppShellContentView({
 			isDesktopMac: controller.isDesktopMac,
 			project,
 			notes: controller.notes,
+			hasMoreNotes: controller.notesHaveMore,
+			isLoadingMoreNotes: controller.isLoadingMoreNotes,
+			onLoadMoreNotes: controller.loadMoreNotes,
 			currentNoteId: controller.currentNoteId,
 			currentNoteTitle: controller.currentNoteTitle,
 			user: controller.user,
@@ -2162,6 +2175,7 @@ function createAppShellContentView({
 		chatComposerId: controller.chatComposerId,
 		chatPluginPrefill: controller.chatPluginPrefill,
 		chats: controller.chats,
+		notes: controller.notes,
 		currentChatId: controller.currentChatId,
 		isDesktopMac: controller.isDesktopMac,
 		onChatPersisted: controller.handleChatPersisted,
@@ -2230,6 +2244,9 @@ export function AuthenticatedAppShell({
 					activeStreamingChatIds={controller.activeStreamingChatIds}
 					automations={controller.automations}
 					notes={controller.notes}
+					hasMoreNotes={controller.notesHaveMore}
+					isLoadingMoreNotes={controller.isLoadingMoreNotes}
+					onLoadMoreNotes={controller.loadMoreNotes}
 					sharedNotes={controller.sharedNotes}
 					projectAppearancePreview={projectAppearancePreview}
 					onWorkspaceSelect={controller.setActiveWorkspaceId}
@@ -2301,6 +2318,7 @@ export function AuthenticatedAppShell({
 					projectSelectionEnabled={controller.automationProjectSelectionEnabled}
 					initialAutomation={controller.editingAutomation}
 					initialTitle={controller.automationChatTitle}
+					notes={controller.notes}
 				/>
 			</SidebarProvider>
 		</ActiveWorkspaceProvider>

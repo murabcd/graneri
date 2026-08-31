@@ -8,6 +8,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
+import { Button } from "@workspace/ui/components/button";
 import {
 	Empty,
 	EmptyDescription,
@@ -46,6 +47,7 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
+import { usePaginatedNotes } from "@/hooks/use-paginated-notes";
 import { getChatId } from "@/lib/chat";
 import {
 	groupItemsByRelativeDate,
@@ -53,6 +55,11 @@ import {
 } from "@/lib/group-by-relative-date";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
+import type { NoteListItem } from "@/lib/note-types";
+import {
+	insertOptimisticNote,
+	removeOptimisticNotes,
+} from "@/lib/optimistic-note-catalog";
 import { removeNoteChats, restoreNoteChats } from "@/lib/optimistic-note-chats";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
@@ -75,7 +82,7 @@ type TrashListItem = {
 
 type TrashQuerySnapshot = {
 	workspaceId: Id<"workspaces">;
-	notes: Array<Doc<"notes">>;
+	notes: NoteListItem[];
 	chats: Array<Doc<"chats">>;
 };
 
@@ -90,7 +97,12 @@ export function NavTrash({
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const queryArgs =
 		open && activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip";
-	const archivedNotes = useQuery(api.notes.listArchived, queryArgs);
+	const {
+		hasMore: hasMoreArchivedNotes,
+		isLoadingMore: isLoadingMoreArchivedNotes,
+		loadMore: loadMoreArchivedNotes,
+		notes: archivedNotes,
+	} = usePaginatedNotes(activeWorkspaceId, { archived: true, enabled: open });
 	const archivedChats = useQuery(api.chats.listArchived, queryArgs);
 	const [resolvedSnapshot, setResolvedSnapshot] =
 		React.useState<TrashQuerySnapshot | null>(null);
@@ -136,6 +148,9 @@ export function NavTrash({
 							activeWorkspaceId={activeWorkspaceId}
 							archivedNotes={archivedNotes ?? currentSnapshot?.notes}
 							archivedChats={archivedChats ?? currentSnapshot?.chats}
+							hasMoreArchivedNotes={hasMoreArchivedNotes}
+							isLoadingMoreArchivedNotes={isLoadingMoreArchivedNotes}
+							onLoadMoreArchivedNotes={loadMoreArchivedNotes}
 						/>
 					</PopoverContent>
 				</Popover>
@@ -148,10 +163,16 @@ function TrashPopoverContent({
 	activeWorkspaceId,
 	archivedNotes,
 	archivedChats,
+	hasMoreArchivedNotes,
+	isLoadingMoreArchivedNotes,
+	onLoadMoreArchivedNotes,
 }: {
 	activeWorkspaceId: Id<"workspaces"> | null;
-	archivedNotes: Array<Doc<"notes">> | undefined;
+	archivedNotes: NoteListItem[] | undefined;
 	archivedChats: Array<Doc<"chats">> | undefined;
+	hasMoreArchivedNotes: boolean;
+	isLoadingMoreArchivedNotes: boolean;
+	onLoadMoreArchivedNotes: () => void;
 }) {
 	const [search, setSearch] = React.useState("");
 	const [deleteNoteId, setDeleteNoteId] = React.useState<Id<"notes"> | null>(
@@ -160,32 +181,23 @@ function TrashPopoverContent({
 	const [deleteChatId, setDeleteChatId] = React.useState<string | null>(null);
 	const restore = useMutation(api.notes.restore).withOptimisticUpdate(
 		(localStore, args) => {
-			const archived = localStore.getQuery(api.notes.listArchived, {
-				workspaceId: args.workspaceId,
-			});
-			const note = archived?.find((item) => item._id === args.id) ?? null;
-
-			if (archived !== undefined) {
-				localStore.setQuery(
-					api.notes.listArchived,
-					{ workspaceId: args.workspaceId },
-					archived.filter((item) => item._id !== args.id),
-				);
-			}
+			const note =
+				removeOptimisticNotes(localStore, {
+					archived: true,
+					shouldRemove: (item) => item._id === args.id,
+					workspaceId: args.workspaceId,
+				})[0] ?? null;
 
 			if (note) {
-				const active =
-					localStore.getQuery(api.notes.list, {
-						workspaceId: args.workspaceId,
-					}) ?? [];
-				localStore.setQuery(api.notes.list, { workspaceId: args.workspaceId }, [
-					{
+				insertOptimisticNote(localStore, {
+					archived: false,
+					note: {
 						...note,
 						isArchived: false,
 						archivedAt: undefined,
 					},
-					...active.filter((item) => item._id !== args.id),
-				]);
+					workspaceId: args.workspaceId,
+				});
 			}
 
 			restoreNoteChats(localStore, args.workspaceId, args.id);
@@ -193,16 +205,11 @@ function TrashPopoverContent({
 	);
 	const remove = useMutation(api.notes.remove).withOptimisticUpdate(
 		(localStore, args) => {
-			const archived = localStore.getQuery(api.notes.listArchived, {
+			removeOptimisticNotes(localStore, {
+				archived: true,
+				shouldRemove: (item) => item._id === args.id,
 				workspaceId: args.workspaceId,
 			});
-			if (archived !== undefined) {
-				localStore.setQuery(
-					api.notes.listArchived,
-					{ workspaceId: args.workspaceId },
-					archived.filter((item) => item._id !== args.id),
-				);
-			}
 
 			removeNoteChats(localStore, args.workspaceId, args.id);
 		},
@@ -406,6 +413,19 @@ function TrashPopoverContent({
 				</ScrollArea>
 
 				<div className="border-t px-3 py-2">
+					{hasMoreArchivedNotes ? (
+						<Button
+							type="button"
+							variant="ghost"
+							className="mb-1 w-full"
+							disabled={isLoadingMoreArchivedNotes}
+							onClick={onLoadMoreArchivedNotes}
+						>
+							{isLoadingMoreArchivedNotes
+								? "Loading notes..."
+								: "Load more notes"}
+						</Button>
+					) : null}
 					<div className="text-xs text-muted-foreground">
 						Items older than 30 days will be automatically deleted.
 					</div>

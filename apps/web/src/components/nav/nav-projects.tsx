@@ -67,6 +67,11 @@ import {
 	useSidebarProjectIdentityEditor,
 } from "@/components/projects/use-project-identity-editor";
 import { logError } from "@/lib/logger";
+import {
+	insertOptimisticNote,
+	mapOptimisticNoteCatalogs,
+	removeOptimisticNotes,
+} from "@/lib/optimistic-note-catalog";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
 import { optimisticUpdateProjectList } from "@/lib/optimistic-projects";
 import { api } from "../../../../../convex/_generated/api";
@@ -1348,31 +1353,18 @@ function optimisticClearProjectFromNotes(
 	workspaceId: Id<"workspaces">,
 	projectId: Id<"projects">,
 ) {
-	const noteQueries = [api.notes.list, api.notes.listArchived] as const;
 	const matchedNoteIds = new Set<Id<"notes">>();
-
-	for (const noteQuery of noteQueries) {
-		const notes = localStore.getQuery(noteQuery, { workspaceId });
-		if (notes === undefined) {
-			continue;
+	mapOptimisticNoteCatalogs(localStore, workspaceId, (note) => {
+		if (note.projectId !== projectId) {
+			return note;
 		}
 
-		localStore.setQuery(
-			noteQuery,
-			{ workspaceId },
-			notes.map((note) => {
-				if (note.projectId !== projectId) {
-					return note;
-				}
-
-				matchedNoteIds.add(note._id);
-				return {
-					...note,
-					projectId: undefined,
-				};
-			}),
-		);
-	}
+		matchedNoteIds.add(note._id);
+		return {
+			...note,
+			projectId: undefined,
+		};
+	});
 
 	for (const noteId of matchedNoteIds) {
 		const activeNote = localStore.getQuery(api.notes.get, {
@@ -1411,34 +1403,24 @@ function optimisticMoveProjectNotesToTrash(
 	workspaceId: Id<"workspaces">,
 	projectId: Id<"projects">,
 ) {
-	const notes = localStore.getQuery(api.notes.list, { workspaceId });
-	if (notes === undefined) {
-		return;
-	}
-
 	const timestamp = Date.now();
-	const projectNotes = notes.filter((note) => note.projectId === projectId);
-	const projectNoteIds = new Set(projectNotes.map((note) => note._id));
-
-	localStore.setQuery(
-		api.notes.list,
-		{ workspaceId },
-		notes.filter((note) => !projectNoteIds.has(note._id)),
-	);
-
-	const archivedNotes = localStore.getQuery(api.notes.listArchived, {
+	const projectNotes = removeOptimisticNotes(localStore, {
+		archived: false,
+		shouldRemove: (note) => note.projectId === projectId,
 		workspaceId,
 	});
-	if (archivedNotes !== undefined) {
-		localStore.setQuery(api.notes.listArchived, { workspaceId }, [
-			...projectNotes.map((note) => ({
+	const projectNoteIds = new Set(projectNotes.map((note) => note._id));
+	for (const note of projectNotes) {
+		insertOptimisticNote(localStore, {
+			archived: true,
+			note: {
 				...note,
 				isArchived: true,
 				archivedAt: timestamp,
 				updatedAt: timestamp,
-			})),
-			...archivedNotes,
-		]);
+			},
+			workspaceId,
+		});
 	}
 
 	for (const note of projectNotes) {

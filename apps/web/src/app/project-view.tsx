@@ -11,7 +11,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { FileText } from "lucide-react";
 import * as React from "react";
 import type { AppUser } from "@/app/app-types";
-import { NotesList } from "@/app/note-list";
+import { NoteCatalogLoadMore, NotesList } from "@/app/note-list";
 import { PageTitle } from "@/components/layout/page-title";
 import { ProjectDescriptionEditor } from "@/components/projects/project-description-editor";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -26,6 +26,9 @@ export function ProjectView({
 	onOpenNote,
 	onNoteTrashed,
 	onCreateNote,
+	hasMoreNotes,
+	isLoadingMoreNotes,
+	onLoadMoreNotes,
 }: {
 	project: Doc<"projects">;
 	notes: Array<Doc<"notes">> | undefined;
@@ -36,6 +39,9 @@ export function ProjectView({
 	onOpenNote: (noteId: Id<"notes">) => void;
 	onNoteTrashed: (noteId: Id<"notes">) => void;
 	onCreateNote: () => void;
+	hasMoreNotes: boolean;
+	isLoadingMoreNotes: boolean;
+	onLoadMoreNotes: () => void;
 }) {
 	const projectNotes = React.useMemo(() => {
 		if (!notes) {
@@ -72,22 +78,40 @@ export function ProjectView({
 								onOpenNote={onOpenNote}
 								onNoteTrashed={onNoteTrashed}
 							/>
+							<NoteCatalogLoadMore
+								hasMore={hasMoreNotes}
+								isLoading={isLoadingMoreNotes}
+								onLoadMore={onLoadMoreNotes}
+							/>
 						</div>
 					) : (
-						<Empty className="md:max-w-xl">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<FileText className="size-4" />
-								</EmptyMedia>
-								<EmptyTitle>No notes in this project</EmptyTitle>
-								<EmptyDescription>
-									Create a note to add it here
-								</EmptyDescription>
-							</EmptyHeader>
-							<EmptyContent>
-								<Button onClick={onCreateNote}>Quick note</Button>
-							</EmptyContent>
-						</Empty>
+						<div className="w-full md:max-w-xl">
+							<Empty>
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<FileText className="size-4" />
+									</EmptyMedia>
+									<EmptyTitle>
+										{hasMoreNotes
+											? "No project notes loaded"
+											: "No notes in this project"}
+									</EmptyTitle>
+									<EmptyDescription>
+										{hasMoreNotes
+											? "Load older notes to keep looking"
+											: "Create a note to add it here"}
+									</EmptyDescription>
+								</EmptyHeader>
+								<EmptyContent>
+									<Button onClick={onCreateNote}>Quick note</Button>
+								</EmptyContent>
+							</Empty>
+							<NoteCatalogLoadMore
+								hasMore={hasMoreNotes}
+								isLoading={isLoadingMoreNotes}
+								onLoadMore={onLoadMoreNotes}
+							/>
+						</div>
 					)}
 				</section>
 			</div>

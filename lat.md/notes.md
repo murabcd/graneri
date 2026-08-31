@@ -127,10 +127,14 @@ for the note. [[apps/web/src/components/note/note-comments-sheet.tsx]] skips bot
 the thread list and expanded-thread reads while the discussion surface is
 closed, so editor navigation does not subscribe to hidden comment data.
 
-The active note list is also the sole source for shared-note navigation.
-[[apps/web/src/app/authenticated-app-shell.tsx]] derives public notes from that
-already-subscribed result instead of issuing a second full-note query for a
-strict subset.
+The active note catalog is one cursor-paginated metadata subscription shared by
+the sidebar, collection views, chat source picker, and automation picker.
+[[apps/web/src/app/authenticated-app-shell.tsx]] loads 30 recent rows initially,
+derives public notes from the loaded pages, and exposes explicit load-more
+controls instead of issuing duplicate catalog queries or imposing a fixed
+workspace ceiling. Opening a note still reads exactly one canonical document,
+while workspace-wide content lookup remains owned by the indexed server search
+path rather than the loaded renderer pages.
 
 ## Transcript-driven generation
 

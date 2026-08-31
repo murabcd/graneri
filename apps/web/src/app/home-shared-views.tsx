@@ -24,7 +24,7 @@ import {
 	isUpcomingEventLive,
 	isUpcomingEventToday,
 } from "@/app/location";
-import { NotesList } from "@/app/note-list";
+import { NoteCatalogLoadMore, NotesList } from "@/app/note-list";
 import { PageTitle } from "@/components/layout/page-title";
 import { useRecordingNoteId } from "@/hooks/use-transcription-session";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -80,6 +80,9 @@ export function HomeView({
 	onCreateNote,
 	onOpenCalendarEventNote,
 	onOpenCalendarSettings,
+	hasMoreNotes,
+	isLoadingMoreNotes,
+	onLoadMoreNotes,
 }: {
 	currentDate: Date;
 	currentDayOfMonth: number;
@@ -102,6 +105,9 @@ export function HomeView({
 		},
 	) => Promise<void> | void;
 	onOpenCalendarSettings: () => void;
+	hasMoreNotes: boolean;
+	isLoadingMoreNotes: boolean;
+	onLoadMoreNotes: () => void;
 }) {
 	const visibleUpcomingEvents = [];
 	for (const event of upcomingCalendar.events) {
@@ -289,15 +295,22 @@ export function HomeView({
 							aria-hidden="true"
 						/>
 					) : notes.length > 0 ? (
-						<NotesList
-							notes={notes}
-							activeNoteId={currentNoteId}
-							activeNoteTitle={currentNoteTitle}
-							recordingNoteId={recordingNoteId}
-							currentUser={currentUser}
-							onOpenNote={onOpenNote}
-							onNoteTrashed={onNoteTrashed}
-						/>
+						<div className="w-full md:max-w-xl">
+							<NotesList
+								notes={notes}
+								activeNoteId={currentNoteId}
+								activeNoteTitle={currentNoteTitle}
+								recordingNoteId={recordingNoteId}
+								currentUser={currentUser}
+								onOpenNote={onOpenNote}
+								onNoteTrashed={onNoteTrashed}
+							/>
+							<NoteCatalogLoadMore
+								hasMore={hasMoreNotes}
+								isLoading={isLoadingMoreNotes}
+								onLoadMore={onLoadMoreNotes}
+							/>
+						</div>
 					) : (
 						<Empty className="md:max-w-xl">
 							<EmptyHeader>
@@ -328,6 +341,9 @@ export function SharedView({
 	isDesktopMac,
 	onOpenNote,
 	onNoteTrashed,
+	hasMoreNotes,
+	isLoadingMoreNotes,
+	onLoadMoreNotes,
 }: {
 	sharedNotes: Array<Doc<"notes">> | undefined;
 	currentNoteId: Id<"notes"> | null;
@@ -336,6 +352,9 @@ export function SharedView({
 	isDesktopMac: boolean;
 	onOpenNote: (noteId: Id<"notes">) => void;
 	onNoteTrashed: (noteId: Id<"notes">) => void;
+	hasMoreNotes: boolean;
+	isLoadingMoreNotes: boolean;
+	onLoadMoreNotes: () => void;
 }) {
 	return (
 		<div
@@ -359,6 +378,7 @@ export function SharedView({
 								{sharedNotes !== undefined ? (
 									<p className="text-5xl leading-none tracking-tight tabular-nums">
 										{sharedNotes.length}
+										{hasMoreNotes ? "+" : ""}
 									</p>
 								) : null}
 							</div>
@@ -376,19 +396,37 @@ export function SharedView({
 								onOpenNote={onOpenNote}
 								onNoteTrashed={onNoteTrashed}
 							/>
+							<NoteCatalogLoadMore
+								hasMore={hasMoreNotes}
+								isLoading={isLoadingMoreNotes}
+								onLoadMore={onLoadMoreNotes}
+							/>
 						</div>
 					) : (
-						<Empty className="md:max-w-xl">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<UsersRound className="size-4" />
-								</EmptyMedia>
-								<EmptyTitle>No shared notes yet</EmptyTitle>
-								<EmptyDescription>
-									Share a note with someone else
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
+						<div className="w-full md:max-w-xl">
+							<Empty>
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<UsersRound className="size-4" />
+									</EmptyMedia>
+									<EmptyTitle>
+										{hasMoreNotes
+											? "No shared notes loaded"
+											: "No shared notes yet"}
+									</EmptyTitle>
+									<EmptyDescription>
+										{hasMoreNotes
+											? "Load older notes to keep looking"
+											: "Share a note with someone else"}
+									</EmptyDescription>
+								</EmptyHeader>
+							</Empty>
+							<NoteCatalogLoadMore
+								hasMore={hasMoreNotes}
+								isLoading={isLoadingMoreNotes}
+								onLoadMore={onLoadMoreNotes}
+							/>
+						</div>
 					)}
 				</section>
 			</div>

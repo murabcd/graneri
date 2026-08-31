@@ -60,6 +60,9 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 	activeStreamingChatIds?: ReadonlySet<string>;
 	automations: AutomationListItem[] | undefined;
 	notes: Array<Doc<"notes">> | undefined;
+	hasMoreNotes: boolean;
+	isLoadingMoreNotes: boolean;
+	onLoadMoreNotes: () => void;
 	sharedNotes: Array<Doc<"notes">> | undefined;
 	projectAppearancePreview: ProjectAppearancePreview | null;
 	onWorkspaceSelect: (workspaceId: Id<"workspaces">) => void;
@@ -513,6 +516,9 @@ export function AppSidebar({
 	activeStreamingChatIds,
 	automations,
 	notes,
+	hasMoreNotes,
+	isLoadingMoreNotes,
+	onLoadMoreNotes,
 	sharedNotes,
 	projectAppearancePreview,
 	onWorkspaceSelect,
@@ -609,6 +615,9 @@ export function AppSidebar({
 					inboxOpen={inboxOpen}
 					navItems={model.navItems}
 					notes={notes}
+					hasMoreNotes={hasMoreNotes}
+					isLoadingMoreNotes={isLoadingMoreNotes}
+					onLoadMoreNotes={onLoadMoreNotes}
 					onCreateNote={model.handleCreateNote}
 					onCreateNoteInsideProject={onCreateNoteInsideProject}
 					onInboxOpenChange={model.handleInboxOpenChange}
@@ -812,6 +821,9 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	inboxOpen,
 	navItems,
 	notes,
+	hasMoreNotes,
+	isLoadingMoreNotes,
+	onLoadMoreNotes,
 	onCreateNote,
 	onCreateNoteInsideProject,
 	onInboxOpenChange,
@@ -838,6 +850,9 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 	inboxOpen: boolean;
 	navItems: SidebarNavigationItem[];
 	notes: Array<Doc<"notes">> | undefined;
+	hasMoreNotes: boolean;
+	isLoadingMoreNotes: boolean;
+	onLoadMoreNotes: () => void;
 	onCreateNote: () => void;
 	onCreateNoteInsideProject: (projectId: Id<"projects">) => void;
 	onInboxOpenChange: (open: boolean) => void;
@@ -903,6 +918,9 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 				onNoteTitleChange={onNoteTitleChange}
 				onNoteTrashed={onNoteTrashed}
 				onCreateNote={onCreateNote}
+				hasMoreNotes={hasMoreNotes}
+				isLoadingMoreNotes={isLoadingMoreNotes}
+				onLoadMoreNotes={onLoadMoreNotes}
 			/>
 			<NavProjects
 				projects={projects}

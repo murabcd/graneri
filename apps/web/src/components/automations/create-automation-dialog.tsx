@@ -57,6 +57,7 @@ import {
 import { defaultChatModel, findChatModel } from "@/lib/ai/models";
 import { getAppSourceLabel } from "@/lib/chat-source-display";
 import { getNoteDisplayTitle } from "@/lib/note-title";
+import type { NoteListItem } from "@/lib/note-types";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
 import {
 	getMentionPickerAnchorRect,
@@ -92,6 +93,7 @@ export type CreateAutomationDialogProps = {
 	projectSelectionEnabled?: boolean;
 	initialAutomation?: AutomationDraft | null;
 	initialTitle?: string;
+	notes: NoteListItem[] | undefined;
 };
 
 type AutomationDialogState = {
@@ -203,12 +205,9 @@ function useCreateAutomationDialogElement({
 	projectSelectionEnabled = true,
 	initialAutomation = null,
 	initialTitle = "",
+	notes,
 }: CreateAutomationDialogProps) {
 	const activeWorkspaceId = useActiveWorkspaceId();
-	const notes = useQuery(
-		api.notes.list,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
-	);
 	const projects = useQuery(
 		api.projects.list,
 		activeWorkspaceId && projectSelectionEnabled

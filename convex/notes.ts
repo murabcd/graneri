@@ -1,3 +1,7 @@
+import {
+	paginationOptsValidator,
+	paginationResultValidator,
+} from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -153,23 +157,6 @@ const toNoteWithDocument = async (
 		searchableText: document.searchableText,
 	};
 };
-
-const getNotesByArchivedState = async (
-	ctx: QueryCtx,
-	ownerTokenIdentifier: string,
-	workspaceId: Id<"workspaces">,
-	isArchived: boolean,
-) =>
-	await ctx.db
-		.query("notes")
-		.withIndex("by_owner_ws_arch_upd", (q) =>
-			q
-				.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-				.eq("workspaceId", workspaceId)
-				.eq("isArchived", isArchived),
-		)
-		.order("desc")
-		.take(100);
 
 export const ensureOwnedNote = ({
 	note,
@@ -448,38 +435,48 @@ export const getLatest = query({
 export const list = query({
 	args: {
 		workspaceId: v.id("workspaces"),
+		paginationOpts: paginationOptsValidator,
 	},
-	returns: v.array(noteMetadataValidator),
+	returns: paginationResultValidator(noteMetadataValidator),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const notes = await getNotesByArchivedState(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			false,
-		);
+		const result = await ctx.db
+			.query("notes")
+			.withIndex("by_owner_ws_arch_upd", (q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("isArchived", false),
+			)
+			.order("desc")
+			.paginate(args.paginationOpts);
 
-		return notes.map(toNoteMetadata);
+		return { ...result, page: result.page.map(toNoteMetadata) };
 	},
 });
 
 export const listArchived = query({
 	args: {
 		workspaceId: v.id("workspaces"),
+		paginationOpts: paginationOptsValidator,
 	},
-	returns: v.array(noteMetadataValidator),
+	returns: paginationResultValidator(noteMetadataValidator),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const notes = await getNotesByArchivedState(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			true,
-		);
+		const result = await ctx.db
+			.query("notes")
+			.withIndex("by_owner_ws_arch_upd", (q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId)
+					.eq("isArchived", true),
+			)
+			.order("desc")
+			.paginate(args.paginationOpts);
 
-		return notes.map(toNoteMetadata);
+		return { ...result, page: result.page.map(toNoteMetadata) };
 	},
 });
 

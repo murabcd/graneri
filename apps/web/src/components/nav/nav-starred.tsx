@@ -27,6 +27,7 @@ import { NoteActionsMenu } from "@/components/note/note-actions-menu";
 import { getChatId } from "@/lib/chat";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
+import { mapOptimisticNoteCatalogs } from "@/lib/optimistic-note-catalog";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 
@@ -78,17 +79,20 @@ const toStarredReorderItem = (item: StarredItem): StarredReorderItem => {
 	return { kind: "project", id: item.project._id };
 };
 
-const updateStarredSortOrder = <TDoc extends { _id: string }>(
-	docs: Array<TDoc>,
+const getStarredOrderById = (
 	items: Array<StarredReorderItem>,
 	kind: StarredReorderItem["kind"],
-) => {
-	const orderById = new Map(
+) =>
+	new Map(
 		items.flatMap((item, index) =>
 			item.kind === kind ? [[String(item.id), index] as const] : [],
 		),
 	);
 
+const updateStarredSortOrder = <TDoc extends { _id: string }>(
+	docs: Array<TDoc>,
+	orderById: ReadonlyMap<string, number>,
+) => {
 	return docs.map((doc) => {
 		const starredSortOrder = orderById.get(String(doc._id));
 		return starredSortOrder === undefined ? doc : { ...doc, starredSortOrder };
@@ -100,21 +104,20 @@ const optimisticUpdateStarredOrder = (
 	workspaceId: Id<"workspaces">,
 	items: Array<StarredReorderItem>,
 ) => {
-	const notes = localStore.getQuery(api.notes.list, { workspaceId });
-	if (notes) {
-		localStore.setQuery(
-			api.notes.list,
-			{ workspaceId },
-			updateStarredSortOrder(notes, items, "note"),
-		);
-	}
+	const noteOrderById = getStarredOrderById(items, "note");
+	mapOptimisticNoteCatalogs(localStore, workspaceId, (note) => {
+		const starredSortOrder = noteOrderById.get(String(note._id));
+		return starredSortOrder === undefined
+			? note
+			: { ...note, starredSortOrder };
+	});
 
 	const chats = localStore.getQuery(api.chats.list, { workspaceId });
 	if (chats) {
 		localStore.setQuery(
 			api.chats.list,
 			{ workspaceId },
-			updateStarredSortOrder(chats, items, "chat"),
+			updateStarredSortOrder(chats, getStarredOrderById(items, "chat")),
 		);
 	}
 
@@ -123,7 +126,7 @@ const optimisticUpdateStarredOrder = (
 		localStore.setQuery(
 			api.projects.list,
 			{ workspaceId },
-			updateStarredSortOrder(projects, items, "project"),
+			updateStarredSortOrder(projects, getStarredOrderById(items, "project")),
 		);
 	}
 };

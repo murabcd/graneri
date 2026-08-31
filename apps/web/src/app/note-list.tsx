@@ -1,3 +1,4 @@
+import { Button } from "@workspace/ui/components/button";
 import { Icons } from "@workspace/ui/components/icons";
 import { cn } from "@workspace/ui/lib/utils";
 import { FileText, MoreHorizontal } from "lucide-react";
@@ -12,6 +13,32 @@ import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 const SidebarRecordingSpinner = Icons.sidebarRecordingSpinner;
+
+export function NoteCatalogLoadMore({
+	hasMore,
+	isLoading,
+	onLoadMore,
+}: {
+	hasMore: boolean;
+	isLoading: boolean;
+	onLoadMore: () => void;
+}) {
+	if (!hasMore) {
+		return null;
+	}
+
+	return (
+		<Button
+			type="button"
+			variant="ghost"
+			className="mt-4 w-full"
+			disabled={isLoading}
+			onClick={onLoadMore}
+		>
+			{isLoading ? "Loading notes..." : "Load more notes"}
+		</Button>
+	);
+}
 
 const getNoteAuthorDisplayName = (note: Doc<"notes">, currentUser: AppUser) =>
 	note.authorName?.trim() || currentUser.name;

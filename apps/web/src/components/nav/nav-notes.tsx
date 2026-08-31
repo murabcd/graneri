@@ -45,6 +45,9 @@ export function NavNotes({
 	onNoteTitleChange,
 	onNoteTrashed,
 	onCreateNote,
+	hasMoreNotes: hasMoreCatalogNotes,
+	isLoadingMoreNotes,
+	onLoadMoreNotes,
 }: {
 	notes: Array<Doc<"notes">> | undefined;
 	currentNoteId: Id<"notes"> | null;
@@ -55,6 +58,9 @@ export function NavNotes({
 	onNoteTitleChange?: (title: string) => void;
 	onNoteTrashed?: (noteId: Id<"notes">) => void;
 	onCreateNote: () => void;
+	hasMoreNotes: boolean;
+	isLoadingMoreNotes: boolean;
+	onLoadMoreNotes: () => void;
 }) {
 	const [filtersOpen, setFiltersOpen] = React.useState(false);
 	const [sortBy, setSortBy] = React.useState<NoteListSort>("updated");
@@ -68,7 +74,7 @@ export function NavNotes({
 	);
 	const sortOptions = getSidebarSortOptions(sortBy);
 	const [showAllNotes, setShowAllNotes] = React.useState(false);
-	const hasMoreNotes = visibleNoteSource.length > MAX_VISIBLE_NOTES;
+	const hasMoreLoadedNotes = visibleNoteSource.length > MAX_VISIBLE_NOTES;
 	const visibleNotes = showAllNotes
 		? visibleNoteSource
 		: visibleNoteSource.slice(0, MAX_VISIBLE_NOTES);
@@ -81,7 +87,7 @@ export function NavNotes({
 			actionClassName={`${SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME} ${SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME} ${filtersOpen ? SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME : ""}`}
 			actions={
 				<div className="flex items-center gap-0.5">
-					{showAllNotes && hasMoreNotes ? (
+					{showAllNotes && hasMoreLoadedNotes ? (
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<button
@@ -149,16 +155,31 @@ export function NavNotes({
 						onNoteTitleChange={onNoteTitleChange}
 						onNoteTrashed={onNoteTrashed}
 					/>
-					{hasMoreNotes ? (
+					{hasMoreLoadedNotes || hasMoreCatalogNotes ? (
 						<SidebarMenu>
 							<SidebarMenuItem>
 								<SidebarMenuButton
 									className="text-sidebar-foreground/70 hover:bg-transparent hover:text-inherit"
-									onClick={() => setShowAllNotes((prev) => !prev)}
+									disabled={isLoadingMoreNotes}
+									onClick={() => {
+										if (!showAllNotes && hasMoreLoadedNotes) {
+											setShowAllNotes(true);
+											return;
+										}
+										if (hasMoreCatalogNotes) {
+											onLoadMoreNotes();
+											return;
+										}
+										setShowAllNotes(false);
+									}}
 								>
 									<MoreHorizontal />
 									<span className="text-xs">
-										{showAllNotes ? "Show less" : "Show more"}
+										{isLoadingMoreNotes
+											? "Loading..."
+											: showAllNotes && !hasMoreCatalogNotes
+												? "Show less"
+												: "Show more"}
 									</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>

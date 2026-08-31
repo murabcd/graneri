@@ -1,4 +1,5 @@
 import type { OptimisticLocalStore } from "convex/browser";
+import { mapOptimisticNoteCatalogs } from "@/lib/optimistic-note-catalog";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 
@@ -10,20 +11,9 @@ export function optimisticPatchNote(
 	noteId: Id<"notes">,
 	patchNote: NotePatcher,
 ) {
-	const noteQueries = [api.notes.list, api.notes.listArchived] as const;
-
-	for (const noteQuery of noteQueries) {
-		const notes = localStore.getQuery(noteQuery, { workspaceId });
-		if (notes === undefined) {
-			continue;
-		}
-
-		localStore.setQuery(
-			noteQuery,
-			{ workspaceId },
-			notes.map((note) => (note._id === noteId ? patchNote(note) : note)),
-		);
-	}
+	mapOptimisticNoteCatalogs(localStore, workspaceId, (note) =>
+		note._id === noteId ? patchNote(note) : note,
+	);
 
 	const activeNote = localStore.getQuery(api.notes.get, {
 		workspaceId,

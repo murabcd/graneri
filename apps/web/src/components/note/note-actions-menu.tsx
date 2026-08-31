@@ -64,6 +64,11 @@ import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
 import { logError } from "@/lib/logger";
 import type { NoteListItem } from "@/lib/note-types";
+import {
+	insertOptimisticNote,
+	mapOptimisticNoteCatalogs,
+	removeOptimisticNotes,
+} from "@/lib/optimistic-note-catalog";
 import { archiveNoteChats } from "@/lib/optimistic-note-chats";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
@@ -87,9 +92,6 @@ const ensureNoteHasRequiredFields = (
 	visibility: note.visibility ?? "private",
 });
 
-const normalizeNoteList = (notes: NoteListItem[]) =>
-	notes.map((note) => ensureNoteHasRequiredFields(note));
-
 function useNoteStarControl({ noteId }: { noteId: Id<"notes"> }) {
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const [isUpdatingStar, setIsUpdatingStar] = React.useState(false);
@@ -99,32 +101,12 @@ function useNoteStarControl({ noteId }: { noteId: Id<"notes"> }) {
 	);
 	const toggleStar = useMutation(api.notes.toggleStar).withOptimisticUpdate(
 		(localStore, args) => {
-			const updateNoteList = (
-				notes: NoteListItem[] | undefined,
-				query: typeof api.notes.list,
-			) => {
-				if (notes === undefined) {
-					return;
-				}
-
-				localStore.setQuery(
-					query,
-					{ workspaceId: args.workspaceId },
-					notes.map((item) =>
-						item._id === args.id
-							? ensureNoteHasRequiredFields(item, {
-									isStarred: !(item.isStarred ?? false),
-								})
-							: ensureNoteHasRequiredFields(item),
-					),
-				);
-			};
-
-			updateNoteList(
-				localStore.getQuery(api.notes.list, {
-					workspaceId: args.workspaceId,
-				}),
-				api.notes.list,
+			mapOptimisticNoteCatalogs(localStore, args.workspaceId, (item) =>
+				item._id === args.id
+					? ensureNoteHasRequiredFields(item, {
+							isStarred: !(item.isStarred ?? false),
+						})
+					: ensureNoteHasRequiredFields(item),
 			);
 			const activeNote = localStore.getQuery(api.notes.get, {
 				workspaceId: args.workspaceId,
@@ -298,15 +280,23 @@ function useNoteActionsMenu({
 	);
 	const moveToTrash = useMutation(api.notes.moveToTrash).withOptimisticUpdate(
 		(localStore, args) => {
-			const notes = localStore.getQuery(api.notes.list, {
+			const note = removeOptimisticNotes(localStore, {
+				archived: false,
+				shouldRemove: (item) => item._id === args.id,
 				workspaceId: args.workspaceId,
-			});
-			if (notes !== undefined) {
-				localStore.setQuery(
-					api.notes.list,
-					{ workspaceId: args.workspaceId },
-					normalizeNoteList(notes.filter((item) => item._id !== args.id)),
-				);
+			})[0];
+			if (note) {
+				const timestamp = Date.now();
+				insertOptimisticNote(localStore, {
+					archived: true,
+					note: ensureNoteHasRequiredFields({
+						...note,
+						archivedAt: timestamp,
+						isArchived: true,
+						updatedAt: timestamp,
+					}),
+					workspaceId: args.workspaceId,
+				});
 			}
 
 			const activeNote = localStore.getQuery(api.notes.get, {

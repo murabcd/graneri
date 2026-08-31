@@ -1,20 +1,25 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
-import { getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { NavTrash } from "../src/components/nav/nav-trash";
 import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
 
-const { useMutationMock, useQueryMock } = vi.hoisted(() => ({
-	useMutationMock: vi.fn(),
-	useQueryMock: vi.fn(),
-}));
+const { useMutationMock, usePaginatedQueryMock, useQueryMock } = vi.hoisted(
+	() => ({
+		useMutationMock: vi.fn(),
+		usePaginatedQueryMock: vi.fn(),
+		useQueryMock: vi.fn(),
+	}),
+);
 
 vi.mock("convex/react", () => ({
 	useMutation: useMutationMock,
+	usePaginatedQuery: usePaginatedQueryMock,
 	useQuery: useQueryMock,
+	insertAtTop: vi.fn(),
+	optimisticallyUpdateValueInPaginatedQuery: vi.fn(),
 }));
 
 const primaryWorkspaceId = "workspace-1" as Id<"workspaces">;
@@ -48,14 +53,20 @@ describe("NavTrash", () => {
 
 	beforeEach(() => {
 		queriesPending = false;
-		useQueryMock.mockImplementation((reference: never, args: unknown) => {
+		usePaginatedQueryMock.mockImplementation(
+			(_reference: never, args: unknown) => ({
+				loadMore: vi.fn(),
+				results: args === "skip" || queriesPending ? [] : archivedNotes,
+				status:
+					args === "skip" || queriesPending ? "LoadingFirstPage" : "Exhausted",
+			}),
+		);
+		useQueryMock.mockImplementation((_reference: never, args: unknown) => {
 			if (args === "skip" || queriesPending) {
 				return undefined;
 			}
 
-			return getFunctionName(reference) === "notes:listArchived"
-				? archivedNotes
-				: archivedChats;
+			return archivedChats;
 		});
 		useMutationMock.mockImplementation(() => {
 			const mutation = vi.fn();

@@ -70,8 +70,11 @@ test("note catalog omits bodies while search joins canonical document text", asy
 		preview: "Reliability roadmap details",
 	});
 
-	const catalog = await asOwner.query(api.notes.list, { workspaceId });
-	const catalogNote = catalog.find((note) => note._id === bodyMatchId);
+	const catalog = await asOwner.query(api.notes.list, {
+		workspaceId,
+		paginationOpts: { cursor: null, numItems: 30 },
+	});
+	const catalogNote = catalog.page.find((note) => note._id === bodyMatchId);
 	expect(catalogNote).not.toHaveProperty("content");
 	expect(catalogNote).not.toHaveProperty("searchableText");
 	await expect(
@@ -91,4 +94,47 @@ test("note catalog omits bodies while search joins canonical document text", asy
 	).resolves.toEqual([
 		expect.objectContaining({ id: titleMatchId, title: "Roadmap decisions" }),
 	]);
+});
+
+test("note catalog returns stable cursor pages in descending update order", async () => {
+	const t = convexTest(schema, modules);
+	const asOwner = t.withIdentity(ownerIdentity);
+	const workspaceId = await t.run(async (ctx) =>
+		ctx.db.insert("workspaces", {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			name: "Workspace",
+			normalizedName: "workspace",
+			createdAt: 1_000,
+			updatedAt: 1_000,
+		}),
+	);
+	await t.run(async (ctx) => {
+		for (const [index, title] of ["Oldest", "Middle", "Newest"].entries()) {
+			await insertTestNote(ctx, {
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				workspaceId,
+				starredSortOrder: 0,
+				title,
+				searchableText: title,
+				visibility: "private",
+				isArchived: false,
+				createdAt: 2_000 + index,
+				updatedAt: 2_000 + index,
+			});
+		}
+	});
+
+	const firstPage = await asOwner.query(api.notes.list, {
+		workspaceId,
+		paginationOpts: { cursor: null, numItems: 2 },
+	});
+	expect(firstPage.page.map((note) => note.title)).toEqual(["Newest", "Middle"]);
+	expect(firstPage.isDone).toBe(false);
+
+	const secondPage = await asOwner.query(api.notes.list, {
+		workspaceId,
+		paginationOpts: { cursor: firstPage.continueCursor, numItems: 2 },
+	});
+	expect(secondPage.page.map((note) => note.title)).toEqual(["Oldest"]);
+	expect(secondPage.isDone).toBe(true);
 });

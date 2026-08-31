@@ -22,7 +22,7 @@ import { ChatPageEntry } from "@/components/chat/chat-page-entry";
 import type { NoteEditorActionsStore } from "@/components/note/note-editor-actions-store";
 import { NotePageEntry } from "@/components/note/note-page-entry";
 import type { ChatPluginPrefill } from "@/lib/chat-plugin-prefill";
-import type { NoteRecord } from "@/lib/note-types";
+import type { NoteListItem, NoteRecord } from "@/lib/note-types";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 type NoteListViewProps = {
@@ -32,6 +32,9 @@ type NoteListViewProps = {
 	user: AppUser;
 	onOpenNote: (noteId: Id<"notes">) => void;
 	onNoteTrashed: (noteId: Id<"notes">) => void;
+	hasMoreNotes: boolean;
+	isLoadingMoreNotes: boolean;
+	onLoadMoreNotes: () => void;
 };
 
 export type AppShellContentView =
@@ -45,7 +48,7 @@ export type AppShellContentView =
 			currentMonthLabel: string;
 			currentWeekdayLabel: string;
 			upcomingCalendar: UpcomingCalendarState;
-			notes: Array<Doc<"notes">> | undefined;
+			notes: NoteListItem[] | undefined;
 			onCreateNote: () => void;
 			onOpenCalendarEventNote: (
 				event: UpcomingCalendarEvent,
@@ -67,11 +70,11 @@ export type AppShellContentView =
 	  }
 	| ({
 			kind: "shared";
-			sharedNotes: Array<Doc<"notes">> | undefined;
+			sharedNotes: NoteListItem[] | undefined;
 	  } & NoteListViewProps)
 	| ({
 			kind: "project";
-			notes: Array<Doc<"notes">> | undefined;
+			notes: NoteListItem[] | undefined;
 			project: Doc<"projects">;
 			onCreateNote: () => void;
 	  } & NoteListViewProps)
@@ -108,6 +111,7 @@ export type AppShellContentView =
 			chatComposerId: string;
 			chatPluginPrefill: ChatPluginPrefill | null;
 			chats: Array<Doc<"chats">> | undefined;
+			notes: NoteListItem[] | undefined;
 			currentChatId: string | null;
 			isDesktopMac: boolean;
 			onChatPersisted?: (chatId: string) => void;
@@ -161,6 +165,9 @@ export const AppShellContent = React.memo(function AppShellContent({
 					onCreateNote={view.onCreateNote}
 					onOpenCalendarEventNote={view.onOpenCalendarEventNote}
 					onOpenCalendarSettings={view.onOpenCalendarSettings}
+					hasMoreNotes={view.hasMoreNotes}
+					isLoadingMoreNotes={view.isLoadingMoreNotes}
+					onLoadMoreNotes={view.onLoadMoreNotes}
 				/>
 			</ContentScrollArea>
 		);
@@ -188,6 +195,9 @@ export const AppShellContent = React.memo(function AppShellContent({
 					isDesktopMac={view.isDesktopMac}
 					onOpenNote={view.onOpenNote}
 					onNoteTrashed={view.onNoteTrashed}
+					hasMoreNotes={view.hasMoreNotes}
+					isLoadingMoreNotes={view.isLoadingMoreNotes}
+					onLoadMoreNotes={view.onLoadMoreNotes}
 				/>
 			</ContentScrollArea>
 		);
@@ -206,6 +216,9 @@ export const AppShellContent = React.memo(function AppShellContent({
 					onOpenNote={view.onOpenNote}
 					onNoteTrashed={view.onNoteTrashed}
 					onCreateNote={view.onCreateNote}
+					hasMoreNotes={view.hasMoreNotes}
+					isLoadingMoreNotes={view.isLoadingMoreNotes}
+					onLoadMoreNotes={view.onLoadMoreNotes}
 				/>
 			</ContentScrollArea>
 		);
@@ -263,6 +276,7 @@ export const AppShellContent = React.memo(function AppShellContent({
 			pluginPrefill={view.chatPluginPrefill}
 			onChatPersisted={view.onChatPersisted}
 			chats={view.chats ?? []}
+			notes={view.notes}
 			isChatsLoading={view.chats === undefined}
 			activeStreamingChatIds={view.activeStreamingChatIds}
 			activeChatId={view.currentChatId}

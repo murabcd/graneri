@@ -76,6 +76,7 @@ import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
 import { getCssHighlightApi } from "@/lib/css-highlights";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
+import type { NoteListItem } from "@/lib/note-types";
 import {
 	DEFAULT_SEND_SHORTCUT,
 	shouldSendFromKeyboardEvent,
@@ -92,6 +93,7 @@ export type ChatPageProps = {
 	pluginPrefill?: ChatPluginPrefill | null;
 	onChatPersisted?: (chatId: string) => void;
 	chats: Array<Doc<"chats">>;
+	notes: NoteListItem[] | undefined;
 	isChatsLoading: boolean;
 	activeStreamingChatIds: ReadonlySet<string>;
 	activeChatId: string | null;
@@ -199,6 +201,7 @@ const useChatPageController = ({
 	onChatPersisted: chatPersistedCallback,
 	onOpenChat,
 	chats,
+	notes,
 	isChatsLoading,
 	activeStreamingChatIds,
 }: Pick<
@@ -208,6 +211,7 @@ const useChatPageController = ({
 	| "onChatPersisted"
 	| "onOpenChat"
 	| "chats"
+	| "notes"
 	| "isChatsLoading"
 	| "activeStreamingChatIds"
 >) => {
@@ -267,10 +271,6 @@ const useChatPageController = ({
 		reconcileLocalCapabilitySession,
 		revokeLocalCapability,
 	} = useLocalCapabilitySession(localCapabilityScope);
-	const notes = useQuery(
-		api.notes.list,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
-	);
 	const recipeData = useQuery(
 		api.recipes.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -840,6 +840,7 @@ export function ChatPage({
 	pluginPrefill,
 	onChatPersisted,
 	chats,
+	notes,
 	isChatsLoading,
 	activeStreamingChatIds,
 	activeChatId,
@@ -860,6 +861,7 @@ export function ChatPage({
 		onOpenChat,
 		// Query results are inputs to render and stream reconciliation.
 		chats,
+		notes,
 		// Loading state is query-derived and controls render fallback only.
 		isChatsLoading,
 		// Parent stream registry is an external source consumed by the controller hook.
