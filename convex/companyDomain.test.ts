@@ -5,6 +5,7 @@ import {
 	getOrCreateCompany,
 	searchWorkspaceCompanies,
 } from "./companyDomain";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -71,12 +72,11 @@ test("company domain deletes a company only after its final note association", a
 			ownerTokenIdentifier,
 			workspaceId,
 		});
-		const noteId = await ctx.db.insert("notes", {
+		const noteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier,
 			workspaceId,
 			starredSortOrder: 0,
 			title: "Customer meeting",
-			content: "",
 			searchableText: "",
 			visibility: "private",
 			isArchived: false,

@@ -108,7 +108,6 @@ import type * as noteAttachmentReferences from "../noteAttachmentReferences.js";
 import type * as noteAttachmentUploads from "../noteAttachmentUploads.js";
 import type * as noteComments from "../noteComments.js";
 import type * as noteDocument from "../noteDocument.js";
-import type * as noteDocumentMigration from "../noteDocumentMigration.js";
 import type * as noteFileHttp from "../noteFileHttp.js";
 import type * as noteFromChat from "../noteFromChat.js";
 import type * as noteImageHttp from "../noteImageHttp.js";
@@ -253,7 +252,6 @@ declare const fullApi: ApiFromModules<{
   noteAttachmentUploads: typeof noteAttachmentUploads;
   noteComments: typeof noteComments;
   noteDocument: typeof noteDocument;
-  noteDocumentMigration: typeof noteDocumentMigration;
   noteFileHttp: typeof noteFileHttp;
   noteFromChat: typeof noteFromChat;
   noteImageHttp: typeof noteImageHttp;

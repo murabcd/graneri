@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -110,13 +111,12 @@ test("starred.reorder rejects oversized starred lists instead of partially reord
 		const ids = [];
 		for (let index = 0; index < 101; index += 1) {
 			ids.push(
-				await ctx.db.insert("notes", {
+				await insertTestNote(ctx, {
 					ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 					workspaceId,
 					isStarred: true,
 					starredSortOrder: index,
 					title: `Note ${index}`,
-					content: "",
 					searchableText: "",
 					visibility: "private",
 					isArchived: false,

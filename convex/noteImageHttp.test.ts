@@ -1,5 +1,6 @@
 import { convexTest } from "convex-test";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -52,7 +53,7 @@ const createNote = async () => {
 			createdAt: 1_000,
 			updatedAt: 1_000,
 		});
-		const noteId = await ctx.db.insert("notes", {
+		const noteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			isStarred: false,

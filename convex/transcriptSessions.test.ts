@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -27,12 +28,11 @@ const createNoteFixture = async () => {
 			updatedAt: 1_000,
 		});
 
-		return await ctx.db.insert("notes", {
+		return await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			starredSortOrder: 0,
 			title: "Note",
-			content: "Body",
 			searchableText: "Body",
 			visibility: "private",
 			isArchived: false,

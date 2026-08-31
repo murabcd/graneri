@@ -26,11 +26,9 @@ queries return metadata only; editor, sharing, chat-context, revision, and
 search readers explicitly load the canonical document they need. The document
 row also carries project and archive projections exclusively for its indexed
 full-text search path, and every metadata mutation updates those projections in
-the same transaction. [[convex/noteDocumentMigration.ts]] temporarily owns the
-bounded five-row cleanup that removes the superseded body fields from migrated
-note catalog rows. Product readers and writers have no compatibility fallback
-or dual-write path; after deployment cleanup is verified, the final narrow
-schema removes the optional legacy fields and migration entrypoint.
+the same transaction. Product readers and writers have no compatibility
+fallback or dual-write path; note catalog rows do not accept or store document
+bodies.
 
 ## Editor files and images
 

@@ -6,6 +6,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import { createQueuedRequestBodyJson } from "./assistantQueuedMessage.fixtures";
 import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -243,13 +244,12 @@ test("chat settings persist on creation and update as one record", async () => {
 test("note chats reject capabilities that their composer does not expose", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const noteId = await t.run(async (ctx) =>
-		ctx.db.insert("notes", {
+		insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId,
 			isStarred: false,
 			starredSortOrder: 1_000,
 			title: "Note",
-			content: JSON.stringify({ type: "doc", content: [] }),
 			searchableText: "",
 			visibility: "private",
 			isArchived: false,

@@ -8,10 +8,7 @@ const EMPTY_TEST_NOTE_DOCUMENT = JSON.stringify({
 	content: [{ type: "paragraph" }],
 });
 
-type TestNoteFields = Omit<
-	WithoutSystemFields<Doc<"notes">>,
-	"content" | "searchableText"
-> & {
+type TestNoteFields = WithoutSystemFields<Doc<"notes">> & {
 	content?: string;
 	searchableText?: string;
 };

@@ -3,6 +3,7 @@ import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -250,12 +251,11 @@ test("note retirement owns linked chat continuation and is idempotent", async ()
 	vi.useFakeTimers();
 	const { t, workspaceId } = await createWorkspace();
 	const { chatIds, noteId } = await t.run(async (ctx) => {
-		const noteId = await ctx.db.insert("notes", {
+		const noteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier,
 			workspaceId,
 			starredSortOrder: 0,
 			title: "Retired note",
-			content: "Body",
 			searchableText: "Body",
 			visibility: "private",
 			isArchived: true,

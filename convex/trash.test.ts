@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
+import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -51,12 +52,11 @@ test("trash cleanup removes expired archived items without touching recent trash
 			updatedAt: 2_000,
 		});
 
-		const expiredNoteId = await ctx.db.insert("notes", {
+		const expiredNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			starredSortOrder: 0,
 			title: "Expired note",
-			content: "Body",
 			searchableText: "Body",
 			visibility: "private",
 			isArchived: true,
@@ -161,12 +161,11 @@ test("trash cleanup removes expired archived items without touching recent trash
 			updatedAt: 5_000,
 		});
 
-		const recentNoteId = await ctx.db.insert("notes", {
+		const recentNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			starredSortOrder: 0,
 			title: "Recent note",
-			content: "Body",
 			searchableText: "Body",
 			visibility: "private",
 			isArchived: true,
@@ -174,12 +173,11 @@ test("trash cleanup removes expired archived items without touching recent trash
 			createdAt: 1_000,
 			updatedAt: 15_000,
 		});
-		const recentOldUpdatedNoteId = await ctx.db.insert("notes", {
+		const recentOldUpdatedNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			starredSortOrder: 0,
 			title: "Recently archived old note",
-			content: "Body",
 			searchableText: "Body",
 			visibility: "private",
 			isArchived: true,
@@ -187,12 +185,11 @@ test("trash cleanup removes expired archived items without touching recent trash
 			createdAt: 1_000,
 			updatedAt: 5_000,
 		});
-		const expiredRecentlyUpdatedNoteId = await ctx.db.insert("notes", {
+		const expiredRecentlyUpdatedNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: cleanupWorkspaceId,
 			starredSortOrder: 0,
 			title: "Expired recently updated note",
-			content: "Body",
 			searchableText: "Body",
 			visibility: "private",
 			isArchived: true,
@@ -283,12 +280,11 @@ test("trash cleanup removes expired archived items without touching recent trash
 			text: "Recent standalone message",
 			createdAt: 15_000,
 		});
-		const otherWorkspaceExpiredNoteId = await ctx.db.insert("notes", {
+		const otherWorkspaceExpiredNoteId = await insertTestNote(ctx, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: otherWorkspaceId,
 			starredSortOrder: 0,
 			title: "Other expired note",
-			content: "Body",
 			searchableText: "Body",
 			visibility: "private",
 			isArchived: true,

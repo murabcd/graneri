@@ -225,7 +225,6 @@ test("creating a note from an assistant response preserves its stored attachment
 	expect(storedNoteState.documentReferences).toMatchObject([
 		{ noteAttachmentId: attachment._id, revisionId: null },
 	]);
-	expect(storedNoteState.note?.content).toBeUndefined();
 	expect(JSON.parse(storedNoteState.document?.content ?? "{}")).toMatchObject({
 		type: "doc",
 		content: [
@@ -875,7 +874,6 @@ test("restoring the oldest retained revision preserves its images while pruning"
 		storage: await ctx.db.system.get(storageId),
 	}));
 
-	expect(stored.note?.content).toBeUndefined();
 	expect(stored.document?.content).toBe(imageContent);
 	expect(stored.image).not.toBeNull();
 	expect(stored.storage).not.toBeNull();
