@@ -42,7 +42,6 @@ const renderHistory = (activeChatId: string | null) =>
 				isChatsLoading={false}
 				activeChatId={activeChatId}
 				onOpenChat={vi.fn()}
-				onPrefetchChat={vi.fn()}
 				onMoveToTrash={vi.fn()}
 			/>
 		</ActiveWorkspaceProvider>,
