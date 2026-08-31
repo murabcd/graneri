@@ -8,8 +8,8 @@ import {
 import { copyChatMessageAttachmentsToNote } from "./noteAttachmentReferences";
 import {
 	appendNoteAttachments,
+	commitCurrentNoteDocument,
 	parseNoteDocument,
-	syncNoteDocumentState,
 } from "./noteDocument";
 import { insertNote } from "./noteRecords";
 
@@ -89,11 +89,12 @@ export const create = mutation({
 				parseNoteDocument(note.content),
 				attachments,
 			);
-			await syncNoteDocumentState({
+			await commitCurrentNoteDocument({
 				ctx,
 				note,
-				revisionId: null,
 				document,
+				searchableText: note.searchableText,
+				now,
 			});
 			await ctx.db.patch(noteId, { content: document.content });
 		}

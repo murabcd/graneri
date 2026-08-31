@@ -98,7 +98,7 @@ test("notes.save updates content without dropping existing metadata", async () =
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date("2026-04-10T18:00:00.000Z"));
 
-	const { asOwner, noteId, workspaceId } = await createWorkspaceAndNote();
+	const { asOwner, noteId, t, workspaceId } = await createWorkspaceAndNote();
 
 	const savedId = await asOwner.mutation(api.notes.save, {
 		workspaceId,
@@ -131,6 +131,18 @@ test("notes.save updates content without dropping existing metadata", async () =
 		isArchived: false,
 	});
 	expect(note?.updatedAt).toBe(Date.now());
+	const persistedDocument = await t.run((ctx) =>
+		ctx.db
+			.query("noteDocuments")
+			.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
+			.unique(),
+	);
+	expect(persistedDocument).toMatchObject({
+		noteId,
+		content: createTextDocument("new-content"),
+		searchableText: "new text",
+		updatedAt: Date.now(),
+	});
 });
 
 test("creating a note from an assistant response preserves its stored attachments", async () => {
@@ -181,6 +193,10 @@ test("creating a note from an assistant response preserves its stored attachment
 	});
 	const storedNoteState = await t.run(async (ctx) => ({
 		note: await ctx.db.get(noteId),
+		document: await ctx.db
+			.query("noteDocuments")
+			.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
+			.unique(),
 		attachments: await ctx.db
 			.query("noteAttachmentReferences")
 			.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
@@ -207,6 +223,7 @@ test("creating a note from an assistant response preserves its stored attachment
 	expect(storedNoteState.documentReferences).toMatchObject([
 		{ noteAttachmentId: attachment._id, revisionId: null },
 	]);
+	expect(storedNoteState.document?.content).toBe(storedNoteState.note?.content);
 	expect(JSON.parse(storedNoteState.note?.content ?? "{}")).toMatchObject({
 		type: "doc",
 		content: [
@@ -253,6 +270,14 @@ test("creating a note from an assistant response preserves its stored attachment
 				.collect(),
 		),
 	).toEqual([]);
+	expect(
+		await t.run((ctx) =>
+			ctx.db
+				.query("noteDocuments")
+				.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
+				.unique(),
+		),
+	).toBeNull();
 });
 
 test("notes.save rejects non-canonical content without changing note state", async () => {

@@ -2,7 +2,7 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import {
 	MAX_NOTE_ATTACHMENTS,
 	type NoteAttachmentAttributes,
@@ -95,6 +95,87 @@ export type ParsedNoteDocument = {
 	images: NoteImageReference[];
 	attachments: NoteAttachmentAttributes[];
 	commentAnchors: NoteCommentAnchor[];
+};
+
+export const getPersistedNoteDocument = async (
+	ctx: QueryCtx | MutationCtx,
+	noteId: Id<"notes">,
+) =>
+	await ctx.db
+		.query("noteDocuments")
+		.withIndex("by_noteId", (query) => query.eq("noteId", noteId))
+		.unique();
+
+export const writePersistedNoteDocument = async ({
+	ctx,
+	note,
+	document,
+	searchableText,
+	now,
+}: {
+	ctx: MutationCtx;
+	note: Doc<"notes">;
+	document: ParsedNoteDocument;
+	searchableText: string;
+	now: number;
+}) => {
+	const existing = await getPersistedNoteDocument(ctx, note._id);
+	if (existing) {
+		await ctx.db.patch(existing._id, {
+			content: document.content,
+			searchableText,
+			updatedAt: now,
+		});
+		return existing._id;
+	}
+
+	return await ctx.db.insert("noteDocuments", {
+		ownerTokenIdentifier: note.ownerTokenIdentifier,
+		workspaceId: note.workspaceId,
+		noteId: note._id,
+		content: document.content,
+		searchableText,
+		createdAt: note.createdAt,
+		updatedAt: now,
+	});
+};
+
+export const commitCurrentNoteDocument = async ({
+	ctx,
+	note,
+	document,
+	searchableText,
+	now,
+}: {
+	ctx: MutationCtx;
+	note: Doc<"notes">;
+	document: ParsedNoteDocument;
+	searchableText: string;
+	now: number;
+}) => {
+	await writePersistedNoteDocument({
+		ctx,
+		note,
+		document,
+		searchableText,
+		now,
+	});
+	await syncNoteDocumentState({
+		ctx,
+		note,
+		revisionId: null,
+		document,
+	});
+};
+
+export const removePersistedNoteDocument = async (
+	ctx: MutationCtx,
+	noteId: Id<"notes">,
+) => {
+	const document = await getPersistedNoteDocument(ctx, noteId);
+	if (document) {
+		await ctx.db.delete(document._id);
+	}
 };
 
 const invalidNoteDocument = (message: string): never => {

@@ -21,6 +21,16 @@ chat-response capture are explicit ingestion paths that convert to that format
 before saving; stored-content readers do not repair Markdown, malformed JSON,
 unowned images, or legacy document shapes.
 
+Persisted note bodies are moving from note catalog rows into one
+`noteDocuments` row per note through a widen-migrate-narrow rollout. During the
+widening deployment, [[convex/noteDocument.ts]] atomically mirrors every new or
+changed canonical document into the new table while
+[[convex/noteDocumentMigration.ts]] backfills existing notes in bounded batches
+of five. Readers remain on the old fields until both deployments have completed
+and the backfill is verified; the next deployment switches every reader to the
+new canonical row, and the final deployment removes the temporary mirror and
+migration entrypoint. No permanent dual-read or dual-write path is allowed.
+
 ## Editor files and images
 
 Open-source Tiptap extensions own document flow and image interaction while Graneri owns authenticated storage, file metadata, and custom node views.

@@ -387,6 +387,15 @@ export default defineSchema({
 			"updatedAt",
 		])
 		.index("by_shareId", ["shareId"]),
+	noteDocuments: defineTable({
+		ownerTokenIdentifier: v.string(),
+		workspaceId: v.id("workspaces"),
+		noteId: v.id("notes"),
+		content: v.string(),
+		searchableText: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_noteId", ["noteId"]),
 	people: defineTable({
 		ownerTokenIdentifier: v.string(),
 		workspaceId: v.id("workspaces"),

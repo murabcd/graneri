@@ -1,6 +1,9 @@
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { type parseNoteDocument, syncNoteDocumentState } from "./noteDocument";
+import {
+	commitCurrentNoteDocument,
+	type parseNoteDocument,
+} from "./noteDocument";
 
 export const insertNote = async (
 	ctx: MutationCtx,
@@ -39,11 +42,12 @@ export const insertNote = async (
 	if (!note) {
 		throw new Error("Inserted note is unavailable.");
 	}
-	await syncNoteDocumentState({
+	await commitCurrentNoteDocument({
 		ctx,
 		note,
-		revisionId: null,
 		document: args.document,
+		searchableText: args.searchableText,
+		now: args.now,
 	});
 
 	return noteId;

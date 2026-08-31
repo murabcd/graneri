@@ -23,7 +23,12 @@ import {
 	removeNoteAttachmentDocumentReferences,
 	removeNoteAttachments,
 } from "./noteAttachmentReferences";
-import { parseNoteDocument, syncNoteDocumentState } from "./noteDocument";
+import {
+	commitCurrentNoteDocument,
+	parseNoteDocument,
+	removePersistedNoteDocument,
+	syncNoteDocumentState,
+} from "./noteDocument";
 import {
 	removeAllNoteImages,
 	removeNoteImageReferences,
@@ -353,6 +358,7 @@ const deleteNoteCascade = async (ctx: MutationCtx, note: Doc<"notes">) => {
 	await removeAllNoteImages(ctx, note);
 	await removeNoteAttachments(ctx, note._id);
 	await removeCalendarNoteRelationships(ctx, note);
+	await removePersistedNoteDocument(ctx, note._id);
 	await ctx.db.delete(note._id);
 };
 
@@ -593,11 +599,12 @@ export const restoreVersion = mutation({
 			archivedAt: undefined,
 			updatedAt: now,
 		});
-		await syncNoteDocumentState({
+		await commitCurrentNoteDocument({
 			ctx,
 			note,
-			revisionId: null,
 			document: restoredDocument,
+			searchableText: revision.searchableText,
+			now,
 		});
 
 		return args.id;
@@ -839,11 +846,12 @@ export const save = mutation({
 				note: existing,
 				now,
 			});
-			await syncNoteDocumentState({
+			await commitCurrentNoteDocument({
 				ctx,
 				note: existing,
-				revisionId: null,
 				document,
+				searchableText: args.searchableText,
+				now,
 			});
 
 			await ctx.db.patch(args.id, {
