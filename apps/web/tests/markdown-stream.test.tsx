@@ -164,7 +164,7 @@ describe("MarkdownStream code blocks", () => {
 		).toBe(true);
 	});
 
-	it("highlights fenced code with the installed Codex Shiki themes", async () => {
+	it("highlights fenced code with the Graneri Shiki themes", async () => {
 		const { container } = render(
 			<TooltipProvider>
 				<MarkdownStream mode="static">{`\`\`\`tsx

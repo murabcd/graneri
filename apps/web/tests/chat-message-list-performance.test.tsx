@@ -322,7 +322,7 @@ describe("ChatMessageListContent performance", () => {
 		).toBe(1);
 	});
 
-	it("does not anchor note composer user messages above streaming replies", () => {
+	it("anchors note composer user messages above streaming replies", () => {
 		const userMessage = createTextMessage({
 			id: "user-1",
 			role: "user",
@@ -354,7 +354,7 @@ describe("ChatMessageListContent performance", () => {
 			document
 				.querySelector('[data-message-id="user-1"]')
 				?.getAttribute("data-scroll-anchor"),
-		).toBe("false");
+		).toBe("true");
 		expect(screen.getByText("Conversation compacting")).toBeTruthy();
 		expect(
 			document

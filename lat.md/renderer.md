@@ -78,7 +78,12 @@ submission, runs request-prepared effects, fences stale queued edits, and
 restores the captured draft and attachments on current-intent failure.
 Workspace and note composers retain their distinct recipe, mention, note
 context, panel, and focus adapters; they must not reconstruct this commit and
-rollback ordering.
+rollback ordering. Both surfaces retain the initiating user message as the
+turn's scroll anchor so a short exchange remains visible while longer streamed
+answers grow below it. The compact note chat restores its viewport from the
+latest turn anchor instead of opening at the transcript's bottom edge and keeps
+that anchor stable while the answer grows; readers can scroll or jump to the
+latest content explicitly.
 The shared `use-chat-turn-presentation.ts` module projects normalized messages
 into turn-level render snapshots and materializes one expanded, continuously
 timed `Working for N` activity group as soon as an active assistant turn exists.
@@ -100,7 +105,7 @@ disclosure and Streamdown renders each text part independently without owning
 event ordering, activity grouping, or transport buffering.
 Chat message rows do not render a per-message source-count disclosure; source
 metadata remains available through the chat summary. Streamdown code fences use
-the shared Codex-style renderer: their vertical height is content-driven, their
+the shared Graneri code renderer: their vertical height is content-driven, their
 outer width remains fixed to the message column, and a local control switches
 between wrapped lines and horizontal scrolling while locking the rendered frame
 to its pre-toggle dimensions. The
@@ -110,14 +115,14 @@ vertical inset, and the body starts after the header without Streamdown's sticky
 negative-margin overlap. Header actions use 32-pixel hit areas with 16-pixel
 Lucide glyphs and retain a balanced inset from the right edge. Fenced code is
 tokenized by Streamdown's lazy Shiki code plugin with the
-`Codex Light` and `Codex Dark` theme registrations extracted from the installed
-ChatGPT/Codex application; highlighting enriches the existing code body without
+`Graneri Light` and `Graneri Dark` theme registrations; highlighting enriches
+the existing code body without
 changing its content-driven geometry or wrap state.
 Streamdown remains the incremental Markdown parser, but it does not own chat
 typography: semantic element renderers remove its presentation classes and the
 shared Markdown root and
 [apps/web/src/styles/chat-markdown.css](../apps/web/src/styles/chat-markdown.css)
-apply the installed ChatGPT/Codex 14-pixel type scale,
+apply the shared Graneri 14-pixel type scale,
 1.625 line height, compact heading ratios, paragraph rhythm, list indentation,
 blockquote rail, and inline-code treatment. Its final top-level Markdown block
 always has zero bottom margin so element-specific prose rhythm cannot leak into

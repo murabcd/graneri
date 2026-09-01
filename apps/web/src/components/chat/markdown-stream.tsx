@@ -7,12 +7,12 @@ import {
 	MarkdownInlineCode,
 } from "@/components/chat/markdown-code-block";
 import {
-	codexDarkCodeTheme,
-	codexLightCodeTheme,
-} from "@/lib/codex-code-themes";
+	graneriDarkCodeTheme,
+	graneriLightCodeTheme,
+} from "@/lib/graneri-code-themes";
 
-const codexCodePlugin = createCodePlugin({
-	themes: [codexLightCodeTheme, codexDarkCodeTheme],
+const graneriCodePlugin = createCodePlugin({
+	themes: [graneriLightCodeTheme, graneriDarkCodeTheme],
 });
 
 const disabledLinkSafety = {
@@ -58,7 +58,7 @@ export function MarkdownStream({
 		[providedComponents],
 	);
 	const plugins = React.useMemo(
-		() => ({ ...providedPlugins, code: codexCodePlugin }),
+		() => ({ ...providedPlugins, code: graneriCodePlugin }),
 		[providedPlugins],
 	);
 

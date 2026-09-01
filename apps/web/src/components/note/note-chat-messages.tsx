@@ -117,7 +117,7 @@ export default function NoteChatMessages({
 	);
 
 	return (
-		<MessageScrollerProvider autoScroll>
+		<MessageScrollerProvider defaultScrollPosition="last-anchor">
 			<MessageScroller className="min-h-0 flex-1">
 				<MessageScrollerViewport
 					className={cn(
@@ -134,7 +134,6 @@ export default function NoteChatMessages({
 						isLoadingEarlierMessages={isLoadingEarlierMessages}
 						messages={chatMessages}
 						onLoadEarlierMessages={onLoadEarlierMessages}
-						scrollAnchorUserMessages={false}
 						turnClassName={getTurnClassName}
 						renderAssistantActions={renderAssistantActions}
 						renderUserActions={renderUserActions}

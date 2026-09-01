@@ -1966,7 +1966,7 @@ function NoteChatHeader({
 							<Plus className="size-4" />
 						</Button>
 					</TooltipTrigger>
-					<TooltipContent align="end">New chat</TooltipContent>
+					<TooltipContent>New chat</TooltipContent>
 				</Tooltip>
 
 				<DropdownMenu>
@@ -1983,7 +1983,7 @@ function NoteChatHeader({
 								</Button>
 							</DropdownMenuTrigger>
 						</TooltipTrigger>
-						<TooltipContent align="end">Switch chat mode</TooltipContent>
+						<TooltipContent>Switch chat mode</TooltipContent>
 					</Tooltip>
 					<DropdownMenuContent
 						align="end"
@@ -2036,7 +2036,7 @@ function NoteChatHeader({
 							<Minus className="size-4" />
 						</Button>
 					</TooltipTrigger>
-					<TooltipContent align="end">Hide chat</TooltipContent>
+					<TooltipContent>Hide chat</TooltipContent>
 				</Tooltip>
 			</div>
 		</CardHeader>
