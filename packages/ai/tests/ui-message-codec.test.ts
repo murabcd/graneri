@@ -44,6 +44,43 @@ describe("UI message codec", () => {
 		});
 	});
 
+	it("preserves OpenAI text phases across durable storage", async () => {
+		const stored = encodeUiMessage({
+			createId: () => "generated",
+			message: {
+				id: "message-phases",
+				role: "assistant",
+				parts: [
+					{
+						type: "text",
+						text: "I’ll inspect the current files.",
+						providerMetadata: {
+							openai: { itemId: "commentary-1", phase: "commentary" },
+						},
+					},
+					{
+						type: "text",
+						text: "The implementation is verified.",
+						providerMetadata: {
+							openai: { itemId: "final-1", phase: "final_answer" },
+						},
+					},
+				],
+			},
+		});
+
+		await expect(decodeStoredUiMessage(stored)).resolves.toMatchObject({
+			parts: [
+				{
+					providerMetadata: { openai: { phase: "commentary" } },
+				},
+				{
+					providerMetadata: { openai: { phase: "final_answer" } },
+				},
+			],
+		});
+	});
+
 	it("classifies malformed JSON and invalid shapes", () => {
 		expect(() => parseUiMessagePartsJson("{")).toThrow(
 			"UI message parts must be valid JSON.",

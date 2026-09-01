@@ -1,28 +1,19 @@
-import { Button } from "@workspace/ui/components/button";
 import {
 	MessageScroller,
 	MessageScrollerButton,
 	MessageScrollerProvider,
 	MessageScrollerViewport,
 } from "@workspace/ui/components/message-scroller";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
-import {
-	Copy,
-	GitBranch,
-	PenLine,
-	Plus,
-	RotateCcw,
-	Trash2,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
+import {
+	AssistantMessageActions,
+	MessageActionButton,
+	UserMessageActions,
+} from "@/components/chat/message-actions";
 import {
 	type ChatCompactionActivity,
 	type ChatHistoryMarkerState,
@@ -84,31 +75,41 @@ export default function NoteChatMessages({
 	const getTurnClassName = React.useCallback(() => "flex flex-col gap-3", []);
 	const renderAssistantActions = React.useCallback(
 		({
-			displayText,
 			isStreamingAssistantMessage,
 			message,
+			text,
 			timestamp,
 		}: ChatMessageActionContext) => (
-			<NoteAssistantMessageActions
-				disableAddToNote={disableAddToNote}
-				displayText={displayText}
+			<AssistantMessageActions
 				isStreaming={isStreamingAssistantMessage}
 				messageId={message.id}
-				onAddMessageToNote={onAddMessageToNote}
 				onForkMessage={onForkMessage}
 				onRegenerateMessage={onRegenerateMessage}
+				text={text}
 				timestamp={timestamp}
+				additionalAction={
+					<NoteAddToNoteButton
+						disabled={disableAddToNote}
+						onAddMessageToNote={onAddMessageToNote}
+						text={text}
+					/>
+				}
 			/>
 		),
 		[disableAddToNote, onAddMessageToNote, onForkMessage, onRegenerateMessage],
 	);
 	const renderUserActions = React.useCallback(
-		({ displayText, message, timestamp }: ChatMessageActionContext) => (
-			<NoteUserMessageActions
-				displayText={displayText}
-				messageId={message.id}
-				onDeleteMessage={onDeleteMessage}
-				onEditMessage={onEditMessage}
+		({ message, text, timestamp }: ChatMessageActionContext) => (
+			<UserMessageActions
+				copyText={text || undefined}
+				onDeleteMessage={
+					onDeleteMessage ? () => onDeleteMessage(message.id) : undefined
+				}
+				onEditMessage={
+					onEditMessage && text
+						? () => onEditMessage(message.id, text)
+						: undefined
+				}
 				timestamp={timestamp}
 			/>
 		),
@@ -129,14 +130,11 @@ export default function NoteChatMessages({
 						error={chatError}
 						hasEarlierMessages={hasEarlierMessages}
 						historyMarkerState={historyMarkerState}
-						includeSources={false}
 						isLoading={isChatLoading}
 						isLoadingEarlierMessages={isLoadingEarlierMessages}
-						messageStackClassName="gap-2"
 						messages={chatMessages}
 						onLoadEarlierMessages={onLoadEarlierMessages}
 						scrollAnchorUserMessages={false}
-						textContainerClassName=""
 						turnClassName={getTurnClassName}
 						renderAssistantActions={renderAssistantActions}
 						renderUserActions={renderUserActions}
@@ -154,196 +152,30 @@ export default function NoteChatMessages({
 	);
 }
 
-function NoteAssistantMessageActions({
-	disableAddToNote,
-	displayText,
-	isStreaming,
-	messageId,
-	onAddMessageToNote,
-	onForkMessage,
-	onRegenerateMessage,
-	timestamp,
-}: {
-	disableAddToNote: boolean;
-	displayText: string;
-	isStreaming: boolean;
-	messageId: string;
-	onAddMessageToNote?: (text: string) => Promise<void> | void;
-	onForkMessage?: (messageId: string) => void;
-	onRegenerateMessage?: (messageId: string) => void;
-	timestamp: string | null;
-}) {
-	return (
-		<div
-			className={cn("flex items-center gap-1", CHAT_ACTIONS_VISIBILITY_CLASS)}
-		>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						className="size-7 text-muted-foreground hover:text-foreground"
-						aria-label="Regenerate"
-						disabled={!onRegenerateMessage}
-						onClick={() => onRegenerateMessage?.(messageId)}
-					>
-						<RotateCcw className="size-3.5" />
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent>Regenerate</TooltipContent>
-			</Tooltip>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						className="size-7 text-muted-foreground hover:text-foreground"
-						aria-label="Fork chat"
-						disabled={!onForkMessage || isStreaming}
-						onClick={() => onForkMessage?.(messageId)}
-					>
-						<GitBranch className="size-3.5" />
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent>Fork chat</TooltipContent>
-			</Tooltip>
-			<NoteCopyMessageButton text={displayText} />
-			<NoteAddToNoteButton
-				disabled={disableAddToNote}
-				displayText={displayText}
-				onAddMessageToNote={onAddMessageToNote}
-			/>
-			{timestamp ? (
-				<span className="px-1 text-xs text-muted-foreground/70">
-					{timestamp}
-				</span>
-			) : null}
-		</div>
-	);
-}
-
-function NoteUserMessageActions({
-	displayText,
-	messageId,
-	onDeleteMessage,
-	onEditMessage,
-	timestamp,
-}: {
-	displayText: string;
-	messageId: string;
-	onDeleteMessage?: (messageId: string) => void;
-	onEditMessage?: (messageId: string, text: string) => void;
-	timestamp: string | null;
-}) {
-	return (
-		<div
-			className={cn("flex justify-end gap-1", CHAT_ACTIONS_VISIBILITY_CLASS)}
-		>
-			{timestamp ? (
-				<span className="self-center px-1 text-xs text-muted-foreground/70">
-					{timestamp}
-				</span>
-			) : null}
-			{displayText ? (
-				<>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								className="size-7 text-muted-foreground hover:text-foreground"
-								aria-label="Edit"
-								onClick={() => onEditMessage?.(messageId, displayText)}
-							>
-								<PenLine className="size-3.5" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>Edit</TooltipContent>
-					</Tooltip>
-					<NoteCopyMessageButton text={displayText} />
-				</>
-			) : null}
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						className="size-7 text-muted-foreground hover:text-foreground"
-						aria-label="Delete"
-						disabled={!onDeleteMessage}
-						onClick={() => onDeleteMessage?.(messageId)}
-					>
-						<Trash2 className="size-3.5" />
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent>Delete</TooltipContent>
-			</Tooltip>
-		</div>
-	);
-}
-
-function NoteCopyMessageButton({ text }: { text: string }) {
-	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					className="size-7 text-muted-foreground hover:text-foreground"
-					aria-label="Copy"
-					onClick={() => {
-						void navigator.clipboard
-							.writeText(text)
-							.then(() => toast.success("Copied"))
-							.catch(() => toast.error("Failed to copy"));
-					}}
-				>
-					<Copy className="size-3.5" />
-				</Button>
-			</TooltipTrigger>
-			<TooltipContent>Copy</TooltipContent>
-		</Tooltip>
-	);
-}
-
 function NoteAddToNoteButton({
 	disabled,
-	displayText,
 	onAddMessageToNote,
+	text,
 }: {
 	disabled: boolean;
-	displayText: string;
 	onAddMessageToNote?: (text: string) => Promise<void> | void;
+	text: string;
 }) {
 	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					className="size-7 text-muted-foreground hover:text-foreground"
-					disabled={disabled}
-					aria-label="Add to note"
-					onClick={() => {
-						if (!onAddMessageToNote) {
-							return;
-						}
+		<MessageActionButton
+			disabled={disabled || !onAddMessageToNote}
+			label="Add to note"
+			onClick={() => {
+				if (!onAddMessageToNote) {
+					return;
+				}
 
-						void Promise.resolve(onAddMessageToNote(displayText)).catch(() =>
-							toast.error("Failed to add"),
-						);
-					}}
-				>
-					<Plus className="size-3.5" />
-				</Button>
-			</TooltipTrigger>
-			<TooltipContent>Add to note</TooltipContent>
-		</Tooltip>
+				void Promise.resolve(onAddMessageToNote(text)).catch(() =>
+					toast.error("Failed to add"),
+				);
+			}}
+		>
+			<Plus className="size-3.5" />
+		</MessageActionButton>
 	);
 }

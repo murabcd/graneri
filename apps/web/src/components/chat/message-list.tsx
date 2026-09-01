@@ -23,12 +23,9 @@ import * as React from "react";
 import { FileAttachmentCards } from "@/components/ai-elements/file-attachment-cards";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 import {
-	Source,
-	Sources,
-	SourcesContent,
-	SourcesTrigger,
-} from "@/components/ai-elements/sources";
-import { ToolGroup } from "@/components/ai-elements/tools/tool-group";
+	AssistantActivityGroup,
+	AssistantWorkGroup,
+} from "@/components/ai-elements/tools/tool-group";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
@@ -39,26 +36,26 @@ import {
 } from "@/components/chat/message-layout";
 import { ChatRecipeReceipt } from "@/components/chat/recipe-receipt";
 import { useChatTurnPresentation } from "@/components/chat/use-chat-turn-presentation";
+import {
+	type AssistantActivityUnit,
+	getAssistantFinalText,
+} from "@/lib/assistant-turn-sequence";
 import { extractChatChartArtifacts } from "@/lib/chat-chart-artifact";
 import type { ChatMessageMention } from "@/lib/chat-composer-mentions";
 import {
 	extractMessageFileParts,
-	extractReasoningParts,
-	extractToolParts,
 	getChatMessageMetadata,
 	getChatText,
 } from "@/lib/chat-message";
-import { collectMessageSources } from "@/lib/chat-sources";
 import {
 	formatChatMessageTimestamp,
 	getChatMessageTimestamp,
 } from "@/lib/chat-timestamp";
 
 export type ChatMessageActionContext = {
-	displayText: string;
 	isStreamingAssistantMessage: boolean;
 	message: UIMessage;
-	messageText: string;
+	text: string;
 	timestamp: string | null;
 };
 
@@ -74,8 +71,8 @@ export type ChatCompactionActivity = {
 	status: "running" | "completed";
 };
 
-const EMPTY_MESSAGE_PARTS: UIMessage["parts"] = [];
 const EMPTY_CHART_ARTIFACTS: ReturnType<typeof extractChatChartArtifacts> = [];
+const EMPTY_ASSISTANT_ACTIVITY_UNITS: AssistantActivityUnit[] = [];
 const CHAT_HISTORY_LOADER_ID = "chat-history-loader";
 
 function ChatHistoryLoader({
@@ -119,10 +116,8 @@ export function ChatMessageListContent({
 	isLoading,
 	className,
 	turnClassName,
-	messageStackClassName,
 	textContainerClassName,
 	errorClassName,
-	includeSources = true,
 	hasEarlierMessages = false,
 	historyMarkerState,
 	compactionActivity,
@@ -139,10 +134,8 @@ export function ChatMessageListContent({
 	isLoading?: boolean;
 	className?: string;
 	turnClassName?: (isLastTurn: boolean) => string;
-	messageStackClassName?: string;
 	textContainerClassName?: string;
 	errorClassName?: string;
-	includeSources?: boolean;
 	hasEarlierMessages?: boolean;
 	historyMarkerState?: ChatHistoryMarkerState;
 	compactionActivity?: ChatCompactionActivity | null;
@@ -162,7 +155,6 @@ export function ChatMessageListContent({
 		showAssistantBreathingSpace,
 		turns,
 	} = useChatTurnPresentation({
-		includeSources,
 		isLoading,
 		messages,
 		scrollAnchorUserMessages,
@@ -217,10 +209,9 @@ export function ChatMessageListContent({
 									}
 								>
 									<ChatMessageListItem
-										assistantTurnWorkParts={
-											message.id === turn.firstAssistantMessageId &&
-											turn.showAssistantWorkSummary
-												? turn.assistantTurnWorkParts
+										assistantTurnActivityUnits={
+											message.id === turn.firstAssistantMessageId
+												? turn.assistantTurnActivityUnits
 												: undefined
 										}
 										assistantTurnWorkStatus={turn.assistantTurnWorkStatus}
@@ -228,12 +219,13 @@ export function ChatMessageListContent({
 											turn.assistantTurnStartedAt ?? undefined
 										}
 										assistantTurnDurationMs={turn.assistantTurnDurationMs}
-										hasAssistantWorkInTurn={turn.hasAssistantWorkInTurn}
+										showAssistantWorkGroup={
+											message.id === turn.firstAssistantMessageId &&
+											turn.showAssistantWorkGroup
+										}
 										message={message}
-										includeSources={includeSources}
 										isLoading={isLoading}
 										lastMessageId={lastMessageId}
-										messageStackClassName={messageStackClassName}
 										renderAssistantActions={renderAssistantActions}
 										renderUserActions={renderUserActions}
 										onOpenMention={onOpenMention}
@@ -297,61 +289,48 @@ function ConversationCompactionActivity({
 }
 
 const ChatMessageListItem = React.memo(function ChatMessageListItem({
-	assistantTurnWorkParts,
+	assistantTurnActivityUnits,
 	assistantTurnWorkStatus,
 	assistantTurnStartedAt,
 	assistantTurnDurationMs,
-	hasAssistantWorkInTurn,
 	message,
-	includeSources,
 	isLoading,
 	lastMessageId,
-	messageStackClassName,
 	renderAssistantActions,
 	renderUserActions,
 	onOpenMention,
 	streamingMessageIds,
+	showAssistantWorkGroup,
 	textContainerClassName,
 }: {
-	assistantTurnWorkParts?: UIMessage["parts"];
+	assistantTurnActivityUnits?: AssistantActivityUnit[];
 	assistantTurnWorkStatus: "streaming" | "ready";
 	assistantTurnStartedAt?: number;
 	assistantTurnDurationMs?: number;
-	hasAssistantWorkInTurn: boolean;
 	message: UIMessage;
-	includeSources: boolean;
 	isLoading?: boolean;
 	lastMessageId?: string;
-	messageStackClassName?: string;
 	renderAssistantActions?: (
 		context: ChatMessageActionContext,
 	) => React.ReactNode;
 	renderUserActions?: (context: ChatMessageActionContext) => React.ReactNode;
 	onOpenMention?: (noteId: string) => void;
 	streamingMessageIds: ReadonlySet<string>;
+	showAssistantWorkGroup: boolean;
 	textContainerClassName?: string;
 }) {
 	const fileParts = extractMessageFileParts(message);
-	const toolParts =
-		message.role === "assistant"
-			? filterSupersededChartToolFailures(extractToolParts(message))
-			: EMPTY_MESSAGE_PARTS;
 	const chartArtifacts =
 		message.role === "assistant"
 			? extractChatChartArtifacts(message)
 			: EMPTY_CHART_ARTIFACTS;
-	const reasoningParts =
-		message.role === "assistant"
-			? extractReasoningParts(message)
-			: EMPTY_MESSAGE_PARTS;
 	const metadata = getChatMessageMetadata(message);
 	const selectedRecipe = metadata?.recipe ?? null;
-	const messageText = metadata?.recipeOnly ? "" : getChatText(message);
-	const displayText = messageText;
-	const messageSources =
-		includeSources && message.role === "assistant"
-			? collectMessageSources(message)
-			: [];
+	const displayText = metadata?.recipeOnly
+		? ""
+		: message.role === "assistant"
+			? getAssistantFinalText(message)
+			: getChatText(message);
 	const isInterruptedAssistantMessage =
 		message.role === "assistant" &&
 		(metadata?.interrupted === true || streamingMessageIds.has(message.id));
@@ -362,31 +341,26 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 			message.id === lastMessageId,
 	);
 	const isEmpty = displayText.length === 0;
-	const showThinkingPlaceholder = Boolean(
-		isStreamingAssistantMessage && isEmpty && !hasAssistantWorkInTurn,
-	);
+	const hasAssistantActivity = Boolean(assistantTurnActivityUnits?.length);
 	const timestamp = formatChatMessageTimestamp(
 		getChatMessageTimestamp(message),
 	);
 
 	if (
 		isEmpty &&
-		assistantTurnWorkParts === undefined &&
+		!hasAssistantActivity &&
 		fileParts.length === 0 &&
 		chartArtifacts.length === 0 &&
-		reasoningParts.length === 0 &&
-		toolParts.length === 0 &&
 		!selectedRecipe &&
-		!isStreamingAssistantMessage
+		!showAssistantWorkGroup
 	) {
 		return null;
 	}
 
 	const actionContext = {
-		displayText,
 		isStreamingAssistantMessage,
 		message,
-		messageText,
+		text: displayText,
 		timestamp,
 	};
 
@@ -398,21 +372,32 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 			<MessageContent
 				className={cn(
 					message.role === "user" ? "items-end" : "items-start",
-					CHAT_MESSAGE_MAX_WIDTH_CLASS,
-					messageStackClassName,
+					message.role === "assistant"
+						? "w-[85%]"
+						: CHAT_MESSAGE_MAX_WIDTH_CLASS,
 				)}
 			>
 				{selectedRecipe ? <ChatRecipeReceipt recipe={selectedRecipe} /> : null}
 				{message.role === "user" ? (
 					<FileAttachmentCards align="end" files={fileParts} />
 				) : null}
-				{assistantTurnWorkParts ? (
-					<ToolGroup
-						parts={assistantTurnWorkParts}
-						chatStatus={assistantTurnWorkStatus}
+				{showAssistantWorkGroup ? (
+					<AssistantWorkGroup
+						hasActivity={hasAssistantActivity}
+						status={assistantTurnWorkStatus}
 						startedAt={assistantTurnStartedAt}
 						totalDurationMs={assistantTurnDurationMs}
-					/>
+					>
+						<AssistantActivitySequence
+							units={
+								assistantTurnActivityUnits ?? EMPTY_ASSISTANT_ACTIVITY_UNITS
+							}
+							chatStatus={assistantTurnWorkStatus}
+							isInterrupted={isInterruptedAssistantMessage}
+							isStreaming={assistantTurnWorkStatus === "streaming"}
+							textContainerClassName={textContainerClassName}
+						/>
+					</AssistantWorkGroup>
 				) : null}
 				<ChatChartArtifacts charts={chartArtifacts} />
 				<ChatMessageText
@@ -422,7 +407,6 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 					mentionPositions={metadata?.mentionPositions}
 					onOpenMention={onOpenMention}
 					role={message.role}
-					showThinkingPlaceholder={showThinkingPlaceholder}
 					textContainerClassName={textContainerClassName}
 				/>
 				{message.role === "assistant" ? (
@@ -435,17 +419,73 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 				{message.role === "user" && (!isEmpty || selectedRecipe)
 					? renderUserActions?.(actionContext)
 					: null}
-				{messageSources.length > 0 ? (
-					<MessageSources messageId={message.id} sources={messageSources} />
-				) : null}
 			</MessageContent>
 		</Message>
 	);
 });
 
-const filterSupersededChartToolFailures = (
-	parts: ReturnType<typeof extractToolParts>,
-) => {
+const AssistantActivitySequence = React.memo(
+	function AssistantActivitySequence({
+		chatStatus,
+		isInterrupted,
+		isStreaming,
+		textContainerClassName,
+		units,
+	}: {
+		chatStatus: "streaming" | "ready";
+		isInterrupted: boolean;
+		isStreaming: boolean;
+		textContainerClassName?: string;
+		units: AssistantActivityUnit[];
+	}) {
+		if (units.length === 0) {
+			return null;
+		}
+
+		return (
+			<div className="flex w-full flex-col gap-3">
+				{units.map((unit) =>
+					unit.kind === "commentary" ? (
+						<div
+							key={`${unit.messageId}:commentary:${unit.sourceIndex}`}
+							className={cn(
+								"w-full min-w-0 max-w-full",
+								textContainerClassName,
+							)}
+						>
+							<Bubble
+								align="start"
+								variant="ghost"
+								className="w-auto max-w-full self-stretch"
+							>
+								<BubbleContent className={ASSISTANT_CHAT_CONTENT_CLASS}>
+									<CollapsibleMessageContent
+										messageRole="assistant"
+										text={unit.part.text}
+										isAnimating={
+											isStreaming &&
+											!isInterrupted &&
+											unit.part.state !== "done"
+										}
+										mode={isStreaming || isInterrupted ? "streaming" : "static"}
+									/>
+								</BubbleContent>
+							</Bubble>
+						</div>
+					) : (
+						<AssistantActivityGroup
+							key={`${unit.messageId}:activity:${unit.sourceIndex}`}
+							chatStatus={chatStatus}
+							parts={filterSupersededChartToolFailures(unit.parts)}
+						/>
+					),
+				)}
+			</div>
+		);
+	},
+);
+
+const filterSupersededChartToolFailures = (parts: UIMessage["parts"]) => {
 	const hasSuccessfulChart = parts.some(
 		(part) =>
 			part.type === "tool-generate_chart" &&
@@ -472,7 +512,6 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	mentionPositions,
 	onOpenMention,
 	role,
-	showThinkingPlaceholder,
 	textContainerClassName,
 }: {
 	displayText: string;
@@ -481,32 +520,36 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	mentionPositions?: ChatMessageMention[];
 	onOpenMention?: (noteId: string) => void;
 	role: UIMessage["role"];
-	showThinkingPlaceholder: boolean;
 	textContainerClassName?: string;
 }) {
-	if (!displayText && !showThinkingPlaceholder) {
+	if (!displayText) {
 		return null;
 	}
 	return (
-		<div className={textContainerClassName}>
+		<div
+			className={cn(
+				"min-w-0 max-w-full",
+				role === "assistant" && "w-full",
+				textContainerClassName,
+			)}
+		>
 			<Bubble
 				align={role === "user" ? "end" : "start"}
 				variant={role === "user" ? "secondary" : "ghost"}
-				className="max-w-full"
+				className={cn(
+					role === "assistant"
+						? "w-auto max-w-full self-stretch"
+						: "max-w-full",
+				)}
 			>
 				<BubbleContent
 					className={cn(
 						role === "user"
 							? USER_CHAT_BUBBLE_CLASS
 							: ASSISTANT_CHAT_CONTENT_CLASS,
-						showThinkingPlaceholder && "text-muted-foreground",
 					)}
 				>
-					{showThinkingPlaceholder ? (
-						<div className="text-sm text-muted-foreground">
-							<ShimmerText>Thinking</ShimmerText>
-						</div>
-					) : role === "user" && mentionPositions?.length ? (
+					{role === "user" && mentionPositions?.length ? (
 						<UserMessageWithMentions
 							text={displayText}
 							mentionPositions={mentionPositions}
@@ -514,7 +557,7 @@ const ChatMessageText = React.memo(function ChatMessageText({
 						/>
 					) : (
 						<CollapsibleMessageContent
-							role={role}
+							messageRole={role}
 							text={displayText}
 							isAnimating={
 								isStreamingAssistantMessage && !isInterruptedAssistantMessage
@@ -630,27 +673,4 @@ function UserMessageWithMentions({
 	}
 
 	return <div className="whitespace-pre-wrap break-words">{parts}</div>;
-}
-
-function MessageSources({
-	messageId,
-	sources,
-}: {
-	messageId: string;
-	sources: ReturnType<typeof collectMessageSources>;
-}) {
-	return (
-		<Sources defaultOpen={false} className="mt-1">
-			<SourcesTrigger count={sources.length} />
-			<SourcesContent>
-				{sources.map((source) => (
-					<Source
-						key={`${messageId}:${source.href}`}
-						href={source.href}
-						title={source.title}
-					/>
-				))}
-			</SourcesContent>
-		</Sources>
-	);
 }

@@ -6,4 +6,5 @@ export const CHAT_ACTIONS_VISIBILITY_CLASS =
 export const USER_CHAT_BUBBLE_CLASS =
 	"rounded-lg bg-secondary px-3 py-2 text-sm leading-6 text-secondary-foreground";
 
-export const ASSISTANT_CHAT_CONTENT_CLASS = "text-sm leading-6 text-foreground";
+export const ASSISTANT_CHAT_CONTENT_CLASS =
+	"w-full min-w-0 text-sm leading-6 text-foreground";

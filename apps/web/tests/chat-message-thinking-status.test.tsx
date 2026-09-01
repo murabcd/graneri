@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
 	MessageScroller,
@@ -106,7 +106,8 @@ describe("chat message thinking status", () => {
 		vi.useRealTimers();
 	});
 
-	it("keeps one work disclosure open for the active turn and collapses it on completion", () => {
+	it("keeps active turn activity inside one expanded Working group and collapses it on completion", async () => {
+		const user = userEvent.setup();
 		const { rerender } = render(
 			renderMessageList({
 				isLoading: true,
@@ -114,8 +115,8 @@ describe("chat message thinking status", () => {
 			}),
 		);
 
-		expect(screen.getAllByText("Thinking")).toHaveLength(1);
-		expect(screen.queryByRole("button", { name: "Working" })).toBeNull();
+		expect(screen.getByText("Working")).not.toBeNull();
+		expect(screen.queryByText("Thinking")).toBeNull();
 
 		rerender(
 			renderMessageList({
@@ -129,6 +130,17 @@ describe("chat message thinking status", () => {
 				.getByRole("button", { name: /^Working/ })
 				.getAttribute("aria-expanded"),
 		).toBe("true");
+		expect(
+			screen.getByRole("button", { name: /^Working for / }),
+		).not.toBeNull();
+		expect(
+			screen.getByRole("button", { name: /^Working for / }).className,
+		).toContain("border-b");
+		expect(
+			screen
+				.getByRole("button", { name: /^Working for / })
+				.closest("[data-assistant-work-group]")?.className,
+		).not.toContain("border-b");
 		expect(screen.getAllByText("Thinking")).toHaveLength(1);
 
 		rerender(
@@ -140,9 +152,10 @@ describe("chat message thinking status", () => {
 
 		expect(
 			screen
-				.getByRole("button", { name: /^Working.*1 call/ })
+				.getByRole("button", { name: /^Working/ })
 				.getAttribute("aria-expanded"),
 		).toBe("true");
+		expect(screen.getByText("Explored local folder")).not.toBeNull();
 		expect(screen.queryByText("Thinking")).toBeNull();
 		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
 
@@ -154,10 +167,163 @@ describe("chat message thinking status", () => {
 
 		expect(
 			screen
-				.getByRole("button", { name: /^Worked.*1 call/ })
+				.getByRole("button", { name: /^Worked/ })
 				.getAttribute("aria-expanded"),
 		).toBe("false");
+		expect(screen.getByRole("button", { name: /^Worked for / })).not.toBeNull();
 		expect(screen.queryByRole("button", { name: "Thought" })).toBeNull();
+		await user.click(screen.getByRole("button", { name: /^Worked/ }));
+		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
+	});
+
+	it("preserves commentary and tool calls inside Worked in source order before the final answer", async () => {
+		const user = userEvent.setup();
+		const message: UIMessage = {
+			id: "assistant-ordered",
+			role: "assistant",
+			parts: [
+				{
+					type: "text",
+					text: "I’ll inspect the renderer.",
+					state: "done",
+					providerMetadata: {
+						openai: { itemId: "commentary-1", phase: "commentary" },
+					},
+				},
+				{
+					type: "tool-run_local_command",
+					toolCallId: "call-command",
+					state: "output-available",
+					input: { command: "rg renderer" },
+					output: { stdout: "message-list.tsx" },
+				},
+				{
+					type: "text",
+					text: "The renderer flattens the event stream.",
+					state: "done",
+					providerMetadata: {
+						openai: { itemId: "commentary-2", phase: "commentary" },
+					},
+				},
+				{
+					type: "tool-search_local_files",
+					toolCallId: "call-search",
+					state: "output-available",
+					input: { query: "message parts" },
+					output: { matches: [] },
+				},
+				{
+					type: "text",
+					text: "The ordered stream is now preserved.",
+					state: "done",
+					providerMetadata: {
+						openai: { itemId: "final-1", phase: "final_answer" },
+					},
+				},
+			],
+		};
+
+		render(renderMessageList({ messages: [message] }));
+		const worked = screen.getByRole("button", { name: /^Worked/ });
+		expect(worked.getAttribute("aria-expanded")).toBe("false");
+		expect(screen.queryByText("I’ll inspect the renderer.")).toBeNull();
+		expect(
+			screen.getByText("The ordered stream is now preserved."),
+		).not.toBeNull();
+		await user.click(worked);
+		expect(screen.getAllByText(/\d+ms$/)).toHaveLength(1);
+
+		const orderedNodes = [
+			worked,
+			screen.getByText("I’ll inspect the renderer."),
+			screen.getByText("Explored local folder"),
+			screen.getByText("The renderer flattens the event stream."),
+			screen.getByText("Searched local files"),
+			screen.getByText("The ordered stream is now preserved."),
+		];
+
+		for (let index = 0; index < orderedNodes.length - 1; index += 1) {
+			const currentNode = orderedNodes.at(index);
+			const nextNode = orderedNodes.at(index + 1);
+			if (!currentNode || !nextNode) {
+				throw new Error("Expected adjacent rendered activity nodes");
+			}
+			expect(currentNode.compareDocumentPosition(nextNode)).toBe(
+				Node.DOCUMENT_POSITION_FOLLOWING,
+			);
+		}
+	});
+
+	it("only appends activity while Working and collapses once when final_answer starts", async () => {
+		const user = userEvent.setup();
+		const activityParts: UIMessage["parts"] = [
+			{
+				type: "text",
+				text: "I’ll inspect the first source.",
+				state: "done",
+				providerMetadata: {
+					openai: { itemId: "commentary-append-1", phase: "commentary" },
+				},
+			},
+			{
+				type: "tool-run_local_command",
+				toolCallId: "call-append-1",
+				state: "output-available",
+				input: { command: "pwd" },
+				output: { stdout: "/workspace" },
+			},
+			{
+				type: "text",
+				text: "The first source is clear; I’ll inspect the second.",
+				state: "streaming",
+				providerMetadata: {
+					openai: { itemId: "commentary-append-2", phase: "commentary" },
+				},
+			},
+		];
+		const renderActivity = (parts: UIMessage["parts"]) =>
+			renderMessageList({
+				isLoading: true,
+				messages: [{ id: "assistant-append", role: "assistant", parts }],
+			});
+		const { rerender } = render(renderActivity(activityParts.slice(0, 1)));
+
+		expect(
+			screen
+				.getByRole("button", { name: /^Working/ })
+				.getAttribute("aria-expanded"),
+		).toBe("true");
+		expect(screen.getByText("I’ll inspect the first source.")).not.toBeNull();
+
+		rerender(renderActivity(activityParts));
+		expect(screen.getByText("I’ll inspect the first source.")).not.toBeNull();
+		expect(screen.getByText("Explored local folder")).not.toBeNull();
+		expect(
+			screen.getByText("The first source is clear; I’ll inspect the second."),
+		).not.toBeNull();
+
+		const finalPart: UIMessage["parts"][number] = {
+			type: "text",
+			text: "Here is the final answer.",
+			state: "streaming",
+			providerMetadata: {
+				openai: { itemId: "final-append", phase: "final_answer" },
+			},
+		};
+		rerender(renderActivity([...activityParts, finalPart]));
+
+		const worked = screen.getByRole("button", { name: /^Worked/ });
+		expect(worked.getAttribute("aria-expanded")).toBe("false");
+		expect(screen.queryByText("I’ll inspect the first source.")).toBeNull();
+		expect(screen.queryByText("Explored local folder")).toBeNull();
+		expect(screen.getByText("Here is the final answer.")).not.toBeNull();
+
+		await user.click(worked);
+		expect(screen.getByText("I’ll inspect the first source.")).not.toBeNull();
+		expect(screen.getByText("Explored local folder")).not.toBeNull();
+		expect(
+			screen.getByText("The first source is clear; I’ll inspect the second."),
+		).not.toBeNull();
 	});
 
 	it("never demotes the active turn from Working after agentic work starts", () => {
@@ -182,7 +348,8 @@ describe("chat message thinking status", () => {
 			}),
 		);
 
-		expect(screen.getByText("Thinking")).not.toBeNull();
+		expect(screen.getByText("Working")).not.toBeNull();
+		expect(screen.queryByText("Thinking")).toBeNull();
 
 		rerender(
 			renderMessageList({
@@ -191,7 +358,8 @@ describe("chat message thinking status", () => {
 			}),
 		);
 
-		expect(screen.getByRole("button", { name: /^Working/ })).not.toBeNull();
+		expect(screen.getByText("Working")).not.toBeNull();
+		expect(screen.getByText("Exploring local folder")).not.toBeNull();
 
 		rerender(
 			renderMessageList({
@@ -210,11 +378,95 @@ describe("chat message thinking status", () => {
 			}),
 		);
 
-		expect(screen.getByRole("button", { name: /^Working/ })).not.toBeNull();
+		expect(screen.getByText("Working")).not.toBeNull();
 		expect(screen.getByText("Thinking")).not.toBeNull();
 	});
 
-	it("renders the generic status when no reasoning part is streaming", () => {
+	it("keeps one uninterrupted turn timer when optimistic message identity changes", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(1_000);
+		const assistantMessage: UIMessage = {
+			id: "assistant-timer",
+			role: "assistant",
+			parts: [],
+		};
+		const { rerender } = render(
+			renderMessageList({
+				isLoading: true,
+				messages: [
+					{
+						id: "user-optimistic-timer",
+						role: "user",
+						parts: [{ type: "text", text: "Inspect twice" }],
+					},
+					assistantMessage,
+				],
+			}),
+		);
+
+		act(() => vi.advanceTimersByTime(3_200));
+		expect(screen.getByText("3s")).not.toBeNull();
+
+		rerender(
+			renderMessageList({
+				isLoading: true,
+				messages: [
+					{
+						id: "user-persisted-timer",
+						role: "user",
+						parts: [{ type: "text", text: "Inspect twice" }],
+					},
+					{
+						...assistantMessage,
+						parts: [
+							{
+								type: "text",
+								text: "I’ll inspect the first source.",
+								state: "done",
+								providerMetadata: {
+									openai: { itemId: "commentary-timer", phase: "commentary" },
+								},
+							},
+						],
+					},
+				],
+			}),
+		);
+
+		expect(screen.getByText("3s")).not.toBeNull();
+		act(() => vi.advanceTimersByTime(1_000));
+		expect(screen.getByText("4s")).not.toBeNull();
+
+		rerender(
+			renderMessageList({
+				messages: [
+					{
+						id: "user-persisted-timer",
+						role: "user",
+						parts: [{ type: "text", text: "Inspect twice" }],
+					},
+					{
+						...assistantMessage,
+						parts: [
+							{
+								type: "text",
+								text: "Done",
+								state: "done",
+								providerMetadata: {
+									openai: { itemId: "final-timer", phase: "final_answer" },
+								},
+							},
+						],
+					},
+				],
+			}),
+		);
+
+		expect(screen.getByText("Worked")).not.toBeNull();
+		expect(screen.getByText("4s")).not.toBeNull();
+	});
+
+	it("renders Working when no stream part has arrived", () => {
 		render(
 			<TooltipProvider>
 				<MessageScrollerProvider autoScroll>
@@ -236,7 +488,8 @@ describe("chat message thinking status", () => {
 			</TooltipProvider>,
 		);
 
-		expect(screen.getAllByText("Thinking")).toHaveLength(1);
+		expect(screen.getAllByText("Working")).toHaveLength(1);
+		expect(screen.queryByText("Thinking")).toBeNull();
 	});
 
 	it("shows the completed turn duration without an empty disclosure", () => {
@@ -272,7 +525,7 @@ describe("chat message thinking status", () => {
 		expect(screen.getByText("Worked")).not.toBeNull();
 	});
 
-	it("keeps timing a direct answer while only Thinking is visible", () => {
+	it("keeps timing a direct answer while Working is visible", () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(1_000);
 		const userMessage: UIMessage = {
@@ -302,7 +555,7 @@ describe("chat message thinking status", () => {
 			}),
 		);
 
-		expect(screen.getByText("Thinking")).not.toBeNull();
+		expect(screen.getByText("Working")).not.toBeNull();
 		vi.setSystemTime(4_750);
 		rerender(
 			renderMessageList(false, {
@@ -333,14 +586,14 @@ describe("chat message thinking status", () => {
 
 		expect(screen.queryByRole("button", { name: "Thought" })).toBeNull();
 		await user.click(screen.getByRole("button", { name: /^Worked/ }));
+		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
 		expect(screen.queryByText(/Reviewed the current renderer/)).toBeNull();
 		await user.click(screen.getByRole("button", { name: "Thought" }));
 		expect(screen.getByText(/Reviewed the current renderer/)).not.toBeNull();
 	});
 
-	it("groups turn activity under one Worked disclosure even when its first assistant slot is empty", async () => {
+	it("renders one collapsed Worked group after continuation activity", async () => {
 		const user = userEvent.setup();
-
 		render(
 			<TooltipProvider>
 				<MessageScrollerProvider autoScroll>
@@ -358,11 +611,42 @@ describe("chat message thinking status", () => {
 			</TooltipProvider>,
 		);
 
-		expect(
-			screen.getAllByRole("button", { name: /^Worked.*1 call/ }),
-		).toHaveLength(1);
-		await user.click(screen.getByRole("button", { name: /^Worked.*1 call/ }));
+		expect(screen.getAllByRole("button", { name: /^Worked/ })).toHaveLength(1);
+		expect(screen.queryByRole("button", { name: "Thought" })).toBeNull();
+		await user.click(screen.getByRole("button", { name: /^Worked/ }));
 		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
 		expect(screen.getByText("Explored local folder")).not.toBeNull();
+	});
+
+	it("does not render an inline sources disclosure in the chat message", () => {
+		render(
+			renderMessageList({
+				messages: [
+					{
+						id: "assistant-with-source",
+						role: "assistant",
+						parts: [
+							{
+								type: "text",
+								text: "Source-backed answer.",
+								state: "done",
+								providerMetadata: {
+									openai: { itemId: "final-source", phase: "final_answer" },
+								},
+							},
+							{
+								type: "source-url",
+								sourceId: "source-1",
+								url: "https://example.com/source",
+								title: "Example source",
+							},
+						],
+					},
+				],
+			}),
+		);
+
+		expect(screen.getByText("Source-backed answer.")).not.toBeNull();
+		expect(screen.queryByRole("button", { name: /sources/i })).toBeNull();
 	});
 });

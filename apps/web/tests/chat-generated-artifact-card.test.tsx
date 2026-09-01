@@ -85,7 +85,7 @@ describe("generated artifact cards", () => {
 		renderMessage();
 
 		const workDisclosure = screen.getByRole("button", {
-			name: /^Worked.*1 call/,
+			name: /^Worked/,
 		});
 		const responseText = screen.getByText("Created the file.");
 		const filename = screen.getByText("generated-report.docx");

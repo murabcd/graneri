@@ -41,7 +41,6 @@ const renderPresentation = ({
 	messages: UIMessage[];
 }) =>
 	useChatTurnPresentation({
-		includeSources: true,
 		isLoading,
 		messages,
 		scrollAnchorUserMessages: true,
@@ -60,19 +59,19 @@ describe("active turn presentation", () => {
 			},
 		});
 
-		expect(result.current.turns[0]?.hasAssistantWorkInTurn).toBe(false);
+		expect(result.current.turns[0]?.assistantTurnActivityUnits).toHaveLength(0);
 
 		rerender({
 			isLoading: true,
 			messages: [optimisticUserMessage, workingAssistantMessage],
 		});
-		expect(result.current.turns[0]?.hasAssistantWorkInTurn).toBe(true);
+		expect(result.current.turns[0]?.assistantTurnActivityUnits).toHaveLength(1);
 
 		rerender({
 			isLoading: true,
 			messages: [persistedUserMessage, emptyAssistantMessage],
 		});
-		expect(result.current.turns[0]?.hasAssistantWorkInTurn).toBe(true);
+		expect(result.current.turns[0]?.assistantTurnActivityUnits).toHaveLength(1);
 		expect(result.current.turns[0]?.assistantTurnWorkStatus).toBe("streaming");
 	});
 

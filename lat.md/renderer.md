@@ -80,14 +80,56 @@ Workspace and note composers retain their distinct recipe, mention, note
 context, panel, and focus adapters; they must not reconstruct this commit and
 rollback ordering.
 The shared `use-chat-turn-presentation.ts` module projects normalized messages
-into turn-level render snapshots and owns one monotonic activity phase per
-active run lifecycle. It begins with the generic `Thinking` placeholder,
-crosses to `Working` when reasoning or a renderable tool first appears, and
-cannot return to the generic placeholder before the run ends even if optimistic
-and persisted message identifiers reconcile or a transient stream snapshot has
-no work parts. [[apps/web/src/components/chat/message-list.tsx]] renders that
-projection; reasoning remains a nested `Thinking` or `Thought` disclosure
-inside the turn-level work group.
+into turn-level render snapshots and materializes one expanded, continuously
+timed `Working for N` activity group as soon as an active assistant turn exists.
+[[apps/web/src/lib/assistant-turn-sequence.ts]]
+uses the OpenAI Responses text-part `providerMetadata.openai.phase` contract to
+keep commentary, reasoning, and tool calls in their original source order while
+separating `final_answer` text from agent activity. Commentary, reasoning, and
+tool calls append inside that single open group without replacing earlier
+activity; when the first final-answer part arrives, the same group becomes
+`Worked`, freezes its timer, and collapses ahead of the still-streaming final
+answer. Consecutive
+reasoning and tool parts may share an activity subgroup, but an intervening
+commentary part always splits them. The separator stays attached directly below
+the `Working` or `Worked` row even while its activity is expanded; nested tool
+rows do not render their own elapsed durations.
+[[apps/web/src/components/chat/message-list.tsx]]
+renders that projection; reasoning remains a nested `Thinking` or `Thought`
+disclosure and Streamdown renders each text part independently without owning
+event ordering, activity grouping, or transport buffering.
+Chat message rows do not render a per-message source-count disclosure; source
+metadata remains available through the chat summary. Streamdown code fences use
+the shared Codex-style renderer: their vertical height is content-driven, their
+outer width remains fixed to the message column, and a local control switches
+between wrapped lines and horizontal scrolling while locking the rendered frame
+to its pre-toggle dimensions. The
+outer code frame uses the chat composer radius while its header and body have no
+internal separator; the 48-pixel header owns the action row with a 6-pixel
+vertical inset, and the body starts after the header without Streamdown's sticky
+negative-margin overlap. Header actions use 32-pixel hit areas with 16-pixel
+Lucide glyphs and retain a balanced inset from the right edge. Fenced code is
+tokenized by Streamdown's lazy Shiki code plugin with the
+`Codex Light` and `Codex Dark` theme registrations extracted from the installed
+ChatGPT/Codex application; highlighting enriches the existing code body without
+changing its content-driven geometry or wrap state.
+Streamdown remains the incremental Markdown parser, but it does not own chat
+typography: semantic element renderers remove its presentation classes and the
+shared Markdown root and
+[apps/web/src/styles/chat-markdown.css](../apps/web/src/styles/chat-markdown.css)
+apply the installed ChatGPT/Codex 14-pixel type scale,
+1.625 line height, compact heading ratios, paragraph rhythm, list indentation,
+blockquote rail, and inline-code treatment. Its final top-level Markdown block
+always has zero bottom margin so element-specific prose rhythm cannot leak into
+the message-to-actions gap.
+Ask AI and note discussions also share
+[[apps/web/src/components/chat/message-actions.tsx]]. Assistant content and user
+bubbles both use the same compact 4-pixel external actions offset. The user
+bubble's internal padding intentionally remains part of its larger text-to-actions
+distance, while unboxed assistant prose stays closer to its controls. Every
+action uses the same 2-pixel control gap, icon button, and tooltip contract.
+Surface-owned actions such as `Create note` and `Add to note` plug into that
+shared row rather than recreating its layout.
 Note-scoped discussion ownership is layered on top of the shared renderer
 interaction session by `use-note-discussion-session.ts`. It owns draft/stored
 chat identity, note chat list/session/run snapshots, cursor-paginated messages, selector

@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 
 export type ToolRowBaseProps = {
+	ariaLabel?: string;
 	children?: ReactNode;
 	completeLabel: string;
 	defaultOpen?: boolean;
@@ -19,11 +20,13 @@ export type ToolRowBaseProps = {
 	icon?: ReactNode;
 	isAnimating: boolean;
 	onToggleExpand?: () => void;
+	separatorAfterRow?: boolean;
 	shimmerLabel?: string;
 	trailingContent?: ReactNode;
 };
 
 export function ToolRowBase({
+	ariaLabel,
 	children,
 	completeLabel,
 	defaultOpen = false,
@@ -34,6 +37,7 @@ export function ToolRowBase({
 	icon,
 	isAnimating,
 	onToggleExpand,
+	separatorAfterRow = false,
 	shimmerLabel,
 	trailingContent,
 }: ToolRowBaseProps) {
@@ -87,7 +91,16 @@ export function ToolRowBase({
 	);
 
 	if (!expandable) {
-		return <div className="flex flex-col gap-1">{row}</div>;
+		return (
+			<div
+				className={cn(
+					"flex flex-col gap-1",
+					separatorAfterRow && "w-full border-border/60 border-b pb-4",
+				)}
+			>
+				{row}
+			</div>
+		);
 	}
 
 	return (
@@ -98,7 +111,11 @@ export function ToolRowBase({
 			onOpenChange={onToggleExpand}
 		>
 			<CollapsibleTrigger
-				className="group flex"
+				aria-label={ariaLabel}
+				className={cn(
+					"group flex",
+					separatorAfterRow && "w-full border-border/60 border-b pb-4",
+				)}
 				disabled={!canToggle}
 				aria-disabled={!canToggle}
 				data-preserve-scroll-on-toggle

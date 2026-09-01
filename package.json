@@ -74,7 +74,7 @@
     "canvas-confetti": "^1.9.4",
     "convex": "^1.42.3",
     "pino": "^10.1.0",
-    "streamdown": "^2.5.0",
+    "streamdown": "^2.6.0",
     "zod": "^4.1.12"
   },
   "knip": {

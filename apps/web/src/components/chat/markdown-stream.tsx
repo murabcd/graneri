@@ -1,8 +1,38 @@
+import { createCodePlugin } from "@streamdown/code";
+import { cn } from "@workspace/ui/lib/utils";
+import * as React from "react";
 import { Streamdown, type StreamdownProps } from "streamdown";
+import {
+	MarkdownCodeBlock,
+	MarkdownInlineCode,
+} from "@/components/chat/markdown-code-block";
+import {
+	codexDarkCodeTheme,
+	codexLightCodeTheme,
+} from "@/lib/codex-code-themes";
+
+const codexCodePlugin = createCodePlugin({
+	themes: [codexLightCodeTheme, codexDarkCodeTheme],
+});
 
 const disabledLinkSafety = {
 	enabled: false,
 } satisfies NonNullable<StreamdownProps["linkSafety"]>;
+
+const semanticMarkdownComponents = {
+	blockquote: "blockquote",
+	h1: "h1",
+	h2: "h2",
+	h3: "h3",
+	h4: "h4",
+	h5: "h5",
+	h6: "h6",
+	hr: "hr",
+	li: "li",
+	ol: "ol",
+	p: "p",
+	ul: "ul",
+} satisfies NonNullable<StreamdownProps["components"]>;
 
 export type MarkdownStreamProps = Omit<
 	StreamdownProps,
@@ -11,9 +41,37 @@ export type MarkdownStreamProps = Omit<
 	children: string;
 };
 
-export function MarkdownStream({ children, ...props }: MarkdownStreamProps) {
+export function MarkdownStream({
+	children,
+	className,
+	components: providedComponents,
+	plugins: providedPlugins,
+	...props
+}: MarkdownStreamProps) {
+	const components = React.useMemo(
+		() => ({
+			...semanticMarkdownComponents,
+			code: MarkdownCodeBlock,
+			inlineCode: MarkdownInlineCode,
+			...providedComponents,
+		}),
+		[providedComponents],
+	);
+	const plugins = React.useMemo(
+		() => ({ ...providedPlugins, code: codexCodePlugin }),
+		[providedPlugins],
+	);
+
 	return (
-		<Streamdown {...props} linkSafety={disabledLinkSafety}>
+		<Streamdown
+			{...props}
+			className={cn("graneri-markdown space-y-0", className)}
+			codeBlockMaxHeight={0}
+			components={components}
+			controls={{ code: { copy: false, download: false } }}
+			linkSafety={disabledLinkSafety}
+			plugins={plugins}
+		>
 			{children}
 		</Streamdown>
 	);

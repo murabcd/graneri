@@ -18,6 +18,12 @@ const assistantMessage: UIMessage = {
 	parts: [{ type: "text", text: "A response with stable spacing." }],
 };
 
+const userMessage: UIMessage = {
+	id: "user-1",
+	role: "user",
+	parts: [{ type: "text", text: "A prompt with stable spacing." }],
+};
+
 function TestMessageScroller({ children }: { children: React.ReactNode }) {
 	return (
 		<MessageScrollerProvider autoScroll>
@@ -64,16 +70,19 @@ describe("chat message spacing", () => {
 		);
 	});
 
-	it("uses the same compact completed spacing in Ask AI and Notes", () => {
+	it("uses the same visual action offset in Ask AI and Notes", () => {
 		render(
 			<TooltipProvider>
 				<div>
 					<TestMessageScroller>
-						<ChatMessages isLoading={false} messages={[assistantMessage]} />
+						<ChatMessages
+							isLoading={false}
+							messages={[userMessage, assistantMessage]}
+						/>
 					</TestMessageScroller>
 					<NoteChatMessages
 						chatError={undefined}
-						chatMessages={[assistantMessage]}
+						chatMessages={[userMessage, assistantMessage]}
 						disableAddToNote={false}
 						disablePadding={false}
 						isChatLoading={false}
@@ -89,6 +98,97 @@ describe("chat message spacing", () => {
 		for (const breathingSpace of breathingSpaces) {
 			expect(breathingSpace.classList).toContain("min-h-8");
 		}
+
+		const assistantActions = document.querySelectorAll(
+			'[data-message-actions="assistant"]',
+		);
+		const userActions = document.querySelectorAll(
+			'[data-message-actions="user"]',
+		);
+		expect(assistantActions).toHaveLength(2);
+		expect(userActions).toHaveLength(2);
+		for (const actions of assistantActions) {
+			expect(actions.classList).toContain("mt-1");
+			expect(actions.classList).toContain("gap-0.5");
+			expect(actions.classList).not.toContain("mt-3");
+			expect(actions.parentElement?.classList).not.toContain("gap-2");
+		}
+		for (const actions of userActions) {
+			expect(actions.classList).toContain("mt-1");
+			expect(actions.classList).toContain("gap-0.5");
+			expect(actions.classList).not.toContain("mt-2");
+			expect(actions.parentElement?.classList).not.toContain("gap-2");
+		}
+	});
+
+	it("uses the shared fenced-code renderer in Notes", async () => {
+		const user = userEvent.setup();
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(globalThis.navigator, "clipboard", {
+			configurable: true,
+			value: { writeText },
+		});
+		const codeMessage: UIMessage = {
+			id: "assistant-code",
+			role: "assistant",
+			parts: [
+				{
+					type: "text",
+					text: "```bash\nnpm install streamdown@2.6.0\n```",
+				},
+			],
+		};
+
+		render(
+			<TooltipProvider>
+				<NoteChatMessages
+					chatError={undefined}
+					chatMessages={[codeMessage]}
+					disableAddToNote={false}
+					disablePadding={false}
+					isChatLoading={false}
+				/>
+			</TooltipProvider>,
+		);
+
+		expect(document.querySelectorAll(".graneri-code-block")).toHaveLength(1);
+		await user.click(screen.getByRole("button", { name: "Copy code" }));
+		expect(writeText).toHaveBeenCalledWith("npm install streamdown@2.6.0");
+	});
+
+	it("uses shared tooltips for Ask AI and Notes message actions", async () => {
+		const user = userEvent.setup();
+		const askAi = render(
+			<TooltipProvider delayDuration={0}>
+				<TestMessageScroller>
+					<ChatMessages messages={[assistantMessage]} onPlusAction={vi.fn()} />
+				</TestMessageScroller>
+			</TooltipProvider>,
+		);
+
+		await user.hover(screen.getByRole("button", { name: "Create note" }));
+		expect(
+			await screen.findByRole("tooltip", { name: "Create note" }),
+		).not.toBeNull();
+		askAi.unmount();
+
+		render(
+			<TooltipProvider delayDuration={0}>
+				<NoteChatMessages
+					chatError={undefined}
+					chatMessages={[assistantMessage]}
+					disableAddToNote={false}
+					disablePadding={false}
+					isChatLoading={false}
+					onAddMessageToNote={vi.fn()}
+				/>
+			</TooltipProvider>,
+		);
+
+		await user.hover(screen.getByRole("button", { name: "Add to note" }));
+		expect(
+			await screen.findByRole("tooltip", { name: "Add to note" }),
+		).not.toBeNull();
 	});
 
 	it("creates notes from the exact completed assistant message", async () => {

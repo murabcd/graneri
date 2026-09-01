@@ -33,18 +33,18 @@ const shouldCollapseMessage = (text: string) => {
 };
 
 export function CollapsibleMessageContent({
-	role,
+	messageRole,
 	text,
 	isAnimating,
 	mode,
 }: {
-	role: UIMessage["role"];
+	messageRole: UIMessage["role"];
 	text: string;
 	isAnimating: boolean;
 	mode?: "streaming" | "static";
 }) {
 	const [isExpanded, setIsExpanded] = useState(false);
-	const isCollapsible = role === "user" && shouldCollapseMessage(text);
+	const isCollapsible = messageRole === "user" && shouldCollapseMessage(text);
 	const resolvedMode = mode ?? (isAnimating ? "streaming" : "static");
 
 	if (!isCollapsible) {
