@@ -1,5 +1,4 @@
 import { Bubble, BubbleContent } from "@workspace/ui/components/bubble";
-import { Button } from "@workspace/ui/components/button";
 import {
 	Marker,
 	MarkerContent,
@@ -9,6 +8,7 @@ import { Message, MessageContent } from "@workspace/ui/components/message";
 import {
 	MessageScrollerContent,
 	MessageScrollerItem,
+	useMessageScrollerScrollable,
 } from "@workspace/ui/components/message-scroller";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
@@ -76,6 +76,43 @@ export type ChatCompactionActivity = {
 
 const EMPTY_MESSAGE_PARTS: UIMessage["parts"] = [];
 const EMPTY_CHART_ARTIFACTS: ReturnType<typeof extractChatChartArtifacts> = [];
+const CHAT_HISTORY_LOADER_ID = "chat-history-loader";
+
+function ChatHistoryLoader({
+	isLoading,
+	onLoad,
+}: {
+	isLoading: boolean;
+	onLoad: () => void;
+}) {
+	const { start: canScrollToEarlierMessages } = useMessageScrollerScrollable();
+
+	React.useEffect(() => {
+		if (!canScrollToEarlierMessages && !isLoading) {
+			onLoad();
+		}
+	}, [canScrollToEarlierMessages, isLoading, onLoad]);
+
+	return (
+		<MessageScrollerItem
+			aria-busy={isLoading}
+			aria-live="polite"
+			className="flex min-h-8 items-center justify-center py-2"
+			messageId={CHAT_HISTORY_LOADER_ID}
+		>
+			{isLoading ? (
+				<>
+					<LoaderCircle
+						aria-hidden="true"
+						className="animate-spin motion-reduce:animate-none"
+					/>
+					<span className="sr-only">Loading earlier messages</span>
+				</>
+			) : null}
+		</MessageScrollerItem>
+	);
+}
+
 export function ChatMessageListContent({
 	messages,
 	error,
@@ -154,26 +191,11 @@ export function ChatMessageListContent({
 					</Marker>
 				</MessageScrollerItem>
 			) : null}
-			{hasEarlierMessages ? (
-				<MessageScrollerItem
-					className="flex justify-center py-2"
-					messageId="chat-history-loader"
-				>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						disabled={isLoadingEarlierMessages}
-						onClick={onLoadEarlierMessages}
-					>
-						{isLoadingEarlierMessages ? (
-							<LoaderCircle className="animate-spin" />
-						) : null}
-						{isLoadingEarlierMessages
-							? "Loading earlier messages"
-							: "Load earlier messages"}
-					</Button>
-				</MessageScrollerItem>
+			{hasEarlierMessages && onLoadEarlierMessages ? (
+				<ChatHistoryLoader
+					isLoading={isLoadingEarlierMessages}
+					onLoad={onLoadEarlierMessages}
+				/>
 			) : null}
 			{turns.map((turn) => {
 				return (

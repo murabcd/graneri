@@ -171,9 +171,14 @@ describe("chat file attachments", () => {
 			}),
 		);
 		const messageImage = screen.getByRole("button", { name: "workspace.png" });
+		const messageImageElement = screen.getByRole("img", {
+			name: "workspace.png",
+		});
 		expect(messageImage.classList.contains("border")).toBe(true);
 		expect(messageImage.classList.contains("size-20")).toBe(true);
 		expect(messageImage.classList.contains("rounded-lg")).toBe(true);
+		expect(messageImageElement.getAttribute("decoding")).toBe("async");
+		expect(messageImageElement.getAttribute("loading")).toBe("lazy");
 		message.unmount();
 
 		const assistantMessage = render(

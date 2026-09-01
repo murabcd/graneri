@@ -45,7 +45,9 @@ and the canonical `noteImageId`, plus display-only alignment, caption, and width
 attributes. Graneri owns the free image toolbar and caption node view; Tiptap's
 open-source resizable node view owns drag geometry. Image replacement reuses the
 same Convex uploader and updates the selected node in place, while the normal
-note document session remains the only writer of note content.
+note document session remains the only writer of note content. Note image node
+views request lazy loading and asynchronous decoding so off-screen document
+media does not compete with editor hydration.
 File and image node selections share one visible block outline so their
 ProseMirror selection state is clear without application-owned selection state.
 

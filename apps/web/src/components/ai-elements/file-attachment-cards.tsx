@@ -200,6 +200,8 @@ export function FileAttachmentCards({
 								<img
 									src={file.url}
 									alt={file.filename || "Attached image"}
+									decoding="async"
+									loading="lazy"
 									className={cn(
 										"size-full object-cover",
 										isUserMessage && "rounded-md",

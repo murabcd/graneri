@@ -294,5 +294,9 @@ export const NoteImage = Image.extend({
 	},
 }).configure({
 	allowBase64: false,
+	HTMLAttributes: {
+		decoding: "async",
+		loading: "lazy",
+	},
 	inline: false,
 });

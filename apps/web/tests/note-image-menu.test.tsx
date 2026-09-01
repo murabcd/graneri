@@ -106,8 +106,11 @@ const renderImageMenu = async () => {
 describe("note image options", () => {
 	it("selects an image as one node when clicked", async () => {
 		const { editor } = await renderImageEditor();
+		const image = screen.getByRole("img", { name: "Diagram.png" });
 
-		fireEvent.click(screen.getByRole("img", { name: "Diagram.png" }));
+		expect(image.getAttribute("decoding")).toBe("async");
+		expect(image.getAttribute("loading")).toBe("lazy");
+		fireEvent.click(image);
 
 		expect(editor.state.selection).toBeInstanceOf(NodeSelection);
 		expect(

@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import {
 	MessageScroller,
 	MessageScrollerProvider,
@@ -357,7 +363,7 @@ describe("ChatMessageListContent performance", () => {
 		).toBe("false");
 	});
 
-	it("exposes paginated history and assistant fork actions", () => {
+	it("loads earlier history when the transcript reaches its start", async () => {
 		const onForkMessage = vi.fn();
 		const onLoadEarlierMessages = vi.fn();
 		render(
@@ -383,12 +389,16 @@ describe("ChatMessageListContent performance", () => {
 			</TooltipProvider>,
 		);
 
-		fireEvent.click(
-			screen.getByRole("button", { name: "Load earlier messages" }),
+		const historyLoader = document.querySelector(
+			'[data-message-id="chat-history-loader"]',
 		);
+		expect(historyLoader).not.toBeNull();
+		expect(
+			screen.queryByRole("button", { name: "Load earlier messages" }),
+		).toBeNull();
+		await waitFor(() => expect(onLoadEarlierMessages).toHaveBeenCalledOnce());
 		fireEvent.click(screen.getByRole("button", { name: "Fork chat" }));
 
-		expect(onLoadEarlierMessages).toHaveBeenCalledOnce();
 		expect(onForkMessage).toHaveBeenCalledWith("assistant-1");
 		expect(screen.getByText("Conversation compacted")).toBeTruthy();
 		expectCanonicalMessageScrollerRows();
