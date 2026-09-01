@@ -1,17 +1,17 @@
-import { Icons } from "@workspace/ui/components/icons";
+import {
+	Context7Logo,
+	FigmaLogo,
+	GoogleCalendarLogo,
+	GoogleDriveLogo,
+	JiraLogo,
+	LinearLogo,
+	NotionLogo,
+	PlaneLogo,
+	YandexCalendarLogo,
+	YandexTrackerLogo,
+	ZoomLogo,
+} from "@workspace/ui/components/icons";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
-
-const GoogleCalendarLogo = Icons.googleCalendarLogo;
-const GoogleDriveLogo = Icons.googleDriveLogo;
-const Context7Logo = Icons.context7Logo;
-const FigmaLogo = Icons.figmaLogo;
-const JiraLogo = Icons.jiraLogo;
-const LinearLogo = Icons.linearLogo;
-const NotionLogo = Icons.notionLogo;
-const PlaneLogo = Icons.planeLogo;
-const ZoomLogo = Icons.zoomLogo;
-const YandexCalendarLogo = Icons.yandexCalendarLogo;
-const YandexTrackerLogo = Icons.yandexTrackerLogo;
 
 export function AppSourceIcon({
 	provider,

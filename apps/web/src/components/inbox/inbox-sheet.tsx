@@ -26,7 +26,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
-import { Icons } from "@workspace/ui/components/icons";
+import { JiraLogo } from "@workspace/ui/components/icons";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import {
 	Sheet,
@@ -90,8 +90,6 @@ import { getAvatarSrc } from "@/lib/avatar";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import { getErrorMessage } from "@/lib/error-message";
 import { api } from "../../../../../convex/_generated/api";
-
-const JiraLogo = Icons.jiraLogo;
 
 type InboxView = "all" | "unread" | "archived";
 type InboxItem = FunctionReturnType<typeof api.inboxItems.list>[number];

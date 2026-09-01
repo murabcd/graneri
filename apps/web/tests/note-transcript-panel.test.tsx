@@ -23,12 +23,11 @@ describe("NoteTranscriptPanel", () => {
 						utteranceIds: ["utterance-1"],
 					},
 				]}
-				fullTranscript="First transcript page"
-				hasMoreStoredTranscriptUtterances={true}
-				isLoadingMoreStoredTranscriptUtterances={false}
-				isSpeechListening={false}
-				isStoredTranscriptLoading={false}
-				loadMoreStoredTranscriptUtterances={loadMore}
+				state={{
+					status: "ready",
+					mode: "paused",
+					pagination: { status: "idle", loadMore },
+				}}
 				transcriptStartedAt={1_000}
 			/>,
 		);

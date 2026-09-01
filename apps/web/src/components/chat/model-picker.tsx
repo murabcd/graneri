@@ -12,7 +12,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import { Icons } from "@workspace/ui/components/icons";
+import { OpenAILogo } from "@workspace/ui/components/icons";
 import { InputGroupButton } from "@workspace/ui/components/input-group";
 import {
 	Tooltip,
@@ -27,8 +27,6 @@ import {
 	type ServiceTier,
 	serviceTiers,
 } from "@/lib/ai/models";
-
-const OpenAILogo = Icons.openaiLogo;
 
 export type ChatModel = (typeof chatModels)[number];
 export type { ReasoningEffort, ServiceTier };

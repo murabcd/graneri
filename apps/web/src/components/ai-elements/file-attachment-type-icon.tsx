@@ -1,4 +1,15 @@
-import { type Icon, Icons } from "@workspace/ui/components/icons";
+import {
+	FileArchiveIcon,
+	FileCodeIcon,
+	FileExcelIcon,
+	FileIcon,
+	FileImageIcon,
+	FilePdfIcon,
+	FilePowerpointIcon,
+	FileTextIcon,
+	FileWordIcon,
+	type Icon,
+} from "@workspace/ui/components/icons";
 import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
 
@@ -19,15 +30,15 @@ type FileKind =
 	| "word";
 
 const FILE_KIND_ICONS: Record<FileKind, Icon> = {
-	archive: Icons.fileArchive,
-	code: Icons.fileCode,
-	document: Icons.fileText,
-	file: Icons.file,
-	image: Icons.fileImage,
-	pdf: Icons.filePdf,
-	presentation: Icons.filePowerpoint,
-	spreadsheet: Icons.fileExcel,
-	word: Icons.fileWord,
+	archive: FileArchiveIcon,
+	code: FileCodeIcon,
+	document: FileTextIcon,
+	file: FileIcon,
+	image: FileImageIcon,
+	pdf: FilePdfIcon,
+	presentation: FilePowerpointIcon,
+	spreadsheet: FileExcelIcon,
+	word: FileWordIcon,
 };
 
 const FILE_KIND_EXTENSIONS: Partial<Record<string, FileKind>> = {

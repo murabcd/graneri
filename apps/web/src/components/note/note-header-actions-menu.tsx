@@ -55,8 +55,7 @@ export function NoteHeaderActionsMenu({
 			<DropdownMenuItem
 				className="cursor-pointer"
 				disabled={!noteEditorActions.canCopyContent}
-				onSelect={(event) => {
-					event.preventDefault();
+				onSelect={() => {
 					void noteEditorActions.exportMarkdown();
 				}}
 			>

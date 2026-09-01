@@ -14,15 +14,13 @@ import {
 	FieldLabel,
 } from "@workspace/ui/components/field";
 import { GraneriMark } from "@workspace/ui/components/graneri-mark";
-import { Icons } from "@workspace/ui/components/icons";
+import { GithubLogo, GoogleLogo } from "@workspace/ui/components/icons";
 import { cn } from "@workspace/ui/lib/utils";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import * as React from "react";
 import type { SocialAuthProvider } from "@/app/app-types";
 import { DESKTOP_AUTH_SAFE_TOP_CLASS } from "@/lib/desktop-chrome";
 
-const GoogleLogo = Icons.googleLogo;
-const GithubLogo = Icons.githubLogo;
 const termsUrl = import.meta.env.VITE_TERMS_URL?.trim() || "/terms";
 const privacyUrl = import.meta.env.VITE_PRIVACY_URL?.trim() || "/privacy";
 const enabledAuthProviders = new Set(

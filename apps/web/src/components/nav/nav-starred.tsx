@@ -1,4 +1,4 @@
-import { Icons } from "@workspace/ui/components/icons";
+import { SidebarRecordingSpinner } from "@workspace/ui/components/icons";
 import {
 	SidebarMenu,
 	SidebarMenuAction,
@@ -61,8 +61,6 @@ const getChatDisplayTitle = (title?: string) => {
 	const trimmed = title?.trim();
 	return trimmed?.length ? trimmed : "New chat";
 };
-
-const SidebarRecordingSpinner = Icons.sidebarRecordingSpinner;
 
 const getStarredSortableId = (item: StarredReorderItem) =>
 	`${item.kind}:${item.id}`;

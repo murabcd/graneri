@@ -1,4 +1,4 @@
-import { Icons } from "@workspace/ui/components/icons";
+import { SidebarRecordingSpinner } from "@workspace/ui/components/icons";
 import {
 	SidebarMenuAction,
 	SidebarMenuButton,
@@ -9,8 +9,6 @@ import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { NoteActionsMenu } from "@/components/note/note-actions-menu";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
-
-const SidebarRecordingSpinner = Icons.sidebarRecordingSpinner;
 
 export function SidebarNoteRow({
 	note,

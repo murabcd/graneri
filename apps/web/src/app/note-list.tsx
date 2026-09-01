@@ -1,5 +1,5 @@
 import { Button } from "@workspace/ui/components/button";
-import { Icons } from "@workspace/ui/components/icons";
+import { SidebarRecordingSpinner } from "@workspace/ui/components/icons";
 import { cn } from "@workspace/ui/lib/utils";
 import { FileText, MoreHorizontal } from "lucide-react";
 import type { AppUser } from "@/app/app-types";
@@ -11,8 +11,6 @@ import {
 } from "@/lib/group-by-relative-date";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-
-const SidebarRecordingSpinner = Icons.sidebarRecordingSpinner;
 
 export function NoteCatalogLoadMore({
 	hasMore,

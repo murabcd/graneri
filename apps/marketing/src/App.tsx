@@ -1,12 +1,10 @@
 import { Button } from "@workspace/ui/components/button";
 import { GraneriMark } from "@workspace/ui/components/graneri-mark";
-import { Icons } from "@workspace/ui/components/icons";
+import { GithubLogo } from "@workspace/ui/components/icons";
 
 const githubOwner = import.meta.env.VITE_GITHUB_OWNER?.trim() || "murabcd";
 const githubRepo = import.meta.env.VITE_GITHUB_REPO?.trim() || "graneri";
 const githubProjectUrl = `https://github.com/${githubOwner}/${githubRepo}`;
-const GithubLogo = Icons.githubLogo;
-
 function App() {
 	return (
 		<div className="dark min-h-screen bg-background text-foreground">

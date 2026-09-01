@@ -4,7 +4,7 @@ import type { DOMOutputSpec } from "@tiptap/pm/model";
 import {
 	context7LogoPaths,
 	linearLogoPath,
-} from "@workspace/ui/components/icons";
+} from "@workspace/ui/lib/icon-paths";
 import {
 	type ChatAppSourceProvider,
 	isChatAppSourceProvider,

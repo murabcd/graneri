@@ -17,6 +17,7 @@ import {
 import type { createTranscriptDisplayEntries } from "@/lib/transcript";
 import { formatTranscriptElapsed } from "@/lib/transcript";
 import { NOTE_POPOVER_SCROLLER_BUTTON_CLASS } from "./note-popover-scroll";
+import type { NoteTranscriptPanelState } from "./note-transcript-panel-state";
 
 const TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD = 32;
 const TRANSCRIPT_INITIAL_WINDOW_SIZE = 32;
@@ -27,21 +28,11 @@ type TranscriptDisplayEntry = ReturnType<
 
 export function NoteTranscriptPanel({
 	displayTranscriptEntries,
-	fullTranscript,
-	hasMoreStoredTranscriptUtterances,
-	isLoadingMoreStoredTranscriptUtterances,
-	isSpeechListening,
-	isStoredTranscriptLoading,
-	loadMoreStoredTranscriptUtterances,
+	state,
 	transcriptStartedAt,
 }: {
 	displayTranscriptEntries: TranscriptDisplayEntry[];
-	fullTranscript: string;
-	hasMoreStoredTranscriptUtterances: boolean;
-	isLoadingMoreStoredTranscriptUtterances: boolean;
-	isSpeechListening: boolean;
-	isStoredTranscriptLoading: boolean;
-	loadMoreStoredTranscriptUtterances: () => void;
+	state: NoteTranscriptPanelState;
 	transcriptStartedAt: number | null;
 }) {
 	const deferredDisplayTranscriptEntries = React.useDeferredValue(
@@ -104,22 +95,22 @@ export function NoteTranscriptPanel({
 		!renderFullTranscriptEntries &&
 		deferredDisplayTranscriptEntries.length > renderedTranscriptEntries.length;
 
-	if (isStoredTranscriptLoading && !fullTranscript && !isSpeechListening) {
+	if (state.status === "loading") {
 		return <div className="flex flex-1" aria-hidden="true" />;
 	}
 
-	if (!fullTranscript) {
+	if (state.status === "empty") {
 		return (
 			<div className="flex flex-1 items-center justify-center">
 				<p className="text-center text-sm font-medium tracking-tight">
-					{isSpeechListening ? "Listening…" : "Transcript paused"}
+					{state.mode === "listening" ? "Listening…" : "Transcript paused"}
 				</p>
 			</div>
 		);
 	}
 
 	return (
-		<MessageScrollerProvider autoScroll={isSpeechListening}>
+		<MessageScrollerProvider autoScroll={state.mode === "listening"}>
 			<div className="relative flex min-h-0 w-full flex-1 flex-col">
 				<MessageScroller className="min-h-0 w-full flex-1">
 					<MessageScrollerViewport className="pr-4">
@@ -198,7 +189,7 @@ export function NoteTranscriptPanel({
 									</MessageScrollerItem>
 								);
 							})}
-							{hasMoreStoredTranscriptUtterances ? (
+							{state.pagination.status !== "complete" ? (
 								<MessageScrollerItem
 									className="flex justify-center py-2"
 									messageId="transcript-load-more"
@@ -207,10 +198,10 @@ export function NoteTranscriptPanel({
 										type="button"
 										variant="ghost"
 										size="sm"
-										disabled={isLoadingMoreStoredTranscriptUtterances}
-										onClick={loadMoreStoredTranscriptUtterances}
+										disabled={state.pagination.status === "loading"}
+										onClick={state.pagination.loadMore}
 									>
-										{isLoadingMoreStoredTranscriptUtterances
+										{state.pagination.status === "loading"
 											? "Loading transcript…"
 											: "Load more transcript"}
 									</Button>

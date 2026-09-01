@@ -46,14 +46,15 @@ export const getMarkdownContent = ({
 		.join("\n\n");
 };
 
-export const getExportFileName = (title: string) =>
-	`${
-		title
-			.trim()
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-+|-+$/g, "") || "note"
-	}.md`;
+export const getExportFileName = (title: string) => {
+	const titleStem = title.trim().replace(/\.md$/i, "");
+	const fileNameStem = titleStem
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+
+	return `${fileNameStem || "note"}.md`;
+};
 
 export const getRichTextContent = ({
 	editor,

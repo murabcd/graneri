@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getRichTextContent } from "../src/lib/note-document-content";
+import {
+	getExportFileName,
+	getRichTextContent,
+} from "../src/lib/note-document-content";
 
 type NoteContentEditor = Parameters<typeof getRichTextContent>[0]["editor"];
 
@@ -10,7 +13,17 @@ const createEditor = ({ html, markdown }: { html: string; markdown: string }) =>
 		getText: () => "",
 	}) satisfies NoteContentEditor;
 
-describe("note document clipboard content", () => {
+describe("note document content", () => {
+	it("adds exactly one Markdown extension to export filenames", () => {
+		expect(getExportFileName("WhatsApp API Stone")).toBe(
+			"whatsapp-api-stone.md",
+		);
+		expect(getExportFileName("whatsapp-api-stone.md")).toBe(
+			"whatsapp-api-stone.md",
+		);
+		expect(getExportFileName("Meeting notes.MD")).toBe("meeting-notes.md");
+	});
+
 	it("pairs semantic HTML with readable Markdown plain text", () => {
 		const html = [
 			"<blockquote><p>Summary</p></blockquote>",

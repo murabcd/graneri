@@ -188,6 +188,7 @@ import {
 	getRecipeSlugFromComposerContent,
 } from "./note-composer-recipe-mentions";
 import { NoteTranscriptPanel } from "./note-transcript-panel";
+import { createNoteTranscriptPanelState } from "./note-transcript-panel-state";
 
 type NoteChatPresentation = "inline" | "floating" | "sidebar";
 const NOTE_CHAT_FLOATING_WIDTH = "min(28rem, calc(100vw - 2rem))";
@@ -3268,6 +3269,17 @@ function NoteComposerTranscriptPanelContentBody({
 	const shouldRenderInlineComposer = controller.shouldShowInlinePanel;
 	const { footerHeight: overlayFooterHeight, footerRef: overlayFooterRef } =
 		useInlineFooterHeight();
+	const transcriptPanelState = createNoteTranscriptPanelState({
+		hasMoreStoredTranscriptUtterances:
+			controller.hasMoreStoredTranscriptUtterances,
+		hasTranscript: Boolean(controller.fullTranscript),
+		isListening: controller.isSpeechListening,
+		isLoadingMoreStoredTranscriptUtterances:
+			controller.isLoadingMoreStoredTranscriptUtterances,
+		isStoredTranscriptLoading: controller.isStoredTranscriptLoading,
+		loadMoreStoredTranscriptUtterances:
+			controller.loadMoreStoredTranscriptUtterances,
+	});
 
 	return (
 		<>
@@ -3290,18 +3302,7 @@ function NoteComposerTranscriptPanelContentBody({
 			>
 				<NoteTranscriptPanel
 					displayTranscriptEntries={controller.displayTranscriptEntries}
-					fullTranscript={controller.fullTranscript}
-					hasMoreStoredTranscriptUtterances={
-						controller.hasMoreStoredTranscriptUtterances
-					}
-					isLoadingMoreStoredTranscriptUtterances={
-						controller.isLoadingMoreStoredTranscriptUtterances
-					}
-					isSpeechListening={controller.isSpeechListening}
-					isStoredTranscriptLoading={controller.isStoredTranscriptLoading}
-					loadMoreStoredTranscriptUtterances={
-						controller.loadMoreStoredTranscriptUtterances
-					}
+					state={transcriptPanelState}
 					transcriptStartedAt={controller.transcriptStartedAt}
 				/>
 			</CardContent>

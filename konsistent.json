@@ -27,14 +27,52 @@
     },
     {
       "name": "ui-component-export-contract",
-      "description": "Single-component UI modules expose a filename-derived component; chart is a component family and sonner is a dependency-named Toaster adapter.",
+      "description": "Single-component UI modules expose a filename-derived component; chart and icons are component families, and sonner is a dependency-named Toaster adapter.",
       "paths": "packages/ui/src/components/{componentName}.tsx",
       "excludeFiles": [
         "packages/ui/src/components/chart.tsx",
+        "packages/ui/src/components/icons.tsx",
         "packages/ui/src/components/sonner.tsx"
       ],
       "must": {
         "exportValues": ["${componentName.toPascalCase()}"]
+      }
+    },
+    {
+      "name": "ui-icon-component-export-contract",
+      "description": "The shared icon family exposes named React components so consumers remain tree-shakeable and Fast Refresh can track each export.",
+      "paths": "packages/ui/src/components/icons.tsx",
+      "must": {
+        "exportValues": [
+          "FileIcon",
+          "FileArchiveIcon",
+          "FileCodeIcon",
+          "FileExcelIcon",
+          "FileImageIcon",
+          "FilePdfIcon",
+          "FilePowerpointIcon",
+          "FileTextIcon",
+          "FileWordIcon",
+          "OpenAILogo",
+          "ClaudeLogo",
+          "GoogleLogo",
+          "GoogleDriveLogo",
+          "GoogleCalendarLogo",
+          "FigmaLogo",
+          "LinearLogo",
+          "Context7Logo",
+          "YandexCalendarLogo",
+          "YandexTrackerLogo",
+          "ZoomLogo",
+          "JiraLogo",
+          "NotionLogo",
+          "PlaneLogo",
+          "GithubLogo",
+          "MacLogo",
+          "LoadingSpinner",
+          "SidebarRecordingSpinner",
+          "ContextUsage"
+        ]
       }
     },
     {

@@ -37,6 +37,37 @@ const note = {
 	workspaceId,
 };
 
+const createNoteEditorActions = (
+	overrides: Partial<NoteEditorActions> = {},
+): NoteEditorActions => ({
+	applyTemplate: vi.fn().mockResolvedValue(false),
+	canCopyContent: true,
+	canRedo: false,
+	canShowTemplateSelect: false,
+	canUndo: false,
+	copyContent: vi.fn().mockResolvedValue(undefined),
+	exportMarkdown: vi.fn().mockResolvedValue(undefined),
+	openComments: vi.fn(),
+	redo: vi.fn(),
+	undo: vi.fn(),
+	...overrides,
+});
+
+const renderMenu = (noteEditorActions: NoteEditorActions) => {
+	render(
+		<TooltipProvider>
+			<ActiveWorkspaceProvider workspaceId={workspaceId}>
+				<NoteHeaderActionsMenu
+					noteId={noteId}
+					noteTitle={note.title}
+					noteEditorActions={noteEditorActions}
+					onNoteTrashed={vi.fn()}
+				/>
+			</ActiveWorkspaceProvider>
+		</TooltipProvider>,
+	);
+};
+
 describe("NoteHeaderActionsMenu", () => {
 	beforeEach(() => {
 		useQueryMock.mockImplementation((reference: never) =>
@@ -53,31 +84,7 @@ describe("NoteHeaderActionsMenu", () => {
 	it("closes the menu after copying note content", async () => {
 		const user = userEvent.setup();
 		const copyContent = vi.fn().mockResolvedValue(undefined);
-		const noteEditorActions: NoteEditorActions = {
-			applyTemplate: vi.fn().mockResolvedValue(false),
-			canCopyContent: true,
-			canRedo: false,
-			canShowTemplateSelect: false,
-			canUndo: false,
-			copyContent,
-			exportMarkdown: vi.fn().mockResolvedValue(undefined),
-			openComments: vi.fn(),
-			redo: vi.fn(),
-			undo: vi.fn(),
-		};
-
-		render(
-			<TooltipProvider>
-				<ActiveWorkspaceProvider workspaceId={workspaceId}>
-					<NoteHeaderActionsMenu
-						noteId={noteId}
-						noteTitle={note.title}
-						noteEditorActions={noteEditorActions}
-						onNoteTrashed={vi.fn()}
-					/>
-				</ActiveWorkspaceProvider>
-			</TooltipProvider>,
-		);
+		renderMenu(createNoteEditorActions({ copyContent }));
 
 		await user.click(
 			screen.getByRole("button", { name: "Open actions for Research note" }),
@@ -87,6 +94,20 @@ describe("NoteHeaderActionsMenu", () => {
 		);
 
 		expect(copyContent).toHaveBeenCalledOnce();
+		await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+	});
+
+	it("closes the menu after starting a note export", async () => {
+		const user = userEvent.setup();
+		const exportMarkdown = vi.fn().mockResolvedValue(undefined);
+		renderMenu(createNoteEditorActions({ exportMarkdown }));
+
+		await user.click(
+			screen.getByRole("button", { name: "Open actions for Research note" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Export" }));
+
+		expect(exportMarkdown).toHaveBeenCalledOnce();
 		await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 	});
 });
