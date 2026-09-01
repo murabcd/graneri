@@ -211,6 +211,7 @@ const requireOwnedActiveStream = async (
 		workspaceId: Id<"workspaces">;
 		chatId: string;
 		runId: Id<"assistantRuns">;
+		assistantMessageId: string;
 	},
 ) => {
 	const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
@@ -244,7 +245,12 @@ const requireOwnedActiveStream = async (
 
 	const stream = await getActiveStreamByRunId(ctx, args.runId);
 
-	if (!stream || stream.chatId !== chat._id) {
+	if (
+		!stream ||
+		stream.chatId !== chat._id ||
+		stream.assistantMessageId !== args.assistantMessageId ||
+		run.assistantMessageId !== args.assistantMessageId
+	) {
 		throw new ConvexError({
 			code: "ACTIVE_STREAM_NOT_FOUND",
 			message: "Active chat stream not found.",
@@ -259,6 +265,7 @@ export const startActiveStreamToolCall = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		toolCallId: v.string(),
 		toolName: v.string(),
 		inputJson: v.optional(v.string()),
@@ -318,6 +325,7 @@ export const finishActiveStreamToolCall = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		toolCallId: v.string(),
 		status: v.union(
 			v.literal("completed"),

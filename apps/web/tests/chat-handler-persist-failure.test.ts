@@ -6,7 +6,6 @@ import {
 	hostedChatReplayQueuedMessageIdHeader,
 	hostedChatSteerAcceptedHeader,
 	hostedChatSteerQueuedMessageIdHeader,
-	hostedChatSteerQueuedMessageIdsHeader,
 	hostedChatSteerTurnIdHeader,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
@@ -52,6 +51,29 @@ vi.mock("convex/browser", () => ({
 const previousConvexUrl = process.env.CONVEX_URL;
 const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
 const defaultChatModelId = defaultChatModel.model;
+const getMutationCalls = (functionName: string) =>
+	convexMock.mutation.mock.calls.filter(
+		([functionReference]) =>
+			getFunctionName(functionReference) === functionName,
+	);
+const mockPreparedTurnQueriesWithNoAcceptance = () => {
+	convexMock.query.mockImplementation((functionReference) => {
+		const functionName = getFunctionName(functionReference);
+		if (
+			functionName === "chats:getMessagesSnapshot" ||
+			functionName === "assistantRunEvents:listRunEventsAfter" ||
+			functionName === "notes:getChatContext"
+		) {
+			return Promise.resolve([]);
+		}
+		if (
+			functionName === "assistantQueuedMessageAcceptances:getAcceptanceStatus"
+		) {
+			return Promise.resolve({ status: "not_accepted" });
+		}
+		return Promise.resolve(null);
+	});
+};
 
 beforeEach(() => {
 	process.env.CONVEX_URL = "https://example.convex.cloud";
@@ -307,7 +329,7 @@ describe("chat handler persistence failures", () => {
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
-		convexMock.query.mockRejectedValueOnce({
+		convexMock.mutation.mockRejectedValueOnce({
 			data: {
 				code: "QUEUED_MESSAGE_INVALID_REQUEST_BODY",
 				message: "Queued message request body is invalid.",
@@ -322,6 +344,7 @@ describe("chat handler persistence failures", () => {
 				model: defaultChatModelId,
 				appsEnabled: false,
 				replayQueuedMessageId: "queued_1",
+				replayQueuedMessageStatus: "queued",
 			}),
 		).resolves.toEqual({
 			status: 400,
@@ -832,22 +855,25 @@ describe("chat handler persistence failures", () => {
 		expect(convexMock.query).toHaveBeenCalledTimes(3);
 	});
 
-	it("prepares replayed queued messages from the claimed queue row before starting a run", async () => {
+	it("releases the replay claim when atomic acceptance and run start fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,
 			title: "Existing chat",
 		});
 		convexMock.query.mockResolvedValueOnce(null);
-		convexMock.query.mockResolvedValueOnce({
-			_id: "queued_1",
-			messageId: "message_1",
-			text: "queued replay",
-			metadataJson: undefined,
+		convexMock.mutation.mockResolvedValueOnce({
+			status: "claimed",
+			claimedMessage: {
+				_id: "queued_1",
+				claimVersion: 2,
+				messageId: "message_1",
+				text: "queued replay",
+				metadataJson: undefined,
+			},
 		});
-		convexMock.query.mockResolvedValueOnce([]);
-		convexMock.query.mockResolvedValueOnce(null);
-		convexMock.mutation.mockResolvedValueOnce({ ok: true });
+		mockPreparedTurnQueriesWithNoAcceptance();
 		convexMock.mutation.mockRejectedValueOnce(new Error("start failed"));
+		convexMock.mutation.mockResolvedValueOnce(null);
 
 		const result = await postChatRequest(
 			{
@@ -857,29 +883,48 @@ describe("chat handler persistence failures", () => {
 				model: defaultChatModelId,
 				appsEnabled: false,
 				replayQueuedMessageId: "queued_1",
+				replayQueuedMessageStatus: "queued",
 			},
 			{ includeHeaders: true },
 		);
 
 		expect(result.status).toBe(500);
 		expect(result.body).toEqual({
-			error: "Failed to start hosted assistant run.",
+			error: "Failed to persist user chat message.",
 		});
-		expect(result.headers.get(hostedChatReplayAcceptedHeader)).toBe("true");
-		expect(result.headers.get(hostedChatReplayQueuedMessageIdHeader)).toBe(
-			"queued_1",
-		);
+		expect(result.headers.get(hostedChatReplayAcceptedHeader)).toBeNull();
+		expect(
+			result.headers.get(hostedChatReplayQueuedMessageIdHeader),
+		).toBeNull();
 
-		expect(convexMock.mutation.mock.calls[0]?.[1]).toMatchObject({
+		expect(getFunctionName(convexMock.mutation.mock.calls[0]?.[0])).toBe(
+			"assistantQueuedMessages:claimForReplay",
+		);
+		expect(convexMock.mutation.mock.calls[0]?.[1]).toEqual({
+			workspaceId: "workspace_1",
+			chatId: "chat_1",
+			expectedStatus: "queued",
 			queuedMessageId: "queued_1",
+		});
+		expect(convexMock.mutation.mock.calls[1]?.[1]).toMatchObject({
+			queuedMessageId: "queued_1",
+			claimVersion: 2,
 			message: {
 				id: "message_1",
 				role: "user",
 				text: "queued replay",
 			},
 		});
-		expect(convexMock.mutation.mock.calls[1]?.[1]).toMatchObject({
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed"),
+		).toHaveLength(1);
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed")[0]?.[1],
+		).toEqual({
+			workspaceId: "workspace_1",
 			chatId: "chat_1",
+			queuedMessageId: "queued_1",
+			claimVersion: 2,
 		});
 	});
 
@@ -892,6 +937,7 @@ describe("chat handler persistence failures", () => {
 				model: defaultChatModelId,
 				appsEnabled: false,
 				replayQueuedMessageId: "queued_1",
+				replayQueuedMessageStatus: "queued",
 				message: {
 					id: "client_message_ignored",
 					role: "user",
@@ -911,7 +957,7 @@ describe("chat handler persistence failures", () => {
 		expect(convexMock.mutation).not.toHaveBeenCalled();
 	});
 
-	it("discards a claimed steer message when active run interrupt fails", async () => {
+	it("releases a claimed steer message when the pre-accept session is unavailable", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,
 			title: "Existing chat",
@@ -920,16 +966,16 @@ describe("chat handler persistence failures", () => {
 			_id: "run_1",
 			status: "running",
 			assistantMessageId: "assistant_1",
+			producer: "web",
 		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
-				_id: "queued_1",
-				messageId: "message_1",
-				text: "queued steer",
-				metadataJson: undefined,
-			},
-		]);
-		convexMock.mutation.mockRejectedValueOnce(new Error("interrupt failed"));
+		convexMock.mutation.mockResolvedValueOnce({
+			_id: "queued_1",
+			claimVersion: 2,
+			messageId: "message_1",
+			text: "queued steer",
+			metadataJson: undefined,
+		});
+		mockPreparedTurnQueriesWithNoAcceptance();
 		convexMock.mutation.mockResolvedValueOnce(null);
 
 		await expect(
@@ -946,19 +992,28 @@ describe("chat handler persistence failures", () => {
 				{ isSteerRoute: true },
 			),
 		).resolves.toEqual({
-			status: 500,
-			body: { error: "Failed to interrupt active assistant run." },
+			status: 409,
+			body: {
+				error:
+					"The active assistant stream finished before the steer input could attach.",
+			},
 		});
 
-		expect(convexMock.mutation).toHaveBeenCalledTimes(3);
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toEqual({
+		expect(getMutationCalls("assistantRuns:failAssistantRun")).toHaveLength(0);
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed"),
+		).toHaveLength(1);
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed")[0]?.[1],
+		).toEqual({
 			workspaceId: "workspace_1",
 			chatId: "chat_1",
 			queuedMessageId: "queued_1",
+			claimVersion: 2,
 		});
 	});
 
-	it("fails closed when claimed steer cleanup fails after active run interrupt failure", async () => {
+	it("releases a claimed steer message when pre-accept preparation fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,
 			title: "Existing chat",
@@ -968,61 +1023,13 @@ describe("chat handler persistence failures", () => {
 			status: "running",
 			assistantMessageId: "assistant_1",
 		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
-				_id: "queued_1",
-				messageId: "message_1",
-				text: "queued steer",
-				metadataJson: undefined,
-			},
-		]);
-		convexMock.mutation.mockRejectedValueOnce(new Error("interrupt failed"));
-		convexMock.mutation.mockRejectedValueOnce(new Error("discard failed"));
-
-		await expect(
-			postChatRequest(
-				{
-					id: "chat_1",
-					workspaceId: "workspace_1",
-					convexToken: "token_1",
-					model: defaultChatModelId,
-					appsEnabled: false,
-					continueRunId: "run_1",
-					steerQueuedMessageId: "queued_1",
-				},
-				{ isSteerRoute: true },
-			),
-		).resolves.toEqual({
-			status: 500,
-			body: { error: "Failed to clean up claimed steered message." },
+		convexMock.mutation.mockResolvedValueOnce({
+			_id: "queued_1",
+			claimVersion: 2,
+			messageId: "message_1",
+			text: "queued steer",
+			metadataJson: undefined,
 		});
-
-		expect(convexMock.mutation).toHaveBeenCalledTimes(3);
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toEqual({
-			workspaceId: "workspace_1",
-			chatId: "chat_1",
-			queuedMessageId: "queued_1",
-		});
-	});
-
-	it("discards a claimed steer message when pre-accept preparation fails", async () => {
-		convexMock.query.mockResolvedValueOnce({
-			model: defaultChatModelId,
-			title: "Existing chat",
-		});
-		convexMock.query.mockResolvedValueOnce({
-			_id: "run_1",
-			status: "running",
-			assistantMessageId: "assistant_1",
-		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
-				_id: "queued_1",
-				messageId: "message_1",
-				text: "queued steer",
-				metadataJson: undefined,
-			},
-		]);
 		convexMock.mutation.mockResolvedValueOnce(null);
 		convexMock.query.mockRejectedValueOnce(new Error("snapshot failed"));
 		convexMock.mutation.mockResolvedValueOnce(null);
@@ -1045,15 +1052,18 @@ describe("chat handler persistence failures", () => {
 			body: { error: "Failed to prepare steered assistant run." },
 		});
 
-		expect(convexMock.mutation).toHaveBeenCalledTimes(3);
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toEqual({
+		expect(getMutationCalls("assistantRuns:failAssistantRun")).toHaveLength(0);
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed")[0]?.[1],
+		).toEqual({
 			workspaceId: "workspace_1",
 			chatId: "chat_1",
 			queuedMessageId: "queued_1",
+			claimVersion: 2,
 		});
 	});
 
-	it("fails closed when claimed steer cleanup fails after preparation failure", async () => {
+	it("fails closed when the pre-accept claim release fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,
 			title: "Existing chat",
@@ -1063,17 +1073,21 @@ describe("chat handler persistence failures", () => {
 			status: "running",
 			assistantMessageId: "assistant_1",
 		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
+		convexMock.mutation
+			.mockResolvedValueOnce({
 				_id: "queued_1",
+				claimVersion: 2,
 				messageId: "message_1",
 				text: "queued steer",
 				metadataJson: undefined,
-			},
-		]);
-		convexMock.mutation.mockResolvedValueOnce(null);
+			})
+			.mockImplementation((functionReference) =>
+				getFunctionName(functionReference) ===
+				"assistantQueuedMessages:releaseClaimed"
+					? Promise.reject(new Error("release failed"))
+					: Promise.resolve(null),
+			);
 		convexMock.query.mockRejectedValueOnce(new Error("snapshot failed"));
-		convexMock.mutation.mockRejectedValueOnce(new Error("discard failed"));
 
 		await expect(
 			postChatRequest(
@@ -1090,65 +1104,20 @@ describe("chat handler persistence failures", () => {
 			),
 		).resolves.toEqual({
 			status: 500,
-			body: { error: "Failed to clean up claimed steered message." },
+			body: { error: "Failed to release claimed steered message." },
 		});
 
-		expect(convexMock.mutation).toHaveBeenCalledTimes(3);
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toEqual({
+		expect(getMutationCalls("assistantRuns:failAssistantRun")).toHaveLength(0);
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed"),
+		).toHaveLength(1);
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed")[0]?.[1],
+		).toEqual({
 			workspaceId: "workspace_1",
 			chatId: "chat_1",
 			queuedMessageId: "queued_1",
-		});
-	});
-
-	it("does not interrupt a waiting run before accepting queued input", async () => {
-		convexMock.query.mockResolvedValueOnce({
-			model: defaultChatModelId,
-			title: "Existing chat",
-		});
-		convexMock.query.mockResolvedValueOnce({
-			_id: "run_1",
-			status: "waiting_for_user",
-			assistantMessageId: "assistant_1",
-		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
-				_id: "queued_1",
-				messageId: "message_1",
-				text: "queued steer",
-				metadataJson: undefined,
-			},
-		]);
-		convexMock.query.mockRejectedValueOnce(new Error("snapshot failed"));
-		convexMock.mutation.mockResolvedValueOnce(null);
-
-		await expect(
-			postChatRequest(
-				{
-					id: "chat_1",
-					workspaceId: "workspace_1",
-					convexToken: "token_1",
-					model: defaultChatModelId,
-					appsEnabled: false,
-					continueRunId: "run_1",
-					steerQueuedMessageId: "queued_1",
-				},
-				{ isSteerRoute: true },
-			),
-		).resolves.toEqual({
-			status: 500,
-			body: { error: "Failed to prepare steered assistant run." },
-		});
-
-		expect(convexMock.mutation).toHaveBeenCalledTimes(2);
-		expect(convexMock.mutation.mock.calls[0]?.[1]).toEqual({
-			runId: "run_1",
-			queuedMessageId: "queued_1",
-		});
-		expect(convexMock.mutation.mock.calls[1]?.[1]).toEqual({
-			workspaceId: "workspace_1",
-			chatId: "chat_1",
-			queuedMessageId: "queued_1",
+			claimVersion: 2,
 		});
 	});
 
@@ -1162,14 +1131,13 @@ describe("chat handler persistence failures", () => {
 			status: "running",
 			assistantMessageId: "assistant_1",
 		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
-				_id: "queued_1",
-				messageId: "message_1",
-				text: "queued steer",
-				metadataJson: undefined,
-			},
-		]);
+		convexMock.mutation.mockResolvedValueOnce({
+			_id: "queued_1",
+			claimVersion: 2,
+			messageId: "message_1",
+			text: "queued steer",
+			metadataJson: undefined,
+		});
 		convexMock.mutation.mockResolvedValueOnce(null);
 		convexMock.query.mockRejectedValueOnce(new Error("snapshot failed"));
 		convexMock.mutation.mockResolvedValueOnce(null);
@@ -1196,14 +1164,17 @@ describe("chat handler persistence failures", () => {
 			runId: "run_1",
 			queuedMessageId: "queued_1",
 		});
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toEqual({
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed")[0]?.[1],
+		).toEqual({
 			workspaceId: "workspace_1",
 			chatId: "chat_1",
 			queuedMessageId: "queued_1",
+			claimVersion: 2,
 		});
 	});
 
-	it("accepts a steered input batch and lets the Convex producer continue it", async () => {
+	it("accepts the selected steered input and lets the Convex producer continue it", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,
 			title: "Existing chat",
@@ -1214,20 +1185,13 @@ describe("chat handler persistence failures", () => {
 			assistantMessageId: "assistant_1",
 			producer: "convex",
 		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
-				_id: "queued_1",
-				messageId: "message_1",
-				text: "queued steer",
-				metadataJson: undefined,
-			},
-			{
-				_id: "queued_2",
-				messageId: "message_2",
-				text: "queued steer follow-up",
-				metadataJson: undefined,
-			},
-		]);
+		convexMock.mutation.mockResolvedValueOnce({
+			_id: "queued_1",
+			claimVersion: 2,
+			messageId: "message_1",
+			text: "queued steer",
+			metadataJson: undefined,
+		});
 		convexMock.query.mockResolvedValueOnce([]);
 		convexMock.query.mockResolvedValueOnce([]);
 		convexMock.query.mockResolvedValueOnce(null);
@@ -1252,36 +1216,22 @@ describe("chat handler persistence failures", () => {
 		expect(result.headers.get(hostedChatSteerQueuedMessageIdHeader)).toBe(
 			"queued_1",
 		);
-		expect(result.headers.get(hostedChatSteerQueuedMessageIdsHeader)).toBe(
-			"queued_1,queued_2",
-		);
 		expect(result.headers.get(hostedChatSteerTurnIdHeader)).toBe("run_1");
 		expect(convexMock.mutation).toHaveBeenCalledTimes(2);
 		expect(convexMock.mutation.mock.calls[1]?.[1]).toMatchObject({
 			admissionReservationId: "admission_1",
 			runId: "run_1",
-			messages: [
-				expect.objectContaining({
-					queuedMessageId: "queued_1",
-					message: expect.objectContaining({
-						id: "message_1",
-						role: "user",
-						text: "queued steer",
-					}),
-				}),
-				expect.objectContaining({
-					queuedMessageId: "queued_2",
-					message: expect.objectContaining({
-						id: "message_2",
-						role: "user",
-						text: "queued steer follow-up",
-					}),
-				}),
-			],
+			queuedMessageId: "queued_1",
+			claimVersion: 2,
+			message: expect.objectContaining({
+				id: "message_1",
+				role: "user",
+				text: "queued steer",
+			}),
 		});
 	});
 
-	it("returns the stale steer transition error when cleanup sees an already consumed queue row", async () => {
+	it("returns the stale steer transition after idempotent claim release", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			model: defaultChatModelId,
 			title: "Existing chat",
@@ -1290,31 +1240,23 @@ describe("chat handler persistence failures", () => {
 			_id: "run_1",
 			status: "running",
 			assistantMessageId: "assistant_1",
+			producer: "convex",
 		});
-		convexMock.mutation.mockResolvedValueOnce([
-			{
-				_id: "queued_1",
-				messageId: "message_1",
-				text: "queued steer",
-				metadataJson: undefined,
-			},
-		]);
-		convexMock.mutation.mockResolvedValueOnce(null);
-		convexMock.query.mockResolvedValueOnce([]);
-		convexMock.query.mockResolvedValueOnce([]);
-		convexMock.query.mockResolvedValueOnce(null);
+		convexMock.mutation.mockResolvedValueOnce({
+			_id: "queued_1",
+			claimVersion: 2,
+			messageId: "message_1",
+			text: "queued steer",
+			metadataJson: undefined,
+		});
+		mockPreparedTurnQueriesWithNoAcceptance();
 		convexMock.mutation.mockRejectedValueOnce({
 			data: {
 				code: "INVALID_ASSISTANT_RUN_TRANSITION",
 				message: "Assistant run cannot accept steered user input.",
 			},
 		});
-		convexMock.mutation.mockRejectedValueOnce({
-			data: {
-				code: "QUEUED_MESSAGE_NOT_FOUND",
-				message: "Queued message is no longer available.",
-			},
-		});
+		convexMock.mutation.mockResolvedValueOnce(null);
 
 		await expect(
 			postChatRequest(
@@ -1337,14 +1279,78 @@ describe("chat handler persistence failures", () => {
 			},
 		});
 
-		expect(convexMock.mutation.mock.calls.at(-1)?.[1]).toEqual({
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed").at(-1)?.[1],
+		).toEqual({
 			workspaceId: "workspace_1",
 			chatId: "chat_1",
 			queuedMessageId: "queued_1",
+			claimVersion: 2,
 		});
 	});
 
-	it("terminalizes manual stops even when active stream cleanup fails", async () => {
+	it("holds an ambiguous steer claim when acceptance status lookup fails", async () => {
+		convexMock.query.mockResolvedValueOnce({
+			model: defaultChatModelId,
+			title: "Existing chat",
+		});
+		convexMock.query.mockResolvedValueOnce({
+			_id: "run_1",
+			status: "running",
+			assistantMessageId: "assistant_1",
+			producer: "convex",
+		});
+		convexMock.query.mockImplementation((functionReference) => {
+			const functionName = getFunctionName(functionReference);
+			if (
+				functionName === "chats:getMessagesSnapshot" ||
+				functionName === "assistantRunEvents:listRunEventsAfter"
+			) {
+				return Promise.resolve([]);
+			}
+			if (
+				functionName === "assistantQueuedMessageAcceptances:getAcceptanceStatus"
+			) {
+				return Promise.reject(new Error("acceptance lookup unavailable"));
+			}
+			return Promise.resolve(null);
+		});
+		convexMock.mutation
+			.mockResolvedValueOnce({
+				_id: "queued_1",
+				claimVersion: 2,
+				messageId: "message_1",
+				text: "queued steer",
+				metadataJson: undefined,
+			})
+			.mockRejectedValueOnce(new Error("mutation response lost"))
+			.mockResolvedValueOnce(null);
+
+		await expect(
+			postChatRequest(
+				{
+					id: "chat_1",
+					workspaceId: "workspace_1",
+					convexToken: "token_1",
+					model: defaultChatModelId,
+					appsEnabled: false,
+					continueRunId: "run_1",
+					steerQueuedMessageId: "queued_1",
+				},
+				{ isSteerRoute: true },
+			),
+		).resolves.toEqual({
+			status: 500,
+			body: { error: "Failed to verify queued message acceptance." },
+		});
+
+		expect(getMutationCalls("assistantRuns:failAssistantRun")).toHaveLength(0);
+		expect(
+			getMutationCalls("assistantQueuedMessages:releaseClaimed"),
+		).toHaveLength(0);
+	});
+
+	it("keeps manual stops retryable when durable active stream cleanup fails", async () => {
 		convexMock.query.mockResolvedValueOnce({
 			_id: "run_1",
 			status: "running",
@@ -1354,7 +1360,6 @@ describe("chat handler persistence failures", () => {
 		convexMock.mutation.mockRejectedValueOnce(
 			new Error("active stream cleanup failed"),
 		);
-		convexMock.mutation.mockResolvedValueOnce(null);
 
 		await expect(
 			postChatStopRequest({
@@ -1367,18 +1372,20 @@ describe("chat handler persistence failures", () => {
 			body: { error: "active stream cleanup failed" },
 		});
 
-		expect(convexMock.mutation).toHaveBeenCalledTimes(3);
+		expect(convexMock.mutation).toHaveBeenCalledTimes(2);
 		expect(convexMock.mutation.mock.calls[0]?.[1]).toEqual({
 			runId: "run_1",
+			assistantMessageId: "assistant_1",
 			stopReason: "user_requested",
 		});
 		expect(convexMock.mutation.mock.calls[1]?.[1]).toEqual({
 			workspaceId: "workspace_1",
 			chatId: "chat_1",
 			runId: "run_1",
+			assistantMessageId: "assistant_1",
 		});
-		expect(convexMock.mutation.mock.calls[2]?.[1]).toEqual({
-			runId: "run_1",
-		});
+		expect(
+			getMutationCalls("assistantRuns:finishStoppedAssistantRun"),
+		).toHaveLength(0);
 	});
 });

@@ -12,16 +12,8 @@ import {
 } from "@workspace/ai/queued-chat-request";
 import { parseUiMessageMetadataJson } from "@workspace/ai/ui-message-codec";
 import { createChatComposerEditDraft } from "@/lib/chat-composer-mentions";
+import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import type { QueueableChatRequestBody } from "@/lib/chat-request-preparation";
-
-type QueuedMessage = {
-	_id: string;
-	messageId: string;
-	metadataJson?: string;
-	requestBodyJson: string;
-	text: string;
-	workspaceId: string;
-};
 
 const generatedQueuedMessageIdPrefix = "queued-";
 
@@ -58,7 +50,7 @@ const parseQueuedMessageMetadata = (
 };
 
 export const getQueuedChatComposerEditDraft = (
-	queuedMessage: Pick<QueuedMessage, "metadataJson" | "text">,
+	queuedMessage: Pick<QueuedFollowUpMessage, "metadataJson" | "text">,
 ) => {
 	const metadata = parseQueuedMessageMetadata(queuedMessage.metadataJson);
 
@@ -137,13 +129,12 @@ export const fromQueuedUserMessage = async ({
 	resolveConvexToken,
 }: {
 	hasMessageId?: (messageId: string) => boolean;
-	queuedMessage: QueuedMessage;
+	queuedMessage: QueuedFollowUpMessage;
 	resolveConvexToken: () => Promise<string | null>;
 }) => {
 	if (!queuedMessage._id.trim()) {
 		throw new Error("Queued chat message requires a durable queue id.");
 	}
-
 	const requestBody = parseQueuedRequestBody(queuedMessage.requestBodyJson);
 	const convexToken = await resolveConvexToken();
 	if (!convexToken) {
@@ -156,6 +147,7 @@ export const fromQueuedUserMessage = async ({
 			...requestBody,
 			convexToken,
 			replayQueuedMessageId: queuedMessage._id,
+			replayQueuedMessageStatus: queuedMessage.status,
 			workspaceId: queuedMessage.workspaceId,
 		},
 		message: {

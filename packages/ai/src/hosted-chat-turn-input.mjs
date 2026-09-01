@@ -4,27 +4,23 @@ import { createHostedChatTurnController } from "./hosted-chat-turn-controller.mj
 export const createHostedChatTurnInput = ({
 	attachableRun,
 	chatId,
-	claimReadyForRun,
-	discardClaimed,
-	getClaimedForChat,
-	interruptActiveRun,
+	claimForReplay,
+	claimForSteer,
+	releaseClaimed,
 	validateInput,
 	workspaceId,
 }) => {
 	const queuedInput = createHostedChatQueuedInput({
 		chatId,
-		claimReadyForRun,
-		discardClaimed,
-		getClaimedForChat,
+		claimForReplay,
+		claimForSteer,
+		releaseClaimed,
 		workspaceId,
 	});
 	const turnController = createHostedChatTurnController({
 		attachableRun,
-		chatId,
-		interruptActiveRun,
 		queuedInput,
 		validateInput,
-		workspaceId,
 	});
 
 	return { queuedInput, turnController };

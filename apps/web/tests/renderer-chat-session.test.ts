@@ -1,6 +1,8 @@
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
+	isRendererQueueActionPending,
+	isRendererQueueHandoffPending,
 	mergeRendererChatSessionMessages,
 	prepareRendererUserQuestionMessages,
 	resolveRendererChatRunState,
@@ -18,6 +20,51 @@ const message = (
 });
 
 describe("renderer chat session", () => {
+	it("withholds replay while a continuation request has no attached queue run", () => {
+		expect(
+			isRendererQueueActionPending({
+				isAcceptedHandoffPending: false,
+				isChatRequestPending: true,
+				queueActiveRunId: null,
+			}),
+		).toBe(true);
+		expect(
+			isRendererQueueActionPending({
+				isAcceptedHandoffPending: false,
+				isChatRequestPending: true,
+				queueActiveRunId: "run-2",
+			}),
+		).toBe(false);
+		expect(
+			isRendererQueueActionPending({
+				isAcceptedHandoffPending: false,
+				isChatRequestPending: false,
+				queueActiveRunId: null,
+			}),
+		).toBe(false);
+	});
+
+	it("keeps an accepted replay fenced until a different active run attaches", () => {
+		expect(
+			isRendererQueueHandoffPending({
+				activeRunId: null,
+				previousRunId: "run-1",
+			}),
+		).toBe(true);
+		expect(
+			isRendererQueueHandoffPending({
+				activeRunId: "run-1",
+				previousRunId: "run-1",
+			}),
+		).toBe(true);
+		expect(
+			isRendererQueueHandoffPending({
+				activeRunId: "run-2",
+				previousRunId: "run-1",
+			}),
+		).toBe(false);
+	});
+
 	it("hides a stale durable run after its assistant message completes locally", () => {
 		const assistantMessage = message("assistant-1", "assistant", "Complete");
 
@@ -36,6 +83,61 @@ describe("renderer chat session", () => {
 			displayActiveRun: null,
 			hasLocallyCompletedAssistantMessage: true,
 		});
+	});
+
+	it("shows server-drained follow-ups after the local controller generation completes", () => {
+		const initialUser = message("user-initial", "user", "Start");
+		const initialAssistant = message(
+			"assistant-initial",
+			"assistant",
+			"Initial response",
+		);
+		const firstQueuedUser = message("queued-a", "user", "A");
+		const firstQueuedAssistant = message(
+			"assistant-a",
+			"assistant",
+			"Red-black trees",
+		);
+		const secondQueuedUser = message("queued-b", "user", "B");
+		const secondQueuedAssistant = message("assistant-b", "assistant", "BRAVO");
+		const thirdQueuedUser = message("queued-c", "user", "C");
+		const thirdQueuedAssistant = message("assistant-c", "assistant", "CHARLIE");
+		const controllerMessages = [
+			initialUser,
+			initialAssistant,
+			firstQueuedUser,
+			firstQueuedAssistant,
+		];
+		const persistedFirstQueuedAssistant = message(
+			"assistant-a",
+			"assistant",
+			"Red-black",
+		);
+		const persistedMessages = [
+			initialUser,
+			initialAssistant,
+			firstQueuedUser,
+			persistedFirstQueuedAssistant,
+			secondQueuedUser,
+			secondQueuedAssistant,
+			thirdQueuedUser,
+			thirdQueuedAssistant,
+		];
+
+		const mergedMessages = mergeRendererChatSessionMessages({
+			activeAssistantMessageId: null,
+			controllerMessages,
+			displayActiveRun: null,
+			persistedMessages,
+		});
+
+		expect(mergedMessages).toEqual([
+			...controllerMessages,
+			secondQueuedUser,
+			secondQueuedAssistant,
+			thirdQueuedUser,
+			thirdQueuedAssistant,
+		]);
 	});
 
 	it("uses the latest assistant after the latest user for active-run identity", () => {

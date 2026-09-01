@@ -3,10 +3,9 @@ import {
 	hostedChatReplayQueuedMessageIdHeader,
 	hostedChatSteerAcceptedHeader,
 	hostedChatSteerQueuedMessageIdHeader,
-	hostedChatSteerQueuedMessageIdsHeader,
 	hostedChatSteerTurnIdHeader,
 } from "@workspace/ai/hosted-chat-runtime";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	createWorkspaceChatFetch,
 	getWorkspaceChatSendApi,
@@ -82,6 +81,7 @@ describe("getWorkspaceChatSendApi", () => {
 					convexToken: "fresh-token",
 					model: "gpt-5",
 					replayQueuedMessageId: "queued-1",
+					replayQueuedMessageStatus: "paused",
 				},
 				id: "chat-1",
 				message: { role: "user", parts: [{ type: "text", text: "client" }] },
@@ -94,6 +94,7 @@ describe("getWorkspaceChatSendApi", () => {
 			id: "chat-1",
 			model: "gpt-5",
 			replayQueuedMessageId: "queued-1",
+			replayQueuedMessageStatus: "paused",
 			workspaceId: "workspace-1",
 		});
 	});
@@ -151,7 +152,232 @@ describe("getWorkspaceChatSendApi", () => {
 });
 
 describe("createWorkspaceChatFetch", () => {
+	it("treats a missing automatic replay as an already-removed stale drain", async () => {
+		const onQueuedAcceptance = vi.fn();
+		const baseFetch = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						error: "Queued message is no longer available.",
+						errorCode: "QUEUED_MESSAGE_NOT_FOUND",
+					}),
+					{
+						status: 409,
+						headers: { "Content-Type": "application/json" },
+					},
+				),
+		);
+		const fetch = createWorkspaceChatFetch(baseFetch, onQueuedAcceptance);
+
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			body: JSON.stringify({
+				replayQueuedMessageId: "queued-1",
+				replayQueuedMessageOrigin: "automatic",
+				replayQueuedMessageStatus: "queued",
+			}),
+		});
+
+		expect(response.ok).toBe(true);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Content-Type")).toBe("text/event-stream");
+		expect(await response.text()).toBe("");
+		expect(onQueuedAcceptance).not.toHaveBeenCalled();
+		const forwardedRequestBody = JSON.parse(
+			String(baseFetch.mock.calls[0]?.[1]?.body),
+		) as {
+			replayQueuedMessageId?: unknown;
+			replayQueuedMessageOrigin?: unknown;
+			replayQueuedMessageStatus?: unknown;
+		};
+		expect(forwardedRequestBody).not.toHaveProperty(
+			"replayQueuedMessageOrigin",
+		);
+		expect(forwardedRequestBody).toMatchObject({
+			replayQueuedMessageId: "queued-1",
+			replayQueuedMessageStatus: "queued",
+		});
+	});
+
+	it("does not hide an active-run conflict behind an empty automatic replay stream", async () => {
+		const onQueuedAcceptance = vi.fn();
+		const baseFetch = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						error: "Chat already has an active assistant run.",
+						errorCode: "ASSISTANT_RUN_ACTIVE",
+					}),
+					{
+						status: 409,
+						headers: { "Content-Type": "application/json" },
+					},
+				),
+		);
+		const fetch = createWorkspaceChatFetch(baseFetch, onQueuedAcceptance);
+
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			body: JSON.stringify({
+				replayQueuedMessageId: "queued-1",
+				replayQueuedMessageOrigin: "automatic",
+				replayQueuedMessageStatus: "queued",
+			}),
+		});
+
+		expect(response.ok).toBe(false);
+		expect(response.status).toBe(409);
+		expect(onQueuedAcceptance).not.toHaveBeenCalled();
+	});
+
+	it("preserves an active-run conflict for a manually selected replay", async () => {
+		const fetch = createWorkspaceChatFetch(async () =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						error: "Chat already has an active assistant run.",
+						errorCode: "ASSISTANT_RUN_ACTIVE",
+					}),
+					{ status: 409 },
+				),
+			),
+		);
+
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			body: JSON.stringify({
+				replayQueuedMessageId: "queued-1",
+				replayQueuedMessageOrigin: "manual",
+				replayQueuedMessageStatus: "paused",
+			}),
+		});
+
+		expect(response.ok).toBe(false);
+		expect(response.status).toBe(409);
+	});
+
+	it("preserves a missing manually selected queued replay failure", async () => {
+		const fetch = createWorkspaceChatFetch(async () =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						error: "Queued message is no longer available.",
+						errorCode: "QUEUED_MESSAGE_NOT_FOUND",
+					}),
+					{
+						status: 409,
+						headers: { "Content-Type": "application/json" },
+					},
+				),
+			),
+		);
+
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			body: JSON.stringify({
+				replayQueuedMessageId: "queued-1",
+				replayQueuedMessageOrigin: "manual",
+				replayQueuedMessageStatus: "queued",
+			}),
+		});
+
+		expect(response.ok).toBe(false);
+		expect(response.status).toBe(409);
+	});
+
+	it("preserves an invalid automatic paused replay failure", async () => {
+		const fetch = createWorkspaceChatFetch(async () =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						error: "Queued message is no longer available.",
+						errorCode: "QUEUED_MESSAGE_NOT_FOUND",
+					}),
+					{ status: 409 },
+				),
+			),
+		);
+
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			body: JSON.stringify({
+				replayQueuedMessageId: "queued-1",
+				replayQueuedMessageOrigin: "automatic",
+				replayQueuedMessageStatus: "paused",
+			}),
+		});
+
+		expect(response.ok).toBe(false);
+		expect(response.status).toBe(409);
+	});
+
+	it("preserves missing paused replay failures for selected sends", async () => {
+		const fetch = createWorkspaceChatFetch(async () =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						error: "Queued message is no longer available.",
+						errorCode: "QUEUED_MESSAGE_NOT_FOUND",
+					}),
+					{
+						status: 409,
+						headers: { "Content-Type": "application/json" },
+					},
+				),
+			),
+		);
+
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			body: JSON.stringify({
+				replayQueuedMessageId: "queued-1",
+				replayQueuedMessageOrigin: "manual",
+				replayQueuedMessageStatus: "paused",
+			}),
+		});
+
+		expect(response.ok).toBe(false);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			error: "Queued message is no longer available.",
+			errorCode: "QUEUED_MESSAGE_NOT_FOUND",
+		});
+	});
+
+	it("preserves real automatic replay failures", async () => {
+		const fetch = createWorkspaceChatFetch(
+			async () =>
+				new Response(
+					JSON.stringify({
+						error: "Failed to claim queued message.",
+						errorCode: "QUEUED_MESSAGE_NOT_CLAIMED",
+					}),
+					{
+						status: 409,
+						headers: { "Content-Type": "application/json" },
+					},
+				),
+		);
+
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			body: JSON.stringify({
+				replayQueuedMessageId: "queued-1",
+				replayQueuedMessageOrigin: "automatic",
+				replayQueuedMessageStatus: "queued",
+			}),
+		});
+
+		expect(response.ok).toBe(false);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			error: "Failed to claim queued message.",
+			errorCode: "QUEUED_MESSAGE_NOT_CLAIMED",
+		});
+	});
+
 	it("converts accepted steer failures into empty successful streams", async () => {
+		const onQueuedAcceptance = vi.fn();
 		const fetch = createWorkspaceChatFetch(
 			async () =>
 				new Response(JSON.stringify({ error: "stream failed" }), {
@@ -160,9 +386,9 @@ describe("createWorkspaceChatFetch", () => {
 						[hostedChatSteerAcceptedHeader]: "true",
 						[hostedChatSteerTurnIdHeader]: "run-1",
 						[hostedChatSteerQueuedMessageIdHeader]: "queued-1",
-						[hostedChatSteerQueuedMessageIdsHeader]: "queued-1,queued-2",
 					},
 				}),
+			onQueuedAcceptance,
 		);
 
 		const response = await fetch("/api/chat/steer", {
@@ -178,18 +404,22 @@ describe("createWorkspaceChatFetch", () => {
 		expect(response.headers.get(hostedChatSteerQueuedMessageIdHeader)).toBe(
 			"queued-1",
 		);
-		expect(response.headers.get(hostedChatSteerQueuedMessageIdsHeader)).toBe(
-			"queued-1,queued-2",
-		);
 		expect(await response.text()).toBe("");
+		expect(onQueuedAcceptance).toHaveBeenCalledOnce();
+		expect(onQueuedAcceptance).toHaveBeenCalledWith({
+			queuedMessageId: "queued-1",
+			type: "steer",
+		});
 	});
 
 	it("leaves pre-accept steer failures untouched", async () => {
+		const onQueuedAcceptance = vi.fn();
 		const fetch = createWorkspaceChatFetch(
 			async () =>
 				new Response(JSON.stringify({ error: "no active turn" }), {
 					status: 409,
 				}),
+			onQueuedAcceptance,
 		);
 
 		const response = await fetch("/api/chat/steer", {
@@ -200,9 +430,11 @@ describe("createWorkspaceChatFetch", () => {
 		expect(response.ok).toBe(false);
 		expect(response.status).toBe(409);
 		expect(await response.json()).toEqual({ error: "no active turn" });
+		expect(onQueuedAcceptance).not.toHaveBeenCalled();
 	});
 
 	it("converts accepted replay failures into empty successful streams", async () => {
+		const onQueuedAcceptance = vi.fn();
 		const fetch = createWorkspaceChatFetch(
 			async () =>
 				new Response(JSON.stringify({ error: "stream failed" }), {
@@ -212,6 +444,7 @@ describe("createWorkspaceChatFetch", () => {
 						[hostedChatReplayQueuedMessageIdHeader]: "queued-1",
 					},
 				}),
+			onQueuedAcceptance,
 		);
 
 		const response = await fetch("/api/chat", {
@@ -227,5 +460,10 @@ describe("createWorkspaceChatFetch", () => {
 			"queued-1",
 		);
 		expect(await response.text()).toBe("");
+		expect(onQueuedAcceptance).toHaveBeenCalledOnce();
+		expect(onQueuedAcceptance).toHaveBeenCalledWith({
+			queuedMessageId: "queued-1",
+			type: "replay",
+		});
 	});
 });

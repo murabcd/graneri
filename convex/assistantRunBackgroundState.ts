@@ -14,7 +14,9 @@ import {
 } from "./assistantRunJobModel";
 import {
 	getAssistantRunJob,
+	projectPersistedAssistantRunJobForNewGeneration,
 	upsertAssistantRunJobMessage,
+	upsertAssistantRunJobMessages,
 } from "./assistantRunJobState";
 import {
 	type AssistantRunPendingDecision,
@@ -22,11 +24,20 @@ import {
 	reasoningEffortValidator,
 	serviceTierValidator,
 } from "./assistantRunModel";
-import { transitionAssistantRun } from "./assistantRunStateMachine";
 import {
+	cleanupAssistantRunSnapshots,
+	transitionAssistantRun,
+} from "./assistantRunStateMachine";
+import {
+	createAssistantRunStream,
 	getActiveStreamForRun,
 	updateAssistantRunStream,
 } from "./assistantRunStreamState";
+import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
+import {
+	deleteAssistantRunSteerInputs,
+	loadPendingAssistantRunSteerMessages,
+} from "./assistantRunSteerInputState";
 import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import { saveMessageForOwnerInternal } from "./chats";
 import { syncAssistantRunToolCalls } from "./chatToolCalls";
@@ -89,13 +100,57 @@ const saveActiveAssistantMessage = async (
 			role: "assistant",
 			partsJson: context.stream.partsJson,
 			text: context.stream.text,
-			createdAt: Date.now(),
+			createdAt: context.stream._creationTime,
 		},
 	});
 	await appendAssistantRunEvent(ctx, run, {
 		type: "message.completed",
 		assistantMessageId: run.assistantMessageId,
 	});
+};
+
+const continueRunWithPendingSteerInput = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+) => {
+	const pending = await loadPendingAssistantRunSteerMessages(ctx, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+	if (pending.inputs.length === 0) {
+		return null;
+	}
+	const context = await getFinalizationContext(ctx, run);
+	if (!context) {
+		throw new Error("Steered assistant run state could not be continued.");
+	}
+
+	await saveActiveAssistantMessage(ctx, run, context);
+	await upsertAssistantRunJobMessage(ctx, run._id, {
+		id: run.assistantMessageId,
+		role: "assistant",
+		partsJson: context.stream.partsJson,
+	});
+	await upsertAssistantRunJobMessages(
+		ctx,
+		run._id,
+		pending.messages.map((message) => ({
+			id: message.messageId,
+			role: "user" as const,
+			partsJson: message.partsJson,
+			metadataJson: message.metadataJson,
+		})),
+	);
+	await projectPersistedAssistantRunJobForNewGeneration(ctx, run._id);
+	await deleteAssistantRunSteerInputs(ctx, pending.inputs);
+	const continuedRun = await transitionAssistantRun(ctx, run, {
+		type: "start_assistant_message",
+		assistantMessageId: `stream-${crypto.randomUUID()}`,
+	});
+	await cleanupAssistantRunSnapshots(ctx, run._id);
+	await createAssistantRunStream(ctx, continuedRun);
+	await scheduleAssistantRunExecution(ctx, continuedRun);
+	return continuedRun;
 };
 
 const completeRun = async (ctx: MutationCtx, run: Doc<"assistantRuns">) => {
@@ -313,6 +368,12 @@ export const checkpointStep = internalMutation({
 			},
 			updatedAt: Date.now(),
 		});
+		if (
+			args.outcome !== "waiting_for_user" &&
+			(await continueRunWithPendingSteerInput(ctx, run))
+		) {
+			return false;
+		}
 		return true;
 	},
 });
@@ -333,6 +394,12 @@ export const applyStepOutcome = internalMutation({
 			run.status !== "running" ||
 			run.assistantMessageId !== args.assistantMessageId ||
 			checkpoint?.stepIndex !== args.stepIndex
+		) {
+			return "completed";
+		}
+		if (
+			checkpoint.outcome !== "waiting_for_user" &&
+			(await continueRunWithPendingSteerInput(ctx, run))
 		) {
 			return "completed";
 		}

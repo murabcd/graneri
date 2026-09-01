@@ -133,6 +133,7 @@ export const buildHostedChatRunContext = async ({
 		},
 		chatMode,
 		coreToolPolicy,
+		getActiveStreamSession,
 		localFolderContext,
 		localFolderTools:
 			localFolderRoots.length > 0

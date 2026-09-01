@@ -39,20 +39,40 @@ const createTurnInput = (attachableRun: AttachableRun | null) =>
 		workspaceId,
 		chatId,
 		attachableRun,
-		claimReadyForRun: async () => [],
-		discardClaimed: async () => null,
-		getClaimedForChat: async () => null,
-		interruptActiveRun: async () => [],
+		claimForReplay: async ({ queuedMessageId }) => ({
+			status: "claimed",
+			claimedMessage: {
+				_id: queuedMessageId,
+				claimVersion: 7,
+				messageId: "user-1",
+				text: "Continue",
+			},
+		}),
+		claimForSteer: async ({ queuedMessageId }) => ({
+			_id: queuedMessageId,
+			claimVersion: 7,
+			messageId: "user-1",
+			text: "Continue",
+		}),
+		releaseClaimed: async () => null,
 		validateInput: () => ({ ok: true }),
 	});
 
 const createPersistence = (
 	overrides: Partial<Persistence> = {},
 ): Persistence => ({
-	acceptQueuedUserMessage: async () => {},
-	acceptSteeredUserMessages: async () => {},
+	acceptQueuedUserMessageAndStartRun: async () =>
+		({
+			run: createAttachableRun("run-replay" as Id<"assistantRuns">),
+		}) as Awaited<
+			ReturnType<Persistence["acceptQueuedUserMessageAndStartRun"]>
+		>,
+	acceptSteeredUserMessage: async () => {},
 	answerUserQuestion: async () => {},
 	completeLocalFolderToolMessage: async () => {},
+	getQueuedMessageAcceptanceStatus: async () => ({
+		status: "not_accepted",
+	}),
 	persistToolApprovalResponse: async () => {},
 	saveMessage: async () => {},
 	startBackgroundRun: async () => createAttachableRun(),
@@ -71,12 +91,12 @@ const createAcceptanceArgs = ({
 		acceptedInput: {
 			attachableRun,
 			queuedInput,
-			steeredUserMessages: [],
 			toolApprovalResponse: null,
+			turnIntent: { type: "direct", continueRunId: null },
 			turnController,
 			userQuestionAnswer: null,
 		},
-		cleanupClaimedSteerQueuedMessage: async () => true,
+		releaseClaimedQueuedMessage: async () => true,
 		onSteerAccepted: vi.fn(),
 		onUserMessagePersistenceCompleted: vi.fn(),
 		persistence,
@@ -85,6 +105,7 @@ const createAcceptanceArgs = ({
 			appsEnabled: false,
 			chatId,
 			defaultTimezone: "UTC",
+			localCapabilitySession: null,
 			noteId: null,
 			projectId: null,
 			selectedSourceIds: [],
@@ -115,23 +136,36 @@ const createAcceptanceArgs = ({
 };
 
 describe("accepted chat turn transaction", () => {
-	it("preserves replay acceptance when the Convex producer cannot start", async () => {
+	it("atomically accepts replay input and uses its explicitly returned run", async () => {
 		const mutationNames: string[] = [];
 		const persistence = createPersistence({
-			acceptQueuedUserMessage: async () => {
-				mutationNames.push("chats:acceptQueuedUserMessage");
+			acceptQueuedUserMessageAndStartRun: async () => {
+				mutationNames.push("chats:acceptQueuedUserMessageAndStartRun");
+				return {
+					run: createAttachableRun("run-replay" as Id<"assistantRuns">),
+				} as Awaited<
+					ReturnType<Persistence["acceptQueuedUserMessageAndStartRun"]>
+				>;
 			},
 			startBackgroundRun: async () => {
 				mutationNames.push("assistantRunBackground:start");
-				throw new Error("producer unavailable");
+				return createAttachableRun();
 			},
 		});
 		const args = createAcceptanceArgs({ persistence });
 		args.onUserMessagePersistenceCompleted = () => {
 			mutationNames.push("user-message-persistence-completed");
 		};
-		args.acceptedInput.replayQueuedMessageId =
-			"queued-1" as Id<"assistantQueuedMessages">;
+		const queuedMessageId = "queued-1" as Id<"assistantQueuedMessages">;
+		args.acceptedInput.turnIntent = {
+			type: "replay",
+			expectedStatus: "queued",
+			queuedMessageId,
+		};
+		await args.acceptedInput.queuedInput.claimReplay({
+			expectedStatus: "queued",
+			queuedMessageId,
+		});
 		args.preparedRun.lastUserMessage = {
 			id: "user-1",
 			role: "user",
@@ -141,17 +175,258 @@ describe("accepted chat turn transaction", () => {
 		const result = await acceptHostedChatTurn(args);
 
 		expect(mutationNames).toEqual([
-			"chats:acceptQueuedUserMessage",
+			"chats:acceptQueuedUserMessageAndStartRun",
 			"user-message-persistence-completed",
-			"assistantRunBackground:start",
 		]);
 		expect(result).toMatchObject({
-			ok: false,
-			failure: {
-				type: "background_run_start",
+			ok: true,
+			acceptedTurn: {
 				pendingQueuedAcceptanceHeaders: expect.any(Object),
+				producer: {
+					type: "convex",
+					assistantRun: {
+						_id: "run-replay",
+						assistantMessageId: "assistant-existing",
+					},
+				},
 			},
 		});
+	});
+
+	it("releases server-claimed input when persistence fails before acceptance", async () => {
+		const persistError = new Error("persistence unavailable");
+		const releaseClaimedQueuedMessage = vi.fn(async () => true);
+		const args = createAcceptanceArgs({
+			persistence: createPersistence({
+				acceptQueuedUserMessageAndStartRun: async () => {
+					throw persistError;
+				},
+			}),
+		});
+		args.releaseClaimedQueuedMessage = releaseClaimedQueuedMessage;
+		const queuedMessageId = "queued-1" as Id<"assistantQueuedMessages">;
+		args.acceptedInput.turnIntent = {
+			type: "replay",
+			expectedStatus: "queued",
+			queuedMessageId,
+		};
+		await args.acceptedInput.queuedInput.claimReplay({
+			expectedStatus: "queued",
+			queuedMessageId,
+		});
+		args.preparedRun.lastUserMessage = {
+			id: "user-1",
+			role: "user",
+			parts: [{ type: "text", text: "Retry me" }],
+		};
+
+		const result = await acceptHostedChatTurn(args);
+
+		expect(releaseClaimedQueuedMessage).toHaveBeenCalledOnce();
+		expect(result).toEqual({
+			ok: false,
+			failure: {
+				error: persistError,
+				isQueuedAccept: true,
+				type: "user_message_persist",
+			},
+		});
+	});
+
+	it("recovers a committed replay when the mutation response is lost", async () => {
+		const releaseClaimedQueuedMessage = vi.fn(async () => true);
+		let attemptedReplay:
+			| Parameters<Persistence["acceptQueuedUserMessageAndStartRun"]>[0]
+			| null = null;
+		const args = createAcceptanceArgs({
+			persistence: createPersistence({
+				acceptQueuedUserMessageAndStartRun: async (input) => {
+					attemptedReplay = input;
+					throw new Error("mutation response lost");
+				},
+				getQueuedMessageAcceptanceStatus: async () => {
+					if (!attemptedReplay) {
+						throw new Error("Replay acceptance was not attempted.");
+					}
+					return {
+						status: "accepted" as const,
+						receipt: {
+							kind: "replay" as const,
+							producer: attemptedReplay.run.producer,
+							queuedMessageId: "queued-1" as Id<"assistantQueuedMessages">,
+							claimVersion: 7,
+							messageId: "user-1",
+							runId: "run-recovered" as Id<"assistantRuns">,
+							assistantMessageId: attemptedReplay.run.assistantMessageId,
+						},
+					};
+				},
+			}),
+		});
+		args.releaseClaimedQueuedMessage = releaseClaimedQueuedMessage;
+		const queuedMessageId = "queued-1" as Id<"assistantQueuedMessages">;
+		args.acceptedInput.turnIntent = {
+			type: "replay",
+			expectedStatus: "queued",
+			queuedMessageId,
+		};
+		await args.acceptedInput.queuedInput.claimReplay({
+			expectedStatus: "queued",
+			queuedMessageId,
+		});
+		args.preparedRun.lastUserMessage = {
+			id: "user-1",
+			role: "user",
+			parts: [{ type: "text", text: "Continue" }],
+		};
+
+		const result = await acceptHostedChatTurn(args);
+
+		expect(releaseClaimedQueuedMessage).not.toHaveBeenCalled();
+		expect(attemptedReplay).not.toBeNull();
+		expect(result).toMatchObject({
+			ok: true,
+			acceptedTurn: {
+				assistantMessageId: attemptedReplay?.run.assistantMessageId,
+				pendingQueuedAcceptanceHeaders: expect.any(Object),
+				producer: {
+					type: "convex",
+					assistantRun: {
+						_id: "run-recovered",
+						assistantMessageId: attemptedReplay?.run.assistantMessageId,
+					},
+				},
+			},
+		});
+	});
+
+	it("recovers a committed steer when the mutation response is lost", async () => {
+		const attachableRun = createAttachableRun();
+		const releaseClaimedQueuedMessage = vi.fn(async () => true);
+		const onSteerAccepted = vi.fn();
+		let attemptedSteer:
+			| Parameters<Persistence["acceptSteeredUserMessage"]>[0]
+			| null = null;
+		const args = createAcceptanceArgs({
+			attachableRun,
+			persistence: createPersistence({
+				acceptSteeredUserMessage: async (input) => {
+					attemptedSteer = input;
+					throw new Error("mutation response lost");
+				},
+				getQueuedMessageAcceptanceStatus: async () => {
+					if (!attemptedSteer) {
+						throw new Error("Steer acceptance was not attempted.");
+					}
+					return {
+						status: "accepted" as const,
+						receipt: {
+							kind: "steer" as const,
+							producer: attachableRun.producer,
+							queuedMessageId: "queued-1" as Id<"assistantQueuedMessages">,
+							claimVersion: 7,
+							messageId: "user-1",
+							runId: attachableRun._id,
+							assistantMessageId: attachableRun.assistantMessageId,
+						},
+					};
+				},
+			}),
+		});
+		args.releaseClaimedQueuedMessage = releaseClaimedQueuedMessage;
+		args.onSteerAccepted = onSteerAccepted;
+		const queuedMessageId = "queued-1" as Id<"assistantQueuedMessages">;
+		args.acceptedInput.turnIntent = {
+			type: "steer",
+			runId: attachableRun._id,
+			queuedMessageId,
+		};
+		await args.acceptedInput.queuedInput.claimSteer({
+			runId: attachableRun._id,
+			queuedMessageId,
+		});
+		args.preparedRun.lastUserMessage = {
+			id: "user-1",
+			role: "user",
+			parts: [{ type: "text", text: "Continue" }],
+		};
+
+		const result = await acceptHostedChatTurn(args);
+
+		expect(releaseClaimedQueuedMessage).not.toHaveBeenCalled();
+		expect(onSteerAccepted).toHaveBeenCalledWith(attachableRun._id);
+		expect(attemptedSteer).toMatchObject({
+			assistantMessageId: attachableRun.assistantMessageId,
+		});
+		expect(result).toMatchObject({
+			ok: true,
+			acceptedTurn: {
+				assistantMessageId: attachableRun.assistantMessageId,
+				pendingQueuedAcceptanceHeaders: expect.any(Object),
+				producer: { type: "web", assistantRun: null },
+			},
+		});
+	});
+
+	it.each([
+		{
+			name: "assistant generation",
+			receipt: { assistantMessageId: "another-generation", producer: "convex" },
+		},
+		{
+			name: "producer",
+			receipt: { assistantMessageId: null, producer: "web" },
+		},
+	])("fails closed when a replay receipt changes $name", async ({
+		receipt,
+	}) => {
+		const releaseClaimedQueuedMessage = vi.fn(async () => true);
+		let attemptedAssistantMessageId: string | null = null;
+		const args = createAcceptanceArgs({
+			persistence: createPersistence({
+				acceptQueuedUserMessageAndStartRun: async (input) => {
+					attemptedAssistantMessageId = input.run.assistantMessageId;
+					throw new Error("mutation response lost");
+				},
+				getQueuedMessageAcceptanceStatus: async () => ({
+					status: "accepted",
+					receipt: {
+						kind: "replay",
+						producer: receipt.producer,
+						queuedMessageId: "queued-1" as Id<"assistantQueuedMessages">,
+						claimVersion: 7,
+						messageId: "user-1",
+						runId: "run-recovered" as Id<"assistantRuns">,
+						assistantMessageId:
+							receipt.assistantMessageId ?? attemptedAssistantMessageId ?? "",
+					},
+				}),
+			}),
+		});
+		args.releaseClaimedQueuedMessage = releaseClaimedQueuedMessage;
+		const queuedMessageId = "queued-1" as Id<"assistantQueuedMessages">;
+		args.acceptedInput.turnIntent = {
+			type: "replay",
+			expectedStatus: "queued",
+			queuedMessageId,
+		};
+		await args.acceptedInput.queuedInput.claimReplay({
+			expectedStatus: "queued",
+			queuedMessageId,
+		});
+		args.preparedRun.lastUserMessage = {
+			id: "user-1",
+			role: "user",
+			parts: [{ type: "text", text: "Continue" }],
+		};
+
+		const result = await acceptHostedChatTurn(args);
+
+		expect(result).toMatchObject({
+			ok: false,
+			failure: { type: "queued_acceptance_status_lookup" },
+		});
+		expect(releaseClaimedQueuedMessage).not.toHaveBeenCalled();
 	});
 
 	it("checks the same-run invariant before persisting local tool output", async () => {
@@ -163,7 +438,10 @@ describe("accepted chat turn transaction", () => {
 				completeLocalFolderToolMessage: mutation,
 			}),
 		});
-		args.acceptedInput.continueRunId = "run-replaced" as Id<"assistantRuns">;
+		args.acceptedInput.turnIntent = {
+			type: "direct",
+			continueRunId: "run-replaced" as Id<"assistantRuns">,
+		};
 		args.preparedRun.localFolderRoots = [
 			{ id: "folder-1", name: "Workspace", path: "/tmp/workspace" },
 		];
@@ -245,7 +523,10 @@ describe("accepted chat turn transaction", () => {
 			attachableRun,
 			persistence: createPersistence({ answerUserQuestion }),
 		});
-		args.acceptedInput.continueRunId = attachableRun._id;
+		args.acceptedInput.turnIntent = {
+			type: "direct",
+			continueRunId: attachableRun._id,
+		};
 		args.acceptedInput.userQuestionAnswer = "Current note";
 
 		const result = await acceptHostedChatTurn(args);

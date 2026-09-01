@@ -8,6 +8,7 @@ export declare const stopOrphanedHostedAssistantRun: <
 	TWorkspaceId extends string,
 >({
 	chatId,
+	assistantMessageId,
 	finishStoppedAssistantRun,
 	logLatency,
 	requestStopAssistantRun,
@@ -16,10 +17,15 @@ export declare const stopOrphanedHostedAssistantRun: <
 	workspaceId,
 }: {
 	chatId: string;
-	finishStoppedAssistantRun: (args: { runId: TRunId }) => Promise<unknown>;
+	assistantMessageId: string;
+	finishStoppedAssistantRun: (args: {
+		runId: TRunId;
+		assistantMessageId: string;
+	}) => Promise<unknown>;
 	logLatency: (event: string, details?: HostedChatLogDetails) => void;
 	requestStopAssistantRun: (args: {
 		runId: TRunId;
+		assistantMessageId: string;
 		stopReason: "cleanup_failed";
 	}) => Promise<unknown>;
 	runId: TRunId;
@@ -27,6 +33,7 @@ export declare const stopOrphanedHostedAssistantRun: <
 		workspaceId: TWorkspaceId;
 		chatId: string;
 		runId: TRunId;
+		assistantMessageId: string;
 	}) => Promise<unknown>;
 	workspaceId: TWorkspaceId;
 }) => Promise<void>;

@@ -40,7 +40,7 @@ const postSteerRequestWithMockedConvex = async () => {
 	process.env.CONVEX_URL = "https://example.convex.cloud";
 	convexMocks.query.mockRejectedValue(
 		new Error(
-			"Could not find public function for 'assistantQueuedMessages:claimReadyForRun'.",
+			"Could not find public function for 'assistantQueuedMessages:claimForSteer'.",
 		),
 	);
 

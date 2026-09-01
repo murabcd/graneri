@@ -122,9 +122,13 @@ import {
 } from "@/hooks/use-note-discussion-session";
 import { useNoteTranscriptSession } from "@/hooks/use-note-transcript-session";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
+import { useRevisionedState } from "@/hooks/use-revisioned-state";
 import { useTranscriptionSession } from "@/hooks/use-transcription-session";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
-import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
+import {
+	claimChatComposerTurnIntent,
+	commitChatComposerTurnIntent,
+} from "@/lib/chat-composer-turn-intent";
 import { buildNoteChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
@@ -280,9 +284,12 @@ const useNoteComposerController = ({
 	const noteStorageScopeKey = getNoteStorageScopeKey(noteId);
 	const draftStorageScope = noteId ? getNoteComposerDraftScope(noteId) : null;
 	const {
+		claimSnapshot: claimDraftSnapshot,
 		clear: clearDraft,
 		getSnapshot: getDraftSnapshot,
+		isClaimCurrent: isDraftClaimCurrent,
 		metadata: draftMetadata,
+		restoreClaim: restoreDraftClaim,
 		setMetadata: setDraftMetadata,
 		setText: setMessage,
 		text: message,
@@ -363,9 +370,14 @@ const useNoteComposerController = ({
 	const [editingMessageId, setEditingMessageId] = React.useState<string | null>(
 		null,
 	);
-	const [attachedFiles, setAttachedFiles] = React.useState<ChatAttachment[]>(
-		[],
-	);
+	const {
+		claimSnapshot: claimAttachedFilesSnapshot,
+		getSnapshot: getAttachedFilesSnapshot,
+		isClaimCurrent: isAttachedFilesClaimCurrent,
+		restoreClaim: restoreAttachedFilesClaim,
+		setValue: setAttachedFiles,
+		value: attachedFiles,
+	} = useRevisionedState<ChatAttachment[]>([]);
 	useRevokeAttachmentObjectUrls(attachedFiles);
 	const setSelectedRecipeSlug = React.useCallback(
 		(value: React.SetStateAction<RecipeSlug | null>) => {
@@ -595,14 +607,15 @@ const useNoteComposerController = ({
 		handleStop,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
+		isResumingQueuedFollowUps,
 		pendingHumanDecision,
 		onQueuedFollowUpsReorder,
+		onQueuedFollowUpsResume,
 		queuedFollowUps,
 		runPlan,
 		regenerateTurn,
 		restoreEditedQueuedMessage,
 		setMessages,
-		status: chatStatus,
 		streamingMessageIds,
 		submitTurn,
 		submitHumanDecision,
@@ -1147,7 +1160,10 @@ const useNoteComposerController = ({
 	});
 
 	const handleSend = React.useCallback(async () => {
-		const submittedDraftText = getDraftSnapshot().text;
+		const draftSnapshot = getDraftSnapshot();
+		const attachedFilesSnapshot = getAttachedFilesSnapshot();
+		const submittedDraftText = draftSnapshot.text;
+		const submittedAttachedFiles = attachedFilesSnapshot.value;
 		const nextMessage = getMessageTextWithoutRecipeMention(
 			submittedDraftText,
 			selectedRecipe,
@@ -1155,13 +1171,11 @@ const useNoteComposerController = ({
 
 		if (
 			isSettingsLoading ||
-			(!nextMessage && !selectedRecipe && attachedFiles.length === 0) ||
-			hasUploadingAttachments(attachedFiles) ||
-			((chatStatus === "submitted" || chatStatus === "streaming") &&
-				!displayActiveRun &&
-				!activeRun) ||
-			(isPreparingRequest && !displayActiveRun && !activeRun) ||
-			(displayActiveRun && attachedFiles.length > 0)
+			(!nextMessage &&
+				!selectedRecipe &&
+				submittedAttachedFiles.length === 0) ||
+			hasUploadingAttachments(submittedAttachedFiles) ||
+			(displayActiveRun && submittedAttachedFiles.length > 0)
 		) {
 			return;
 		}
@@ -1169,7 +1183,23 @@ const useNoteComposerController = ({
 		try {
 			const queuedMessageEditId = queuedMessageEditDraft?.message._id ?? null;
 			const result = await commitChatComposerTurnIntent({
-				attachedFiles,
+				attachedFiles: submittedAttachedFiles,
+				claimIntent: () =>
+					claimChatComposerTurnIntent({
+						claimAttachments: () =>
+							claimAttachedFilesSnapshot(attachedFilesSnapshot, []),
+						claimDraft: () => claimDraftSnapshot(draftSnapshot),
+						isAttachmentsClaimCurrent: isAttachedFilesClaimCurrent,
+						isDraftClaimCurrent,
+						onClaim: () => setEditingMessageId(null),
+						onRestore: () => {
+							setEditingMessageId(editingMessageId);
+							resetTextareaHeight();
+							requestComposerFocus();
+						},
+						restoreAttachments: restoreAttachedFilesClaim,
+						restoreDraft: restoreDraftClaim,
+					}),
 				editingMessageId,
 				isQueuedMessageEditCurrent,
 				onBeforeSubmit: () => {
@@ -1180,15 +1210,6 @@ const useNoteComposerController = ({
 					}
 				},
 				onRequestPrepared: ({ localCapabilitySession }) => {
-					setEditingMessageId((currentEditingMessageId) =>
-						queuedMessageEditId
-							? currentEditingMessageId === queuedMessageEditId
-								? null
-								: currentEditingMessageId
-							: null,
-					);
-					clearDraft();
-					setAttachedFiles([]);
 					resetTextareaHeight();
 					reconcileLocalCapabilitySession(localCapabilitySession);
 					requestComposerFocus();
@@ -1228,13 +1249,6 @@ const useNoteComposerController = ({
 					};
 				},
 				queuedMessageEditId,
-				restoreDraft: () => {
-					setEditingMessageId(editingMessageId);
-					setMessage(submittedDraftText);
-					setAttachedFiles(attachedFiles);
-					resetTextareaHeight();
-					requestComposerFocus();
-				},
 				submitTurn,
 				updateQueuedTurn,
 			});
@@ -1242,6 +1256,11 @@ const useNoteComposerController = ({
 			if (result.status === "queued") {
 				await waitForBrowserPaint();
 				return;
+			}
+			if (result.status === "attachments_blocked") {
+				toast.info(
+					"Wait for the current response to finish before sending attachments.",
+				);
 			}
 		} catch (error) {
 			logError({
@@ -1257,15 +1276,15 @@ const useNoteComposerController = ({
 		}
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
-		activeRun,
-		attachedFiles,
-		chatStatus,
-		clearDraft,
+		claimAttachedFilesSnapshot,
+		claimDraftSnapshot,
 		displayActiveRun,
-		isPreparingRequest,
 		isQueuedMessageEditCurrent,
 		isSettingsLoading,
 		getDraftSnapshot,
+		getAttachedFilesSnapshot,
+		isAttachedFilesClaimCurrent,
+		isDraftClaimCurrent,
 		localCapabilityScope,
 		reconcileLocalCapabilitySession,
 		openRightSidebar,
@@ -1277,8 +1296,9 @@ const useNoteComposerController = ({
 		selectedRecipe,
 		editingMessageId,
 		setPanelMode,
-		setMessage,
 		requestComposerFocus,
+		restoreAttachedFilesClaim,
+		restoreDraftClaim,
 		submitTurn,
 		updateQueuedTurn,
 	]);
@@ -1324,7 +1344,14 @@ const useNoteComposerController = ({
 			requestComposerFocus();
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[handleStop, canStop, requestComposerFocus, resizeTextarea, setMessage],
+		[
+			handleStop,
+			canStop,
+			requestComposerFocus,
+			resizeTextarea,
+			setAttachedFiles,
+			setMessage,
+		],
 	);
 
 	const handleCancelEdit = React.useCallback(() => {
@@ -1339,6 +1366,7 @@ const useNoteComposerController = ({
 		requestComposerFocus,
 		resetTextareaHeight,
 		restoreEditedQueuedMessage,
+		setAttachedFiles,
 	]);
 
 	const handleHumanDecisionResponse = React.useCallback(
@@ -1396,7 +1424,7 @@ const useNoteComposerController = ({
 				toast.error("Failed to delete message");
 			});
 		},
-		[clearDraft, deleteMessage, resetTextareaHeight],
+		[clearDraft, deleteMessage, resetTextareaHeight, setAttachedFiles],
 	);
 
 	const handleRegenerateMessage = React.useCallback(
@@ -1656,8 +1684,10 @@ const useNoteComposerController = ({
 		isHumanDecisionSubmitting: isPreparingRequest,
 		onHumanDecisionResponse: handleHumanDecisionResponse,
 		queuedFollowUps,
+		isResumingQueuedFollowUps,
 		runPlan,
 		onQueuedFollowUpsReorder,
+		onQueuedFollowUpsResume,
 		suppressRecipePickerUntilUserActionRef,
 		handleStop,
 		shouldShowInlinePanel,
@@ -2177,6 +2207,9 @@ function ChatInlinePopoverFooter({
 		isSidebarCompact,
 		showModelPicker,
 	} = status;
+	const hasSendableInput =
+		canSendMessage && (!canStop || attachedFiles.length === 0);
+	const shouldShowStop = canStop && !hasSendableInput;
 	const shouldShowRecipeControls = !activateInlineOnFocus;
 	const activeMentionRangeRef = React.useRef<Range | null>(null);
 	const filteredRecipesRef = React.useRef<RecipePrompt[]>(recipes);
@@ -2660,23 +2693,21 @@ function ChatInlinePopoverFooter({
 						</div>
 					) : null}
 					<InputGroupButton
-						type={canStop && !canSendMessage ? "button" : "submit"}
+						type={shouldShowStop ? "button" : "submit"}
 						variant="default"
 						size="icon-sm"
 						className={cn("rounded-full", !showModelPicker && "ml-auto")}
-						aria-label={
-							canStop && !canSendMessage ? "Stop streaming" : "Send message"
-						}
+						aria-label={shouldShowStop ? "Stop streaming" : "Send message"}
 						disabled={
 							canStop
-								? canSendMessage && hasUploadingAttachments(attachedFiles)
+								? hasSendableInput && hasUploadingAttachments(attachedFiles)
 								: isChatLoading ||
-									!canSendMessage ||
+									!hasSendableInput ||
 									hasUploadingAttachments(attachedFiles)
 						}
-						onClick={canStop && !canSendMessage ? onStop : undefined}
+						onClick={shouldShowStop ? onStop : undefined}
 					>
-						{canStop && !canSendMessage ? (
+						{shouldShowStop ? (
 							<Square className="size-3.5 fill-current" />
 						) : (
 							<ArrowUp className="size-4" />
@@ -2999,6 +3030,8 @@ function ChatComposerForm({
 				<ChatQueuedFollowUpBar
 					queuedFollowUps={controller.queuedFollowUps}
 					onReorder={controller.onQueuedFollowUpsReorder}
+					onResume={controller.onQueuedFollowUpsResume}
+					isResuming={controller.isResumingQueuedFollowUps}
 				/>
 			) : null}
 			<ChatInlinePopoverFooter

@@ -63,6 +63,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 		workspaceId,
 		chatId,
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 		message: {
 			id: run.assistantMessageId,
 			role: "assistant",
@@ -73,6 +74,7 @@ test("accepting a matching tool approval resumes the same run atomically", async
 	});
 	await asOwner.mutation(api.assistantRuns.waitForUserDecision, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 		pendingDecision: {
 			type: "tool_approval",
 			approvalId: "approval-1",

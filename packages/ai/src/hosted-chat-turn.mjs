@@ -9,7 +9,4 @@ export { createHostedAssistantRunFinalizer } from "./hosted-chat-run-finalizer.m
 export { startHostedChatRun } from "./hosted-chat-run-starter.mjs";
 export { createHostedChatRunResponseStream } from "./hosted-chat-stream-lifecycle.mjs";
 export { createHostedChatTurnInput } from "./hosted-chat-turn-input.mjs";
-export {
-	isHostedQueuedUserMessageAccept,
-	persistHostedChatUserMessage,
-} from "./hosted-chat-user-message-persistence.mjs";
+export { persistHostedChatUserMessage } from "./hosted-chat-user-message-persistence.mjs";

@@ -9,25 +9,28 @@ const userMessage = (id: string, text: string) => ({
 });
 
 const createQueuedInput = ({
+	claimReplay = vi.fn(),
 	claimSteer = vi.fn(),
-	cleanupClaimed = vi.fn(async () => ({ ok: true })),
-	loadClaimedReplay = vi.fn(),
+	releaseClaimed = vi.fn(async () => ({ ok: true })),
 } = {}) => ({
+	claimReplay,
 	claimSteer,
-	cleanupClaimed,
-	loadClaimedReplay,
+	releaseClaimed,
 });
 
 const createController = ({
-	attachableRun = { _id: "run-1", status: "running" },
-	interruptActiveRun = vi.fn(async () => []),
+	attachableRun = {
+		_id: "run-1",
+		assistantMessageId: "assistant-1",
+		producer: "web",
+		status: "running",
+	},
 	queuedInput = createQueuedInput(),
 	validateInput = vi.fn(() => ({ ok: true })),
 } = {}) =>
 	createHostedChatTurnController({
 		attachableRun,
 		chatId: "chat-1",
-		interruptActiveRun,
 		queuedInput,
 		validateInput,
 		workspaceId: "workspace-1",
@@ -38,10 +41,9 @@ describe("hosted chat turn controller", () => {
 		const turnInput = createHostedChatTurnInput({
 			attachableRun: null,
 			chatId: "chat-1",
-			claimReadyForRun: vi.fn(async () => []),
-			discardClaimed: vi.fn(async () => undefined),
-			getClaimedForChat: vi.fn(async () => null),
-			interruptActiveRun: vi.fn(async () => []),
+			claimForReplay: vi.fn(),
+			claimForSteer: vi.fn(),
+			releaseClaimed: vi.fn(async () => undefined),
 			validateInput: vi.fn(() => ({ ok: true })),
 			workspaceId: "workspace-1",
 		});
@@ -50,6 +52,7 @@ describe("hosted chat turn controller", () => {
 		await expect(
 			turnInput.turnController.prepareInput({
 				message: userMessage("message-1", "Hello"),
+				turnIntent: { type: "direct", continueRunId: null },
 			}),
 		).resolves.toMatchObject({
 			effectiveMessage: { id: "message-1" },
@@ -57,23 +60,22 @@ describe("hosted chat turn controller", () => {
 		});
 	});
 
-	it("claims and interrupts running turns before returning steered input", async () => {
-		const firstMessage = userMessage("queued-1", "First");
-		const secondMessage = userMessage("queued-2", "Second");
-		const pendingMessage = userMessage("queued-pending", "Pending");
+	it("claims and validates only the selected input without interrupting its active generation", async () => {
+		const selectedMessage = userMessage("queued-1", "Selected");
 		const queuedInput = createQueuedInput({
 			claimSteer: vi.fn(async () => ({
-				claimedMessages: [{ _id: "queued-1" }, { _id: "queued-2" }],
-				userMessage: secondMessage,
-				userMessages: [firstMessage, secondMessage],
+				claimedMessage: { _id: "queued-1" },
+				userMessage: selectedMessage,
 			})),
 		});
-		const interruptActiveRun = vi.fn(async () => [pendingMessage]);
-		const controller = createController({ interruptActiveRun, queuedInput });
+		const controller = createController({ queuedInput });
 
 		const result = await controller.prepareInput({
-			continueRunId: "run-1",
-			steerQueuedMessageId: "queued-1",
+			turnIntent: {
+				type: "steer",
+				queuedMessageId: "queued-1",
+				runId: "run-1",
+			},
 		});
 
 		expect(result.ok).toBe(true);
@@ -84,50 +86,76 @@ describe("hosted chat turn controller", () => {
 			runId: "run-1",
 			queuedMessageId: "queued-1",
 		});
-		expect(interruptActiveRun).toHaveBeenCalledWith({
-			chatId: "chat-1",
-			pendingInput: [firstMessage, secondMessage],
-			runId: "run-1",
-			workspaceId: "workspace-1",
-		});
-		expect(result.effectiveMessage).toBe(secondMessage);
-		expect(result.pendingSteerMessages).toEqual([pendingMessage]);
-		expect(result.steeredUserMessages).toEqual([firstMessage, secondMessage]);
+		expect(result.effectiveMessage).toBe(selectedMessage);
+		expect(result.steeredUserMessage).toBe(selectedMessage);
 	});
 
-	it("does not interrupt waiting turns", async () => {
-		const message = userMessage("queued-1", "Waiting input");
+	it("rejects invalid claimed steer input before accepting it", async () => {
 		const queuedInput = createQueuedInput({
 			claimSteer: vi.fn(async () => ({
-				claimedMessages: [{ _id: "queued-1" }],
-				userMessage: message,
-				userMessages: [message],
+				claimedMessage: { _id: "queued-1" },
+				userMessage: userMessage("queued-1", "Too large"),
 			})),
 		});
-		const interruptActiveRun = vi.fn();
 		const controller = createController({
-			attachableRun: { _id: "run-1", status: "waiting_for_user" },
-			interruptActiveRun,
 			queuedInput,
+			validateInput: vi.fn(() => ({
+				ok: false,
+				error: "Input is too large.",
+			})),
 		});
 
-		const result = await controller.prepareInput({
-			continueRunId: "run-1",
-			steerQueuedMessageId: "queued-1",
-		});
-
-		expect(result.ok).toBe(true);
-		expect(interruptActiveRun).not.toHaveBeenCalled();
-		if (!result.ok) {
-			throw new Error("expected turn input preparation to succeed");
-		}
-		expect(result.pendingSteerMessages).toEqual([message]);
+		await expect(
+			controller.prepareInput({
+				turnIntent: {
+					type: "steer",
+					queuedMessageId: "queued-1",
+					runId: "run-1",
+				},
+			}),
+		).resolves.toMatchObject({ ok: false, phase: "input_invalid" });
+		expect(queuedInput.releaseClaimed).toHaveBeenCalledOnce();
 	});
 
-	it("loads claimed replay input without steering an active turn", async () => {
+	it("preserves the authoritative queue rejection when a waiting run cannot accept steer input", async () => {
+		const claimSteer = vi.fn(async () => {
+			throw new Error("Assistant run is not active.");
+		});
+		const queuedInput = createQueuedInput({
+			claimSteer,
+		});
+		const validateInput = vi.fn(() => ({ ok: true }));
+		const controller = createController({
+			attachableRun: {
+				_id: "run-1",
+				assistantMessageId: "assistant-1",
+				producer: "web",
+				status: "waiting_for_user",
+			},
+			queuedInput,
+			validateInput,
+		});
+
+		await expect(
+			controller.prepareInput({
+				turnIntent: {
+					type: "steer",
+					queuedMessageId: "queued-1",
+					runId: "run-1",
+				},
+			}),
+		).rejects.toThrow("Assistant run is not active.");
+		expect(claimSteer).toHaveBeenCalledOnce();
+		expect(validateInput).not.toHaveBeenCalled();
+	});
+
+	it("claims replay input without steering an active turn", async () => {
 		const message = userMessage("queued-replay", "Replay");
 		const queuedInput = createQueuedInput({
-			loadClaimedReplay: vi.fn(async () => message),
+			claimReplay: vi.fn(async () => ({
+				status: "claimed" as const,
+				userMessage: message,
+			})),
 		});
 		const controller = createController({
 			attachableRun: null,
@@ -135,88 +163,62 @@ describe("hosted chat turn controller", () => {
 		});
 
 		const result = await controller.prepareInput({
-			replayQueuedMessageId: "queued-replay",
+			turnIntent: {
+				type: "replay",
+				expectedStatus: "paused",
+				queuedMessageId: "queued-replay",
+			},
 		});
 
 		expect(result.ok).toBe(true);
-		expect(queuedInput.loadClaimedReplay).toHaveBeenCalledWith({
+		expect(queuedInput.claimReplay).toHaveBeenCalledWith({
+			expectedStatus: "paused",
 			queuedMessageId: "queued-replay",
 		});
 		if (!result.ok) {
 			throw new Error("expected replay input preparation to succeed");
 		}
 		expect(result.effectiveMessage).toBe(message);
-		expect(result.pendingSteerMessages).toEqual([]);
 	});
 
-	it("cleans claimed steer input when interruption fails", async () => {
-		const message = userMessage("queued-1", "Steer");
-		const interruptError = new Error("interrupt failed");
+	it.each([
+		{
+			status: "active_run",
+			errorCode: "ASSISTANT_RUN_ACTIVE",
+			error: "Chat already has an active assistant run.",
+		},
+		{
+			status: "unavailable",
+			errorCode: "QUEUED_MESSAGE_NOT_FOUND",
+			error: "Queued message is no longer available.",
+		},
+	] as const)("projects a $status replay claim attempt into a structured route conflict", async ({
+		error,
+		errorCode,
+		status,
+	}) => {
 		const queuedInput = createQueuedInput({
-			claimSteer: vi.fn(async () => ({
-				claimedMessages: [{ _id: "queued-1" }],
-				userMessage: message,
-				userMessages: [message],
-			})),
-			cleanupClaimed: vi.fn(async () => ({ ok: true })),
+			claimReplay: vi.fn(async () => ({ status })),
 		});
 		const controller = createController({
-			interruptActiveRun: vi.fn(async () => {
-				throw interruptError;
-			}),
+			attachableRun: null,
 			queuedInput,
 		});
 
-		const result = await controller.prepareInput({
-			continueRunId: "run-1",
-			steerQueuedMessageId: "queued-1",
-		});
-
-		expect(result).toMatchObject({
-			ok: false,
-			cause: interruptError,
-			error: "Failed to interrupt active assistant run.",
-			phase: "active_run_interrupt_failed",
-			statusCode: 500,
-		});
-		expect(queuedInput.cleanupClaimed).toHaveBeenCalledWith({
-			tolerateMissing: false,
-		});
-	});
-
-	it("reports cleanup failure instead of hiding claimed steer leftovers", async () => {
-		const message = userMessage("queued-1", "Steer");
-		const cleanupError = new Error("cleanup failed");
-		const queuedInput = createQueuedInput({
-			claimSteer: vi.fn(async () => ({
-				claimedMessages: [{ _id: "queued-1" }],
-				userMessage: message,
-				userMessages: [message],
-			})),
-			cleanupClaimed: vi.fn(async () => ({
-				error: cleanupError,
-				ok: false,
-				queuedMessageIds: ["queued-1"],
-			})),
-		});
-		const controller = createController({
-			interruptActiveRun: vi.fn(async () => {
-				throw new Error("interrupt failed");
+		await expect(
+			controller.prepareInput({
+				turnIntent: {
+					type: "replay",
+					expectedStatus: "queued",
+					queuedMessageId: "queued-replay",
+				},
 			}),
-			queuedInput,
-		});
-
-		const result = await controller.prepareInput({
-			continueRunId: "run-1",
-			steerQueuedMessageId: "queued-1",
-		});
-
-		expect(result).toMatchObject({
-			cleanupError,
-			error: "Failed to clean up claimed steered message.",
+		).resolves.toEqual({
 			ok: false,
-			phase: "steer_queue_cleanup_failed",
-			statusCode: 500,
+			phase: "replay_claim_conflict",
+			error,
+			errorCode,
+			statusCode: 409,
 		});
 	});
 });

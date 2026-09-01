@@ -3,7 +3,6 @@ import type { ServiceTier } from "@workspace/ai/models";
 import type { UIMessage } from "ai";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../../convex/_generated/api.js";
-import type { Id } from "../../../convex/_generated/dataModel.js";
 
 export type ChatRequestBody = {
 	chatMode?: unknown;
@@ -29,10 +28,11 @@ export type ChatRequestBody = {
 		title?: string;
 		text?: string;
 	};
-	continueRunId?: Id<"assistantRuns">;
+	continueRunId?: unknown;
 	interruptActiveRun?: boolean;
-	replayQueuedMessageId?: Id<"assistantQueuedMessages">;
-	steerQueuedMessageId?: Id<"assistantQueuedMessages">;
+	replayQueuedMessageId?: unknown;
+	replayQueuedMessageStatus?: unknown;
+	steerQueuedMessageId?: unknown;
 	supersedeActiveRun?: boolean;
 };
 

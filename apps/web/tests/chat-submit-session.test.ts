@@ -1,6 +1,7 @@
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { describe, expect, it, vi } from "vitest";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
+import type { AdmitQueuedChatTurn } from "@/lib/chat-submit-session";
 import {
 	removeChatMessageById,
 	submitChatTurn,
@@ -9,6 +10,15 @@ import type { Id } from "../../../convex/_generated/dataModel";
 
 const workspaceId = "workspace-1" as Id<"workspaces">;
 const runId = "run-1" as Id<"assistantRuns">;
+
+const createCurrentRunAdmission = (
+	admitQueuedMessage: AdmitQueuedChatTurn = vi.fn(),
+) => ({
+	admitQueuedMessage,
+	beginDirectSubmission: vi.fn(),
+	completeQueuedAdmission: vi.fn(),
+	status: "current_run" as const,
+});
 
 const createQueuedFollowUpMessage = (text: string): QueuedFollowUpMessage =>
 	({
@@ -56,6 +66,7 @@ describe("chat submit session", () => {
 				timezone: "UTC",
 			}),
 			chatId: "chat-1",
+			currentRunAdmission: { status: "direct" },
 			displayActiveRun: null,
 			editingMessageId: null,
 			enqueueQueuedMessage: vi.fn(),
@@ -117,6 +128,52 @@ describe("chat submit session", () => {
 		);
 	});
 
+	it("keeps attachments out of an uncertain admission without clearing or sending", async () => {
+		const buildRequestBody = vi.fn(async () => ({
+			convexToken: "token",
+			localCapabilitySession: null,
+			model: "gpt-5",
+			timezone: "UTC",
+		}));
+		const admitQueuedMessage = vi.fn();
+		const enqueueQueuedMessage = vi.fn();
+		const onOptimisticMessage = vi.fn();
+		const onRequestPrepared = vi.fn();
+		const sendMessage = vi.fn();
+
+		const result = await submitChatTurn({
+			attachedFiles: [
+				{
+					id: "attachment-1",
+					type: "file",
+					mediaType: "text/plain",
+					filename: "notes.txt",
+					url: "convex://file",
+					uploadStatus: "ready",
+				},
+			],
+			buildRequestBody,
+			chatId: "chat-1",
+			currentRunAdmission: createCurrentRunAdmission(admitQueuedMessage),
+			displayActiveRun: null,
+			editingMessageId: null,
+			enqueueQueuedMessage,
+			onOptimisticMessage,
+			onRequestPrepared,
+			sendMessage,
+			text: "Use this file",
+			workspaceId,
+		});
+
+		expect(result).toEqual({ status: "attachments_blocked" });
+		expect(buildRequestBody).not.toHaveBeenCalled();
+		expect(admitQueuedMessage).not.toHaveBeenCalled();
+		expect(enqueueQueuedMessage).not.toHaveBeenCalled();
+		expect(onOptimisticMessage).not.toHaveBeenCalled();
+		expect(onRequestPrepared).not.toHaveBeenCalled();
+		expect(sendMessage).not.toHaveBeenCalled();
+	});
+
 	it("prepares an edited submission before sending without an optimistic message", async () => {
 		const events: string[] = [];
 		let editingMessageId: string | null = "message-1";
@@ -132,6 +189,7 @@ describe("chat submit session", () => {
 				model: "gpt-5",
 			}),
 			chatId: "chat-1",
+			currentRunAdmission: { status: "direct" },
 			displayActiveRun: null,
 			editingMessageId,
 			enqueueQueuedMessage: vi.fn(),
@@ -173,6 +231,7 @@ describe("chat submit session", () => {
 				timezone: "UTC",
 			}),
 			chatId: "chat-1",
+			currentRunAdmission: createCurrentRunAdmission(),
 			displayActiveRun: { _id: runId },
 			editingMessageId: null,
 			enqueueQueuedMessage,
@@ -213,6 +272,7 @@ describe("chat submit session", () => {
 			}),
 			chatId: "chat-1",
 			continueRunId: runId,
+			currentRunAdmission: { status: "direct" },
 			displayActiveRun: { _id: runId },
 			editingMessageId: null,
 			enqueueQueuedMessage,
@@ -262,6 +322,7 @@ describe("chat submit session", () => {
 				timezone: "UTC",
 			}),
 			chatId: "chat-1",
+			currentRunAdmission: createCurrentRunAdmission(),
 			displayActiveRun: null,
 			editingMessageId: null,
 			enqueueQueuedMessage,
@@ -298,7 +359,111 @@ describe("chat submit session", () => {
 		});
 	});
 
-	it("sends normally when active follow-up enqueue races with run completion", async () => {
+	it("atomically queues an uncertain follow-up when the server still owns an active run", async () => {
+		const queuedMessage = createQueuedFollowUpMessage(
+			"Follow up before the active run query catches up",
+		);
+		const admitQueuedMessage = vi.fn(async () => ({
+			status: "queued" as const,
+			queuedMessage,
+		}));
+		const enqueueQueuedMessage = vi.fn();
+		const sendMessage = vi.fn();
+		const onOptimisticMessage = vi.fn();
+		const onQueuedMessageSaved = vi.fn();
+
+		const result = await submitChatTurn({
+			attachedFiles: [],
+			buildRequestBody: async () => ({
+				convexToken: "token",
+				localCapabilitySession: null,
+				model: "gpt-5",
+				timezone: "UTC",
+			}),
+			chatId: "chat-1",
+			currentRunAdmission: createCurrentRunAdmission(admitQueuedMessage),
+			displayActiveRun: null,
+			editingMessageId: null,
+			enqueueQueuedMessage,
+			onOptimisticMessage,
+			onQueuedMessageSaved,
+			onRequestPrepared: () => undefined,
+			sendMessage,
+			text: "Follow up before the active run query catches up",
+			workspaceId,
+		});
+
+		expect(result.status).toBe("queued");
+		expect(admitQueuedMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				chatId: "chat-1",
+				workspaceId,
+				message: expect.objectContaining({
+					text: "Follow up before the active run query catches up",
+				}),
+			}),
+		);
+		expect(enqueueQueuedMessage).not.toHaveBeenCalled();
+		expect(sendMessage).not.toHaveBeenCalled();
+		expect(onOptimisticMessage).not.toHaveBeenCalled();
+		expect(onQueuedMessageSaved).toHaveBeenCalledWith({
+			optimisticMessageId: expect.stringMatching(/^queued-/),
+			queuedMessage,
+		});
+	});
+
+	it("normal-sends an uncertain follow-up only after the server reports no active run", async () => {
+		const admitQueuedMessage = vi.fn(async () => ({
+			status: "no_active" as const,
+		}));
+		const sendMessage = vi.fn(async () => undefined);
+		const onOptimisticMessage = vi.fn();
+
+		const result = await submitChatTurn({
+			attachedFiles: [],
+			buildRequestBody: async () => ({
+				convexToken: "token",
+				localCapabilitySession: null,
+				model: "gpt-5",
+				timezone: "UTC",
+			}),
+			chatId: "chat-1",
+			currentRunAdmission: createCurrentRunAdmission(admitQueuedMessage),
+			displayActiveRun: null,
+			editingMessageId: null,
+			enqueueQueuedMessage: vi.fn(),
+			onOptimisticMessage,
+			onRequestPrepared: () => undefined,
+			sendMessage,
+			text: "Follow up after actual completion",
+			workspaceId,
+		});
+
+		expect(result.status).toBe("sent");
+		expect(admitQueuedMessage).toHaveBeenCalledOnce();
+		expect(onOptimisticMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: expect.not.stringMatching(/^queued-/),
+				role: "user",
+			}),
+		);
+		expect(sendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				messageId: expect.not.stringMatching(/^queued-/),
+				text: "Follow up after actual completion",
+			}),
+			expect.anything(),
+		);
+	});
+
+	it("re-admits server-authoritatively when the exact active run becomes stale", async () => {
+		const queuedMessage = createQueuedFollowUpMessage(
+			"Follow up after completion",
+		);
+		const admitQueuedMessage = vi.fn(async () => ({
+			queuedMessage,
+			status: "queued" as const,
+		}));
 		const enqueueQueuedMessage = vi.fn(async () => {
 			throw new Error(
 				'[Request ID: test] Server Error Uncaught ConvexError: {"code":"ASSISTANT_RUN_NOT_ACTIVE","message":"Assistant run is not active."}',
@@ -317,6 +482,7 @@ describe("chat submit session", () => {
 				timezone: "UTC",
 			}),
 			chatId: "chat-1",
+			currentRunAdmission: createCurrentRunAdmission(admitQueuedMessage),
 			displayActiveRun: { _id: runId },
 			editingMessageId: null,
 			enqueueQueuedMessage,
@@ -328,29 +494,15 @@ describe("chat submit session", () => {
 			workspaceId,
 		});
 
-		expect(result.status).toBe("sent");
+		expect(result.status).toBe("queued");
 		expect(enqueueQueuedMessage).toHaveBeenCalledOnce();
-		expect(onQueuedMessageSaved).not.toHaveBeenCalled();
-		expect(onOptimisticMessage).toHaveBeenCalledWith(
-			expect.objectContaining({
-				id: expect.stringMatching(/^queued-/),
-				role: "user",
-			}),
-		);
-		expect(sendMessage).toHaveBeenCalledWith(
-			expect.objectContaining({
-				messageId: expect.stringMatching(/^queued-/),
-				text: "Follow up after completion",
-			}),
-			{
-				body: {
-					convexToken: "token",
-					localCapabilitySession: null,
-					model: "gpt-5",
-					timezone: "UTC",
-				},
-			},
-		);
+		expect(admitQueuedMessage).toHaveBeenCalledOnce();
+		expect(onQueuedMessageSaved).toHaveBeenCalledWith({
+			optimisticMessageId: expect.stringMatching(/^queued-/),
+			queuedMessage,
+		});
+		expect(onOptimisticMessage).not.toHaveBeenCalled();
+		expect(sendMessage).not.toHaveBeenCalled();
 	});
 
 	it("preserves non-stale active enqueue failures", async () => {
@@ -369,6 +521,7 @@ describe("chat submit session", () => {
 					timezone: "UTC",
 				}),
 				chatId: "chat-1",
+				currentRunAdmission: createCurrentRunAdmission(),
 				displayActiveRun: { _id: runId },
 				editingMessageId: null,
 				enqueueQueuedMessage,
@@ -394,6 +547,7 @@ describe("chat submit session", () => {
 				timezone: "UTC",
 			}),
 			chatId: "chat-1",
+			currentRunAdmission: { status: "direct" },
 			displayActiveRun: null,
 			editingMessageId: null,
 			enqueueQueuedMessage: vi.fn(),

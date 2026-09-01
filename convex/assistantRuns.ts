@@ -82,6 +82,18 @@ const requireOwnedRun = async (
 	return run;
 };
 
+const requireCurrentAssistantGeneration = (
+	run: Doc<"assistantRuns">,
+	assistantMessageId: string,
+) => {
+	if (run.assistantMessageId !== assistantMessageId) {
+		throw new ConvexError({
+			code: "INVALID_ASSISTANT_RUN_TRANSITION",
+			message: "Assistant run generation is no longer active.",
+		});
+	}
+};
+
 export const startAssistantRunForOwner = async (
 	ctx: MutationCtx,
 	args: {
@@ -289,6 +301,7 @@ export const removeOrphanedRun = internalMutation({
 export const waitForUserDecision = mutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		pendingDecision: pendingDecisionValidator,
 		phase: v.optional(v.string()),
 	},
@@ -296,6 +309,7 @@ export const waitForUserDecision = mutation({
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		requireCurrentAssistantGeneration(run, args.assistantMessageId);
 		if (
 			run.status === "running" &&
 			args.pendingDecision.type === "user_question"
@@ -320,11 +334,13 @@ export const waitForUserDecision = mutation({
 export const finishAssistantRun = mutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		requireCurrentAssistantGeneration(run, args.assistantMessageId);
 
 		return await transitionAssistantRun(ctx, run, { type: "complete" });
 	},
@@ -333,12 +349,14 @@ export const finishAssistantRun = mutation({
 export const failAssistantRun = mutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		errorText: v.optional(v.string()),
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		requireCurrentAssistantGeneration(run, args.assistantMessageId);
 
 		return await transitionAssistantRun(ctx, run, {
 			type: "fail",
@@ -350,12 +368,14 @@ export const failAssistantRun = mutation({
 export const requestStopAssistantRun = mutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		stopReason: v.optional(stopReasonValidator),
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		requireCurrentAssistantGeneration(run, args.assistantMessageId);
 
 		return await transitionAssistantRun(ctx, run, {
 			type: "request_stop",
@@ -367,11 +387,13 @@ export const requestStopAssistantRun = mutation({
 export const finishStoppedAssistantRun = mutation({
 	args: {
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 	},
 	returns: assistantRunValidator,
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const run = await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		requireCurrentAssistantGeneration(run, args.assistantMessageId);
 
 		return await transitionAssistantRun(ctx, run, { type: "finish_stop" });
 	},

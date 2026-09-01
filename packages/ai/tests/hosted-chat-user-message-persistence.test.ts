@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-	isHostedQueuedUserMessageAccept,
-	persistHostedChatUserMessage,
-} from "../src/hosted-chat-user-message-persistence.mjs";
+import { persistHostedChatUserMessage } from "../src/hosted-chat-user-message-persistence.mjs";
 
 const userMessage = (id: string, text: string) => ({
 	id,
@@ -10,18 +7,12 @@ const userMessage = (id: string, text: string) => ({
 	parts: [{ type: "text", text }],
 });
 
-const createQueuedInput = ({
-	claimedQueuedMessageId = null,
-	claimedQueuedMessageIds = [],
-} = {}) => ({
-	get claimedQueuedMessageId() {
-		return claimedQueuedMessageId;
-	},
-	get claimedQueuedMessageIds() {
-		return claimedQueuedMessageIds;
+const createQueuedInput = ({ claimedLease = null } = {}) => ({
+	get claimedLease() {
+		return claimedLease;
 	},
 	get hasClaimed() {
-		return claimedQueuedMessageIds.length > 0;
+		return claimedLease !== null;
 	},
 	clearClaimed: vi.fn(),
 });
@@ -41,45 +32,20 @@ const createPersistenceArgs = (overrides = {}) => ({
 	},
 	message: userMessage("user-1", "Hello"),
 	queuedInput: createQueuedInput(),
-	steeredUserMessages: [],
-	acceptQueuedUserMessage: vi.fn(async () => null),
-	acceptSteeredUserMessages: vi.fn(async () => null),
+	acceptQueuedUserMessageAndStartRun: vi.fn(async () => ({
+		run: { _id: "run-replay-1", assistantMessageId: "assistant-2" },
+	})),
+	acceptSteeredUserMessage: vi.fn(async () => null),
 	saveMessage: vi.fn(async () => null),
+	turnIntent: { type: "direct", continueRunId: null },
 	...overrides,
 });
 
 describe("hosted chat user message persistence", () => {
-	it("detects queued accept intents", () => {
-		expect(
-			isHostedQueuedUserMessageAccept({
-				continueRunId: "run-1",
-				queuedInput: createQueuedInput({
-					claimedQueuedMessageId: "queued-1",
-					claimedQueuedMessageIds: ["queued-1"],
-				}),
-				replayQueuedMessageId: null,
-			}),
-		).toBe(true);
-
-		expect(
-			isHostedQueuedUserMessageAccept({
-				continueRunId: null,
-				queuedInput: createQueuedInput(),
-				replayQueuedMessageId: "queued-1",
-			}),
-		).toBe(true);
-
-		expect(
-			isHostedQueuedUserMessageAccept({
-				continueRunId: "run-1",
-				queuedInput: createQueuedInput(),
-				replayQueuedMessageId: "queued-1",
-			}),
-		).toBe(false);
-	});
-
 	it("rejects unclassified input against a continued run", async () => {
-		const args = createPersistenceArgs({ continueRunId: "run-1" });
+		const args = createPersistenceArgs({
+			turnIntent: { type: "direct", continueRunId: "run-1" },
+		});
 
 		await expect(persistHostedChatUserMessage(args)).rejects.toThrow(
 			"Continued user input must use a claimed queue item.",
@@ -87,59 +53,76 @@ describe("hosted chat user message persistence", () => {
 		expect(args.saveMessage).not.toHaveBeenCalled();
 	});
 
-	it("accepts claimed replay messages with replay headers", async () => {
+	it("accepts a claimed replay message with a discriminated result", async () => {
+		const queuedInput = createQueuedInput({
+			claimedLease: {
+				queuedMessageId: "queued-replay-1",
+				claimVersion: 4,
+			},
+		});
 		const args = createPersistenceArgs({
-			replayQueuedMessageId: "queued-replay-1",
+			queuedInput,
+			turnIntent: {
+				type: "replay",
+				expectedStatus: "queued",
+				queuedMessageId: "queued-replay-1",
+			},
 		});
 
 		const result = await persistHostedChatUserMessage(args);
 
-		expect(args.acceptQueuedUserMessage).toHaveBeenCalledWith(
+		expect(args.acceptQueuedUserMessageAndStartRun).toHaveBeenCalledWith(
 			expect.objectContaining({
 				queuedMessageId: "queued-replay-1",
+				claimVersion: 4,
 				message: expect.objectContaining({ id: "user-1" }),
 			}),
 		);
-		expect(result.pendingQueuedAcceptanceHeaders).toMatchObject({
-			"X-Graneri-Replay-Accepted": "true",
-			"X-Graneri-Replay-Queued-Message-Id": "queued-replay-1",
+		expect(result).toEqual({
+			type: "replay",
+			queuedMessageId: "queued-replay-1",
+			acceptance: {
+				run: { _id: "run-replay-1", assistantMessageId: "assistant-2" },
+			},
 		});
+		expect(queuedInput.clearClaimed).toHaveBeenCalledOnce();
 	});
 
-	it("accepts claimed steer batches and clears the claim", async () => {
+	it("accepts only the selected claimed steer message and clears the claim", async () => {
 		const queuedInput = createQueuedInput({
-			claimedQueuedMessageId: "queued-1",
-			claimedQueuedMessageIds: ["queued-1", "queued-2"],
+			claimedLease: {
+				queuedMessageId: "queued-1",
+				claimVersion: 5,
+			},
 		});
 		const args = createPersistenceArgs({
-			continueRunId: "run-1",
+			message: userMessage("queued-user-1", "Selected"),
 			queuedInput,
-			steeredUserMessages: [
-				userMessage("queued-user-1", "First"),
-				userMessage("queued-user-2", "Second"),
-			],
+			turnIntent: {
+				type: "steer",
+				queuedMessageId: "queued-1",
+				runId: "run-1",
+			},
 		});
 
 		const result = await persistHostedChatUserMessage(args);
 
-		expect(args.acceptSteeredUserMessages).toHaveBeenCalledWith(
+		expect(args.acceptSteeredUserMessage).toHaveBeenCalledWith(
 			expect.objectContaining({
 				runId: "run-1",
-				nextAssistantMessageId: "assistant-2",
-				messages: [
-					expect.objectContaining({ queuedMessageId: "queued-1" }),
-					expect.objectContaining({ queuedMessageId: "queued-2" }),
-				],
+				queuedMessageId: "queued-1",
+				claimVersion: 5,
+				message: expect.objectContaining({ id: "queued-user-1" }),
 			}),
 		);
+		expect(args.acceptSteeredUserMessage.mock.calls[0]?.[0]).not.toHaveProperty(
+			"nextAssistantMessageId",
+		);
 		expect(queuedInput.clearClaimed).toHaveBeenCalledOnce();
-		expect(result).toMatchObject({
-			acceptedSteerTurnId: "run-1",
-			pendingQueuedAcceptanceHeaders: {
-				"X-Graneri-Queued-Message-Id": "queued-1",
-				"X-Graneri-Steer-Accepted": "true",
-				"X-Graneri-Turn-Id": "run-1",
-			},
+		expect(result).toEqual({
+			type: "steer",
+			queuedMessageId: "queued-1",
+			runId: "run-1",
 		});
 	});
 });

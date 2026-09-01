@@ -1,9 +1,11 @@
+import type { WorkflowId } from "@convex-dev/workflow";
+import { projectUiMessagesForAssistantGeneration } from "@workspace/ai/assistant-generation-context";
 import {
 	decodeStoredUiMessage,
 	parseUiMessagesJson,
 	type StoredUiMessageRole,
+	validateUiMessages,
 } from "@workspace/ai/ui-message-codec";
-import type { WorkflowId } from "@convex-dev/workflow";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -95,6 +97,41 @@ export const deleteAssistantRunJob = async (
 	}
 };
 
+export const projectAssistantRunJobForNewGeneration = async (
+	job: AssistantRunJob,
+) => {
+	const messages = await validateUiMessages({
+		messages: parseUiMessagesJson(job.messagesJson),
+	});
+	return {
+		...job,
+		messagesJson: JSON.stringify(
+			projectUiMessagesForAssistantGeneration(messages),
+		),
+	};
+};
+
+export const projectPersistedAssistantRunJobForNewGeneration = async (
+	ctx: MutationCtx,
+	runId: Id<"assistantRuns">,
+) => {
+	const runJob = await getAssistantRunJob(ctx, runId);
+	if (!runJob) {
+		throw new ConvexError({
+			code: "ASSISTANT_RUN_JOB_NOT_FOUND",
+			message: "Assistant run background job not found.",
+		});
+	}
+	const job = await projectAssistantRunJobForNewGeneration(runJob.job);
+	const updatedAt = Date.now();
+	requireConvexDocumentWithinLimit({
+		document: { ...runJob, job, updatedAt },
+		errorCode: "ASSISTANT_RUN_JOB_TOO_LARGE",
+		message: "Assistant run background job exceeds the Convex document limit.",
+	});
+	await ctx.db.patch(runJob._id, { job, updatedAt });
+};
+
 export const upsertAssistantRunJobMessage = async (
 	ctx: MutationCtx,
 	runId: Id<"assistantRuns">,
@@ -105,6 +142,19 @@ export const upsertAssistantRunJobMessage = async (
 		metadataJson?: string;
 	},
 ) => {
+	await upsertAssistantRunJobMessages(ctx, runId, [message]);
+};
+
+export const upsertAssistantRunJobMessages = async (
+	ctx: MutationCtx,
+	runId: Id<"assistantRuns">,
+	messagesToUpsert: ReadonlyArray<{
+		id: string;
+		role: StoredUiMessageRole;
+		partsJson: string;
+		metadataJson?: string;
+	}>,
+) => {
 	const runJob = await getAssistantRunJob(ctx, runId);
 	if (!runJob) {
 		throw new ConvexError({
@@ -114,29 +164,33 @@ export const upsertAssistantRunJobMessage = async (
 	}
 
 	let messages: unknown[];
-	let uiMessage: Awaited<ReturnType<typeof decodeStoredUiMessage>>;
+	let uiMessages: Array<Awaited<ReturnType<typeof decodeStoredUiMessage>>>;
 	try {
 		messages = parseUiMessagesJson(runJob.job.messagesJson);
-		uiMessage = await decodeStoredUiMessage(message);
+		uiMessages = await Promise.all(
+			messagesToUpsert.map((message) => decodeStoredUiMessage(message)),
+		);
 	} catch {
 		throw new ConvexError({
 			code: "INVALID_ASSISTANT_RUN_JOB",
 			message: "Assistant run background messages are invalid.",
 		});
 	}
-	const existingIndex = messages.findIndex(
-		(value) =>
-			value !== null &&
-			typeof value === "object" &&
-			!Array.isArray(value) &&
-			"id" in value &&
-			value.id === message.id,
-	);
 	const nextMessages = [...messages];
-	if (existingIndex === -1) {
-		nextMessages.push(uiMessage);
-	} else {
-		nextMessages[existingIndex] = uiMessage;
+	for (const uiMessage of uiMessages) {
+		const existingIndex = nextMessages.findIndex(
+			(value) =>
+				value !== null &&
+				typeof value === "object" &&
+				!Array.isArray(value) &&
+				"id" in value &&
+				value.id === uiMessage.id,
+		);
+		if (existingIndex === -1) {
+			nextMessages.push(uiMessage);
+		} else {
+			nextMessages[existingIndex] = uiMessage;
+		}
 	}
 
 	const updatedAt = Date.now();

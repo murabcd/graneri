@@ -32,6 +32,10 @@
     "vitest": "^4.1.9"
   },
   "exports": {
+    "./assistant-generation-context": {
+      "types": "./src/assistant-generation-context.d.mts",
+      "import": "./src/assistant-generation-context.mjs"
+    },
     "./artifact-authoring-contract": {
       "types": "./src/artifact-authoring-contract.d.mts",
       "import": "./src/artifact-authoring-contract.mjs"

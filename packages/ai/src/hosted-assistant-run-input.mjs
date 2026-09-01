@@ -1,3 +1,4 @@
+import { projectUiMessagesForAssistantGeneration } from "./assistant-generation-context.mjs";
 import { prepareHostedChatContextWindow } from "./hosted-chat-context-window.mjs";
 import { buildHostedChatRunContext } from "./hosted-chat-run-context.mjs";
 import { prepareHostedChatBranch } from "./hosted-chat-runtime.mjs";
@@ -124,8 +125,11 @@ export const prepareHostedAssistantRunInput = async ({
 				...context,
 				compactionSummary: preparedContextWindow.compactionSummary,
 			});
+			const generationMessages = projectUiMessagesForAssistantGeneration(
+				preparedBranch.incomingMessages,
+			);
 			const chatMessages = await validateUiMessages({
-				messages: preparedBranch.incomingMessages,
+				messages: generationMessages,
 				tools: runContext.tools,
 			});
 

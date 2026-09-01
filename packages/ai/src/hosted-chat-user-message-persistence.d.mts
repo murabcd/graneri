@@ -1,7 +1,10 @@
 import type { UIMessage } from "ai";
 import type { ChatSettings } from "./chat-settings.mjs";
 import type { createHostedChatQueuedInput } from "./hosted-chat-queued-input.mjs";
-import type { toHostedStoredMessage } from "./hosted-chat-runtime.mjs";
+import type {
+	HostedChatTurnIntent,
+	toHostedStoredMessage,
+} from "./hosted-chat-runtime.mjs";
 
 type QueuedInput<
 	WorkspaceId extends string,
@@ -47,15 +50,6 @@ type BuiltSaveMessageArgs<
 	workspaceId: WorkspaceId;
 };
 
-export declare const isHostedQueuedUserMessageAccept: <
-	RunId extends string,
-	QueuedMessageId extends string,
->(args: {
-	continueRunId?: RunId | null;
-	queuedInput: { readonly hasClaimed: boolean };
-	replayQueuedMessageId?: QueuedMessageId | null;
-}) => boolean;
-
 export declare const persistHostedChatUserMessage: <
 	WorkspaceId extends string,
 	ChatId extends string,
@@ -63,38 +57,46 @@ export declare const persistHostedChatUserMessage: <
 	ProjectId extends string,
 	RunId extends string,
 	QueuedMessageId extends string,
+	QueuedReplayRun,
 >(
 	args: SaveMessageArgs<WorkspaceId, ChatId, NoteId, ProjectId> & {
-		acceptQueuedUserMessage: (
+		acceptQueuedUserMessageAndStartRun: (
 			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId, ProjectId> & {
 				queuedMessageId: QueuedMessageId;
+				claimVersion: number;
 			},
-		) => Promise<unknown>;
-		acceptSteeredUserMessages: (args: {
+		) => Promise<QueuedReplayRun>;
+		acceptSteeredUserMessage: (args: {
 			workspaceId: WorkspaceId;
 			chatId: ChatId;
 			noteId: NoteId | undefined;
 			projectId: ProjectId | null;
 			title?: string;
 			preview: string;
-			nextAssistantMessageId: string;
 			settings: ChatSettings;
 			runId: RunId;
-			messages: Array<{
-				queuedMessageId: QueuedMessageId;
-				message: ReturnType<typeof toHostedStoredMessage>;
-			}>;
+			queuedMessageId: QueuedMessageId;
+			claimVersion: number;
+			message: ReturnType<typeof toHostedStoredMessage>;
 		}) => Promise<unknown>;
-		continueRunId?: RunId | null;
-		nextAssistantMessageId: string;
 		queuedInput: QueuedInput<WorkspaceId, ChatId, RunId, QueuedMessageId>;
-		replayQueuedMessageId?: QueuedMessageId | null;
 		saveMessage: (
 			args: BuiltSaveMessageArgs<WorkspaceId, ChatId, NoteId, ProjectId>,
 		) => Promise<unknown>;
-		steeredUserMessages: UIMessage[];
+		turnIntent: HostedChatTurnIntent<RunId, QueuedMessageId>;
 	},
-) => Promise<{
-	acceptedSteerTurnId: RunId | null;
-	pendingQueuedAcceptanceHeaders: Record<string, string> | null;
-}>;
+) => Promise<
+	| {
+			type: "direct";
+	  }
+	| {
+			type: "replay";
+			acceptance: QueuedReplayRun;
+			queuedMessageId: QueuedMessageId;
+	  }
+	| {
+			type: "steer";
+			queuedMessageId: QueuedMessageId;
+			runId: RunId;
+	  }
+>;

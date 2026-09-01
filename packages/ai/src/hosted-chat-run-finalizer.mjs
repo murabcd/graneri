@@ -13,7 +13,6 @@ const isConvexErrorCode = (error, code) => getConvexErrorCode(error) === code;
 
 export const createHostedAssistantRunFinalizer = ({
 	activeStreamSession,
-	assistantMessageId,
 	assistantRunId,
 	chatId,
 	failAssistantRun,
@@ -34,13 +33,17 @@ export const createHostedAssistantRunFinalizer = ({
 	waitForUserDecision,
 	workspaceId,
 }) => {
-	const getRunResponseMessage = (responseMessage) =>
-		responseMessage.id === assistantMessageId
+	const getCurrentAssistantMessageId = () =>
+		activeStreamSession.persister.messageId;
+	const getRunResponseMessage = (responseMessage) => {
+		const currentAssistantMessageId = getCurrentAssistantMessageId();
+		return responseMessage.id === currentAssistantMessageId
 			? responseMessage
 			: {
 					...responseMessage,
-					id: assistantMessageId,
+					id: currentAssistantMessageId,
 				};
+	};
 
 	const saveRunResponseMessage = async ({ responseMessage }) => {
 		const runResponseMessage = getRunResponseMessage(responseMessage);
@@ -57,6 +60,7 @@ export const createHostedAssistantRunFinalizer = ({
 				message: runResponseMessage,
 			}),
 			runId: assistantRunId,
+			assistantMessageId: getCurrentAssistantMessageId(),
 		});
 		logLatency("stream.persist_save_done", {
 			messageId: runResponseMessage.id,
@@ -107,6 +111,7 @@ export const createHostedAssistantRunFinalizer = ({
 		try {
 			await failAssistantRun({
 				runId: assistantRunId,
+				assistantMessageId: getCurrentAssistantMessageId(),
 				errorText: error instanceof Error ? error.message : "Unknown error",
 			});
 		} catch (failError) {
@@ -148,7 +153,10 @@ export const createHostedAssistantRunFinalizer = ({
 			});
 
 			if (terminalization.status === "completed") {
-				await finishAssistantRun({ runId: assistantRunId });
+				await finishAssistantRun({
+					runId: assistantRunId,
+					assistantMessageId: getCurrentAssistantMessageId(),
+				});
 				logLatency("stream.finalize_done", {
 					runId: assistantRunId,
 					status: terminalization.status,
@@ -158,9 +166,14 @@ export const createHostedAssistantRunFinalizer = ({
 			}
 
 			if (terminalization.status === "waiting_for_user") {
+				const currentAssistantMessageId = getCurrentAssistantMessageId();
 				await waitForUserDecision({
 					runId: assistantRunId,
-					pendingDecision: terminalization.pendingDecision,
+					assistantMessageId: currentAssistantMessageId,
+					pendingDecision: {
+						...terminalization.pendingDecision,
+						assistantMessageId: currentAssistantMessageId,
+					},
 				});
 				logLatency("stream.finalize_done", {
 					runId: assistantRunId,
@@ -172,6 +185,7 @@ export const createHostedAssistantRunFinalizer = ({
 
 			await failAssistantRun({
 				runId: assistantRunId,
+				assistantMessageId: getCurrentAssistantMessageId(),
 				errorText: terminalization.errorText,
 			});
 			logLatency("stream.finalize_done", {

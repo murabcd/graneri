@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import type { ModelMessage } from "@ai-sdk/provider-utils";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineAiTool } from "../src/ai-tool-definition.mjs";
 import { CHAT_MODE } from "../src/chat-mode.mjs";
-import { buildHostedChatAgentToolSet } from "../src/hosted-chat-agent.mjs";
+import {
+	buildHostedChatAgentToolSet,
+	createHostedChatPrepareStep,
+} from "../src/hosted-chat-agent.mjs";
 import { buildHostedChatRunPlan } from "../src/hosted-chat-run-plan.mjs";
 
 const deferredTool = {
@@ -141,6 +145,80 @@ describe("hosted chat agent tool set", () => {
 		});
 
 		expect(assembled.toolApproval).toBeUndefined();
+	});
+});
+
+describe("hosted chat prepare-step continuation", () => {
+	it("preserves same-generation provider references while appending accepted steer input", async () => {
+		const sameGenerationContext = [
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "reasoning",
+						text: "Current generation reasoning",
+						providerOptions: {
+							openai: { itemId: "rs_same_generation" },
+						},
+					},
+				],
+			},
+		] satisfies ModelMessage[];
+		const prepareStep = vi.fn(async () => ({
+			messages: sameGenerationContext,
+		}));
+		const takePendingSteeredUserMessages = vi.fn(() => [
+			{
+				id: "queued-1",
+				role: "user" as const,
+				parts: [{ type: "text" as const, text: "Use this correction" }],
+			},
+		]);
+		const prepareInTurnSteerInput = createHostedChatPrepareStep({
+			getActiveStreamSession: () => ({
+				takePendingSteeredUserMessages,
+			}),
+			prepareStep,
+			tools: {},
+		});
+
+		const result = await prepareInTurnSteerInput({
+			messages: [],
+			stepNumber: 2,
+		} as Parameters<typeof prepareInTurnSteerInput>[0]);
+
+		expect(result?.messages).toEqual([
+			...sameGenerationContext,
+			{
+				role: "user",
+				content: [{ type: "text", text: "Use this correction" }],
+			},
+		]);
+		expect(result?.messages?.[0]).toBe(sameGenerationContext[0]);
+		expect(takePendingSteeredUserMessages).toHaveBeenCalledWith(2);
+	});
+
+	it("returns uninterrupted continuation settings unchanged when no steer input is pending", async () => {
+		const sameGenerationContext = [
+			{ role: "user", content: "Continue normally" },
+		] satisfies ModelMessage[];
+		const prepared = { messages: sameGenerationContext };
+		const prepareStep = vi.fn(async () => prepared);
+		const prepareUninterruptedStep = createHostedChatPrepareStep({
+			getActiveStreamSession: () => ({
+				takePendingSteeredUserMessages: () => [],
+			}),
+			prepareStep,
+			tools: {},
+		});
+
+		const result = await prepareUninterruptedStep({
+			messages: sameGenerationContext,
+			stepNumber: 1,
+		} as Parameters<typeof prepareUninterruptedStep>[0]);
+
+		expect(result).toBe(prepared);
+		expect(result?.messages).toBe(sameGenerationContext);
 	});
 });
 

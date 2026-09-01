@@ -29,7 +29,6 @@ const createQueuedFollowUp = (
 		_id: id as Id<"assistantQueuedMessages">,
 		_creationTime: 1,
 		chatId: "chat-1",
-		claimedAt: undefined,
 		createdAt: 1,
 		messageId: id,
 		metadataJson: undefined,
@@ -237,6 +236,7 @@ describe("chat queue serialization", () => {
 			queuedMessage: {
 				...queuedMessage,
 				_id: "queued-message-1",
+				status: "queued",
 				workspaceId,
 			},
 			resolveConvexToken: async () => "fresh-token",
@@ -246,6 +246,7 @@ describe("chat queue serialization", () => {
 			convexToken: "fresh-token",
 			model: DEFAULT_CHAT_SETTINGS.model,
 			replayQueuedMessageId: "queued-message-1",
+			replayQueuedMessageStatus: "queued",
 			workspaceId,
 		});
 		expect(prepared.message.messageId).toBeUndefined();
@@ -273,6 +274,7 @@ describe("chat queue serialization", () => {
 				queuedMessage: {
 					...queuedMessage,
 					_id: "queued-message-1",
+					status: "queued",
 					workspaceId,
 				},
 				resolveConvexToken: async () => null,
@@ -299,6 +301,7 @@ describe("chat queue serialization", () => {
 				queuedMessage: {
 					...queuedMessage,
 					_id: "",
+					status: "queued",
 					workspaceId,
 				},
 				resolveConvexToken: async () => "fresh-token",
@@ -323,6 +326,7 @@ describe("chat queue serialization", () => {
 			queuedMessage: {
 				...queuedMessage,
 				_id: "queued-message-1",
+				status: "paused",
 				workspaceId,
 			},
 			resolveConvexToken: async () => "fresh-token",
@@ -330,6 +334,7 @@ describe("chat queue serialization", () => {
 
 		expect(prepared.message.messageId).toBe("existing-user-message");
 		expect(prepared.message.text).toBe("Edited follow up");
+		expect(prepared.body.replayQueuedMessageStatus).toBe("paused");
 	});
 
 	it("preserves generated queued message ids when they already exist locally", async () => {
@@ -351,6 +356,7 @@ describe("chat queue serialization", () => {
 			queuedMessage: {
 				...queuedMessage,
 				_id: "queued-message-1",
+				status: "queued",
 				workspaceId,
 			},
 			resolveConvexToken: async () => "fresh-token",
@@ -367,6 +373,7 @@ describe("chat queue serialization", () => {
 					_id: "queued-message-1",
 					messageId: "queued-1",
 					requestBodyJson: "[]",
+					status: "queued",
 					text: "Follow up",
 					workspaceId,
 				},

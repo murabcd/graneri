@@ -156,6 +156,8 @@ type ChatComposerProps = {
 	isSettingsLoading: boolean;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 	onQueuedFollowUpsReorder?: (ids: Array<string>) => void;
+	onQueuedFollowUpsResume: () => void;
+	isResumingQueuedFollowUps: boolean;
 	onHumanDecisionResponse: (response: HostedHumanDecisionResponse) => void;
 	onDraftChange: (value: string) => void;
 	onDraftKeyDown: (event: KeyboardEvent) => void;
@@ -165,6 +167,7 @@ type ChatComposerProps = {
 	onStop: () => void;
 	attachedFiles: ChatAttachment[];
 	onAttachedFilesChange: React.Dispatch<React.SetStateAction<ChatAttachment[]>>;
+	attachmentsDisabled: boolean;
 	canStop: boolean;
 	selectedModel: ChatModel | null;
 	reasoningEffort: ReasoningEffort;
@@ -209,6 +212,8 @@ export function ChatComposer({
 	isSettingsLoading,
 	queuedFollowUps = EMPTY_QUEUED_FOLLOW_UPS,
 	onQueuedFollowUpsReorder,
+	onQueuedFollowUpsResume,
+	isResumingQueuedFollowUps,
 	onHumanDecisionResponse,
 	onDraftChange,
 	onDraftKeyDown,
@@ -218,6 +223,7 @@ export function ChatComposer({
 	onStop,
 	attachedFiles,
 	onAttachedFilesChange,
+	attachmentsDisabled,
 	canStop,
 	selectedModel,
 	reasoningEffort,
@@ -269,6 +275,7 @@ export function ChatComposer({
 		[onAttachedFilesChange],
 	);
 	const attachmentDropzone = useFileAttachmentDropzone({
+		disabled: attachmentsDisabled,
 		onFileUploadFailed: handleAttachmentUploadFailed,
 		onFileUploaded: handleAttachmentUploaded,
 		onFilesAdded: handleAttachmentsAdded,
@@ -298,6 +305,8 @@ export function ChatComposer({
 						<ChatQueuedFollowUpBar
 							queuedFollowUps={queuedFollowUps}
 							onReorder={onQueuedFollowUpsReorder}
+							onResume={onQueuedFollowUpsResume}
+							isResuming={isResumingQueuedFollowUps}
 						/>
 					) : null}
 					<InputGroup
@@ -337,6 +346,7 @@ export function ChatComposer({
 						<ChatComposerFooter
 							draft={draft}
 							attachedFiles={attachedFiles}
+							attachmentsDisabled={attachmentsDisabled}
 							canStop={canStop}
 							disabled={isSettingsLoading}
 							onAttachmentUploadFailed={handleAttachmentUploadFailed}
@@ -1277,6 +1287,7 @@ function ChatComposerTopAddon({
 function ChatComposerFooter({
 	draft,
 	attachedFiles,
+	attachmentsDisabled,
 	canStop,
 	disabled,
 	onAttachmentUploadFailed,
@@ -1289,6 +1300,7 @@ function ChatComposerFooter({
 }: {
 	draft: string;
 	attachedFiles: ChatAttachment[];
+	attachmentsDisabled: boolean;
 	canStop: boolean;
 	disabled: boolean;
 	onAttachmentUploadFailed: (id: string) => void;
@@ -1301,6 +1313,7 @@ function ChatComposerFooter({
 }) {
 	const hasDraftText = draft.trim().length > 0;
 	const hasSendableInput =
+		(!canStop || attachedFiles.length === 0) &&
 		(canStop ? hasDraftText : hasDraftText || attachedFiles.length > 0) &&
 		!hasUploadingAttachments(attachedFiles);
 	const shouldShowStop = canStop && !hasSendableInput;
@@ -1312,6 +1325,7 @@ function ChatComposerFooter({
 			className="min-w-0 flex-wrap gap-1 px-2 pt-1 pb-2"
 		>
 			<FileAttachmentButton
+				disabled={attachmentsDisabled}
 				onFileUploadFailed={onAttachmentUploadFailed}
 				onFileUploaded={onAttachmentUploaded}
 				onFilesAdded={onAttachmentsAdded}

@@ -18,6 +18,38 @@ type RendererChatActiveRun = {
 	interruptedAssistantMessageIds?: string[];
 };
 
+export const resolveRendererQueueActiveRun = <
+	ActiveRun extends RendererChatActiveRun,
+>({
+	activeRun,
+	displayActiveRun,
+	isAiRequestPending,
+}: {
+	activeRun: ActiveRun | null;
+	displayActiveRun: ActiveRun | null;
+	isAiRequestPending: boolean;
+}) => displayActiveRun ?? (isAiRequestPending ? activeRun : null);
+
+export const isRendererQueueHandoffPending = ({
+	activeRunId,
+	previousRunId,
+}: {
+	activeRunId: string | null;
+	previousRunId: string | null;
+}) => activeRunId === null || activeRunId === previousRunId;
+
+export const isRendererQueueActionPending = ({
+	isAcceptedHandoffPending,
+	isChatRequestPending,
+	queueActiveRunId,
+}: {
+	isAcceptedHandoffPending: boolean;
+	isChatRequestPending: boolean;
+	queueActiveRunId: string | null;
+}) =>
+	isAcceptedHandoffPending ||
+	(isChatRequestPending && queueActiveRunId === null);
+
 const hasHostedUserQuestionOutput = (messages: UIMessage[]) =>
 	messages
 		.at(-1)
@@ -151,9 +183,17 @@ export const mergeRendererChatSessionMessages = ({
 	persistedMessages: UIMessage[];
 }) => {
 	if (!activeAssistantMessageId || !displayActiveRun) {
-		return controllerMessages.length > 0
-			? controllerMessages
-			: persistedMessages;
+		const controllerMessageById = new Map(
+			controllerMessages.map((message) => [message.id, message]),
+		);
+		const persistedMessagesWithControllerSnapshots = persistedMessages.map(
+			(message) => controllerMessageById.get(message.id) ?? message,
+		);
+
+		return mergePersistedChatMessagesWithController({
+			controllerMessages,
+			persistedMessages: persistedMessagesWithControllerSnapshots,
+		});
 	}
 
 	const activeControllerMessage = controllerMessages.find(

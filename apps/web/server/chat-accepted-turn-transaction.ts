@@ -1,14 +1,16 @@
 import type { ChatSettings } from "@workspace/ai/chat-settings";
 import {
-	getHostedChatConvexRouteError,
+	getHostedChatReplayAcceptanceHeaders,
+	getHostedChatSteerAcceptanceHeaders,
+	type HostedChatTurnIntent,
 	toHostedStoredMessage,
 	validateHostedChatActiveRunPolicy,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
 	type createHostedChatTurnInput,
-	isHostedQueuedUserMessageAccept,
 	persistHostedChatUserMessage,
 } from "@workspace/ai/hosted-chat-turn";
+import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { ToolApprovalResponse } from "@workspace/ai/tool-approval-state";
 import type { UIMessage } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
@@ -21,6 +23,11 @@ import { api } from "../../../convex/_generated/api.js";
 import type { Id } from "../../../convex/_generated/dataModel.js";
 import type { ServerAssistantRunContext } from "./chat-assistant-run-input.js";
 import type { AttachableAssistantRun } from "./chat-handler-types.js";
+import {
+	createExpectedQueuedTurnAcceptanceReceipt,
+	persistQueuedTurnAcceptance,
+	type QueuedTurnAcceptance,
+} from "./chat-queued-turn-acceptance.js";
 
 type HostedTurnInput = ReturnType<
 	typeof createHostedChatTurnInput<
@@ -46,18 +53,25 @@ type MutationCall<Mutation extends FunctionReference<"mutation">> = (
 	args: FunctionArgs<Mutation>,
 ) => Promise<FunctionReturnType<Mutation>>;
 
+type QueryCall<Query extends FunctionReference<"query">> = (
+	args: FunctionArgs<Query>,
+) => Promise<FunctionReturnType<Query>>;
+
 type HostedChatTurnPersistence = {
-	acceptQueuedUserMessage: MutationCommand<
-		typeof api.chats.acceptQueuedUserMessage
+	acceptQueuedUserMessageAndStartRun: MutationCall<
+		typeof api.assistantQueuedMessageAcceptances.acceptQueuedUserMessageAndStartRun
 	>;
-	acceptSteeredUserMessages: MutationCommand<
-		typeof api.chats.acceptSteeredUserMessages
+	acceptSteeredUserMessage: MutationCommand<
+		typeof api.assistantQueuedMessageAcceptances.acceptSteeredUserMessage
 	>;
 	answerUserQuestion: MutationCommand<
 		typeof api.assistantRunQuestionAnswers.answer
 	>;
 	completeLocalFolderToolMessage: MutationCommand<
 		typeof api.chats.completeLocalFolderToolMessage
+	>;
+	getQueuedMessageAcceptanceStatus: QueryCall<
+		typeof api.assistantQueuedMessageAcceptances.getAcceptanceStatus
 	>;
 	persistToolApprovalResponse: MutationCommand<
 		typeof api.toolApprovals.acceptResponse
@@ -69,11 +83,16 @@ type HostedChatTurnPersistence = {
 export const createHostedChatTurnPersistence = (
 	client: ConvexHttpClient,
 ): HostedChatTurnPersistence => ({
-	acceptQueuedUserMessage: async (args) => {
-		await client.mutation(api.chats.acceptQueuedUserMessage, args);
-	},
-	acceptSteeredUserMessages: async (args) => {
-		await client.mutation(api.chats.acceptSteeredUserMessages, args);
+	acceptQueuedUserMessageAndStartRun: (args) =>
+		client.mutation(
+			api.assistantQueuedMessageAcceptances.acceptQueuedUserMessageAndStartRun,
+			args,
+		),
+	acceptSteeredUserMessage: async (args) => {
+		await client.mutation(
+			api.assistantQueuedMessageAcceptances.acceptSteeredUserMessage,
+			args,
+		);
 	},
 	answerUserQuestion: async (args) => {
 		await client.mutation(api.assistantRunQuestionAnswers.answer, args);
@@ -81,6 +100,11 @@ export const createHostedChatTurnPersistence = (
 	completeLocalFolderToolMessage: async (args) => {
 		await client.mutation(api.chats.completeLocalFolderToolMessage, args);
 	},
+	getQueuedMessageAcceptanceStatus: (args) =>
+		client.query(
+			api.assistantQueuedMessageAcceptances.getAcceptanceStatus,
+			args,
+		),
 	persistToolApprovalResponse: async (args) => {
 		await client.mutation(api.toolApprovals.acceptResponse, args);
 	},
@@ -93,11 +117,12 @@ export const createHostedChatTurnPersistence = (
 
 export type HostedChatTurnAcceptedInput = {
 	attachableRun: AttachableAssistantRun | null;
-	continueRunId?: Id<"assistantRuns"> | null;
 	queuedInput: HostedQueuedInput;
-	replayQueuedMessageId?: Id<"assistantQueuedMessages"> | null;
-	steeredUserMessages: UIMessage[];
 	toolApprovalResponse: ToolApprovalResponse | null;
+	turnIntent: HostedChatTurnIntent<
+		Id<"assistantRuns">,
+		Id<"assistantQueuedMessages">
+	>;
 	turnController: HostedTurnController;
 	userQuestionAnswer: string | null;
 };
@@ -117,6 +142,7 @@ export type HostedChatTurnAcceptancePolicy = {
 	appsEnabled: boolean;
 	chatId: string;
 	defaultTimezone: string;
+	localCapabilitySession: LocalCapabilitySession | null;
 	noteId: Id<"notes"> | null;
 	projectId: Id<"projects"> | null;
 	selectedSourceIds: string[];
@@ -142,7 +168,8 @@ export type HostedChatTurnAcceptanceFailure =
 			error: unknown;
 			isQueuedAccept: boolean;
 	  }
-	| { type: "claimed_queue_cleanup_failed" }
+	| { type: "claimed_queue_release_failed" }
+	| { type: "queued_acceptance_status_lookup"; error: unknown }
 	| {
 			type: "ai_admission_reservation_missing";
 			pendingQueuedAcceptanceHeaders: Record<string, string> | null;
@@ -162,7 +189,7 @@ type HostedChatAcceptedTurn = {
 	assistantMessageId: string;
 	pendingQueuedAcceptanceHeaders: Record<string, string> | null;
 	producer:
-		| { type: "web" }
+		| { type: "web"; assistantRun: HostedAssistantRunIdentity | null }
 		| {
 				type: "convex";
 				assistantRun: HostedAssistantRunIdentity;
@@ -175,9 +202,7 @@ type HostedChatTurnAcceptanceResult =
 
 type AcceptHostedChatTurnArgs = {
 	acceptedInput: HostedChatTurnAcceptedInput;
-	cleanupClaimedSteerQueuedMessage: (options: {
-		tolerateMissing: boolean;
-	}) => Promise<boolean>;
+	releaseClaimedQueuedMessage: () => Promise<boolean>;
 	onSteerAccepted: (runId: Id<"assistantRuns"> | null) => void;
 	onUserMessagePersistenceCompleted: (attempted: boolean) => void;
 	persistence: HostedChatTurnPersistence;
@@ -187,7 +212,7 @@ type AcceptHostedChatTurnArgs = {
 
 export const acceptHostedChatTurn = async ({
 	acceptedInput,
-	cleanupClaimedSteerQueuedMessage,
+	releaseClaimedQueuedMessage,
 	onSteerAccepted,
 	onUserMessagePersistenceCompleted,
 	persistence,
@@ -196,19 +221,24 @@ export const acceptHostedChatTurn = async ({
 }: AcceptHostedChatTurnArgs): Promise<HostedChatTurnAcceptanceResult> => {
 	const {
 		attachableRun,
-		continueRunId,
 		queuedInput,
-		replayQueuedMessageId,
-		steeredUserMessages,
 		toolApprovalResponse,
+		turnIntent,
 		turnController,
 		userQuestionAnswer,
 	} = acceptedInput;
+	const continueRunId =
+		turnIntent.type === "steer"
+			? turnIntent.runId
+			: turnIntent.type === "direct"
+				? turnIntent.continueRunId
+				: null;
 	const {
 		admissionReservationId,
 		appsEnabled,
 		chatId,
 		defaultTimezone,
+		localCapabilitySession,
 		noteId,
 		projectId,
 		selectedSourceIds,
@@ -253,7 +283,7 @@ export const acceptHostedChatTurn = async ({
 
 	const isSteeringConvexRun = Boolean(
 		attachableRun?.producer === "convex" &&
-			continueRunId &&
+			turnIntent.type === "steer" &&
 			queuedInput.hasClaimed,
 	);
 	const userQuestionResolution =
@@ -286,7 +316,25 @@ export const acceptHostedChatTurn = async ({
 	}
 
 	const assistantMessageId =
-		assistantContinuationMessageId ?? `stream-${crypto.randomUUID()}`;
+		turnIntent.type === "steer" && attachableRun
+			? attachableRun.assistantMessageId
+			: (assistantContinuationMessageId ?? `stream-${crypto.randomUUID()}`);
+	const backgroundRunJob = {
+		messagesJson: JSON.stringify(chatMessages),
+		instructions,
+		chatMode: settings.chatMode,
+		webSearchEnabled: coreToolPolicyState.webSearchEnabled,
+		artifactAuthoringRequested: coreToolPolicyState.artifactAuthoringRequested,
+		chartGenerationRequested: coreToolPolicyState.chartGenerationRequested,
+		imageGenerationRequested: coreToolPolicyState.imageGenerationRequested,
+		appToolScope: appsEnabled ? ("available" as const) : ("disabled" as const),
+		shouldGenerateChatTitle,
+		selectedSourceIds: appsEnabled ? selectedSourceIds : [],
+		defaultTimezone,
+		model: settings.model,
+		reasoningEffort: settings.reasoningEffort,
+		serviceTier: settings.serviceTier,
+	};
 
 	if (localFolderContinuationMessage) {
 		try {
@@ -359,56 +407,175 @@ export const acceptHostedChatTurn = async ({
 		}
 	}
 
-	let pendingQueuedAcceptanceHeaders: Record<string, string> | null = null;
+	let queuedTurnAcceptance: QueuedTurnAcceptance | null = null;
 	if (lastUserMessage) {
-		const isQueuedAccept = isHostedQueuedUserMessageAccept({
-			continueRunId,
-			queuedInput,
-			replayQueuedMessageId,
-		});
-		try {
-			const persistedUserMessage = await persistHostedChatUserMessage({
-				workspaceId,
-				chatId,
-				noteId,
-				projectId,
-				settings,
-				nextAssistantMessageId: assistantMessageId,
-				message: lastUserMessage,
-				continueRunId,
-				queuedInput,
-				replayQueuedMessageId,
-				steeredUserMessages,
-				acceptQueuedUserMessage: persistence.acceptQueuedUserMessage,
-				acceptSteeredUserMessages: (args) =>
-					persistence.acceptSteeredUserMessages({
-						...args,
-						admissionReservationId,
-					}),
-				saveMessage: persistence.saveMessage,
-			});
-			pendingQueuedAcceptanceHeaders =
-				persistedUserMessage.pendingQueuedAcceptanceHeaders;
-			onSteerAccepted(persistedUserMessage.acceptedSteerTurnId);
-		} catch (error) {
-			const routeError = isQueuedAccept
-				? getHostedChatConvexRouteError(error)
-				: null;
-			const cleaned = await cleanupClaimedSteerQueuedMessage({
-				tolerateMissing: Boolean(routeError),
-			});
-			if (!cleaned) {
+		const isQueuedAccept =
+			turnIntent.type !== "direct" && queuedInput.hasClaimed;
+		const attemptedAcceptanceLease = isQueuedAccept
+			? queuedInput.claimedLease
+			: null;
+		const persistUserMessage =
+			async (): Promise<QueuedTurnAcceptance | null> => {
+				const persistedUserMessage = await persistHostedChatUserMessage({
+					workspaceId,
+					chatId,
+					noteId,
+					projectId,
+					settings,
+					message: lastUserMessage,
+					queuedInput,
+					turnIntent,
+					acceptQueuedUserMessageAndStartRun: async (args) => {
+						const run = shouldUseConvexProducer
+							? (() => {
+									if (!admissionReservationId) {
+										throw new Error(
+											"Queued replay admission reservation is missing.",
+										);
+									}
+									return {
+										producer: "convex" as const,
+										assistantMessageId,
+										admissionReservationId,
+										job: backgroundRunJob,
+									};
+								})()
+							: {
+									producer: "web" as const,
+									assistantMessageId,
+									localCapabilitySession,
+									model: settings.model,
+									reasoningEffort: settings.reasoningEffort,
+									serviceTier: settings.serviceTier,
+								};
+						return await persistence.acceptQueuedUserMessageAndStartRun({
+							...args,
+							run,
+						});
+					},
+					acceptSteeredUserMessage: (args) => {
+						if (!attachableRun) {
+							throw new Error("Steered assistant run is missing.");
+						}
+						return persistence.acceptSteeredUserMessage({
+							...args,
+							assistantMessageId: attachableRun.assistantMessageId,
+							admissionReservationId,
+						});
+					},
+					saveMessage: persistence.saveMessage,
+				});
+				if (persistedUserMessage.type === "replay") {
+					return {
+						type: "replay",
+						queuedMessageId: persistedUserMessage.queuedMessageId,
+						run: {
+							_id: persistedUserMessage.acceptance.run._id,
+							assistantMessageId:
+								persistedUserMessage.acceptance.run.assistantMessageId,
+						},
+					};
+				}
+				if (persistedUserMessage.type === "steer") {
+					return persistedUserMessage;
+				}
+				return null;
+			};
+		if (attemptedAcceptanceLease) {
+			const producer =
+				turnIntent.type === "steer"
+					? attachableRun?.producer
+					: shouldUseConvexProducer
+						? "convex"
+						: "web";
+			if (!producer) {
 				return {
 					ok: false,
-					failure: { type: "claimed_queue_cleanup_failed" },
+					failure: {
+						type: "user_message_persist",
+						error: new Error("Steered assistant run is missing."),
+						isQueuedAccept,
+					},
 				};
 			}
-			return {
-				ok: false,
-				failure: { type: "user_message_persist", error, isQueuedAccept },
-			};
+			const result = await persistQueuedTurnAcceptance({
+				clearClaimed: queuedInput.clearClaimed,
+				expected: createExpectedQueuedTurnAcceptanceReceipt({
+					assistantMessageId,
+					claimVersion: attemptedAcceptanceLease.claimVersion,
+					messageId: lastUserMessage.id,
+					producer,
+					queuedMessageId: attemptedAcceptanceLease.queuedMessageId,
+					turnIntent,
+				}),
+				getAcceptanceStatus: () =>
+					persistence.getQueuedMessageAcceptanceStatus({
+						workspaceId,
+						chatId,
+						queuedMessageId: attemptedAcceptanceLease.queuedMessageId,
+						claimVersion: attemptedAcceptanceLease.claimVersion,
+					}),
+				persist: async () => {
+					const acceptance = await persistUserMessage();
+					if (!acceptance) {
+						throw new Error("Queued chat input did not produce an acceptance.");
+					}
+					return acceptance;
+				},
+				releaseClaimed: releaseClaimedQueuedMessage,
+			});
+			if (!result.ok) {
+				if (result.failure.type === "release_failed") {
+					return {
+						ok: false,
+						failure: { type: "claimed_queue_release_failed" },
+					};
+				}
+				if (result.failure.type === "status_lookup") {
+					return {
+						ok: false,
+						failure: {
+							type: "queued_acceptance_status_lookup",
+							error: result.failure.error,
+						},
+					};
+				}
+				return {
+					ok: false,
+					failure: {
+						type: "user_message_persist",
+						error: result.failure.error,
+						isQueuedAccept,
+					},
+				};
+			}
+			queuedTurnAcceptance = result.acceptance;
+		} else {
+			try {
+				queuedTurnAcceptance = await persistUserMessage();
+			} catch (error) {
+				return {
+					ok: false,
+					failure: { type: "user_message_persist", error, isQueuedAccept },
+				};
+			}
 		}
 	}
+	const pendingQueuedAcceptanceHeaders = queuedTurnAcceptance
+		? queuedTurnAcceptance.type === "steer"
+			? getHostedChatSteerAcceptanceHeaders({
+					queuedMessageId: queuedTurnAcceptance.queuedMessageId,
+					turnId: queuedTurnAcceptance.runId,
+				})
+			: getHostedChatReplayAcceptanceHeaders({
+					queuedMessageId: queuedTurnAcceptance.queuedMessageId,
+				})
+		: null;
+	if (queuedTurnAcceptance?.type === "steer") {
+		onSteerAccepted(queuedTurnAcceptance.runId);
+	}
+	const acceptedReplayRun =
+		queuedTurnAcceptance?.type === "replay" ? queuedTurnAcceptance.run : null;
 	onUserMessagePersistenceCompleted(Boolean(lastUserMessage));
 
 	if (!shouldUseConvexProducer) {
@@ -417,12 +584,12 @@ export const acceptHostedChatTurn = async ({
 			acceptedTurn: {
 				assistantMessageId,
 				pendingQueuedAcceptanceHeaders,
-				producer: { type: "web" },
+				producer: { type: "web", assistantRun: acceptedReplayRun },
 			},
 		};
 	}
 
-	if (!admissionReservationId) {
+	if (!admissionReservationId && !acceptedReplayRun) {
 		return {
 			ok: false,
 			failure: {
@@ -433,38 +600,25 @@ export const acceptHostedChatTurn = async ({
 	}
 
 	let assistantRun: HostedAssistantRunIdentity;
-	if (attachableRun) {
+	if (acceptedReplayRun) {
+		assistantRun = acceptedReplayRun;
+	} else if (attachableRun) {
 		assistantRun = {
 			_id: attachableRun._id,
 			assistantMessageId,
 		};
 	} else {
 		try {
+			if (!admissionReservationId) {
+				throw new Error("Assistant run admission reservation is missing.");
+			}
 			const startedRun = await persistence.startBackgroundRun({
 				workspaceId,
 				chatId,
 				assistantMessageId,
 				admissionReservationId,
 				policy: supersedeActiveRun ? "supersede" : "reject",
-				job: {
-					messagesJson: JSON.stringify(chatMessages),
-					instructions,
-					chatMode: settings.chatMode,
-					webSearchEnabled: coreToolPolicyState.webSearchEnabled,
-					artifactAuthoringRequested:
-						coreToolPolicyState.artifactAuthoringRequested,
-					chartGenerationRequested:
-						coreToolPolicyState.chartGenerationRequested,
-					imageGenerationRequested:
-						coreToolPolicyState.imageGenerationRequested,
-					appToolScope: appsEnabled ? "available" : "disabled",
-					shouldGenerateChatTitle,
-					selectedSourceIds: appsEnabled ? selectedSourceIds : [],
-					defaultTimezone,
-					model: settings.model,
-					reasoningEffort: settings.reasoningEffort,
-					serviceTier: settings.serviceTier,
-				},
+				job: backgroundRunJob,
 			});
 			assistantRun = {
 				_id: startedRun._id,

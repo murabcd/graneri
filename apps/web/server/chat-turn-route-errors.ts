@@ -4,19 +4,18 @@ import type { HostedChatTurnAcceptanceFailure } from "./chat-accepted-turn-trans
 import type { JsonObject, SendJson } from "./http-utils.js";
 import { recordServerError, type ServerWideEvent } from "./server-logger.js";
 
-type CleanupClaimedSteerQueuedMessageResult =
+type ReleaseClaimedQueuedMessageResult =
 	| {
 			ok: true;
 	  }
 	| {
 			error: unknown;
 			ok: false;
-			queuedMessageIds?: string[];
+			queuedMessageId?: string;
 	  };
 
-type CleanupClaimedSteerQueuedMessage = (options?: {
-	tolerateMissing?: boolean;
-}) => Promise<CleanupClaimedSteerQueuedMessageResult>;
+type ReleaseClaimedQueuedMessage =
+	() => Promise<ReleaseClaimedQueuedMessageResult>;
 
 type TurnControllerError =
 	| {
@@ -24,7 +23,7 @@ type TurnControllerError =
 	  }
 	| {
 			cause?: unknown;
-			cleanupError?: unknown;
+			releaseError?: unknown;
 			error: string;
 			errorCode?: string;
 			logMessage?: string;
@@ -106,29 +105,25 @@ export const createHostedChatTurnRouteErrorResponder = ({
 }: HostedChatRouteErrorEnvironment & {
 	continueRunId?: string | null;
 	turnController: {
-		cleanupClaimedSteerQueuedMessage: CleanupClaimedSteerQueuedMessage;
+		releaseClaimedQueuedMessage: ReleaseClaimedQueuedMessage;
 	};
 }) => {
 	const routeErrors = createHostedChatRouteErrorResponder(environment);
 	const { send, sendConvexError } = routeErrors;
 
-	const cleanupClaimedSteerQueuedMessage = async (
-		operation: string,
-		options: { tolerateMissing?: boolean } = {},
-	) => {
-		const cleanupResult =
-			await turnController.cleanupClaimedSteerQueuedMessage(options);
-		if (cleanupResult.ok) {
+	const releaseClaimedQueuedMessage = async (operation: string) => {
+		const releaseResult = await turnController.releaseClaimedQueuedMessage();
+		if (releaseResult.ok) {
 			return true;
 		}
 		send({
-			eventErrorCode: "steer_queue_cleanup_failed",
+			eventErrorCode: "steer_queue_release_failed",
 			log: {
-				cause: cleanupResult.error,
-				details: { queued_message_ids: cleanupResult.queuedMessageIds },
+				cause: releaseResult.error,
+				details: { queued_message_id: releaseResult.queuedMessageId },
 				operation,
 			},
-			payload: { error: "Failed to clean up claimed steered message." },
+			payload: { error: "Failed to release claimed steered message." },
 			statusCode: 500,
 		});
 		return false;
@@ -138,7 +133,7 @@ export const createHostedChatTurnRouteErrorResponder = ({
 		if (turnError.ok) {
 			return false;
 		}
-		const logCause = turnError.cleanupError ?? turnError.cause;
+		const logCause = turnError.releaseError ?? turnError.cause;
 		const shouldLog = Boolean(logCause || turnError.logMessage);
 		send({
 			eventErrorCode: turnError.errorCode ?? turnError.phase,
@@ -146,7 +141,7 @@ export const createHostedChatTurnRouteErrorResponder = ({
 				? {
 						cause: logCause,
 						details:
-							!turnError.cleanupError && continueRunId
+							!turnError.releaseError && continueRunId
 								? { run_id: continueRunId }
 								: undefined,
 						operation: turnError.logMessage ?? turnError.phase,
@@ -252,7 +247,20 @@ export const createHostedChatTurnRouteErrorResponder = ({
 					statusCode: 500,
 				});
 				return;
-			case "claimed_queue_cleanup_failed":
+			case "claimed_queue_release_failed":
+				return;
+			case "queued_acceptance_status_lookup":
+				send({
+					eventErrorCode: "queued_acceptance_status_lookup_failed",
+					log: {
+						cause: failure.error,
+						operation: "queued_acceptance_status_lookup",
+					},
+					payload: {
+						error: "Failed to verify queued message acceptance.",
+					},
+					statusCode: 500,
+				});
 				return;
 			case "ai_admission_reservation_missing":
 				send({
@@ -285,7 +293,7 @@ export const createHostedChatTurnRouteErrorResponder = ({
 
 	return {
 		...routeErrors,
-		cleanupClaimedSteerQueuedMessage,
+		releaseClaimedQueuedMessage,
 		sendAcceptanceFailure,
 		sendTurnControllerError,
 	};

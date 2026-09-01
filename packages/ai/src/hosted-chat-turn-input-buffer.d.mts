@@ -4,6 +4,11 @@ export type HostedTurnInputActivity =
 	| typeof HOSTED_TURN_INPUT_ACTIVITY_MAILBOX
 	| typeof HOSTED_TURN_INPUT_ACTIVITY_STEER;
 
+export type HostedConsumedSteerInput = {
+	input: unknown[];
+	stepNumber: number;
+};
+
 export type HostedTurnInputBuffer = {
 	acceptMailboxDeliveryForCurrentTurn(): void;
 	clear(): void;
@@ -17,7 +22,17 @@ export type HostedTurnInputBuffer = {
 		unsubscribe(): void;
 	};
 	takeAllForReplacement(): unknown[];
+	takeForReplacementByKind(): {
+		acceptsMailboxDelivery: boolean;
+		mailbox: unknown[];
+		steer: unknown[];
+	};
 	takeForCurrentTurn(): unknown[];
+	takeSteerInput(stepNumber: number): unknown[];
+	takeSteerGenerationBoundary(): {
+		consumed: HostedConsumedSteerInput[];
+		pending: unknown[];
+	};
 };
 
 export declare const createHostedTurnInputBuffer: () => HostedTurnInputBuffer;

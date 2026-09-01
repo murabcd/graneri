@@ -130,6 +130,7 @@ describe("chat steer HTTP contract", () => {
 				body: {
 					continueRunId: "run-1",
 					replayQueuedMessageId: "queued-replay-1",
+					replayQueuedMessageStatus: "queued",
 					steerQueuedMessageId: "queued-steer-1",
 				},
 			}),
@@ -149,6 +150,7 @@ describe("chat steer HTTP contract", () => {
 				body: {
 					continueRunId: "run-1",
 					replayQueuedMessageId: "queued-replay-1",
+					replayQueuedMessageStatus: "queued",
 				},
 			}),
 		).resolves.toEqual({
@@ -170,6 +172,7 @@ describe("chat steer HTTP contract", () => {
 						parts: [{ type: "text", text: "ignore me" }],
 					},
 					replayQueuedMessageId: "queued-replay-1",
+					replayQueuedMessageStatus: "queued",
 				},
 			}),
 		).resolves.toEqual({
@@ -178,6 +181,21 @@ describe("chat steer HTTP contract", () => {
 				error:
 					"Queued message replay and steering must not include a client message body.",
 				errorCode: "queued_message_body_conflict",
+			},
+		});
+	});
+
+	it("rejects queued replay without its expected durable status", async () => {
+		await expect(
+			postChatRequest({
+				body: { replayQueuedMessageId: "queued-replay-1" },
+			}),
+		).resolves.toEqual({
+			status: 400,
+			body: {
+				error:
+					"replayQueuedMessageStatus must match the current queued message status.",
+				errorCode: "replay_queued_message_status_invalid",
 			},
 		});
 	});

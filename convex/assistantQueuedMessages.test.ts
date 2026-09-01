@@ -1,11 +1,13 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import {
 	createQueuedRequestBody,
 	createQueuedRequestBodyJson,
 } from "./assistantQueuedMessage.fixtures";
+import type { AssistantQueuedMessageReplayClaimAttempt } from "./assistantQueuedMessageModel";
 import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -16,6 +18,27 @@ const ownerIdentity = {
 	tokenIdentifier: "test|owner",
 	name: "Owner",
 	email: "owner@example.com",
+};
+
+const expectUnclaimedQueueRow = (
+	row: Doc<"assistantQueuedMessages"> | null | undefined,
+	status: "paused" | "queued",
+) => {
+	expect(row?.status).toBe(status);
+	if (!row || row.status !== status) {
+		throw new Error(`Expected ${status} queued message.`);
+	}
+	expect(row).not.toHaveProperty("claimedAt");
+	expect(row).not.toHaveProperty("claimOrigin");
+};
+const requireClaimedReplay = (
+	attempt: AssistantQueuedMessageReplayClaimAttempt,
+) => {
+	expect(attempt.status).toBe("claimed");
+	if (attempt.status !== "claimed") {
+		throw new Error("Expected queued replay to be claimed.");
+	}
+	return attempt.claimedMessage;
 };
 const createWorkspace = async () => {
 	const t = convexTest(schema, modules);
@@ -170,6 +193,237 @@ test("queued follow-ups attach to the active assistant run", async () => {
 	]);
 });
 
+test("uncertain admission atomically queues against the current active run", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	await createChat({ asOwner, chatId: "chat-current-admission", workspaceId });
+	const run = await startRun({
+		asOwner,
+		chatId: "chat-current-admission",
+		workspaceId,
+	});
+
+	const admission = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForCurrentRun,
+		{
+			workspaceId,
+			chatId: "chat-current-admission",
+			message: queuedMessageInput(
+				"queued-current-admission",
+				"Follow the server-owned run",
+			),
+		},
+	);
+
+	expect(admission).toMatchObject({
+		status: "queued",
+		queuedMessage: {
+			messageId: "queued-current-admission",
+			runId: run._id,
+			status: "queued",
+		},
+	});
+});
+
+test("uncertain admission returns no_active after the run truly completes", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	await createChat({
+		asOwner,
+		chatId: "chat-completed-admission",
+		workspaceId,
+	});
+	const run = await startRun({
+		asOwner,
+		chatId: "chat-completed-admission",
+		workspaceId,
+	});
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+
+	const admission = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForCurrentRun,
+		{
+			workspaceId,
+			chatId: "chat-completed-admission",
+			message: queuedMessageInput(
+				"queued-completed-admission",
+				"Start only after completion",
+			),
+		},
+	);
+
+	expect(admission).toEqual({ status: "no_active" });
+	const queuedMessages = await t.run((ctx) =>
+		ctx.db
+			.query("assistantQueuedMessages")
+			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", run.chatId))
+			.collect(),
+	);
+	expect(queuedMessages).toEqual([]);
+});
+
+test("uncertain admission appends behind a queued continuation reservation", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-queued-reservation-admission";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRun({ asOwner, chatId, workspaceId });
+	const reservedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("queued-reserved", "Reserved next turn"),
+		},
+	);
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+
+	const admission = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForCurrentRun,
+		{
+			workspaceId,
+			chatId,
+			message: queuedMessageInput(
+				"queued-behind-reservation",
+				"Wait behind it",
+			),
+		},
+	);
+
+	expect(admission).toMatchObject({
+		status: "queued",
+		queuedMessage: {
+			messageId: "queued-behind-reservation",
+			runId: reservedMessage.runId,
+			status: "queued",
+		},
+	});
+	const queuedMessages = await asOwner.query(
+		api.assistantQueuedMessages.listQueuedForChat,
+		{ workspaceId, chatId },
+	);
+	expect(queuedMessages.map((message) => message.messageId)).toEqual([
+		"queued-reserved",
+		"queued-behind-reservation",
+	]);
+});
+
+test("uncertain admission appends behind a claimed continuation reservation", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-claimed-reservation-admission";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRun({ asOwner, chatId, workspaceId });
+	const reservedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("claimed-reserved", "Replay setup in flight"),
+		},
+	);
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+	const claim = await asOwner.mutation(
+		api.assistantQueuedMessages.claimForReplay,
+		{
+			workspaceId,
+			chatId,
+			expectedStatus: "queued",
+			queuedMessageId: reservedMessage._id,
+		},
+	);
+	expect(claim.status).toBe("claimed");
+
+	const admission = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForCurrentRun,
+		{
+			workspaceId,
+			chatId,
+			message: queuedMessageInput(
+				"queued-behind-claim",
+				"Wait for replay setup",
+			),
+		},
+	);
+
+	expect(admission).toMatchObject({
+		status: "queued",
+		queuedMessage: {
+			messageId: "queued-behind-claim",
+			runId: reservedMessage.runId,
+			status: "queued",
+		},
+	});
+	const persistedRows = await t.run((ctx) =>
+		ctx.db
+			.query("assistantQueuedMessages")
+			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", run.chatId))
+			.collect(),
+	);
+	expect(
+		persistedRows.map(({ messageId, status }) => ({ messageId, status })),
+	).toEqual([
+		{ messageId: "claimed-reserved", status: "claimed" },
+		{ messageId: "queued-behind-claim", status: "queued" },
+	]);
+});
+
+test("uncertain admission appends behind a paused continuation reservation", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-paused-reservation-admission";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRun({ asOwner, chatId, workspaceId });
+	const reservedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("paused-reserved", "Failed queue head"),
+		},
+	);
+	await asOwner.mutation(api.assistantRuns.failAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		errorText: "generation failed",
+	});
+
+	const admission = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForCurrentRun,
+		{
+			workspaceId,
+			chatId,
+			message: queuedMessageInput("queued-behind-pause", "Wait behind failure"),
+		},
+	);
+
+	expect(admission).toMatchObject({
+		status: "queued",
+		queuedMessage: {
+			messageId: "queued-behind-pause",
+			runId: reservedMessage.runId,
+			status: "queued",
+		},
+	});
+	const queuedMessages = await asOwner.query(
+		api.assistantQueuedMessages.listQueuedForChat,
+		{ workspaceId, chatId },
+	);
+	expect(
+		queuedMessages.map(({ messageId, status }) => ({ messageId, status })),
+	).toEqual([
+		{ messageId: "paused-reserved", status: "paused" },
+		{ messageId: "queued-behind-pause", status: "queued" },
+	]);
+});
+
 test("empty queued follow-ups are rejected", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-empty-queue", workspaceId });
@@ -256,54 +510,59 @@ test("queued follow-ups reject invalid durable payloads before claim", async () 
 	).rejects.toThrow("Queued message request body is invalid.");
 });
 
-test("claimNextForRun claims one pending follow-up per run", async () => {
+test("claimForSteer claims only the selected follow-up per run", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-claim", workspaceId });
 	const run = await startRun({ asOwner, chatId: "chat-claim", workspaceId });
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-claim",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "First"),
-	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-claim",
-		runId: run._id,
-		message: queuedMessageInput("queued-2", "Second"),
-	});
+	const firstMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-claim",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "First"),
+		},
+	);
+	const secondMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-claim",
+			runId: run._id,
+			message: queuedMessageInput("queued-2", "Second"),
+		},
+	);
 
 	const firstClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
-	);
-	const secondClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: firstMessage._id },
 	);
 
-	expect(firstClaim?.messageId).toBe("queued-1");
-	expect(firstClaim?.status).toBe("claimed");
-	expect(secondClaim).toBeNull();
+	expect(firstClaim.messageId).toBe("queued-1");
+	expect(firstClaim.status).toBe("claimed");
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+			runId: run._id,
+			queuedMessageId: secondMessage._id,
+		}),
+	).rejects.toThrow("Queued message is no longer available.");
 
-	if (!firstClaim) {
-		throw new Error("Expected queued message to be claimed.");
-	}
-	await asOwner.mutation(api.assistantQueuedMessages.discardClaimed, {
+	await asOwner.mutation(api.assistantQueuedMessages.releaseClaimed, {
 		workspaceId,
 		chatId: "chat-claim",
 		queuedMessageId: firstClaim._id,
+		claimVersion: firstClaim.claimVersion,
 	});
-	const emptyClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+	const secondClaim = await asOwner.mutation(
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: secondMessage._id },
 	);
-	expect(emptyClaim?.messageId).toBe("queued-2");
-	expect(emptyClaim?.status).toBe("claimed");
+	expect(secondClaim.messageId).toBe("queued-2");
+	expect(secondClaim.status).toBe("claimed");
 });
 
-test("claimReadyForRun claims a targeted follow-up and remaining ready input", async () => {
+test("claimForSteer leaves every non-selected follow-up queued", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-claim-ready", workspaceId });
 	const run = await startRun({
@@ -330,35 +589,164 @@ test("claimReadyForRun claims a targeted follow-up and remaining ready input", a
 			message: queuedMessageInput("queued-2", "Second"),
 		},
 	);
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-claim-ready",
-		runId: run._id,
-		message: queuedMessageInput("queued-3", "Third"),
-	});
+	const third = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-claim-ready",
+			runId: run._id,
+			message: queuedMessageInput("queued-3", "Third"),
+		},
+	);
 
-	const claimedMessages = await asOwner.mutation(
-		api.assistantQueuedMessages.claimReadyForRun,
+	const claimedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.claimForSteer,
 		{ runId: run._id, queuedMessageId: second._id },
 	);
 
-	expect(claimedMessages.map((message) => message.messageId)).toEqual([
-		"queued-2",
-		"queued-1",
-		"queued-3",
-	]);
-	expect(claimedMessages.map((message) => message.status)).toEqual([
-		"claimed",
-		"claimed",
-		"claimed",
+	expect(claimedMessage.messageId).toBe("queued-2");
+	expect(claimedMessage.status).toBe("claimed");
+	const remainingMessages = await asOwner.query(
+		api.assistantQueuedMessages.listQueuedForChat,
+		{ workspaceId, chatId: "chat-claim-ready" },
+	);
+	expect(remainingMessages.map((message) => message._id)).toEqual([
+		first._id,
+		third._id,
 	]);
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimReadyForRun, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
 			runId: run._id,
 			queuedMessageId: first._id,
 		}),
 	).rejects.toThrow("Queued message is no longer available.");
+});
+
+test("claimed follow-ups are released automatically when their lease expires", async () => {
+	vi.useFakeTimers();
+	try {
+		const { asOwner, t, workspaceId } = await createWorkspace();
+		await createChat({ asOwner, chatId: "chat-claim-lease", workspaceId });
+		const run = await startRun({
+			asOwner,
+			chatId: "chat-claim-lease",
+			workspaceId,
+		});
+		const queuedMessage = await asOwner.mutation(
+			api.assistantQueuedMessages.enqueueForActiveRun,
+			{
+				workspaceId,
+				chatId: "chat-claim-lease",
+				runId: run._id,
+				message: queuedMessageInput("queued-lease", "Lease recovery"),
+			},
+		);
+
+		await asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+			runId: run._id,
+			queuedMessageId: queuedMessage._id,
+		});
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		const recoveredMessage = await t.run((ctx) =>
+			ctx.db.get(queuedMessage._id),
+		);
+		expect(recoveredMessage).toMatchObject({
+			status: "queued",
+			runId: run._id,
+		});
+		expectUnclaimedQueueRow(recoveredMessage, "queued");
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+test("claimForSteer rebinds a selected paused row to the current run", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	await createChat({ asOwner, chatId: "chat-paused-rebind", workspaceId });
+	const oldRun = await startRun({
+		asOwner,
+		chatId: "chat-paused-rebind",
+		workspaceId,
+	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-paused-rebind",
+			runId: oldRun._id,
+			message: queuedMessageInput("queued-paused", "Use in the new run"),
+		},
+	);
+	const currentRun = await asOwner.mutation(
+		api.assistantRuns.startAssistantRun,
+		{
+			workspaceId,
+			chatId: "chat-paused-rebind",
+			assistantMessageId: "chat-paused-rebind-assistant-2",
+			localCapabilitySession: null,
+			model: "gpt-5",
+			serviceTier: "auto",
+			policy: "supersede",
+		},
+	);
+
+	const claimedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.claimForSteer,
+		{
+			runId: currentRun._id,
+			queuedMessageId: queuedMessage._id,
+		},
+	);
+
+	expect(claimedMessage).toMatchObject({
+		status: "claimed",
+		claimOrigin: { status: "paused", pauseReason: "interrupted" },
+		runId: currentRun._id,
+	});
+});
+
+test("claimForSteer rebinds a queued row left by a completed run", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	await createChat({ asOwner, chatId: "chat-queued-rebind", workspaceId });
+	const oldRun = await startRun({
+		asOwner,
+		chatId: "chat-queued-rebind",
+		workspaceId,
+	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-queued-rebind",
+			runId: oldRun._id,
+			message: queuedMessageInput("queued-next", "Steer the replaying turn"),
+		},
+	);
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: oldRun._id,
+		assistantMessageId: oldRun.assistantMessageId,
+	});
+	const currentRun = await startRun({
+		asOwner,
+		chatId: "chat-queued-rebind",
+		workspaceId,
+	});
+
+	const claimedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.claimForSteer,
+		{
+			runId: currentRun._id,
+			queuedMessageId: queuedMessage._id,
+		},
+	);
+
+	expect(claimedMessage).toMatchObject({
+		status: "claimed",
+		claimOrigin: { status: "queued" },
+		runId: currentRun._id,
+	});
 });
 
 test("queued follow-ups only attach to the current active run", async () => {
@@ -393,7 +781,7 @@ test("queued follow-ups only attach to the current active run", async () => {
 	).rejects.toThrow("Assistant run is not active.");
 });
 
-test("claimNextForRun only claims for the current active run", async () => {
+test("claimForSteer only claims for the current active run", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({
 		asOwner,
@@ -424,19 +812,20 @@ test("claimNextForRun only claims for the current active run", async () => {
 		policy: "supersede",
 	});
 
-	const oldRunClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: oldRun._id },
-	);
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+			runId: oldRun._id,
+			queuedMessageId: queuedMessage._id,
+		}),
+	).rejects.toThrow("Assistant run is not active.");
 	const persistedQueuedMessage = await t.run((ctx) =>
 		ctx.db.get(queuedMessage._id),
 	);
 
-	expect(oldRunClaim).toBeNull();
-	expect(persistedQueuedMessage).toBeNull();
+	expect(persistedQueuedMessage?.status).toBe("paused");
 });
 
-test("claimNextForRun fails closed when multiple active runs exist", async () => {
+test("claimForSteer fails closed when multiple active runs exist", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({
 		asOwner,
@@ -448,21 +837,25 @@ test("claimNextForRun fails closed when multiple active runs exist", async () =>
 		chatId: "chat-duplicate-active-run",
 		workspaceId,
 	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-duplicate-active-run",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Follow up"),
-	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-duplicate-active-run",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Follow up"),
+		},
+	);
 	await insertDuplicateActiveRun({ run, t, workspaceId });
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
 			runId: run._id,
+			queuedMessageId: queuedMessage._id,
 		}),
 	).rejects.toThrow("ASSISTANT_RUN_INVARIANT_VIOLATION");
 
-	const queuedMessage = await t.run(async (ctx) =>
+	const persistedQueuedMessage = await t.run(async (ctx) =>
 		ctx.db
 			.query("assistantQueuedMessages")
 			.withIndex("by_runId_and_status", (q) =>
@@ -470,8 +863,8 @@ test("claimNextForRun fails closed when multiple active runs exist", async () =>
 			)
 			.first(),
 	);
-	expect(queuedMessage?.messageId).toBe("queued-1");
-	expect(queuedMessage?.claimedAt).toBeUndefined();
+	expect(persistedQueuedMessage?.messageId).toBe("queued-1");
+	expectUnclaimedQueueRow(persistedQueuedMessage, "queued");
 });
 
 test("listQueuedForChat fails closed when multiple active runs exist", async () => {
@@ -498,7 +891,7 @@ test("listQueuedForChat fails closed when multiple active runs exist", async () 
 	).rejects.toThrow("ASSISTANT_RUN_INVARIANT_VIOLATION");
 });
 
-test("claimNextForRun rejects invalid durable payloads before claiming", async () => {
+test("claimForSteer rejects invalid durable payloads before claiming", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-claim-invalid", workspaceId });
 	const run = await startRun({
@@ -523,17 +916,18 @@ test("claimNextForRun rejects invalid durable payloads before claiming", async (
 	});
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
 			runId: run._id,
+			queuedMessageId: queuedMessage._id,
 		}),
 	).rejects.toThrow("Queued message request body is invalid.");
 	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
 
 	expect(persistedMessage?.status).toBe("queued");
-	expect(persistedMessage?.claimedAt).toBeUndefined();
+	expectUnclaimedQueueRow(persistedMessage, "queued");
 });
 
-test("claimNextForRun claims waiting user-decision follow-ups but not stopping runs", async () => {
+test("claimForSteer rejects waiting user-decision follow-ups without claiming them", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-non-running-claim", workspaceId });
 	const waitingRun = await startRun({
@@ -541,12 +935,15 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 		chatId: "chat-non-running-claim",
 		workspaceId,
 	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-non-running-claim",
-		runId: waitingRun._id,
-		message: queuedMessageInput("queued-waiting", "Wait"),
-	});
+	const waitingMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-non-running-claim",
+			runId: waitingRun._id,
+			message: queuedMessageInput("queued-waiting", "Wait"),
+		},
+	);
 	await asOwner.mutation(api.chats.saveMessage, {
 		projectId: null,
 		settings: DEFAULT_CHAT_SETTINGS,
@@ -574,28 +971,31 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 	});
 	await asOwner.mutation(api.assistantRuns.waitForUserDecision, {
 		runId: waitingRun._id,
+		assistantMessageId: waitingRun.assistantMessageId,
 		pendingDecision: userQuestionDecision(
 			waitingRun.assistantMessageId,
 			"Clarify scope",
 		),
 	});
 
-	const waitingClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: waitingRun._id },
-	);
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+			runId: waitingRun._id,
+			queuedMessageId: waitingMessage._id,
+		}),
+	).rejects.toThrow("Assistant run is not active.");
 	const waitingQueuedMessage = await t.run(async (ctx) =>
 		ctx.db
 			.query("assistantQueuedMessages")
 			.withIndex("by_runId_and_status", (q) =>
-				q.eq("runId", waitingRun._id).eq("status", "claimed"),
+				q.eq("runId", waitingRun._id).eq("status", "queued"),
 			)
 			.first(),
 	);
 
-	expect(waitingClaim?.messageId).toBe("queued-waiting");
 	expect(waitingQueuedMessage?.messageId).toBe("queued-waiting");
-	expect(waitingQueuedMessage?.claimedAt).toEqual(expect.any(Number));
+	expect(waitingQueuedMessage?.claimVersion).toBe(waitingMessage.claimVersion);
+	expectUnclaimedQueueRow(waitingQueuedMessage, "queued");
 
 	await createChat({
 		asOwner,
@@ -607,20 +1007,26 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 		chatId: "chat-stopping-non-running-claim",
 		workspaceId,
 	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-stopping-non-running-claim",
-		runId: stoppingRun._id,
-		message: queuedMessageInput("queued-stopping", "Stop"),
-	});
+	const stoppingMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-stopping-non-running-claim",
+			runId: stoppingRun._id,
+			message: queuedMessageInput("queued-stopping", "Stop"),
+		},
+	);
 	await asOwner.mutation(api.assistantRuns.requestStopAssistantRun, {
 		runId: stoppingRun._id,
+		assistantMessageId: stoppingRun.assistantMessageId,
 	});
 
-	const stoppingClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: stoppingRun._id },
-	);
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+			runId: stoppingRun._id,
+			queuedMessageId: stoppingMessage._id,
+		}),
+	).rejects.toThrow("Assistant run is not active.");
 	const stoppingQueuedMessage = await t.run(async (ctx) =>
 		ctx.db
 			.query("assistantQueuedMessages")
@@ -630,12 +1036,11 @@ test("claimNextForRun claims waiting user-decision follow-ups but not stopping r
 			.first(),
 	);
 
-	expect(stoppingClaim).toBeNull();
 	expect(stoppingQueuedMessage?.messageId).toBe("queued-stopping");
-	expect(stoppingQueuedMessage?.claimedAt).toBeUndefined();
+	expectUnclaimedQueueRow(stoppingQueuedMessage, "queued");
 });
 
-test("claimNextForRun reclaims stale claimed follow-ups for the active run", async () => {
+test("claimForSteer reclaims stale claimed follow-ups for the active run", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-reclaim-run", workspaceId });
 	const run = await startRun({
@@ -644,16 +1049,19 @@ test("claimNextForRun reclaims stale claimed follow-ups for the active run", asy
 		workspaceId,
 	});
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-reclaim-run",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Retry me"),
-	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-reclaim-run",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Retry me"),
+		},
+	);
 
 	const firstClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	if (!firstClaim) {
 		throw new Error("Expected queued message to be claimed.");
@@ -666,8 +1074,8 @@ test("claimNextForRun reclaims stale claimed follow-ups for the active run", asy
 	});
 
 	const reclaimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 
 	expect(reclaimedMessage?._id).toBe(firstClaim._id);
@@ -714,8 +1122,8 @@ test("queued follow-ups can be reordered before they drain", async () => {
 		},
 	);
 	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: secondMessage._id },
 	);
 
 	expect(queuedMessages.map((message) => message.messageId)).toEqual([
@@ -936,7 +1344,7 @@ test("updateQueued fails closed when multiple active runs exist", async () => {
 	expect(persistedMessage?.text).toBe("Original");
 });
 
-test("claimNextForRun can steer a specific queued follow-up", async () => {
+test("claimForSteer can steer a specific queued follow-up", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-steer-specific", workspaceId });
 	const run = await startRun({
@@ -945,12 +1353,15 @@ test("claimNextForRun can steer a specific queued follow-up", async () => {
 		workspaceId,
 	});
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-steer-specific",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "First"),
-	});
+	const firstMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-steer-specific",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "First"),
+		},
+	);
 	const secondMessage = await asOwner.mutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
 		{
@@ -962,34 +1373,33 @@ test("claimNextForRun can steer a specific queued follow-up", async () => {
 	);
 
 	const steeredMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
+		api.assistantQueuedMessages.claimForSteer,
 		{ runId: run._id, queuedMessageId: secondMessage._id },
 	);
-	const blockedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
-	);
 
-	expect(steeredMessage?.messageId).toBe("queued-2");
-	expect(steeredMessage?.status).toBe("claimed");
-	expect(blockedMessage).toBeNull();
+	expect(steeredMessage.messageId).toBe("queued-2");
+	expect(steeredMessage.status).toBe("claimed");
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+			runId: run._id,
+			queuedMessageId: firstMessage._id,
+		}),
+	).rejects.toThrow("Queued message is no longer available.");
 
-	if (!steeredMessage) {
-		throw new Error("Expected queued message to be claimed.");
-	}
-	await asOwner.mutation(api.assistantQueuedMessages.discardClaimed, {
+	await asOwner.mutation(api.assistantQueuedMessages.releaseClaimed, {
 		workspaceId,
 		chatId: "chat-steer-specific",
 		queuedMessageId: steeredMessage._id,
+		claimVersion: steeredMessage.claimVersion,
 	});
 	const nextMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: firstMessage._id },
 	);
-	expect(nextMessage?.messageId).toBe("queued-1");
+	expect(nextMessage.messageId).toBe("queued-1");
 });
 
-test("claimNextForRun rejects targeted queued follow-ups from another run", async () => {
+test("claimForSteer rejects targeted queued follow-ups from another run", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-target-owner", workspaceId });
 	await createChat({ asOwner, chatId: "chat-target-other", workspaceId });
@@ -1014,7 +1424,7 @@ test("claimNextForRun rejects targeted queued follow-ups from another run", asyn
 	);
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
 			runId: run._id,
 			queuedMessageId: otherQueuedMessage._id,
 		}),
@@ -1026,7 +1436,7 @@ test("claimNextForRun rejects targeted queued follow-ups from another run", asyn
 	expect(persistedOtherMessage?.status).toBe("queued");
 });
 
-test("claimNextForRun rejects missing targeted queued follow-ups", async () => {
+test("claimForSteer rejects missing targeted queued follow-ups", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-target-missing", workspaceId });
 	const run = await startRun({
@@ -1050,14 +1460,14 @@ test("claimNextForRun rejects missing targeted queued follow-ups", async () => {
 	});
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
 			runId: run._id,
 			queuedMessageId: queuedMessage._id,
 		}),
 	).rejects.toThrow("Queued message is no longer available.");
 });
 
-test("claimNextForRun rejects targeted queued follow-ups for inactive runs", async () => {
+test("claimForSteer rejects targeted queued follow-ups for inactive runs", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-target-inactive", workspaceId });
 	const run = await startRun({
@@ -1076,10 +1486,11 @@ test("claimNextForRun rejects targeted queued follow-ups for inactive runs", asy
 	);
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
 			runId: run._id,
 			queuedMessageId: queuedMessage._id,
 		}),
@@ -1091,7 +1502,7 @@ test("claimNextForRun rejects targeted queued follow-ups for inactive runs", asy
 	expect(persistedQueuedMessage?.status).toBe("queued");
 });
 
-test("claimNextForRun rejects targeted queued follow-ups while another claim is in flight", async () => {
+test("claimForSteer rejects targeted queued follow-ups while another claim is in flight", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-target-claimed", workspaceId });
 	const run = await startRun({
@@ -1099,12 +1510,15 @@ test("claimNextForRun rejects targeted queued follow-ups while another claim is 
 		chatId: "chat-target-claimed",
 		workspaceId,
 	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-target-claimed",
-		runId: run._id,
-		message: queuedMessageInput("queued-claimed-1", "First"),
-	});
+	const firstQueuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-target-claimed",
+			runId: run._id,
+			message: queuedMessageInput("queued-claimed-1", "First"),
+		},
+	);
 	const secondQueuedMessage = await asOwner.mutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
 		{
@@ -1115,15 +1529,15 @@ test("claimNextForRun rejects targeted queued follow-ups while another claim is 
 		},
 	);
 	const existingClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: firstQueuedMessage._id },
 	);
 	if (!existingClaim) {
 		throw new Error("Expected queued message to be claimed.");
 	}
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForRun, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
 			runId: run._id,
 			queuedMessageId: secondQueuedMessage._id,
 		}),
@@ -1139,33 +1553,38 @@ test("claimNextForRun rejects targeted queued follow-ups while another claim is 
 	expect(persistedSecondMessage?.status).toBe("queued");
 });
 
-test("discardClaimed removes consumed queued follow-ups from future drain attempts", async () => {
+test("releaseClaimed restores a failed steer for later replay", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-consumed", workspaceId });
 	const run = await startRun({ asOwner, chatId: "chat-consumed", workspaceId });
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-consumed",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Do not repeat"),
-	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-consumed",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Do not repeat"),
+		},
+	);
 
 	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	if (!claimedMessage) {
 		throw new Error("Expected queued message to be claimed.");
 	}
 
-	await asOwner.mutation(api.assistantQueuedMessages.discardClaimed, {
+	await asOwner.mutation(api.assistantQueuedMessages.releaseClaimed, {
 		workspaceId,
 		chatId: "chat-consumed",
 		queuedMessageId: claimedMessage._id,
+		claimVersion: claimedMessage.claimVersion,
 	});
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 
 	const queuedMessages = await asOwner.query(
@@ -1175,23 +1594,70 @@ test("discardClaimed removes consumed queued follow-ups from future drain attemp
 			chatId: "chat-consumed",
 		},
 	);
-	const nextClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForChat,
-		{
+	const nextClaim = requireClaimedReplay(
+		await asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
 			workspaceId,
 			chatId: "chat-consumed",
-		},
+			expectedStatus: "queued",
+			queuedMessageId: claimedMessage._id,
+		}),
 	);
 
-	expect(queuedMessages).toHaveLength(0);
-	expect(nextClaim).toBeNull();
+	expect(queuedMessages).toHaveLength(1);
+	expect(nextClaim._id).toBe(claimedMessage._id);
+	expect(nextClaim.status).toBe("claimed");
 	const persistedQueuedMessage = await t.run((ctx) =>
 		ctx.db.get(claimedMessage._id),
 	);
-	expect(persistedQueuedMessage).toBeNull();
+	expect(persistedQueuedMessage?.status).toBe("claimed");
 });
 
-test("discardClaimed rejects claimed rows from another chat", async () => {
+test("stale claim versions cannot release a re-claimed row", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-claim-version-fence";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRun({ asOwner, chatId, workspaceId });
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("queued-fenced", "Keep the newer claim"),
+		},
+	);
+	const firstClaim = await asOwner.mutation(
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
+	);
+	await asOwner.mutation(api.assistantQueuedMessages.releaseClaimed, {
+		workspaceId,
+		chatId,
+		queuedMessageId: firstClaim._id,
+		claimVersion: firstClaim.claimVersion,
+	});
+	const currentClaim = await asOwner.mutation(
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
+	);
+	expect(currentClaim.claimVersion).toBeGreaterThan(firstClaim.claimVersion);
+
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.releaseClaimed, {
+			workspaceId,
+			chatId,
+			queuedMessageId: currentClaim._id,
+			claimVersion: firstClaim.claimVersion,
+		}),
+	).resolves.toBeNull();
+	const afterStaleRelease = await t.run((ctx) => ctx.db.get(currentClaim._id));
+	expect(afterStaleRelease).toMatchObject({
+		status: "claimed",
+		claimVersion: currentClaim.claimVersion,
+	});
+});
+
+test("releaseClaimed rejects claimed rows from another chat", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-claimed-owner", workspaceId });
 	await createChat({ asOwner, chatId: "chat-claimed-other", workspaceId });
@@ -1201,25 +1667,29 @@ test("discardClaimed rejects claimed rows from another chat", async () => {
 		workspaceId,
 	});
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-claimed-owner",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Keep claimed"),
-	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-claimed-owner",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Keep claimed"),
+		},
+	);
 	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	if (!claimedMessage) {
 		throw new Error("Expected queued message to be claimed.");
 	}
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.discardClaimed, {
+		asOwner.mutation(api.assistantQueuedMessages.releaseClaimed, {
 			workspaceId,
 			chatId: "chat-claimed-other",
 			queuedMessageId: claimedMessage._id,
+			claimVersion: claimedMessage.claimVersion,
 		}),
 	).rejects.toThrow("Queued message is no longer available.");
 
@@ -1227,7 +1697,7 @@ test("discardClaimed rejects claimed rows from another chat", async () => {
 	expect(persistedClaim?.status).toBe("claimed");
 });
 
-test("discardClaimed rejects queued rows", async () => {
+test("releaseClaimed is idempotent for an already visible row", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-claimed-status", workspaceId });
 	const run = await startRun({
@@ -1247,12 +1717,13 @@ test("discardClaimed rejects queued rows", async () => {
 	);
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.discardClaimed, {
+		asOwner.mutation(api.assistantQueuedMessages.releaseClaimed, {
 			workspaceId,
 			chatId: "chat-claimed-status",
 			queuedMessageId: queuedMessage._id,
+			claimVersion: queuedMessage.claimVersion,
 		}),
-	).rejects.toThrow("Queued message is not claimed.");
+	).resolves.toBeNull();
 
 	const persistedQueuedMessage = await t.run((ctx) =>
 		ctx.db.get(queuedMessage._id),
@@ -1260,7 +1731,7 @@ test("discardClaimed rejects queued rows", async () => {
 	expect(persistedQueuedMessage?.status).toBe("queued");
 });
 
-test("stopping a run deletes claimed steered follow-ups", async () => {
+test("stopping a run pauses claimed input and reports stale queued replay unavailable", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-steer-stop", workspaceId });
 	const run = await startRun({
@@ -1269,16 +1740,19 @@ test("stopping a run deletes claimed steered follow-ups", async () => {
 		workspaceId,
 	});
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-steer-stop",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Steer now"),
-	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-steer-stop",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Steer now"),
+		},
+	);
 
 	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	if (!claimedMessage) {
 		throw new Error("Expected queued message to be claimed.");
@@ -1286,9 +1760,11 @@ test("stopping a run deletes claimed steered follow-ups", async () => {
 
 	await asOwner.mutation(api.assistantRuns.requestStopAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 	await asOwner.mutation(api.assistantRuns.finishStoppedAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 
 	const queuedMessages = await asOwner.query(
@@ -1298,9 +1774,164 @@ test("stopping a run deletes claimed steered follow-ups", async () => {
 			chatId: "chat-steer-stop",
 		},
 	);
-	expect(queuedMessages).toHaveLength(0);
+	expect(queuedMessages).toHaveLength(1);
+	expect(queuedMessages[0]).toMatchObject({
+		_id: claimedMessage._id,
+		status: "paused",
+		pauseReason: "interrupted",
+	});
 	const persistedClaim = await t.run((ctx) => ctx.db.get(claimedMessage._id));
-	expect(persistedClaim).toBeNull();
+	expect(persistedClaim?.status).toBe("paused");
+	expectUnclaimedQueueRow(persistedClaim, "paused");
+
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId: "chat-steer-stop",
+			expectedStatus: "queued",
+			queuedMessageId: claimedMessage._id,
+		}),
+	).resolves.toEqual({ status: "unavailable" });
+
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId: "chat-steer-stop",
+			expectedStatus: "paused",
+			queuedMessageId: claimedMessage._id,
+		}),
+	).resolves.toEqual({ status: "unavailable" });
+	await asOwner.mutation(api.assistantQueuedMessages.resumeInterruptedForChat, {
+		workspaceId,
+		chatId: "chat-steer-stop",
+	});
+	const retriedMessage = requireClaimedReplay(
+		await asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId: "chat-steer-stop",
+			expectedStatus: "queued",
+			queuedMessageId: claimedMessage._id,
+		}),
+	);
+	expect(retriedMessage.status).toBe("claimed");
+	expect(retriedMessage.claimOrigin).toEqual({ status: "queued" });
+});
+
+test("resuming after Stop atomically restores every interrupted row", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-resume-interrupted";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRun({ asOwner, chatId, workspaceId });
+	const first = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "First"),
+		},
+	);
+	const second = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("queued-2", "Second"),
+		},
+	);
+	await asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+		runId: run._id,
+		queuedMessageId: first._id,
+	});
+	await asOwner.mutation(api.assistantRuns.requestStopAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+	await asOwner.mutation(api.assistantRuns.finishStoppedAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+
+	await asOwner.mutation(api.assistantQueuedMessages.resumeInterruptedForChat, {
+		workspaceId,
+		chatId,
+	});
+
+	for (const queuedMessageId of [first._id, second._id]) {
+		const row = await t.run((ctx) => ctx.db.get(queuedMessageId));
+		expectUnclaimedQueueRow(row, "queued");
+	}
+});
+
+test("failure pauses only the literal queue head and prevents skipping it", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "chat-failure-head";
+	await createChat({ asOwner, chatId, workspaceId });
+	const run = await startRun({ asOwner, chatId, workspaceId });
+	const first = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "First"),
+		},
+	);
+	const second = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId,
+			runId: run._id,
+			message: queuedMessageInput("queued-2", "Second"),
+		},
+	);
+	await t.run(async (ctx) => {
+		await ctx.db.patch(first._id, { createdAt: 3_000 });
+		await ctx.db.patch(second._id, { createdAt: 3_001 });
+	});
+	await asOwner.mutation(api.assistantQueuedMessages.claimForSteer, {
+		runId: run._id,
+		queuedMessageId: second._id,
+	});
+	await asOwner.mutation(api.assistantRuns.failAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		errorText: "Generation failed.",
+	});
+
+	expect(await t.run((ctx) => ctx.db.get(first._id))).toMatchObject({
+		status: "paused",
+		pauseReason: "failed",
+	});
+	expect(await t.run((ctx) => ctx.db.get(second._id))).toMatchObject({
+		status: "queued",
+	});
+	expectUnclaimedQueueRow(
+		await t.run((ctx) => ctx.db.get(second._id)),
+		"queued",
+	);
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId,
+			expectedStatus: "queued",
+			queuedMessageId: second._id,
+		}),
+	).resolves.toEqual({ status: "unavailable" });
+	const claimedHead = requireClaimedReplay(
+		await asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId,
+			expectedStatus: "paused",
+			queuedMessageId: first._id,
+		}),
+	);
+	expect(claimedHead.claimOrigin).toEqual({
+		status: "paused",
+		pauseReason: "failed",
+	});
 });
 
 test("terminal assistant runs cannot accept queued follow-ups", async () => {
@@ -1310,6 +1941,7 @@ test("terminal assistant runs cannot accept queued follow-ups", async () => {
 
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 
 	await expect(
@@ -1397,15 +2029,18 @@ test("discardQueued rejects claimed rows", async () => {
 		chatId: "chat-queued-status",
 		workspaceId,
 	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-queued-status",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Claimed now"),
-	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-queued-status",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Claimed now"),
+		},
+	);
 	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	if (!claimedMessage) {
 		throw new Error("Expected queued message to be claimed.");
@@ -1432,207 +2067,173 @@ test("completed assistant runs leave queued follow-ups claimable by chat", async
 		workspaceId,
 	});
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-terminal-claim",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Claim after complete"),
-	});
-
-	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
-		runId: run._id,
-	});
-
-	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForChat,
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
 		{
 			workspaceId,
 			chatId: "chat-terminal-claim",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Claim after complete"),
 		},
 	);
 
-	expect(claimedMessage?.messageId).toBe("queued-1");
-	expect(claimedMessage?.status).toBe("claimed");
-});
-
-test("claimNextForChat fails closed when multiple active runs exist", async () => {
-	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({
-		asOwner,
-		chatId: "chat-duplicate-active-chat",
-		workspaceId,
-	});
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-duplicate-active-chat",
-		workspaceId,
-	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-duplicate-active-chat",
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
-		message: queuedMessageInput("queued-1", "Wait for invariant"),
+		assistantMessageId: run.assistantMessageId,
 	});
-	await insertDuplicateActiveRun({ run, t, workspaceId });
 
-	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForChat, {
+	const claimedMessage = requireClaimedReplay(
+		await asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
 			workspaceId,
-			chatId: "chat-duplicate-active-chat",
+			chatId: "chat-terminal-claim",
+			expectedStatus: "queued",
+			queuedMessageId: queuedMessage._id,
 		}),
-	).rejects.toThrow("ASSISTANT_RUN_INVARIANT_VIOLATION");
-});
-
-test("getClaimedForChat fails closed when multiple active runs exist", async () => {
-	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-duplicate-claimed", workspaceId });
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-duplicate-claimed",
-		workspaceId,
-	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-duplicate-claimed",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Claimed"),
-	});
-	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
 	);
-	if (!claimedMessage) {
-		throw new Error("Expected queued message to be claimed.");
-	}
-	await insertDuplicateActiveRun({ run, t, workspaceId });
 
-	await expect(
-		asOwner.query(api.assistantQueuedMessages.getClaimedForChat, {
-			workspaceId,
-			chatId: "chat-duplicate-claimed",
-			queuedMessageId: claimedMessage._id,
-		}),
-	).rejects.toThrow("ASSISTANT_RUN_INVARIANT_VIOLATION");
+	expect(claimedMessage.messageId).toBe("queued-1");
+	expect(claimedMessage.status).toBe("claimed");
 });
 
-test("getClaimedForChat rejects claimed rows from another chat", async () => {
+test("claimForReplay reports selected follow-ups from another chat unavailable", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({
-		asOwner,
-		chatId: "chat-claimed-replay-owner",
-		workspaceId,
-	});
-	await createChat({
-		asOwner,
-		chatId: "chat-claimed-replay-other",
-		workspaceId,
-	});
+	await createChat({ asOwner, chatId: "chat-replay-owner", workspaceId });
+	await createChat({ asOwner, chatId: "chat-replay-other", workspaceId });
 	const run = await startRun({
 		asOwner,
-		chatId: "chat-claimed-replay-owner",
-		workspaceId,
-	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-claimed-replay-owner",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Keep claimed"),
-	});
-	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
-	);
-	if (!claimedMessage) {
-		throw new Error("Expected queued message to be claimed.");
-	}
-
-	await expect(
-		asOwner.query(api.assistantQueuedMessages.getClaimedForChat, {
-			workspaceId,
-			chatId: "chat-claimed-replay-other",
-			queuedMessageId: claimedMessage._id,
-		}),
-	).rejects.toThrow("Queued message is no longer available.");
-
-	const persistedClaim = await t.run((ctx) => ctx.db.get(claimedMessage._id));
-	expect(persistedClaim?.status).toBe("claimed");
-});
-
-test("getClaimedForChat rejects missing chat scope", async () => {
-	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({
-		asOwner,
-		chatId: "chat-claimed-replay-missing",
-		workspaceId,
-	});
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-claimed-replay-missing",
-		workspaceId,
-	});
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-claimed-replay-missing",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Keep claimed"),
-	});
-	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
-	);
-	if (!claimedMessage) {
-		throw new Error("Expected queued message to be claimed.");
-	}
-
-	await expect(
-		asOwner.query(api.assistantQueuedMessages.getClaimedForChat, {
-			workspaceId,
-			chatId: "chat-claimed-replay-missing-other",
-			queuedMessageId: claimedMessage._id,
-		}),
-	).rejects.toThrow("Chat not found.");
-
-	const persistedClaim = await t.run((ctx) => ctx.db.get(claimedMessage._id));
-	expect(persistedClaim?.status).toBe("claimed");
-});
-
-test("getClaimedForChat rejects queued rows", async () => {
-	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({
-		asOwner,
-		chatId: "chat-claimed-replay-status",
-		workspaceId,
-	});
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-claimed-replay-status",
+		chatId: "chat-replay-owner",
 		workspaceId,
 	});
 	const queuedMessage = await asOwner.mutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
 		{
 			workspaceId,
-			chatId: "chat-claimed-replay-status",
+			chatId: "chat-replay-owner",
 			runId: run._id,
-			message: queuedMessageInput("queued-1", "Still queued"),
+			message: queuedMessageInput("queued-1", "Keep scoped"),
+		},
+	);
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId: "chat-replay-other",
+			expectedStatus: "queued",
+			queuedMessageId: queuedMessage._id,
+		}),
+	).resolves.toEqual({ status: "unavailable" });
+
+	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
+	expect(persistedMessage?.status).toBe("queued");
+	expectUnclaimedQueueRow(persistedMessage, "queued");
+});
+
+test("claimForReplay rejects missing chat scope", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	await createChat({ asOwner, chatId: "chat-replay-existing", workspaceId });
+	const run = await startRun({
+		asOwner,
+		chatId: "chat-replay-existing",
+		workspaceId,
+	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-replay-existing",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Keep available"),
+		},
+	);
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId: "chat-replay-missing",
+			expectedStatus: "queued",
+			queuedMessageId: queuedMessage._id,
+		}),
+	).rejects.toThrow("Chat not found.");
+
+	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
+	expect(persistedMessage?.status).toBe("queued");
+	expectUnclaimedQueueRow(persistedMessage, "queued");
+});
+
+test("claimForReplay reports a retryable active-run conflict", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	await createChat({ asOwner, chatId: "chat-active-replay", workspaceId });
+	const run = await startRun({
+		asOwner,
+		chatId: "chat-active-replay",
+		workspaceId,
+	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-active-replay",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Wait for completion"),
 		},
 	);
 
 	await expect(
-		asOwner.query(api.assistantQueuedMessages.getClaimedForChat, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
 			workspaceId,
-			chatId: "chat-claimed-replay-status",
+			chatId: "chat-active-replay",
+			expectedStatus: "queued",
 			queuedMessageId: queuedMessage._id,
 		}),
-	).rejects.toThrow("Queued message is not claimed.");
+	).resolves.toEqual({ status: "active_run" });
 
-	const persistedQueuedMessage = await t.run((ctx) =>
-		ctx.db.get(queuedMessage._id),
-	);
-	expect(persistedQueuedMessage?.status).toBe("queued");
+	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
+	expect(persistedMessage?.status).toBe("queued");
+	expectUnclaimedQueueRow(persistedMessage, "queued");
 });
 
-test("claimNextForChat rejects invalid durable payloads before claiming", async () => {
+test("claimForReplay fails closed when multiple active runs exist", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	await createChat({
+		asOwner,
+		chatId: "chat-duplicate-active-chat",
+		workspaceId,
+	});
+	const run = await startRun({
+		asOwner,
+		chatId: "chat-duplicate-active-chat",
+		workspaceId,
+	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-duplicate-active-chat",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Wait for invariant"),
+		},
+	);
+	await insertDuplicateActiveRun({ run, t, workspaceId });
+
+	await expect(
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId: "chat-duplicate-active-chat",
+			expectedStatus: "queued",
+			queuedMessageId: queuedMessage._id,
+		}),
+	).rejects.toThrow("ASSISTANT_RUN_INVARIANT_VIOLATION");
+});
+
+test("claimForReplay rejects invalid durable payloads before claiming", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-terminal-invalid", workspaceId });
 	const run = await startRun({
@@ -1652,6 +2253,7 @@ test("claimNextForChat rejects invalid durable payloads before claiming", async 
 	);
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 	await t.run(async (ctx) => {
 		await ctx.db.patch(queuedMessage._id, {
@@ -1660,18 +2262,20 @@ test("claimNextForChat rejects invalid durable payloads before claiming", async 
 	});
 
 	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.claimNextForChat, {
+		asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
 			workspaceId,
 			chatId: "chat-terminal-invalid",
+			expectedStatus: "queued",
+			queuedMessageId: queuedMessage._id,
 		}),
 	).rejects.toThrow("Queued message request body is invalid.");
 	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
 
 	expect(persistedMessage?.status).toBe("queued");
-	expect(persistedMessage?.claimedAt).toBeUndefined();
+	expectUnclaimedQueueRow(persistedMessage, "queued");
 });
 
-test("claimNextForChat reclaims stale claimed follow-ups after the run completes", async () => {
+test("claimForReplay reclaims stale claimed follow-ups after the run completes", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-reclaim-chat", workspaceId });
 	const run = await startRun({
@@ -1680,26 +2284,28 @@ test("claimNextForChat reclaims stale claimed follow-ups after the run completes
 		workspaceId,
 	});
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-reclaim-chat",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Replay me"),
-	});
-	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
-		runId: run._id,
-	});
-
-	const firstClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForChat,
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
 		{
 			workspaceId,
 			chatId: "chat-reclaim-chat",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Replay me"),
 		},
 	);
-	if (!firstClaim) {
-		throw new Error("Expected queued message to be claimed.");
-	}
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+
+	const firstClaim = requireClaimedReplay(
+		await asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
+			workspaceId,
+			chatId: "chat-reclaim-chat",
+			expectedStatus: "queued",
+			queuedMessageId: queuedMessage._id,
+		}),
+	);
 	await t.run(async (ctx) => {
 		await ctx.db.patch(firstClaim._id, {
 			claimedAt: 1_000,
@@ -1707,12 +2313,13 @@ test("claimNextForChat reclaims stale claimed follow-ups after the run completes
 		});
 	});
 
-	const reclaimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForChat,
-		{
+	const reclaimedMessage = requireClaimedReplay(
+		await asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
 			workspaceId,
 			chatId: "chat-reclaim-chat",
-		},
+			expectedStatus: "queued",
+			queuedMessageId: queuedMessage._id,
+		}),
 	);
 
 	expect(reclaimedMessage?._id).toBe(firstClaim._id);
@@ -1721,50 +2328,7 @@ test("claimNextForChat reclaims stale claimed follow-ups after the run completes
 	expect(reclaimedMessage?.claimedAt).toBeGreaterThan(1_000);
 });
 
-test("getClaimedForChat rejects invalid claimed durable payloads", async () => {
-	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-claimed-invalid", workspaceId });
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-claimed-invalid",
-		workspaceId,
-	});
-
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-claimed-invalid",
-		runId: run._id,
-		message: queuedMessageInput("queued-invalid-claimed", "Original"),
-	});
-	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
-		runId: run._id,
-	});
-	const claimedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForChat,
-		{
-			workspaceId,
-			chatId: "chat-claimed-invalid",
-		},
-	);
-	if (!claimedMessage) {
-		throw new Error("Expected queued message to be claimed.");
-	}
-	await t.run(async (ctx) => {
-		await ctx.db.patch(claimedMessage._id, {
-			requestBodyJson: "[]",
-		});
-	});
-
-	await expect(
-		asOwner.query(api.assistantQueuedMessages.getClaimedForChat, {
-			workspaceId,
-			chatId: "chat-claimed-invalid",
-			queuedMessageId: claimedMessage._id,
-		}),
-	).rejects.toThrow("Queued message request body is invalid.");
-});
-
-test("completed assistant runs delete claimed follow-ups instead of recovering them", async () => {
+test("completed assistant runs release claimed follow-ups for replay", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await createChat({ asOwner, chatId: "chat-stale-claim", workspaceId });
 	const run = await startRun({
@@ -1773,16 +2337,19 @@ test("completed assistant runs delete claimed follow-ups instead of recovering t
 		workspaceId,
 	});
 
-	await asOwner.mutation(api.assistantQueuedMessages.enqueueForActiveRun, {
-		workspaceId,
-		chatId: "chat-stale-claim",
-		runId: run._id,
-		message: queuedMessageInput("queued-1", "Delete me"),
-	});
+	const queuedMessage = await asOwner.mutation(
+		api.assistantQueuedMessages.enqueueForActiveRun,
+		{
+			workspaceId,
+			chatId: "chat-stale-claim",
+			runId: run._id,
+			message: queuedMessageInput("queued-1", "Delete me"),
+		},
+	);
 
 	const firstClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForRun,
-		{ runId: run._id },
+		api.assistantQueuedMessages.claimForSteer,
+		{ runId: run._id, queuedMessageId: queuedMessage._id },
 	);
 	if (!firstClaim) {
 		throw new Error("Expected queued message to be claimed.");
@@ -1795,6 +2362,7 @@ test("completed assistant runs delete claimed follow-ups instead of recovering t
 	});
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 
 	const listedMessages = await asOwner.query(
@@ -1804,16 +2372,18 @@ test("completed assistant runs delete claimed follow-ups instead of recovering t
 			chatId: "chat-stale-claim",
 		},
 	);
-	const secondClaim = await asOwner.mutation(
-		api.assistantQueuedMessages.claimNextForChat,
-		{
+	const secondClaim = requireClaimedReplay(
+		await asOwner.mutation(api.assistantQueuedMessages.claimForReplay, {
 			workspaceId,
 			chatId: "chat-stale-claim",
-		},
+			expectedStatus: "queued",
+			queuedMessageId: firstClaim._id,
+		}),
 	);
 
-	expect(listedMessages).toHaveLength(0);
-	expect(secondClaim).toBeNull();
+	expect(listedMessages).toHaveLength(1);
+	expect(listedMessages[0]?._id).toBe(firstClaim._id);
+	expect(secondClaim._id).toBe(firstClaim._id);
 	const persistedClaim = await t.run((ctx) => ctx.db.get(firstClaim._id));
-	expect(persistedClaim).toBeNull();
+	expect(persistedClaim?.status).toBe("claimed");
 });

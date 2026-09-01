@@ -85,6 +85,23 @@ describe("hosted chat turn input buffer", () => {
 		expect(buffer.hasPendingMailboxInput()).toBe(false);
 	});
 
+	it("owns consumed and pending steer input in one generation ledger", () => {
+		const buffer = createHostedTurnInputBuffer();
+
+		buffer.extendSteerInput({ id: "steer-b" });
+		expect(buffer.takeSteerInput(1)).toEqual([{ id: "steer-b" }]);
+		buffer.extendSteerInput({ id: "steer-c" });
+
+		expect(buffer.takeSteerGenerationBoundary()).toEqual({
+			consumed: [{ input: [{ id: "steer-b" }], stepNumber: 1 }],
+			pending: [{ id: "steer-c" }],
+		});
+		expect(buffer.takeSteerGenerationBoundary()).toEqual({
+			consumed: [],
+			pending: [],
+		});
+	});
+
 	it("notifies subscribers with pending activity snapshots", () => {
 		const buffer = createHostedTurnInputBuffer();
 		const listener = vi.fn();

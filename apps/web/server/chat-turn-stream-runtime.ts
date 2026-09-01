@@ -4,6 +4,10 @@ import {
 	createChatStreamLatencyTracker,
 } from "@workspace/ai/chat-latency-logger";
 import {
+	buildHostedSteeredGenerationTranscript,
+	toHostedStoredMessage,
+} from "@workspace/ai/hosted-chat-runtime";
+import {
 	createHostedActiveStreamKey,
 	createHostedAssistantRunFinalizer,
 	createHostedChatRunResponseStream,
@@ -31,7 +35,8 @@ import { pipeUiMessageStreamToServerResponse } from "./ui-message-response-strea
 export type HostedChatTurnStreamRuntimeResult =
 	| {
 			activeStreamSession: HostedActiveStreamSession<
-				Id<"assistantRuns">
+				Id<"assistantRuns">,
+				Id<"assistantQueuedMessages">
 			> | null;
 			assistantMessageId: string;
 			assistantRunId: Id<"assistantRuns">;
@@ -39,8 +44,10 @@ export type HostedChatTurnStreamRuntimeResult =
 	  }
 	| {
 			activeStreamSession: HostedActiveStreamSession<
-				Id<"assistantRuns">
+				Id<"assistantRuns">,
+				Id<"assistantQueuedMessages">
 			> | null;
+			claimDisposition: "hold" | "release";
 			ok: false;
 	  };
 
@@ -60,39 +67,147 @@ export const pipeHostedActiveStreamSessionToResponse = ({
 export const interruptHostedChatRun = async ({
 	activeStreamSessions,
 	chatId,
-	client,
 	pendingInput = [],
 	runId,
+	assistantMessageId,
+	stopActiveStream,
 	workspaceId,
 }: {
-	activeStreamSessions: Map<string, HostedActiveStreamSession>;
+	activeStreamSessions: Map<
+		string,
+		HostedActiveStreamSession<
+			Id<"assistantRuns">,
+			Id<"assistantQueuedMessages">
+		>
+	>;
 	chatId: string;
-	client: ConvexHttpClient;
 	pendingInput?: readonly unknown[];
 	runId: Id<"assistantRuns">;
+	assistantMessageId: string;
+	stopActiveStream: (args: {
+		workspaceId: Id<"workspaces">;
+		chatId: string;
+		runId: Id<"assistantRuns">;
+		assistantMessageId: string;
+		steeredGenerationBoundary?: {
+			orderedMessageIds: string[];
+			steerAcceptances: Array<{
+				queuedMessageId: Id<"assistantQueuedMessages">;
+				claimVersion: number;
+				messageId: string;
+			}>;
+			assistantMessages: ReturnType<typeof toHostedStoredMessage>[];
+		};
+	}) => Promise<unknown>;
 	workspaceId: Id<"workspaces">;
 }) => {
 	const streamKey = createHostedActiveStreamKey({ workspaceId, chatId });
 	const activeSession = activeStreamSessions.get(streamKey);
-	if (pendingInput.length > 0) {
+	const isExpectedSession =
+		activeSession?.persister.runId === runId &&
+		activeSession.persister.messageId === assistantMessageId;
+	let steeredGenerationBoundary:
+		| {
+				orderedMessageIds: string[];
+				steerAcceptances: Array<{
+					queuedMessageId: Id<"assistantQueuedMessages">;
+					claimVersion: number;
+					messageId: string;
+				}>;
+				assistantMessages: ReturnType<typeof toHostedStoredMessage>[];
+		  }
+		| undefined;
+	let drainedPendingInput: unknown[] = [];
+	if (pendingInput.length > 0 && isExpectedSession) {
 		activeSession?.turnInput.extendSteerInput([...pendingInput]);
 	}
-	const drainedPendingInput =
-		activeSession?.turnInput.takeForCurrentTurn() ?? [];
-	activeSession?.abort("stopped");
-	activeSession?.cleanup();
+	if (isExpectedSession) {
+		activeSession.beginDurableStop();
+		await activeSession.waitForSteeredUserMessageReservations();
+		activeSession.abort("stopped");
+		await activeSession.persister.flush?.();
+		const boundary = activeSession.prepareDurableStopBoundary();
+		const acceptedMessageIds = new Set(
+			boundary.steerAcceptances.map((acceptance) => acceptance.messageId),
+		);
+		const acceptedBoundary = {
+			consumed: boundary.consumed
+				.map((batch) => ({
+					...batch,
+					input: batch.input.filter((message) =>
+						acceptedMessageIds.has(message.id),
+					),
+				}))
+				.filter((batch) => batch.input.length > 0),
+			pending: boundary.pending.filter((message) =>
+				acceptedMessageIds.has(message.id),
+			),
+		};
+		drainedPendingInput = [
+			...boundary.consumed.flatMap((batch) =>
+				batch.input.filter((message) => !acceptedMessageIds.has(message.id)),
+			),
+			...boundary.pending.filter(
+				(message) => !acceptedMessageIds.has(message.id),
+			),
+			...boundary.deferredInput,
+		];
+		const responseMessage = activeSession.persister.responseMessage;
+		if (
+			responseMessage &&
+			boundary.steerAcceptances.length > 0 &&
+			(acceptedBoundary.consumed.length > 0 ||
+				acceptedBoundary.pending.length > 0)
+		) {
+			const transcript = buildHostedSteeredGenerationTranscript({
+				...acceptedBoundary,
+				responseMessage,
+			});
+			const assistantMessages = transcript
+				.filter((message) => message.role === "assistant")
+				.map((message) => ({
+					...toHostedStoredMessage(message),
+					createdAt: boundary.preparedAt,
+				}))
+				.filter((message) => message.text.trim().length > 0);
+			const assistantMessageIds = new Set(
+				assistantMessages.map((message) => message.id),
+			);
+			steeredGenerationBoundary = {
+				orderedMessageIds: transcript
+					.filter(
+						(message) =>
+							message.role === "user" || assistantMessageIds.has(message.id),
+					)
+					.map((message) => message.id),
+				steerAcceptances: boundary.steerAcceptances,
+				assistantMessages,
+			};
+		}
+	}
 
-	await client.mutation(api.chats.stopActiveStream, {
+	await stopActiveStream({
 		workspaceId,
 		chatId,
 		runId,
+		assistantMessageId,
+		...(steeredGenerationBoundary && { steeredGenerationBoundary }),
 	});
+	if (isExpectedSession) {
+		activeSession.commitDurableStop();
+	}
 
 	return drainedPendingInput;
 };
 
 export type HostedChatTurnRouteEnvironment = {
-	activeStreamSessions: Map<string, HostedActiveStreamSession>;
+	activeStreamSessions: Map<
+		string,
+		HostedActiveStreamSession<
+			Id<"assistantRuns">,
+			Id<"assistantQueuedMessages">
+		>
+	>;
 	client: ConvexHttpClient;
 	emitEvent: (level: "error" | "info") => void;
 	logLatency: ChatLatencyLogger;
@@ -126,7 +241,13 @@ export const runHostedChatTurnStreamRuntime = async ({
 	policy: HostedChatTurnExecutionPolicy;
 	preparedRun: HostedChatTurnPreparedRun;
 }): Promise<HostedChatTurnStreamRuntimeResult> => {
-	const { attachableRun, continueRunId, turnController } = acceptedInput;
+	const { attachableRun, turnController, turnIntent } = acceptedInput;
+	const continueRunId =
+		turnIntent.type === "steer"
+			? turnIntent.runId
+			: turnIntent.type === "direct"
+				? turnIntent.continueRunId
+				: null;
 	const {
 		activeStreamSessions,
 		client: convexClient,
@@ -166,35 +287,135 @@ export const runHostedChatTurnStreamRuntime = async ({
 		turnController,
 		wideEvent,
 	});
-	const cleanupClaimedSteerQueuedMessage = async (options: {
-		tolerateMissing: boolean;
-	}) =>
-		await turnRouteErrors.cleanupClaimedSteerQueuedMessage(
-			"steer_queue_cleanup",
-			options,
-		);
+	const releaseClaimedQueuedMessage = async () =>
+		await turnRouteErrors.releaseClaimedQueuedMessage("queue_claim_release");
+	const rejectUnavailableSteerSession = async () => {
+		if (await releaseClaimedQueuedMessage()) {
+			turnRouteErrors.send({
+				eventErrorCode: "steer_active_stream_unavailable",
+				payload: {
+					error:
+						"The active assistant stream finished before the steer input could attach.",
+				},
+				statusCode: 409,
+			});
+		}
+		return {
+			activeStreamSession: null,
+			claimDisposition: "release" as const,
+			ok: false as const,
+		};
+	};
+	let reservedSteerSession: HostedActiveStreamSession<
+		Id<"assistantRuns">,
+		Id<"assistantQueuedMessages">
+	> | null = null;
+	let steerReservation: ReturnType<
+		HostedActiveStreamSession<
+			Id<"assistantRuns">,
+			Id<"assistantQueuedMessages">
+		>["reserveSteeredUserMessageAcceptance"]
+	> = null;
+	if (turnIntent.type === "steer" && attachableRun?.producer === "web") {
+		const streamKey = createHostedActiveStreamKey({ workspaceId, chatId });
+		const activeStreamSession = activeStreamSessions.get(streamKey);
+		if (
+			!activeStreamSession ||
+			activeStreamSession.persister.runId !== attachableRun._id ||
+			activeStreamSession.persister.messageId !==
+				attachableRun.assistantMessageId
+		) {
+			return await rejectUnavailableSteerSession();
+		}
+		const reservation =
+			activeStreamSession.reserveSteeredUserMessageAcceptance();
+		if (!reservation) {
+			return await rejectUnavailableSteerSession();
+		}
+		reservedSteerSession = activeStreamSession;
+		steerReservation = reservation;
+	}
 
-	const acceptance = await acceptHostedChatTurn({
-		acceptedInput,
-		cleanupClaimedSteerQueuedMessage,
-		onSteerAccepted: setAcceptedSteerTurnId,
-		onUserMessagePersistenceCompleted: (attempted) => {
-			logLatency("convex.user_message_saved", { attempted });
-		},
-		persistence: createHostedChatTurnPersistence(convexClient),
-		policy,
-		preparedRun,
-	});
+	let acceptance: Awaited<ReturnType<typeof acceptHostedChatTurn>>;
+	const claimedSteerLease =
+		turnIntent.type === "steer" ? acceptedInput.queuedInput.claimedLease : null;
+	try {
+		acceptance = await acceptHostedChatTurn({
+			acceptedInput,
+			releaseClaimedQueuedMessage,
+			onSteerAccepted: setAcceptedSteerTurnId,
+			onUserMessagePersistenceCompleted: (attempted) => {
+				logLatency("convex.user_message_saved", { attempted });
+			},
+			persistence: createHostedChatTurnPersistence(convexClient),
+			policy,
+			preparedRun,
+		});
+	} catch (error) {
+		steerReservation?.release();
+		throw error;
+	}
 	if (!acceptance.ok) {
+		steerReservation?.release();
 		turnRouteErrors.sendAcceptanceFailure({
 			failure: acceptance.failure,
 			lastUserMessageId: lastUserMessage?.id,
 		});
-		return { activeStreamSession: null, ok: false };
+		return {
+			activeStreamSession: null,
+			claimDisposition:
+				acceptance.failure.type === "queued_acceptance_status_lookup"
+					? "hold"
+					: "release",
+			ok: false,
+		};
 	}
 
 	const { assistantMessageId, pendingQueuedAcceptanceHeaders, producer } =
 		acceptance.acceptedTurn;
+	if (turnIntent.type === "steer" && producer.type === "web" && attachableRun) {
+		const attachedToActiveStream =
+			reservedSteerSession &&
+			attachableRun &&
+			lastUserMessage &&
+			reservedSteerSession.persister.runId === attachableRun._id &&
+			reservedSteerSession.persister.messageId === assistantMessageId &&
+			steerReservation?.accept(
+				lastUserMessage,
+				claimedSteerLease
+					? {
+							queuedMessageId: claimedSteerLease.queuedMessageId,
+							claimVersion: claimedSteerLease.claimVersion,
+							messageId: lastUserMessage.id,
+						}
+					: undefined,
+			);
+		steerReservation?.release();
+		if (!attachedToActiveStream) {
+			logLatency("ai.steer_active_stream_attach_closed");
+		}
+		wideEvent.assistant_run_id = attachableRun._id;
+		wideEvent.assistant_message_id = assistantMessageId;
+		wideEvent.outcome = "success";
+		wideEvent.status_code = 200;
+		if (pendingQueuedAcceptanceHeaders) {
+			for (const [header, value] of Object.entries(
+				pendingQueuedAcceptanceHeaders,
+			)) {
+				response.setHeader(header, value);
+			}
+		}
+		response.statusCode = 200;
+		response.setHeader("Content-Type", "text/event-stream");
+		response.end();
+		emitWideEvent(wideEvent.errors?.length ? "error" : "info");
+		return {
+			activeStreamSession: reservedSteerSession,
+			assistantMessageId,
+			assistantRunId: attachableRun._id,
+			ok: true,
+		};
+	}
 	if (producer.type === "convex") {
 		wideEvent.assistant_run_id = producer.assistantRun._id;
 		wideEvent.assistant_message_id = producer.assistantRun.assistantMessageId;
@@ -228,8 +449,8 @@ export const runHostedChatTurnStreamRuntime = async ({
 		chatId,
 		assistantMessageId,
 		localCapabilitySession,
-		attachableRun,
-		continueRunId,
+		attachableRun: producer.assistantRun ?? attachableRun,
+		continueRunId: producer.assistantRun?._id ?? continueRunId,
 		model,
 		reasoningEffort,
 		serviceTier,
@@ -250,6 +471,22 @@ export const runHostedChatTurnStreamRuntime = async ({
 			convexClient.mutation(api.chatToolCalls.startActiveStreamToolCall, args),
 		finishActiveStreamToolCall: (args) =>
 			convexClient.mutation(api.chatToolCalls.finishActiveStreamToolCall, args),
+		transitionActiveStreamGeneration: (args) =>
+			convexClient.mutation(api.chats.continueActiveWebStreamGeneration, {
+				workspaceId: args.workspaceId,
+				chatId: args.chatId,
+				runId: args.runId,
+				assistantMessageId: args.assistantMessageId,
+				nextAssistantMessageId: args.nextAssistantMessageId,
+				orderedMessageIds: args.orderedMessageIds,
+				completedAssistantMessages: args.completedAssistantMessages.map(
+					toHostedStoredMessage,
+				),
+				activeAssistantMessage: args.activeAssistantMessage
+					? toHostedStoredMessage(args.activeAssistantMessage)
+					: null,
+				steerAcceptances: args.steerAcceptances,
+			}),
 	});
 	if (!startedRun.ok) {
 		if (startedRun.terminalizationError) {
@@ -268,6 +505,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 		});
 		return {
 			activeStreamSession: startedRun.activeStreamSession,
+			claimDisposition: "release",
 			ok: false,
 		};
 	}
@@ -285,7 +523,6 @@ export const runHostedChatTurnStreamRuntime = async ({
 		createChatStreamLatencyTracker<UIMessageChunk>(logLatency);
 	const finalizeAssistantRun = createHostedAssistantRunFinalizer({
 		activeStreamSession,
-		assistantMessageId,
 		assistantRunId: assistantRun._id,
 		chatId,
 		failAssistantRun: (args) =>
@@ -381,6 +618,13 @@ export const runHostedChatTurnStreamRuntime = async ({
 		streamLatencyTracker,
 	});
 	if (!responseStreamResult.ok) {
+		if (responseStreamResult.terminalizationError) {
+			recordServerError({
+				error: responseStreamResult.terminalizationError,
+				event: wideEvent,
+				operation: "stream_create_terminalization",
+			});
+		}
 		if (pendingQueuedAcceptanceHeaders) {
 			sendJson(
 				response,
@@ -390,7 +634,7 @@ export const runHostedChatTurnStreamRuntime = async ({
 				},
 				pendingQueuedAcceptanceHeaders,
 			);
-			return { activeStreamSession, ok: false };
+			return { activeStreamSession, claimDisposition: "release", ok: false };
 		}
 		throw responseStreamResult.error;
 	}

@@ -28,17 +28,22 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { CornerDownRight, Ellipsis, Pencil, Trash2 } from "lucide-react";
+import { CornerDownRight, Ellipsis, Pencil, Play, Trash2 } from "lucide-react";
 import * as React from "react";
 
 export type QueuedFollowUpBarItem = {
+	actionLabel: "Retry" | "Steer" | null;
+	helpText?: string;
 	id: string;
 	isDeleting: boolean;
 	isEditing: boolean;
+	isActionDisabled: boolean;
 	isSendingNow: boolean;
 	onDelete: () => void;
 	onEdit: () => void;
 	onSendNow: () => void;
+	pauseReason?: "failed" | "interrupted";
+	statusLabel: "Paused" | "Queued";
 	text: string;
 };
 
@@ -59,12 +64,19 @@ const getQueuedFollowUpDisplayText = (text: string) =>
 	text.replace(/^queued\s+follow-up:\s*/i, "");
 
 export function ChatQueuedFollowUpBar({
+	isResuming,
 	onReorder,
+	onResume,
 	queuedFollowUps,
 }: {
+	isResuming: boolean;
 	onReorder?: (ids: Array<string>) => void;
+	onResume: () => void;
 	queuedFollowUps: Array<QueuedFollowUpBarItem>;
 }) {
+	const hasInterruptedQueue = queuedFollowUps.some(
+		(queuedFollowUp) => queuedFollowUp.pauseReason === "interrupted",
+	);
 	const ids = React.useMemo(
 		() => queuedFollowUps.map((queuedFollowUp) => queuedFollowUp.id),
 		[queuedFollowUps],
@@ -136,6 +148,20 @@ export function ChatQueuedFollowUpBar({
 					role="listbox"
 					aria-label="Queued follow-ups"
 				>
+					{hasInterruptedQueue ? (
+						<div className="flex h-9 items-center justify-between gap-3 border-border/20 border-b bg-muted/30 px-3.5 text-muted-foreground">
+							<span>Queue paused because you interrupted</span>
+							<button
+								type="button"
+								disabled={isResuming}
+								onClick={onResume}
+								className="inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+							>
+								<Play className="size-3.5" aria-hidden="true" />
+								Resume
+							</button>
+						</div>
+					) : null}
 					{ids.map((id) => {
 						const queuedFollowUp = queuedFollowUpsById.get(id);
 						if (!queuedFollowUp) {
@@ -234,25 +260,44 @@ function SortableQueuedFollowUpRow({
 					aria-hidden="true"
 				/>
 				<p className="flex min-w-0 items-center gap-3">
-					<span className="shrink-0 font-medium text-foreground">Queued</span>
+					<span className="shrink-0 font-medium text-foreground">
+						{queuedFollowUp.pauseReason === "failed"
+							? "This queued message could not be sent"
+							: queuedFollowUp.statusLabel}
+					</span>
 					<span className="min-w-0 truncate">{displayText}</span>
 				</p>
 			</div>
 			<div className="flex shrink-0 items-center gap-1">
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<button
-							type="button"
-							disabled={queuedFollowUp.isSendingNow}
-							onPointerDown={stopActionPointerDown}
-							onClick={queuedFollowUp.onSendNow}
-							className="inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
-						>
-							{queuedFollowUp.isSendingNow ? "Steering" : "Steer"}
-						</button>
-					</TooltipTrigger>
-					<TooltipContent>Submit without interrupting the model</TooltipContent>
-				</Tooltip>
+				{queuedFollowUp.actionLabel ? (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								disabled={
+									queuedFollowUp.isActionDisabled || queuedFollowUp.isSendingNow
+								}
+								onPointerDown={stopActionPointerDown}
+								onClick={queuedFollowUp.onSendNow}
+								className="inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+							>
+								{queuedFollowUp.isSendingNow
+									? queuedFollowUp.actionLabel === "Steer"
+										? "Steering"
+										: "Retrying"
+									: queuedFollowUp.actionLabel}
+							</button>
+						</TooltipTrigger>
+						<TooltipContent>
+							{queuedFollowUp.helpText ??
+								(queuedFollowUp.isActionDisabled
+									? "Answer the pending question before steering"
+									: queuedFollowUp.actionLabel === "Steer"
+										? "Guide the active response with this message"
+										: "Send this message")}
+						</TooltipContent>
+					</Tooltip>
+				) : null}
 				<button
 					type="button"
 					disabled={queuedFollowUp.isDeleting}
@@ -290,8 +335,8 @@ function SortableQueuedFollowUpRow({
 							disabled={queuedFollowUp.isDeleting}
 							onClick={queuedFollowUp.onDelete}
 						>
-							<CornerDownRight className="size-4" aria-hidden="true" />
-							Turn off
+							<Trash2 className="size-4" aria-hidden="true" />
+							Delete
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>

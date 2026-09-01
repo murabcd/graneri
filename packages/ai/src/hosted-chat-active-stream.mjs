@@ -17,10 +17,12 @@ export class HostedActiveChatStreamPersister {
 	#flushPromise = null;
 	#flushTimer = null;
 	#messageId;
+	#latestParts = [];
 	#parts = null;
 	#runId;
 	#startActiveStream;
 	#startActiveStreamToolCall;
+	#transitionActiveStreamGeneration;
 	#updateActiveStream;
 	#workspaceId;
 
@@ -32,6 +34,7 @@ export class HostedActiveChatStreamPersister {
 		runId,
 		startActiveStream,
 		startActiveStreamToolCall,
+		transitionActiveStreamGeneration,
 		updateActiveStream,
 		workspaceId,
 	}) {
@@ -42,6 +45,7 @@ export class HostedActiveChatStreamPersister {
 		this.#runId = runId;
 		this.#startActiveStream = startActiveStream;
 		this.#startActiveStreamToolCall = startActiveStreamToolCall;
+		this.#transitionActiveStreamGeneration = transitionActiveStreamGeneration;
 		this.#updateActiveStream = updateActiveStream;
 		this.#workspaceId = workspaceId;
 	}
@@ -52,6 +56,14 @@ export class HostedActiveChatStreamPersister {
 
 	get runId() {
 		return this.#runId;
+	}
+
+	get responseMessage() {
+		return {
+			id: this.#messageId,
+			role: "assistant",
+			parts: this.#latestParts,
+		};
 	}
 
 	async start() {
@@ -80,6 +92,7 @@ export class HostedActiveChatStreamPersister {
 			return;
 		}
 
+		this.#latestParts = parts;
 		this.#parts = parts;
 		this.#scheduleFlush();
 	}
@@ -102,6 +115,7 @@ export class HostedActiveChatStreamPersister {
 			workspaceId: this.#workspaceId,
 			chatId: this.#chatId,
 			runId: this.#runId,
+			assistantMessageId: this.#messageId,
 			toolCallId,
 			toolName,
 			inputJson: stringifyToolPayload(input),
@@ -113,11 +127,30 @@ export class HostedActiveChatStreamPersister {
 			workspaceId: this.#workspaceId,
 			chatId: this.#chatId,
 			runId: this.#runId,
+			assistantMessageId: this.#messageId,
 			toolCallId,
 			status,
 			outputJson: stringifyToolPayload(output),
 			errorText,
 		});
+	}
+
+	async transitionGeneration(args) {
+		if (!this.#transitionActiveStreamGeneration) {
+			throw new Error("Active stream generation transition is unavailable.");
+		}
+		await this.flush();
+		await this.#transitionActiveStreamGeneration({
+			...args,
+			assistantMessageId: this.#messageId,
+			runId: this.#runId,
+			workspaceId: this.#workspaceId,
+			chatId: this.#chatId,
+		});
+		this.#messageId = args.nextAssistantMessageId;
+		this.#latestParts = args.activeAssistantMessage?.parts ?? [];
+		this.#buffer = "";
+		this.#parts = null;
 	}
 
 	async flush() {
@@ -151,6 +184,7 @@ export class HostedActiveChatStreamPersister {
 						workspaceId: this.#workspaceId,
 						chatId: this.#chatId,
 						runId: this.#runId,
+						assistantMessageId: this.#messageId,
 						...(delta && { delta }),
 						...(parts !== null && {
 							partsJson: stringifyToolPayload(parts),
@@ -189,6 +223,7 @@ export class HostedActiveChatStreamPersister {
 			workspaceId: this.#workspaceId,
 			chatId: this.#chatId,
 			runId: this.#runId,
+			assistantMessageId: this.#messageId,
 		});
 		this.#discardPending();
 	}
@@ -223,26 +258,97 @@ export const createHostedActiveStreamSession = ({
 }) => {
 	const abortController = new AbortController();
 	const broadcast = createHostedChatStreamBroadcast();
+	const steerAcceptancesByMessageId = new Map();
+	const steerReservationWaiters = new Set();
+	let acceptsSteeredUserMessages = true;
+	let isDisposed = false;
+	let outstandingSteerReservations = 0;
+	let preparedDurableStopBoundary = null;
+	let retainsSessionForDurableStop = false;
+	const attachSteeredUserMessage = (message, acceptance) => {
+		turnInput.extendSteerInput(message);
+		if (acceptance) {
+			steerAcceptancesByMessageId.set(message.id, acceptance);
+		}
+		return true;
+	};
+
+	const releaseSteerReservation = () => {
+		outstandingSteerReservations -= 1;
+		if (outstandingSteerReservations === 0) {
+			for (const resolve of steerReservationWaiters) {
+				resolve();
+			}
+			steerReservationWaiters.clear();
+		}
+	};
+	const disposeSession = () => {
+		isDisposed = true;
+		acceptsSteeredUserMessages = false;
+		turnInput.clear();
+		steerAcceptancesByMessageId.clear();
+		persister.discardPending?.();
+		broadcast.close();
+		if (controllers.get(streamKey) === session) {
+			controllers.delete(streamKey);
+		}
+	};
 
 	const session = {
 		abort(reason) {
 			abortController.abort(reason);
 		},
 		abortSignal: abortController.signal,
+		acceptSteeredUserMessage(message, acceptance = null) {
+			if (!acceptsSteeredUserMessages) {
+				return false;
+			}
+			return attachSteeredUserMessage(message, acceptance);
+		},
+		closeSteeredUserMessageAcceptance() {
+			acceptsSteeredUserMessages = false;
+		},
+		openSteeredUserMessageAcceptance() {
+			if (!isDisposed && !abortController.signal.aborted) {
+				acceptsSteeredUserMessages = true;
+			}
+		},
+		reserveSteeredUserMessageAcceptance() {
+			if (!acceptsSteeredUserMessages) {
+				return null;
+			}
+			outstandingSteerReservations += 1;
+			let released = false;
+			let attached = false;
+			return {
+				accept(message, acceptance = null) {
+					if (released || attached || isDisposed) {
+						return false;
+					}
+					attached = true;
+					return attachSteeredUserMessage(message, acceptance);
+				},
+				release() {
+					if (released) {
+						return;
+					}
+					released = true;
+					releaseSteerReservation();
+				},
+			};
+		},
 		persister,
 		streamKey,
 		turnInput,
 		async start() {
+			await persister.start();
 			const existingSession = controllers.get(streamKey);
 			if (existingSession && !existingSession.isBroadcastClosed?.()) {
-				session.turnInput.extendSteerInput(
-					existingSession.turnInput.takeAllForReplacement(),
-				);
+				existingSession.transferPendingInputTo(session);
 				existingSession.abort("superseded");
 				existingSession.cleanup?.();
 			}
 			controllers.set(streamKey, session);
-			await persister.start();
 		},
 		isBroadcastClosed() {
 			return broadcast.isClosed();
@@ -258,6 +364,9 @@ export const createHostedActiveStreamSession = ({
 		},
 		async finishToolCall(args) {
 			await persister.finishToolCall?.(args);
+		},
+		async transitionGeneration(args) {
+			await persister.transitionGeneration?.(args);
 		},
 		discardPending() {
 			persister.discardPending?.();
@@ -276,12 +385,101 @@ export const createHostedActiveStreamSession = ({
 			}
 		},
 		cleanup() {
-			turnInput.clear();
-			persister.discardPending?.();
-			broadcast.close();
-			if (controllers.get(streamKey) === session) {
-				controllers.delete(streamKey);
+			if (retainsSessionForDurableStop) {
+				return;
 			}
+			disposeSession();
+		},
+		beginDurableStop() {
+			retainsSessionForDurableStop = true;
+			acceptsSteeredUserMessages = false;
+		},
+		commitDurableStop() {
+			if (!retainsSessionForDurableStop) {
+				throw new Error("Durable stop was not prepared.");
+			}
+			for (const acceptance of preparedDurableStopBoundary?.steerAcceptances ??
+				[]) {
+				steerAcceptancesByMessageId.delete(acceptance.messageId);
+			}
+			preparedDurableStopBoundary = null;
+			retainsSessionForDurableStop = false;
+			disposeSession();
+		},
+		prepareDurableStopBoundary() {
+			if (!retainsSessionForDurableStop) {
+				throw new Error("Durable stop was not started.");
+			}
+			if (preparedDurableStopBoundary) {
+				return preparedDurableStopBoundary;
+			}
+			const boundary = turnInput.takeSteerGenerationBoundary();
+			const messages = [
+				...boundary.consumed.flatMap((batch) => batch.input),
+				...boundary.pending,
+			];
+			const steerAcceptances = messages.flatMap((message) => {
+				const acceptance = steerAcceptancesByMessageId.get(message.id);
+				return acceptance ? [acceptance] : [];
+			});
+			preparedDurableStopBoundary = Object.freeze({
+				consumed: Object.freeze(
+					boundary.consumed.map((batch) =>
+						Object.freeze({
+							input: Object.freeze([...batch.input]),
+							stepNumber: batch.stepNumber,
+						}),
+					),
+				),
+				deferredInput: Object.freeze([...turnInput.takeForCurrentTurn()]),
+				pending: Object.freeze([...boundary.pending]),
+				preparedAt: Date.now(),
+				steerAcceptances: Object.freeze([...steerAcceptances]),
+			});
+			return preparedDurableStopBoundary;
+		},
+		takePendingSteeredUserMessages(stepNumber) {
+			return turnInput.takeSteerInput(stepNumber);
+		},
+		takeSteeredUserMessageGenerationBoundary() {
+			const boundary = turnInput.takeSteerGenerationBoundary();
+			const messages = [
+				...boundary.consumed.flatMap((batch) => batch.input),
+				...boundary.pending,
+			];
+			const steerAcceptances = messages.flatMap((message) => {
+				const acceptance = steerAcceptancesByMessageId.get(message.id);
+				steerAcceptancesByMessageId.delete(message.id);
+				return acceptance ? [acceptance] : [];
+			});
+			return {
+				...boundary,
+				steerAcceptances,
+			};
+		},
+		transferPendingInputTo(targetSession) {
+			const transfer = turnInput.takeForReplacementByKind();
+			for (const message of transfer.steer) {
+				targetSession.acceptSteeredUserMessage(
+					message,
+					steerAcceptancesByMessageId.get(message.id),
+				);
+			}
+			if (transfer.mailbox.length > 0) {
+				targetSession.turnInput.enqueueMailboxInput(transfer.mailbox);
+			}
+			if (!transfer.acceptsMailboxDelivery) {
+				targetSession.turnInput.deferMailboxDeliveryToNextTurn();
+			}
+			steerAcceptancesByMessageId.clear();
+		},
+		waitForSteeredUserMessageReservations() {
+			if (outstandingSteerReservations === 0) {
+				return Promise.resolve();
+			}
+			return new Promise((resolve) => {
+				steerReservationWaiters.add(resolve);
+			});
 		},
 		subscribe() {
 			return broadcast.subscribe();

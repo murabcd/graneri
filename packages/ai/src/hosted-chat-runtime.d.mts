@@ -6,13 +6,11 @@ export declare const hostedChatSteerAcceptedHeader: "X-Graneri-Steer-Accepted";
 export declare const hostedChatReplayAcceptedHeader: "X-Graneri-Replay-Accepted";
 export declare const hostedChatSteerTurnIdHeader: "X-Graneri-Turn-Id";
 export declare const hostedChatSteerQueuedMessageIdHeader: "X-Graneri-Queued-Message-Id";
-export declare const hostedChatSteerQueuedMessageIdsHeader: "X-Graneri-Queued-Message-Ids";
 export declare const hostedChatReplayQueuedMessageIdHeader: "X-Graneri-Replay-Queued-Message-Id";
 export declare const HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE: "input_empty";
 export declare const HOSTED_CHAT_CONVEX_DEPLOYMENT_OUT_OF_SYNC_ERROR_CODE: "convex_deployment_out_of_sync";
 export declare const getHostedChatSteerAcceptanceHeaders: (args: {
 	queuedMessageId: string;
-	queuedMessageIds?: string[];
 	turnId: string;
 }) => Record<string, string>;
 export declare const getHostedChatReplayAcceptanceHeaders: (args: {
@@ -38,25 +36,41 @@ export declare const getHostedChatSteerTelemetry: (args: {
 	turn_steer_rejection_reason: string | null;
 	turn_steer_result: "accepted" | "rejected";
 };
-export declare const validateHostedChatSteerRoute: (args: {
-	continueRunId?: string | null;
+export type HostedChatTurnIntent<
+	RunId extends string = string,
+	QueuedMessageId extends string = string,
+> =
+	| { type: "direct"; continueRunId: RunId | null }
+	| {
+			type: "replay";
+			expectedStatus: "paused" | "queued";
+			queuedMessageId: QueuedMessageId;
+	  }
+	| { type: "steer"; queuedMessageId: QueuedMessageId; runId: RunId };
+export declare const parseHostedChatTurnIntent: (args: {
+	continueRunId?: unknown;
 	hasMessage?: boolean;
 	isSteerRoute: boolean;
-	replayQueuedMessageId?: string | null;
-	steerQueuedMessageId?: string | null;
-}) => null | {
-	error: string;
-	errorCode:
-		| "continue_run_id_invalid"
-		| "queued_message_body_conflict"
-		| "queued_message_mode_conflict"
-		| "queued_replay_active_run_conflict"
-		| "replay_queued_message_id_invalid"
-		| "steer_context_missing"
-		| "steer_queued_message_id_invalid"
-		| "steer_route_required";
-	statusCode: 400;
-};
+	replayQueuedMessageId?: unknown;
+	replayQueuedMessageStatus?: unknown;
+	steerQueuedMessageId?: unknown;
+}) =>
+	| { ok: true; intent: HostedChatTurnIntent }
+	| {
+			ok: false;
+			error: string;
+			errorCode:
+				| "continue_run_id_invalid"
+				| "queued_message_body_conflict"
+				| "queued_message_mode_conflict"
+				| "queued_replay_active_run_conflict"
+				| "replay_queued_message_id_invalid"
+				| "replay_queued_message_status_invalid"
+				| "steer_context_missing"
+				| "steer_queued_message_id_invalid"
+				| "steer_route_required";
+			statusCode: 400;
+	  };
 export declare const getHostedChatInputValidationErrorResponse: (
 	error: unknown,
 ) => {
@@ -67,10 +81,8 @@ export declare const getHostedChatInputValidationErrorResponse: (
 };
 export declare const validateHostedChatRequestInput: (args: {
 	allowLocalFolderToolContinuation?: boolean;
-	continueRunId?: string | null;
 	message?: UIMessage | null;
-	replayQueuedMessageId?: string | null;
-	steerQueuedMessageId?: string | null;
+	turnIntent: HostedChatTurnIntent;
 }) => null | {
 	errorCode: "message_missing" | typeof HOSTED_CHAT_INPUT_EMPTY_ERROR_CODE;
 	payload: {
@@ -194,3 +206,5 @@ export declare const generateHostedChatTitle: (args: {
 	safetyIdentifier: string;
 	userMessage: UIMessage;
 }) => Promise<string>;
+export { createHostedActiveChatStreamSession } from "./hosted-chat-active-stream.mjs";
+export { buildHostedSteeredGenerationTranscript } from "./hosted-chat-stream-lifecycle.mjs";

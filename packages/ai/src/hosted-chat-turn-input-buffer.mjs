@@ -4,6 +4,7 @@ export const HOSTED_TURN_INPUT_ACTIVITY_STEER = "steer";
 export const createHostedTurnInputBuffer = () => {
 	const pendingSteerInput = [];
 	const pendingMailboxInput = [];
+	const consumedSteerInput = [];
 	const activitySubscribers = new Set();
 	let acceptsMailboxDelivery = true;
 
@@ -39,6 +40,7 @@ export const createHostedTurnInputBuffer = () => {
 		clear() {
 			pendingSteerInput.length = 0;
 			pendingMailboxInput.length = 0;
+			consumedSteerInput.length = 0;
 			acceptsMailboxDelivery = true;
 		},
 		deferMailboxDeliveryToNextTurn() {
@@ -77,12 +79,32 @@ export const createHostedTurnInputBuffer = () => {
 		takeAllForReplacement() {
 			return [...pendingSteerInput.splice(0), ...pendingMailboxInput.splice(0)];
 		},
+		takeForReplacementByKind() {
+			return {
+				acceptsMailboxDelivery,
+				mailbox: pendingMailboxInput.splice(0),
+				steer: pendingSteerInput.splice(0),
+			};
+		},
 		takeForCurrentTurn() {
 			const pendingInput = pendingSteerInput.splice(0);
 			if (acceptsMailboxDelivery) {
 				pendingInput.push(...pendingMailboxInput.splice(0));
 			}
 			return pendingInput;
+		},
+		takeSteerInput(stepNumber) {
+			const input = pendingSteerInput.splice(0);
+			if (input.length > 0) {
+				consumedSteerInput.push({ input, stepNumber });
+			}
+			return input;
+		},
+		takeSteerGenerationBoundary() {
+			return {
+				consumed: consumedSteerInput.splice(0),
+				pending: pendingSteerInput.splice(0),
+			};
 		},
 	};
 };

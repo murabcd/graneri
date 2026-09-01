@@ -37,12 +37,40 @@ export type EnqueueQueuedChatTurn = (args: {
 	message: ReturnType<typeof toQueuedUserMessageInput>;
 }) => Promise<QueuedFollowUpMessage>;
 
+export type AdmitQueuedChatTurn = (args: {
+	workspaceId: Id<"workspaces">;
+	chatId: string;
+	message: ReturnType<typeof toQueuedUserMessageInput>;
+}) => Promise<
+	| {
+			status: "queued";
+			queuedMessage: QueuedFollowUpMessage;
+	  }
+	| { status: "no_active" }
+>;
+
+export type CurrentRunAdmission =
+	| { status: "canceled" }
+	| { status: "direct" }
+	| {
+			admitQueuedMessage: AdmitQueuedChatTurn;
+			beginDirectSubmission: () => void;
+			completeQueuedAdmission: () => void;
+			status: "current_run";
+	  };
+
 export type SendChatTurn = (
 	message: SubmitChatTurnMessage,
 	options: { body: ChatRequestBody & ChatRequestContext },
 ) => Promise<unknown> | unknown;
 
 export type SubmitChatTurnResult =
+	| {
+			status: "canceled";
+	  }
+	| {
+			status: "attachments_blocked";
+	  }
 	| {
 			status: "queued";
 	  }
@@ -73,6 +101,7 @@ export const submitChatTurn = async ({
 	buildRequestBody,
 	chatId,
 	continueRunId,
+	currentRunAdmission,
 	displayActiveRun,
 	editingMessageId,
 	enqueueQueuedMessage,
@@ -89,6 +118,7 @@ export const submitChatTurn = async ({
 	buildRequestBody: () => Promise<ChatRequestBody>;
 	chatId: string;
 	continueRunId?: Id<"assistantRuns">;
+	currentRunAdmission: CurrentRunAdmission;
 	displayActiveRun: ActiveRun;
 	editingMessageId: string | null;
 	enqueueQueuedMessage: EnqueueQueuedChatTurn;
@@ -107,25 +137,29 @@ export const submitChatTurn = async ({
 	text: string;
 	workspaceId: Id<"workspaces"> | null;
 }): Promise<SubmitChatTurnResult> => {
+	if (currentRunAdmission.status === "canceled") {
+		return { status: "canceled" };
+	}
 	const queuedActiveRun = continueRunId
 		? null
-		: (queueActiveRun ?? displayActiveRun);
+		: (queueActiveRun ?? displayActiveRun ?? null);
+	const shouldAdmitCurrentRun =
+		!continueRunId && currentRunAdmission.status === "current_run";
 	const readyFiles = getReadyFileParts(attachedFiles);
+	if (
+		readyFiles.length > 0 &&
+		!continueRunId &&
+		(Boolean(queuedActiveRun) || shouldAdmitCurrentRun)
+	) {
+		return { status: "attachments_blocked" };
+	}
 	const filePayload = readyFiles.length > 0 ? { files: readyFiles } : {};
-	const optimisticMessageId =
+	const queuedMessageId =
 		editingMessageId === null
-			? queuedActiveRun
+			? queuedActiveRun || shouldAdmitCurrentRun
 				? createQueuedUserMessageId()
-				: crypto.randomUUID()
+				: null
 			: null;
-	const optimisticMessage = optimisticMessageId
-		? createChatUserMessage({
-				files: readyFiles,
-				id: optimisticMessageId,
-				metadata,
-				text,
-			})
-		: null;
 
 	const requestBody = await buildRequestBody();
 	onRequestPrepared({
@@ -133,32 +167,15 @@ export const submitChatTurn = async ({
 		requestBody,
 	});
 
-	if (optimisticMessage && !queuedActiveRun) {
-		onOptimisticMessage(optimisticMessage);
-	}
+	const queuedMessageInput = toQueuedUserMessageInput({
+		messageId: editingMessageId ?? queuedMessageId ?? undefined,
+		metadata,
+		requestBody,
+		text,
+	});
 
-	const outgoingMessage = editingMessageId
-		? {
-				messageId: editingMessageId,
-				text,
-				metadata,
-				...filePayload,
-			}
-		: {
-				messageId: optimisticMessageId ?? undefined,
-				text,
-				metadata,
-				...filePayload,
-			};
-
+	let exactActiveRunBecameStale = false;
 	if (queuedActiveRun && workspaceId) {
-		const queuedMessageInput = toQueuedUserMessageInput({
-			messageId: editingMessageId ?? optimisticMessageId ?? undefined,
-			metadata,
-			requestBody,
-			text,
-		});
-
 		try {
 			const queuedMessage = await enqueueQueuedMessage({
 				workspaceId,
@@ -166,21 +183,70 @@ export const submitChatTurn = async ({
 				runId: queuedActiveRun._id,
 				message: queuedMessageInput,
 			});
-			if (optimisticMessageId && onQueuedMessageSaved) {
-				onQueuedMessageSaved({ optimisticMessageId, queuedMessage });
+			if (currentRunAdmission.status === "current_run") {
+				currentRunAdmission.completeQueuedAdmission();
+			}
+			if (queuedMessageId && onQueuedMessageSaved) {
+				onQueuedMessageSaved({
+					optimisticMessageId: queuedMessageId,
+					queuedMessage,
+				});
 			}
 			return { status: "queued" };
 		} catch (error) {
 			if (!isAssistantRunNoLongerActiveError(error)) {
 				throw error;
 			}
+			exactActiveRunBecameStale = true;
 		}
 	}
 
-	if (optimisticMessage && queuedActiveRun) {
+	if (
+		(!queuedActiveRun || exactActiveRunBecameStale) &&
+		currentRunAdmission.status === "current_run" &&
+		workspaceId
+	) {
+		const admission = await currentRunAdmission.admitQueuedMessage({
+			workspaceId,
+			chatId,
+			message: queuedMessageInput,
+		});
+		if (admission.status === "queued") {
+			currentRunAdmission.completeQueuedAdmission();
+			if (queuedMessageId && onQueuedMessageSaved) {
+				onQueuedMessageSaved({
+					optimisticMessageId: queuedMessageId,
+					queuedMessage: admission.queuedMessage,
+				});
+			}
+			return { status: "queued" };
+		}
+	}
+
+	const normalMessageId =
+		editingMessageId === null ? crypto.randomUUID() : editingMessageId;
+	const optimisticMessage =
+		editingMessageId === null
+			? createChatUserMessage({
+					files: readyFiles,
+					id: normalMessageId,
+					metadata,
+					text,
+				})
+			: null;
+	if (optimisticMessage) {
 		onOptimisticMessage(optimisticMessage);
 	}
 
+	const outgoingMessage = {
+		messageId: normalMessageId,
+		text,
+		metadata,
+		...filePayload,
+	};
+	if (!continueRunId && currentRunAdmission.status === "current_run") {
+		currentRunAdmission.beginDirectSubmission();
+	}
 	await Promise.resolve(
 		sendMessage(outgoingMessage, {
 			body: continueRunId ? { ...requestBody, continueRunId } : requestBody,

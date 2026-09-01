@@ -1,12 +1,15 @@
 import { vWorkflowId } from "@convex-dev/workflow";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { assistantQueuedMessageAcceptanceTableValidator } from "./assistantQueuedMessageAcceptanceModel";
+import { assistantQueuedMessageTableValidator } from "./assistantQueuedMessageModel";
 import { assistantRunPlanValidator } from "./assistantRunActivityModel";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
 import {
 	assistantRunExecutionValidator,
 	assistantRunJobValidator,
 } from "./assistantRunJobModel";
+import { assistantRunSteerInputTableValidator } from "./assistantRunSteerInputModel";
 import {
 	assistantRunProducerValidator,
 	assistantRunStatusValidator,
@@ -866,20 +869,7 @@ export default defineSchema({
 			"stepIndex",
 			"ordinal",
 		]),
-	assistantQueuedMessages: defineTable({
-		ownerTokenIdentifier: v.string(),
-		workspaceId: v.id("workspaces"),
-		chatId: v.id("chats"),
-		runId: v.id("assistantRuns"),
-		messageId: v.string(),
-		metadataJson: v.optional(v.string()),
-		text: v.string(),
-		requestBodyJson: v.string(),
-		status: v.union(v.literal("queued"), v.literal("claimed")),
-		createdAt: v.number(),
-		updatedAt: v.number(),
-		claimedAt: v.optional(v.number()),
-	})
+	assistantQueuedMessages: defineTable(assistantQueuedMessageTableValidator)
 		.index("by_runId_and_status", ["runId", "status"])
 		.index("by_runId_and_status_and_createdAt", [
 			"runId",
@@ -893,6 +883,21 @@ export default defineSchema({
 			"createdAt",
 		])
 		.index("by_chatId_and_createdAt", ["chatId", "createdAt"]),
+	assistantQueuedMessageAcceptances: defineTable(
+		assistantQueuedMessageAcceptanceTableValidator,
+	)
+		.index("by_queuedMessageId_and_claimVersion", [
+			"queuedMessageId",
+			"claimVersion",
+		])
+		.index("by_chatId", ["chatId"]),
+	assistantRunSteerInputs: defineTable(assistantRunSteerInputTableValidator)
+		.index("by_runId_and_assistantMessageId_and_createdAt", [
+			"runId",
+			"assistantMessageId",
+			"createdAt",
+		])
+		.index("by_chatId", ["chatId"]),
 	chatActiveStreams: defineTable({
 		runId: v.id("assistantRuns"),
 		chatId: v.id("chats"),

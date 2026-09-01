@@ -5,6 +5,7 @@ import {
 	getHostedChatConvexRouteError,
 	getHostedChatInputValidationErrorResponse,
 	getStoredHostedNoteContext,
+	type HostedChatTurnIntent,
 	validateHostedChatInput,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
@@ -35,28 +36,28 @@ import type {
 import { createHostedChatTurnRouteErrorResponder } from "./chat-turn-route-errors.js";
 import {
 	type HostedChatTurnRouteEnvironment,
-	interruptHostedChatRun,
 	runHostedChatTurnStreamRuntime,
 } from "./chat-turn-stream-runtime.js";
 
 type HostedChatTurnRequest = Pick<
 	ChatRequestBody,
 	| "appsEnabled"
-	| "continueRunId"
 	| "localCapabilitySession"
 	| "mentions"
 	| "message"
 	| "messageId"
 	| "noteContext"
 	| "recipeSlug"
-	| "replayQueuedMessageId"
 	| "selectedSourceIds"
-	| "steerQueuedMessageId"
 	| "supersedeActiveRun"
 	| "trigger"
 > & {
 	chatId: string;
 	projectId: Id<"projects"> | null;
+	turnIntent: HostedChatTurnIntent<
+		Id<"assistantRuns">,
+		Id<"assistantQueuedMessages">
+	>;
 	workspaceId: Id<"workspaces">;
 };
 
@@ -169,19 +170,11 @@ export const executeHostedChatTurn = async ({
 	request,
 	settings,
 }: ExecuteHostedChatTurnArgs) => {
-	const {
-		activeStreamSessions,
-		client,
-		emitEvent,
-		logLatency,
-		response,
-		sendJson,
-		wideEvent,
-	} = environment;
+	const { client, emitEvent, logLatency, response, sendJson, wideEvent } =
+		environment;
 	const {
 		appsEnabled = true,
 		chatId,
-		continueRunId,
 		localCapabilitySession = null,
 		mentions,
 		message,
@@ -189,13 +182,18 @@ export const executeHostedChatTurn = async ({
 		noteContext,
 		projectId,
 		recipeSlug,
-		replayQueuedMessageId,
 		selectedSourceIds,
-		steerQueuedMessageId,
 		supersedeActiveRun,
 		trigger,
+		turnIntent,
 		workspaceId,
 	} = request;
+	const continueRunId =
+		turnIntent.type === "steer"
+			? turnIntent.runId
+			: turnIntent.type === "direct"
+				? turnIntent.continueRunId
+				: null;
 	const { chatMode, webSearchEnabled } = settings;
 	const pendingUserQuestion =
 		attachableRun?.pendingDecision?.type === "user_question"
@@ -209,21 +207,13 @@ export const executeHostedChatTurn = async ({
 	>({
 		workspaceId,
 		chatId,
-		claimReadyForRun: (args) =>
-			client.mutation(api.assistantQueuedMessages.claimReadyForRun, args),
-		discardClaimed: (args) =>
-			client.mutation(api.assistantQueuedMessages.discardClaimed, args),
-		getClaimedForChat: (args) =>
-			client.query(api.assistantQueuedMessages.getClaimedForChat, args),
+		claimForReplay: (args) =>
+			client.mutation(api.assistantQueuedMessages.claimForReplay, args),
+		claimForSteer: (args) =>
+			client.mutation(api.assistantQueuedMessages.claimForSteer, args),
+		releaseClaimed: (args) =>
+			client.mutation(api.assistantQueuedMessages.releaseClaimed, args),
 		attachableRun,
-		interruptActiveRun: (args) =>
-			attachableRun?.producer === "convex"
-				? Promise.resolve([...args.pendingInput])
-				: interruptHostedChatRun({
-						...args,
-						activeStreamSessions,
-						client,
-					}),
 		validateInput: (inputMessage) => {
 			if (
 				getToolApprovalResponse(inputMessage) ||
@@ -261,10 +251,8 @@ export const executeHostedChatTurn = async ({
 	>;
 	try {
 		preparedTurnInput = await turnController.prepareInput({
-			continueRunId,
 			message,
-			replayQueuedMessageId,
-			steerQueuedMessageId,
+			turnIntent,
 		});
 	} catch (error) {
 		if (!turnRouteErrors.sendConvexError(error)) {
@@ -276,9 +264,7 @@ export const executeHostedChatTurn = async ({
 		turnRouteErrors.sendTurnControllerError(preparedTurnInput);
 		return;
 	}
-
-	const { effectiveMessage, pendingSteerMessages, steeredUserMessages } =
-		preparedTurnInput;
+	const { effectiveMessage } = preparedTurnInput;
 	const isLocalFolderToolContinuation =
 		Boolean(localCapabilitySession) &&
 		isLocalFolderToolContinuationMessage(effectiveMessage);
@@ -300,7 +286,8 @@ export const executeHostedChatTurn = async ({
 		return;
 	}
 	let activeStreamSession: HostedActiveStreamSession<
-		Id<"assistantRuns">
+		Id<"assistantRuns">,
+		Id<"assistantQueuedMessages">
 	> | null = null;
 	let assistantRun: ServerAssistantRunContext;
 	let toolApprovalResponse: ReturnType<typeof getToolApprovalResponse>;
@@ -322,9 +309,10 @@ export const executeHostedChatTurn = async ({
 					: messageId,
 			onBranchError: async ({ error, messageId: branchMessageId }) => {
 				if (
+					turnIntent.type !== "steer" &&
 					queuedInput.hasClaimed &&
-					!(await turnRouteErrors.cleanupClaimedSteerQueuedMessage(
-						"steer_queue_branch_create_cleanup",
+					!(await turnRouteErrors.releaseClaimedQueuedMessage(
+						"steer_queue_branch_create_release",
 					))
 				) {
 					return true;
@@ -345,7 +333,7 @@ export const executeHostedChatTurn = async ({
 				});
 				return true;
 			},
-			pendingMessages: pendingSteerMessages,
+			pendingMessages: [],
 			prepareMessage:
 				toolApprovalResponse ||
 				userQuestionAnswer !== null ||
@@ -445,8 +433,8 @@ export const executeHostedChatTurn = async ({
 	} catch (error) {
 		if (queuedInput.hasClaimed) {
 			if (
-				!(await turnRouteErrors.cleanupClaimedSteerQueuedMessage(
-					"steer_run_prepare_cleanup",
+				!(await turnRouteErrors.releaseClaimedQueuedMessage(
+					"steer_run_prepare_release",
 				))
 			) {
 				return;
@@ -477,11 +465,9 @@ export const executeHostedChatTurn = async ({
 	const result = await runHostedChatTurnStreamRuntime({
 		acceptedInput: {
 			attachableRun,
-			continueRunId,
 			queuedInput,
-			replayQueuedMessageId,
-			steeredUserMessages,
 			toolApprovalResponse,
+			turnIntent,
 			turnController,
 			userQuestionAnswer,
 		},

@@ -94,6 +94,7 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 			workspaceId,
 			chatId: "chat-tools",
 			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
 			toolCallId: "tool-call-1",
 			toolName: "search",
 			inputJson: JSON.stringify({ query: "note" }),
@@ -110,6 +111,7 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 			workspaceId,
 			chatId: "chat-tools",
 			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
 			toolCallId: "tool-call-1",
 			status: "completed",
 			outputJson: JSON.stringify({ result: "found" }),
@@ -161,6 +163,7 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 
 	const terminalRows = await t.run(async (ctx) => ({
@@ -225,6 +228,7 @@ test("active stream tool calls reject stale run ids", async () => {
 	});
 	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
 		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
 	});
 
 	await expect(
@@ -232,6 +236,7 @@ test("active stream tool calls reject stale run ids", async () => {
 			workspaceId,
 			chatId: "chat-tools-stale",
 			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
 			toolCallId: "tool-call-1",
 			toolName: "search",
 		}),

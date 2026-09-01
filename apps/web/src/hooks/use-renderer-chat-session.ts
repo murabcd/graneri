@@ -33,12 +33,15 @@ import {
 import { recoverPendingLocalCapabilityToolCalls } from "@/lib/local-capability-run-recovery";
 import { logError } from "@/lib/logger";
 import {
+	isRendererQueueActionPending,
+	isRendererQueueHandoffPending,
 	prepareRendererUserQuestionMessages,
 	shouldAutomaticallyContinueRendererChat,
 } from "@/lib/renderer-chat-session";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useChatInteractionSession } from "./use-chat-interaction-session";
+import { useChatTurnAdmission } from "./use-chat-turn-admission";
 import { useLocalFileStorage } from "./use-local-file-storage";
 import { useQueuedChatDrain } from "./use-queued-chat-drain";
 import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
@@ -49,6 +52,7 @@ import { useWorkspaceChatTransport } from "./use-workspace-chat-transport";
 type SubmitRendererChatTurnInput = Omit<
 	Parameters<typeof submitChatTurn>[0],
 	| "chatId"
+	| "currentRunAdmission"
 	| "displayActiveRun"
 	| "enqueueQueuedMessage"
 	| "onOptimisticMessage"
@@ -117,6 +121,9 @@ export const useRendererChatSession = ({
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
 	);
+	const admitQueuedMessage = useMutation(
+		api.assistantQueuedMessages.enqueueForCurrentRun,
+	);
 	const updateQueuedMessage = useMutation(
 		api.assistantQueuedMessages.updateQueued,
 	);
@@ -136,7 +143,42 @@ export const useRendererChatSession = ({
 			),
 		[activePendingBranchMessageId, persistedMessages],
 	);
-	const transport = useWorkspaceChatTransport(workspaceId);
+	const [acceptedQueuedMessageId, setAcceptedQueuedMessageId] = React.useState<
+		string | null
+	>(null);
+	const [queuedRunHandoff, setQueuedRunHandoff] = React.useState<{
+		previousRunId: string | null;
+		queuedMessageId: string;
+	} | null>(null);
+	const manuallySendingQueuedMessageIdRef = React.useRef<string | null>(null);
+	const acceptedQueuedMessageIdsRef = React.useRef(new Set<string>());
+	const latestQueueActiveRunIdRef = React.useRef<string | null>(null);
+	const queuedMessagesRef = React.useRef<Array<QueuedFollowUpMessage>>([]);
+	const handleQueuedAcceptance = React.useCallback(
+		(acceptance: { queuedMessageId: string; type: "replay" | "steer" }) => {
+			acceptedQueuedMessageIdsRef.current.add(acceptance.queuedMessageId);
+			if (acceptance.type === "replay") {
+				setQueuedRunHandoff({
+					previousRunId:
+						queuedMessagesRef.current.find(
+							(message) => message._id === acceptance.queuedMessageId,
+						)?.runId ?? latestQueueActiveRunIdRef.current,
+					queuedMessageId: acceptance.queuedMessageId,
+				});
+			}
+			if (
+				manuallySendingQueuedMessageIdRef.current === acceptance.queuedMessageId
+			) {
+				manuallySendingQueuedMessageIdRef.current = null;
+			}
+			setAcceptedQueuedMessageId(acceptance.queuedMessageId);
+		},
+		[],
+	);
+	const transport = useWorkspaceChatTransport(
+		workspaceId,
+		handleQueuedAcceptance,
+	);
 	const localFileStorage = useLocalFileStorage();
 	const latestRequestBodyRef = React.useRef<ChatRequestContext | null>(null);
 	const pendingUserQuestionRollbackRef = React.useRef<{
@@ -211,6 +253,7 @@ export const useRendererChatSession = ({
 		hasLocallyCompletedAssistantMessage,
 		localMessageIds,
 		pendingHumanDecision,
+		queueActiveRun,
 		runPlan,
 		streamingMessageIds,
 	} = useRendererChatPresentation({
@@ -223,6 +266,36 @@ export const useRendererChatSession = ({
 		persistedMessages: sessionPersistedMessages,
 		steerHandoffStreamingMessageIds: activeSteerHandoffStreamingMessageIds,
 	});
+	const { runTurnAdmission } = useChatTurnAdmission({
+		isAiRequestPending,
+		queueActiveRun,
+		scopeKey: chatId,
+	});
+	latestQueueActiveRunIdRef.current = queueActiveRun?._id ?? null;
+	const isQueuedRunHandoffPending =
+		queuedRunHandoff !== null &&
+		isRendererQueueHandoffPending({
+			activeRunId: queueActiveRun?._id ?? null,
+			previousRunId: queuedRunHandoff.previousRunId,
+		});
+	const isQueueActionPending = isRendererQueueActionPending({
+		isAcceptedHandoffPending: isQueuedRunHandoffPending,
+		isChatRequestPending,
+		queueActiveRunId: queueActiveRun?._id ?? null,
+	});
+	React.useEffect(() => {
+		if (
+			acceptedQueuedMessageId !== null &&
+			(queueActiveRun !== null || error)
+		) {
+			setAcceptedQueuedMessageId(null);
+		}
+	}, [acceptedQueuedMessageId, error, queueActiveRun]);
+	React.useEffect(() => {
+		if (queuedRunHandoff !== null && (!isQueuedRunHandoffPending || error)) {
+			setQueuedRunHandoff(null);
+		}
+	}, [error, isQueuedRunHandoffPending, queuedRunHandoff]);
 	React.useEffect(() => {
 		const rollback = pendingUserQuestionRollbackRef.current;
 		if (!error || !rollback) {
@@ -317,21 +390,34 @@ export const useRendererChatSession = ({
 	]);
 
 	const { queuedMessages, setQueuedMessages } = useQueuedChatDrain({
-		activeRun: displayActiveRun,
+		acceptedQueuedMessageId,
+		acceptedQueuedMessageIdsRef,
+		// A stopping run is no longer attachable for row actions, but it remains
+		// non-terminal and must fence automatic replay until Convex finishes it.
+		activeRun,
 		chatId,
 		contextLabel,
-		isBlocked: isChatRequestPending || isExternallyBlocked,
+		isBlocked:
+			isChatRequestPending ||
+			isQueueActionPending ||
+			Boolean(error) ||
+			isExternallyBlocked,
 		latestRequestBodyRef,
 		localMessageIds,
 		sendMessage,
 		workspaceId,
 	});
+	queuedMessagesRef.current = queuedMessages;
 	const queuedFollowUpControls = useQueuedFollowUpControls({
-		activeRun: displayActiveRun,
+		acceptedQueuedMessageIdsRef,
+		acceptedQueuedMessageId,
+		activeRun: queueActiveRun,
 		chatId,
 		contextLabel,
+		isQueueHandoffPending: isQueueActionPending,
 		latestRequestBodyRef,
 		localMessageIds,
+		manuallySendingQueuedMessageIdRef,
 		onEditMessage: onEditQueuedMessage,
 		onSteerStart: () => {
 			const handoffMessageIds = [
@@ -392,11 +478,7 @@ export const useRendererChatSession = ({
 		],
 	);
 	const handleStop = React.useCallback(() => {
-		const stopPromise = queuedMessages[0]
-			? queuedFollowUpControls.sendQueuedFollowUpNow()
-			: stopCurrentStream();
-
-		void stopPromise.catch((error) => {
+		void stopCurrentStream().catch((error) => {
 			logError({
 				event: "client.error",
 				error,
@@ -408,61 +490,68 @@ export const useRendererChatSession = ({
 					: `Failed to stop ${contextLabel} stream`,
 			);
 		});
-	}, [
-		contextLabel,
-		queuedFollowUpControls.sendQueuedFollowUpNow,
-		queuedMessages,
-		stopCurrentStream,
-	]);
+	}, [contextLabel, stopCurrentStream]);
 	const submitTurn = React.useCallback(
 		(input: SubmitRendererChatTurnInput) =>
-			runPreparedRequest(async () => {
-				let optimisticMessageId: string | null = null;
-				try {
-					return await submitChatTurn({
-						...input,
-						chatId,
-						displayActiveRun,
-						enqueueQueuedMessage,
-						onOptimisticMessage: (message) => {
-							optimisticMessageId = message.id;
-							flushSync(() => {
-								commitOptimisticMessage({ message });
-							});
-						},
-						onQueuedMessageSaved: ({
-							optimisticMessageId: savedOptimisticMessageId,
-							queuedMessage,
-						}) => {
-							setQueuedMessages((currentMessages) =>
-								currentMessages.map((message) =>
-									message._id === savedOptimisticMessageId
-										? queuedMessage
-										: message,
-								),
-							);
-						},
-						queueActiveRun:
-							displayActiveRun ?? (isAiRequestPending ? activeRun : null),
-						sendMessage,
-						workspaceId,
-					});
-				} catch (error) {
-					if (optimisticMessageId) {
-						rollbackOptimisticMessage(optimisticMessageId);
+			runTurnAdmission((admission) =>
+				runPreparedRequest(async () => {
+					let optimisticMessageId: string | null = null;
+					try {
+						return await submitChatTurn({
+							...input,
+							chatId,
+							currentRunAdmission:
+								admission.status === "current_run"
+									? {
+											admitQueuedMessage,
+											beginDirectSubmission: admission.beginDirectSubmission,
+											completeQueuedAdmission:
+												admission.completeQueuedAdmission,
+											status: "current_run",
+										}
+									: admission,
+							displayActiveRun,
+							enqueueQueuedMessage,
+							onOptimisticMessage: (message) => {
+								optimisticMessageId = message.id;
+								flushSync(() => {
+									commitOptimisticMessage({ message });
+								});
+							},
+							onQueuedMessageSaved: ({
+								optimisticMessageId: savedOptimisticMessageId,
+								queuedMessage,
+							}) => {
+								setQueuedMessages((currentMessages) =>
+									currentMessages.map((message) =>
+										message._id === savedOptimisticMessageId
+											? queuedMessage
+											: message,
+									),
+								);
+							},
+							queueActiveRun,
+							sendMessage,
+							workspaceId,
+						});
+					} catch (error) {
+						if (optimisticMessageId) {
+							rollbackOptimisticMessage(optimisticMessageId);
+						}
+						throw error;
 					}
-					throw error;
-				}
-			}),
+				}),
+			),
 		[
-			activeRun,
+			admitQueuedMessage,
 			chatId,
 			commitOptimisticMessage,
 			displayActiveRun,
 			enqueueQueuedMessage,
-			isAiRequestPending,
+			queueActiveRun,
 			rollbackOptimisticMessage,
 			runPreparedRequest,
+			runTurnAdmission,
 			sendMessage,
 			setQueuedMessages,
 			workspaceId,
@@ -637,7 +726,7 @@ export const useRendererChatSession = ({
 	const deleteMessage = React.useCallback(
 		async (messageId: string) => {
 			if (isChatUiPending) {
-				handleStop();
+				await stopCurrentStream();
 			}
 
 			setPendingBranchMessageId(messageId);
@@ -657,8 +746,8 @@ export const useRendererChatSession = ({
 			branchFromMessage,
 			branchMessagesFrom,
 			chatId,
-			handleStop,
 			isChatUiPending,
+			stopCurrentStream,
 			workspaceId,
 		],
 	);
@@ -744,7 +833,9 @@ export const useRendererChatSession = ({
 		isPreparingRequest,
 		isQueuedMessageEditCurrent:
 			queuedFollowUpControls.isQueuedMessageEditCurrent,
+		isResumingQueuedFollowUps: queuedFollowUpControls.isResumingQueuedFollowUps,
 		onQueuedFollowUpsReorder: queuedFollowUpControls.onQueuedFollowUpsReorder,
+		onQueuedFollowUpsResume: queuedFollowUpControls.onQueuedFollowUpsResume,
 		pendingHumanDecision,
 		queuedFollowUps: queuedFollowUpControls.queuedFollowUps,
 		runPlan: runPlan ?? null,

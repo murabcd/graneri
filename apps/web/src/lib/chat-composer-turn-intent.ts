@@ -32,50 +32,116 @@ type UpdateQueuedComposerTurn = (
 type CommitComposerTurnResult =
 	| SubmitChatTurnResult
 	| { status: "updated" }
-	| { status: "stale_edit" };
+	| { status: "stale_edit" }
+	| { status: "stale_intent" };
+
+type ComposerTurnIntentClaim = {
+	restoreIfCurrent: () => void;
+};
+
+export const claimChatComposerTurnIntent = <DraftClaim, AttachmentClaim>({
+	claimAttachments,
+	claimDraft,
+	isAttachmentsClaimCurrent,
+	isDraftClaimCurrent,
+	onClaim,
+	onRestore,
+	restoreAttachments,
+	restoreDraft,
+}: {
+	claimAttachments: () => AttachmentClaim | null;
+	claimDraft: () => DraftClaim | null;
+	isAttachmentsClaimCurrent: (claim: AttachmentClaim) => boolean;
+	isDraftClaimCurrent: (claim: DraftClaim) => boolean;
+	onClaim: () => void;
+	onRestore: () => void;
+	restoreAttachments: (claim: AttachmentClaim) => void;
+	restoreDraft: (claim: DraftClaim) => void;
+}): ComposerTurnIntentClaim | null => {
+	const draftClaim = claimDraft();
+	if (!draftClaim) {
+		return null;
+	}
+	const attachmentClaim = claimAttachments();
+	if (!attachmentClaim) {
+		restoreDraft(draftClaim);
+		return null;
+	}
+
+	onClaim();
+	return {
+		restoreIfCurrent: () => {
+			if (
+				!isDraftClaimCurrent(draftClaim) ||
+				!isAttachmentsClaimCurrent(attachmentClaim)
+			) {
+				return;
+			}
+
+			restoreDraft(draftClaim);
+			restoreAttachments(attachmentClaim);
+			onRestore();
+		},
+	};
+};
 
 export const commitChatComposerTurnIntent = async ({
 	attachedFiles,
+	claimIntent,
 	editingMessageId,
 	isQueuedMessageEditCurrent,
 	onBeforeSubmit,
 	onRequestPrepared,
 	prepareTurn,
 	queuedMessageEditId,
-	restoreDraft,
 	submitTurn,
 	updateQueuedTurn,
 }: {
 	attachedFiles: ChatAttachment[];
+	claimIntent: () => ComposerTurnIntentClaim | null;
 	editingMessageId: string | null;
 	isQueuedMessageEditCurrent: (queuedMessageId: string) => boolean;
 	onBeforeSubmit: () => void;
 	onRequestPrepared: RequestPrepared;
 	prepareTurn: () => PreparedComposerTurn;
 	queuedMessageEditId: string | null;
-	restoreDraft: () => void;
 	submitTurn: SubmitComposerTurn;
 	updateQueuedTurn: UpdateQueuedComposerTurn;
 }): Promise<CommitComposerTurnResult> => {
+	let intentClaim: ComposerTurnIntentClaim | null = null;
 	try {
 		const preparedTurn = prepareTurn();
+		intentClaim = claimIntent();
+		if (!intentClaim) {
+			return { status: "stale_intent" };
+		}
 		if (queuedMessageEditId) {
 			const didUpdateCurrentEdit = await updateQueuedTurn({
 				...preparedTurn,
 				onRequestPrepared,
 			});
-			return didUpdateCurrentEdit
-				? { status: "updated" }
-				: { status: "stale_edit" };
+			if (didUpdateCurrentEdit) {
+				return { status: "updated" };
+			}
+
+			intentClaim.restoreIfCurrent();
+			return { status: "stale_edit" };
 		}
 
 		onBeforeSubmit();
-		return await submitTurn({
+		const result = await submitTurn({
 			...preparedTurn,
 			attachedFiles,
 			editingMessageId,
 			onRequestPrepared,
 		});
+		if (
+			result.status === "attachments_blocked" ||
+			result.status === "canceled"
+		) {
+			intentClaim.restoreIfCurrent();
+		}
+		return result;
 	} catch (error) {
 		if (
 			queuedMessageEditId &&
@@ -83,7 +149,7 @@ export const commitChatComposerTurnIntent = async ({
 		) {
 			throw error;
 		}
-		restoreDraft();
+		intentClaim?.restoreIfCurrent();
 		throw error;
 	}
 };

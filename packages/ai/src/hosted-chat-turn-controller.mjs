@@ -1,63 +1,22 @@
-export const isPendingHostedUserMessage = (input) =>
-	input &&
-	typeof input === "object" &&
-	typeof input.id === "string" &&
-	input.role === "user" &&
-	Array.isArray(input.parts);
-
 const activeRunChangedError = () => ({
 	error: "Active assistant run changed before the queued message could steer.",
 	statusCode: 409,
 });
 
-const queuedMessageUnavailableError = () => ({
-	error: "Queued message is no longer available.",
-	statusCode: 409,
-});
-
-const cleanupClaimedInput = async ({
-	queuedInput,
-	tolerateMissing = false,
-}) => {
-	const cleanupResult = await queuedInput.cleanupClaimed({ tolerateMissing });
-	if (cleanupResult.ok) {
-		return { ok: true };
-	}
-
-	return {
-		ok: false,
-		error: cleanupResult.error,
-		queuedMessageIds: cleanupResult.queuedMessageIds,
-	};
-};
-
 export const createHostedChatTurnController = ({
 	attachableRun,
-	chatId,
-	interruptActiveRun,
 	queuedInput,
 	validateInput,
-	workspaceId,
 }) => {
-	const cleanupClaimedSteerQueuedMessage = async (options = {}) =>
-		await cleanupClaimedInput({
-			queuedInput,
-			tolerateMissing: options.tolerateMissing,
-		});
+	const releaseClaimedQueuedMessage = queuedInput.releaseClaimed;
 
-	const prepareInput = async ({
-		continueRunId,
-		message,
-		replayQueuedMessageId,
-		steerQueuedMessageId,
-	}) => {
-		let interruptedPendingInput = [];
+	const prepareInput = async ({ message, turnIntent }) => {
 		let replayedUserMessage = null;
 		let steeredUserMessage = null;
-		let steeredUserMessages = [];
+		let inputWasValidated = false;
 
-		if (steerQueuedMessageId) {
-			if (!continueRunId || attachableRun?._id !== continueRunId) {
+		if (turnIntent.type === "steer") {
+			if (attachableRun?._id !== turnIntent.runId) {
 				return {
 					ok: false,
 					phase: "active_run_mismatch",
@@ -66,80 +25,72 @@ export const createHostedChatTurnController = ({
 			}
 
 			const claimedSteer = await queuedInput.claimSteer({
-				runId: continueRunId,
-				queuedMessageId: steerQueuedMessageId,
+				runId: turnIntent.runId,
+				queuedMessageId: turnIntent.queuedMessageId,
 			});
-			steeredUserMessages = claimedSteer.userMessages;
 			steeredUserMessage = claimedSteer.userMessage;
-
-			if (claimedSteer.claimedMessages.length === 0) {
-				return {
-					ok: false,
-					phase: "queued_message_unavailable",
-					...queuedMessageUnavailableError(),
-				};
-			}
-
-			if (attachableRun.status === "running") {
-				try {
-					interruptedPendingInput = await interruptActiveRun({
-						chatId,
-						pendingInput: steeredUserMessages,
-						runId: continueRunId,
-						workspaceId,
-					});
-				} catch (error) {
-					const cleanupResult = await cleanupClaimedSteerQueuedMessage();
-					if (!cleanupResult.ok) {
-						return {
-							ok: false,
-							cleanupError: cleanupResult.error,
-							logMessage:
-								"Failed to delete failed steered queue message after active run interrupt failure",
-							phase: "steer_queue_cleanup_failed",
-							error: "Failed to clean up claimed steered message.",
-							statusCode: 500,
-						};
-					}
-
+			const steerInputValidation = validateInput(steeredUserMessage);
+			if (!steerInputValidation.ok) {
+				const releaseResult = await releaseClaimedQueuedMessage();
+				if (!releaseResult.ok) {
 					return {
 						ok: false,
-						cause: error,
-						logMessage: "Failed to interrupt active assistant run",
-						phase: "active_run_interrupt_failed",
-						error: "Failed to interrupt active assistant run.",
+						releaseError: releaseResult.error,
+						logMessage:
+							"Failed to release steered queue message after input size validation",
+						phase: "steer_queue_release_failed",
+						error: "Failed to release claimed steered message.",
 						statusCode: 500,
 					};
 				}
-			}
-		}
-
-		if (replayQueuedMessageId && !continueRunId) {
-			replayedUserMessage = await queuedInput.loadClaimedReplay({
-				queuedMessageId: replayQueuedMessageId,
-			});
-
-			if (!replayedUserMessage) {
 				return {
 					ok: false,
-					phase: "queued_message_unavailable",
-					...queuedMessageUnavailableError(),
+					phase: "input_invalid",
+					error: steerInputValidation.error,
+					errorCode: steerInputValidation.errorCode,
+					statusCode: 400,
 				};
 			}
+			inputWasValidated = true;
+		}
+
+		if (turnIntent.type === "replay") {
+			const replayClaim = await queuedInput.claimReplay({
+				expectedStatus: turnIntent.expectedStatus,
+				queuedMessageId: turnIntent.queuedMessageId,
+			});
+			if (replayClaim.status !== "claimed") {
+				return replayClaim.status === "active_run"
+					? {
+							ok: false,
+							phase: "replay_claim_conflict",
+							error: "Chat already has an active assistant run.",
+							errorCode: "ASSISTANT_RUN_ACTIVE",
+							statusCode: 409,
+						}
+					: {
+							ok: false,
+							phase: "replay_claim_conflict",
+							error: "Queued message is no longer available.",
+							errorCode: "QUEUED_MESSAGE_NOT_FOUND",
+							statusCode: 409,
+						};
+			}
+			replayedUserMessage = replayClaim.userMessage;
 		}
 
 		const effectiveMessage =
 			steeredUserMessage ?? replayedUserMessage ?? message;
 		if (!effectiveMessage) {
-			const cleanupResult = await cleanupClaimedSteerQueuedMessage();
-			if (!cleanupResult.ok) {
+			const releaseResult = await releaseClaimedQueuedMessage();
+			if (!releaseResult.ok) {
 				return {
 					ok: false,
-					cleanupError: cleanupResult.error,
+					releaseError: releaseResult.error,
 					logMessage:
-						"Failed to delete failed steered queue message after missing input",
-					phase: "steer_queue_cleanup_failed",
-					error: "Failed to clean up claimed steered message.",
+						"Failed to release steered queue message after missing input",
+					phase: "steer_queue_release_failed",
+					error: "Failed to release claimed steered message.",
 					statusCode: 500,
 				};
 			}
@@ -152,17 +103,19 @@ export const createHostedChatTurnController = ({
 			};
 		}
 
-		const inputValidation = validateInput(effectiveMessage);
+		const inputValidation = inputWasValidated
+			? { ok: true }
+			: validateInput(effectiveMessage);
 		if (!inputValidation.ok) {
-			const cleanupResult = await cleanupClaimedSteerQueuedMessage();
-			if (!cleanupResult.ok) {
+			const releaseResult = await releaseClaimedQueuedMessage();
+			if (!releaseResult.ok) {
 				return {
 					ok: false,
-					cleanupError: cleanupResult.error,
+					releaseError: releaseResult.error,
 					logMessage:
-						"Failed to delete failed steered queue message after input size validation",
-					phase: "steer_queue_cleanup_failed",
-					error: "Failed to clean up claimed steered message.",
+						"Failed to release steered queue message after input size validation",
+					phase: "steer_queue_release_failed",
+					error: "Failed to release claimed steered message.",
 					statusCode: 500,
 				};
 			}
@@ -178,16 +131,10 @@ export const createHostedChatTurnController = ({
 
 		return {
 			ok: true,
-			cleanupClaimedSteerQueuedMessage,
+			releaseClaimedQueuedMessage,
 			effectiveMessage,
-			interruptedPendingInput,
-			pendingSteerMessages:
-				interruptedPendingInput.length > 0
-					? interruptedPendingInput.filter(isPendingHostedUserMessage)
-					: steeredUserMessages,
 			replayedUserMessage,
 			steeredUserMessage,
-			steeredUserMessages,
 		};
 	};
 
@@ -196,15 +143,15 @@ export const createHostedChatTurnController = ({
 			return { ok: true };
 		}
 
-		const cleanupResult = await cleanupClaimedSteerQueuedMessage();
-		if (!cleanupResult.ok) {
+		const releaseResult = await releaseClaimedQueuedMessage();
+		if (!releaseResult.ok) {
 			return {
 				ok: false,
-				cleanupError: cleanupResult.error,
+				releaseError: releaseResult.error,
 				logMessage:
-					"Failed to delete failed steered queue message after active run mismatch",
-				phase: "steer_queue_cleanup_failed",
-				error: "Failed to clean up claimed steered message.",
+					"Failed to release steered queue message after active run mismatch",
+				phase: "steer_queue_release_failed",
+				error: "Failed to release claimed steered message.",
 				statusCode: 500,
 			};
 		}
@@ -217,7 +164,7 @@ export const createHostedChatTurnController = ({
 	};
 
 	return {
-		cleanupClaimedSteerQueuedMessage,
+		releaseClaimedQueuedMessage,
 		prepareInput,
 		requireSameActiveRun,
 	};

@@ -8,6 +8,7 @@ import type {
 	UIMessage,
 	UIMessageChunk,
 } from "ai";
+import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 import type { HostedAssistantRunTerminalization } from "./hosted-chat-run-finalizer.mjs";
 
 export type HostedAssistantExecutionOutcome =
@@ -18,6 +19,7 @@ export declare const prepareHostedAssistantExecution: (settings: {
 	additionalAgentTools?: ToolSet;
 	enabledTools: ToolSet;
 	emptyToolsWhenNone?: boolean;
+	getActiveStreamSession?: (() => HostedActiveStreamSession | null) | undefined;
 	instructions: string;
 	model: string;
 	prepareStep?: PrepareStepFunction<ToolSet>;

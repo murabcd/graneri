@@ -114,6 +114,7 @@ describe("hosted chat run starter", () => {
 		});
 		expect(callbacks.failAssistantRun).toHaveBeenCalledWith({
 			runId: "run-1",
+			assistantMessageId: "assistant-1",
 			errorText: "stream start failed",
 		});
 		expect(result.activeStreamSession?.isBroadcastClosed()).toBe(true);

@@ -17,7 +17,11 @@ const createConvexError = (code: string) =>
 const createSerializedConvexError = (code: string) =>
 	new Error(`Uncaught ConvexError: {"code":"${code}"} at mutation`);
 
-const createFinalizerHarness = () => {
+const createFinalizerHarness = ({
+	currentAssistantMessageId = "assistant-message-1",
+}: {
+	currentAssistantMessageId?: string;
+} = {}) => {
 	const calls: string[] = [];
 	const activeStreamSession = {
 		abortSignal: new AbortController().signal,
@@ -27,6 +31,9 @@ const createFinalizerHarness = () => {
 		closePersistence: vi.fn(async () => {
 			calls.push("closePersistence");
 		}),
+		persister: {
+			messageId: currentAssistantMessageId,
+		},
 	};
 	const saveAssistantMessageForRun = vi.fn(async () => {
 		calls.push("saveAssistantMessageForRun");
@@ -56,7 +63,6 @@ const createFinalizerHarness = () => {
 
 	const finalizeAssistantRun = createHostedAssistantRunFinalizer({
 		activeStreamSession,
-		assistantMessageId: "assistant-message-1",
 		assistantRunId: "assistant-run-1",
 		chatId: "chat-1",
 		failAssistantRun,
@@ -111,6 +117,7 @@ describe("hosted assistant run finalizer", () => {
 		);
 		expect(harness.finishAssistantRun).toHaveBeenCalledWith({
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
 		});
 		expect(harness.failAssistantRun).not.toHaveBeenCalled();
 		expect(harness.calls).toEqual([
@@ -143,6 +150,34 @@ describe("hosted assistant run finalizer", () => {
 		);
 		expect(harness.finishAssistantRun).toHaveBeenCalledWith({
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
+		});
+	});
+
+	it("uses the active rotated generation id for persistence and completion", async () => {
+		const harness = createFinalizerHarness({
+			currentAssistantMessageId: "assistant-message-2",
+		});
+
+		await harness.finalizeAssistantRun({
+			responseMessage: {
+				...createMessage(),
+				id: "ai-sdk-response-message",
+			},
+			status: "completed",
+		});
+
+		expect(harness.saveAssistantMessageForRun).toHaveBeenCalledWith(
+			expect.objectContaining({
+				assistantMessageId: "assistant-message-2",
+				message: expect.objectContaining({
+					id: "assistant-message-2",
+				}),
+			}),
+		);
+		expect(harness.finishAssistantRun).toHaveBeenCalledWith({
+			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-2",
 		});
 	});
 
@@ -166,6 +201,7 @@ describe("hosted assistant run finalizer", () => {
 		expect(harness.waitForUserDecision).toHaveBeenCalledWith({
 			pendingDecision: expect.objectContaining({ approvalId: "approval-1" }),
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
 		});
 		expect(harness.finishAssistantRun).not.toHaveBeenCalled();
 		expect(harness.calls).toEqual([
@@ -175,6 +211,41 @@ describe("hosted assistant run finalizer", () => {
 			"onWaitingForUser",
 			"cleanup",
 		]);
+	});
+
+	it("projects a pending decision onto the active rotated generation", async () => {
+		const harness = createFinalizerHarness({
+			currentAssistantMessageId: "assistant-message-2",
+		});
+
+		await harness.finalizeAssistantRun({
+			pendingDecision: {
+				type: "tool_approval",
+				approvalId: "approval-1",
+				assistantMessageId: "assistant-message-1",
+				toolCallId: "call-1",
+				toolName: "delete_automation",
+				consequence:
+					"This action can change data or perform an external action.",
+			},
+			responseMessage: createMessage(),
+			status: "waiting_for_user",
+		});
+
+		expect(harness.saveAssistantMessageForRun).toHaveBeenCalledWith(
+			expect.objectContaining({
+				assistantMessageId: "assistant-message-2",
+				message: expect.objectContaining({ id: "assistant-message-2" }),
+			}),
+		);
+		expect(harness.waitForUserDecision).toHaveBeenCalledWith({
+			pendingDecision: expect.objectContaining({
+				assistantMessageId: "assistant-message-2",
+				approvalId: "approval-1",
+			}),
+			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-2",
+		});
 	});
 
 	it("saves, closes, and pauses runs with a pending user question", async () => {
@@ -206,6 +277,7 @@ describe("hosted assistant run finalizer", () => {
 				toolCallId: "question-1",
 			}),
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
 		});
 		expect(harness.calls).toEqual([
 			"saveAssistantMessageForRun",
@@ -258,6 +330,7 @@ describe("hosted assistant run finalizer", () => {
 		expect(harness.failAssistantRun).toHaveBeenCalledWith({
 			errorText: "ACTIVE_STREAM_NOT_FOUND",
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
 		});
 		expect(harness.logError).toHaveBeenCalledOnce();
 		expect(harness.onFinalizeError).toHaveBeenCalledOnce();
@@ -281,6 +354,7 @@ describe("hosted assistant run finalizer", () => {
 		expect(harness.failAssistantRun).toHaveBeenCalledWith({
 			errorText: "stream failed",
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
 		});
 		expect(harness.finishAssistantRun).not.toHaveBeenCalled();
 		expect(harness.calls).toEqual([
@@ -313,6 +387,7 @@ describe("hosted assistant run finalizer", () => {
 		expect(harness.failAssistantRun).toHaveBeenCalledWith({
 			errorText: "persistence failed",
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
 		});
 		expect(harness.calls).toEqual([
 			"saveAssistantMessageForRun",
@@ -344,6 +419,7 @@ describe("hosted assistant run finalizer", () => {
 		expect(harness.failAssistantRun).toHaveBeenCalledWith({
 			errorText: "persistence failed",
 			runId: "assistant-run-1",
+			assistantMessageId: "assistant-message-1",
 		});
 		expect(harness.calls).toEqual([
 			"saveAssistantMessageForRun",

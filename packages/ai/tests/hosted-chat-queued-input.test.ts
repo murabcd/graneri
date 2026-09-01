@@ -11,30 +11,25 @@ const queuedMessage = ({
 	text: string;
 }) => ({
 	_id: id,
+	claimVersion: 3,
 	messageId,
 	text,
 });
 
 describe("hosted chat queued input", () => {
-	it("claims steered queued messages and exposes the accepted batch", async () => {
-		const claimReadyForRun = vi.fn().mockResolvedValue([
-			queuedMessage({
-				id: "queued-1",
-				messageId: "message-1",
-				text: "first",
-			}),
-			queuedMessage({
-				id: "queued-2",
-				messageId: "message-2",
-				text: "second",
-			}),
-		]);
+	it("claims only the selected queued message for steering", async () => {
+		const selectedMessage = queuedMessage({
+			id: "queued-2",
+			messageId: "message-2",
+			text: "second",
+		});
+		const claimForSteer = vi.fn().mockResolvedValue(selectedMessage);
 		const queuedInput = createHostedChatQueuedInput({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
-			claimReadyForRun,
-			discardClaimed: vi.fn(),
-			getClaimedForChat: vi.fn(),
+			claimForReplay: vi.fn(),
+			claimForSteer,
+			releaseClaimed: vi.fn(),
 		});
 
 		const claimed = await queuedInput.claimSteer({
@@ -42,137 +37,194 @@ describe("hosted chat queued input", () => {
 			queuedMessageId: "queued-2",
 		});
 
-		expect(claimReadyForRun).toHaveBeenCalledWith({
+		expect(claimForSteer).toHaveBeenCalledWith({
 			runId: "run-1",
 			queuedMessageId: "queued-2",
 		});
 		expect(queuedInput.hasClaimed).toBe(true);
-		expect(queuedInput.claimedQueuedMessageId).toBe("queued-1");
-		expect(queuedInput.claimedQueuedMessageIds).toEqual([
-			"queued-1",
-			"queued-2",
-		]);
-		expect(claimed.userMessages).toMatchObject([
-			{
-				id: "message-1",
-				role: "user",
-				parts: [{ type: "text", text: "first" }],
-			},
-			{
-				id: "message-2",
-				role: "user",
-				parts: [{ type: "text", text: "second" }],
-			},
-		]);
+		expect(queuedInput.claimedLease).toEqual({
+			queuedMessageId: "queued-2",
+			claimVersion: 3,
+		});
+		expect(claimed.claimedMessage).toBe(selectedMessage);
 		expect(claimed.userMessage).toMatchObject({
 			id: "message-2",
 			role: "user",
+			parts: [{ type: "text", text: "second" }],
 		});
 	});
 
-	it("loads a claimed replay message for the same workspace and chat", async () => {
-		const getClaimedForChat = vi.fn().mockResolvedValue(
-			queuedMessage({
+	it("claims a selected replay message for the same workspace and chat", async () => {
+		const claimForReplay = vi.fn().mockResolvedValue({
+			status: "claimed",
+			claimedMessage: queuedMessage({
 				id: "queued-1",
 				messageId: "message-1",
 				text: "replay me",
 			}),
-		);
+		});
 		const queuedInput = createHostedChatQueuedInput({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
-			claimReadyForRun: vi.fn(),
-			discardClaimed: vi.fn(),
-			getClaimedForChat,
+			claimForReplay,
+			claimForSteer: vi.fn(),
+			releaseClaimed: vi.fn(),
 		});
 
 		await expect(
-			queuedInput.loadClaimedReplay({ queuedMessageId: "queued-1" }),
+			queuedInput.claimReplay({
+				expectedStatus: "queued",
+				queuedMessageId: "queued-1",
+			}),
 		).resolves.toMatchObject({
-			id: "message-1",
-			role: "user",
-			parts: [{ type: "text", text: "replay me" }],
+			status: "claimed",
+			userMessage: {
+				id: "message-1",
+				role: "user",
+				parts: [{ type: "text", text: "replay me" }],
+			},
 		});
-		expect(getClaimedForChat).toHaveBeenCalledWith({
+		expect(claimForReplay).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
+			expectedStatus: "queued",
 			queuedMessageId: "queued-1",
+		});
+		expect(queuedInput.claimedLease).toEqual({
+			queuedMessageId: "queued-1",
+			claimVersion: 3,
 		});
 	});
 
-	it("discards every claimed queued message and clears local claim state", async () => {
-		const discardClaimed = vi.fn().mockResolvedValue(null);
+	it("releases the claimed message and clears local claim state", async () => {
+		const releaseClaimed = vi.fn().mockResolvedValue(null);
 		const queuedInput = createHostedChatQueuedInput({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
-			claimReadyForRun: vi.fn().mockResolvedValue([
+			claimForReplay: vi.fn(),
+			claimForSteer: vi.fn().mockResolvedValue(
 				queuedMessage({
 					id: "queued-1",
 					messageId: "message-1",
 					text: "first",
 				}),
+			),
+			releaseClaimed,
+		});
+
+		await queuedInput.claimSteer({
+			runId: "run-1",
+			queuedMessageId: "queued-1",
+		});
+
+		await expect(queuedInput.releaseClaimed()).resolves.toEqual({
+			ok: true,
+		});
+		expect(releaseClaimed).toHaveBeenCalledWith({
+			workspaceId: "workspace-1",
+			chatId: "chat-1",
+			queuedMessageId: "queued-1",
+			claimVersion: 3,
+		});
+		expect(queuedInput.hasClaimed).toBe(false);
+		expect(queuedInput.claimedLease).toBeNull();
+	});
+
+	it("keeps local claim state when release fails", async () => {
+		const releaseError = new Error("release failed");
+		const queuedInput = createHostedChatQueuedInput({
+			workspaceId: "workspace-1",
+			chatId: "chat-1",
+			claimForReplay: vi.fn(),
+			claimForSteer: vi.fn().mockResolvedValue(
 				queuedMessage({
+					id: "queued-1",
+					messageId: "message-1",
+					text: "first",
+				}),
+			),
+			releaseClaimed: vi.fn().mockRejectedValue(releaseError),
+		});
+
+		await queuedInput.claimSteer({
+			runId: "run-1",
+			queuedMessageId: "queued-1",
+		});
+
+		await expect(queuedInput.releaseClaimed()).resolves.toEqual({
+			ok: false,
+			error: releaseError,
+			queuedMessageId: "queued-1",
+		});
+		expect(queuedInput.hasClaimed).toBe(true);
+		expect(queuedInput.claimedLease).toEqual({
+			queuedMessageId: "queued-1",
+			claimVersion: 3,
+		});
+	});
+
+	it("does not clear a newer lease when an older release completes", async () => {
+		let completeRelease: (() => void) | undefined;
+		const releasePending = new Promise<void>((resolve) => {
+			completeRelease = resolve;
+		});
+		const queuedInput = createHostedChatQueuedInput({
+			workspaceId: "workspace-1",
+			chatId: "chat-1",
+			claimForReplay: vi.fn().mockResolvedValue({
+				status: "claimed",
+				claimedMessage: queuedMessage({
 					id: "queued-2",
 					messageId: "message-2",
 					text: "second",
 				}),
-			]),
-			discardClaimed,
-			getClaimedForChat: vi.fn(),
-		});
-
-		await queuedInput.claimSteer({
-			runId: "run-1",
-			queuedMessageId: "queued-2",
-		});
-
-		await expect(queuedInput.cleanupClaimed()).resolves.toEqual({
-			ok: true,
-			cleaned: true,
-		});
-		expect(discardClaimed).toHaveBeenCalledTimes(2);
-		expect(discardClaimed).toHaveBeenNthCalledWith(1, {
-			workspaceId: "workspace-1",
-			chatId: "chat-1",
-			queuedMessageId: "queued-1",
-		});
-		expect(discardClaimed).toHaveBeenNthCalledWith(2, {
-			workspaceId: "workspace-1",
-			chatId: "chat-1",
-			queuedMessageId: "queued-2",
-		});
-		expect(queuedInput.hasClaimed).toBe(false);
-	});
-
-	it("can tolerate missing queued messages during cleanup", async () => {
-		const discardError = new Error(
-			'Uncaught ConvexError: {"code":"QUEUED_MESSAGE_NOT_FOUND","message":"Queued message is no longer available."} at handler',
-		);
-		const queuedInput = createHostedChatQueuedInput({
-			workspaceId: "workspace-1",
-			chatId: "chat-1",
-			claimReadyForRun: vi.fn().mockResolvedValue([
+			}),
+			claimForSteer: vi.fn().mockResolvedValue(
 				queuedMessage({
 					id: "queued-1",
 					messageId: "message-1",
 					text: "first",
 				}),
-			]),
-			discardClaimed: vi.fn().mockRejectedValue(discardError),
-			getClaimedForChat: vi.fn(),
+			),
+			releaseClaimed: vi.fn(async () => await releasePending),
 		});
 
 		await queuedInput.claimSteer({
 			runId: "run-1",
 			queuedMessageId: "queued-1",
 		});
+		const releaseResult = queuedInput.releaseClaimed();
+		await queuedInput.claimReplay({
+			expectedStatus: "queued",
+			queuedMessageId: "queued-2",
+		});
+		completeRelease?.();
+
+		await expect(releaseResult).resolves.toEqual({ ok: true });
+		expect(queuedInput.claimedLease).toEqual({
+			queuedMessageId: "queued-2",
+			claimVersion: 3,
+		});
+	});
+
+	it.each([
+		"active_run",
+		"unavailable",
+	] as const)("does not create a lease for a %s replay attempt", async (status) => {
+		const queuedInput = createHostedChatQueuedInput({
+			workspaceId: "workspace-1",
+			chatId: "chat-1",
+			claimForReplay: vi.fn().mockResolvedValue({ status }),
+			claimForSteer: vi.fn(),
+			releaseClaimed: vi.fn(),
+		});
 
 		await expect(
-			queuedInput.cleanupClaimed({ tolerateMissing: true }),
-		).resolves.toEqual({
-			ok: true,
-			cleaned: true,
-		});
-		expect(queuedInput.hasClaimed).toBe(false);
+			queuedInput.claimReplay({
+				expectedStatus: "queued",
+				queuedMessageId: "queued-1",
+			}),
+		).resolves.toEqual({ status });
+		expect(queuedInput.claimedLease).toBeNull();
 	});
 });

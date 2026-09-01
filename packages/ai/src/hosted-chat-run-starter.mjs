@@ -29,6 +29,7 @@ export const startHostedChatRun = async ({
 	startAssistantRun,
 	supersedeActiveRun = false,
 	trigger,
+	transitionActiveStreamGeneration,
 	updateActiveStream,
 	workspaceId,
 }) => {
@@ -69,6 +70,7 @@ export const startHostedChatRun = async ({
 				finishActiveStream: deleteActiveStreamSnapshot,
 				startActiveStreamToolCall,
 				finishActiveStreamToolCall,
+				transitionActiveStreamGeneration,
 			},
 		});
 		await activeStreamSession.start();
@@ -83,6 +85,7 @@ export const startHostedChatRun = async ({
 		if (assistantRun) {
 			await failAssistantRun({
 				runId: assistantRun._id,
+				assistantMessageId,
 				errorText: getErrorText(error, "Unknown stream start error"),
 			}).catch((failError) => {
 				terminalizationError = failError;

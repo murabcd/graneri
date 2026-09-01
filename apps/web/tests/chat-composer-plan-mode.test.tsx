@@ -106,7 +106,9 @@ function ActiveOptionComposer({
 					humanDecision={humanDecision}
 					isHumanDecisionSubmitting={false}
 					isSettingsLoading={isSettingsLoading}
+					isResumingQueuedFollowUps={false}
 					onHumanDecisionResponse={vi.fn()}
+					onQueuedFollowUpsResume={vi.fn()}
 				/>
 			</TooltipProvider>
 		</ConvexProvider>

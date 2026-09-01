@@ -6,6 +6,8 @@ type TurnInputValidationResult =
 	| { ok: true }
 	| { error: string; errorCode?: string; ok: false };
 
+type QueuedMessageStatus = "paused" | "queued";
+
 export declare const createHostedChatTurnInput: <
 	WorkspaceId extends string,
 	ChatId extends string,
@@ -14,41 +16,45 @@ export declare const createHostedChatTurnInput: <
 >(args: {
 	attachableRun: {
 		_id: RunId;
+		assistantMessageId: string;
+		producer: "convex" | "web";
 		status?: "running" | "waiting_for_user" | string;
 	} | null;
 	chatId: ChatId;
-	claimReadyForRun: (args: {
+	claimForSteer: (args: {
 		runId: RunId;
-		queuedMessageId: QueuedMessageId;
-	}) => Promise<
-		{
-			_id: QueuedMessageId;
-			messageId: string;
-			metadataJson?: string;
-			text: string;
-		}[]
-	>;
-	discardClaimed: (args: {
-		workspaceId: WorkspaceId;
-		chatId: ChatId;
-		queuedMessageId: QueuedMessageId;
-	}) => Promise<unknown>;
-	getClaimedForChat: (args: {
-		workspaceId: WorkspaceId;
-		chatId: ChatId;
 		queuedMessageId: QueuedMessageId;
 	}) => Promise<{
 		_id: QueuedMessageId;
 		messageId: string;
 		metadataJson?: string;
 		text: string;
-	} | null>;
-	interruptActiveRun: (args: {
-		chatId: ChatId;
-		pendingInput: UIMessage[];
-		runId: RunId;
+		claimVersion: number;
+	}>;
+	claimForReplay: (args: {
 		workspaceId: WorkspaceId;
-	}) => Promise<unknown[]>;
+		chatId: ChatId;
+		expectedStatus: QueuedMessageStatus;
+		queuedMessageId: QueuedMessageId;
+	}) => Promise<
+		| {
+				status: "claimed";
+				claimedMessage: {
+					_id: QueuedMessageId;
+					messageId: string;
+					metadataJson?: string;
+					text: string;
+					claimVersion: number;
+				};
+		  }
+		| { status: "active_run" | "unavailable" }
+	>;
+	releaseClaimed: (args: {
+		workspaceId: WorkspaceId;
+		chatId: ChatId;
+		queuedMessageId: QueuedMessageId;
+		claimVersion: number;
+	}) => Promise<unknown>;
 	validateInput: (message: UIMessage) => TurnInputValidationResult;
 	workspaceId: WorkspaceId;
 }) => {

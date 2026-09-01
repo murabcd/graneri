@@ -27,6 +27,9 @@ type HostedActiveStreamSessionLike = {
 	abortSignal: AbortSignal;
 	cleanup: () => void;
 	closePersistence: () => Promise<void>;
+	persister: {
+		readonly messageId: string;
+	};
 };
 
 type LogLatencyDetails = Record<
@@ -42,6 +45,7 @@ type SaveAssistantMessageForRunArgs<
 	typeof HostedChatRuntime.buildHostedChatSaveMessageArgs<WorkspaceId, NoteId>
 > & {
 	runId: AssistantRunId;
+	assistantMessageId: string;
 };
 
 export declare const createHostedAssistantRunFinalizer: <
@@ -50,14 +54,17 @@ export declare const createHostedAssistantRunFinalizer: <
 	AssistantRunId extends string,
 >(args: {
 	activeStreamSession: HostedActiveStreamSessionLike;
-	assistantMessageId: string;
 	assistantRunId: AssistantRunId;
 	chatId: string;
 	failAssistantRun: (args: {
 		errorText: string;
 		runId: AssistantRunId;
+		assistantMessageId: string;
 	}) => Promise<unknown>;
-	finishAssistantRun: (args: { runId: AssistantRunId }) => Promise<unknown>;
+	finishAssistantRun: (args: {
+		runId: AssistantRunId;
+		assistantMessageId: string;
+	}) => Promise<unknown>;
 	lastUserMessage?: UIMessage | null;
 	logError: (args: {
 		error: unknown;
@@ -90,6 +97,7 @@ export declare const createHostedAssistantRunFinalizer: <
 	waitForUserDecision: (args: {
 		pendingDecision: HostedHumanDecisionPendingDecision;
 		runId: AssistantRunId;
+		assistantMessageId: string;
 	}) => Promise<unknown>;
 	workspaceId: WorkspaceId;
 }) => (terminalization: HostedAssistantRunTerminalization) => Promise<void>;

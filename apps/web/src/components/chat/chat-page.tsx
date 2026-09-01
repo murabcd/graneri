@@ -50,6 +50,7 @@ import { useComposerDraft } from "@/hooks/use-composer-draft";
 import { useLocalCapabilitySession } from "@/hooks/use-local-capability-session";
 import { usePaginatedChatMessages } from "@/hooks/use-paginated-chat-messages";
 import { useRendererChatSession } from "@/hooks/use-renderer-chat-session";
+import { useRevisionedState } from "@/hooks/use-revisioned-state";
 import { getChatModel } from "@/lib/ai/models";
 import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { getChatId } from "@/lib/chat";
@@ -61,7 +62,10 @@ import {
 	getWorkspaceChatMentionContext,
 	prepareChatComposerSubmission,
 } from "@/lib/chat-composer-mentions";
-import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
+import {
+	claimChatComposerTurnIntent,
+	commitChatComposerTurnIntent,
+} from "@/lib/chat-composer-turn-intent";
 import { getChatText } from "@/lib/chat-message";
 import {
 	type ChatPluginPrefill,
@@ -231,9 +235,12 @@ const useChatPageController = ({
 		[chatId, pluginPrefill],
 	);
 	const {
+		claimSnapshot: claimDraftSnapshot,
 		clear: clearDraft,
 		getSnapshot: getDraftSnapshot,
+		isClaimCurrent: isDraftClaimCurrent,
 		metadata: draftMetadata,
+		restoreClaim: restoreDraftClaim,
 		setMetadata: setDraftMetadata,
 		setText: setDraft,
 		text: draft,
@@ -242,9 +249,14 @@ const useChatPageController = ({
 		initialPluginDraft,
 	);
 	// Attachments are composer state; object URL cleanup is owned by the cleanup hook.
-	const [attachedFiles, setAttachedFiles] = React.useState<ChatAttachment[]>(
-		[],
-	);
+	const {
+		claimSnapshot: claimAttachedFilesSnapshot,
+		getSnapshot: getAttachedFilesSnapshot,
+		isClaimCurrent: isAttachedFilesClaimCurrent,
+		restoreClaim: restoreAttachedFilesClaim,
+		setValue: setAttachedFiles,
+		value: attachedFiles,
+	} = useRevisionedState<ChatAttachment[]>([]);
 	useRevokeAttachmentObjectUrls(attachedFiles);
 	const mentions = React.useMemo(
 		() => draftMetadata?.mentions ?? [],
@@ -370,11 +382,12 @@ const useChatPageController = ({
 		error,
 		hasLocallyCompletedAssistantMessage,
 		handleStop,
-		isChatRequestPending,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
+		isResumingQueuedFollowUps,
 		pendingHumanDecision,
 		onQueuedFollowUpsReorder,
+		onQueuedFollowUpsResume,
 		queuedFollowUps,
 		runPlan,
 		regenerateTurn,
@@ -475,15 +488,17 @@ const useChatPageController = ({
 		[notes],
 	);
 	const handleSubmit = React.useCallback(async () => {
-		const draftText = getDraftSnapshot().text;
+		const draftSnapshot = getDraftSnapshot();
+		const attachedFilesSnapshot = getAttachedFilesSnapshot();
+		const draftText = draftSnapshot.text;
+		const submittedAttachedFiles = attachedFilesSnapshot.value;
 
 		if (
 			isModelResolving ||
-			(!draftText.trim() && attachedFiles.length === 0) ||
-			hasUploadingAttachments(attachedFiles) ||
-			(isChatRequestPending && !displayActiveRun && !activeRun) ||
+			(!draftText.trim() && submittedAttachedFiles.length === 0) ||
+			hasUploadingAttachments(submittedAttachedFiles) ||
 			isAutomationRunning ||
-			(displayActiveRun && attachedFiles.length > 0)
+			(displayActiveRun && submittedAttachedFiles.length > 0)
 		) {
 			return;
 		}
@@ -491,22 +506,25 @@ const useChatPageController = ({
 		try {
 			const queuedMessageEditId = queuedMessageEditDraft?.message._id ?? null;
 			const result = await commitChatComposerTurnIntent({
-				attachedFiles,
+				attachedFiles: submittedAttachedFiles,
+				claimIntent: () =>
+					claimChatComposerTurnIntent({
+						claimAttachments: () =>
+							claimAttachedFilesSnapshot(attachedFilesSnapshot, []),
+						claimDraft: () => claimDraftSnapshot(draftSnapshot),
+						isAttachmentsClaimCurrent: isAttachedFilesClaimCurrent,
+						isDraftClaimCurrent,
+						onClaim: () => setEditingMessageId(null),
+						onRestore: () => setEditingMessageId(editingMessageId),
+						restoreAttachments: restoreAttachedFilesClaim,
+						restoreDraft: restoreDraftClaim,
+					}),
 				editingMessageId,
 				isQueuedMessageEditCurrent,
 				onBeforeSubmit: () => {
 					chatPersistedCallback?.(chatId);
 				},
 				onRequestPrepared: ({ localCapabilitySession }) => {
-					setEditingMessageId((currentEditingMessageId) =>
-						queuedMessageEditId
-							? currentEditingMessageId === queuedMessageEditId
-								? null
-								: currentEditingMessageId
-							: null,
-					);
-					clearDraft();
-					setAttachedFiles([]);
 					reconcileLocalCapabilitySession(localCapabilitySession);
 				},
 				prepareTurn: () => {
@@ -549,12 +567,6 @@ const useChatPageController = ({
 					};
 				},
 				queuedMessageEditId,
-				restoreDraft: () => {
-					setEditingMessageId(editingMessageId);
-					setDraft(draftText);
-					setDraftMetadata(mentions.length > 0 ? { mentions } : null);
-					setAttachedFiles(attachedFiles);
-				},
 				submitTurn,
 				updateQueuedTurn,
 			});
@@ -562,6 +574,11 @@ const useChatPageController = ({
 			if (result.status === "queued") {
 				await waitForBrowserPaint();
 				return;
+			}
+			if (result.status === "attachments_blocked") {
+				toast.info(
+					"Wait for the current response to finish before sending attachments.",
+				);
 			}
 		} catch (error) {
 			logError({
@@ -577,15 +594,17 @@ const useChatPageController = ({
 		}
 	}, [
 		activeWorkspaceId,
-		activeRun,
-		attachedFiles,
 		chatId,
+		claimAttachedFilesSnapshot,
+		claimDraftSnapshot,
 		displayActiveRun,
 		editingMessageId,
+		getAttachedFilesSnapshot,
 		getDraftSnapshot,
+		isAttachedFilesClaimCurrent,
 		isAutomationRunning,
+		isDraftClaimCurrent,
 		isModelResolving,
-		isChatRequestPending,
 		isQueuedMessageEditCurrent,
 		localCapabilityScope,
 		reconcileLocalCapabilitySession,
@@ -595,9 +614,8 @@ const useChatPageController = ({
 		chatPersistedCallback,
 		queuedMessageEditDraft,
 		recipes,
-		clearDraft,
-		setDraft,
-		setDraftMetadata,
+		restoreAttachedFilesClaim,
+		restoreDraftClaim,
 		settings,
 		submitTurn,
 		updateQueuedTurn,
@@ -649,7 +667,7 @@ const useChatPageController = ({
 			setAttachedFiles([]);
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-		[canStop, handleStop, setDraft, setDraftMetadata],
+		[canStop, handleStop, setAttachedFiles, setDraft, setDraftMetadata],
 	);
 
 	const handleCancelEdit = React.useCallback(() => {
@@ -657,7 +675,7 @@ const useChatPageController = ({
 		setEditingMessageId(null);
 		clearDraft();
 		setAttachedFiles([]);
-	}, [clearDraft, restoreEditedQueuedMessage]);
+	}, [clearDraft, restoreEditedQueuedMessage, setAttachedFiles]);
 
 	const handleHumanDecisionResponse = React.useCallback(
 		async (response: HostedHumanDecisionResponse) => {
@@ -826,6 +844,8 @@ const useChatPageController = ({
 		queuedFollowUps,
 		runPlan,
 		onQueuedFollowUpsReorder,
+		onQueuedFollowUpsResume,
+		isResumingQueuedFollowUps,
 		onDeleteMessage: handleDeleteMessage,
 		onForkMessage: handleForkMessage,
 		onOpenMention: handleOpenMention,
@@ -1140,6 +1160,8 @@ export function ChatPage({
 			onHumanDecisionResponse={controller.onHumanDecisionResponse}
 			queuedFollowUps={queuedFollowUps}
 			onQueuedFollowUpsReorder={controller.onQueuedFollowUpsReorder}
+			onQueuedFollowUpsResume={controller.onQueuedFollowUpsResume}
+			isResumingQueuedFollowUps={controller.isResumingQueuedFollowUps}
 			onDraftChange={controller.setDraft}
 			onDraftKeyDown={controller.handleDraftKeyDown}
 			mentions={controller.mentions}
@@ -1147,6 +1169,7 @@ export function ChatPage({
 			onStop={controller.handleStop}
 			attachedFiles={controller.attachedFiles}
 			onAttachedFilesChange={controller.setAttachedFiles}
+			attachmentsDisabled={controller.canStop}
 			canStop={controller.canStop}
 			selectedModel={controller.selectedModel}
 			reasoningEffort={controller.reasoningEffort}

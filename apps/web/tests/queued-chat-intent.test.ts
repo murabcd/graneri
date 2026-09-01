@@ -1,6 +1,7 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { describe, expect, it } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { QueuedFollowUpMessage } from "../src/lib/chat-queued-followups";
 import {
 	prepareQueuedReplayIntent,
 	prepareQueuedSteerIntent,
@@ -10,11 +11,12 @@ const workspaceId = "workspace-1" as Id<"workspaces">;
 const runId = "run-1" as Id<"assistantRuns">;
 const queuedMessageId = "queued-1" as Id<"assistantQueuedMessages">;
 
-const createQueuedMessage = () => ({
+const createQueuedMessage = (
+	status: QueuedFollowUpMessage["status"] = "queued",
+): QueuedFollowUpMessage => ({
 	_id: queuedMessageId,
 	_creationTime: 1,
 	chatId: "chat-1",
-	claimedAt: undefined,
 	createdAt: 1,
 	messageId: "queued-message-1",
 	ownerTokenIdentifier: "owner",
@@ -25,7 +27,7 @@ const createQueuedMessage = () => ({
 		timezone: "UTC",
 	}),
 	runId,
-	status: "claimed" as const,
+	status,
 	text: "Queued",
 	updatedAt: 1,
 	workspaceId,
@@ -36,6 +38,7 @@ describe("queued chat intent", () => {
 		await expect(
 			prepareQueuedReplayIntent({
 				hasMessageId: () => false,
+				origin: "manual",
 				queuedMessage: createQueuedMessage(),
 				resolveConvexToken: async () => "fresh-token",
 			}),
@@ -46,6 +49,8 @@ describe("queued chat intent", () => {
 				localCapabilitySession: null,
 				projectId: null,
 				replayQueuedMessageId: queuedMessageId,
+				replayQueuedMessageOrigin: "manual",
+				replayQueuedMessageStatus: "queued",
 				workspaceId,
 			},
 			message: {
@@ -84,5 +89,7 @@ describe("queued chat intent", () => {
 			resolveConvexToken: async () => "fresh-token",
 		});
 		expect(prepared.body).not.toHaveProperty("replayQueuedMessageId");
+		expect(prepared.body).not.toHaveProperty("replayQueuedMessageOrigin");
+		expect(prepared.body).not.toHaveProperty("replayQueuedMessageStatus");
 	});
 });

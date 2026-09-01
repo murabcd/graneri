@@ -171,6 +171,56 @@ describe("hosted Assistant Run input", () => {
 		expect(events).toEqual(["context"]);
 	});
 
+	it("projects prepared context onto a fresh assistant generation", async () => {
+		const result = await prepareHostedAssistantRunInput({
+			branchFromMessage: async () => undefined,
+			chatId: "chat-1",
+			contextWindow: idleContextWindow(async () => ({
+				compaction: null,
+				hasMoreMessages: false,
+				messages: [],
+			})),
+			getMessagesSnapshot: async () => [],
+			listRunEventsAfter: async () => [],
+			message: {
+				id: "assistant-previous",
+				role: "assistant",
+				parts: [
+					{
+						type: "text",
+						text: "Previous answer",
+						providerMetadata: {
+							openai: {
+								itemId: "msg_previous_generation",
+								phase: "final_answer",
+							},
+						},
+					},
+				],
+			},
+			trigger: "submit-message",
+			workspaceId: "workspace-1",
+		});
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) {
+			throw new Error("Expected Assistant Run input preparation to succeed.");
+		}
+		const completed = await result.complete(createCompletionInput());
+		expect(completed.chatMessages[0]).toMatchObject({
+			id: "assistant-previous",
+			parts: [
+				{
+					type: "text",
+					text: "Previous answer",
+					providerMetadata: {
+						openai: { phase: "final_answer" },
+					},
+				},
+			],
+		});
+	});
+
 	it("stops before context preparation when the route handles a branch error", async () => {
 		let contextLoaded = false;
 		const result = await prepareHostedAssistantRunInput({

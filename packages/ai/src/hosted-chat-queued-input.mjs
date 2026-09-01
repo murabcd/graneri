@@ -1,110 +1,88 @@
-import { isConvexErrorCode } from "./convex-error.mjs";
 import { toHostedQueuedUserMessage } from "./hosted-chat-runtime.mjs";
-
-const getClaimedQueuedMessageIds = ({
-	claimedQueuedMessageId,
-	claimedQueuedMessageIds,
-}) =>
-	claimedQueuedMessageIds.length > 0
-		? claimedQueuedMessageIds
-		: claimedQueuedMessageId
-			? [claimedQueuedMessageId]
-			: [];
 
 export const createHostedChatQueuedInput = ({
 	chatId,
-	claimReadyForRun,
-	discardClaimed,
-	getClaimedForChat,
+	claimForReplay,
+	claimForSteer,
+	releaseClaimed,
 	workspaceId,
 }) => {
-	let claimedQueuedMessageId = null;
-	let claimedQueuedMessageIds = [];
+	let claimedLease = null;
 
 	const clearClaimed = () => {
-		claimedQueuedMessageId = null;
-		claimedQueuedMessageIds = [];
+		claimedLease = null;
 	};
 
 	return {
 		get hasClaimed() {
-			return Boolean(claimedQueuedMessageId);
+			return claimedLease !== null;
 		},
 
-		get claimedQueuedMessageId() {
-			return claimedQueuedMessageId;
-		},
-
-		get claimedQueuedMessageIds() {
-			return claimedQueuedMessageIds;
+		get claimedLease() {
+			return claimedLease;
 		},
 
 		clearClaimed,
 
 		async claimSteer({ queuedMessageId, runId }) {
-			const claimedMessages = await claimReadyForRun({
+			const claimedMessage = await claimForSteer({
 				runId,
 				queuedMessageId,
 			});
-			claimedQueuedMessageId = claimedMessages[0]?._id ?? null;
-			claimedQueuedMessageIds = claimedMessages.map(
-				(queuedMessage) => queuedMessage._id,
-			);
-			const userMessages = claimedMessages.map((queuedMessage) =>
-				toHostedQueuedUserMessage(queuedMessage),
-			);
+			claimedLease = {
+				queuedMessageId: claimedMessage._id,
+				claimVersion: claimedMessage.claimVersion,
+			};
 
 			return {
-				claimedMessages,
-				userMessage: userMessages[userMessages.length - 1] ?? null,
-				userMessages,
+				claimedMessage,
+				userMessage: toHostedQueuedUserMessage(claimedMessage),
 			};
 		},
 
-		async loadClaimedReplay({ queuedMessageId }) {
-			const queuedMessage = await getClaimedForChat({
+		async claimReplay({ expectedStatus, queuedMessageId }) {
+			const attempt = await claimForReplay({
 				workspaceId,
 				chatId,
+				expectedStatus,
 				queuedMessageId,
 			});
-
-			return queuedMessage ? toHostedQueuedUserMessage(queuedMessage) : null;
+			if (attempt.status !== "claimed") {
+				return attempt;
+			}
+			const { claimedMessage } = attempt;
+			claimedLease = {
+				queuedMessageId: claimedMessage._id,
+				claimVersion: claimedMessage.claimVersion,
+			};
+			return {
+				status: "claimed",
+				userMessage: toHostedQueuedUserMessage(claimedMessage),
+			};
 		},
 
-		async cleanupClaimed({ tolerateMissing = false } = {}) {
-			const queuedMessageIds = getClaimedQueuedMessageIds({
-				claimedQueuedMessageId,
-				claimedQueuedMessageIds,
-			});
-			if (queuedMessageIds.length === 0) {
-				return { ok: true, cleaned: false };
+		async releaseClaimed() {
+			const lease = claimedLease;
+			if (!lease) {
+				return { ok: true };
 			}
 
 			try {
-				await Promise.all(
-					queuedMessageIds.map((queuedMessageId) =>
-						discardClaimed({
-							workspaceId,
-							chatId,
-							queuedMessageId,
-						}),
-					),
-				);
-				clearClaimed();
-				return { ok: true, cleaned: true };
-			} catch (error) {
-				if (
-					tolerateMissing &&
-					isConvexErrorCode(error, "QUEUED_MESSAGE_NOT_FOUND")
-				) {
+				await releaseClaimed({
+					workspaceId,
+					chatId,
+					queuedMessageId: lease.queuedMessageId,
+					claimVersion: lease.claimVersion,
+				});
+				if (claimedLease === lease) {
 					clearClaimed();
-					return { ok: true, cleaned: true };
 				}
-
+				return { ok: true };
+			} catch (error) {
 				return {
 					ok: false,
 					error,
-					queuedMessageIds,
+					queuedMessageId: lease.queuedMessageId,
 				};
 			}
 		},

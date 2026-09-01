@@ -15,23 +15,17 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
-import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
-import { acceptClaimedFollowUps } from "./assistantQueuedMessageStateMachine";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
-import {
-	deleteAssistantRunJob,
-	upsertAssistantRunJobMessage,
-} from "./assistantRunJobState";
+import { commitAssistantRunGenerationBoundary } from "./assistantRunGenerationBoundaryState";
+import { deleteAssistantRunJob } from "./assistantRunJobState";
 import {
 	getOwnedActiveChatById,
 	requireOwnedActiveChatAndRun,
 } from "./assistantRunLifecycle";
-import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import {
 	cleanupAssistantRunSnapshots,
 	cleanupAssistantRunToolExecutions,
-	transitionAssistantRun,
 } from "./assistantRunStateMachine";
 import {
 	createAssistantRunStream,
@@ -99,7 +93,7 @@ const chatFields = {
 	lastMessageAt: v.number(),
 };
 
-const chatValidator = v.object(chatFields);
+export const chatValidator = v.object(chatFields);
 
 const chatMessageFields = {
 	_id: v.id("chatMessages"),
@@ -114,7 +108,7 @@ const chatMessageFields = {
 	createdAt: v.number(),
 };
 
-const chatMessageValidator = v.object(chatMessageFields);
+export const chatMessageValidator = v.object(chatMessageFields);
 
 const chatActiveStreamValidator = v.object({
 	_id: v.id("chatActiveStreams"),
@@ -354,7 +348,14 @@ const deleteChatRuntimeBatch = async (
 	ctx: MutationCtx,
 	chatId: Doc<"chats">["_id"],
 ) => {
-	const [activeStreams, queuedMessages, toolCalls, runs] = await Promise.all([
+	const [
+		activeStreams,
+		queuedMessages,
+		queuedMessageAcceptances,
+		steerInputs,
+		toolCalls,
+		runs,
+	] = await Promise.all([
 		ctx.db
 			.query("chatActiveStreams")
 			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
@@ -362,6 +363,14 @@ const deleteChatRuntimeBatch = async (
 		ctx.db
 			.query("assistantQueuedMessages")
 			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
+			.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+		ctx.db
+			.query("assistantQueuedMessageAcceptances")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
+			.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+		ctx.db
+			.query("assistantRunSteerInputs")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
 			.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE),
 		ctx.db
 			.query("chatToolCalls")
@@ -385,6 +394,10 @@ const deleteChatRuntimeBatch = async (
 		clearChatContextState(ctx, chatId),
 		...activeStreams.map((stream) => ctx.db.delete(stream._id)),
 		...queuedMessages.map((message) => ctx.db.delete(message._id)),
+		...queuedMessageAcceptances.map((acceptance) =>
+			ctx.db.delete(acceptance._id),
+		),
+		...steerInputs.map((input) => ctx.db.delete(input._id)),
 		...toolCalls.map((toolCall) => ctx.db.delete(toolCall._id)),
 		...deletableRuns.map((run) => deleteAssistantRunJob(ctx, run._id)),
 		...deletableRuns.map((run) => ctx.db.delete(run._id)),
@@ -394,6 +407,8 @@ const deleteChatRuntimeBatch = async (
 		hasMore:
 			activeStreams.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE ||
 			queuedMessages.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE ||
+			queuedMessageAcceptances.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE ||
+			steerInputs.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE ||
 			toolCalls.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE ||
 			runs.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE ||
 			eventBatchesHaveMore.some(Boolean),
@@ -1259,238 +1274,6 @@ export const completeLocalFolderToolMessage = mutation({
 	},
 });
 
-export const acceptSteeredUserMessages = mutation({
-	args: {
-		workspaceId: v.id("workspaces"),
-		chatId: v.string(),
-		runId: v.id("assistantRuns"),
-		admissionReservationId: v.optional(v.id("aiAdmissionReservations")),
-		nextAssistantMessageId: v.string(),
-		messages: v.array(
-			v.object({
-				queuedMessageId: v.id("assistantQueuedMessages"),
-				message: chatMessageInputValidator,
-			}),
-		),
-		projectId: v.union(v.id("projects"), v.null()),
-		noteId: v.optional(v.id("notes")),
-		title: v.optional(v.string()),
-		preview: v.optional(v.string()),
-		settings: chatSettingsValidator,
-	},
-	returns: v.array(
-		v.object({
-			chat: chatValidator,
-			message: chatMessageValidator,
-		}),
-	),
-	handler: async (ctx, args) => {
-		if (args.messages.length === 0) {
-			throw new ConvexError({
-				code: "INVALID_STEERED_MESSAGE",
-				message: "Steered message batch cannot be empty.",
-			});
-		}
-		if (!args.nextAssistantMessageId.trim()) {
-			throw new ConvexError({
-				code: "INVALID_STEERED_MESSAGE",
-				message: "Steered continuation assistant message id cannot be empty.",
-			});
-		}
-
-		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const { chat, run } = await requireOwnedActiveChatAndRun(ctx, {
-			ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			chatId: args.chatId,
-			runId: args.runId,
-		});
-
-		if (run.status !== "running") {
-			throw new ConvexError({
-				code: "INVALID_ASSISTANT_RUN_TRANSITION",
-				message: "Assistant run cannot accept steered user input.",
-			});
-		}
-
-		const commitSteeredFollowUps = async (
-			queuedMessages: ReadonlyArray<Doc<"assistantQueuedMessages">>,
-		) => {
-			const convexStream =
-				run.producer === "convex"
-					? await getActiveStreamForRun(ctx, run._id)
-					: null;
-			if (
-				run.producer === "convex" &&
-				(!convexStream ||
-					convexStream.assistantMessageId !== run.assistantMessageId)
-			) {
-				throw new ConvexError({
-					code: "ASSISTANT_RUN_INVARIANT_VIOLATION",
-					message:
-						"Convex assistant run stream does not match its active generation.",
-				});
-			}
-			if (run.producer === "convex") {
-				await consumeChatTurnAdmissionReservation(ctx, {
-					ownerTokenIdentifier,
-					reservationId: args.admissionReservationId,
-				});
-			}
-
-			if (convexStream && run.status === "running") {
-				const stream = convexStream;
-				if (stream.text.trim() || stream.partsJson !== "[]") {
-					const interruptedMetadataJson = JSON.stringify({ interrupted: true });
-					await saveMessageForOwnerInternal(ctx, {
-						ownerTokenIdentifier,
-						workspaceId: args.workspaceId,
-						authorName: getAuthorName(identity),
-						chatId: args.chatId,
-						message: {
-							id: stream.assistantMessageId,
-							role: "assistant",
-							partsJson: stream.partsJson,
-							metadataJson: interruptedMetadataJson,
-							text: stream.text.trim(),
-							createdAt: Date.now(),
-						},
-					});
-					await appendAssistantRunEvent(ctx, run, {
-						type: "assistant.message.interrupted",
-						assistantMessageId: stream.assistantMessageId,
-					});
-					await upsertAssistantRunJobMessage(ctx, run._id, {
-						id: stream.assistantMessageId,
-						role: "assistant",
-						partsJson: stream.partsJson,
-						metadataJson: interruptedMetadataJson,
-					});
-				}
-			}
-			const savedMessages = [];
-			for (const { message } of args.messages) {
-				const savedMessage = await saveMessageForOwnerInternal(ctx, {
-					ownerTokenIdentifier,
-					workspaceId: args.workspaceId,
-					authorName: getAuthorName(identity),
-					chatId: args.chatId,
-					projectId: args.projectId,
-					noteId: args.noteId,
-					title: args.title,
-					preview: args.preview,
-					settings: args.settings,
-					message,
-				});
-				savedMessages.push(savedMessage);
-				if (run.producer === "convex") {
-					await upsertAssistantRunJobMessage(ctx, run._id, message);
-				}
-			}
-			const transitionMessages = queuedMessages.map((queuedMessage, index) => {
-				const message = args.messages[index]?.message;
-				if (!message) {
-					throw new ConvexError({
-						code: "INVALID_STEERED_MESSAGE",
-						message: "Steered message must be a non-empty user message.",
-					});
-				}
-
-				return {
-					queuedMessageId: queuedMessage._id,
-					messageId: message.id,
-				};
-			});
-			const appendedRun = await transitionAssistantRun(ctx, run, {
-				type: "append_user_messages",
-				messages: transitionMessages,
-			});
-			const messageRun = await transitionAssistantRun(ctx, appendedRun, {
-				type: "start_assistant_message",
-				assistantMessageId: args.nextAssistantMessageId,
-			});
-			if (run.producer === "convex") {
-				await cleanupAssistantRunSnapshots(ctx, run._id);
-				await createAssistantRunStream(ctx, messageRun);
-				await scheduleAssistantRunExecution(ctx, messageRun);
-			}
-			return savedMessages;
-		};
-
-		return await acceptClaimedFollowUps(ctx, {
-			chatId: chat._id,
-			mode: "steer",
-			ownerTokenIdentifier,
-			runId: run._id,
-			workspaceId: args.workspaceId,
-			messages: args.messages,
-			commit: commitSteeredFollowUps,
-		});
-	},
-});
-
-export const acceptQueuedUserMessage = mutation({
-	args: {
-		workspaceId: v.id("workspaces"),
-		chatId: v.string(),
-		queuedMessageId: v.id("assistantQueuedMessages"),
-		projectId: v.union(v.id("projects"), v.null()),
-		noteId: v.optional(v.id("notes")),
-		title: v.optional(v.string()),
-		preview: v.optional(v.string()),
-		settings: chatSettingsValidator,
-		message: chatMessageInputValidator,
-	},
-	returns: v.object({
-		chat: chatValidator,
-		message: chatMessageValidator,
-	}),
-	handler: async (ctx, args) => {
-		const identity = await requireIdentity(ctx);
-		const ownerTokenIdentifier = identity.tokenIdentifier;
-		const chat = await getOwnedActiveChatById(
-			ctx,
-			ownerTokenIdentifier,
-			args.workspaceId,
-			args.chatId,
-		);
-
-		if (!chat) {
-			throw new ConvexError({
-				code: "CHAT_NOT_FOUND",
-				message: "Chat not found.",
-			});
-		}
-
-		return await acceptClaimedFollowUps(ctx, {
-			chatId: chat._id,
-			mode: "replay",
-			ownerTokenIdentifier,
-			workspaceId: args.workspaceId,
-			messages: [
-				{
-					message: args.message,
-					queuedMessageId: args.queuedMessageId,
-				},
-			],
-			commit: async () =>
-				await saveMessageForOwnerInternal(ctx, {
-					ownerTokenIdentifier,
-					workspaceId: args.workspaceId,
-					authorName: getAuthorName(identity),
-					chatId: args.chatId,
-					projectId: args.projectId,
-					noteId: args.noteId,
-					title: args.title,
-					preview: args.preview,
-					settings: args.settings,
-					message: args.message,
-				}),
-		});
-	},
-});
-
 export const startActiveStream = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
@@ -1516,15 +1299,14 @@ export const startActiveStream = mutation({
 			});
 		}
 
-		const messageRun =
-			run.assistantMessageId === args.assistantMessageId
-				? run
-				: await transitionAssistantRun(ctx, run, {
-						type: "start_assistant_message",
-						assistantMessageId: args.assistantMessageId,
-					});
+		if (run.assistantMessageId !== args.assistantMessageId) {
+			throw new ConvexError({
+				code: "ACTIVE_STREAM_NOT_FOUND",
+				message: "Active stream snapshot not found.",
+			});
+		}
 
-		return await createAssistantRunStream(ctx, messageRun);
+		return await createAssistantRunStream(ctx, run);
 	},
 });
 
@@ -1533,6 +1315,7 @@ export const updateActiveStream = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		delta: v.optional(v.string()),
 		partsJson: v.optional(v.string()),
 	},
@@ -1547,6 +1330,12 @@ export const updateActiveStream = mutation({
 			runNotFoundMessage: "Active assistant run not found.",
 		});
 
+		if (run.assistantMessageId !== args.assistantMessageId) {
+			throw new ConvexError({
+				code: "ACTIVE_STREAM_NOT_FOUND",
+				message: "Active stream snapshot not found.",
+			});
+		}
 		await updateAssistantRunStream(ctx, run, {
 			delta: args.delta,
 			partsJson: args.partsJson,
@@ -1556,11 +1345,112 @@ export const updateActiveStream = mutation({
 	},
 });
 
+export const continueActiveWebStreamGeneration = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+		nextAssistantMessageId: v.string(),
+		orderedMessageIds: v.array(v.string()),
+		steerAcceptances: v.array(
+			v.object({
+				queuedMessageId: v.id("assistantQueuedMessages"),
+				claimVersion: v.number(),
+				messageId: v.string(),
+			}),
+		),
+		completedAssistantMessages: v.array(chatMessageInputValidator),
+		activeAssistantMessage: v.union(chatMessageInputValidator, v.null()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const identity = await requireIdentity(ctx);
+		const ownerTokenIdentifier = identity.tokenIdentifier;
+		const { run } = await requireOwnedActiveChatAndRun(ctx, {
+			ownerTokenIdentifier,
+			workspaceId: args.workspaceId,
+			chatId: args.chatId,
+			runId: args.runId,
+		});
+		if (run.producer !== "web" || run.status !== "running") {
+			throw new ConvexError({
+				code: "INVALID_ASSISTANT_RUN_TRANSITION",
+				message: "Only a running web assistant can continue its generation.",
+			});
+		}
+		if (args.steerAcceptances.length === 0) {
+			throw new ConvexError({
+				code: "INVALID_ASSISTANT_GENERATION_BOUNDARY",
+				message: "Assistant generation boundary requires accepted steering.",
+			});
+		}
+		if (run.assistantMessageId !== args.assistantMessageId) {
+			if (run.assistantMessageId === args.nextAssistantMessageId) {
+				const acceptanceMatches = await Promise.all(
+					args.steerAcceptances.map(async (expected) => {
+						const acceptance = await ctx.db
+							.query("assistantQueuedMessageAcceptances")
+							.withIndex("by_queuedMessageId_and_claimVersion", (q) =>
+								q
+									.eq("queuedMessageId", expected.queuedMessageId)
+									.eq("claimVersion", expected.claimVersion),
+							)
+							.unique();
+						return Boolean(
+							acceptance &&
+								acceptance.kind === "steer" &&
+								acceptance.producer === "web" &&
+								acceptance.runId === run._id &&
+								acceptance.assistantMessageId === args.assistantMessageId &&
+								acceptance.messageId === expected.messageId,
+						);
+					}),
+				);
+				if (acceptanceMatches.every(Boolean)) {
+					return null;
+				}
+			}
+			throw new ConvexError({
+				code: "INVALID_ASSISTANT_RUN_TRANSITION",
+				message: "Assistant run generation is no longer active.",
+			});
+		}
+
+		const sequenceStart = Math.max(
+			1,
+			Date.now() - args.orderedMessageIds.length - 1,
+		);
+		await commitAssistantRunGenerationBoundary(ctx, {
+			run,
+			orderedMessageIds: args.orderedMessageIds,
+			steerAcceptances: args.steerAcceptances,
+			sequenceStart,
+			mode: {
+				type: "continue",
+				nextAssistantMessageId: args.nextAssistantMessageId,
+				completedAssistantMessages: args.completedAssistantMessages,
+				activeAssistantMessage: args.activeAssistantMessage,
+			},
+			saveAssistantMessage: async (message) =>
+				await saveMessageForOwnerInternal(ctx, {
+					ownerTokenIdentifier,
+					workspaceId: args.workspaceId,
+					authorName: getAuthorName(identity),
+					chatId: args.chatId,
+					message,
+				}),
+		});
+		return null;
+	},
+});
+
 export const deleteActiveStreamSnapshot = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
@@ -1581,7 +1471,11 @@ export const deleteActiveStreamSnapshot = mutation({
 
 		const stream = await getActiveStreamByRunId(ctx, args.runId);
 
-		if (!stream || stream.chatId !== chat._id) {
+		if (
+			!stream ||
+			stream.chatId !== chat._id ||
+			stream.assistantMessageId !== args.assistantMessageId
+		) {
 			throw new ConvexError({
 				code: "ACTIVE_STREAM_NOT_FOUND",
 				message: "Active stream snapshot not found.",
@@ -1599,6 +1493,7 @@ export const saveAssistantMessageForRun = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 		noteId: v.optional(v.id("notes")),
 		title: v.optional(v.string()),
 		preview: v.optional(v.string()),
@@ -1628,6 +1523,15 @@ export const saveAssistantMessageForRun = mutation({
 			run.status === "completed"
 		) {
 			return null;
+		}
+		if (
+			run.assistantMessageId !== args.assistantMessageId ||
+			args.message.id !== args.assistantMessageId
+		) {
+			throw new ConvexError({
+				code: "ACTIVE_STREAM_NOT_FOUND",
+				message: "Active stream snapshot not found.",
+			});
 		}
 
 		if (run.status !== "running") {
@@ -1665,6 +1569,20 @@ export const stopActiveStream = mutation({
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
 		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
+		steeredGenerationBoundary: v.optional(
+			v.object({
+				orderedMessageIds: v.array(v.string()),
+				steerAcceptances: v.array(
+					v.object({
+						queuedMessageId: v.id("assistantQueuedMessages"),
+						claimVersion: v.number(),
+						messageId: v.string(),
+					}),
+				),
+				assistantMessages: v.array(chatMessageInputValidator),
+			}),
+		),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
@@ -1692,8 +1610,14 @@ export const stopActiveStream = mutation({
 				message: "Assistant run not found.",
 			});
 		}
+		if (run.assistantMessageId !== args.assistantMessageId) {
+			return null;
+		}
 
 		const stream = await getActiveStreamByRunId(ctx, args.runId);
+		if (stream && stream.assistantMessageId !== args.assistantMessageId) {
+			return null;
+		}
 		const stoppedText = stream?.text.trim() ?? "";
 		const stoppedAt = Date.now();
 
@@ -1703,6 +1627,32 @@ export const stopActiveStream = mutation({
 			run.status === "stopped"
 		) {
 			await cleanupAssistantRunSnapshots(ctx, args.runId);
+			return null;
+		}
+
+		const steeredBoundary = args.steeredGenerationBoundary;
+		if (steeredBoundary) {
+			const sequenceStart = Math.max(
+				1,
+				stoppedAt - steeredBoundary.orderedMessageIds.length,
+			);
+			await commitAssistantRunGenerationBoundary(ctx, {
+				run,
+				orderedMessageIds: steeredBoundary.orderedMessageIds,
+				steerAcceptances: steeredBoundary.steerAcceptances,
+				sequenceStart,
+				mode: {
+					type: "interrupt",
+					assistantMessages: steeredBoundary.assistantMessages,
+				},
+				saveAssistantMessage: async (message) =>
+					await saveMessageForOwnerInternal(ctx, {
+						ownerTokenIdentifier,
+						workspaceId: args.workspaceId,
+						chatId: args.chatId,
+						message,
+					}),
+			});
 			return null;
 		}
 

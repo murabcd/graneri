@@ -1,18 +1,4 @@
-import {
-	buildHostedChatSaveMessageArgs,
-	getHostedChatReplayAcceptanceHeaders,
-	getHostedChatSteerAcceptanceHeaders,
-} from "./hosted-chat-runtime.mjs";
-
-export const isHostedQueuedUserMessageAccept = ({
-	continueRunId,
-	queuedInput,
-	replayQueuedMessageId,
-}) =>
-	Boolean(
-		(continueRunId && queuedInput.hasClaimed) ||
-			(replayQueuedMessageId && !continueRunId),
-	);
+import { buildHostedChatSaveMessageArgs } from "./hosted-chat-runtime.mjs";
 
 const buildSaveMessageArgs = ({
 	chatId,
@@ -33,19 +19,16 @@ const buildSaveMessageArgs = ({
 });
 
 export const persistHostedChatUserMessage = async ({
-	acceptQueuedUserMessage,
-	acceptSteeredUserMessages,
+	acceptQueuedUserMessageAndStartRun,
+	acceptSteeredUserMessage,
 	chatId,
-	continueRunId,
 	message,
-	nextAssistantMessageId,
 	noteId,
 	projectId,
 	queuedInput,
-	replayQueuedMessageId,
 	saveMessage,
 	settings,
-	steeredUserMessages,
+	turnIntent,
 	workspaceId,
 }) => {
 	const saveMessageArgs = buildSaveMessageArgs({
@@ -57,13 +40,16 @@ export const persistHostedChatUserMessage = async ({
 		message,
 	});
 
-	if (continueRunId && queuedInput.hasClaimed) {
-		const acceptedQueuedMessageId = queuedInput.claimedQueuedMessageId;
-		if (!acceptedQueuedMessageId) {
+	if (turnIntent.type === "steer") {
+		const acceptedLease = queuedInput.claimedLease;
+		if (
+			!acceptedLease ||
+			acceptedLease.queuedMessageId !== turnIntent.queuedMessageId
+		) {
 			throw new Error("Claimed steered queued message is missing.");
 		}
 
-		await acceptSteeredUserMessages({
+		await acceptSteeredUserMessage({
 			workspaceId: saveMessageArgs.workspaceId,
 			chatId: saveMessageArgs.chatId,
 			noteId: saveMessageArgs.noteId,
@@ -71,54 +57,55 @@ export const persistHostedChatUserMessage = async ({
 			title: saveMessageArgs.title,
 			preview: saveMessageArgs.preview,
 			settings: saveMessageArgs.settings,
-			runId: continueRunId,
-			nextAssistantMessageId,
-			messages: steeredUserMessages.map((steeredMessage, index) => ({
-				queuedMessageId: queuedInput.claimedQueuedMessageIds[index],
-				message: buildSaveMessageArgs({
-					workspaceId,
-					chatId,
-					noteId,
-					projectId,
-					settings,
-					message: steeredMessage,
-				}).message,
-			})),
+			runId: turnIntent.runId,
+			queuedMessageId: acceptedLease.queuedMessageId,
+			claimVersion: acceptedLease.claimVersion,
+			message: buildSaveMessageArgs({
+				workspaceId,
+				chatId,
+				noteId,
+				projectId,
+				settings,
+				message,
+			}).message,
 		});
 
-		const acceptedHeaders = getHostedChatSteerAcceptanceHeaders({
-			queuedMessageId: acceptedQueuedMessageId,
-			queuedMessageIds: queuedInput.claimedQueuedMessageIds,
-			turnId: continueRunId,
+		queuedInput.clearClaimed();
+		return {
+			type: "steer",
+			queuedMessageId: acceptedLease.queuedMessageId,
+			runId: turnIntent.runId,
+		};
+	}
+
+	if (turnIntent.type === "replay") {
+		const acceptedLease = queuedInput.claimedLease;
+		if (
+			!acceptedLease ||
+			acceptedLease.queuedMessageId !== turnIntent.queuedMessageId
+		) {
+			throw new Error("Claimed replay queued message is missing.");
+		}
+		const acceptedReplayRun = await acceptQueuedUserMessageAndStartRun({
+			...saveMessageArgs,
+			queuedMessageId: turnIntent.queuedMessageId,
+			claimVersion: acceptedLease.claimVersion,
 		});
 		queuedInput.clearClaimed();
 		return {
-			acceptedSteerTurnId: continueRunId,
-			pendingQueuedAcceptanceHeaders: acceptedHeaders,
+			type: "replay",
+			acceptance: acceptedReplayRun,
+			queuedMessageId: turnIntent.queuedMessageId,
 		};
 	}
 
-	if (replayQueuedMessageId && !continueRunId) {
-		await acceptQueuedUserMessage({
-			...saveMessageArgs,
-			queuedMessageId: replayQueuedMessageId,
-		});
-		return {
-			acceptedSteerTurnId: null,
-			pendingQueuedAcceptanceHeaders: getHostedChatReplayAcceptanceHeaders({
-				queuedMessageId: replayQueuedMessageId,
-			}),
-		};
-	}
-
-	if (continueRunId) {
+	if (turnIntent.continueRunId) {
 		throw new Error("Continued user input must use a claimed queue item.");
 	}
 
 	await saveMessage(saveMessageArgs);
 
 	return {
-		acceptedSteerTurnId: null,
-		pendingQueuedAcceptanceHeaders: null,
+		type: "direct",
 	};
 };

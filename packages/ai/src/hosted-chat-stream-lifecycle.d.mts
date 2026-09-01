@@ -16,6 +16,12 @@ type FinalizedToolSet = {
 	hasTools: boolean;
 };
 
+export declare const buildHostedSteeredGenerationTranscript: (args: {
+	consumed: Array<{ input: UIMessage[]; stepNumber: number }>;
+	pending: UIMessage[];
+	responseMessage: UIMessage;
+}) => UIMessage[];
+
 export declare const createHostedChatRunResponseStream: <
 	AssistantRunId extends string,
 	Chunk extends { type: string },
@@ -38,6 +44,7 @@ export declare const createHostedChatRunResponseStream: <
 	}) => Promise<ReadableStream<Chunk>>;
 	failAssistantRun: (args: {
 		runId: AssistantRunId;
+		assistantMessageId: string;
 		errorText: string;
 	}) => Promise<unknown>;
 	finalizeAssistantRun: (
@@ -56,5 +63,6 @@ export declare const createHostedChatRunResponseStream: <
 	| {
 			ok: false;
 			error: unknown;
+			terminalizationError: unknown | null;
 	  }
 >;

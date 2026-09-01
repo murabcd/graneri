@@ -123,7 +123,6 @@ describe("AI package boundary", () => {
 			"createHostedAssistantRunFinalizer",
 			"createHostedChatRunResponseStream",
 			"createHostedChatTurnInput",
-			"isHostedQueuedUserMessageAccept",
 			"persistHostedChatUserMessage",
 			"prepareHostedAssistantExecution",
 			"prepareHostedAssistantRunInput",

@@ -6,6 +6,7 @@ import type {
 	ToolLoopAgent,
 	ToolSet,
 } from "ai";
+import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 
 export declare const buildHostedChatAgentToolSet: ({
 	additionalAgentTools,
@@ -26,6 +27,23 @@ export declare const buildHostedChatAgentToolSet: ({
 	tools: ToolSet;
 };
 
+type HostedChatPrepareStepSession = Pick<
+	HostedActiveStreamSession,
+	"takePendingSteeredUserMessages"
+>;
+
+export declare const createHostedChatPrepareStep: <
+	Tools extends ToolSet,
+>(args: {
+	getActiveStreamSession?:
+		| (() => HostedChatPrepareStepSession | null)
+		| undefined;
+	prepareStep?: PrepareStepFunction<Tools> | undefined;
+	tools: Tools;
+}) => (
+	options: Parameters<PrepareStepFunction<Tools>>[0],
+) => Promise<Awaited<ReturnType<PrepareStepFunction<Tools>>> | undefined>;
+
 export declare const createHostedChatAgent: ({
 	additionalAgentTools,
 	enabledTools,
@@ -39,6 +57,7 @@ export declare const createHostedChatAgent: ({
 	additionalAgentTools?: ToolSet | undefined;
 	enabledTools: ToolSet;
 	emptyToolsWhenNone?: boolean;
+	getActiveStreamSession?: (() => HostedActiveStreamSession | null) | undefined;
 	model: string;
 	prepareStep?: PrepareStepFunction<ToolSet> | undefined;
 	providerOptions?: ProviderOptions | undefined;

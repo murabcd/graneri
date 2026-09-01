@@ -7,6 +7,7 @@ import { appendLocalOptimisticChatMessages } from "@/lib/chat-message-state";
 import {
 	mergeRendererChatSessionMessages,
 	resolveRendererChatRunState,
+	resolveRendererQueueActiveRun,
 } from "@/lib/renderer-chat-session";
 import { api } from "../../../../convex/_generated/api";
 import type { ScopedLocalOptimisticMessages } from "./use-chat-interaction-session";
@@ -50,6 +51,11 @@ export const useRendererChatPresentation = ({
 		runState.displayActiveRun || isChatRequestPending
 			? steerHandoffStreamingMessageIds
 			: EMPTY_STREAMING_MESSAGE_IDS;
+	const queueActiveRun = resolveRendererQueueActiveRun({
+		activeRun,
+		displayActiveRun: runState.displayActiveRun,
+		isAiRequestPending,
+	});
 	const mergedMessages = React.useMemo(
 		() =>
 			mergeRendererChatSessionMessages({
@@ -112,6 +118,7 @@ export const useRendererChatPresentation = ({
 		displayMessages,
 		localMessageIds,
 		pendingHumanDecision,
+		queueActiveRun,
 		runPlan: runPlan ?? null,
 		streamingMessageIds,
 	};

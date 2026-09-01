@@ -37,23 +37,16 @@ export const hostedChatReplayAcceptedHeader = "X-Graneri-Replay-Accepted";
 export const hostedChatSteerTurnIdHeader = "X-Graneri-Turn-Id";
 export const hostedChatSteerQueuedMessageIdHeader =
 	"X-Graneri-Queued-Message-Id";
-export const hostedChatSteerQueuedMessageIdsHeader =
-	"X-Graneri-Queued-Message-Ids";
 export const hostedChatReplayQueuedMessageIdHeader =
 	"X-Graneri-Replay-Queued-Message-Id";
 
 export const getHostedChatSteerAcceptanceHeaders = ({
 	queuedMessageId,
-	queuedMessageIds,
 	turnId,
 }) => ({
 	[hostedChatSteerAcceptedHeader]: "true",
 	[hostedChatSteerTurnIdHeader]: turnId,
 	[hostedChatSteerQueuedMessageIdHeader]: queuedMessageId,
-	...(Array.isArray(queuedMessageIds) &&
-		queuedMessageIds.length > 0 && {
-			[hostedChatSteerQueuedMessageIdsHeader]: queuedMessageIds.join(","),
-		}),
 });
 
 export const getHostedChatReplayAcceptanceHeaders = ({ queuedMessageId }) => ({
@@ -71,10 +64,11 @@ const hostedChatSteerRejectionReasonsByErrorCode = new Map([
 	["message_missing", "empty_input"],
 	["queued_message_body_conflict", "invalid_request"],
 	["queued_message_mode_conflict", "invalid_request"],
-	["queued_message_unavailable", "queued_message_unavailable"],
+	["QUEUED_MESSAGE_NOT_FOUND", "queued_message_unavailable"],
 	["steer_context_missing", "no_active_turn"],
 	["steer_preparation_failed", "steer_preparation_failed"],
-	["steer_queue_cleanup_failed", "steer_queue_cleanup_failed"],
+	["steer_rollback_failed", "steer_rollback_failed"],
+	["steer_queue_release_failed", "steer_queue_release_failed"],
 	["steer_queued_message_id_invalid", "queued_message_invalid"],
 	["steer_route_required", "invalid_request"],
 	["stream_create_failed", "stream_create_failed"],
@@ -128,6 +122,18 @@ const hostedChatConvexRouteErrorMessages = new Map([
 	["QUEUED_MESSAGE_NOT_EDITABLE", "Queued message cannot be edited."],
 ]);
 
+const hostedChatQueuedMessageConflictErrorCodes = new Set([
+	"QUEUED_MESSAGE_ACCEPTANCE_CONFLICT",
+	"QUEUED_MESSAGE_NOT_CLAIMED",
+	"QUEUED_MESSAGE_NOT_FOUND",
+]);
+
+const hostedChatQueuedMessageServerErrorCodes = new Set([
+	"QUEUED_MESSAGE_ACCEPTANCE_INVALID",
+	"QUEUED_MESSAGE_ACCEPTANCE_SAVE_FAILED",
+	"QUEUED_MESSAGE_SAVE_FAILED",
+]);
+
 const missingConvexFunctionPattern =
 	/Could not find public function for '([^']+)'/u;
 
@@ -176,7 +182,11 @@ export const getHostedChatConvexRouteError = (error) => {
 	const isContextCompactionConflict =
 		code === "CONTEXT_COMPACTION_INVALID" ||
 		code === "CONTEXT_COMPACTION_STALE";
-	const isQueuedMessageError = code.startsWith("QUEUED_MESSAGE_");
+	const isQueuedMessageError =
+		code.startsWith("QUEUED_MESSAGE_") &&
+		!hostedChatQueuedMessageServerErrorCodes.has(code);
+	const isQueuedMessageServerError =
+		hostedChatQueuedMessageServerErrorCodes.has(code);
 	const isToolApprovalError = code.startsWith("TOOL_APPROVAL_");
 	const isMessageSizeError =
 		code === "CHAT_BRANCH_MESSAGE_TOO_LARGE" ||
@@ -190,6 +200,7 @@ export const getHostedChatConvexRouteError = (error) => {
 		!isChatLifecycleError &&
 		!isContextCompactionConflict &&
 		!isQueuedMessageError &&
+		!isQueuedMessageServerError &&
 		!isToolApprovalError &&
 		!isMessageSizeError
 	) {
@@ -203,14 +214,15 @@ export const getHostedChatConvexRouteError = (error) => {
 				? data.message
 				: "Queued chat request failed validation."),
 		errorCode: isMessageSizeError ? "input_too_large" : code,
-		statusCode:
-			isAdmissionError ||
-			isAssistantRunLifecycleError ||
-			isChatLifecycleError ||
-			isContextCompactionConflict ||
-			code === "CHAT_BRANCH_TARGET_NOT_FOUND" ||
-			code === "CHAT_BRANCH_TARGET_TOO_OLD" ||
-			code === "QUEUED_MESSAGE_NOT_FOUND"
+		statusCode: isQueuedMessageServerError
+			? 500
+			: isAdmissionError ||
+					isAssistantRunLifecycleError ||
+					isChatLifecycleError ||
+					isContextCompactionConflict ||
+					code === "CHAT_BRANCH_TARGET_NOT_FOUND" ||
+					code === "CHAT_BRANCH_TARGET_TOO_OLD" ||
+					hostedChatQueuedMessageConflictErrorCodes.has(code)
 				? 409
 				: code === "TOOL_APPROVAL_NOT_PENDING"
 					? 409
@@ -249,11 +261,12 @@ export const getHostedChatSteerTelemetry = ({
 	};
 };
 
-export const validateHostedChatSteerRoute = ({
+export const parseHostedChatTurnIntent = ({
 	continueRunId,
 	hasMessage = false,
 	isSteerRoute,
 	replayQueuedMessageId,
+	replayQueuedMessageStatus,
 	steerQueuedMessageId,
 }) => {
 	const validateOptionalId = (value, error, errorCode) => {
@@ -275,7 +288,7 @@ export const validateHostedChatSteerRoute = ({
 		"continue_run_id_invalid",
 	);
 	if (invalidContinueRunId) {
-		return invalidContinueRunId;
+		return { ok: false, ...invalidContinueRunId };
 	}
 	const invalidReplayQueuedMessageId = validateOptionalId(
 		replayQueuedMessageId,
@@ -283,7 +296,20 @@ export const validateHostedChatSteerRoute = ({
 		"replay_queued_message_id_invalid",
 	);
 	if (invalidReplayQueuedMessageId) {
-		return invalidReplayQueuedMessageId;
+		return { ok: false, ...invalidReplayQueuedMessageId };
+	}
+	if (
+		(replayQueuedMessageId &&
+			!["paused", "queued"].includes(replayQueuedMessageStatus)) ||
+		(!replayQueuedMessageId && replayQueuedMessageStatus !== undefined)
+	) {
+		return {
+			ok: false,
+			error:
+				"replayQueuedMessageStatus must match the current queued message status.",
+			errorCode: "replay_queued_message_status_invalid",
+			statusCode: 400,
+		};
 	}
 	const invalidSteerQueuedMessageId = validateOptionalId(
 		steerQueuedMessageId,
@@ -291,11 +317,12 @@ export const validateHostedChatSteerRoute = ({
 		"steer_queued_message_id_invalid",
 	);
 	if (invalidSteerQueuedMessageId) {
-		return invalidSteerQueuedMessageId;
+		return { ok: false, ...invalidSteerQueuedMessageId };
 	}
 
 	if (steerQueuedMessageId && replayQueuedMessageId) {
 		return {
+			ok: false,
 			error: "Queued message replay and steering cannot be requested together.",
 			errorCode: "queued_message_mode_conflict",
 			statusCode: 400,
@@ -304,6 +331,7 @@ export const validateHostedChatSteerRoute = ({
 
 	if (replayQueuedMessageId && continueRunId) {
 		return {
+			ok: false,
 			error: "Queued message replay cannot continue an active assistant run.",
 			errorCode: "queued_replay_active_run_conflict",
 			statusCode: 400,
@@ -312,6 +340,7 @@ export const validateHostedChatSteerRoute = ({
 
 	if (hasMessage && (steerQueuedMessageId || replayQueuedMessageId)) {
 		return {
+			ok: false,
 			error:
 				"Queued message replay and steering must not include a client message body.",
 			errorCode: "queued_message_body_conflict",
@@ -322,6 +351,7 @@ export const validateHostedChatSteerRoute = ({
 	if (isSteerRoute) {
 		if (!steerQueuedMessageId || !continueRunId) {
 			return {
+				ok: false,
 				error:
 					"steerQueuedMessageId and continueRunId are required for chat steering.",
 				errorCode: "steer_context_missing",
@@ -329,18 +359,43 @@ export const validateHostedChatSteerRoute = ({
 			};
 		}
 
-		return null;
+		return {
+			ok: true,
+			intent: {
+				type: "steer",
+				queuedMessageId: steerQueuedMessageId,
+				runId: continueRunId,
+			},
+		};
 	}
 
 	if (steerQueuedMessageId) {
 		return {
+			ok: false,
 			error: `Queued message steering must use ${buildHostedRoutePath("chatSteer")}.`,
 			errorCode: "steer_route_required",
 			statusCode: 400,
 		};
 	}
 
-	return null;
+	if (replayQueuedMessageId) {
+		return {
+			ok: true,
+			intent: {
+				type: "replay",
+				expectedStatus: replayQueuedMessageStatus,
+				queuedMessageId: replayQueuedMessageId,
+			},
+		};
+	}
+
+	return {
+		ok: true,
+		intent: {
+			type: "direct",
+			continueRunId: continueRunId ?? null,
+		},
+	};
 };
 
 export const getHostedChatInputValidationErrorResponse = (error) => {
@@ -354,12 +409,10 @@ export const getHostedChatInputValidationErrorResponse = (error) => {
 
 export const validateHostedChatRequestInput = ({
 	allowLocalFolderToolContinuation = false,
-	continueRunId,
 	message,
-	replayQueuedMessageId,
-	steerQueuedMessageId,
+	turnIntent,
 }) => {
-	if (!message && !steerQueuedMessageId && !replayQueuedMessageId) {
+	if (!message && turnIntent.type === "direct") {
 		return {
 			errorCode: "message_missing",
 			payload: {
@@ -371,14 +424,13 @@ export const validateHostedChatRequestInput = ({
 
 	if (
 		message &&
+		turnIntent.type === "direct" &&
 		!getToolApprovalResponse(message) &&
-		!(continueRunId && isHostedUserQuestionAnswerMessage(message)) &&
+		!(turnIntent.continueRunId && isHostedUserQuestionAnswerMessage(message)) &&
 		!(
 			allowLocalFolderToolContinuation &&
 			isLocalFolderToolContinuationMessage(message)
-		) &&
-		!steerQueuedMessageId &&
-		!replayQueuedMessageId
+		)
 	) {
 		try {
 			validateHostedChatInput(message);
@@ -710,3 +762,5 @@ export const generateHostedChatTitle = async ({
 		});
 	}
 };
+export { createHostedActiveChatStreamSession } from "./hosted-chat-active-stream.mjs";
+export { buildHostedSteeredGenerationTranscript } from "./hosted-chat-stream-lifecycle.mjs";

@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { ToolLoopAgent } from "ai";
+import { convertToModelMessages, ToolLoopAgent } from "ai";
 import { buildAiToolApprovalConfiguration } from "./ai-tool-authority.mjs";
 import { finalizeOpenAIToolSet } from "./openai-tool-search.mjs";
 
@@ -27,10 +27,31 @@ export const buildHostedChatAgentToolSet = ({
 	};
 };
 
+export const createHostedChatPrepareStep =
+	({ getActiveStreamSession, prepareStep, tools }) =>
+	async (options) => {
+		const prepared = await prepareStep?.(options);
+		const session = getActiveStreamSession?.();
+		const pendingMessages =
+			session?.takePendingSteeredUserMessages(options.stepNumber) ?? [];
+		if (pendingMessages.length === 0) {
+			return prepared;
+		}
+
+		return {
+			...prepared,
+			messages: [
+				...(prepared?.messages ?? options.messages),
+				...(await convertToModelMessages(pendingMessages, { tools })),
+			],
+		};
+	};
+
 export const createHostedChatAgent = ({
 	additionalAgentTools,
 	enabledTools,
 	emptyToolsWhenNone = false,
+	getActiveStreamSession,
 	model,
 	prepareStep,
 	providerOptions,
@@ -42,13 +63,18 @@ export const createHostedChatAgent = ({
 			additionalAgentTools,
 			enabledTools,
 		});
+	const prepareInTurnSteerInput = createHostedChatPrepareStep({
+		getActiveStreamSession,
+		prepareStep,
+		tools,
+	});
 	const agent = new ToolLoopAgent({
 		model: openai(model),
 		providerOptions,
 		instructions,
 		tools: agentTools ?? (emptyToolsWhenNone ? {} : undefined),
 		...(toolApproval && { toolApproval }),
-		prepareStep,
+		prepareStep: prepareInTurnSteerInput,
 		stopWhen,
 	});
 

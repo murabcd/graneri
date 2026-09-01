@@ -13,10 +13,14 @@ type ChatRequestBase = ChatSettings & {
 	timezone: string;
 };
 
+export type QueuedReplayOrigin = "automatic" | "manual";
+
 export type ChatRequestContext = {
 	continueRunId?: string;
 	localCapabilitySession?: LocalCapabilitySession | null;
 	replayQueuedMessageId?: string;
+	replayQueuedMessageOrigin?: QueuedReplayOrigin;
+	replayQueuedMessageStatus?: "paused" | "queued";
 	steerQueuedMessageId?: string;
 };
 

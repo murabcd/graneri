@@ -104,6 +104,7 @@ describe("hosted active chat stream", () => {
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
+			assistantMessageId: "stream-1",
 			delta: "hello world",
 			partsJson: JSON.stringify([
 				{ type: "text", text: "hello world", state: "streaming" },
@@ -113,11 +114,13 @@ describe("hosted active chat stream", () => {
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
+			assistantMessageId: "stream-1",
 		});
 		expect(startActiveStreamToolCall).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
+			assistantMessageId: "stream-1",
 			toolCallId: "tool-call-1",
 			toolName: "search",
 			inputJson: JSON.stringify({ query: "graneri" }),
@@ -126,6 +129,7 @@ describe("hosted active chat stream", () => {
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
+			assistantMessageId: "stream-1",
 			toolCallId: "tool-call-1",
 			status: "completed",
 			outputJson: JSON.stringify({ result: "ok" }),
@@ -230,6 +234,7 @@ describe("hosted active chat stream", () => {
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
+			assistantMessageId: "stream-1",
 			delta: "first",
 		});
 		expect(finishActiveStream).not.toHaveBeenCalled();
@@ -262,6 +267,7 @@ describe("hosted active chat stream", () => {
 				workspaceId: "workspace-1",
 				chatId: "chat-1",
 				runId: "run-1",
+				assistantMessageId: "stream-1",
 				delta: "accepted",
 			});
 		} finally {
@@ -333,6 +339,141 @@ describe("hosted active chat stream", () => {
 		expect(session.turnInput.takeForCurrentTurn()).toEqual([]);
 	});
 
+	it("rejects steer attachment after the terminal generation boundary closes", () => {
+		const session = createTestActiveStreamSession({
+			controllers: new Map(),
+			streamKey: "workspace-1:chat-1",
+			persister: {
+				start: vi.fn().mockResolvedValue(undefined),
+				append: vi.fn(),
+				closePersistence: vi.fn().mockResolvedValue(undefined),
+				finish: vi.fn().mockResolvedValue(undefined),
+			},
+		});
+		const steerMessage = {
+			id: "queued-1",
+			role: "user" as const,
+			parts: [{ type: "text" as const, text: "Steer" }],
+		};
+
+		expect(session.acceptSteeredUserMessage(steerMessage)).toBe(true);
+		expect(session.takePendingSteeredUserMessages(1)).toEqual([steerMessage]);
+		session.beginDurableStop();
+		expect(session.prepareDurableStopBoundary()).toEqual({
+			consumed: [{ input: [steerMessage], stepNumber: 1 }],
+			deferredInput: [],
+			pending: [],
+			preparedAt: expect.any(Number),
+			steerAcceptances: [],
+		});
+		expect(session.acceptSteeredUserMessage(steerMessage)).toBe(false);
+		expect(session.takePendingSteeredUserMessages(2)).toEqual([]);
+		session.commitDurableStop();
+	});
+
+	it("retains one immutable durable stop boundary until it commits", async () => {
+		const controllers = new Map();
+		const streamKey = "workspace-1:chat-1";
+		const session = createTestActiveStreamSession({
+			controllers,
+			streamKey,
+			persister: {
+				start: vi.fn().mockResolvedValue(undefined),
+				append: vi.fn(),
+				closePersistence: vi.fn().mockResolvedValue(undefined),
+				discardPending: vi.fn(),
+				finish: vi.fn().mockResolvedValue(undefined),
+			},
+		});
+		await session.start();
+		const steerMessage = {
+			id: "steer-1",
+			role: "user" as const,
+			parts: [{ type: "text" as const, text: "Steer" }],
+		};
+		const mailboxMessage = {
+			id: "mailbox-1",
+			role: "user" as const,
+			parts: [{ type: "text" as const, text: "Later" }],
+		};
+		session.acceptSteeredUserMessage(steerMessage, {
+			queuedMessageId: "queued-1",
+			claimVersion: 2,
+			messageId: steerMessage.id,
+		});
+		session.takePendingSteeredUserMessages(1);
+		session.turnInput.enqueueMailboxInput(mailboxMessage);
+		session.beginDurableStop();
+
+		const prepared = session.prepareDurableStopBoundary();
+		session.cleanup();
+
+		expect(session.prepareDurableStopBoundary()).toBe(prepared);
+		expect(Object.isFrozen(prepared)).toBe(true);
+		expect(prepared).toEqual({
+			consumed: [{ input: [steerMessage], stepNumber: 1 }],
+			deferredInput: [mailboxMessage],
+			pending: [],
+			preparedAt: expect.any(Number),
+			steerAcceptances: [
+				{
+					queuedMessageId: "queued-1",
+					claimVersion: 2,
+					messageId: steerMessage.id,
+				},
+			],
+		});
+		expect(controllers.get(streamKey)).toBe(session);
+
+		session.commitDurableStop();
+		expect(controllers.has(streamKey)).toBe(false);
+		expect(session.turnInput.hasPendingInput()).toBe(false);
+	});
+
+	it("lets an issued steer reservation attach after the generation gate seals", async () => {
+		const session = createTestActiveStreamSession({
+			controllers: new Map(),
+			streamKey: "workspace-1:chat-1",
+			persister: {
+				start: vi.fn().mockResolvedValue(undefined),
+				append: vi.fn(),
+				closePersistence: vi.fn().mockResolvedValue(undefined),
+				finish: vi.fn().mockResolvedValue(undefined),
+			},
+		});
+		const steerMessage = {
+			id: "queued-1",
+			role: "user" as const,
+			parts: [{ type: "text" as const, text: "Steer" }],
+		};
+		const reservation = session.reserveSteeredUserMessageAcceptance();
+		expect(reservation).not.toBeNull();
+
+		session.closeSteeredUserMessageAcceptance();
+		expect(session.reserveSteeredUserMessageAcceptance()).toBeNull();
+		expect(
+			reservation?.accept(steerMessage, {
+				queuedMessageId: "queue-row-1",
+				claimVersion: 2,
+				messageId: steerMessage.id,
+			}),
+		).toBe(true);
+		reservation?.release();
+		await session.waitForSteeredUserMessageReservations();
+
+		expect(session.takeSteeredUserMessageGenerationBoundary()).toEqual({
+			consumed: [],
+			pending: [steerMessage],
+			steerAcceptances: [
+				{
+					queuedMessageId: "queue-row-1",
+					claimVersion: 2,
+					messageId: steerMessage.id,
+				},
+			],
+		});
+	});
+
 	it("carries all pending input to a replacement active stream session", async () => {
 		const controllers = new Map();
 		const streamKey = "workspace-1:chat-1";
@@ -350,14 +491,28 @@ describe("hosted active chat stream", () => {
 		});
 		await oldSession.start();
 		oldSession.turnInput.deferMailboxDeliveryToNextTurn();
-		oldSession.turnInput.enqueueMailboxInput({
+		const mailboxMessage = {
 			id: "mailbox-1",
-			role: "user",
+			role: "user" as const,
+			parts: [{ type: "text" as const, text: "Mailbox" }],
+		};
+		oldSession.turnInput.enqueueMailboxInput(mailboxMessage);
+		const firstSteerMessage = {
+			id: "queued-1",
+			role: "user" as const,
+			parts: [{ type: "text" as const, text: "First steer" }],
+		};
+		const secondSteerMessage = {
+			id: "queued-2",
+			role: "user" as const,
+			parts: [{ type: "text" as const, text: "Second steer" }],
+		};
+		oldSession.acceptSteeredUserMessage(firstSteerMessage, {
+			queuedMessageId: "queue-row-1",
+			claimVersion: 4,
+			messageId: firstSteerMessage.id,
 		});
-		oldSession.turnInput.extendSteerInput([
-			{ id: "queued-1", role: "user" },
-			{ id: "queued-2", role: "user" },
-		]);
+		oldSession.acceptSteeredUserMessage(secondSteerMessage);
 
 		const newSession = createTestActiveStreamSession({
 			controllers,
@@ -369,17 +524,38 @@ describe("hosted active chat stream", () => {
 				finish: vi.fn().mockResolvedValue(undefined),
 			},
 		});
+		const transferredActivities: string[] = [];
+		newSession.turnInput.subscribeActivity((activity) => {
+			transferredActivities.push(activity);
+		});
 
 		await newSession.start();
 
 		expect(oldSession.abortSignal.aborted).toBe(true);
 		expect(oldPersister.discardPending).toHaveBeenCalled();
 		expect(oldSession.turnInput.hasPendingInput()).toBe(false);
-		expect(newSession.turnInput.takeForCurrentTurn()).toEqual([
-			{ id: "queued-1", role: "user" },
-			{ id: "queued-2", role: "user" },
-			{ id: "mailbox-1", role: "user" },
+		expect(newSession.takePendingSteeredUserMessages(2)).toEqual([
+			firstSteerMessage,
+			secondSteerMessage,
 		]);
+		expect(newSession.takeSteeredUserMessageGenerationBoundary()).toEqual({
+			consumed: [
+				{
+					input: [firstSteerMessage, secondSteerMessage],
+					stepNumber: 2,
+				},
+			],
+			pending: [],
+			steerAcceptances: [
+				{
+					queuedMessageId: "queue-row-1",
+					claimVersion: 4,
+					messageId: firstSteerMessage.id,
+				},
+			],
+		});
+		expect(newSession.turnInput.takeForCurrentTurn()).toEqual([mailboxMessage]);
+		expect(transferredActivities).toEqual(["steer", "steer", "mailbox"]);
 	});
 
 	it("replaces closed stream controllers without aborting finalization", async () => {
@@ -627,12 +803,14 @@ describe("hosted active chat stream", () => {
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
+			assistantMessageId: "stream-1",
 			delta: "hello",
 		});
 		expect(finishActiveStream).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
 			chatId: "chat-1",
 			runId: "run-1",
+			assistantMessageId: "stream-1",
 		});
 	});
 

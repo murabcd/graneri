@@ -5,8 +5,9 @@ import { getBearerTokenFromAuthorizationHeader } from "@workspace/ai/hosted-chat
 import {
 	getHostedChatConvexRouteError,
 	getHostedChatSteerTelemetry,
+	type HostedChatTurnIntent,
+	parseHostedChatTurnIntent,
 	validateHostedChatRequestInput,
-	validateHostedChatSteerRoute,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
 	createHostedActiveStreamKey,
@@ -40,7 +41,7 @@ import {
 
 const activeChatStreamControllers = new Map<
 	string,
-	HostedActiveStreamSession
+	HostedActiveStreamSession<Id<"assistantRuns">, Id<"assistantQueuedMessages">>
 >();
 const AI_LATENCY_DEBUG_ENABLED = process.env.GRANERI_AI_LATENCY_DEBUG === "1";
 
@@ -136,10 +137,11 @@ export const handleChatRequest = async (
 		convexToken,
 		recipeSlug,
 		noteContext,
-		continueRunId,
-		replayQueuedMessageId,
+		continueRunId: requestedContinueRunId,
+		replayQueuedMessageId: requestedReplayQueuedMessageId,
+		replayQueuedMessageStatus: requestedReplayQueuedMessageStatus,
 		supersedeActiveRun = false,
-		steerQueuedMessageId,
+		steerQueuedMessageId: requestedSteerQueuedMessageId,
 	} = await readJsonBody<ChatRequestBody>(request);
 	const hasRequestedLocalCapabilitySession =
 		requestedLocalCapabilitySession !== null &&
@@ -187,27 +189,40 @@ export const handleChatRequest = async (
 	wideEvent.reasoning_effort = reasoningEffort;
 	wideEvent.service_tier = serviceTier;
 	wideEvent.is_steer_route = options.isSteerRoute === true;
-	wideEvent.continue_run_id = continueRunId ?? null;
-	wideEvent.replay_queued_message_id = replayQueuedMessageId ?? null;
-	wideEvent.steer_queued_message_id = steerQueuedMessageId ?? null;
-	const steerRouteValidation = validateHostedChatSteerRoute({
-		continueRunId,
+	const parsedTurnIntent = parseHostedChatTurnIntent({
+		continueRunId: requestedContinueRunId,
 		hasMessage: Boolean(message),
 		isSteerRoute: options.isSteerRoute === true,
-		replayQueuedMessageId,
-		steerQueuedMessageId,
+		replayQueuedMessageId: requestedReplayQueuedMessageId,
+		replayQueuedMessageStatus: requestedReplayQueuedMessageStatus,
+		steerQueuedMessageId: requestedSteerQueuedMessageId,
 	});
-	if (steerRouteValidation) {
+	if (!parsedTurnIntent.ok) {
 		routeErrors.send({
-			eventErrorCode: steerRouteValidation.errorCode,
+			eventErrorCode: parsedTurnIntent.errorCode,
 			payload: {
-				error: steerRouteValidation.error,
-				errorCode: steerRouteValidation.errorCode,
+				error: parsedTurnIntent.error,
+				errorCode: parsedTurnIntent.errorCode,
 			},
-			statusCode: steerRouteValidation.statusCode,
+			statusCode: parsedTurnIntent.statusCode,
 		});
 		return;
 	}
+	const turnIntent = parsedTurnIntent.intent as HostedChatTurnIntent<
+		Id<"assistantRuns">,
+		Id<"assistantQueuedMessages">
+	>;
+	const continueRunId =
+		turnIntent.type === "steer"
+			? turnIntent.runId
+			: turnIntent.type === "direct"
+				? turnIntent.continueRunId
+				: null;
+	wideEvent.continue_run_id = continueRunId;
+	wideEvent.replay_queued_message_id =
+		turnIntent.type === "replay" ? turnIntent.queuedMessageId : null;
+	wideEvent.steer_queued_message_id =
+		turnIntent.type === "steer" ? turnIntent.queuedMessageId : null;
 	wideEvent.web_search_enabled = webSearchEnabled;
 	wideEvent.apps_enabled = appsEnabled;
 	wideEvent.mention_count = mentions?.length ?? 0;
@@ -240,10 +255,8 @@ export const handleChatRequest = async (
 
 	const inputValidation = validateHostedChatRequestInput({
 		allowLocalFolderToolContinuation: Boolean(localCapabilitySession),
-		continueRunId,
 		message,
-		replayQueuedMessageId,
-		steerQueuedMessageId,
+		turnIntent,
 	});
 	if (inputValidation) {
 		routeErrors.send({
@@ -384,7 +397,6 @@ export const handleChatRequest = async (
 		request: {
 			appsEnabled,
 			chatId: id,
-			continueRunId,
 			localCapabilitySession,
 			mentions,
 			message,
@@ -392,9 +404,8 @@ export const handleChatRequest = async (
 			noteContext,
 			projectId: resolvedProjectId,
 			recipeSlug,
-			replayQueuedMessageId,
 			selectedSourceIds,
-			steerQueuedMessageId,
+			turnIntent,
 			supersedeActiveRun,
 			trigger,
 			workspaceId: resolvedWorkspaceId,
@@ -451,24 +462,25 @@ export const handleChatStopRequest = async (
 	if (!interruptActiveRun && attachableRun.status !== "stopping") {
 		await convexClient.mutation(api.assistantRuns.requestStopAssistantRun, {
 			runId: attachableRun._id,
+			assistantMessageId: attachableRun.assistantMessageId,
 			stopReason: "user_requested",
 		});
 	}
 
-	try {
-		await interruptHostedChatRun({
-			activeStreamSessions: activeChatStreamControllers,
-			workspaceId: resolvedWorkspaceId,
-			chatId: id,
-			client: convexClient,
+	await interruptHostedChatRun({
+		activeStreamSessions: activeChatStreamControllers,
+		workspaceId: resolvedWorkspaceId,
+		chatId: id,
+		runId: attachableRun._id,
+		assistantMessageId: attachableRun.assistantMessageId,
+		stopActiveStream: (args) =>
+			convexClient.mutation(api.chats.stopActiveStream, args),
+	});
+	if (!interruptActiveRun) {
+		await convexClient.mutation(api.assistantRuns.finishStoppedAssistantRun, {
 			runId: attachableRun._id,
+			assistantMessageId: attachableRun.assistantMessageId,
 		});
-	} finally {
-		if (!interruptActiveRun) {
-			await convexClient.mutation(api.assistantRuns.finishStoppedAssistantRun, {
-				runId: attachableRun._id,
-			});
-		}
 	}
 
 	sendJson(response, 200, { ok: true });
@@ -549,6 +561,7 @@ export const handleChatReconnectRequest = async (
 		}
 		await stopOrphanedHostedAssistantRun({
 			chatId: id,
+			assistantMessageId: attachableRun.assistantMessageId,
 			finishStoppedAssistantRun: (args) =>
 				convexClient.mutation(
 					api.assistantRuns.finishStoppedAssistantRun,

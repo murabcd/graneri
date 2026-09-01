@@ -8,8 +8,8 @@ import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import { logError } from "@/lib/logger";
 import {
+	prepareQueuedReplayIntent,
 	prepareQueuedSteerIntent,
-	QUEUED_SEND_NOW_PENDING_ID,
 	type QueuedChatSendMessage,
 } from "@/lib/queued-chat-intent";
 import { api } from "../../../../convex/_generated/api";
@@ -39,11 +39,15 @@ const restoreQueuedMessageAtIndex = (
 };
 
 export const useQueuedFollowUpControls = ({
+	acceptedQueuedMessageIdsRef,
+	acceptedQueuedMessageId,
 	activeRun,
 	chatId,
 	contextLabel,
+	isQueueHandoffPending = false,
 	latestRequestBodyRef,
 	localMessageIds,
+	manuallySendingQueuedMessageIdRef,
 	onSteerStart,
 	onEditMessage,
 	queuedMessages,
@@ -51,11 +55,15 @@ export const useQueuedFollowUpControls = ({
 	setQueuedMessages,
 	workspaceId,
 }: {
+	acceptedQueuedMessageIdsRef: React.MutableRefObject<Set<string>>;
+	acceptedQueuedMessageId: string | null;
 	activeRun: AttachableAssistantRunQueryResult;
 	chatId: string;
 	contextLabel: string;
+	isQueueHandoffPending?: boolean;
 	latestRequestBodyRef: React.MutableRefObject<ChatRequestContext | null>;
 	localMessageIds: ReadonlySet<string>;
+	manuallySendingQueuedMessageIdRef: React.MutableRefObject<string | null>;
 	onSteerStart?: () => (() => void) | undefined;
 	onEditMessage: (message: QueuedFollowUpMessage) => void;
 	queuedMessages: Array<QueuedFollowUpMessage>;
@@ -69,22 +77,24 @@ export const useQueuedFollowUpControls = ({
 	const reorderQueuedMessages = useMutation(
 		api.assistantQueuedMessages.reorderQueuedForChat,
 	);
-	const [sendingNowIds, setSendingNowIds] = React.useState<ReadonlySet<string>>(
-		() => new Set(),
+	const resumeInterruptedQueuedMessages = useMutation(
+		api.assistantQueuedMessages.resumeInterruptedForChat,
 	);
+	const [sendingNowId, setSendingNowId] = React.useState<string | null>(null);
+	const [isResuming, setIsResuming] = React.useState(false);
 	const [editingId, setEditingId] = React.useState<string | null>(null);
 	const [deletingId, setDeletingId] = React.useState<string | null>(null);
 	const [editDraft, setEditDraft] =
 		React.useState<QueuedMessageEditDraft | null>(null);
 	const editingIdRef = React.useRef<string | null>(null);
-	const sendingNowIdsRef = React.useRef<Set<string> | null>(null);
-	if (sendingNowIdsRef.current === null) {
-		sendingNowIdsRef.current = new Set();
-	}
-	const [initialSendNowChain] = React.useState(() => Promise.resolve());
-	const sendNowChainRef = React.useRef<Promise<void> | null>(
-		initialSendNowChain,
-	);
+	React.useEffect(() => {
+		if (acceptedQueuedMessageId === null) {
+			return;
+		}
+		setSendingNowId((currentId) =>
+			currentId === acceptedQueuedMessageId ? null : currentId,
+		);
+	}, [acceptedQueuedMessageId]);
 
 	const restoreEditedQueuedMessage = React.useCallback(() => {
 		if (!editDraft) {
@@ -136,96 +146,148 @@ export const useQueuedFollowUpControls = ({
 	);
 
 	const handleSendNow = React.useCallback(
-		async (queuedMessageId?: string) => {
-			if (!workspaceId || !activeRun) {
+		async (queuedMessageId: string) => {
+			if (!workspaceId) {
 				return;
 			}
-
-			const nextSendingNowId = queuedMessageId ?? QUEUED_SEND_NOW_PENDING_ID;
-			const sendingNowIds = sendingNowIdsRef.current;
-			const sendNowChain = sendNowChainRef.current;
-			if (!sendingNowIds || !sendNowChain) {
+			if (isQueueHandoffPending) {
 				return;
 			}
-			if (sendingNowIds.has(nextSendingNowId)) {
+			if (manuallySendingQueuedMessageIdRef.current !== null) {
 				return;
 			}
-			sendingNowIds.add(nextSendingNowId);
-			setSendingNowIds(new Set(sendingNowIds));
-			const queuedMessage = queuedMessageId
-				? queuedMessages.find((message) => message._id === queuedMessageId)
-				: (queuedMessages[0] ?? null);
-			const queuedMessageIndex = queuedMessage
-				? queuedMessages.findIndex(
-						(message) => message._id === queuedMessage._id,
-					)
-				: -1;
+			manuallySendingQueuedMessageIdRef.current = queuedMessageId;
+			setSendingNowId(queuedMessageId);
+			const queuedMessage = queuedMessages.find(
+				(message) => message._id === queuedMessageId,
+			);
 
-			const sendQueuedMessageNow = async () => {
-				let rollbackSteerStart: (() => void) | undefined;
-				try {
-					if (!queuedMessage) {
-						return;
-					}
+			let rollbackSteerStart: (() => void) | undefined;
+			try {
+				if (!queuedMessage) {
+					return;
+				}
+				if (
+					queuedMessage.status === "paused" &&
+					queuedMessage.pauseReason === "interrupted"
+				) {
+					return;
+				}
+				const isSteer =
+					queuedMessage.status === "queued" && activeRun?.status === "running";
+				if (activeRun && !isSteer) {
+					return;
+				}
 
-					setQueuedMessages((messages) =>
-						messages.filter((message) => message._id !== queuedMessage._id),
-					);
-					const preparedQueuedIntent = await prepareQueuedSteerIntent({
-						activeRunId: activeRun._id,
-						hasMessageId: (messageId) => localMessageIds.has(messageId),
-						queuedMessage,
-						resolveConvexToken: getCachedConvexToken,
-					});
-					latestRequestBodyRef.current = preparedQueuedIntent.body;
-					rollbackSteerStart = onSteerStart?.();
-					await sendMessage(preparedQueuedIntent.message, {
-						body: preparedQueuedIntent.body,
-					});
-				} catch (error) {
+				const preparedQueuedIntent = isSteer
+					? await prepareQueuedSteerIntent({
+							activeRunId: activeRun._id,
+							hasMessageId: (messageId) => localMessageIds.has(messageId),
+							queuedMessage,
+							resolveConvexToken: getCachedConvexToken,
+						})
+					: await prepareQueuedReplayIntent({
+							hasMessageId: (messageId) => localMessageIds.has(messageId),
+							origin: "manual",
+							queuedMessage,
+							resolveConvexToken: getCachedConvexToken,
+						});
+				latestRequestBodyRef.current = preparedQueuedIntent.body;
+				rollbackSteerStart = isSteer ? onSteerStart?.() : undefined;
+				await sendMessage(preparedQueuedIntent.message, {
+					body: preparedQueuedIntent.body,
+				});
+			} catch (error) {
+				const wasAccepted =
+					acceptedQueuedMessageIdsRef.current.has(queuedMessageId);
+				if (!wasAccepted) {
 					rollbackSteerStart?.();
-					if (queuedMessage && queuedMessageIndex >= 0) {
-						setQueuedMessages((messages) =>
-							restoreQueuedMessageAtIndex(messages, {
-								index: queuedMessageIndex,
-								message: queuedMessage,
-							}),
-						);
-					}
-					logError({
-						event: "client.error",
-						error,
-						message: `Failed to send queued ${contextLabel} message now`,
-					});
-					toast.error(
-						error instanceof Error
+				}
+				logError({
+					event: "client.error",
+					error,
+					message: wasAccepted
+						? `Queued ${contextLabel} message was accepted, but its response stream failed`
+						: `Failed to send queued ${contextLabel} message now`,
+				});
+				toast.error(
+					wasAccepted
+						? "Queued message was accepted, but its response stream disconnected."
+						: error instanceof Error
 							? error.message
 							: "Failed to send queued message now",
-					);
-				} finally {
-					sendingNowIds.delete(nextSendingNowId);
-					setSendingNowIds(new Set(sendingNowIds));
+				);
+			} finally {
+				if (manuallySendingQueuedMessageIdRef.current === queuedMessageId) {
+					manuallySendingQueuedMessageIdRef.current = null;
+					setSendingNowId(null);
 				}
-			};
-			const nextSend = sendNowChain.then(
-				sendQueuedMessageNow,
-				sendQueuedMessageNow,
-			);
-			sendNowChainRef.current = nextSend.catch(() => undefined);
-			await nextSend;
+			}
 		},
 		[
+			acceptedQueuedMessageIdsRef,
 			activeRun,
 			contextLabel,
+			isQueueHandoffPending,
 			latestRequestBodyRef,
 			localMessageIds,
+			manuallySendingQueuedMessageIdRef,
 			onSteerStart,
 			queuedMessages,
 			sendMessage,
-			setQueuedMessages,
 			workspaceId,
 		],
 	);
+
+	const handleResume = React.useCallback(async () => {
+		if (!workspaceId || isResuming) {
+			return;
+		}
+
+		const interruptedMessages = queuedMessages.filter(
+			(message) =>
+				message.status === "paused" && message.pauseReason === "interrupted",
+		);
+		if (interruptedMessages.length === 0) {
+			return;
+		}
+
+		setIsResuming(true);
+		try {
+			await resumeInterruptedQueuedMessages({ workspaceId, chatId });
+			setQueuedMessages((messages) =>
+				messages.map((message) =>
+					message.status === "paused" && message.pauseReason === "interrupted"
+						? {
+								...message,
+								status: "queued",
+							}
+						: message,
+				),
+			);
+		} catch (error) {
+			logError({
+				event: "client.error",
+				error,
+				message: `Failed to resume queued ${contextLabel} messages`,
+			});
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to resume queued messages",
+			);
+		} finally {
+			setIsResuming(false);
+		}
+	}, [
+		chatId,
+		contextLabel,
+		isResuming,
+		queuedMessages,
+		resumeInterruptedQueuedMessages,
+		setQueuedMessages,
+		workspaceId,
+	]);
 
 	const handleEdit = React.useCallback(
 		(queuedMessageId: string) => {
@@ -358,28 +420,61 @@ export const useQueuedFollowUpControls = ({
 
 	const queuedFollowUps = React.useMemo<Array<QueuedFollowUpBarItem>>(
 		() =>
-			queuedMessages.map((queuedMessage) => ({
-				id: queuedMessage._id,
-				isDeleting: deletingId === queuedMessage._id,
-				isEditing: editingId === queuedMessage._id,
-				isSendingNow: sendingNowIds.has(queuedMessage._id),
-				onDelete: () => {
-					void handleDelete(queuedMessage._id);
-				},
-				onEdit: () => handleEdit(queuedMessage._id),
-				onSendNow: () => {
-					void handleSendNow(queuedMessage._id);
-				},
-				text: queuedMessage.text,
-			})),
+			queuedMessages.map((queuedMessage) => {
+				const isInterrupted =
+					queuedMessage.status === "paused" &&
+					queuedMessage.pauseReason === "interrupted";
+				const isFailed =
+					queuedMessage.status === "paused" &&
+					queuedMessage.pauseReason === "failed";
+				const isSteer = queuedMessage.status === "queued" && Boolean(activeRun);
+				const isHandoffBlocked =
+					isQueueHandoffPending && queuedMessage.status === "queued";
+
+				return {
+					actionLabel:
+						isInterrupted || isHandoffBlocked
+							? null
+							: isSteer
+								? "Steer"
+								: "Retry",
+					helpText: isFailed
+						? "Retry, edit, or delete it to continue the queue"
+						: undefined,
+					id: queuedMessage._id,
+					isActionDisabled:
+						sendingNowId !== null ||
+						isInterrupted ||
+						isHandoffBlocked ||
+						Boolean(activeRun && (!isSteer || activeRun.status !== "running")),
+					isDeleting: deletingId === queuedMessage._id,
+					isEditing: editingId === queuedMessage._id,
+					isSendingNow: sendingNowId === queuedMessage._id,
+					onDelete: () => {
+						void handleDelete(queuedMessage._id);
+					},
+					onEdit: () => handleEdit(queuedMessage._id),
+					onSendNow: () => {
+						void handleSendNow(queuedMessage._id);
+					},
+					pauseReason:
+						queuedMessage.status === "paused"
+							? queuedMessage.pauseReason
+							: undefined,
+					text: queuedMessage.text,
+					statusLabel: queuedMessage.status === "paused" ? "Paused" : "Queued",
+				};
+			}),
 		[
+			activeRun,
 			deletingId,
 			editingId,
 			handleDelete,
 			handleEdit,
 			handleSendNow,
+			isQueueHandoffPending,
 			queuedMessages,
-			sendingNowIds,
+			sendingNowId,
 		],
 	);
 
@@ -387,7 +482,9 @@ export const useQueuedFollowUpControls = ({
 		editDraft,
 		finishQueuedMessageEdit,
 		isQueuedMessageEditCurrent,
+		isResumingQueuedFollowUps: isResuming,
 		onQueuedFollowUpsReorder: handleReorder,
+		onQueuedFollowUpsResume: handleResume,
 		queuedFollowUps,
 		restoreEditedQueuedMessage,
 		sendQueuedFollowUpNow: handleSendNow,

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import * as React from "react";
 import { toast } from "sonner";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
@@ -23,6 +23,8 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export const useQueuedChatDrain = ({
+	acceptedQueuedMessageId,
+	acceptedQueuedMessageIdsRef,
 	activeRun,
 	chatId,
 	contextLabel,
@@ -32,6 +34,8 @@ export const useQueuedChatDrain = ({
 	sendMessage,
 	workspaceId,
 }: {
+	acceptedQueuedMessageId: string | null;
+	acceptedQueuedMessageIdsRef: React.MutableRefObject<Set<string>>;
 	activeRun: AttachableAssistantRunQueryResult;
 	chatId: string;
 	contextLabel: string;
@@ -41,12 +45,6 @@ export const useQueuedChatDrain = ({
 	sendMessage: QueuedChatSendMessage;
 	workspaceId: Id<"workspaces"> | null | undefined;
 }) => {
-	const claimQueuedMessage = useMutation(
-		api.assistantQueuedMessages.claimNextForChat,
-	);
-	const discardClaimedMessage = useMutation(
-		api.assistantQueuedMessages.discardClaimed,
-	);
 	const queuedMessages = useQuery(
 		api.assistantQueuedMessages.listQueuedForChat,
 		workspaceId ? { workspaceId, chatId } : "skip",
@@ -70,8 +68,6 @@ export const useQueuedChatDrain = ({
 		getVisibleQueuedMessagesSnapshot,
 	);
 	const isDrainingQueuedMessageRef = React.useRef(false);
-	const pendingDiscardClaimedMessageIdRef =
-		React.useRef<Id<"assistantQueuedMessages"> | null>(null);
 	const retryTimerRef = React.useRef<number | null>(null);
 	const isMountedRef = React.useRef(true);
 	const [retryNonce, setRetryNonce] = React.useState(0);
@@ -81,8 +77,27 @@ export const useQueuedChatDrain = ({
 			return;
 		}
 
-		writeQueuedFollowUpsCache(queuedMessagesCacheKey, queuedMessages);
-	}, [queuedMessages, queuedMessagesCacheKey]);
+		writeQueuedFollowUpsCache(
+			queuedMessagesCacheKey,
+			queuedMessages.filter(
+				(message) =>
+					message._id !== acceptedQueuedMessageId &&
+					!acceptedQueuedMessageIdsRef.current.has(message._id),
+			),
+		);
+		for (const acceptedMessageId of acceptedQueuedMessageIdsRef.current) {
+			if (
+				!queuedMessages.some((message) => message._id === acceptedMessageId)
+			) {
+				acceptedQueuedMessageIdsRef.current.delete(acceptedMessageId);
+			}
+		}
+	}, [
+		acceptedQueuedMessageId,
+		acceptedQueuedMessageIdsRef,
+		queuedMessages,
+		queuedMessagesCacheKey,
+	]);
 
 	const updateVisibleQueuedMessages = React.useCallback(
 		(
@@ -122,17 +137,20 @@ export const useQueuedChatDrain = ({
 
 	React.useEffect(() => {
 		void retryNonce;
-		const queuedMessageCount = queuedMessages?.length ?? 0;
-		const hasPendingClaimedMessageCleanup = Boolean(
-			pendingDiscardClaimedMessageIdRef.current,
-		);
-		const hasQueuedMessage =
-			queuedMessageCount > 0 || hasPendingClaimedMessageCleanup;
+		// The queue is ordered server-side: a paused or failed head must block later
+		// rows until the user resolves it, rather than letting the drain skip ahead.
+		const queueHead =
+			queuedMessages?.find(
+				(message) =>
+					message._id !== acceptedQueuedMessageId &&
+					!acceptedQueuedMessageIdsRef.current.has(message._id),
+			) ?? null;
+		const queuedMessage = queueHead?.status === "queued" ? queueHead : null;
 
 		if (
 			!shouldDrainQueuedFollowUp({
 				activeRun,
-				hasQueuedMessage,
+				hasQueuedMessage: Boolean(queuedMessage),
 				isBlocked,
 				isDraining: isDrainingQueuedMessageRef.current,
 				workspaceId,
@@ -141,8 +159,7 @@ export const useQueuedChatDrain = ({
 			return;
 		}
 		// Queue draining is driven by external run/queue state, not a local UI event.
-		const resolvedWorkspaceId = workspaceId;
-		if (!resolvedWorkspaceId) {
+		if (!workspaceId) {
 			return;
 		}
 
@@ -150,39 +167,18 @@ export const useQueuedChatDrain = ({
 		void (async () => {
 			try {
 				const drainResult = await drainQueuedChatMessage({
-					workspaceId: resolvedWorkspaceId,
-					// The queued drain must target the active chat from hook props.
-					chatId,
-					claimQueuedMessage,
-					discardClaimedMessage,
 					// Local message ids come from the live chat state used to de-dupe drains.
 					hasMessageId: (messageId) => localMessageIds.has(messageId),
-					pendingDiscardClaimedMessageId:
-						pendingDiscardClaimedMessageIdRef.current,
-					queuedMessageCount,
+					queuedMessage,
 					resolveConvexToken: getCachedConvexToken,
-					// Sending is the imperative AI SDK handoff for the claimed queued message.
+					// Sending hands the visible queue id to the hosted route for claiming.
 					sendMessage,
 					setLatestRequestBody: (body) => {
 						// Latest request body is stored for the next queued drain handoff.
 						latestRequestBodyRef.current = body;
 					},
 				});
-				pendingDiscardClaimedMessageIdRef.current =
-					drainResult.pendingDiscardClaimedMessageId;
-
 				if (drainResult.status === "retry") {
-					scheduleRetry();
-					return;
-				}
-
-				if (drainResult.status === "cleanup_failed") {
-					logError({
-						event: "client.error",
-						error: drainResult.error,
-						message: `Failed to discard failed ${contextLabel} message`,
-					});
-					toast.error("Failed to clean up queued follow-up");
 					scheduleRetry();
 					return;
 				}
@@ -215,11 +211,10 @@ export const useQueuedChatDrain = ({
 			}
 		})();
 	}, [
+		acceptedQueuedMessageId,
+		acceptedQueuedMessageIdsRef,
 		activeRun,
-		chatId,
-		claimQueuedMessage,
 		contextLabel,
-		discardClaimedMessage,
 		isBlocked,
 		latestRequestBodyRef,
 		localMessageIds,

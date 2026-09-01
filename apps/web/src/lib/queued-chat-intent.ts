@@ -4,8 +4,12 @@ import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-type ClaimedQueuedMessage = NonNullable<
-	FunctionReturnType<typeof api.assistantQueuedMessages.claimNextForChat>
+type QueuedMessage = FunctionReturnType<
+	typeof api.assistantQueuedMessages.listQueuedForChat
+>[number];
+type AutomaticallyReplayableQueuedMessage = Extract<
+	QueuedMessage,
+	{ status: "queued" }
 >;
 type PreparedQueuedMessage = Awaited<ReturnType<typeof fromQueuedUserMessage>>;
 
@@ -16,22 +20,38 @@ export type QueuedChatSendMessage = (
 
 type PrepareQueuedIntentArgs = {
 	hasMessageId: (messageId: string) => boolean;
-	queuedMessage: ClaimedQueuedMessage;
+	queuedMessage: QueuedMessage;
 	resolveConvexToken: () => Promise<string | null>;
 };
 
-export const QUEUED_SEND_NOW_PENDING_ID = "__queued_send_now_pending__";
+type PrepareQueuedReplayIntentArgs =
+	| (PrepareQueuedIntentArgs & {
+			origin: "manual";
+	  })
+	| (Omit<PrepareQueuedIntentArgs, "queuedMessage"> & {
+			origin: "automatic";
+			queuedMessage: AutomaticallyReplayableQueuedMessage;
+	  });
 
 export const prepareQueuedReplayIntent = async ({
 	hasMessageId,
+	origin,
 	queuedMessage,
 	resolveConvexToken,
-}: PrepareQueuedIntentArgs) =>
-	await fromQueuedUserMessage({
+}: PrepareQueuedReplayIntentArgs) => {
+	const prepared = await fromQueuedUserMessage({
 		hasMessageId,
 		queuedMessage,
 		resolveConvexToken,
 	});
+	return {
+		...prepared,
+		body: {
+			...prepared.body,
+			replayQueuedMessageOrigin: origin,
+		},
+	};
+};
 
 export const prepareQueuedSteerIntent = async ({
 	activeRunId,
@@ -43,11 +63,16 @@ export const prepareQueuedSteerIntent = async ({
 }) => {
 	const preparedQueuedMessage = await prepareQueuedReplayIntent({
 		hasMessageId,
+		origin: "manual",
 		queuedMessage,
 		resolveConvexToken,
 	});
-	const { replayQueuedMessageId: _replayQueuedMessageId, ...queuedBody } =
-		preparedQueuedMessage.body;
+	const {
+		replayQueuedMessageId: _replayQueuedMessageId,
+		replayQueuedMessageOrigin: _replayQueuedMessageOrigin,
+		replayQueuedMessageStatus: _replayQueuedMessageStatus,
+		...queuedBody
+	} = preparedQueuedMessage.body;
 
 	return {
 		body: {
@@ -60,98 +85,40 @@ export const prepareQueuedSteerIntent = async ({
 };
 
 type DrainQueuedChatMessageArgs = {
-	chatId: string;
-	claimQueuedMessage: (args: {
-		workspaceId: Id<"workspaces">;
-		chatId: string;
-	}) => Promise<ClaimedQueuedMessage | null>;
-	discardClaimedMessage: (args: {
-		workspaceId: Id<"workspaces">;
-		chatId: string;
-		queuedMessageId: Id<"assistantQueuedMessages">;
-	}) => Promise<unknown>;
 	hasMessageId: (messageId: string) => boolean;
-	pendingDiscardClaimedMessageId: Id<"assistantQueuedMessages"> | null;
-	queuedMessageCount: number;
+	queuedMessage: AutomaticallyReplayableQueuedMessage | null;
 	resolveConvexToken: () => Promise<string | null>;
 	sendMessage: QueuedChatSendMessage;
 	setLatestRequestBody: (body: ChatRequestContext) => void;
-	workspaceId: Id<"workspaces">;
 };
 
 type DrainQueuedChatMessageResult =
-	| {
-			pendingDiscardClaimedMessageId: Id<"assistantQueuedMessages"> | null;
-			status: "idle" | "retry" | "sent";
-	  }
+	| { status: "idle" | "retry" | "sent" }
 	| {
 			error: unknown;
-			pendingDiscardClaimedMessageId: Id<"assistantQueuedMessages">;
-			status: "cleanup_failed";
-	  }
-	| {
-			error: unknown;
-			pendingDiscardClaimedMessageId: null;
 			status: "send_failed";
 	  };
 
 export const drainQueuedChatMessage = async ({
-	chatId,
-	claimQueuedMessage,
-	discardClaimedMessage,
 	hasMessageId,
-	pendingDiscardClaimedMessageId,
-	queuedMessageCount,
+	queuedMessage,
 	resolveConvexToken,
 	sendMessage,
 	setLatestRequestBody,
-	workspaceId,
 }: DrainQueuedChatMessageArgs): Promise<DrainQueuedChatMessageResult> => {
 	const convexToken = await resolveConvexToken();
 	if (!convexToken) {
-		return {
-			pendingDiscardClaimedMessageId,
-			status: "retry",
-		};
+		return { status: "retry" };
 	}
 
-	if (pendingDiscardClaimedMessageId) {
-		try {
-			await discardClaimedMessage({
-				workspaceId,
-				chatId,
-				queuedMessageId: pendingDiscardClaimedMessageId,
-			});
-		} catch (error) {
-			return {
-				error,
-				pendingDiscardClaimedMessageId,
-				status: "cleanup_failed",
-			};
-		}
-
-		if (queuedMessageCount === 0) {
-			return {
-				pendingDiscardClaimedMessageId: null,
-				status: "idle",
-			};
-		}
-	}
-
-	const queuedMessage = await claimQueuedMessage({
-		workspaceId,
-		chatId,
-	});
 	if (!queuedMessage) {
-		return {
-			pendingDiscardClaimedMessageId: null,
-			status: "retry",
-		};
+		return { status: "idle" };
 	}
 
 	try {
 		const preparedQueuedMessage = await prepareQueuedReplayIntent({
 			hasMessageId,
+			origin: "automatic",
 			queuedMessage,
 			resolveConvexToken: async () => convexToken,
 		});
@@ -159,28 +126,10 @@ export const drainQueuedChatMessage = async ({
 		await sendMessage(preparedQueuedMessage.message, {
 			body: preparedQueuedMessage.body,
 		});
-		return {
-			pendingDiscardClaimedMessageId: null,
-			status: "sent",
-		};
+		return { status: "sent" };
 	} catch (error) {
-		try {
-			await discardClaimedMessage({
-				workspaceId,
-				chatId,
-				queuedMessageId: queuedMessage._id,
-			});
-		} catch (discardError) {
-			return {
-				error: discardError,
-				pendingDiscardClaimedMessageId: queuedMessage._id,
-				status: "cleanup_failed",
-			};
-		}
-
 		return {
 			error,
-			pendingDiscardClaimedMessageId: null,
 			status: "send_failed",
 		};
 	}

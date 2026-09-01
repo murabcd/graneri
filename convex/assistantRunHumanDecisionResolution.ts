@@ -2,7 +2,11 @@ import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { consumeChatTurnAdmissionReservation } from "./aiAdmissionReservations";
-import { upsertAssistantRunJobMessage } from "./assistantRunJobState";
+import {
+	projectPersistedAssistantRunJobForNewGeneration,
+	upsertAssistantRunJobMessage,
+	upsertAssistantRunJobMessages,
+} from "./assistantRunJobState";
 import { requireOwnedActiveChatAndRun } from "./assistantRunLifecycle";
 import type { HumanDecisionResolution } from "./assistantRunModel";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
@@ -14,6 +18,10 @@ import {
 	createAssistantRunStream,
 	getActiveStreamForRun,
 } from "./assistantRunStreamState";
+import {
+	deleteAssistantRunSteerInputs,
+	loadPendingAssistantRunSteerMessages,
+} from "./assistantRunSteerInputState";
 import { persistAssistantRunUserQuestionResolution } from "./assistantRunUserQuestions";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
@@ -243,6 +251,22 @@ export const resolveAssistantRunHumanDecision = async (
 			run._id,
 			persistedResolution.jobMessage,
 		);
+		const pendingSteer = await loadPendingAssistantRunSteerMessages(ctx, {
+			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
+		});
+		await upsertAssistantRunJobMessages(
+			ctx,
+			run._id,
+			pendingSteer.messages.map((message) => ({
+				id: message.messageId,
+				role: "user" as const,
+				partsJson: message.partsJson,
+				metadataJson: message.metadataJson,
+			})),
+		);
+		await deleteAssistantRunSteerInputs(ctx, pendingSteer.inputs);
+		await projectPersistedAssistantRunJobForNewGeneration(ctx, run._id);
 	}
 
 	await cleanupAssistantRunSnapshots(ctx, run._id);

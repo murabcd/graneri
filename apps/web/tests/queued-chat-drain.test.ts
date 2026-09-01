@@ -9,8 +9,7 @@ const queuedMessageId = "queued-1" as Id<"assistantQueuedMessages">;
 const createQueuedMessage = () => ({
 	_id: queuedMessageId,
 	_creationTime: 1,
-	chatId: "chat-1",
-	claimedAt: undefined,
+	chatId: "chat-1" as Id<"chats">,
 	createdAt: 1,
 	messageId: "queued-message-1",
 	ownerTokenIdentifier: "owner",
@@ -21,7 +20,7 @@ const createQueuedMessage = () => ({
 		timezone: "UTC",
 	}),
 	runId: "run-1" as Id<"assistantRuns">,
-	status: "claimed" as const,
+	status: "queued" as const,
 	text: "Queued",
 	updatedAt: 1,
 	workspaceId,
@@ -30,13 +29,8 @@ const createQueuedMessage = () => ({
 const createDrainArgs = (
 	overrides: Partial<Parameters<typeof drainQueuedChatMessage>[0]> = {},
 ) => ({
-	workspaceId,
-	chatId: "chat-1",
-	claimQueuedMessage: vi.fn().mockResolvedValue(createQueuedMessage()),
-	discardClaimedMessage: vi.fn().mockResolvedValue(null),
 	hasMessageId: vi.fn().mockReturnValue(false),
-	pendingDiscardClaimedMessageId: null,
-	queuedMessageCount: 1,
+	queuedMessage: createQueuedMessage(),
 	resolveConvexToken: vi.fn().mockResolvedValue("fresh-token"),
 	sendMessage: vi.fn().mockResolvedValue(null),
 	setLatestRequestBody: vi.fn(),
@@ -44,29 +38,25 @@ const createDrainArgs = (
 });
 
 describe("queued chat drain", () => {
-	it("waits for a Convex token before claiming queued messages", async () => {
+	it("waits for a Convex token without changing the visible queued row", async () => {
+		const queuedMessage = createQueuedMessage();
 		const args = createDrainArgs({
+			queuedMessage,
 			resolveConvexToken: vi.fn().mockResolvedValue(null),
 		});
 
 		await expect(drainQueuedChatMessage(args)).resolves.toEqual({
-			pendingDiscardClaimedMessageId: null,
 			status: "retry",
 		});
-		expect(args.claimQueuedMessage).not.toHaveBeenCalled();
-		expect(args.discardClaimedMessage).not.toHaveBeenCalled();
+		expect(args.sendMessage).not.toHaveBeenCalled();
+		expect(args.queuedMessage).toBe(queuedMessage);
 	});
 
-	it("claims, prepares, and sends a queued message", async () => {
+	it("sends a visible queued row for server-owned claiming", async () => {
 		const args = createDrainArgs();
 
 		await expect(drainQueuedChatMessage(args)).resolves.toEqual({
-			pendingDiscardClaimedMessageId: null,
 			status: "sent",
-		});
-		expect(args.claimQueuedMessage).toHaveBeenCalledWith({
-			workspaceId,
-			chatId: "chat-1",
 		});
 		expect(args.setLatestRequestBody).toHaveBeenCalledWith({
 			...DEFAULT_CHAT_SETTINGS,
@@ -74,13 +64,13 @@ describe("queued chat drain", () => {
 			localCapabilitySession: null,
 			projectId: null,
 			replayQueuedMessageId: queuedMessageId,
+			replayQueuedMessageOrigin: "automatic",
+			replayQueuedMessageStatus: "queued",
 			timezone: "UTC",
 			workspaceId,
 		});
 		expect(args.sendMessage).toHaveBeenCalledWith(
-			expect.objectContaining({
-				text: "Queued",
-			}),
+			expect.objectContaining({ text: "Queued" }),
 			{
 				body: {
 					...DEFAULT_CHAT_SETTINGS,
@@ -88,63 +78,36 @@ describe("queued chat drain", () => {
 					localCapabilitySession: null,
 					projectId: null,
 					replayQueuedMessageId: queuedMessageId,
+					replayQueuedMessageOrigin: "automatic",
+					replayQueuedMessageStatus: "queued",
 					timezone: "UTC",
 					workspaceId,
 				},
 			},
 		);
-		expect(args.discardClaimedMessage).not.toHaveBeenCalled();
 	});
 
-	it("retries pending claimed cleanup before claiming more work", async () => {
-		const cleanupError = new Error("discard failed");
-		const args = createDrainArgs({
-			discardClaimedMessage: vi.fn().mockRejectedValue(cleanupError),
-			pendingDiscardClaimedMessageId: queuedMessageId,
-		});
+	it("is idle when no queued row is visible", async () => {
+		const args = createDrainArgs({ queuedMessage: null });
 
 		await expect(drainQueuedChatMessage(args)).resolves.toEqual({
-			error: cleanupError,
-			pendingDiscardClaimedMessageId: queuedMessageId,
-			status: "cleanup_failed",
+			status: "idle",
 		});
-		expect(args.discardClaimedMessage).toHaveBeenCalledWith({
-			workspaceId,
-			chatId: "chat-1",
-			queuedMessageId,
-		});
-		expect(args.claimQueuedMessage).not.toHaveBeenCalled();
+		expect(args.sendMessage).not.toHaveBeenCalled();
 	});
 
-	it("discards a claimed queued message after send failure", async () => {
+	it("keeps the queued row available when submission rejects", async () => {
+		const queuedMessage = createQueuedMessage();
 		const sendError = new Error("send failed");
 		const args = createDrainArgs({
+			queuedMessage,
 			sendMessage: vi.fn().mockRejectedValue(sendError),
 		});
 
 		await expect(drainQueuedChatMessage(args)).resolves.toEqual({
 			error: sendError,
-			pendingDiscardClaimedMessageId: null,
 			status: "send_failed",
 		});
-		expect(args.discardClaimedMessage).toHaveBeenCalledWith({
-			workspaceId,
-			chatId: "chat-1",
-			queuedMessageId,
-		});
-	});
-
-	it("keeps claimed cleanup pending when send-failure cleanup fails", async () => {
-		const discardError = new Error("discard failed");
-		const args = createDrainArgs({
-			sendMessage: vi.fn().mockRejectedValue(new Error("send failed")),
-			discardClaimedMessage: vi.fn().mockRejectedValue(discardError),
-		});
-
-		await expect(drainQueuedChatMessage(args)).resolves.toEqual({
-			error: discardError,
-			pendingDiscardClaimedMessageId: queuedMessageId,
-			status: "cleanup_failed",
-		});
+		expect(args.queuedMessage).toBe(queuedMessage);
 	});
 });

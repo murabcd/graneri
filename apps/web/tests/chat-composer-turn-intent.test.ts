@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { commitChatComposerTurnIntent } from "@/lib/chat-composer-turn-intent";
+import {
+	claimChatComposerTurnIntent,
+	commitChatComposerTurnIntent,
+} from "@/lib/chat-composer-turn-intent";
+
+type CommitComposerTurnIntentArgs = Parameters<
+	typeof commitChatComposerTurnIntent
+>[0];
 
 const requestBody = {
 	chatMode: "default" as const,
@@ -16,21 +23,25 @@ const requestBody = {
 	workspaceId: "workspace-1",
 };
 
-const createArgs = () => ({
-	attachedFiles: [],
-	editingMessageId: null,
-	isQueuedMessageEditCurrent: vi.fn(() => true),
-	onBeforeSubmit: vi.fn(),
-	onRequestPrepared: vi.fn(),
-	prepareTurn: vi.fn(() => ({
-		buildRequestBody: async () => requestBody,
-		text: "Continue",
-	})),
-	queuedMessageEditId: null,
-	restoreDraft: vi.fn(),
-	submitTurn: vi.fn(async () => ({ status: "sent" as const })),
-	updateQueuedTurn: vi.fn(async () => true),
-});
+const createArgs = () => {
+	const restoreIfCurrent = vi.fn();
+	return {
+		attachedFiles: [],
+		claimIntent: vi.fn(() => ({ restoreIfCurrent })),
+		editingMessageId: null,
+		isQueuedMessageEditCurrent: vi.fn(() => true),
+		onBeforeSubmit: vi.fn(),
+		onRequestPrepared: vi.fn(),
+		prepareTurn: vi.fn(() => ({
+			buildRequestBody: async () => requestBody,
+			text: "Continue",
+		})),
+		queuedMessageEditId: null,
+		restoreIfCurrent,
+		submitTurn: vi.fn(async () => ({ status: "sent" as const })),
+		updateQueuedTurn: vi.fn(async () => true),
+	};
+};
 
 describe("chat composer turn intent", () => {
 	it("commits a new turn through the submit path", async () => {
@@ -69,7 +80,7 @@ describe("chat composer turn intent", () => {
 			}),
 		);
 		expect(args.updateQueuedTurn).not.toHaveBeenCalled();
-		expect(args.restoreDraft).not.toHaveBeenCalled();
+		expect(args.restoreIfCurrent).not.toHaveBeenCalled();
 	});
 
 	it("updates a queued edit without starting a new turn", async () => {
@@ -103,10 +114,10 @@ describe("chat composer turn intent", () => {
 
 		expect(result).toEqual({ status: "stale_edit" });
 		expect(args.onRequestPrepared).not.toHaveBeenCalled();
-		expect(args.restoreDraft).not.toHaveBeenCalled();
+		expect(args.restoreIfCurrent).toHaveBeenCalledOnce();
 	});
 
-	it("restores the captured draft when preparing a current intent fails", async () => {
+	it("leaves the unclaimed draft untouched when synchronous preparation fails", async () => {
 		const args = createArgs();
 		args.prepareTurn.mockImplementation(() => {
 			throw new Error("local folder unavailable");
@@ -115,7 +126,8 @@ describe("chat composer turn intent", () => {
 		await expect(commitChatComposerTurnIntent(args)).rejects.toThrow(
 			"local folder unavailable",
 		);
-		expect(args.restoreDraft).toHaveBeenCalledOnce();
+		expect(args.claimIntent).not.toHaveBeenCalled();
+		expect(args.restoreIfCurrent).not.toHaveBeenCalled();
 	});
 
 	it("does not restore a queued edit that was replaced while failing", async () => {
@@ -127,6 +139,130 @@ describe("chat composer turn intent", () => {
 		await expect(commitChatComposerTurnIntent(args)).rejects.toThrow(
 			"update failed",
 		);
-		expect(args.restoreDraft).not.toHaveBeenCalled();
+		expect(args.restoreIfCurrent).not.toHaveBeenCalled();
+	});
+
+	it("claims one draft revision immediately and never clears a newer draft", async () => {
+		let draft = { revision: 0, text: "B" };
+		let attachments = { revision: 0, value: [] as string[] };
+		const capturedDraft = draft;
+		const capturedAttachments = attachments;
+		let finishSubmit!: (result: { status: "queued" }) => void;
+		const pendingSubmit = new Promise<{ status: "queued" }>((resolve) => {
+			finishSubmit = resolve;
+		});
+		let preparedInput:
+			| Parameters<CommitComposerTurnIntentArgs["submitTurn"]>[0]
+			| undefined;
+		const submitTurn: CommitComposerTurnIntentArgs["submitTurn"] = vi.fn(
+			(input) => {
+				preparedInput = input;
+				return pendingSubmit;
+			},
+		);
+		const claimIntent = vi.fn(() => {
+			let draftClaimRevision: number | null = null;
+			let attachmentsClaimRevision: number | null = null;
+			return claimChatComposerTurnIntent({
+				claimAttachments: () => {
+					if (attachments.revision !== capturedAttachments.revision) {
+						return null;
+					}
+					attachmentsClaimRevision = attachments.revision + 1;
+					attachments = {
+						revision: attachmentsClaimRevision,
+						value: [],
+					};
+					return attachmentsClaimRevision;
+				},
+				claimDraft: () => {
+					if (draft.revision !== capturedDraft.revision) {
+						return null;
+					}
+					draftClaimRevision = draft.revision + 1;
+					draft = { revision: draftClaimRevision, text: "" };
+					return draftClaimRevision;
+				},
+				isAttachmentsClaimCurrent: (revision) =>
+					attachments.revision === revision,
+				isDraftClaimCurrent: (revision) => draft.revision === revision,
+				onClaim: vi.fn(),
+				onRestore: vi.fn(),
+				restoreAttachments: () => {
+					attachments = {
+						revision: (attachmentsClaimRevision ?? 0) + 1,
+						value: capturedAttachments.value,
+					};
+				},
+				restoreDraft: () => {
+					draft = {
+						revision: (draftClaimRevision ?? 0) + 1,
+						text: capturedDraft.text,
+					};
+				},
+			});
+		});
+		const args = {
+			...createArgs(),
+			claimIntent,
+			prepareTurn: vi.fn(() => ({
+				buildRequestBody: async () => requestBody,
+				text: capturedDraft.text,
+			})),
+			submitTurn,
+		};
+
+		const firstCommit = commitChatComposerTurnIntent(args);
+		expect(draft.text).toBe("");
+
+		const duplicateCommit = commitChatComposerTurnIntent(args);
+		await expect(duplicateCommit).resolves.toEqual({ status: "stale_intent" });
+		expect(submitTurn).toHaveBeenCalledOnce();
+
+		draft = { revision: draft.revision + 1, text: "D" };
+		preparedInput?.onRequestPrepared({
+			localCapabilitySession: null,
+			requestBody,
+		});
+		expect(draft.text).toBe("D");
+
+		finishSubmit({ status: "queued" });
+		await expect(firstCommit).resolves.toEqual({ status: "queued" });
+		expect(draft.text).toBe("D");
+	});
+
+	it("does not restore a failed intent over a newer draft revision", async () => {
+		let draft = { revision: 0, text: "B" };
+		const capturedDraft = draft;
+		let rejectSubmit!: (error: Error) => void;
+		const pendingSubmit = new Promise<never>((_resolve, reject) => {
+			rejectSubmit = reject;
+		});
+		const args = {
+			...createArgs(),
+			claimIntent: () => {
+				const claimedRevision = draft.revision + 1;
+				draft = { revision: claimedRevision, text: "" };
+				return {
+					restoreIfCurrent: () => {
+						if (draft.revision === claimedRevision) {
+							draft = {
+								revision: draft.revision + 1,
+								text: capturedDraft.text,
+							};
+						}
+					},
+				};
+			},
+			submitTurn: vi.fn(() => pendingSubmit),
+		};
+
+		const commit = commitChatComposerTurnIntent(args);
+		draft = { revision: draft.revision + 1, text: "D" };
+		const submitError = new Error("B setup failed");
+		rejectSubmit(submitError);
+
+		await expect(commit).rejects.toBe(submitError);
+		expect(draft.text).toBe("D");
 	});
 });
