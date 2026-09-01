@@ -1,3 +1,4 @@
+import { Button } from "@workspace/ui/components/button";
 import {
 	Tooltip,
 	TooltipContent,
@@ -21,8 +22,6 @@ type MarkdownCodeBlockProps = React.ComponentProps<"code"> & {
 };
 
 const LANGUAGE_PATTERN = /language-([^\s]+)/;
-const CODE_ACTION_BUTTON_CLASS =
-	"flex size-8 cursor-pointer items-center justify-center rounded-full p-0 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-default disabled:opacity-50";
 
 const getCodeText = (children: React.ReactNode): string =>
 	React.Children.toArray(children)
@@ -142,38 +141,42 @@ export function MarkdownCodeBlock({
 			>
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<button
+						<Button
 							aria-label={wrapLabel}
 							aria-pressed={isWrapped}
-							className={CODE_ACTION_BUTTON_CLASS}
+							className="rounded-full text-muted-foreground hover:bg-foreground/5"
 							disabled={controlsDisabled}
 							onClick={handleWrapToggle}
+							size="icon"
 							type="button"
+							variant="ghost"
 						>
 							{isWrapped ? (
-								<WrapText aria-hidden="true" className="size-4" />
+								<WrapText aria-hidden="true" />
 							) : (
-								<ArrowRightToLine aria-hidden="true" className="size-4" />
+								<ArrowRightToLine aria-hidden="true" />
 							)}
-						</button>
+						</Button>
 					</TooltipTrigger>
 					<TooltipContent>{wrapLabel}</TooltipContent>
 				</Tooltip>
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<button
+						<Button
 							aria-label={copyLabel}
-							className={CODE_ACTION_BUTTON_CLASS}
+							className="rounded-full text-muted-foreground hover:bg-foreground/5"
 							disabled={controlsDisabled}
 							onClick={handleCopy}
+							size="icon"
 							type="button"
+							variant="ghost"
 						>
 							{isCopied ? (
-								<Check aria-hidden="true" className="size-4" />
+								<Check aria-hidden="true" />
 							) : (
-								<Copy aria-hidden="true" className="size-4" />
+								<Copy aria-hidden="true" />
 							)}
-						</button>
+						</Button>
 					</TooltipTrigger>
 					<TooltipContent>{copyLabel}</TooltipContent>
 				</Tooltip>

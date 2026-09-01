@@ -119,7 +119,16 @@ describe("chat file attachments", () => {
 			}),
 		);
 
-		const pill = screen.getByText("report.pdf").parentElement;
+		const pill = screen
+			.getByText("report.pdf")
+			.closest<HTMLElement>('[data-slot="attachment"]');
+		expect(pill?.dataset.slot).toBe("attachment");
+		expect(
+			pill?.querySelector('[data-slot="attachment-content"]'),
+		).not.toBeNull();
+		expect(
+			pill?.querySelector('[data-slot="attachment-actions"]'),
+		).not.toBeNull();
 		expect(pill?.classList.contains("inline-flex")).toBe(true);
 		expect(pill?.classList.contains("max-w-80")).toBe(true);
 		expect(pill?.classList.contains("relative")).toBe(true);
@@ -131,7 +140,12 @@ describe("chat file attachments", () => {
 		const downloadButton = screen.getByRole("button", {
 			name: "Download report.pdf",
 		});
-		expect(downloadButton.classList.contains("absolute")).toBe(true);
+		expect(downloadButton.dataset.slot).toBe("attachment-action");
+		expect(
+			downloadButton
+				.closest('[data-slot="attachment-actions"]')
+				?.classList.contains("absolute"),
+		).toBe(true);
 		fireEvent.click(downloadButton);
 		expect(onDownload).toHaveBeenCalledWith(file);
 	});
@@ -171,12 +185,19 @@ describe("chat file attachments", () => {
 			}),
 		);
 		const messageImage = screen.getByRole("button", { name: "workspace.png" });
+		const messageImageAttachment = messageImage.closest<HTMLElement>(
+			'[data-slot="attachment"]',
+		);
 		const messageImageElement = screen.getByRole("img", {
 			name: "workspace.png",
 		});
-		expect(messageImage.classList.contains("border")).toBe(true);
-		expect(messageImage.classList.contains("size-20")).toBe(true);
-		expect(messageImage.classList.contains("rounded-lg")).toBe(true);
+		expect(messageImage.dataset.slot).toBe("attachment-trigger");
+		expect(messageImageAttachment?.classList.contains("border")).toBe(true);
+		expect(messageImageAttachment?.classList.contains("size-20")).toBe(true);
+		expect(messageImageAttachment?.classList.contains("rounded-lg")).toBe(true);
+		expect(
+			messageImageAttachment?.querySelector('[data-slot="attachment-media"]'),
+		).not.toBeNull();
 		expect(messageImageElement.getAttribute("decoding")).toBe("async");
 		expect(messageImageElement.getAttribute("loading")).toBe("lazy");
 		message.unmount();
@@ -190,7 +211,11 @@ describe("chat file attachments", () => {
 		const assistantImage = screen.getByRole("button", {
 			name: "workspace.png",
 		});
-		expect(assistantImage.classList.contains("border")).toBe(true);
+		expect(
+			assistantImage
+				.closest('[data-slot="attachment"]')
+				?.classList.contains("border"),
+		).toBe(true);
 		assistantMessage.unmount();
 
 		render(
@@ -232,15 +257,17 @@ describe("chat file attachments", () => {
 		);
 
 		const galleryImage = screen.getByRole("button", { name: "workspace.png" });
-		expect(galleryImage.classList.contains("border")).toBe(true);
-		expect(galleryImage.classList.contains("rounded-lg")).toBe(true);
-		expect(galleryImage.classList.contains("size-20")).toBe(true);
-		expect(galleryImage.parentElement?.classList.contains("flex-wrap")).toBe(
-			true,
+		const galleryAttachment = galleryImage.closest<HTMLElement>(
+			'[data-slot="attachment"]',
 		);
-		expect(galleryImage.parentElement?.classList.contains("justify-end")).toBe(
-			true,
+		const galleryGroup = galleryImage.closest<HTMLElement>(
+			'[data-slot="attachment-group"]',
 		);
+		expect(galleryAttachment?.classList.contains("border")).toBe(true);
+		expect(galleryAttachment?.classList.contains("rounded-lg")).toBe(true);
+		expect(galleryAttachment?.classList.contains("size-20")).toBe(true);
+		expect(galleryGroup?.classList.contains("flex-wrap")).toBe(true);
+		expect(galleryGroup?.classList.contains("justify-end")).toBe(true);
 	});
 
 	it("groups user images above wrapped right-aligned file pills", () => {
@@ -267,11 +294,15 @@ describe("chat file attachments", () => {
 			}),
 		);
 
-		const imageGroup = screen.getByRole("button", {
-			name: "workspace.png",
-		}).parentElement;
-		const firstDocumentPill = screen.getByText("report.pdf").parentElement;
-		const documentRow = firstDocumentPill?.parentElement;
+		const imageGroup = screen
+			.getByRole("button", { name: "workspace.png" })
+			.closest<HTMLElement>('[data-slot="attachment-group"]');
+		const firstDocumentPill = screen
+			.getByText("report.pdf")
+			.closest<HTMLElement>('[data-slot="attachment"]');
+		const documentRow = firstDocumentPill?.closest<HTMLElement>(
+			'[data-slot="attachment-group"]',
+		);
 
 		expect(imageGroup?.nextElementSibling).toBe(documentRow);
 		expect(imageGroup?.classList.contains("flex-wrap")).toBe(true);
@@ -290,7 +321,8 @@ describe("chat file attachments", () => {
 		expect(
 			screen
 				.getByText("notes.docx")
-				.parentElement?.querySelector('[data-file-kind="word"]'),
+				.closest('[data-slot="attachment"]')
+				?.querySelector('[data-file-kind="word"]'),
 		).toBeTruthy();
 	});
 

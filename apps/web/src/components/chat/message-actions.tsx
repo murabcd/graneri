@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { CHAT_ACTIONS_VISIBILITY_CLASS } from "@/components/chat/message-layout";
 
 const MESSAGE_ACTION_BUTTON_CLASS =
-	"size-7 text-muted-foreground hover:text-foreground";
+	"text-muted-foreground hover:text-foreground [&_svg]:size-3.5!";
 
 export function MessageActionButton({
 	children,
@@ -88,14 +88,14 @@ export function AssistantMessageActions({
 				label="Regenerate"
 				onClick={() => onRegenerateMessage?.(messageId)}
 			>
-				<RotateCcw className="size-3.5" />
+				<RotateCcw />
 			</MessageActionButton>
 			<MessageActionButton
 				disabled={!onForkMessage || isStreaming}
 				label="Fork chat"
 				onClick={() => onForkMessage?.(messageId)}
 			>
-				<GitBranch className="size-3.5" />
+				<GitBranch />
 			</MessageActionButton>
 			<CopyMessageButton text={text} />
 			{additionalAction}
@@ -145,7 +145,7 @@ export function UserMessageActions({
 			<MessageActionButton
 				className={
 					isPendingDelete
-						? "text-destructive hover:bg-destructive/10 hover:text-destructive dark:text-red-500"
+						? "text-destructive hover:bg-destructive/10 hover:text-destructive"
 						: undefined
 				}
 				disabled={!onDeleteMessage}
@@ -154,11 +154,7 @@ export function UserMessageActions({
 				onMouseLeave={onDeleteMouseLeave}
 				showTooltip={!isPendingDelete}
 			>
-				{isPendingDelete ? (
-					<Check className="size-3.5" />
-				) : (
-					<Trash2 className="size-3.5" />
-				)}
+				{isPendingDelete ? <Check /> : <Trash2 />}
 			</MessageActionButton>
 		</div>
 	);
@@ -175,7 +171,7 @@ function CopyMessageButton({ text }: { text: string }) {
 					.catch(() => toast.error("Failed to copy"));
 			}}
 		>
-			<Copy className="size-3.5" />
+			<Copy />
 		</MessageActionButton>
 	);
 }

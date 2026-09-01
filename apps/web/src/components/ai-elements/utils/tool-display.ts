@@ -37,16 +37,6 @@ export const formatElapsedTime = (ms: number) => {
 		: `${minutes}m ${remainingSeconds}s`;
 };
 
-export const getToolDurationMs = (part: { output?: JSONValue }) => {
-	const output = part.output;
-	if (output === null || typeof output !== "object" || Array.isArray(output)) {
-		return null;
-	}
-	const duration = output.totalDurationMs ?? output.durationMs;
-
-	return typeof duration === "number" ? duration : null;
-};
-
 export const formatToolPayload = (value: JSONValue | undefined) => {
 	if (value === undefined || value === null || value === "") {
 		return "";

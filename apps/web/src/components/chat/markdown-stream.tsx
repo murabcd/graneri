@@ -65,7 +65,7 @@ export function MarkdownStream({
 	return (
 		<Streamdown
 			{...props}
-			className={cn("graneri-markdown space-y-0", className)}
+			className={cn("graneri-markdown", className)}
 			codeBlockMaxHeight={0}
 			components={components}
 			controls={{ code: { copy: false, download: false } }}

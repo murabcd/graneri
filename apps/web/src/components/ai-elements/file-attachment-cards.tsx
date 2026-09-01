@@ -1,4 +1,14 @@
-import { Button } from "@workspace/ui/components/button";
+import {
+	Attachment,
+	AttachmentAction,
+	AttachmentActions,
+	AttachmentContent,
+	AttachmentDescription,
+	AttachmentGroup,
+	AttachmentMedia,
+	AttachmentTitle,
+	AttachmentTrigger,
+} from "@workspace/ui/components/attachment";
 import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
 import { Download, LoaderCircle } from "lucide-react";
@@ -32,55 +42,52 @@ export function FileAttachmentCard({
 		canDownloadOverride ?? (Boolean(onDownload) && isDownloadableUrl(file.url));
 	const hasDownloadAction =
 		isDownloading || (canDownload && Boolean(onDownload));
-	const downloadAction = isDownloading ? (
-		<Button
-			aria-label={`Downloading ${filename}`}
-			className={cn(
-				"size-8 shrink-0 rounded-full text-muted-foreground disabled:opacity-100",
-				variant === "pill" && "absolute end-1 top-1/2 -translate-y-1/2",
-			)}
-			disabled
-			size="icon-sm"
-			type="button"
-			variant="ghost"
-		>
-			<LoaderCircle
-				aria-hidden="true"
-				className="size-4 animate-spin motion-reduce:animate-none"
-			/>
-		</Button>
-	) : canDownload && onDownload ? (
-		<Button
-			aria-label={`Download ${filename}`}
-			className={cn(
-				"size-8 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
-				variant === "pill" && "absolute end-1 top-1/2 -translate-y-1/2",
-			)}
-			onClick={() => onDownload(file)}
-			size="icon-sm"
-			title={`Download ${filename}`}
-			type="button"
-			variant="ghost"
-		>
-			<Download aria-hidden="true" className="size-4" />
-		</Button>
-	) : null;
+	const downloadAction =
+		isDownloading || (canDownload && onDownload) ? (
+			<AttachmentActions
+				className={cn(
+					variant === "pill" && "absolute end-1 top-1/2 -translate-y-1/2",
+				)}
+			>
+				<AttachmentAction
+					aria-label={
+						isDownloading ? `Downloading ${filename}` : `Download ${filename}`
+					}
+					className="rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-100"
+					disabled={isDownloading}
+					onClick={
+						isDownloading || !onDownload ? undefined : () => onDownload(file)
+					}
+					size="icon"
+					title={isDownloading ? undefined : `Download ${filename}`}
+					type="button"
+				>
+					{isDownloading ? (
+						<LoaderCircle
+							aria-hidden="true"
+							className="animate-spin motion-reduce:animate-none"
+						/>
+					) : (
+						<Download aria-hidden="true" />
+					)}
+				</AttachmentAction>
+			</AttachmentActions>
+		) : null;
 
 	if (variant === "pill") {
 		return (
-			<div className="relative inline-flex max-w-80 min-w-0 items-center gap-1 rounded-full border border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground">
+			<Attachment
+				className="inline-flex max-w-80 min-w-0 flex-nowrap gap-1 rounded-full border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground focus-within:ring-0 has-data-[slot=attachment-content]:p-0"
+				size="xs"
+			>
 				<FileAttachmentGlyph file={file} />
-				<span
-					className={cn(
-						"min-w-0 truncate font-medium",
-						hasDownloadAction ? "pe-8" : "pe-1",
-					)}
-					title={filename}
+				<AttachmentContent
+					className={cn("leading-5", hasDownloadAction ? "pe-8" : "pe-1")}
 				>
-					{filename}
-				</span>
+					<AttachmentTitle title={filename}>{filename}</AttachmentTitle>
+				</AttachmentContent>
 				{downloadAction}
-			</div>
+			</Attachment>
 		);
 	}
 	const sizeBytes = getChatFileSizeBytes(file);
@@ -92,26 +99,20 @@ export function FileAttachmentCard({
 		.join(" · ");
 
 	return (
-		<div className="flex h-16 w-[17rem] max-w-full min-w-0 items-center gap-3 rounded-2xl border border-border/60 bg-muted/50 px-3">
+		<Attachment className="h-16 w-[17rem] max-w-full min-w-0 flex-nowrap gap-3 rounded-2xl border-border/60 bg-muted/50 px-3 focus-within:ring-0 has-data-[slot=attachment-content]:p-0">
 			<FileAttachmentGlyph className="size-8 shrink-0" file={file} />
-			<div className="min-w-0 flex-1">
-				<p
-					className="truncate font-medium text-foreground text-sm"
-					title={filename}
-				>
+			<AttachmentContent className="leading-5">
+				<AttachmentTitle className="text-foreground text-sm" title={filename}>
 					{filename}
-				</p>
+				</AttachmentTitle>
 				{fileDetails ? (
-					<p
-						aria-live="polite"
-						className="mt-0.5 truncate text-muted-foreground text-xs"
-					>
+					<AttachmentDescription aria-live="polite">
 						{fileDetails}
-					</p>
+					</AttachmentDescription>
 				) : null}
-			</div>
+			</AttachmentContent>
 			{downloadAction}
-		</div>
+		</Attachment>
 	);
 }
 
@@ -181,39 +182,45 @@ export function FileAttachmentCards({
 				)}
 			>
 				{imageFiles.length > 0 ? (
-					<div
+					<AttachmentGroup
 						className={cn(
-							"flex max-w-full flex-wrap items-end gap-2",
+							"max-w-full flex-wrap items-end gap-2 overflow-visible py-0 [mask-image:none] snap-none scroll-px-0",
 							align === "end" && "justify-end",
 						)}
 					>
 						{imageFiles.map((file) => (
-							<button
-								key={getChatFileIdentity(file)}
-								type="button"
+							<Attachment
 								className={cn(
-									"cursor-zoom-in overflow-hidden border border-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+									"gap-0 overflow-hidden border-border/60 bg-transparent p-0 focus-within:ring-0 has-data-[slot=attachment-media]:p-0",
 									isUserMessage ? "size-20 rounded-lg" : "size-16 rounded-xl",
 								)}
-								onClick={() => setPreviewImage(file)}
+								key={getChatFileIdentity(file)}
+								size="xs"
 							>
-								<img
-									src={file.url}
-									alt={file.filename || "Attached image"}
-									decoding="async"
-									loading="lazy"
-									className={cn(
-										"size-full object-cover",
-										isUserMessage && "rounded-md",
-									)}
+								<AttachmentMedia
+									className="size-full rounded-[inherit] bg-transparent"
+									variant="image"
+								>
+									<img
+										src={file.url}
+										alt={file.filename || "Attached image"}
+										decoding="async"
+										loading="lazy"
+										className="size-full object-cover"
+									/>
+								</AttachmentMedia>
+								<AttachmentTrigger
+									aria-label={file.filename || "Attached image"}
+									className="cursor-zoom-in rounded-[inherit] focus-visible:ring-2 focus-visible:ring-ring"
+									onClick={() => setPreviewImage(file)}
 								/>
-							</button>
+							</Attachment>
 						))}
-					</div>
+					</AttachmentGroup>
 				) : null}
 				{documentFiles.length > 0 ? (
 					isUserMessage ? (
-						<div className="flex max-w-full flex-wrap justify-end gap-2 self-end">
+						<AttachmentGroup className="max-w-full flex-wrap justify-end gap-2 self-end overflow-visible py-0 [mask-image:none] snap-none scroll-px-0">
 							{documentFiles.map((file) => (
 								<FileAttachmentCard
 									key={getChatFileIdentity(file)}
@@ -222,9 +229,9 @@ export function FileAttachmentCards({
 									variant="pill"
 								/>
 							))}
-						</div>
+						</AttachmentGroup>
 					) : (
-						<div className="flex max-w-full flex-col gap-2">
+						<AttachmentGroup className="max-w-full flex-col gap-2 overflow-visible py-0 [mask-image:none] snap-none scroll-px-0">
 							{documentFiles.map((file) => (
 								<FileAttachmentCard
 									key={getChatFileIdentity(file)}
@@ -233,7 +240,7 @@ export function FileAttachmentCards({
 									onDownload={handleDownload}
 								/>
 							))}
-						</div>
+						</AttachmentGroup>
 					)
 				) : null}
 			</div>

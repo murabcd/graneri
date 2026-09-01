@@ -11,6 +11,10 @@
 	overflow-wrap: anywhere;
 }
 
+.graneri-markdown > :not(:last-child) {
+	margin-block: 0;
+}
+
 .graneri-markdown p {
 	margin: 0 0 var(--markdown-space);
 }

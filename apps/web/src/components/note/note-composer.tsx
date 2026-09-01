@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from "@workspace/ui/components/card";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
@@ -1839,11 +1840,11 @@ function NoteChatHeader({
 }) {
 	const chatModeIcon =
 		presentationMode === "inline" ? (
-			<PanelBottom className="size-4" />
+			<PanelBottom />
 		) : presentationMode === "floating" ? (
-			<PanelRightDashed className="size-4" />
+			<PanelRightDashed />
 		) : (
-			<PanelRight className="size-4" />
+			<PanelRight />
 		);
 	const isDesktopSidebarHeader = sidebarCompact && !isMobile;
 	const isMobileSidebarHeader = sidebarCompact && isMobile;
@@ -1963,7 +1964,7 @@ function NoteChatHeader({
 							onClick={onNewChat}
 							aria-label="New chat"
 						>
-							<Plus className="size-4" />
+							<Plus />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent>New chat</TooltipContent>
@@ -1991,36 +1992,32 @@ function NoteChatHeader({
 							event.preventDefault();
 						}}
 					>
-						<DropdownMenuItem
-							onSelect={onSelectInlinePresentation}
-							className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
-						>
-							<PanelBottom className="size-4 text-muted-foreground" />
-							<span>Inline</span>
-							{presentationMode === "inline" ? (
-								<Check className="size-4 text-muted-foreground" />
-							) : null}
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							onSelect={() => onSelectRightPresentation("floating")}
-							className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
-						>
-							<PanelRightDashed className="size-4 text-muted-foreground" />
-							<span>Floating</span>
-							{presentationMode === "floating" ? (
-								<Check className="size-4 text-muted-foreground" />
-							) : null}
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							onSelect={() => onSelectRightPresentation("sidebar")}
-							className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
-						>
-							<PanelRight className="size-4 text-muted-foreground" />
-							<span>Sidebar</span>
-							{presentationMode === "sidebar" ? (
-								<Check className="size-4 text-muted-foreground" />
-							) : null}
-						</DropdownMenuItem>
+						<DropdownMenuGroup>
+							<DropdownMenuItem
+								onSelect={onSelectInlinePresentation}
+								className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+							>
+								<PanelBottom />
+								<span>Inline</span>
+								{presentationMode === "inline" ? <Check /> : null}
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								onSelect={() => onSelectRightPresentation("floating")}
+								className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+							>
+								<PanelRightDashed />
+								<span>Floating</span>
+								{presentationMode === "floating" ? <Check /> : null}
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								onSelect={() => onSelectRightPresentation("sidebar")}
+								className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+							>
+								<PanelRight />
+								<span>Sidebar</span>
+								{presentationMode === "sidebar" ? <Check /> : null}
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
 					</DropdownMenuContent>
 				</DropdownMenu>
 
@@ -2033,7 +2030,7 @@ function NoteChatHeader({
 							onClick={onHideChat}
 							aria-label="Hide chat"
 						>
-							<Minus className="size-4" />
+							<Minus />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent>Hide chat</TooltipContent>

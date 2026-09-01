@@ -55,8 +55,11 @@ describe("MarkdownStream code blocks", () => {
 		);
 		expect(wrapButton.classList).toContain("size-8");
 		expect(wrapButton.classList).not.toContain("size-9");
+		expect(wrapButton.className).toContain(
+			"[&_svg:not([class*='size-'])]:size-4",
+		);
 		expect(wrapButton.querySelector("svg")?.classList.contains("size-4")).toBe(
-			true,
+			false,
 		);
 		Object.defineProperty(block as HTMLElement, "getBoundingClientRect", {
 			value: () => ({ height: 212 }),
@@ -81,8 +84,8 @@ describe("MarkdownStream code blocks", () => {
 		);
 		expect(copyButton.classList).toContain("size-8");
 		expect(copyButton.classList).not.toContain("size-9");
-		expect(copyButton.querySelector("svg")?.classList.contains("size-4")).toBe(
-			true,
+		expect(copyButton.className).toContain(
+			"[&_svg:not([class*='size-'])]:size-4",
 		);
 	});
 
@@ -222,8 +225,8 @@ Second paragraph.
 
 		const root = container.querySelector<HTMLElement>(".graneri-markdown");
 		expect(root).not.toBeNull();
-		expect(root?.className).toContain("space-y-0");
-		expect(root?.className).not.toContain("space-y-4");
+		expect(root?.className).not.toContain("space-y-0");
+		expect(root?.className).toContain("graneri-markdown");
 		expect(screen.getByRole("heading", { level: 1 }).className).toBe("");
 		expect(screen.getByRole("heading", { level: 2 }).className).toBe("");
 		expect(screen.getByRole("list").className).toBe("");
