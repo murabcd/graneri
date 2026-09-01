@@ -377,7 +377,80 @@ test("stored transcript reads utterances from the latest session only", async ()
 	expect(summary).toMatchObject({ hasTranscript: true, utteranceCount: 2 });
 });
 
-test("markGenerated terminalizes a recovered stopping transcript session", async () => {
+test("active transcript reads its current utterances without a completed document", async () => {
+	const { asOwner, noteId } = await createNoteFixture();
+	const sessionId = await asOwner.mutation(
+		api.transcriptSessions.startSession,
+		{
+			noteId,
+			transcriptionLanguage: "en",
+		},
+	);
+	await asOwner.mutation(api.transcriptSessions.appendUtterance, {
+		sessionId,
+		utterance: {
+			utteranceId: "active",
+			speaker: "you",
+			source: "live",
+			text: "Current capture text.",
+			startedAt: 1_000,
+			endedAt: 1_500,
+		},
+	});
+
+	const transcript = await asOwner.query(
+		api.transcriptSessions.getLatestTextForNote,
+		{ noteId },
+	);
+
+	expect(transcript).toMatchObject({
+		sessionId,
+		text: "You: Current capture text.",
+		transcriptionLanguage: "en",
+	});
+});
+
+test("completed transcript fails closed when its canonical document is missing", async () => {
+	const { asOwner, noteId, t } = await createNoteFixture();
+	const sessionId = await asOwner.mutation(
+		api.transcriptSessions.startSession,
+		{
+			noteId,
+			transcriptionLanguage: null,
+		},
+	);
+	await asOwner.mutation(api.transcriptSessions.appendUtterance, {
+		sessionId,
+		utterance: {
+			utteranceId: "missing-document",
+			speaker: "you",
+			source: "live",
+			text: "This must not be reconstructed.",
+			startedAt: 1_000,
+			endedAt: 1_500,
+		},
+	});
+	await t.run(async (ctx) => {
+		const state = await ctx.db
+			.query("transcriptSessionStates")
+			.withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+			.unique();
+		if (!state) {
+			throw new Error("Expected transcript session state.");
+		}
+		await ctx.db.patch(state._id, {
+			status: "completed",
+			endedAt: 2_000,
+			updatedAt: 2_000,
+		});
+	});
+
+	await expect(
+		asOwner.query(api.transcriptSessions.getLatestTextForNote, { noteId }),
+	).rejects.toThrow("Persisted transcript document is unavailable.");
+});
+
+test("markGenerated persists and terminalizes a recovered stopping transcript session", async () => {
 	const { asOwner, noteId, t } = await createNoteFixture();
 	const sessionId = await asOwner.mutation(
 		api.transcriptSessions.startSession,
@@ -390,15 +463,28 @@ test("markGenerated terminalizes a recovered stopping transcript session", async
 	await asOwner.mutation(api.transcriptSessions.requestStopSession, {
 		sessionId,
 	});
+	await asOwner.mutation(api.transcriptSessions.appendUtterance, {
+		sessionId,
+		utterance: {
+			utteranceId: "recovered",
+			speaker: "you",
+			source: "live",
+			text: "Recovered transcript.",
+			startedAt: 1_000,
+			endedAt: 1_500,
+		},
+	});
 	await asOwner.mutation(api.transcriptSessions.markGenerated, {
 		sessionId,
 	});
 
 	const state = await getSessionState(t, sessionId);
+	const document = await getSessionDocument(t, sessionId);
 
 	expect(state?.status).toBe("completed");
 	expect(state?.endedAt).toEqual(expect.any(Number));
 	expect(state?.generatedNoteAt).toEqual(expect.any(Number));
+	expect(document?.text).toBe("You: Recovered transcript.");
 });
 
 test("completeSession rejects already terminal transcript sessions", async () => {

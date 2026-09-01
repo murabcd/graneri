@@ -27,7 +27,9 @@ Stored transcript metadata, canonical text, and utterance history have separate 
 timestamps, transcript availability, and utterance count without reading or
 returning the transcript body. Canonical completed text lives in
 [[convex/transcriptDocument.ts]] and is read only by explicit generation or
-template-rewrite actions. The transcript panel reads
+template-rewrite actions. Terminal sessions with captured utterances require
+that document and fail closed when it is unavailable; only active capture
+assembles its current utterances on demand. The transcript panel reads
 `transcriptSessions.listUtterances` in chronological cursor pages of 50 and
 offers another page only when one exists. Active capture recovery drains every
 page before publishing a recovered snapshot so a partial history can never

@@ -27,9 +27,9 @@ search readers explicitly load the canonical document they need. The document
 row also carries project and archive projections exclusively for its indexed
 full-text search path. [[convex/noteRecords.ts]] owns project and archive
 transitions across both records, so callers cannot update metadata without its
-matching search projection in the same transaction. Product readers and writers
-have no compatibility fallback or dual-write path; note catalog rows do not
-accept or store document bodies.
+matching required search projection in the same transaction. Product readers
+and writers have no compatibility fallback or dual-write path; note catalog
+rows do not accept or store document bodies.
 
 ## Editor files and images
 

@@ -10,6 +10,17 @@ export const getTranscriptDocument = async (
 		.withIndex("by_sessionId", (query) => query.eq("sessionId", sessionId))
 		.unique();
 
+export const requireTranscriptDocument = async (
+	ctx: QueryCtx | MutationCtx,
+	sessionId: Id<"transcriptSessions">,
+) => {
+	const document = await getTranscriptDocument(ctx, sessionId);
+	if (!document) {
+		throw new Error("Persisted transcript document is unavailable.");
+	}
+	return document;
+};
+
 export const replaceTranscriptDocument = async ({
 	ctx,
 	noteId,

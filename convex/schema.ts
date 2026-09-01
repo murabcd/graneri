@@ -381,7 +381,7 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		noteId: v.id("notes"),
 		projectId: v.optional(v.id("projects")),
-		isArchived: v.optional(v.boolean()),
+		isArchived: v.boolean(),
 		content: v.string(),
 		searchableText: v.string(),
 		createdAt: v.number(),

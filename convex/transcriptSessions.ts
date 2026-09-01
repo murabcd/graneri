@@ -10,9 +10,9 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createResourceAccess } from "./domain";
 import {
-	getTranscriptDocument,
 	removeTranscriptDocument,
 	replaceTranscriptDocument,
+	requireTranscriptDocument,
 } from "./transcriptDocument";
 
 type TranscriptSessionStatus = Doc<"transcriptSessionStates">["status"];
@@ -432,10 +432,13 @@ export const getLatestTextForNote = query({
 			return null;
 		}
 
-		const document = await getTranscriptDocument(ctx, session._id);
-		const text =
-			document?.text ??
-			createTranscriptText(await listSessionUtterances(ctx, session._id));
+		const isActive =
+			session.status === "capturing" || session.status === "stopping";
+		const text = isActive
+			? createTranscriptText(await listSessionUtterances(ctx, session._id))
+			: session.hasTranscript
+				? (await requireTranscriptDocument(ctx, session._id)).text
+				: "";
 
 		return {
 			sessionId: session._id,
@@ -693,6 +696,17 @@ export const markGenerated = mutation({
 		);
 		const state = await requireTranscriptSessionState(ctx, session._id);
 		const now = Date.now();
+		if (state.status === "stopping") {
+			await replaceTranscriptDocument({
+				ctx,
+				noteId: session.noteId,
+				ownerTokenIdentifier,
+				sessionId: session._id,
+				text: createTranscriptText(
+					await listSessionUtterances(ctx, session._id),
+				),
+			});
+		}
 
 		await ctx.db.patch(
 			state._id,
