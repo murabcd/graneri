@@ -211,7 +211,7 @@ const useNotePageController = ({
 		editorProps: {
 			attributes: {
 				class:
-					"note-tiptap min-h-[240px] border border-transparent bg-transparent p-0 text-base outline-none",
+					"note-tiptap min-h-[240px] border border-transparent bg-transparent p-0 outline-none",
 			},
 			scrollThreshold: {
 				top: 0,
@@ -1195,7 +1195,7 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 										<Tiptap editor={editor}>
 											<Tiptap.Content
 												className={cn(
-													"min-h-[320px] text-base text-foreground",
+													"min-h-[320px] text-foreground",
 													"[&_.ProseMirror]:min-h-[320px]",
 													shouldHideEmptyBodyPlaceholder &&
 														"note-editor--hide-placeholder",
@@ -1215,7 +1215,7 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 									{templateApplyState.isRunning ? (
 										templateApplyState.streamedMarkdown.trim().length > 0 ? (
 											<MarkdownStreamEntry
-												className="min-h-[320px] text-base text-foreground"
+												className="min-h-[320px] text-foreground"
 												isAnimating
 												mode="streaming"
 											>

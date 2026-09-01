@@ -1,0 +1,187 @@
+:where(.graneri-markdown, .note-tiptap.ProseMirror) {
+	--markdown-font-size: 0.875rem;
+	--markdown-small-font-size: max(
+		0.8125rem,
+		calc(var(--markdown-font-size) * 0.875)
+	);
+	--markdown-line-height: calc(var(--markdown-font-size) * 1.625);
+	--markdown-space: calc(var(--markdown-font-size) / 4);
+	font-family: var(--font-sans);
+	font-size: var(--markdown-font-size);
+	line-height: var(--markdown-line-height);
+	overflow-wrap: anywhere;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(p) {
+	margin: 0 0 var(--markdown-space);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror)
+	> :where(p:not(:first-child)) {
+	margin-top: calc(var(--markdown-space) * 2);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) > :where(p + p) {
+	margin-block: calc(var(--markdown-space) * 4);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror)
+	:where(h1, h2, h3, h4, h5, h6) {
+	font-weight: 600;
+	letter-spacing: normal;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(h1) {
+	margin: 0 0 calc(var(--markdown-space) * 2);
+	font-size: calc(var(--markdown-font-size) * 1.5);
+	line-height: calc(var(--markdown-space) * 8);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(h2) {
+	margin: calc(var(--markdown-space) * 4) 0 var(--markdown-space);
+	font-size: calc(var(--markdown-font-size) * 1.25);
+	line-height: calc(var(--markdown-space) * 7);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(h3) {
+	margin: calc(var(--markdown-space) * 4) 0 var(--markdown-space);
+	font-size: calc(var(--markdown-font-size) * 1.125);
+	line-height: calc(var(--markdown-space) * 7);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(h4) {
+	margin: calc(var(--markdown-space) * 4) 0 0;
+	font-size: var(--markdown-font-size);
+	line-height: calc(var(--markdown-space) * 6);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(h5, h6) {
+	margin: 0;
+	font-size: var(--markdown-font-size);
+	line-height: var(--markdown-line-height);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror)
+	> :where(:is(h1, h2, h3, h4, h5, h6) + p),
+:where(.graneri-markdown, .note-tiptap.ProseMirror) > :where(hr + *) {
+	margin-top: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(ul, ol) {
+	margin: 0;
+	padding-inline-start: var(--markdown-line-height);
+	list-style-position: outside;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) > :where(p + :is(ul, ol)) {
+	margin-top: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(ul) {
+	list-style-type: disc;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(ul, ol) ul {
+	list-style-type: circle;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror)
+	:where(ul, ol)
+	:where(ul, ol)
+	ul {
+	list-style-type: square;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(ol) {
+	list-style-type: decimal;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror)
+	:where(ul ul, ul ol, ol ul, ol ol) {
+	margin-block: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(li) {
+	display: list-item;
+	margin: 0;
+	padding-inline-start: calc(var(--markdown-space) * 1.5);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(li + li) {
+	margin-top: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(li > :first-child) {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(li > p) {
+	margin: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(li > p + p) {
+	margin-top: calc(var(--markdown-space) * 4);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(li > ul, li > ol) {
+	margin-block: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror)
+	:where(ul, ol)
+	> li::marker {
+	color: currentColor;
+	font-weight: 600;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(blockquote) {
+	position: relative;
+	margin: 0 0 calc(var(--markdown-space) * 2);
+	border: 0;
+	background-color: transparent;
+	padding-block: calc(var(--markdown-space) * 2);
+	padding-inline-start: calc(var(--markdown-space) * 6);
+	color: currentColor;
+	font-style: normal;
+	line-height: calc(var(--markdown-space) * 6);
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror)
+	:where(blockquote > :first-child) {
+	margin-top: 0;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(blockquote > p) {
+	margin: 0;
+	font-weight: 400;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(blockquote)::after {
+	position: absolute;
+	inset-block: calc(var(--markdown-space) * 2);
+	inset-inline-start: 0;
+	width: var(--markdown-space);
+	border-radius: calc(var(--markdown-space) / 2);
+	background-color: var(--border);
+	content: "";
+}
+
+:where(.graneri-markdown .graneri-inline-code, .note-tiptap.ProseMirror code) {
+	border: 0;
+	border-radius: 0.25rem;
+	background-color: color-mix(in srgb, var(--muted) 92%, transparent);
+	color: var(--foreground);
+	padding: calc(var(--markdown-space) * 0.6) calc(var(--markdown-space) * 1.2);
+	font-family: var(--font-mono);
+	font-size: var(--markdown-small-font-size);
+	font-weight: 500;
+}
+
+:where(.graneri-markdown, .note-tiptap.ProseMirror) :where(hr) {
+	clear: both;
+	height: 0;
+	margin: calc(var(--markdown-space) * 7) 0;
+	border: 0;
+	border-top: 1px solid var(--border);
+}

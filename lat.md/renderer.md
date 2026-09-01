@@ -120,9 +120,11 @@ the existing code body without
 changing its content-driven geometry or wrap state.
 Streamdown remains the incremental Markdown parser, but it does not own chat
 typography: semantic element renderers remove its presentation classes and the
-shared Markdown root and
+shared Markdown root and note editor use the semantic prose contract in
+[apps/web/src/styles/prose.css](../apps/web/src/styles/prose.css), while
 [apps/web/src/styles/chat-markdown.css](../apps/web/src/styles/chat-markdown.css)
-apply the shared Graneri 14-pixel type scale,
+owns only the Streamdown boundary and chat-specific code presentation. The shared
+contract applies the Graneri 14-pixel type scale,
 1.625 line height, compact heading ratios, paragraph rhythm, list indentation,
 blockquote rail, and inline-code treatment. Its final top-level Markdown block
 always has zero bottom margin so element-specific prose rhythm cannot leak into

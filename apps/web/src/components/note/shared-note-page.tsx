@@ -63,7 +63,7 @@ export function SharedNotePage({ note }: SharedNotePageProps) {
 		editorProps: {
 			attributes: {
 				class:
-					"note-tiptap min-h-[240px] border border-transparent bg-transparent p-0 text-base outline-none",
+					"note-tiptap min-h-[240px] border border-transparent bg-transparent p-0 outline-none",
 			},
 		},
 	});
@@ -122,7 +122,7 @@ export function SharedNotePage({ note }: SharedNotePageProps) {
 								<Tiptap editor={editor}>
 									<Tiptap.Content
 										className={cn(
-											"min-h-[320px] text-base text-foreground",
+											"min-h-[320px] text-foreground",
 											"[&_.ProseMirror]:min-h-[320px]",
 										)}
 									/>

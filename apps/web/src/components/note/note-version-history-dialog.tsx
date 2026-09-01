@@ -167,10 +167,6 @@ function NoteVersionPreview({ version }: { version: NoteVersion }) {
 					"max-w-none text-foreground text-sm",
 					"[&_.ProseMirror]:min-h-[180px]",
 					"[&_.ProseMirror]:outline-none",
-					"[&_.ProseMirror_h1]:font-semibold [&_.ProseMirror_h1]:text-2xl",
-					"[&_.ProseMirror_h2]:font-semibold [&_.ProseMirror_h2]:text-xl",
-					"[&_.ProseMirror_h3]:font-semibold [&_.ProseMirror_h3]:text-lg",
-					"[&_.ProseMirror_p]:leading-6",
 					"[&_.note-comment-anchor]:bg-transparent [&_.note-comment-anchor]:text-inherit",
 				)}
 			/>

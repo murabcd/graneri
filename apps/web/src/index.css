@@ -1,4 +1,5 @@
 @import "@workspace/ui/globals.css";
+@import "./styles/prose.css";
 @import "./styles/chat-markdown.css";
 @import "./styles/note-editor.css";
 

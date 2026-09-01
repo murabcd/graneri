@@ -50,6 +50,10 @@ views request lazy loading and asynchronous decoding so off-screen document
 media does not compete with editor hydration.
 File and image node selections share one visible block outline so their
 ProseMirror selection state is clear without application-owned selection state.
+Editable note prose and rendered chat Markdown share the semantic typography
+contract in [apps/web/src/styles/prose.css](../apps/web/src/styles/prose.css);
+editor-only node geometry and interaction styling remain in
+[apps/web/src/styles/note-editor.css](../apps/web/src/styles/note-editor.css).
 
 Files are Tiptap block atoms inside that same canonical document rather than a
 separate list beneath the editor. A file node persists its durable
