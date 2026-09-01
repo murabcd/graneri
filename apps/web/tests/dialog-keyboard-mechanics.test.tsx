@@ -14,6 +14,31 @@ import { Input } from "@workspace/ui/components/input";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectionDialogForm } from "../src/components/settings/connection-dialog-form";
 
+function ConfirmationDialog({
+	onConfirm,
+	onOpenChange,
+}: {
+	onConfirm: () => void;
+	onOpenChange: (open: boolean) => void;
+}) {
+	return (
+		<AlertDialog open onOpenChange={onOpenChange}>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>Delete item?</AlertDialogTitle>
+					<AlertDialogDescription>
+						This action cannot be undone.
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel>Cancel</AlertDialogCancel>
+					<AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
+	);
+}
+
 describe("dialog keyboard mechanics", () => {
 	afterEach(() => {
 		cleanup();
@@ -66,36 +91,37 @@ describe("dialog keyboard mechanics", () => {
 		expect(onConnect).not.toHaveBeenCalled();
 	});
 
-	it("keeps a destructive action inactive until it is explicitly focused", async () => {
+	it("confirms a destructive action with Enter", async () => {
 		const user = userEvent.setup();
 		const onConfirm = vi.fn();
+		const onOpenChange = vi.fn();
 
 		render(
-			<AlertDialog open>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete item?</AlertDialogTitle>
-						<AlertDialogDescription>
-							This action cannot be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>,
+			<ConfirmationDialog onConfirm={onConfirm} onOpenChange={onOpenChange} />,
 		);
 
-		const cancel = screen.getByRole("button", { name: "Cancel" });
 		const confirm = screen.getByRole("button", { name: "Delete" });
-		await waitFor(() => expect(document.activeElement).toBe(cancel));
+		await waitFor(() => expect(document.activeElement).toBe(confirm));
 
-		await user.keyboard("{Enter}");
-		expect(onConfirm).not.toHaveBeenCalled();
-
-		confirm.focus();
 		await user.keyboard("{Enter}");
 		expect(onConfirm).toHaveBeenCalledOnce();
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it("cancels a destructive action with Escape", async () => {
+		const user = userEvent.setup();
+		const onConfirm = vi.fn();
+		const onOpenChange = vi.fn();
+
+		render(
+			<ConfirmationDialog onConfirm={onConfirm} onOpenChange={onOpenChange} />,
+		);
+
+		const confirm = screen.getByRole("button", { name: "Delete" });
+		await waitFor(() => expect(document.activeElement).toBe(confirm));
+
+		await user.keyboard("{Escape}");
+		expect(onConfirm).not.toHaveBeenCalled();
+		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
 });
