@@ -34,6 +34,92 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const FIELD_LABEL_CLASS_NAME = "text-xs font-medium text-muted-foreground";
 
+const getCalendarMoveDescription = ({
+	canMoveEvent,
+	event,
+	writableCalendarCount,
+}: {
+	canMoveEvent: boolean;
+	event: UpcomingCalendarEvent | null;
+	writableCalendarCount: number;
+}) => {
+	if (event?.isRecurring && canMoveEvent) {
+		return "Moving calendars applies to the entire series.";
+	}
+	if (event && !canMoveEvent) {
+		return "You do not have permission to move this event.";
+	}
+	return writableCalendarCount === 0
+		? "No writable calendars are connected."
+		: null;
+};
+
+function CalendarSelectionField({
+	availableCalendars,
+	canMoveEvent,
+	draft,
+	event,
+	onDraftChange,
+	selectedCalendar,
+	writableCalendarCount,
+}: {
+	availableCalendars: CalendarSource[];
+	canMoveEvent: boolean;
+	draft: CalendarEventDraft;
+	event: UpcomingCalendarEvent | null;
+	onDraftChange: (partial: Partial<CalendarEventDraft>) => void;
+	selectedCalendar: CalendarSource | undefined;
+	writableCalendarCount: number;
+}) {
+	const description = getCalendarMoveDescription({
+		canMoveEvent,
+		event,
+		writableCalendarCount,
+	});
+	return (
+		<Field data-disabled={!canMoveEvent || undefined}>
+			<FieldLabel
+				className={FIELD_LABEL_CLASS_NAME}
+				htmlFor="calendar-event-calendar"
+			>
+				Calendar
+			</FieldLabel>
+			<Select
+				disabled={!canMoveEvent}
+				onValueChange={(calendarId) => onDraftChange({ calendarId })}
+				value={draft.calendarId}
+			>
+				<SelectTrigger
+					aria-label="Calendar"
+					className="w-full"
+					id="calendar-event-calendar"
+				>
+					<span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+						{selectedCalendar ? (
+							<CalendarSourceDot color={selectedCalendar.color} />
+						) : null}
+						<SelectValue className="truncate" placeholder="Select calendar">
+							{selectedCalendar?.name ?? "Select calendar"}
+						</SelectValue>
+					</span>
+				</SelectTrigger>
+				<SelectContent align="end">
+					<SelectGroup>
+						{availableCalendars.map((calendar) => (
+							<SelectItem key={calendar.id} value={calendar.id}>
+								<CalendarSourceLabel calendar={calendar} />
+							</SelectItem>
+						))}
+					</SelectGroup>
+				</SelectContent>
+			</Select>
+			{description ? (
+				<FieldDescription className="text-xs">{description}</FieldDescription>
+			) : null}
+		</Field>
+	);
+}
+
 export function CalendarEventEditorFields({
 	availableCalendars,
 	canEditEventDetails,
@@ -88,56 +174,15 @@ export function CalendarEventEditorFields({
 					<FieldError className="text-xs">{titleError}</FieldError>
 				</Field>
 
-				<Field data-disabled={!canMoveEvent || undefined}>
-					<FieldLabel
-						htmlFor="calendar-event-calendar"
-						className={FIELD_LABEL_CLASS_NAME}
-					>
-						Calendar
-					</FieldLabel>
-					<Select
-						disabled={!canMoveEvent}
-						value={draft.calendarId}
-						onValueChange={(calendarId) => onDraftChange({ calendarId })}
-					>
-						<SelectTrigger
-							id="calendar-event-calendar"
-							className="w-full"
-							aria-label="Calendar"
-						>
-							<span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-								{selectedCalendar ? (
-									<CalendarSourceDot color={selectedCalendar.color} />
-								) : null}
-								<SelectValue className="truncate" placeholder="Select calendar">
-									{selectedCalendar?.name ?? "Select calendar"}
-								</SelectValue>
-							</span>
-						</SelectTrigger>
-						<SelectContent align="end">
-							<SelectGroup>
-								{availableCalendars.map((calendar) => (
-									<SelectItem key={calendar.id} value={calendar.id}>
-										<CalendarSourceLabel calendar={calendar} />
-									</SelectItem>
-								))}
-							</SelectGroup>
-						</SelectContent>
-					</Select>
-					{event?.isRecurring && canMoveEvent ? (
-						<FieldDescription className="text-xs">
-							Moving calendars applies to the entire series.
-						</FieldDescription>
-					) : event && !canMoveEvent ? (
-						<FieldDescription className="text-xs">
-							You do not have permission to move this event.
-						</FieldDescription>
-					) : writableCalendarCount === 0 ? (
-						<FieldDescription className="text-xs">
-							No writable calendars are connected.
-						</FieldDescription>
-					) : null}
-				</Field>
+				<CalendarSelectionField
+					availableCalendars={availableCalendars}
+					canMoveEvent={canMoveEvent}
+					draft={draft}
+					event={event}
+					onDraftChange={onDraftChange}
+					selectedCalendar={selectedCalendar}
+					writableCalendarCount={writableCalendarCount}
+				/>
 
 				<Field
 					data-disabled={!canEditEventDetails || undefined}

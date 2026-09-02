@@ -37,6 +37,68 @@ type SpeechInputProps = ComponentProps<typeof Button> & {
 
 const pulseAnimationDelays = ["0s", "0.3s", "0.6s"] as const;
 
+const getScopedSpeechInputState = (
+	session: ReturnType<typeof useTranscriptionSession>,
+	scopeKey: string | null,
+) => {
+	const isScopedSession = session.scopeKey === scopeKey;
+	const isListening = isScopedSession ? session.isListening : false;
+	const isConnecting = isScopedSession ? session.isConnecting : false;
+	return {
+		hasActiveSessionInDifferentScope:
+			session.scopeKey !== null &&
+			session.scopeKey !== scopeKey &&
+			(session.isListening || session.isConnecting),
+		isActive: isListening || isConnecting,
+		isConnecting,
+		isListening,
+		liveTranscript: isScopedSession
+			? session.liveTranscript
+			: createEmptyLiveTranscriptState(),
+		recoveryStatus: isScopedSession
+			? session.recoveryStatus
+			: createTranscriptRecoveryStatus(),
+		systemAudioStatus: isScopedSession
+			? session.systemAudioStatus
+			: createSystemAudioCaptureStatus(),
+	};
+};
+
+const toggleSpeechInput = async ({
+	isActive,
+	isAvailable,
+	lang,
+	scopeKey,
+	sessionIsActive,
+}: {
+	isActive: boolean;
+	isAvailable: boolean;
+	lang?: string;
+	scopeKey: string | null;
+	sessionIsActive: boolean;
+}) => {
+	if (!isAvailable) {
+		return;
+	}
+	if (isActive) {
+		await transcriptionSessionManager.controller.stop({
+			reason: "speech-input-active-toggle",
+		});
+		return;
+	}
+	if (sessionIsActive) {
+		await transcriptionSessionManager.controller.stop({
+			reason: "speech-input-cross-scope-stop",
+		});
+	}
+	transcriptionSessionManager.controller.configure({
+		autoStartKey: null,
+		lang,
+		scopeKey,
+	});
+	await transcriptionSessionManager.controller.start();
+};
+
 function useSynchronizedCallbackValue<T>(
 	callback: ((value: T) => void) | undefined,
 	value: T,
@@ -60,51 +122,43 @@ export const SpeechInput = ({
 	...props
 }: SpeechInputProps) => {
 	const session = useTranscriptionSession();
-	const isScopedSession = session.scopeKey === scopeKey;
-	const isScopedListening = isScopedSession ? session.isListening : false;
-	const isScopedConnecting = isScopedSession ? session.isConnecting : false;
-	const hasActiveSessionInDifferentScope =
-		session.scopeKey !== null &&
-		session.scopeKey !== scopeKey &&
-		(session.isListening || session.isConnecting);
-	const scopedLiveTranscript = isScopedSession
-		? session.liveTranscript
-		: createEmptyLiveTranscriptState();
-	const scopedSystemAudioStatus = isScopedSession
-		? session.systemAudioStatus
-		: createSystemAudioCaptureStatus();
-	const scopedRecoveryStatus = isScopedSession
-		? session.recoveryStatus
-		: createTranscriptRecoveryStatus();
-	const tooltipLabel =
-		isScopedListening || isScopedConnecting
-			? "Stop transcription"
-			: "Start transcription";
+	const scopedState = getScopedSpeechInputState(session, scopeKey);
+	const tooltipLabel = scopedState.isActive
+		? "Stop transcription"
+		: "Start transcription";
 
 	useEffect(() => {
-		const configuredScopeKey = hasActiveSessionInDifferentScope
+		const configuredScopeKey = scopedState.hasActiveSessionInDifferentScope
 			? session.scopeKey
 			: scopeKey;
 		transcriptionSessionManager.controller.configure({
-			autoStartKey: hasActiveSessionInDifferentScope ? null : autoStartKey,
+			autoStartKey: scopedState.hasActiveSessionInDifferentScope
+				? null
+				: autoStartKey,
 			lang,
 			scopeKey: configuredScopeKey,
 		});
 	}, [
 		autoStartKey,
-		hasActiveSessionInDifferentScope,
+		scopedState.hasActiveSessionInDifferentScope,
 		lang,
 		scopeKey,
 		session.scopeKey,
 	]);
 
-	useSynchronizedCallbackValue(onListeningChange, isScopedListening);
-	useSynchronizedCallbackValue(onLiveTranscriptChange, scopedLiveTranscript);
+	useSynchronizedCallbackValue(onListeningChange, scopedState.isListening);
+	useSynchronizedCallbackValue(
+		onLiveTranscriptChange,
+		scopedState.liveTranscript,
+	);
 	useSynchronizedCallbackValue(
 		onSystemAudioStatusChange,
-		scopedSystemAudioStatus,
+		scopedState.systemAudioStatus,
 	);
-	useSynchronizedCallbackValue(onRecoveryStatusChange, scopedRecoveryStatus);
+	useSynchronizedCallbackValue(
+		onRecoveryStatusChange,
+		scopedState.recoveryStatus,
+	);
 
 	useEffect(() => {
 		if (!onUtterance) {
@@ -120,7 +174,7 @@ export const SpeechInput = ({
 
 	return (
 		<div className="relative inline-flex items-center justify-center">
-			{isScopedListening &&
+			{scopedState.isListening &&
 				pulseAnimationDelays.map((delay) => (
 					<div
 						className="absolute inset-0 animate-ping rounded-full border-2 border-destructive/30"
@@ -138,7 +192,7 @@ export const SpeechInput = ({
 						size={size}
 						className={cn(
 							"relative z-10 rounded-full transition-all duration-300",
-							isScopedListening || isScopedConnecting
+							scopedState.isActive
 								? "!bg-destructive/15 !text-destructive hover:!bg-destructive/20 hover:!text-destructive"
 								: null,
 							size === "icon-sm" && "size-8",
@@ -147,36 +201,18 @@ export const SpeechInput = ({
 						)}
 						aria-disabled={!session.isAvailable}
 						aria-label={tooltipLabel}
-						onClick={() => {
-							if (!session.isAvailable) {
-								return;
-							}
-
-							void (async () => {
-								if (isScopedListening || isScopedConnecting) {
-									await transcriptionSessionManager.controller.stop({
-										reason: "speech-input-active-toggle",
-									});
-									return;
-								}
-
-								if (session.isListening || session.isConnecting) {
-									await transcriptionSessionManager.controller.stop({
-										reason: "speech-input-cross-scope-stop",
-									});
-								}
-
-								transcriptionSessionManager.controller.configure({
-									autoStartKey: null,
-									lang,
-									scopeKey,
-								});
-								await transcriptionSessionManager.controller.start();
-							})();
-						}}
+						onClick={() =>
+							void toggleSpeechInput({
+								isActive: scopedState.isActive,
+								isAvailable: session.isAvailable,
+								lang,
+								scopeKey,
+								sessionIsActive: session.isListening || session.isConnecting,
+							})
+						}
 						{...props}
 					>
-						{isScopedListening || isScopedConnecting ? (
+						{scopedState.isActive ? (
 							<SquareIcon className="size-4 text-current" />
 						) : (
 							<MicIcon className="size-4 text-current" />

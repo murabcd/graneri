@@ -333,6 +333,19 @@ function ThreadCommentNodeItem({
 	);
 }
 
+const getExpandedThreadDetail = ({
+	expandedThread,
+	isExpanded,
+	threadId,
+}: {
+	expandedThread: ThreadDetail | null | undefined;
+	isExpanded: boolean;
+	threadId: Id<"noteCommentThreads">;
+}) => {
+	if (!isExpanded || expandedThread === undefined) return undefined;
+	return expandedThread?._id === threadId ? expandedThread : null;
+};
+
 function DiscussionThreadRow({
 	thread,
 	currentUser,
@@ -404,13 +417,11 @@ function DiscussionThreadRow({
 		) === true;
 	const isRead =
 		thread.isRead || optimisticReadThreadIds.has(String(thread._id));
-	const expandedDetail = !isExpanded
-		? undefined
-		: expandedThread === undefined
-			? undefined
-			: expandedThread && expandedThread._id === thread._id
-				? expandedThread
-				: null;
+	const expandedDetail = getExpandedThreadDetail({
+		expandedThread,
+		isExpanded,
+		threadId: thread._id,
+	});
 	return (
 		<div
 			data-note-comment-thread-row={thread._id}
@@ -434,33 +445,47 @@ function DiscussionThreadRow({
 				handlePrefetchThread={handlePrefetchThread}
 			/>
 
-			{isExpanded ? (
-				expandedDetail === null ? (
-					<div className="mx-4 mt-4 border-b pb-4 text-sm text-muted-foreground">
-						This discussion is no longer available.
-					</div>
-				) : expandedDetail ? (
-					<ExpandedDiscussionThread
-						key={expandedDetail._id}
-						expandedDetail={expandedDetail}
-						currentUser={currentUser}
-						commentActionsOpenId={commentActionsOpenId}
-						setCommentActionsOpenId={setCommentActionsOpenId}
-						editingCommentId={editingCommentId}
-						editBody={editBody}
-						replyBody={replyBody}
-						isReplySubmitting={isReplySubmitting}
-						setEditBody={setEditBody}
-						setReplyBody={setReplyBody}
-						handleSaveEdit={handleSaveEdit}
-						handleCancelEdit={handleCancelEdit}
-						handleReply={handleReply}
-						handleStartEditComment={handleStartEditComment}
-						handleDeleteComment={handleDeleteComment}
-					/>
-				) : null
-			) : null}
+			<DiscussionThreadRowDetails
+				expandedDetail={expandedDetail}
+				currentUser={currentUser}
+				commentActionsOpenId={commentActionsOpenId}
+				setCommentActionsOpenId={setCommentActionsOpenId}
+				editingCommentId={editingCommentId}
+				editBody={editBody}
+				replyBody={replyBody}
+				isReplySubmitting={isReplySubmitting}
+				setEditBody={setEditBody}
+				setReplyBody={setReplyBody}
+				handleSaveEdit={handleSaveEdit}
+				handleCancelEdit={handleCancelEdit}
+				handleReply={handleReply}
+				handleStartEditComment={handleStartEditComment}
+				handleDeleteComment={handleDeleteComment}
+			/>
 		</div>
+	);
+}
+
+function DiscussionThreadRowDetails({
+	expandedDetail,
+	...expandedProps
+}: Omit<Parameters<typeof ExpandedDiscussionThread>[0], "expandedDetail"> & {
+	expandedDetail: ThreadDetail | null | undefined;
+}) {
+	if (expandedDetail === undefined) return null;
+	if (expandedDetail === null) {
+		return (
+			<div className="mx-4 mt-4 border-b pb-4 text-sm text-muted-foreground">
+				This discussion is no longer available.
+			</div>
+		);
+	}
+	return (
+		<ExpandedDiscussionThread
+			key={expandedDetail._id}
+			expandedDetail={expandedDetail}
+			{...expandedProps}
+		/>
 	);
 }
 

@@ -15,6 +15,88 @@ import type { DockedPanelSide } from "@/components/layout/use-docked-panel-width
 
 const DOCKED_PANEL_TRANSITION_DURATION_MS = 300;
 
+const getDismissLayerStyle = ({
+	dismissLeadingOffset,
+	dismissTrailingOffset,
+	isLeft,
+	panelOffset,
+	panelWidth,
+}: {
+	dismissLeadingOffset?: string;
+	dismissTrailingOffset?: string;
+	isLeft: boolean;
+	panelOffset?: string;
+	panelWidth: number;
+}) =>
+	isLeft
+		? {
+				left: `calc(${panelOffset ?? "0px"} + ${panelWidth}px)`,
+				right: dismissTrailingOffset ?? "0px",
+			}
+		: {
+				left: dismissLeadingOffset ?? "0px",
+				right: `calc(${panelOffset ?? "0px"} + ${panelWidth}px)`,
+			};
+
+function DockedPanelDismissLayer({
+	dismissLeadingOffset,
+	dismissTrailingOffset,
+	isLeft,
+	onDismiss,
+	open,
+	panelName,
+	panelOffset,
+	panelWidth,
+	shouldDismiss,
+}: {
+	dismissLeadingOffset?: string;
+	dismissTrailingOffset?: string;
+	isLeft: boolean;
+	onDismiss: () => void;
+	open: boolean;
+	panelName: string;
+	panelOffset?: string;
+	panelWidth: number;
+	shouldDismiss: boolean;
+}) {
+	if (!open || !shouldDismiss) {
+		return null;
+	}
+	return (
+		<button
+			aria-label={`Close ${panelName}`}
+			className="fixed inset-y-0 z-20 hidden bg-transparent md:block"
+			onClick={onDismiss}
+			style={getDismissLayerStyle({
+				dismissLeadingOffset,
+				dismissTrailingOffset,
+				isLeft,
+				panelOffset,
+				panelWidth,
+			})}
+			type="button"
+		/>
+	);
+}
+
+const getDockedPanelPositionStyle = (
+	isLeft: boolean,
+	panelOffset: string | undefined,
+	panelWidth: number,
+) =>
+	isLeft
+		? { left: panelOffset, width: panelWidth }
+		: { right: panelOffset, width: panelWidth };
+
+const getDockedPanelTranslationClass = (open: boolean, isLeft: boolean) => {
+	if (open) {
+		return "pointer-events-auto translate-x-0";
+	}
+	return isLeft
+		? "pointer-events-none -translate-x-full"
+		: "pointer-events-none translate-x-full";
+};
+
 export function DockedPanelPinButton({
 	isPinned,
 	label,
@@ -162,25 +244,17 @@ export function DesktopDockedSidePanel({
 
 	return (
 		<>
-			{open && !isPinned ? (
-				<button
-					type="button"
-					aria-label={`Close ${panelName}`}
-					className="fixed inset-y-0 z-20 hidden bg-transparent md:block"
-					style={
-						isLeft
-							? {
-									left: `calc(${panelOffset ?? "0px"} + ${panelWidth}px)`,
-									right: dismissTrailingOffset ?? "0px",
-								}
-							: {
-									left: dismissLeadingOffset ?? "0px",
-									right: `calc(${panelOffset ?? "0px"} + ${panelWidth}px)`,
-								}
-					}
-					onClick={() => onOpenChange(false)}
-				/>
-			) : null}
+			<DockedPanelDismissLayer
+				dismissLeadingOffset={dismissLeadingOffset}
+				dismissTrailingOffset={dismissTrailingOffset}
+				isLeft={isLeft}
+				onDismiss={() => onOpenChange(false)}
+				open={open}
+				panelName={panelName}
+				panelOffset={panelOffset}
+				panelWidth={panelWidth}
+				shouldDismiss={!isPinned}
+			/>
 			<div
 				aria-hidden={!open}
 				data-app-region={desktopSafeTop && open ? "no-drag" : undefined}
@@ -188,28 +262,14 @@ export function DesktopDockedSidePanel({
 					"pointer-events-none fixed inset-y-0 z-30 hidden overflow-hidden md:block",
 					isLeft ? undefined : "right-0",
 				)}
-				style={
-					isLeft
-						? {
-								left: panelOffset,
-								width: panelWidth,
-							}
-						: {
-								right: panelOffset,
-								width: panelWidth,
-							}
-				}
+				style={getDockedPanelPositionStyle(isLeft, panelOffset, panelWidth)}
 			>
 				<div
 					data-app-region={desktopSafeTop && open ? "no-drag" : undefined}
 					className={cn(
 						"group/docked-sheet relative flex h-svh flex-col bg-background text-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
 						isLeft ? "border-r" : "border-l",
-						open
-							? "pointer-events-auto translate-x-0"
-							: isLeft
-								? "pointer-events-none -translate-x-full"
-								: "pointer-events-none translate-x-full",
+						getDockedPanelTranslationClass(open, isLeft),
 					)}
 					style={{ width: panelWidth }}
 				>

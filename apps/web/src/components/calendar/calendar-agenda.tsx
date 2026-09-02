@@ -401,6 +401,112 @@ export function CalendarAgenda({
 	);
 }
 
+function RecurringEventIndicator({ event }: { event: UpcomingCalendarEvent }) {
+	if (!event.isRecurring) {
+		return null;
+	}
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<span className="inline-flex shrink-0" data-recurring-indicator>
+					<Repeat2 aria-hidden className="size-3.5 text-muted-foreground" />
+				</span>
+			</TooltipTrigger>
+			<TooltipContent>
+				{event.recurrence
+					? formatCalendarRecurrence(event.recurrence)
+					: "Recurring event"}
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+
+function CalendarAgendaEventActions({
+	closedByPointerOutsideRef,
+	event,
+	onEdit,
+	onRequestDelete,
+	onRequestRemove,
+}: {
+	closedByPointerOutsideRef: React.MutableRefObject<boolean>;
+	event: UpcomingCalendarEvent;
+	onEdit: (event: UpcomingCalendarEvent) => void;
+	onRequestDelete: (event: UpcomingCalendarEvent) => void;
+	onRequestRemove: (event: UpcomingCalendarEvent) => void;
+}) {
+	const hasActions =
+		event.canEdit ||
+		event.guestPermissions !== "none" ||
+		event.canDelete ||
+		event.canRemove;
+	if (!hasActions) {
+		return null;
+	}
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<button
+					aria-label={`Open actions for ${event.title}`}
+					className="absolute top-1/2 right-2 flex aspect-square size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md p-0 text-muted-foreground opacity-0 outline-hidden transition-[color,opacity] hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/event:opacity-100 data-[state=open]:opacity-100 data-[state=open]:text-foreground"
+					type="button"
+				>
+					<MoreHorizontal aria-hidden className="size-4" />
+				</button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent
+				align="end"
+				onCloseAutoFocus={(closeEvent) => {
+					if (!closedByPointerOutsideRef.current) {
+						return;
+					}
+					closeEvent.preventDefault();
+					closedByPointerOutsideRef.current = false;
+				}}
+				onPointerDownOutside={() => {
+					closedByPointerOutsideRef.current = true;
+				}}
+			>
+				<DropdownMenuGroup>
+					<DropdownMenuItem
+						disabled={!event.canEdit && event.guestPermissions === "none"}
+						onSelect={() => onEdit(event)}
+					>
+						<Pencil aria-hidden />
+						Edit
+					</DropdownMenuItem>
+					{event.canRemove ? (
+						<DropdownMenuItem onSelect={() => onRequestRemove(event)}>
+							{event.provider === "yandex" ? (
+								<Ban aria-hidden />
+							) : (
+								<Trash2 aria-hidden />
+							)}
+							{event.provider === "yandex"
+								? "Not going"
+								: "Remove from calendar"}
+						</DropdownMenuItem>
+					) : null}
+				</DropdownMenuGroup>
+				{event.canRemove ? null : (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuGroup>
+							<DropdownMenuItem
+								disabled={!event.canDelete}
+								onSelect={() => onRequestDelete(event)}
+								variant="destructive"
+							>
+								<Trash2 aria-hidden />
+								Delete
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
+					</>
+				)}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 	color,
 	event,
@@ -451,93 +557,17 @@ const CalendarAgendaEventRow = React.memo(function CalendarAgendaEventRow({
 						<HoverScrollTitle className="text-sm">
 							{event.title}
 						</HoverScrollTitle>
-						{event.isRecurring ? (
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<span
-										className="inline-flex shrink-0"
-										data-recurring-indicator
-									>
-										<Repeat2
-											aria-hidden
-											className="size-3.5 text-muted-foreground"
-										/>
-									</span>
-								</TooltipTrigger>
-								<TooltipContent>
-									{event.recurrence
-										? formatCalendarRecurrence(event.recurrence)
-										: "Recurring event"}
-								</TooltipContent>
-							</Tooltip>
-						) : null}
+						<RecurringEventIndicator event={event} />
 					</span>
 				</span>
 			</button>
-			{hasActions ? (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<button
-							type="button"
-							aria-label={`Open actions for ${event.title}`}
-							className="absolute top-1/2 right-2 flex aspect-square size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md p-0 text-muted-foreground opacity-0 outline-hidden transition-[color,opacity] hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/event:opacity-100 data-[state=open]:opacity-100 data-[state=open]:text-foreground"
-						>
-							<MoreHorizontal className="size-4" aria-hidden />
-						</button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent
-						align="end"
-						onPointerDownOutside={() => {
-							closedByPointerOutsideRef.current = true;
-						}}
-						onCloseAutoFocus={(closeEvent) => {
-							if (!closedByPointerOutsideRef.current) {
-								return;
-							}
-
-							closeEvent.preventDefault();
-							closedByPointerOutsideRef.current = false;
-						}}
-					>
-						<DropdownMenuGroup>
-							<DropdownMenuItem
-								disabled={!event.canEdit && event.guestPermissions === "none"}
-								onSelect={() => onEdit(event)}
-							>
-								<Pencil aria-hidden />
-								Edit
-							</DropdownMenuItem>
-							{event.canRemove ? (
-								<DropdownMenuItem onSelect={() => onRequestRemove(event)}>
-									{event.provider === "yandex" ? (
-										<Ban aria-hidden />
-									) : (
-										<Trash2 aria-hidden />
-									)}
-									{event.provider === "yandex"
-										? "Not going"
-										: "Remove from calendar"}
-								</DropdownMenuItem>
-							) : null}
-						</DropdownMenuGroup>
-						{event.canRemove ? null : (
-							<>
-								<DropdownMenuSeparator />
-								<DropdownMenuGroup>
-									<DropdownMenuItem
-										disabled={!event.canDelete}
-										variant="destructive"
-										onSelect={() => onRequestDelete(event)}
-									>
-										<Trash2 aria-hidden />
-										Delete
-									</DropdownMenuItem>
-								</DropdownMenuGroup>
-							</>
-						)}
-					</DropdownMenuContent>
-				</DropdownMenu>
-			) : null}
+			<CalendarAgendaEventActions
+				closedByPointerOutsideRef={closedByPointerOutsideRef}
+				event={event}
+				onEdit={onEdit}
+				onRequestDelete={onRequestDelete}
+				onRequestRemove={onRequestRemove}
+			/>
 		</div>
 	);
 });

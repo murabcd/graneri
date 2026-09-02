@@ -275,6 +275,97 @@ function getInboxAvatarProps({
 	};
 }
 
+function InboxPaneTitle({
+	desktopSafeTop,
+	isMobile,
+}: {
+	desktopSafeTop: boolean;
+	isMobile: boolean;
+}) {
+	if (isMobile) {
+		return (
+			<SheetTitle
+				className={cn(
+					"text-sm font-medium",
+					desktopSafeTop && DESKTOP_MAIN_HEADER_CONTENT_CLASS,
+					desktopSafeTop && "mt-1",
+				)}
+			>
+				Inbox
+			</SheetTitle>
+		);
+	}
+
+	return (
+		<Breadcrumb
+			className={desktopSafeTop ? DESKTOP_MAIN_HEADER_CONTENT_CLASS : undefined}
+		>
+			<BreadcrumbList className="gap-0">
+				<BreadcrumbItem>
+					<BreadcrumbPage>Inbox</BreadcrumbPage>
+				</BreadcrumbItem>
+			</BreadcrumbList>
+		</Breadcrumb>
+	);
+}
+
+function useInboxPaneActions({
+	onArchiveRead,
+	onClearArchived,
+	onMarkAllRead,
+	setActionsOpen,
+}: {
+	onArchiveRead: () => void;
+	onClearArchived: () => void;
+	onMarkAllRead: () => void;
+	setActionsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+	const activeWorkspaceId = useActiveWorkspaceId();
+	const markAllRead = useMutation(api.inboxItems.markAllRead);
+	const archiveRead = useMutation(api.inboxItems.archiveRead);
+	const clearArchived = useMutation(api.inboxItems.clearArchived);
+	const handleMarkAllRead = React.useCallback(() => {
+		if (!activeWorkspaceId) return;
+		setActionsOpen(false);
+		void markAllRead({ workspaceId: activeWorkspaceId })
+			.then(onMarkAllRead)
+			.catch((error) =>
+				toast.error(
+					getErrorMessage(error, "Failed to mark all inbox items as read"),
+				),
+			);
+	}, [activeWorkspaceId, markAllRead, onMarkAllRead, setActionsOpen]);
+	const handleArchiveRead = React.useCallback(() => {
+		if (!activeWorkspaceId) return;
+		setActionsOpen(false);
+		void archiveRead({ workspaceId: activeWorkspaceId })
+			.then(onArchiveRead)
+			.catch((error) =>
+				toast.error(
+					getErrorMessage(error, "Failed to archive read inbox items"),
+				),
+			);
+	}, [activeWorkspaceId, archiveRead, onArchiveRead, setActionsOpen]);
+	const handleClearArchived = React.useCallback(() => {
+		if (!activeWorkspaceId) return;
+		setActionsOpen(false);
+		void clearArchived({ workspaceId: activeWorkspaceId })
+			.then(onClearArchived)
+			.catch((error) =>
+				toast.error(
+					getErrorMessage(error, "Failed to clear archived inbox items"),
+				),
+			);
+	}, [activeWorkspaceId, clearArchived, onClearArchived, setActionsOpen]);
+
+	return {
+		activeWorkspaceId,
+		handleArchiveRead,
+		handleClearArchived,
+		handleMarkAllRead,
+	};
+}
+
 function InboxPaneHeader({
 	isMobile = false,
 	open = true,
@@ -298,60 +389,19 @@ function InboxPaneHeader({
 	isPinned: boolean;
 	onTogglePinned: () => void;
 }) {
-	const activeWorkspaceId = useActiveWorkspaceId();
-	const markAllRead = useMutation(api.inboxItems.markAllRead);
-	const archiveRead = useMutation(api.inboxItems.archiveRead);
-	const clearArchived = useMutation(api.inboxItems.clearArchived);
 	const [actionsOpen, setActionsOpen] = React.useState(false);
 	const [filtersOpen, setFiltersOpen] = React.useState(false);
-	const handleMarkAllRead = React.useCallback(() => {
-		if (!activeWorkspaceId) {
-			return;
-		}
-
-		setActionsOpen(false);
-		void markAllRead({ workspaceId: activeWorkspaceId })
-			.then(() => {
-				onMarkAllRead();
-			})
-			.catch((error) => {
-				toast.error(
-					getErrorMessage(error, "Failed to mark all inbox items as read"),
-				);
-			});
-	}, [activeWorkspaceId, markAllRead, onMarkAllRead]);
-	const handleArchiveRead = React.useCallback(() => {
-		if (!activeWorkspaceId) {
-			return;
-		}
-
-		setActionsOpen(false);
-		void archiveRead({ workspaceId: activeWorkspaceId })
-			.then(() => {
-				onArchiveRead();
-			})
-			.catch((error) => {
-				toast.error(
-					getErrorMessage(error, "Failed to archive read inbox items"),
-				);
-			});
-	}, [activeWorkspaceId, archiveRead, onArchiveRead]);
-	const handleClearArchived = React.useCallback(() => {
-		if (!activeWorkspaceId) {
-			return;
-		}
-
-		setActionsOpen(false);
-		void clearArchived({ workspaceId: activeWorkspaceId })
-			.then(() => {
-				onClearArchived();
-			})
-			.catch((error) => {
-				toast.error(
-					getErrorMessage(error, "Failed to clear archived inbox items"),
-				);
-			});
-	}, [activeWorkspaceId, clearArchived, onClearArchived]);
+	const {
+		activeWorkspaceId,
+		handleArchiveRead,
+		handleClearArchived,
+		handleMarkAllRead,
+	} = useInboxPaneActions({
+		onArchiveRead,
+		onClearArchived,
+		onMarkAllRead,
+		setActionsOpen,
+	});
 
 	return (
 		<div
@@ -362,29 +412,7 @@ function InboxPaneHeader({
 				isMobile && "border-b px-4 py-3",
 			)}
 		>
-			{isMobile ? (
-				<SheetTitle
-					className={cn(
-						"text-sm font-medium",
-						desktopSafeTop && DESKTOP_MAIN_HEADER_CONTENT_CLASS,
-						desktopSafeTop && "mt-1",
-					)}
-				>
-					Inbox
-				</SheetTitle>
-			) : (
-				<Breadcrumb
-					className={
-						desktopSafeTop ? DESKTOP_MAIN_HEADER_CONTENT_CLASS : undefined
-					}
-				>
-					<BreadcrumbList className="gap-0">
-						<BreadcrumbItem>
-							<BreadcrumbPage>Inbox</BreadcrumbPage>
-						</BreadcrumbItem>
-					</BreadcrumbList>
-				</Breadcrumb>
-			)}
+			<InboxPaneTitle desktopSafeTop={desktopSafeTop} isMobile={isMobile} />
 			<div
 				className={cn(
 					"flex items-center gap-0.5",

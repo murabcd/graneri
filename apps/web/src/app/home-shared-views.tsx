@@ -31,6 +31,22 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 const homeCalendarSkeletonTitleWidths = ["w-3/5", "w-2/3", "w-1/2"] as const;
 
+const getVisibleUpcomingMeetings = (
+	events: UpcomingCalendarEvent[],
+	currentDate: Date,
+) => {
+	const visibleEvents: UpcomingCalendarEvent[] = [];
+	for (const event of events) {
+		if (event.isMeeting && isUpcomingEventToday(event, currentDate)) {
+			visibleEvents.push(event);
+			if (visibleEvents.length === 5) {
+				break;
+			}
+		}
+	}
+	return visibleEvents;
+};
+
 function HomeCalendarEventListSkeleton() {
 	return (
 		<div
@@ -59,6 +75,133 @@ function HomeCalendarEventListSkeleton() {
 						</div>
 					</div>
 				))}
+			</div>
+		</div>
+	);
+}
+
+const getUpcomingCalendarEmptyCopy = (
+	status: UpcomingCalendarState["status"],
+) => {
+	if (status === "not_connected") {
+		return {
+			description: "Link your calendar in settings to see upcoming meetings.",
+			title: "Connect a calendar",
+		};
+	}
+	if (status === "error") {
+		return {
+			description: "Try reconnecting your calendars or refresh the app.",
+			title: "Couldn’t load calendar",
+		};
+	}
+	return {
+		description: "Check your visible calendars for today",
+		title: "No upcoming events today",
+	};
+};
+
+function HomeUpcomingEvents({
+	currentDate,
+	isResolving,
+	onOpenCalendarEventNote,
+	onOpenCalendarSettings,
+	onOpenMeetingLink,
+	status,
+	visibleEvents,
+}: {
+	currentDate: Date;
+	isResolving: boolean;
+	onOpenCalendarEventNote: (
+		event: UpcomingCalendarEvent,
+		options: {
+			autoStartCapture: boolean;
+			stopCaptureWhenMeetingEnds: boolean;
+		},
+	) => Promise<void> | void;
+	onOpenCalendarSettings: () => void;
+	onOpenMeetingLink: (url: string) => void;
+	status: UpcomingCalendarState["status"];
+	visibleEvents: UpcomingCalendarEvent[];
+}) {
+	if (isResolving) {
+		return <HomeCalendarEventListSkeleton />;
+	}
+	if (visibleEvents.length === 0) {
+		const emptyCopy = getUpcomingCalendarEmptyCopy(status);
+		return (
+			<Empty className="h-full rounded-none border-0 p-4">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<CalendarClock className="size-4" />
+					</EmptyMedia>
+					<EmptyTitle>{emptyCopy.title}</EmptyTitle>
+					<EmptyDescription>{emptyCopy.description}</EmptyDescription>
+				</EmptyHeader>
+				<EmptyContent>
+					<Button variant="outline" onClick={onOpenCalendarSettings}>
+						Calendar settings
+					</Button>
+				</EmptyContent>
+			</Empty>
+		);
+	}
+
+	return (
+		<div className="w-full p-1">
+			<div className="space-y-1.5">
+				{visibleEvents.map((event) => {
+					const isLive = isUpcomingEventLive(event, currentDate);
+					const hasStarted =
+						new Date(event.startAt).getTime() <= currentDate.getTime();
+					return (
+						<div
+							className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-muted/40"
+							key={`${event.id}:${event.startAt}`}
+						>
+							<div
+								className={cn(
+									"h-8 w-1 shrink-0 rounded-full bg-status-planned",
+									isLive && "bg-status-live",
+								)}
+							/>
+							<div className="min-w-0 flex-1">
+								<div className="flex items-center justify-between gap-4">
+									<div className="min-w-0">
+										<p className="truncate text-sm font-medium text-foreground">
+											{event.title}
+										</p>
+										<p
+											className={cn(
+												"mt-0.5 text-xs text-muted-foreground",
+												isLive && "text-status-live",
+											)}
+										>
+											{formatUpcomingEventMeta(event, currentDate)}
+										</p>
+									</div>
+									<Button
+										className="shrink-0"
+										onClick={() => {
+											void onOpenCalendarEventNote(event, {
+												autoStartCapture: hasStarted,
+												stopCaptureWhenMeetingEnds: true,
+											});
+											if (event.meetingUrl) {
+												onOpenMeetingLink(event.meetingUrl);
+											}
+										}}
+										size="sm"
+										type="button"
+										variant="default"
+									>
+										{event.meetingUrl ? "Start now" : "Open note"}
+									</Button>
+								</div>
+							</div>
+						</div>
+					);
+				})}
 			</div>
 		</div>
 	);
@@ -109,15 +252,10 @@ export function HomeView({
 	isLoadingMoreNotes: boolean;
 	onLoadMoreNotes: () => void;
 }) {
-	const visibleUpcomingEvents = [];
-	for (const event of upcomingCalendar.events) {
-		if (event.isMeeting && isUpcomingEventToday(event, currentDate)) {
-			visibleUpcomingEvents.push(event);
-			if (visibleUpcomingEvents.length === 5) {
-				break;
-			}
-		}
-	}
+	const visibleUpcomingEvents = getVisibleUpcomingMeetings(
+		upcomingCalendar.events,
+		currentDate,
+	);
 	const isResolvingUpcomingCalendar =
 		upcomingCalendar.status === "checking" &&
 		visibleUpcomingEvents.length === 0;
@@ -137,11 +275,6 @@ export function HomeView({
 
 		window.open(url, "_blank", "noopener,noreferrer");
 	}, []);
-	const hasUpcomingEventStarted = React.useCallback(
-		(event: UpcomingCalendarEvent) =>
-			new Date(event.startAt).getTime() <= currentDate.getTime(),
-		[currentDate],
-	);
 
 	return (
 		<div
@@ -184,104 +317,15 @@ export function HomeView({
 									</div>
 								</div>
 								<div className="flex min-h-[152px] w-full items-start justify-center p-3">
-									{isResolvingUpcomingCalendar ? (
-										<HomeCalendarEventListSkeleton />
-									) : visibleUpcomingEvents.length > 0 ? (
-										<div className="w-full p-1">
-											<div className="space-y-1.5">
-												{visibleUpcomingEvents.map((event) => {
-													const isLive = isUpcomingEventLive(
-														event,
-														currentDate,
-													);
-													const hasStarted = hasUpcomingEventStarted(event);
-
-													return (
-														<div
-															key={`${event.id}:${event.startAt}`}
-															className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-muted/40"
-														>
-															<div
-																className={cn(
-																	"h-8 w-1 shrink-0 rounded-full bg-status-planned",
-																	isLive && "bg-status-live",
-																)}
-															/>
-															<div className="min-w-0 flex-1">
-																<div className="flex items-center justify-between gap-4">
-																	<div className="min-w-0">
-																		<p className="truncate text-sm font-medium text-foreground">
-																			{event.title}
-																		</p>
-																		<p
-																			className={cn(
-																				"mt-0.5 text-xs text-muted-foreground",
-																				isLive && "text-status-live",
-																			)}
-																		>
-																			{formatUpcomingEventMeta(
-																				event,
-																				currentDate,
-																			)}
-																		</p>
-																	</div>
-																	<Button
-																		type="button"
-																		variant="default"
-																		size="sm"
-																		className="shrink-0"
-																		onClick={() => {
-																			void onOpenCalendarEventNote(event, {
-																				autoStartCapture: hasStarted,
-																				stopCaptureWhenMeetingEnds: true,
-																			});
-																			if (event.meetingUrl) {
-																				void openMeetingLink(event.meetingUrl);
-																			}
-																		}}
-																	>
-																		{event.meetingUrl
-																			? "Start now"
-																			: "Open note"}
-																	</Button>
-																</div>
-															</div>
-														</div>
-													);
-												})}
-											</div>
-										</div>
-									) : (
-										<Empty className="h-full rounded-none border-0 p-4">
-											<EmptyHeader>
-												<EmptyMedia variant="icon">
-													<CalendarClock className="size-4" />
-												</EmptyMedia>
-												<EmptyTitle>
-													{upcomingCalendar.status === "not_connected"
-														? "Connect a calendar"
-														: upcomingCalendar.status === "error"
-															? "Couldn’t load calendar"
-															: "No upcoming events today"}
-												</EmptyTitle>
-												<EmptyDescription>
-													{upcomingCalendar.status === "not_connected"
-														? "Link your calendar in settings to see upcoming meetings."
-														: upcomingCalendar.status === "error"
-															? "Try reconnecting your calendars or refresh the app."
-															: "Check your visible calendars for today"}
-												</EmptyDescription>
-											</EmptyHeader>
-											<EmptyContent>
-												<Button
-													variant="outline"
-													onClick={onOpenCalendarSettings}
-												>
-													Calendar settings
-												</Button>
-											</EmptyContent>
-										</Empty>
-									)}
+									<HomeUpcomingEvents
+										currentDate={currentDate}
+										isResolving={isResolvingUpcomingCalendar}
+										onOpenCalendarEventNote={onOpenCalendarEventNote}
+										onOpenCalendarSettings={onOpenCalendarSettings}
+										onOpenMeetingLink={(url) => void openMeetingLink(url)}
+										status={upcomingCalendar.status}
+										visibleEvents={visibleUpcomingEvents}
+									/>
 								</div>
 							</div>
 						</CardContent>

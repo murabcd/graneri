@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { RenamePopoverContent } from "@/components/navigation/rename-popover";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
@@ -1273,27 +1274,16 @@ function ProjectDeleteDialog({
 	onConfirm: () => void;
 }) {
 	return (
-		<AlertDialog open={open} onOpenChange={onOpenChange}>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-					<AlertDialogDescription>
-						This action cannot be undone. This will delete your project and move
-						its notes back.
-					</AlertDialogDescription>
-				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
-					<AlertDialogAction
-						className="bg-destructive/15 text-destructive hover:bg-destructive/20 hover:text-destructive dark:text-red-500 dark:hover:bg-destructive/25"
-						onClick={onConfirm}
-						disabled={isRemoving}
-					>
-						{isRemoving ? "Deleting..." : "Delete"}
-					</AlertDialogAction>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
+		<DestructiveConfirmationDialog
+			actionLabel="Delete"
+			description="This action cannot be undone. This will delete your project and move its notes back."
+			isPending={isRemoving}
+			onConfirm={onConfirm}
+			onOpenChange={onOpenChange}
+			open={open}
+			pendingActionLabel="Deleting..."
+			title="Are you absolutely sure?"
+		/>
 	);
 }
 

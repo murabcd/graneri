@@ -174,6 +174,95 @@ function NoteVersionPreview({ version }: { version: NoteVersion }) {
 	) : null;
 }
 
+const getNoteVersionsQueryArgs = ({
+	noteId,
+	open,
+	workspaceId,
+}: {
+	noteId: Id<"notes">;
+	open: boolean;
+	workspaceId: Id<"workspaces"> | null;
+}) => (open && workspaceId ? { workspaceId, id: noteId } : ("skip" as const));
+
+const getSelectedVersionMetadata = (
+	versions: NoteVersionMetadata[],
+	activeVersionId: string | null,
+) =>
+	versions.find((version) => version.id === activeVersionId) ??
+	versions[0] ??
+	null;
+
+const getNoteVersionQueryArgs = ({
+	initialVersion,
+	noteId,
+	open,
+	selectedVersion,
+	workspaceId,
+}: {
+	initialVersion: NoteVersion | null;
+	noteId: Id<"notes">;
+	open: boolean;
+	selectedVersion: NoteVersionMetadata | null;
+	workspaceId: Id<"workspaces"> | null;
+}) =>
+	open &&
+	workspaceId &&
+	selectedVersion &&
+	initialVersion?.id !== selectedVersion.id
+		? {
+				workspaceId,
+				id: noteId,
+				versionId: selectedVersion.id,
+			}
+		: ("skip" as const);
+
+function NoteVersionHistoryPreview({
+	displayVersions,
+	isLoading,
+	selectedVersion,
+	selectedVersionMetadata,
+}: {
+	displayVersions: NoteVersionMetadata[];
+	isLoading: boolean;
+	selectedVersion: NoteVersion | null | undefined;
+	selectedVersionMetadata: NoteVersionMetadata | null;
+}) {
+	if (displayVersions.length === 0 || !selectedVersionMetadata) {
+		return (
+			<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
+				No saved versions yet.
+			</div>
+		);
+	}
+	if (isLoading) {
+		return (
+			<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
+				Loading version...
+			</div>
+		);
+	}
+	if (!selectedVersion) {
+		return (
+			<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
+				This version is no longer available.
+			</div>
+		);
+	}
+
+	return (
+		<ScrollArea className="h-full">
+			<div className="mx-auto max-w-2xl p-6">
+				<article className="space-y-4">
+					<h3 className="text-balance font-semibold text-2xl tracking-normal">
+						{getNoteDisplayTitle(selectedVersion.title)}
+					</h3>
+					<NoteVersionPreview version={selectedVersion} />
+				</article>
+			</div>
+		</ScrollArea>
+	);
+}
+
 function NoteVersionHistoryDialogContent({
 	initialVersion,
 	noteId,
@@ -187,9 +276,11 @@ function NoteVersionHistoryDialogContent({
 	const restoreVersion = useMutation(api.notes.restoreVersion);
 	const versions = useQuery(
 		api.noteVersions.list,
-		open && activeWorkspaceId
-			? { workspaceId: activeWorkspaceId, id: noteId }
-			: "skip",
+		getNoteVersionsQueryArgs({
+			noteId,
+			open,
+			workspaceId: activeWorkspaceId,
+		}),
 	);
 	const [activeVersionId, setActiveVersionId] = React.useState<string | null>(
 		null,
@@ -211,22 +302,19 @@ function NoteVersionHistoryDialogContent({
 			})),
 		[displayVersions],
 	);
-	const selectedVersionMetadata =
-		displayVersions.find((version) => version.id === activeVersionId) ??
-		displayVersions[0] ??
-		null;
+	const selectedVersionMetadata = getSelectedVersionMetadata(
+		displayVersions,
+		activeVersionId,
+	);
 	const queriedVersion = useQuery(
 		api.noteVersions.get,
-		open &&
-			activeWorkspaceId &&
-			selectedVersionMetadata &&
-			initialVersion?.id !== selectedVersionMetadata.id
-			? {
-					workspaceId: activeWorkspaceId,
-					id: noteId,
-					versionId: selectedVersionMetadata.id,
-				}
-			: "skip",
+		getNoteVersionQueryArgs({
+			initialVersion,
+			noteId,
+			open,
+			selectedVersion: selectedVersionMetadata,
+			workspaceId: activeWorkspaceId,
+		}),
 	);
 	const selectedVersion =
 		initialVersion?.id === selectedVersionMetadata?.id
@@ -313,30 +401,12 @@ function NoteVersionHistoryDialogContent({
 			}}
 			onSelect={setActiveVersionId}
 		>
-			{displayVersions.length === 0 || !selectedVersionMetadata ? (
-				<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
-					No saved versions yet.
-				</div>
-			) : isLoadingSelectedVersion ? (
-				<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
-					Loading version...
-				</div>
-			) : !selectedVersion ? (
-				<div className="flex h-full items-center justify-center px-4 text-muted-foreground text-sm">
-					This version is no longer available.
-				</div>
-			) : (
-				<ScrollArea className="h-full">
-					<div className="mx-auto max-w-2xl p-6">
-						<article className="space-y-4">
-							<h3 className="text-balance font-semibold text-2xl tracking-normal">
-								{getNoteDisplayTitle(selectedVersion.title)}
-							</h3>
-							<NoteVersionPreview version={selectedVersion} />
-						</article>
-					</div>
-				</ScrollArea>
-			)}
+			<NoteVersionHistoryPreview
+				displayVersions={displayVersions}
+				isLoading={isLoadingSelectedVersion}
+				selectedVersion={selectedVersion}
+				selectedVersionMetadata={selectedVersionMetadata}
+			/>
 			<AlertDialog
 				open={confirmRestoreOpen}
 				onOpenChange={setConfirmRestoreOpen}

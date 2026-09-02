@@ -9,6 +9,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
+import { cn } from "@workspace/ui/lib/utils";
 import { ChevronsUp, MoreHorizontal, Plus } from "lucide-react";
 import * as React from "react";
 import {
@@ -35,6 +36,168 @@ const SIDEBAR_NOTE_SKELETON_IDS = [
 ] as const;
 
 type NoteListSort = SidebarSortValue;
+
+function NavNotesActions({
+	filtersOpen,
+	showFewer,
+	onCreateNote,
+	onFiltersOpenChange,
+	onShowFewer,
+	onSortChange,
+	sortOptions,
+	className,
+	...divProps
+}: {
+	filtersOpen: boolean;
+	showFewer: boolean;
+	onCreateNote: () => void;
+	onFiltersOpenChange: (open: boolean) => void;
+	onShowFewer: () => void;
+	onSortChange: (sort: NoteListSort) => void;
+	sortOptions: ReturnType<typeof getSidebarSortOptions>;
+} & React.ComponentProps<"div">) {
+	return (
+		<div {...divProps} className={cn("flex items-center gap-0.5", className)}>
+			{showFewer ? (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							aria-label="Show fewer notes"
+							onClick={onShowFewer}
+						>
+							<ChevronsUp />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent
+						side="bottom"
+						align="center"
+						className="pointer-events-none select-none"
+					>
+						Show less
+					</TooltipContent>
+				</Tooltip>
+			) : null}
+			<SidebarSortMenu
+				label="Sort notes"
+				open={filtersOpen}
+				options={sortOptions}
+				onOpenChange={onFiltersOpenChange}
+				onSortChange={onSortChange}
+			/>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<button
+						type="button"
+						aria-label="Add note"
+						className="cursor-pointer"
+						onClick={onCreateNote}
+					>
+						<Plus />
+					</button>
+				</TooltipTrigger>
+				<TooltipContent
+					side="bottom"
+					align="center"
+					className="pointer-events-none select-none"
+				>
+					Add note
+				</TooltipContent>
+			</Tooltip>
+		</div>
+	);
+}
+
+function NavNotesContent({
+	catalog,
+	currentNoteId,
+	currentNoteTitle,
+	notes,
+	recordingNoteId,
+	visibleNoteSource,
+	visibleNotes,
+	onLoadMoreNotes,
+	onNoteSelect,
+	onNoteTitleChange,
+	onNoteTrashed,
+	onPrefetchNote,
+	onShowAllNotesChange,
+}: {
+	catalog: {
+		hasMoreLoadedNotes: boolean;
+		hasMoreNotes: boolean;
+		isLoadingMoreNotes: boolean;
+		showAllNotes: boolean;
+	};
+	currentNoteId: Id<"notes"> | null;
+	currentNoteTitle?: string;
+	notes: Array<Doc<"notes">> | undefined;
+	recordingNoteId: Id<"notes"> | null;
+	visibleNoteSource: Array<Doc<"notes">>;
+	visibleNotes: Array<Doc<"notes">>;
+	onLoadMoreNotes: () => void;
+	onNoteSelect: (noteId: Id<"notes">) => void;
+	onNoteTitleChange?: (title: string) => void;
+	onNoteTrashed?: (noteId: Id<"notes">) => void;
+	onPrefetchNote: (noteId: Id<"notes">) => void;
+	onShowAllNotesChange: (showAll: boolean) => void;
+}) {
+	if (notes === undefined) {
+		return <NavNotesSkeleton />;
+	}
+
+	const handleMoreClick = () => {
+		if (!catalog.showAllNotes && catalog.hasMoreLoadedNotes) {
+			onShowAllNotesChange(true);
+			return;
+		}
+		if (catalog.hasMoreNotes) {
+			onLoadMoreNotes();
+			return;
+		}
+		onShowAllNotesChange(false);
+	};
+	const moreLabel = catalog.isLoadingMoreNotes
+		? "Loading..."
+		: catalog.showAllNotes && !catalog.hasMoreNotes
+			? "Show less"
+			: "Show more";
+
+	return (
+		<>
+			{visibleNoteSource.length === 0 ? (
+				<div className="px-2 text-xs text-muted-foreground/50">
+					{notes.length > 0 ? "All notes are in projects" : "No notes yet"}
+				</div>
+			) : null}
+			<SidebarNotesList
+				notes={visibleNotes}
+				currentNoteId={currentNoteId}
+				currentNoteTitle={currentNoteTitle}
+				recordingNoteId={recordingNoteId}
+				onPrefetchNote={onPrefetchNote}
+				onNoteSelect={onNoteSelect}
+				onNoteTitleChange={onNoteTitleChange}
+				onNoteTrashed={onNoteTrashed}
+			/>
+			{catalog.hasMoreLoadedNotes || catalog.hasMoreNotes ? (
+				<SidebarMenu>
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							className="text-sidebar-foreground/70 hover:bg-transparent hover:text-inherit"
+							disabled={catalog.isLoadingMoreNotes}
+							onClick={handleMoreClick}
+						>
+							<MoreHorizontal />
+							<span className="text-xs">{moreLabel}</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				</SidebarMenu>
+			) : null}
+		</>
+	);
+}
+
 export function NavNotes({
 	notes,
 	currentNoteId,
@@ -86,107 +249,37 @@ export function NavNotes({
 			storageKey="notes"
 			actionClassName={`${SIDEBAR_COLLAPSIBLE_GROUP_ACTION_CLASS_NAME} ${SIDEBAR_HEADER_ACTION_ROW_CLASS_NAME} ${filtersOpen ? SIDEBAR_COLLAPSIBLE_GROUP_ACTION_OPEN_CLASS_NAME : ""}`}
 			actions={
-				<div className="flex items-center gap-0.5">
-					{showAllNotes && hasMoreLoadedNotes ? (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<button
-									type="button"
-									aria-label="Show fewer notes"
-									onClick={() => setShowAllNotes(false)}
-								>
-									<ChevronsUp />
-								</button>
-							</TooltipTrigger>
-							<TooltipContent
-								side="bottom"
-								align="center"
-								className="pointer-events-none select-none"
-							>
-								Show less
-							</TooltipContent>
-						</Tooltip>
-					) : null}
-					<SidebarSortMenu
-						label="Sort notes"
-						open={filtersOpen}
-						options={sortOptions}
-						onOpenChange={setFiltersOpen}
-						onSortChange={setSortBy}
-					/>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								aria-label="Add note"
-								className="cursor-pointer"
-								onClick={onCreateNote}
-							>
-								<Plus />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent
-							side="bottom"
-							align="center"
-							className="pointer-events-none select-none"
-						>
-							Add note
-						</TooltipContent>
-					</Tooltip>
-				</div>
+				<NavNotesActions
+					filtersOpen={filtersOpen}
+					showFewer={showAllNotes && hasMoreLoadedNotes}
+					onCreateNote={onCreateNote}
+					onFiltersOpenChange={setFiltersOpen}
+					onShowFewer={() => setShowAllNotes(false)}
+					onSortChange={setSortBy}
+					sortOptions={sortOptions}
+				/>
 			}
 		>
-			{notes === undefined ? (
-				<NavNotesSkeleton />
-			) : (
-				<>
-					{visibleNoteSource.length === 0 ? (
-						<div className="px-2 text-xs text-muted-foreground/50">
-							{notes.length > 0 ? "All notes are in projects" : "No notes yet"}
-						</div>
-					) : null}
-					<SidebarNotesList
-						notes={visibleNotes}
-						currentNoteId={currentNoteId}
-						currentNoteTitle={currentNoteTitle}
-						recordingNoteId={recordingNoteId}
-						onPrefetchNote={onPrefetchNote}
-						onNoteSelect={onNoteSelect}
-						onNoteTitleChange={onNoteTitleChange}
-						onNoteTrashed={onNoteTrashed}
-					/>
-					{hasMoreLoadedNotes || hasMoreCatalogNotes ? (
-						<SidebarMenu>
-							<SidebarMenuItem>
-								<SidebarMenuButton
-									className="text-sidebar-foreground/70 hover:bg-transparent hover:text-inherit"
-									disabled={isLoadingMoreNotes}
-									onClick={() => {
-										if (!showAllNotes && hasMoreLoadedNotes) {
-											setShowAllNotes(true);
-											return;
-										}
-										if (hasMoreCatalogNotes) {
-											onLoadMoreNotes();
-											return;
-										}
-										setShowAllNotes(false);
-									}}
-								>
-									<MoreHorizontal />
-									<span className="text-xs">
-										{isLoadingMoreNotes
-											? "Loading..."
-											: showAllNotes && !hasMoreCatalogNotes
-												? "Show less"
-												: "Show more"}
-									</span>
-								</SidebarMenuButton>
-							</SidebarMenuItem>
-						</SidebarMenu>
-					) : null}
-				</>
-			)}
+			<NavNotesContent
+				catalog={{
+					hasMoreLoadedNotes,
+					hasMoreNotes: hasMoreCatalogNotes,
+					isLoadingMoreNotes,
+					showAllNotes,
+				}}
+				currentNoteId={currentNoteId}
+				currentNoteTitle={currentNoteTitle}
+				notes={notes}
+				recordingNoteId={recordingNoteId}
+				visibleNoteSource={visibleNoteSource}
+				visibleNotes={visibleNotes}
+				onLoadMoreNotes={onLoadMoreNotes}
+				onNoteSelect={onNoteSelect}
+				onNoteTitleChange={onNoteTitleChange}
+				onNoteTrashed={onNoteTrashed}
+				onPrefetchNote={onPrefetchNote}
+				onShowAllNotesChange={setShowAllNotes}
+			/>
 		</SidebarCollapsibleGroup>
 	);
 }

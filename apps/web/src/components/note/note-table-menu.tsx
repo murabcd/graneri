@@ -167,20 +167,14 @@ type TableHandleMenuProps = {
 	target: TableHandleTarget;
 };
 
-function TableHandleMenu({
+function useTableHandleMenuActions({
 	editor,
 	onOpenChange,
-	open,
 	orientation,
 	session,
 	target,
-}: TableHandleMenuProps) {
+}: Omit<TableHandleMenuProps, "open">) {
 	const isRow = orientation === "row";
-	const index = isRow ? target.rowIndex : target.columnIndex;
-	const count = isRow ? target.rowCount : target.columnCount;
-	const noun = isRow ? "row" : "column";
-	const style = isRow ? target.rowStyle : target.columnStyle;
-
 	const execute = React.useCallback(
 		(command: () => boolean) => {
 			const didRun = session.runHandleCommand(target, orientation, command);
@@ -189,38 +183,137 @@ function TableHandleMenu({
 		},
 		[onOpenChange, orientation, session, target],
 	);
-
 	const move = (offset: -1 | 1) => {
 		const didRun = session.moveHandle(target, orientation, offset);
 		onOpenChange(false);
 		return didRun;
 	};
-
-	const addBefore = () =>
-		execute(() =>
-			isRow
-				? editor.commands.addRowBefore()
-				: editor.commands.addColumnBefore(),
-		);
-	const addAfter = () =>
-		execute(() =>
-			isRow ? editor.commands.addRowAfter() : editor.commands.addColumnAfter(),
-		);
 	const duplicate = () => {
 		const didRun = session.duplicateHandle(target, orientation);
 		onOpenChange(false);
 		return didRun;
 	};
-	const remove = () =>
-		execute(() =>
-			isRow ? editor.commands.deleteRow() : editor.commands.deleteColumn(),
-		);
-	const setCellBackground = (value: NoteTableCellBackground | null) =>
-		execute(() => editor.commands.setCellAttribute("cellBackground", value));
-	const setCellAlignment = (value: NoteTableCellAlignment) =>
-		execute(() => editor.commands.setCellAttribute("align", value));
-	const toggleHeaderRow = () => execute(editor.commands.toggleHeaderRow);
-	const currentCellBackground = getSelectedCellBackground(editor);
+
+	return {
+		addAfter: () =>
+			execute(() =>
+				isRow
+					? editor.commands.addRowAfter()
+					: editor.commands.addColumnAfter(),
+			),
+		addBefore: () =>
+			execute(() =>
+				isRow
+					? editor.commands.addRowBefore()
+					: editor.commands.addColumnBefore(),
+			),
+		count: isRow ? target.rowCount : target.columnCount,
+		currentCellBackground: getSelectedCellBackground(editor),
+		duplicate,
+		index: isRow ? target.rowIndex : target.columnIndex,
+		isRow,
+		move,
+		noun: isRow ? "row" : "column",
+		remove: () =>
+			execute(() =>
+				isRow ? editor.commands.deleteRow() : editor.commands.deleteColumn(),
+			),
+		setCellAlignment: (value: NoteTableCellAlignment) =>
+			execute(() => editor.commands.setCellAttribute("align", value)),
+		setCellBackground: (value: NoteTableCellBackground | null) =>
+			execute(() => editor.commands.setCellAttribute("cellBackground", value)),
+		style: isRow ? target.rowStyle : target.columnStyle,
+		toggleHeaderRow: () => execute(editor.commands.toggleHeaderRow),
+	};
+}
+
+function TableHandleMoveItems({
+	count,
+	index,
+	isRow,
+	noun,
+	onMove,
+}: {
+	count: number;
+	index: number;
+	isRow: boolean;
+	noun: string;
+	onMove: (offset: -1 | 1) => boolean;
+}) {
+	return (
+		<>
+			{index > 0 ? (
+				<DropdownMenuItem onSelect={() => onMove(-1)}>
+					{isRow ? <ArrowUp /> : <ArrowLeft />}
+					Move {noun} {isRow ? "up" : "left"}
+				</DropdownMenuItem>
+			) : null}
+			{index < count - 1 ? (
+				<DropdownMenuItem onSelect={() => onMove(1)}>
+					{isRow ? <ArrowDown /> : <ArrowRight />}
+					Move {noun} {isRow ? "down" : "right"}
+				</DropdownMenuItem>
+			) : null}
+			{count > 1 ? <DropdownMenuSeparator /> : null}
+		</>
+	);
+}
+
+function TableHandleInsertItems({
+	isRow,
+	noun,
+	onAddAfter,
+	onAddBefore,
+}: {
+	isRow: boolean;
+	noun: string;
+	onAddAfter: () => boolean;
+	onAddBefore: () => boolean;
+}) {
+	return (
+		<>
+			<DropdownMenuItem onSelect={onAddBefore}>
+				<Plus />
+				Insert {noun} {isRow ? "above" : "left"}
+			</DropdownMenuItem>
+			<DropdownMenuItem onSelect={onAddAfter}>
+				<Plus />
+				Insert {noun} {isRow ? "below" : "right"}
+			</DropdownMenuItem>
+		</>
+	);
+}
+
+function TableHandleMenu({
+	editor,
+	onOpenChange,
+	open,
+	orientation,
+	session,
+	target,
+}: TableHandleMenuProps) {
+	const {
+		addAfter,
+		addBefore,
+		count,
+		currentCellBackground,
+		duplicate,
+		index,
+		isRow,
+		move,
+		noun,
+		remove,
+		setCellAlignment,
+		setCellBackground,
+		style,
+		toggleHeaderRow,
+	} = useTableHandleMenuActions({
+		editor,
+		onOpenChange,
+		orientation,
+		session,
+		target,
+	});
 
 	return (
 		<DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -261,27 +354,19 @@ function TableHandleMenu({
 						<DropdownMenuSeparator />
 					</>
 				) : null}
-				{index > 0 ? (
-					<DropdownMenuItem onSelect={() => move(-1)}>
-						{isRow ? <ArrowUp /> : <ArrowLeft />}
-						Move {noun} {isRow ? "up" : "left"}
-					</DropdownMenuItem>
-				) : null}
-				{index < count - 1 ? (
-					<DropdownMenuItem onSelect={() => move(1)}>
-						{isRow ? <ArrowDown /> : <ArrowRight />}
-						Move {noun} {isRow ? "down" : "right"}
-					</DropdownMenuItem>
-				) : null}
-				{count > 1 ? <DropdownMenuSeparator /> : null}
-				<DropdownMenuItem onSelect={addBefore}>
-					<Plus />
-					Insert {noun} {isRow ? "above" : "left"}
-				</DropdownMenuItem>
-				<DropdownMenuItem onSelect={addAfter}>
-					<Plus />
-					Insert {noun} {isRow ? "below" : "right"}
-				</DropdownMenuItem>
+				<TableHandleMoveItems
+					count={count}
+					index={index}
+					isRow={isRow}
+					noun={noun}
+					onMove={move}
+				/>
+				<TableHandleInsertItems
+					isRow={isRow}
+					noun={noun}
+					onAddAfter={addAfter}
+					onAddBefore={addBefore}
+				/>
 				<DropdownMenuSeparator />
 				<TableCellColorSubmenu
 					currentValue={currentCellBackground}

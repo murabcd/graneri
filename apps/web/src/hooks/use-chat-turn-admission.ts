@@ -17,6 +17,9 @@ type LocalSubmissionBoundary = {
 
 type SubmissionBoundaryOutcome = "active_run" | "no_active" | "queued";
 
+const NO_ACTIVE_SUBMISSION_BOUNDARY =
+	Promise.resolve<SubmissionBoundaryOutcome>("no_active");
+
 const createLocalSubmissionBoundary = (): LocalSubmissionBoundary => {
 	let isReleased = false;
 	let resolveBoundary!: (outcome: SubmissionBoundaryOutcome) => void;
@@ -52,20 +55,22 @@ export const useChatTurnAdmission = ({
 	const admissionBoundariesRef = React.useRef(
 		new Set<LocalSubmissionBoundary>(),
 	);
-	const admissionTailRef = React.useRef<Promise<SubmissionBoundaryOutcome>>(
-		Promise.resolve("no_active"),
-	);
-	if (scopeKeyRef.current !== scopeKey) {
+	const admissionTailRef = React.useRef(NO_ACTIVE_SUBMISSION_BOUNDARY);
+	React.useLayoutEffect(() => {
+		if (scopeKeyRef.current === scopeKey) {
+			return;
+		}
+
 		for (const boundary of admissionBoundariesRef.current) {
 			boundary.release("no_active");
 		}
 		admissionBoundariesRef.current.clear();
 		localSubmissionBoundaryRef.current = null;
 		pendingAdmissionBoundaryRef.current = null;
-		admissionTailRef.current = Promise.resolve("no_active");
+		admissionTailRef.current = NO_ACTIVE_SUBMISSION_BOUNDARY;
 		scopeKeyRef.current = scopeKey;
 		scopeVersionRef.current += 1;
-	}
+	}, [scopeKey]);
 
 	const releaseLocalSubmissionBoundary = React.useCallback(
 		(boundary: LocalSubmissionBoundary, outcome: SubmissionBoundaryOutcome) => {

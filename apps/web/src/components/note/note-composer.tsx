@@ -12,7 +12,6 @@ import { Card, CardContent, CardHeader } from "@workspace/ui/components/card";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
-	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
@@ -49,6 +48,7 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import {
 	ArrowUp,
 	AtSign,
@@ -56,11 +56,6 @@ import {
 	Check,
 	ChevronUp,
 	Copy,
-	Minus,
-	PanelBottom,
-	PanelRight,
-	PanelRightDashed,
-	Plus,
 	SlidersHorizontal,
 	Square,
 } from "lucide-react";
@@ -109,14 +104,16 @@ import {
 	useResizableSidePanel,
 	useResizeHandle,
 } from "@/components/layout/resizable-side-panel";
+import {
+	NoteChatHeader,
+	type NoteChatPresentation,
+} from "@/components/note/note-chat-header";
 import { NoteGenerateButton } from "@/components/note/note-generate-button";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useAssistantMessageFork } from "@/hooks/use-assistant-message-fork";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
 import { useLocalCapabilitySession } from "@/hooks/use-local-capability-session";
 import {
-	type NoteChatGroups,
-	type NoteChatSummary,
 	resolveNoteComposerPlaceholder,
 	useNoteDiscussionSession,
 } from "@/hooks/use-note-discussion-session";
@@ -133,7 +130,6 @@ import { buildNoteChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
-import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import { logError } from "@/lib/logger";
 import { resolveCanGenerateNotes } from "@/lib/note-generate-action";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
@@ -195,7 +191,6 @@ import {
 import { NoteTranscriptPanel } from "./note-transcript-panel";
 import { createNoteTranscriptPanelState } from "./note-transcript-panel-state";
 
-type NoteChatPresentation = "inline" | "floating" | "sidebar";
 const NOTE_CHAT_FLOATING_WIDTH = "min(28rem, calc(100vw - 2rem))";
 const NOTE_CHAT_PANEL_DOCK_OFFSET =
 	COMPOSER_DOCK_BOTTOM_OFFSET - COMPOSER_OVERLAY_FOOTER_PADDING;
@@ -257,6 +252,117 @@ const resolveStateUpdate = <T,>(
 		? (value as (previousValue: T) => T)(currentValue)
 		: value;
 
+const getNoteComposerPresentationState = ({
+	isMobile,
+	panelMode,
+	presentationMode,
+	rightInsetPanelWidth,
+	rightMode,
+	rightOpen,
+	rightOpenMobile,
+	sidebarPanelWidth,
+}: {
+	isMobile: boolean;
+	panelMode: "chat" | "transcript" | null;
+	presentationMode: NoteChatPresentation;
+	rightInsetPanelWidth: string | null;
+	rightMode: ReturnType<typeof useSidebarRight>["rightMode"];
+	rightOpen: boolean;
+	rightOpenMobile: boolean;
+	sidebarPanelWidth: number;
+}) => {
+	const isChatOpen = panelMode === "chat";
+	const isTranscriptOpen = panelMode === "transcript";
+	const isRightSidebarOpen = isMobile ? rightOpenMobile : rightOpen;
+	const isFloatingPresentation =
+		isChatOpen &&
+		presentationMode === "floating" &&
+		isRightSidebarOpen &&
+		rightMode === "floating";
+	const isSidebarPresentation =
+		isChatOpen &&
+		presentationMode === "sidebar" &&
+		isRightSidebarOpen &&
+		rightMode === "sidebar";
+	return {
+		activeSidebarWidthOverride: isSidebarPresentation
+			? `${sidebarPanelWidth}px`
+			: null,
+		floatingPanelRightOffset:
+			!isMobile && rightInsetPanelWidth
+				? `calc(${rightInsetPanelWidth} + 18px)`
+				: "18px",
+		hasAdjacentInsetPanel:
+			isSidebarPresentation && !isMobile && Boolean(rightInsetPanelWidth),
+		isChatOpen,
+		isFloatingPresentation,
+		isRightSidebarOpen,
+		isSidebarPresentation,
+		isTranscriptOpen,
+		sidebarPanelWidthCss: `${sidebarPanelWidth}px`,
+		shouldShowInlinePanel: presentationMode === "inline" || isTranscriptOpen,
+	};
+};
+
+const isPointerInsideNoteChatSurface = ({
+	event,
+	refs,
+}: {
+	event: PointerEvent;
+	refs: Array<React.RefObject<HTMLElement | null>>;
+}) => {
+	const target = event.target;
+	if (!(target instanceof Node)) return true;
+	if (refs.some((ref) => ref.current?.contains(target))) return true;
+	return event
+		.composedPath()
+		.some(
+			(entry) =>
+				entry instanceof HTMLElement &&
+				(entry.dataset.slot === "dropdown-menu-content" ||
+					entry.dataset.slot === "dropdown-menu-sub-content" ||
+					entry.hasAttribute("data-radix-popper-content-wrapper")),
+		);
+};
+
+const shouldBlockNoteChatSubmit = ({
+	attachedFiles,
+	displayActiveRun,
+	isSettingsLoading,
+	message,
+	selectedRecipe,
+}: {
+	attachedFiles: ChatAttachment[];
+	displayActiveRun: boolean;
+	isSettingsLoading: boolean;
+	message: string;
+	selectedRecipe: RecipePrompt | null;
+}) =>
+	isSettingsLoading ||
+	(!message && !selectedRecipe && attachedFiles.length === 0) ||
+	hasUploadingAttachments(attachedFiles) ||
+	(displayActiveRun && attachedFiles.length > 0);
+
+const getNoteDraftStorageScope = (noteId: Id<"notes"> | null) =>
+	noteId ? getNoteComposerDraftScope(noteId) : null;
+
+const getNoteRecipeQueryArgs = (workspaceId: Id<"workspaces"> | null) =>
+	workspaceId ? { workspaceId } : ("skip" as const);
+
+const getNoteTranscriptionLanguage = (
+	userPreferences:
+		| FunctionReturnType<typeof api.userPreferences.get>
+		| undefined,
+) =>
+	userPreferences === undefined
+		? undefined
+		: (userPreferences?.transcriptionLanguage ?? null);
+
+const getLeftSidebarReservedWidth = (state: "expanded" | "collapsed") =>
+	state === "collapsed"
+		? APP_SIDEBAR_COLLAPSED_WIDTH
+		: APP_SIDEBAR_EXPANDED_WIDTH;
+
 const useNoteComposerController = ({
 	noteContext,
 	getNoteContext,
@@ -282,7 +388,7 @@ const useNoteComposerController = ({
 	// Note id is route/context input for storage and query scopes, not event-handler work.
 	const noteId = (noteContext.noteId as Id<"notes"> | null) ?? null;
 	const noteStorageScopeKey = getNoteStorageScopeKey(noteId);
-	const draftStorageScope = noteId ? getNoteComposerDraftScope(noteId) : null;
+	const draftStorageScope = getNoteDraftStorageScope(noteId);
 	const {
 		claimSnapshot: claimDraftSnapshot,
 		clear: clearDraft,
@@ -397,10 +503,7 @@ const useNoteComposerController = ({
 		() => parseCssLengthToPixels(rightInsetPanelWidth ?? undefined),
 		[rightInsetPanelWidth],
 	);
-	const leftSidebarReservedWidth =
-		state === "collapsed"
-			? APP_SIDEBAR_COLLAPSED_WIDTH
-			: APP_SIDEBAR_EXPANDED_WIDTH;
+	const leftSidebarReservedWidth = getLeftSidebarReservedWidth(state);
 	const {
 		handleResizeKeyDown: handleSidebarResizeKeyDown,
 		handleResizeStart: handleSidebarResizeStart,
@@ -488,7 +591,7 @@ const useNoteComposerController = ({
 	const updateUserPreferences = useMutation(api.userPreferences.update);
 	const recipeData = useQuery(
 		api.recipes.list,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getNoteRecipeQueryArgs(activeWorkspaceId),
 	);
 	const recipes = React.useMemo(
 		() =>
@@ -504,9 +607,7 @@ const useNoteComposerController = ({
 	const [isSavingTranscriptionLanguage, setIsSavingTranscriptionLanguage] =
 		React.useState(false);
 	const isTranscriptionLanguageReady = userPreferences !== undefined;
-	const transcriptionLanguage = isTranscriptionLanguageReady
-		? (userPreferences?.transcriptionLanguage ?? null)
-		: undefined;
+	const transcriptionLanguage = getNoteTranscriptionLanguage(userPreferences);
 	const transcriptionLanguageSelectValue = getTranscriptionLanguageSelectValue(
 		transcriptionLanguage,
 	);
@@ -794,32 +895,27 @@ const useNoteComposerController = ({
 		onKeyDown: handleFloatingPanelResizeKeyDown,
 	});
 
-	const isChatOpen = panelMode === "chat";
-	const isTranscriptOpen = panelMode === "transcript";
-	const isRightSidebarOpen = isMobile ? rightOpenMobile : rightOpen;
-	const resolvedPresentationMode = presentationMode;
-	const shouldShowInlinePanel =
-		resolvedPresentationMode === "inline" || isTranscriptOpen;
-	const isFloatingPresentation =
-		isChatOpen &&
-		resolvedPresentationMode === "floating" &&
-		isRightSidebarOpen &&
-		rightMode === "floating";
-	const isSidebarPresentation =
-		isChatOpen &&
-		resolvedPresentationMode === "sidebar" &&
-		isRightSidebarOpen &&
-		rightMode === "sidebar";
-	const floatingPanelRightOffset =
-		!isMobile && rightInsetPanelWidth
-			? `calc(${rightInsetPanelWidth} + 18px)`
-			: "18px";
-	const hasAdjacentInsetPanel =
-		isSidebarPresentation && !isMobile && Boolean(rightInsetPanelWidth);
-	const sidebarPanelWidthCss = `${sidebarPanelWidth}px`;
-	const activeSidebarWidthOverride = isSidebarPresentation
-		? sidebarPanelWidthCss
-		: null;
+	const {
+		activeSidebarWidthOverride,
+		floatingPanelRightOffset,
+		hasAdjacentInsetPanel,
+		isChatOpen,
+		isFloatingPresentation,
+		isRightSidebarOpen,
+		isSidebarPresentation,
+		isTranscriptOpen,
+		sidebarPanelWidthCss,
+		shouldShowInlinePanel,
+	} = getNoteComposerPresentationState({
+		isMobile,
+		panelMode,
+		presentationMode,
+		rightInsetPanelWidth,
+		rightMode,
+		rightOpen,
+		rightOpenMobile,
+		sidebarPanelWidth,
+	});
 	React.useEffect(() => {
 		if (isMobile) {
 			return;
@@ -1018,38 +1114,12 @@ const useNoteComposerController = ({
 				shouldIgnoreNextOutsidePointerDownRef.current = false;
 				return;
 			}
-
-			const target = event.target;
-			if (!(target instanceof Node)) {
-				return;
-			}
-
-			const composedPath = event.composedPath();
-			const isInsidePortaledDropdown = composedPath.some((entry) => {
-				if (!(entry instanceof HTMLElement)) {
-					return false;
-				}
-
-				return (
-					entry.dataset.slot === "dropdown-menu-content" ||
-					entry.dataset.slot === "dropdown-menu-sub-content" ||
-					entry.hasAttribute("data-radix-popper-content-wrapper")
-				);
-			});
-
-			if (rootRef.current?.contains(target)) {
-				return;
-			}
-
-			if (composerEditorRef.current?.contains(target)) {
-				return;
-			}
-
-			if (inlinePanelRef.current?.contains(target)) {
-				return;
-			}
-
-			if (isInsidePortaledDropdown) {
+			if (
+				isPointerInsideNoteChatSurface({
+					event,
+					refs: [rootRef, composerEditorRef, inlinePanelRef],
+				})
+			) {
 				return;
 			}
 
@@ -1170,12 +1240,13 @@ const useNoteComposerController = ({
 		);
 
 		if (
-			isSettingsLoading ||
-			(!nextMessage &&
-				!selectedRecipe &&
-				submittedAttachedFiles.length === 0) ||
-			hasUploadingAttachments(submittedAttachedFiles) ||
-			(displayActiveRun && submittedAttachedFiles.length > 0)
+			shouldBlockNoteChatSubmit({
+				attachedFiles: submittedAttachedFiles,
+				displayActiveRun: Boolean(displayActiveRun),
+				isSettingsLoading,
+				message: nextMessage,
+				selectedRecipe,
+			})
 		) {
 			return;
 		}
@@ -1660,7 +1731,7 @@ const useNoteComposerController = ({
 		orderedTranscriptUtterances: transcriptSession.orderedTranscriptUtterances,
 		openDraftChat,
 		panelMode,
-		presentationMode: resolvedPresentationMode,
+		presentationMode,
 		floatingPanelHeight,
 		floatingPanelRightOffset,
 		rootRef,
@@ -1837,239 +1908,6 @@ function TranscriptLanguageSelector({
 	);
 }
 
-function NoteChatHeader({
-	chatTitle,
-	currentChatId,
-	groupedNoteChats,
-	noteChats,
-	onHideChat,
-	onNewChat,
-	onSelectChat,
-	onSelectInlinePresentation,
-	onSelectRightPresentation,
-	presentationMode,
-	isMobile,
-	desktopSafeTop,
-	sidebarCompact,
-}: {
-	chatTitle: string;
-	currentChatId: string;
-	groupedNoteChats: NoteChatGroups;
-	noteChats: NoteChatSummary[] | undefined;
-	onHideChat: () => void;
-	onNewChat: () => void;
-	onSelectChat: (chatId: string) => void;
-	onSelectInlinePresentation: () => void;
-	onSelectRightPresentation: (
-		mode: Exclude<NoteChatPresentation, "inline">,
-	) => void;
-	presentationMode: NoteChatPresentation;
-	isMobile: boolean;
-	desktopSafeTop: boolean;
-	sidebarCompact: boolean;
-}) {
-	const chatModeIcon =
-		presentationMode === "inline" ? (
-			<PanelBottom />
-		) : presentationMode === "floating" ? (
-			<PanelRightDashed />
-		) : (
-			<PanelRight />
-		);
-	const isDesktopSidebarHeader = sidebarCompact && !isMobile;
-	const isMobileSidebarHeader = sidebarCompact && isMobile;
-	const hasNoteChats = (noteChats?.length ?? 0) > 0;
-	const chatTitleClassName = cn(
-		"min-w-0 max-w-full justify-start gap-0.5 border-0 !bg-transparent text-left shadow-none",
-		isDesktopSidebarHeader
-			? "h-9 px-2.5 pr-1.5 text-sm"
-			: "h-8 px-2 pr-1.5 text-sm",
-		sidebarCompact ? "max-w-[min(100%,18rem)]" : "max-w-[min(100%,36rem)]",
-		sidebarCompact ? "-ml-1" : "-ml-2",
-	);
-
-	return (
-		<CardHeader
-			data-app-region={isDesktopSidebarHeader ? "no-drag" : undefined}
-			className={cn(
-				"flex items-center justify-between gap-3",
-				isDesktopSidebarHeader
-					? desktopSafeTop
-						? "h-10 px-2 py-0"
-						: "h-12 px-4 py-0"
-					: sidebarCompact
-						? "p-2"
-						: "px-4 py-4",
-			)}
-		>
-			<div
-				className={cn(
-					"flex min-w-0 flex-1 items-center gap-2",
-					(isDesktopSidebarHeader || isMobileSidebarHeader) &&
-						desktopSafeTop && [
-							DESKTOP_MAIN_HEADER_CONTENT_CLASS,
-							isMobileSidebarHeader && "mt-1",
-						],
-				)}
-			>
-				{hasNoteChats ? (
-					<Select value={currentChatId} onValueChange={onSelectChat}>
-						<SelectTrigger
-							size="sm"
-							title={chatTitle}
-							aria-label="Select note chat"
-							className={cn(
-								chatTitleClassName,
-								"cursor-pointer hover:!bg-accent/50 focus-visible:!bg-accent/50 focus-visible:ring-0 data-[state=open]:!bg-accent/50 dark:!bg-transparent dark:hover:!bg-accent/50 dark:data-[state=open]:!bg-accent/50",
-							)}
-						>
-							<span className="min-w-0 truncate text-sm text-foreground">
-								{chatTitle}
-							</span>
-						</SelectTrigger>
-						<SelectContent
-							align="start"
-							className="min-w-[var(--radix-select-trigger-width)] max-w-[90vw]"
-						>
-							{groupedNoteChats.today.length > 0 ? (
-								<SelectGroup>
-									<SelectLabel>Today</SelectLabel>
-									{groupedNoteChats.today.map((chat) => (
-										<SelectItem
-											key={chat._id}
-											value={chat.chatId}
-											className="min-w-0"
-										>
-											<span className="block min-w-0 max-w-full truncate">
-												{chat.title}
-											</span>
-										</SelectItem>
-									))}
-								</SelectGroup>
-							) : null}
-							{groupedNoteChats.previous.length > 0 ? (
-								<SelectGroup>
-									<SelectLabel>Previous</SelectLabel>
-									{groupedNoteChats.previous.map((chat) => (
-										<SelectItem
-											key={chat._id}
-											value={chat.chatId}
-											className="min-w-0"
-										>
-											<span className="block min-w-0 max-w-full truncate">
-												{chat.title}
-											</span>
-										</SelectItem>
-									))}
-								</SelectGroup>
-							) : null}
-						</SelectContent>
-					</Select>
-				) : (
-					<div className={cn(chatTitleClassName, "flex items-center")}>
-						<span className="min-w-0 truncate text-sm text-foreground">
-							New chat
-						</span>
-					</div>
-				)}
-			</div>
-
-			<div
-				className={cn(
-					"flex items-center gap-1",
-					sidebarCompact ? "-mr-1" : "-mr-2",
-					(isDesktopSidebarHeader || isMobileSidebarHeader) &&
-						desktopSafeTop && [
-							DESKTOP_MAIN_HEADER_CONTENT_CLASS,
-							isMobileSidebarHeader && "mt-1",
-						],
-				)}
-			>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							onClick={onNewChat}
-							aria-label="New chat"
-						>
-							<Plus />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent>New chat</TooltipContent>
-				</Tooltip>
-
-				<DropdownMenu>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<DropdownMenuTrigger asChild>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon-sm"
-									aria-label="Switch chat mode"
-								>
-									{chatModeIcon}
-								</Button>
-							</DropdownMenuTrigger>
-						</TooltipTrigger>
-						<TooltipContent>Switch chat mode</TooltipContent>
-					</Tooltip>
-					<DropdownMenuContent
-						align="end"
-						onCloseAutoFocus={(event) => {
-							event.preventDefault();
-						}}
-					>
-						<DropdownMenuGroup>
-							<DropdownMenuItem
-								onSelect={onSelectInlinePresentation}
-								className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
-							>
-								<PanelBottom />
-								<span>Inline</span>
-								{presentationMode === "inline" ? <Check /> : null}
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								onSelect={() => onSelectRightPresentation("floating")}
-								className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
-							>
-								<PanelRightDashed />
-								<span>Floating</span>
-								{presentationMode === "floating" ? <Check /> : null}
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								onSelect={() => onSelectRightPresentation("sidebar")}
-								className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
-							>
-								<PanelRight />
-								<span>Sidebar</span>
-								{presentationMode === "sidebar" ? <Check /> : null}
-							</DropdownMenuItem>
-						</DropdownMenuGroup>
-					</DropdownMenuContent>
-				</DropdownMenu>
-
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							onClick={onHideChat}
-							aria-label="Hide chat"
-						>
-							<Minus />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent>Hide chat</TooltipContent>
-				</Tooltip>
-			</div>
-		</CardHeader>
-	);
-}
-
 function InlinePopoverFooterContainer({
 	className,
 	children,
@@ -2131,6 +1969,70 @@ function useInlineFooterHeight() {
 		footerRef,
 	};
 }
+
+const filterNoteChatRecipes = (recipes: RecipePrompt[], query: string) => {
+	const normalizedQuery = query.trim().toLowerCase();
+	return normalizedQuery
+		? recipes.filter((recipe) =>
+				`${recipe.name} ${recipe.slug}`.toLowerCase().includes(normalizedQuery),
+			)
+		: recipes;
+};
+
+const getInlineComposerActionState = ({
+	attachedFiles,
+	canSendMessage,
+	canStop,
+	isChatLoading,
+}: {
+	attachedFiles: ChatAttachment[];
+	canSendMessage: boolean;
+	canStop: boolean;
+	isChatLoading: boolean;
+}) => {
+	const hasSendableInput =
+		canSendMessage && (!canStop || attachedFiles.length === 0);
+	const shouldShowStop = canStop && !hasSendableInput;
+	return {
+		hasSendableInput,
+		shouldShowStop,
+		submitDisabled: canStop
+			? hasSendableInput && hasUploadingAttachments(attachedFiles)
+			: isChatLoading ||
+				!hasSendableInput ||
+				hasUploadingAttachments(attachedFiles),
+	};
+};
+
+const getRecipePickerEmptyStateMessage = (query: string) =>
+	query.trim().length > 0 ? "No recipes found." : "Type to search for recipes";
+
+const getSelectedRecipeSlug = (recipe: RecipePrompt | null) =>
+	recipe?.slug ?? null;
+
+const completeMatchingAttachmentUpload = (
+	file: ChatAttachment,
+	id: string,
+	uploadedFile: FileUIPart,
+) => (file.id === id ? completeAttachmentUpload(file, uploadedFile) : file);
+
+const syncRecipePickerOpenRefs = ({
+	isOpen,
+	openRef,
+	previousOpenRef,
+	suppressUntilUserActionRef,
+}: {
+	isOpen: boolean;
+	openRef: React.MutableRefObject<boolean>;
+	previousOpenRef: React.MutableRefObject<boolean>;
+	suppressUntilUserActionRef: React.MutableRefObject<boolean>;
+}) => {
+	if (previousOpenRef.current && !isOpen) {
+		suppressUntilUserActionRef.current = true;
+	}
+	previousOpenRef.current = isOpen;
+	openRef.current = isOpen;
+};
 
 // react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap footer adapter owns recipe suggestions, editor focus, and submit controls for one popover.
 function ChatInlinePopoverFooter({
@@ -2207,9 +2109,12 @@ function ChatInlinePopoverFooter({
 		isSidebarCompact,
 		showModelPicker,
 	} = status;
-	const hasSendableInput =
-		canSendMessage && (!canStop || attachedFiles.length === 0);
-	const shouldShowStop = canStop && !hasSendableInput;
+	const { shouldShowStop, submitDisabled } = getInlineComposerActionState({
+		attachedFiles,
+		canSendMessage,
+		canStop,
+		isChatLoading,
+	});
 	const shouldShowRecipeControls = !activateInlineOnFocus;
 	const activeMentionRangeRef = React.useRef<Range | null>(null);
 	const filteredRecipesRef = React.useRef<RecipePrompt[]>(recipes);
@@ -2223,37 +2128,31 @@ function ChatInlinePopoverFooter({
 	const [recipePickerPosition, setRecipePickerPosition] =
 		React.useState<MentionPickerPosition | null>(null);
 	const [selectedRecipeIndex, setSelectedRecipeIndex] = React.useState(0);
+	const selectedRecipeSlug = getSelectedRecipeSlug(selectedRecipe);
 	const composerPlaceholderRef = React.useRef(composerPlaceholder);
 	const previousComposerPlaceholderRef = React.useRef(composerPlaceholder);
 	const selectedRecipeSlugRef = React.useRef<RecipeSlug | null>(
-		selectedRecipe?.slug ?? null,
+		selectedRecipeSlug,
 	);
 	const filteredRecipes = React.useMemo(() => {
-		const normalizedQuery = activeMentionQuery.trim().toLowerCase();
-
-		if (!normalizedQuery) {
-			return recipes;
-		}
-
-		return recipes.filter((recipe) =>
-			`${recipe.name} ${recipe.slug}`.toLowerCase().includes(normalizedQuery),
-		);
+		return filterNoteChatRecipes(recipes, activeMentionQuery);
 	}, [activeMentionQuery, recipes]);
 	React.useEffect(() => {
 		composerPlaceholderRef.current = composerPlaceholder;
 		filteredRecipesRef.current = filteredRecipes;
-		if (previousRecipePopoverOpenRef.current && !recipePopoverOpen) {
-			suppressRecipePickerUntilUserActionRef.current = true;
-		}
-		previousRecipePopoverOpenRef.current = recipePopoverOpen;
-		recipePopoverOpenRef.current = recipePopoverOpen;
-		selectedRecipeSlugRef.current = selectedRecipe?.slug ?? null;
+		syncRecipePickerOpenRefs({
+			isOpen: recipePopoverOpen,
+			openRef: recipePopoverOpenRef,
+			previousOpenRef: previousRecipePopoverOpenRef,
+			suppressUntilUserActionRef: suppressRecipePickerUntilUserActionRef,
+		});
+		selectedRecipeSlugRef.current = selectedRecipeSlug;
 		selectedRecipeIndexRef.current = selectedRecipeIndex;
 	}, [
 		composerPlaceholder,
 		filteredRecipes,
 		recipePopoverOpen,
-		selectedRecipe?.slug,
+		selectedRecipeSlug,
 		selectedRecipeIndex,
 		suppressRecipePickerUntilUserActionRef,
 	]);
@@ -2466,10 +2365,7 @@ function ChatInlinePopoverFooter({
 			// Recipe mentions are embedded in ProseMirror JSON, outside React render state.
 			composerEditor.getJSON(),
 		);
-		if (
-			currentText === message &&
-			currentRecipeSlug === (selectedRecipe?.slug ?? null)
-		) {
+		if (currentText === message && currentRecipeSlug === selectedRecipeSlug) {
 			return;
 		}
 
@@ -2482,7 +2378,13 @@ function ChatInlinePopoverFooter({
 			getComposerContentFromMessage(message, selectedRecipe),
 			{ emitUpdate: false },
 		);
-	}, [composerEditor, editingMessageId, message, selectedRecipe]);
+	}, [
+		composerEditor,
+		editingMessageId,
+		message,
+		selectedRecipe,
+		selectedRecipeSlug,
+	]);
 	const handleRecipeSelect = React.useCallback(
 		(recipeSlug: RecipeSlug) => {
 			const recipe = recipes.find((item) => item.slug === recipeSlug);
@@ -2526,7 +2428,7 @@ function ChatInlinePopoverFooter({
 		(id: string, uploadedFile: FileUIPart) => {
 			onAttachedFilesChange((files) =>
 				files.map((file) =>
-					file.id === id ? completeAttachmentUpload(file, uploadedFile) : file,
+					completeMatchingAttachmentUpload(file, id, uploadedFile),
 				),
 			);
 		},
@@ -2698,13 +2600,7 @@ function ChatInlinePopoverFooter({
 						size="icon-sm"
 						className={cn("rounded-full", !showModelPicker && "ml-auto")}
 						aria-label={shouldShowStop ? "Stop streaming" : "Send message"}
-						disabled={
-							canStop
-								? hasSendableInput && hasUploadingAttachments(attachedFiles)
-								: isChatLoading ||
-									!hasSendableInput ||
-									hasUploadingAttachments(attachedFiles)
-						}
+						disabled={submitDisabled}
 						onClick={shouldShowStop ? onStop : undefined}
 					>
 						{shouldShowStop ? (
@@ -2722,11 +2618,7 @@ function ChatInlinePopoverFooter({
 				selectedIndex={selectedRecipeIndex}
 				onSelectedIndexChange={selectRecipeIndex}
 				isRecipeLoading={isRecipeLoading}
-				emptyStateMessage={
-					activeMentionQuery.trim().length > 0
-						? "No recipes found."
-						: "Type to search for recipes"
-				}
+				emptyStateMessage={getRecipePickerEmptyStateMessage(activeMentionQuery)}
 				onSelectRecipe={handleRecipeSelect}
 			/>
 		</>

@@ -196,18 +196,17 @@ const automationDialogStateReducer = (
 	...(typeof update === "function" ? update(state) : update),
 });
 
-function useCreateAutomationDialogElement({
-	open,
-	onOpenChange,
-	onCreateAutomation,
-	onDisableAutomation,
-	onOpenConnectionsSettings,
-	projectSelectionEnabled = true,
-	initialAutomation = null,
-	initialTitle = "",
+function useAutomationDialogSources({
+	activeWorkspaceId,
 	notes,
-}: CreateAutomationDialogProps) {
-	const activeWorkspaceId = useActiveWorkspaceId();
+	projectSelectionEnabled,
+	updateDialogState,
+}: {
+	activeWorkspaceId: Id<"workspaces"> | null;
+	notes: CreateAutomationDialogProps["notes"];
+	projectSelectionEnabled: boolean;
+	updateDialogState: React.Dispatch<AutomationDialogStateUpdate>;
+}) {
 	const projects = useQuery(
 		api.projects.list,
 		activeWorkspaceId && projectSelectionEnabled
@@ -223,11 +222,70 @@ function useCreateAutomationDialogElement({
 			})),
 		[notes],
 	);
+
+	React.useEffect(() => {
+		updateDialogState((currentState) => {
+			const availableAppIds = new Set(
+				connectedAppSources.map((source) => source.id),
+			);
+			const nextIds = currentState.selectedConnectedAppIds.filter((sourceId) =>
+				availableAppIds.has(sourceId),
+			);
+			return nextIds.length === currentState.selectedConnectedAppIds.length
+				? {}
+				: { selectedConnectedAppIds: nextIds };
+		});
+	}, [connectedAppSources, updateDialogState]);
+	React.useEffect(() => {
+		updateDialogState((currentState) => {
+			const availableIds = new Set(noteSources.map((source) => source.id));
+			const nextIds = currentState.selectedNoteIds.filter((sourceId) =>
+				availableIds.has(sourceId),
+			);
+			return nextIds.length === currentState.selectedNoteIds.length
+				? {}
+				: { selectedNoteIds: nextIds };
+		});
+	}, [noteSources, updateDialogState]);
+	React.useEffect(() => {
+		updateDialogState((currentState) =>
+			currentState.selectedProjectId &&
+			projects &&
+			!projects.some(
+				(project) => project._id === currentState.selectedProjectId,
+			)
+				? { selectedProjectId: null }
+				: {},
+		);
+	}, [projects, updateDialogState]);
+
+	return { connectedAppSources, noteSources, projects };
+}
+
+function useCreateAutomationDialogElement({
+	open,
+	onOpenChange,
+	onCreateAutomation,
+	onDisableAutomation,
+	onOpenConnectionsSettings,
+	projectSelectionEnabled = true,
+	initialAutomation = null,
+	initialTitle = "",
+	notes,
+}: CreateAutomationDialogProps) {
+	const activeWorkspaceId = useActiveWorkspaceId();
 	const [dialogState, updateDialogState] = React.useReducer(
 		automationDialogStateReducer,
 		null,
 		() => createAutomationDialogState(initialAutomation, initialTitle),
 	);
+	const { connectedAppSources, noteSources, projects } =
+		useAutomationDialogSources({
+			activeWorkspaceId,
+			notes,
+			projectSelectionEnabled,
+			updateDialogState,
+		});
 	const [isDisabling, setIsDisabling] = React.useState(false);
 	const [isSaving, setIsSaving] = React.useState(false);
 	const {
@@ -261,46 +319,6 @@ function useCreateAutomationDialogElement({
 		promptMentionsRef.current = nextState.promptMentions;
 		updateDialogState(nextState);
 	}, [initialAutomation, initialTitle, open]);
-
-	React.useEffect(() => {
-		updateDialogState((currentState) => {
-			const availableAppIds = new Set(
-				connectedAppSources.map((source) => source.id),
-			);
-			const nextIds = currentState.selectedConnectedAppIds.filter((sourceId) =>
-				availableAppIds.has(sourceId),
-			);
-
-			return nextIds.length === currentState.selectedConnectedAppIds.length
-				? {}
-				: { selectedConnectedAppIds: nextIds };
-		});
-	}, [connectedAppSources]);
-
-	React.useEffect(() => {
-		updateDialogState((currentState) => {
-			const availableIds = new Set(noteSources.map((source) => source.id));
-			const nextIds = currentState.selectedNoteIds.filter((sourceId) =>
-				availableIds.has(sourceId),
-			);
-
-			return nextIds.length === currentState.selectedNoteIds.length
-				? {}
-				: { selectedNoteIds: nextIds };
-		});
-	}, [noteSources]);
-
-	React.useEffect(() => {
-		updateDialogState((currentState) =>
-			currentState.selectedProjectId &&
-			projects &&
-			!projects.some(
-				(project) => project._id === currentState.selectedProjectId,
-			)
-				? { selectedProjectId: null }
-				: {},
-		);
-	}, [projects]);
 
 	const closeAutomationPickers = React.useCallback(() => {
 		updateDialogState({

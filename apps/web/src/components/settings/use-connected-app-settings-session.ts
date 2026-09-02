@@ -43,6 +43,10 @@ import {
 import { logError } from "@/lib/logger";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
+
+const getConnectedAppQueryArgs = (workspaceId: Id<"workspaces"> | null) =>
+	workspaceId ? { workspaceId } : ("skip" as const);
 
 export function useConnectedAppSettingsSession() {
 	const activeWorkspaceId = useActiveWorkspaceId();
@@ -54,48 +58,48 @@ export function useConnectedAppSettingsSession() {
 	});
 	const yandexTrackerConnectionResult = useQuery(
 		api.appConnections.getYandexTracker,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const yandexCalendarConnectionResult = useQuery(
 		api.appConnections.getYandexCalendar,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const calendarPreferences = useQuery(
 		api.calendarPreferences.get,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const updateCalendarPreferences = useMutation(api.calendarPreferences.update);
 	const jiraConnectionResult = useQuery(
 		api.appConnections.getJira,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const jiraMcpConnectionResult = useQuery(
 		api.appConnections.getJiraMcp,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const posthogConnectionResult = useQuery(
 		api.appConnections.getPostHog,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const context7ConnectionResult = useQuery(
 		api.appConnections.getContext7,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const figmaConnectionResult = useQuery(
 		api.appConnections.getFigma,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const linearConnectionResult = useQuery(
 		api.appConnections.getLinear,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const notionConnectionResult = useQuery(
 		api.appConnections.getNotion,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const zoomConnectionResult = useQuery(
 		api.appConnections.getZoom,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getConnectedAppQueryArgs(activeWorkspaceId),
 	);
 	const connectionQueryResults = useMemo(
 		() => ({

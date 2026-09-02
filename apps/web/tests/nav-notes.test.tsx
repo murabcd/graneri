@@ -60,6 +60,19 @@ afterEach(() => {
 });
 
 describe("NavNotes", () => {
+	it("keeps its actions aligned in the section header", () => {
+		renderNavNotes();
+
+		const actions = screen.getByRole("button", {
+			name: "Add note",
+		}).parentElement;
+
+		expect(actions?.getAttribute("data-sidebar")).toBe("group-action");
+		expect(actions?.classList.contains("absolute")).toBe(true);
+		expect(actions?.classList.contains("top-2.5")).toBe(true);
+		expect(actions?.classList.contains("right-3")).toBe(true);
+	});
+
 	it("collapses an expanded note list from the section header", async () => {
 		const user = userEvent.setup();
 		renderNavNotes();

@@ -1,11 +1,4 @@
-import {
-	Field,
-	FieldError,
-	FieldGroup,
-	FieldLabel,
-} from "@workspace/ui/components/field";
-import { Input } from "@workspace/ui/components/input";
-import { cn } from "@workspace/ui/lib/utils";
+import { EntityNameComposer } from "@/components/entity-name-composer";
 
 type ProjectComposerProps = {
 	name: string;
@@ -23,20 +16,14 @@ export function ProjectComposer({
 	className,
 }: ProjectComposerProps) {
 	return (
-		<div className={cn("flex flex-col gap-4", className)}>
-			<FieldGroup>
-				<Field data-invalid={error ? true : undefined}>
-					<FieldLabel htmlFor={nameInputId}>Project name</FieldLabel>
-					<Input
-						id={nameInputId}
-						value={name}
-						onChange={(event) => onNameChange(event.target.value)}
-						aria-invalid={error ? true : undefined}
-						maxLength={48}
-					/>
-				</Field>
-			</FieldGroup>
-			{error ? <FieldError>{error}</FieldError> : null}
-		</div>
+		<EntityNameComposer
+			className={className}
+			error={error}
+			label="Project name"
+			maxLength={48}
+			name={name}
+			nameInputId={nameInputId}
+			onNameChange={onNameChange}
+		/>
 	);
 }

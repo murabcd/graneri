@@ -69,6 +69,41 @@ export const resolveNoteComposerPlaceholder = (
 		: "Ask anything. @ to mention recipes";
 };
 
+const getNoteChatsQueryArgs = (
+	workspaceId: Id<"workspaces"> | null,
+	noteId: Id<"notes"> | null,
+) => (workspaceId && noteId ? { workspaceId, noteId } : ("skip" as const));
+
+const getStoredNoteChatQueryArgs = ({
+	chatId,
+	hasStoredChat,
+	workspaceId,
+}: {
+	chatId: string;
+	hasStoredChat: boolean;
+	workspaceId: Id<"workspaces"> | null;
+}) =>
+	workspaceId && hasStoredChat ? { workspaceId, chatId } : ("skip" as const);
+
+const getNoteChatTitle = (
+	selectedChat: NoteChatSummary | null,
+	currentSession: NoteChatSummary | null | undefined,
+) => selectedChat?.title?.trim() || currentSession?.title?.trim() || "New chat";
+
+const getNoteChatHistoryMarkerState = (
+	selectedChat: NoteChatSummary | null,
+	currentSession: NoteChatSummary | null | undefined,
+) =>
+	(selectedChat?.forkedFromChatId ?? currentSession?.forkedFromChatId) !==
+	undefined
+		? {
+				kind: "fork" as const,
+				historyOmittedBefore:
+					(selectedChat?.historyOmittedBefore ??
+						currentSession?.historyOmittedBefore) === true,
+			}
+		: { kind: "original" as const };
+
 export const useNoteDiscussionSession = ({
 	activeWorkspaceId,
 	noteId,
@@ -80,9 +115,7 @@ export const useNoteDiscussionSession = ({
 		React.useState<string>(createDraftChatId);
 	const noteChats = useQuery(
 		api.chats.listForNote,
-		noteId && activeWorkspaceId
-			? { workspaceId: activeWorkspaceId, noteId }
-			: "skip",
+		getNoteChatsQueryArgs(activeWorkspaceId, noteId),
 	);
 	const hasStoredCurrentChat = React.useMemo(
 		() => (noteChats ?? []).some((chat) => chat.chatId === currentChatId),
@@ -100,15 +133,19 @@ export const useNoteDiscussionSession = ({
 	});
 	const activeRun = useQuery(
 		api.assistantRuns.getAttachableRun,
-		activeWorkspaceId && hasStoredCurrentChat
-			? { workspaceId: activeWorkspaceId, chatId: currentChatId }
-			: "skip",
+		getStoredNoteChatQueryArgs({
+			chatId: currentChatId,
+			hasStoredChat: hasStoredCurrentChat,
+			workspaceId: activeWorkspaceId,
+		}),
 	);
 	const currentChatSession = useQuery(
 		api.chats.getSession,
-		activeWorkspaceId && hasStoredCurrentChat
-			? { workspaceId: activeWorkspaceId, chatId: currentChatId }
-			: "skip",
+		getStoredNoteChatQueryArgs({
+			chatId: currentChatId,
+			hasStoredChat: hasStoredCurrentChat,
+			workspaceId: activeWorkspaceId,
+		}),
 	);
 	const selectedNoteChat =
 		(noteChats ?? []).find((chat) => chat.chatId === currentChatId) ?? null;
@@ -162,10 +199,7 @@ export const useNoteDiscussionSession = ({
 		activeRun,
 		chatSettings: settings,
 		compactionActivity,
-		chatTitle:
-			selectedNoteChat?.title?.trim() ||
-			currentChatSession?.title?.trim() ||
-			"New chat",
+		chatTitle: getNoteChatTitle(selectedNoteChat, currentChatSession),
 		currentChatId,
 		groupedNoteChats,
 		handleReasoningEffortChange,
@@ -173,16 +207,10 @@ export const useNoteDiscussionSession = ({
 		handleSelectedModelChange,
 		hasStoredCurrentChat,
 		hasEarlierMessages,
-		historyMarkerState:
-			(selectedNoteChat?.forkedFromChatId ??
-				currentChatSession?.forkedFromChatId) !== undefined
-				? {
-						kind: "fork" as const,
-						historyOmittedBefore:
-							(selectedNoteChat?.historyOmittedBefore ??
-								currentChatSession?.historyOmittedBefore) === true,
-					}
-				: { kind: "original" as const },
+		historyMarkerState: getNoteChatHistoryMarkerState(
+			selectedNoteChat,
+			currentChatSession,
+		),
 		isLoadingEarlierMessages,
 		isSettingsLoading,
 		latestNoteChat,

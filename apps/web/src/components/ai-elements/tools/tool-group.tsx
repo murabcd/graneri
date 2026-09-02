@@ -74,6 +74,30 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 	status,
 	totalDurationMs,
 }: AssistantWorkGroupProps) {
+	const [fallbackStartedAt] = useState(() => Date.now());
+
+	return (
+		<AssistantWorkGroupPhase
+			key={status}
+			fallbackStartedAt={fallbackStartedAt}
+			hasActivity={hasActivity}
+			startedAt={startedAt}
+			status={status}
+			totalDurationMs={totalDurationMs}
+		>
+			{children}
+		</AssistantWorkGroupPhase>
+	);
+});
+
+const AssistantWorkGroupPhase = ({
+	children,
+	fallbackStartedAt,
+	hasActivity,
+	startedAt,
+	status,
+	totalDurationMs,
+}: AssistantWorkGroupProps & { fallbackStartedAt: number }) => {
 	const isWorking = status === "streaming";
 	const [isWorkingCollapsed, setIsWorkingCollapsed] = useState(false);
 	const [isWorkedExpanded, setIsWorkedExpanded] = useState(false);
@@ -82,7 +106,7 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 			? !isWorkingCollapsed
 			: isWorkedExpanded
 		: false;
-	const { completedAt, fallbackStartedAt, now } = useWorkTimer(isWorking);
+	const { completedAt, now } = useWorkTimer(isWorking);
 	const measuredDurationMs = Math.max(
 		1,
 		(completedAt ?? now) - (startedAt ?? fallbackStartedAt),
@@ -123,11 +147,12 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 			</ToolRowBase>
 		</div>
 	);
-});
+};
 
 const useWorkTimer = (isPending: boolean) => {
-	const [fallbackStartedAt] = useState(() => Date.now());
-	const [completedAt, setCompletedAt] = useState<number | null>(null);
+	const [completedAt] = useState<number | null>(() =>
+		isPending ? null : Date.now(),
+	);
 	const [now, setNow] = useState(() => Date.now());
 
 	useEffect(() => {
@@ -143,22 +168,8 @@ const useWorkTimer = (isPending: boolean) => {
 		return () => window.clearInterval(interval);
 	}, [isPending]);
 
-	useEffect(() => {
-		if (isPending) {
-			if (completedAt !== null) {
-				setCompletedAt(null);
-			}
-			return;
-		}
-
-		if (completedAt === null) {
-			setCompletedAt(Date.now());
-		}
-	}, [completedAt, isPending]);
-
 	return {
 		completedAt,
-		fallbackStartedAt,
 		now,
 	};
 };

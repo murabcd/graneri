@@ -98,6 +98,13 @@ export type ChatComposerMentionCatalog<Item> = {
 	status: "loading" | "ready";
 };
 
+export type ChatComposerActivity = {
+	humanDecision: "idle" | "submitting";
+	queuedFollowUps: "idle" | "resuming";
+	settings: "loading" | "ready";
+	turn: "idle" | "active";
+};
+
 type MentionPickerItem =
 	| {
 			type: "tool";
@@ -146,18 +153,16 @@ const filterMentionableTools = (
 };
 
 type ChatComposerProps = {
+	activity: ChatComposerActivity;
 	useCompactLayout: boolean;
 	draft: string;
 	editingMessageId?: string | null;
 	placeholder: string;
 	topAccessory?: React.ReactNode;
 	humanDecision: HostedHumanDecisionRequest | null;
-	isHumanDecisionSubmitting: boolean;
-	isSettingsLoading: boolean;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 	onQueuedFollowUpsReorder?: (ids: Array<string>) => void;
 	onQueuedFollowUpsResume: () => void;
-	isResumingQueuedFollowUps: boolean;
 	onHumanDecisionResponse: (response: HostedHumanDecisionResponse) => void;
 	onDraftChange: (value: string) => void;
 	onDraftKeyDown: (event: KeyboardEvent) => void;
@@ -167,8 +172,6 @@ type ChatComposerProps = {
 	onStop: () => void;
 	attachedFiles: ChatAttachment[];
 	onAttachedFilesChange: React.Dispatch<React.SetStateAction<ChatAttachment[]>>;
-	attachmentsDisabled: boolean;
-	canStop: boolean;
 	selectedModel: ChatModel | null;
 	reasoningEffort: ReasoningEffort;
 	serviceTier: ServiceTier;
@@ -202,18 +205,16 @@ const EMPTY_QUEUED_FOLLOW_UPS: NonNullable<
 > = [];
 
 export function ChatComposer({
+	activity,
 	useCompactLayout,
 	draft,
 	editingMessageId,
 	placeholder,
 	topAccessory,
 	humanDecision,
-	isHumanDecisionSubmitting,
-	isSettingsLoading,
 	queuedFollowUps = EMPTY_QUEUED_FOLLOW_UPS,
 	onQueuedFollowUpsReorder,
 	onQueuedFollowUpsResume,
-	isResumingQueuedFollowUps,
 	onHumanDecisionResponse,
 	onDraftChange,
 	onDraftKeyDown,
@@ -223,8 +224,6 @@ export function ChatComposer({
 	onStop,
 	attachedFiles,
 	onAttachedFilesChange,
-	attachmentsDisabled,
-	canStop,
 	selectedModel,
 	reasoningEffort,
 	serviceTier,
@@ -252,6 +251,10 @@ export function ChatComposer({
 	appSources,
 	onOpenConnectionsSettings,
 }: ChatComposerProps) {
+	const isHumanDecisionSubmitting = activity.humanDecision === "submitting";
+	const isResumingQueuedFollowUps = activity.queuedFollowUps === "resuming";
+	const isSettingsLoading = activity.settings === "loading";
+	const canStop = activity.turn === "active";
 	const handleAttachmentUploadFailed = React.useCallback(
 		(id: string) => {
 			onAttachedFilesChange((files) => files.filter((file) => file.id !== id));
@@ -275,7 +278,7 @@ export function ChatComposer({
 		[onAttachedFilesChange],
 	);
 	const attachmentDropzone = useFileAttachmentDropzone({
-		disabled: attachmentsDisabled,
+		disabled: canStop,
 		onFileUploadFailed: handleAttachmentUploadFailed,
 		onFileUploaded: handleAttachmentUploaded,
 		onFilesAdded: handleAttachmentsAdded,
@@ -346,7 +349,7 @@ export function ChatComposer({
 						<ChatComposerFooter
 							draft={draft}
 							attachedFiles={attachedFiles}
-							attachmentsDisabled={attachmentsDisabled}
+							attachmentsDisabled={canStop}
 							canStop={canStop}
 							disabled={isSettingsLoading}
 							onAttachmentUploadFailed={handleAttachmentUploadFailed}
@@ -1025,6 +1028,207 @@ function useChatComposerPromptFocus({
 	}, [editingMessageId, onCancelEdit]);
 }
 
+function RecipeMentionSection({
+	recipes,
+	selectedIndex,
+	onSelectedIndexChange,
+	onAddRecipe,
+}: {
+	recipes: ChatRecipeReceipt[];
+	selectedIndex: number;
+	onSelectedIndexChange: (index: number) => void;
+	onAddRecipe: (recipeSlug: string) => void;
+}) {
+	if (recipes.length === 0) {
+		return null;
+	}
+
+	return (
+		<div>
+			<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>Recipes</div>
+			<div>
+				{recipes.map((recipe, index) => {
+					const Icon = getRecipeIcon(recipe.slug);
+					return (
+						<button
+							key={recipe.slug}
+							type="button"
+							onMouseEnter={() => onSelectedIndexChange(index)}
+							onPointerDown={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+								onAddRecipe(recipe.slug);
+							}}
+							className={cn(
+								COMPOSER_MENTION_PICKER_ITEM_CLASS,
+								index === selectedIndex
+									? "bg-accent text-accent-foreground"
+									: "text-popover-foreground",
+							)}
+						>
+							<Icon className={COMPOSER_MENTION_PICKER_ICON_CLASS} />
+							<div className="min-w-0 flex-1 truncate" title={recipe.name}>
+								{recipe.name}
+							</div>
+						</button>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+function AppSourceMentionSection({
+	appSources,
+	recipeCount,
+	selectedIndex,
+	onSelectedIndexChange,
+	onAddTool,
+}: {
+	appSources: AppSource[];
+	recipeCount: number;
+	selectedIndex: number;
+	onSelectedIndexChange: (index: number) => void;
+	onAddTool: (sourceId: string) => void;
+}) {
+	if (appSources.length === 0) {
+		return null;
+	}
+
+	return (
+		<div className={recipeCount > 0 ? "mt-1" : undefined}>
+			<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>Plugins</div>
+			<div>
+				{appSources.map((source, index) => {
+					const itemIndex = recipeCount + index;
+					return (
+						<button
+							key={source.id}
+							type="button"
+							onMouseEnter={() => onSelectedIndexChange(itemIndex)}
+							onPointerDown={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+								onAddTool(source.id);
+							}}
+							className={cn(
+								COMPOSER_MENTION_PICKER_ITEM_CLASS,
+								itemIndex === selectedIndex
+									? "bg-accent text-accent-foreground"
+									: "text-popover-foreground",
+							)}
+						>
+							<div className="flex size-4 shrink-0 items-center justify-center">
+								<AppSourceIcon provider={source.provider} className="size-4" />
+							</div>
+							<ComposerMentionPickerItemLabel
+								label={getAppSourceLabel(source.provider)}
+								description={getAppSourceDescription(source.provider)}
+							/>
+						</button>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+function ReferenceMentionSearchState({
+	loading,
+	itemCount,
+	state,
+}: {
+	loading: { notes: boolean; recipes: boolean };
+	itemCount: number;
+	state: { searching: boolean; showTopMargin: boolean };
+}) {
+	if (!state.searching) {
+		return (
+			<div className={state.showTopMargin ? "mt-1" : undefined}>
+				<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
+					Notes and recipes
+				</div>
+				<div className="px-2 pt-0.5 pb-2 text-xs text-muted-foreground">
+					Type to search notes or recipes
+				</div>
+			</div>
+		);
+	}
+
+	if (loading.notes || loading.recipes) {
+		return (
+			<div className="px-1">
+				<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
+					Notes and recipes
+				</div>
+				<div className="h-20" aria-hidden="true" />
+			</div>
+		);
+	}
+
+	return itemCount === 0 ? (
+		<div className="py-6 text-center text-sm text-muted-foreground">
+			No results found.
+		</div>
+	) : null;
+}
+
+function NoteMentionSection({
+	mentionableDocuments,
+	itemOffset,
+	selectedIndex,
+	showTopMargin,
+	onSelectedIndexChange,
+	onAddMention,
+}: {
+	mentionableDocuments: ContextPage[];
+	itemOffset: number;
+	selectedIndex: number;
+	showTopMargin: boolean;
+	onSelectedIndexChange: (index: number) => void;
+	onAddMention: (pageId: string) => void;
+}) {
+	if (mentionableDocuments.length === 0) {
+		return null;
+	}
+
+	return (
+		<div className={showTopMargin ? "mt-1" : undefined}>
+			<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>Notes</div>
+			<div>
+				{mentionableDocuments.map((document, index) => {
+					const itemIndex = itemOffset + index;
+					return (
+						<button
+							key={document.id}
+							type="button"
+							onMouseEnter={() => onSelectedIndexChange(itemIndex)}
+							onPointerDown={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+								onAddMention(document.id);
+							}}
+							className={cn(
+								COMPOSER_MENTION_PICKER_ITEM_CLASS,
+								itemIndex === selectedIndex
+									? "bg-accent text-accent-foreground"
+									: "text-popover-foreground",
+							)}
+						>
+							<div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+								<document.icon className="size-4" />
+							</div>
+							<div className="min-w-0 flex-1 truncate" title={document.title}>
+								{document.title}
+							</div>
+						</button>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
 function MentionPicker({
 	open,
 	position,
@@ -1063,161 +1267,36 @@ function MentionPicker({
 			position={position}
 		>
 			<ComposerMentionPickerViewport>
-				{recipes.length > 0 ? (
-					<div>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Recipes
-						</div>
-						<div>
-							{recipes.map((recipe, index) => {
-								const selected = index === selectedIndex;
-								const Icon = getRecipeIcon(recipe.slug);
-								return (
-									<button
-										key={recipe.slug}
-										type="button"
-										onMouseEnter={() => onSelectedIndexChange(index)}
-										onPointerDown={(event) => {
-											event.preventDefault();
-											event.stopPropagation();
-											onAddRecipe(recipe.slug);
-										}}
-										className={cn(
-											COMPOSER_MENTION_PICKER_ITEM_CLASS,
-											selected
-												? "bg-accent text-accent-foreground"
-												: "text-popover-foreground",
-										)}
-									>
-										<Icon className={COMPOSER_MENTION_PICKER_ICON_CLASS} />
-										<div
-											className="min-w-0 flex-1 truncate"
-											title={recipe.name}
-										>
-											{recipe.name}
-										</div>
-									</button>
-								);
-							})}
-						</div>
-					</div>
-				) : null}
-				{appSources.length > 0 ? (
-					<div className={recipes.length > 0 ? "mt-1" : undefined}>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Plugins
-						</div>
-						<div>
-							{appSources.map((source, index) => {
-								const itemIndex = recipes.length + index;
-								const selected = itemIndex === selectedIndex;
-								return (
-									<button
-										key={source.id}
-										type="button"
-										onMouseEnter={() => onSelectedIndexChange(itemIndex)}
-										onPointerDown={(event) => {
-											event.preventDefault();
-											event.stopPropagation();
-											onAddTool(source.id);
-										}}
-										className={cn(
-											COMPOSER_MENTION_PICKER_ITEM_CLASS,
-											selected
-												? "bg-accent text-accent-foreground"
-												: "text-popover-foreground",
-										)}
-									>
-										<div className="flex size-4 shrink-0 items-center justify-center">
-											<AppSourceIcon
-												provider={source.provider}
-												className="size-4"
-											/>
-										</div>
-										<ComposerMentionPickerItemLabel
-											label={getAppSourceLabel(source.provider)}
-											description={getAppSourceDescription(source.provider)}
-										/>
-									</button>
-								);
-							})}
-						</div>
-					</div>
-				) : null}
-				{!shouldSearchReferences ? (
-					<div
-						className={
-							recipes.length > 0 || appSources.length > 0 ? "mt-1" : undefined
-						}
-					>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Notes and recipes
-						</div>
-						<div className="px-2 pt-0.5 pb-2 text-xs text-muted-foreground">
-							Type to search notes or recipes
-						</div>
-					</div>
-				) : null}
-				{shouldSearchReferences && (isNotesLoading || isRecipesLoading) ? (
-					<div className="px-1">
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Notes and recipes
-						</div>
-						<div className="h-20" aria-hidden="true" />
-					</div>
-				) : null}
-				{!isNotesLoading &&
-				!isRecipesLoading &&
-				items.length === 0 &&
-				shouldSearchReferences ? (
-					<div className="py-6 text-center text-sm text-muted-foreground">
-						No results found.
-					</div>
-				) : null}
-				{shouldSearchReferences && mentionableDocuments.length > 0 ? (
-					<div
-						className={
-							recipes.length > 0 || appSources.length > 0 ? "mt-1" : undefined
-						}
-					>
-						<div className={COMPOSER_MENTION_PICKER_SECTION_LABEL_CLASS}>
-							Notes
-						</div>
-						<div>
-							{mentionableDocuments.map((document, index) => {
-								const itemIndex = recipes.length + appSources.length + index;
-								const selected = itemIndex === selectedIndex;
-								return (
-									<button
-										key={document.id}
-										type="button"
-										onMouseEnter={() => onSelectedIndexChange(itemIndex)}
-										onPointerDown={(event) => {
-											event.preventDefault();
-											event.stopPropagation();
-											onAddMention(document.id);
-										}}
-										className={cn(
-											COMPOSER_MENTION_PICKER_ITEM_CLASS,
-											selected
-												? "bg-accent text-accent-foreground"
-												: "text-popover-foreground",
-										)}
-									>
-										<div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-											<document.icon className="size-4" />
-										</div>
-										<div
-											className="min-w-0 flex-1 truncate"
-											title={document.title}
-										>
-											{document.title}
-										</div>
-									</button>
-								);
-							})}
-						</div>
-					</div>
+				<RecipeMentionSection
+					recipes={recipes}
+					selectedIndex={selectedIndex}
+					onSelectedIndexChange={onSelectedIndexChange}
+					onAddRecipe={onAddRecipe}
+				/>
+				<AppSourceMentionSection
+					appSources={appSources}
+					recipeCount={recipes.length}
+					selectedIndex={selectedIndex}
+					onSelectedIndexChange={onSelectedIndexChange}
+					onAddTool={onAddTool}
+				/>
+				<ReferenceMentionSearchState
+					loading={{ notes: isNotesLoading, recipes: isRecipesLoading }}
+					itemCount={items.length}
+					state={{
+						searching: shouldSearchReferences,
+						showTopMargin: recipes.length > 0 || appSources.length > 0,
+					}}
+				/>
+				{shouldSearchReferences ? (
+					<NoteMentionSection
+						mentionableDocuments={mentionableDocuments}
+						itemOffset={recipes.length + appSources.length}
+						selectedIndex={selectedIndex}
+						showTopMargin={recipes.length > 0 || appSources.length > 0}
+						onSelectedIndexChange={onSelectedIndexChange}
+						onAddMention={onAddMention}
+					/>
 				) : null}
 			</ComposerMentionPickerViewport>
 		</ComposerMentionPickerSurface>

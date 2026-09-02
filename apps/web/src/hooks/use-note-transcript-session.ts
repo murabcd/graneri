@@ -3,11 +3,17 @@ import {
 	onDesktopMeetingDetectionState,
 } from "@workspace/platform/desktop";
 import * as React from "react";
+import {
+	createScopedTranscriptState,
+	getGeneratedTranscriptSessionId,
+	getQueuedTranscriptAutoStartKey,
+	getScopedTranscriptionSnapshot,
+	type ScopedTranscriptState,
+	type UseNoteTranscriptSessionArgs,
+} from "@/hooks/note-transcript-session-state";
 import { useNoteTranscriptScope } from "@/hooks/use-note-transcript-scope";
-import type { TranscriptSessionRepository } from "@/hooks/use-transcript-session-repository";
 import { useTranscriptSessionStopController } from "@/hooks/use-transcript-session-stop-controller";
 import { logError } from "@/lib/logger";
-import { NoteTranscriptCaptureSession } from "@/lib/note-transcript-capture-session";
 import {
 	createVisibleTranscriptView,
 	mergeTranscriptUtterances,
@@ -15,11 +21,9 @@ import {
 	resolveTranscriptSessionReady,
 } from "@/lib/note-transcript-session-view";
 import {
-	createEmptyLiveTranscriptState,
 	createLiveTranscriptEntries,
 	createSystemAudioCaptureStatus,
 	createTranscriptRecoveryStatus,
-	type LiveTranscriptState,
 	type TranscriptUtterance,
 } from "@/lib/transcript";
 import { createTranscriptText } from "@/lib/transcript-session";
@@ -29,62 +33,6 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 
 const transcriptIdleStopMs = 15 * 60 * 1000;
 const transcriptIdleCheckIntervalMs = 15 * 1000;
-const emptyTranscriptUtterances: TranscriptUtterance[] = [];
-
-type UseNoteTranscriptSessionArgs = {
-	autoStartTranscription?: boolean;
-	autoStartTranscriptionRequestId?: string | null;
-	noteId: Id<"notes"> | null;
-	onAutoStartTranscriptionHandled?: () => void;
-	onEnhanceTranscript?: (
-		transcript: string,
-		transcriptionLanguage: string | null,
-	) => Promise<void>;
-	shouldLoadStoredTranscriptHistory?: boolean;
-	stopTranscriptionWhenMeetingEnds?: boolean;
-	transcriptionLanguage?: string | null;
-};
-
-type ScopedTranscriptState = {
-	activeTranscriptSessionId: Id<"transcriptSessions"> | null;
-	captureSession: NoteTranscriptCaptureSession;
-	completeSession: TranscriptSessionRepository["completeSession"];
-	isTranscriptDraftReady: boolean;
-	pendingGenerateTranscript: string;
-	retiredScope: {
-		captureSession: NoteTranscriptCaptureSession;
-		completeSession: TranscriptSessionRepository["completeSession"];
-	} | null;
-	scopeKey: string;
-	transcriptUtterances: TranscriptUtterance[];
-};
-
-const createScopedTranscriptState = ({
-	completeSession,
-	isSpeechListening,
-	retiredScope = null,
-	scopeKey,
-}: {
-	completeSession: TranscriptSessionRepository["completeSession"];
-	isSpeechListening: boolean;
-	retiredScope?: ScopedTranscriptState["retiredScope"];
-	scopeKey: string;
-}): ScopedTranscriptState => {
-	const captureSession = new NoteTranscriptCaptureSession({
-		isSpeechListening,
-	});
-
-	return {
-		activeTranscriptSessionId: null,
-		captureSession,
-		completeSession,
-		isTranscriptDraftReady: false,
-		pendingGenerateTranscript: "",
-		retiredScope,
-		scopeKey,
-		transcriptUtterances: [],
-	};
-};
 
 export const useNoteTranscriptSession = ({
 	autoStartTranscription,
@@ -107,13 +55,9 @@ export const useNoteTranscriptSession = ({
 	>(null);
 	const lastQueuedAutoStartKeyRef = React.useRef<string | null>(null);
 	const hasHandledAutoStartRef = React.useRef(false);
-	const transcriptionAutoStopStateRef =
-		React.useRef<TranscriptionAutoStopController | null>(null);
-	if (transcriptionAutoStopStateRef.current === null) {
-		transcriptionAutoStopStateRef.current =
-			new TranscriptionAutoStopController();
-	}
-	const transcriptionAutoStopState = transcriptionAutoStopStateRef.current;
+	const [transcriptionAutoStopState] = React.useState(
+		() => new TranscriptionAutoStopController(),
+	);
 	const [initialLastAudioActivityAt] = React.useState(Date.now);
 	const lastAudioActivityAtRef = React.useRef<number | null>(
 		initialLastAudioActivityAt,
@@ -179,26 +123,20 @@ export const useNoteTranscriptSession = ({
 		},
 		[captureTranscriptDraftKey],
 	);
-	const generatedTranscriptSessionId =
-		generatedTranscriptSession?.draftKey === captureTranscriptDraftKey
-			? generatedTranscriptSession.sessionId
-			: null;
-	const systemAudioStatus = isScopedTranscriptionSession
-		? transcriptionSession.systemAudioStatus
-		: createSystemAudioCaptureStatus();
-	const recoveryStatus = isScopedTranscriptionSession
-		? transcriptionSession.recoveryStatus
-		: createTranscriptRecoveryStatus();
-	const liveTranscript = React.useMemo<LiveTranscriptState>(
-		() =>
-			isScopedTranscriptionSession
-				? transcriptionSession.liveTranscript
-				: createEmptyLiveTranscriptState(),
-		[isScopedTranscriptionSession, transcriptionSession.liveTranscript],
+	const generatedTranscriptSessionId = getGeneratedTranscriptSessionId(
+		generatedTranscriptSession,
+		captureTranscriptDraftKey,
 	);
-	const scopedSnapshotUtterances = isScopedTranscriptionSession
-		? transcriptionSession.utterances
-		: emptyTranscriptUtterances;
+	const scopedTranscriptionSnapshot = getScopedTranscriptionSnapshot({
+		isScoped: isScopedTranscriptionSession,
+		transcriptionSession,
+	});
+	const {
+		liveTranscript,
+		recoveryStatus,
+		snapshotUtterances: scopedSnapshotUtterances,
+		systemAudioStatus,
+	} = scopedTranscriptionSnapshot;
 	const transcriptSessionStopController = useTranscriptSessionStopController({
 		isSpeechListening,
 		repository: captureTranscriptSessionRepository,
@@ -286,13 +224,12 @@ export const useNoteTranscriptSession = ({
 	const visibleHasPendingGenerateTranscript = isViewingCaptureScope
 		? hasPendingGenerateTranscript || hasLocalCaptureTranscript
 		: Boolean(currentNoteLatestTranscriptSessionSummary?.hasTranscript);
-	const queuedAutoStartKey =
-		autoStartTranscription &&
-		noteId &&
-		autoStartTranscriptionRequestId &&
-		transcriptionLanguage !== undefined
-			? `${noteId}:capture:${autoStartTranscriptionRequestId}`
-			: null;
+	const queuedAutoStartKey = getQueuedTranscriptAutoStartKey({
+		autoStartTranscription,
+		autoStartTranscriptionRequestId,
+		noteId,
+		transcriptionLanguage,
+	});
 	const currentPendingAutoStartKey =
 		pendingAutoStartKey === queuedAutoStartKey ? pendingAutoStartKey : null;
 

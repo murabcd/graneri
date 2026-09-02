@@ -24,6 +24,84 @@ import {
 import { downloadUrlAsFile, isDownloadableUrl } from "@/lib/download-file";
 import { logError } from "@/lib/logger";
 
+type FileAttachmentCardVariant = "card" | "pill";
+
+function FileDownloadAction({
+	canDownload,
+	file,
+	filename,
+	isDownloading,
+	onDownload,
+	variant,
+}: {
+	canDownload: boolean;
+	file: FileUIPart;
+	filename: string;
+	isDownloading: boolean;
+	onDownload?: (file: FileUIPart) => void;
+	variant: FileAttachmentCardVariant;
+}) {
+	if (!isDownloading && (!canDownload || !onDownload)) {
+		return null;
+	}
+
+	return (
+		<AttachmentActions
+			className={cn(
+				variant === "pill" && "absolute end-1 top-1/2 -translate-y-1/2",
+			)}
+		>
+			<AttachmentAction
+				aria-label={
+					isDownloading ? `Downloading ${filename}` : `Download ${filename}`
+				}
+				className="rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-100"
+				disabled={isDownloading}
+				onClick={isDownloading ? undefined : () => onDownload?.(file)}
+				size="icon"
+				title={isDownloading ? undefined : `Download ${filename}`}
+				type="button"
+			>
+				{isDownloading ? (
+					<LoaderCircle
+						aria-hidden="true"
+						className="animate-spin motion-reduce:animate-none"
+					/>
+				) : (
+					<Download aria-hidden="true" />
+				)}
+			</AttachmentAction>
+		</AttachmentActions>
+	);
+}
+
+function PillFileAttachment({
+	downloadAction,
+	file,
+	filename,
+	hasDownloadAction,
+}: {
+	downloadAction: React.ReactNode;
+	file: FileUIPart;
+	filename: string;
+	hasDownloadAction: boolean;
+}) {
+	return (
+		<Attachment
+			className="inline-flex max-w-80 min-w-0 flex-nowrap gap-1 rounded-full border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground focus-within:ring-0 has-data-[slot=attachment-content]:p-0"
+			size="xs"
+		>
+			<FileAttachmentGlyph file={file} />
+			<AttachmentContent
+				className={cn("leading-5", hasDownloadAction ? "pe-8" : "pe-1")}
+			>
+				<AttachmentTitle title={filename}>{filename}</AttachmentTitle>
+			</AttachmentContent>
+			{downloadAction}
+		</Attachment>
+	);
+}
+
 export function FileAttachmentCard({
 	file,
 	canDownload: canDownloadOverride,
@@ -35,59 +113,32 @@ export function FileAttachmentCard({
 	file: FileUIPart;
 	isDownloading: boolean;
 	onDownload?: (file: FileUIPart) => void;
-	variant?: "card" | "pill";
+	variant?: FileAttachmentCardVariant;
 }) {
 	const filename = file.filename || "Attached file";
 	const canDownload =
 		canDownloadOverride ?? (Boolean(onDownload) && isDownloadableUrl(file.url));
 	const hasDownloadAction =
 		isDownloading || (canDownload && Boolean(onDownload));
-	const downloadAction =
-		isDownloading || (canDownload && onDownload) ? (
-			<AttachmentActions
-				className={cn(
-					variant === "pill" && "absolute end-1 top-1/2 -translate-y-1/2",
-				)}
-			>
-				<AttachmentAction
-					aria-label={
-						isDownloading ? `Downloading ${filename}` : `Download ${filename}`
-					}
-					className="rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-100"
-					disabled={isDownloading}
-					onClick={
-						isDownloading || !onDownload ? undefined : () => onDownload(file)
-					}
-					size="icon"
-					title={isDownloading ? undefined : `Download ${filename}`}
-					type="button"
-				>
-					{isDownloading ? (
-						<LoaderCircle
-							aria-hidden="true"
-							className="animate-spin motion-reduce:animate-none"
-						/>
-					) : (
-						<Download aria-hidden="true" />
-					)}
-				</AttachmentAction>
-			</AttachmentActions>
-		) : null;
+	const downloadAction = (
+		<FileDownloadAction
+			canDownload={canDownload}
+			file={file}
+			filename={filename}
+			isDownloading={isDownloading}
+			onDownload={onDownload}
+			variant={variant}
+		/>
+	);
 
 	if (variant === "pill") {
 		return (
-			<Attachment
-				className="inline-flex max-w-80 min-w-0 flex-nowrap gap-1 rounded-full border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground focus-within:ring-0 has-data-[slot=attachment-content]:p-0"
-				size="xs"
-			>
-				<FileAttachmentGlyph file={file} />
-				<AttachmentContent
-					className={cn("leading-5", hasDownloadAction ? "pe-8" : "pe-1")}
-				>
-					<AttachmentTitle title={filename}>{filename}</AttachmentTitle>
-				</AttachmentContent>
-				{downloadAction}
-			</Attachment>
+			<PillFileAttachment
+				downloadAction={downloadAction}
+				file={file}
+				filename={filename}
+				hasDownloadAction={hasDownloadAction}
+			/>
 		);
 	}
 	const sizeBytes = getChatFileSizeBytes(file);

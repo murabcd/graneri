@@ -84,6 +84,43 @@ type RegenerateRendererChatTurnInput = {
 	onRequestPrepared: (requestBody: ChatRequestBody) => void;
 };
 
+const getAttachableActiveRun = (
+	activeRun: AttachableAssistantRunQueryResult,
+) => (!activeRun || activeRun.status === "stopping" ? null : activeRun);
+
+const getActivePendingBranchMessageId = ({
+	messageId,
+	persistedMessages,
+}: {
+	messageId: string | null;
+	persistedMessages: UIMessage[];
+}) =>
+	messageId && persistedMessages.some((message) => message.id === messageId)
+		? messageId
+		: null;
+
+const isAiChatRequestPending = (status: string) =>
+	status === "submitted" || status === "streaming";
+
+const getQueuedRunHandoffPending = ({
+	error,
+	queueActiveRunId,
+	queuedRunHandoff,
+}: {
+	error: Error | undefined;
+	queueActiveRunId: string | null;
+	queuedRunHandoff: {
+		previousRunId: string | null;
+		queuedMessageId: string;
+	} | null;
+}) =>
+	!error &&
+	queuedRunHandoff !== null &&
+	isRendererQueueHandoffPending({
+		activeRunId: queueActiveRunId,
+		previousRunId: queuedRunHandoff.previousRunId,
+	});
+
 export const useRendererChatSession = ({
 	activeRun,
 	buildContinuationRequestBody,
@@ -115,8 +152,7 @@ export const useRendererChatSession = ({
 		() => buildContinuationRequestBody(localCapabilitySession),
 		[buildContinuationRequestBody, localCapabilitySession],
 	);
-	const attachableActiveRun =
-		activeRun && activeRun.status !== "stopping" ? activeRun : null;
+	const attachableActiveRun = getAttachableActiveRun(activeRun);
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
@@ -130,11 +166,10 @@ export const useRendererChatSession = ({
 	const [pendingBranchMessageId, setPendingBranchMessageId] = React.useState<
 		string | null
 	>(null);
-	const activePendingBranchMessageId =
-		pendingBranchMessageId &&
-		persistedMessages.some((message) => message.id === pendingBranchMessageId)
-			? pendingBranchMessageId
-			: null;
+	const activePendingBranchMessageId = getActivePendingBranchMessageId({
+		messageId: pendingBranchMessageId,
+		persistedMessages,
+	});
 	const sessionPersistedMessages = React.useMemo(
 		() =>
 			applyPendingBranchReplacement(
@@ -244,7 +279,7 @@ export const useRendererChatSession = ({
 		() => normalizeChatMessages(messages),
 		[messages],
 	);
-	const isAiRequestPending = status === "submitted" || status === "streaming";
+	const isAiRequestPending = isAiChatRequestPending(status);
 	const isChatRequestPending = isAiRequestPending || isPreparingRequest;
 	const {
 		activeAssistantMessageId,
@@ -271,49 +306,32 @@ export const useRendererChatSession = ({
 		queueActiveRun,
 		scopeKey: chatId,
 	});
-	latestQueueActiveRunIdRef.current = queueActiveRun?._id ?? null;
-	const isQueuedRunHandoffPending =
-		queuedRunHandoff !== null &&
-		isRendererQueueHandoffPending({
-			activeRunId: queueActiveRun?._id ?? null,
-			previousRunId: queuedRunHandoff.previousRunId,
-		});
+	React.useEffect(() => {
+		latestQueueActiveRunIdRef.current = queueActiveRun?._id ?? null;
+	}, [queueActiveRun?._id]);
+	const isQueuedRunHandoffPending = getQueuedRunHandoffPending({
+		error,
+		queueActiveRunId: queueActiveRun?._id ?? null,
+		queuedRunHandoff,
+	});
 	const isQueueActionPending = isRendererQueueActionPending({
 		isAcceptedHandoffPending: isQueuedRunHandoffPending,
 		isChatRequestPending,
 		queueActiveRunId: queueActiveRun?._id ?? null,
 	});
 	React.useEffect(() => {
-		if (
-			acceptedQueuedMessageId !== null &&
-			(queueActiveRun !== null || error)
-		) {
-			setAcceptedQueuedMessageId(null);
-		}
-	}, [acceptedQueuedMessageId, error, queueActiveRun]);
-	React.useEffect(() => {
-		if (queuedRunHandoff !== null && (!isQueuedRunHandoffPending || error)) {
-			setQueuedRunHandoff(null);
-		}
-	}, [error, isQueuedRunHandoffPending, queuedRunHandoff]);
-	React.useEffect(() => {
 		const rollback = pendingUserQuestionRollbackRef.current;
-		if (!error || !rollback) {
-			return;
-		}
+		if (!error || !rollback) return;
 		if (rollback.chatId !== chatId) {
 			pendingUserQuestionRollbackRef.current = null;
 			return;
 		}
-
 		pendingUserQuestionRollbackRef.current = null;
 		setMessages(rollback.messages);
 	}, [chatId, error, setMessages]);
 	React.useEffect(() => {
 		const rollback = pendingUserQuestionRollbackRef.current;
-		if (!rollback) {
-			return;
-		}
+		if (!rollback) return;
 		if (rollback.chatId !== chatId) {
 			pendingUserQuestionRollbackRef.current = null;
 			return;
@@ -326,7 +344,6 @@ export const useRendererChatSession = ({
 		) {
 			return;
 		}
-
 		pendingUserQuestionRollbackRef.current = null;
 	}, [attachableActiveRun?.pendingDecision, chatId]);
 	useResumeActiveChatRun({
@@ -407,7 +424,9 @@ export const useRendererChatSession = ({
 		sendMessage,
 		workspaceId,
 	});
-	queuedMessagesRef.current = queuedMessages;
+	React.useEffect(() => {
+		queuedMessagesRef.current = queuedMessages;
+	}, [queuedMessages]);
 	const queuedFollowUpControls = useQueuedFollowUpControls({
 		acceptedQueuedMessageIdsRef,
 		acceptedQueuedMessageId,

@@ -39,6 +39,54 @@ import {
 	type ThreadSummary,
 } from "./note-comments-utils";
 
+function ThreadReplyPreview({
+	isExpanded,
+	replyAuthors,
+	replyCount,
+}: {
+	isExpanded: boolean;
+	replyAuthors: ReturnType<typeof resolveAuthorIdentity>[];
+	replyCount: number;
+}) {
+	if (isExpanded) return null;
+
+	return (
+		<div className="pl-6 pt-3">
+			{replyCount > 0 ? (
+				<div className="flex items-center gap-2 text-xs font-medium text-primary">
+					<CornerDownRight className="size-4 shrink-0 text-muted-foreground" />
+					<AvatarGroup className="-space-x-1.5">
+						{replyAuthors.map((author) => (
+							<Avatar key={author.name} size="sm">
+								<AvatarImage
+									src={author.avatarSrc ?? undefined}
+									alt={author.name}
+								/>
+								<AvatarFallback className="text-[9px] font-medium">
+									{getAvatarLabel(author.name)}
+								</AvatarFallback>
+							</Avatar>
+						))}
+					</AvatarGroup>
+					<span>
+						{replyCount} {replyCount === 1 ? "reply" : "replies"}
+					</span>
+				</div>
+			) : (
+				<Button
+					asChild
+					type={undefined}
+					variant="outline"
+					size="sm"
+					className="pointer-events-none text-xs"
+				>
+					<span>Reply</span>
+				</Button>
+			)}
+		</div>
+	);
+}
+
 export function NoteCommentsThreadSummary({
 	thread,
 	currentUser,
@@ -135,41 +183,11 @@ export function NoteCommentsThreadSummary({
 							</div>
 						)}
 					</div>
-					{isExpanded ? null : (
-						<div className="pl-6 pt-3">
-							{replyCount > 0 ? (
-								<div className="flex items-center gap-2 text-xs font-medium text-primary">
-									<CornerDownRight className="size-4 shrink-0 text-muted-foreground" />
-									<AvatarGroup className="-space-x-1.5">
-										{replyAuthors.map((author) => (
-											<Avatar key={author.name} size="sm">
-												<AvatarImage
-													src={author.avatarSrc ?? undefined}
-													alt={author.name}
-												/>
-												<AvatarFallback className="text-[9px] font-medium">
-													{getAvatarLabel(author.name)}
-												</AvatarFallback>
-											</Avatar>
-										))}
-									</AvatarGroup>
-									<span>
-										{replyCount} {replyCount === 1 ? "reply" : "replies"}
-									</span>
-								</div>
-							) : (
-								<Button
-									asChild
-									type={undefined}
-									variant="outline"
-									size="sm"
-									className="pointer-events-none text-xs"
-								>
-									<span>Reply</span>
-								</Button>
-							)}
-						</div>
-					)}
+					<ThreadReplyPreview
+						isExpanded={isExpanded}
+						replyAuthors={replyAuthors}
+						replyCount={replyCount}
+					/>
 				</div>
 				<div className="relative flex min-w-[3.75rem] shrink-0 items-start justify-end pt-0.5">
 					<span

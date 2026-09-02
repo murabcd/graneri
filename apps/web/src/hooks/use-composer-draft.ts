@@ -59,14 +59,6 @@ export const useComposerDraft = <TMetadata>(
 		readComposerDraft<TMetadata>(scopeKey, initialDraft, 0),
 	);
 	const draftRef = React.useRef(draft);
-	const scopeKeyRef = React.useRef(scopeKey);
-	if (scopeKeyRef.current !== scopeKey) {
-		draftRef.current = {
-			...draftRef.current,
-			revision: draftRef.current.revision + 1,
-		};
-		scopeKeyRef.current = scopeKey;
-	}
 	const persistTimeoutRef = React.useRef<number | null>(null);
 
 	const cancelPendingPersist = React.useCallback(() => {
@@ -89,7 +81,7 @@ export const useComposerDraft = <TMetadata>(
 		[scopeKey],
 	);
 
-	React.useEffect(() => {
+	React.useLayoutEffect(() => {
 		cancelPendingPersist();
 		const nextDraft = readComposerDraft<TMetadata>(
 			scopeKey,

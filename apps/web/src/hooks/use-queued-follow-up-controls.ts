@@ -80,22 +80,19 @@ export const useQueuedFollowUpControls = ({
 	const resumeInterruptedQueuedMessages = useMutation(
 		api.assistantQueuedMessages.resumeInterruptedForChat,
 	);
-	const [sendingNowId, setSendingNowId] = React.useState<string | null>(null);
+	const [pendingSendingNowId, setPendingSendingNowId] = React.useState<
+		string | null
+	>(null);
+	const sendingNowId =
+		pendingSendingNowId === acceptedQueuedMessageId
+			? null
+			: pendingSendingNowId;
 	const [isResuming, setIsResuming] = React.useState(false);
 	const [editingId, setEditingId] = React.useState<string | null>(null);
 	const [deletingId, setDeletingId] = React.useState<string | null>(null);
 	const [editDraft, setEditDraft] =
 		React.useState<QueuedMessageEditDraft | null>(null);
 	const editingIdRef = React.useRef<string | null>(null);
-	React.useEffect(() => {
-		if (acceptedQueuedMessageId === null) {
-			return;
-		}
-		setSendingNowId((currentId) =>
-			currentId === acceptedQueuedMessageId ? null : currentId,
-		);
-	}, [acceptedQueuedMessageId]);
-
 	const restoreEditedQueuedMessage = React.useCallback(() => {
 		if (!editDraft) {
 			return;
@@ -157,7 +154,7 @@ export const useQueuedFollowUpControls = ({
 				return;
 			}
 			manuallySendingQueuedMessageIdRef.current = queuedMessageId;
-			setSendingNowId(queuedMessageId);
+			setPendingSendingNowId(queuedMessageId);
 			const queuedMessage = queuedMessages.find(
 				(message) => message._id === queuedMessageId,
 			);
@@ -220,7 +217,7 @@ export const useQueuedFollowUpControls = ({
 			} finally {
 				if (manuallySendingQueuedMessageIdRef.current === queuedMessageId) {
 					manuallySendingQueuedMessageIdRef.current = null;
-					setSendingNowId(null);
+					setPendingSendingNowId(null);
 				}
 			}
 		},

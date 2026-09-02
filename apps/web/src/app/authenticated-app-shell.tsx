@@ -1,19 +1,8 @@
 import {
 	getDesktopMeta,
-	isDesktopRuntime,
 	setDesktopActiveWorkspaceId,
 	setDesktopActiveWorkspaceNotificationPreferences,
 } from "@workspace/platform/desktop";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@workspace/ui/components/alert-dialog";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -58,21 +47,39 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import {
+	getAppShellBreadcrumbDetailLabel,
+	handleAppShellBreadcrumbClick,
+} from "@/app/app-shell-breadcrumb-state";
+import {
 	AppShellContent,
 	type AppShellContentView,
 } from "@/app/app-shell-content";
-import type { AppUser, AppView, UpcomingCalendarEvent } from "@/app/app-types";
 import {
-	getResolvingPersistedChatIds,
-	resolveApplicationView,
-	resolveCollectionRoute,
-} from "@/app/application-navigation-session";
+	type AppShellCreateNoteOptions,
+	createAppShellNote,
+	getAppShellNoteCreationIntent,
+	scheduleNoteCaptureAutoStart,
+} from "@/app/app-shell-note-creation";
+import {
+	getAppShellChatMetadata,
+	getAppShellUserPreferencesQueryArgs,
+	getAppShellWorkspaceQueryArgs,
+	getIsSharedNote,
+	getNormalizedNoteIdQueryArgs,
+	getSelectedNoteQueryArgs,
+	getSharedNotes,
+	resolveAppShellResourceState,
+	resolveCurrentNoteRouteIdentity,
+} from "@/app/app-shell-resource-state";
+import type { AppUser, AppView, UpcomingCalendarEvent } from "@/app/app-types";
+import { getResolvingPersistedChatIds } from "@/app/application-navigation-session";
 import { useDesktopCalendarEventRequest } from "@/app/desktop-calendar-event-request";
 import {
 	buildCalendarEventNoteDocument,
 	buildCalendarEventSearchableText,
 } from "@/app/location";
 import { createPendingPersistedChatRoutesStore } from "@/app/pending-persisted-chat-routes";
+import { useAppShellDesktopShortcuts } from "@/app/use-app-shell-desktop-shortcuts";
 import { useApplicationNavigationSession } from "@/app/use-application-navigation-session";
 import { useUpcomingCalendar } from "@/app/use-upcoming-calendar";
 import type {
@@ -83,6 +90,7 @@ import { CreateAutomationDialogEntry } from "@/components/automations/create-aut
 import { OPEN_NEW_CALENDAR_EVENT } from "@/components/calendar/calendar-page-events";
 import { OPEN_CHAT_SUMMARY_EVENT } from "@/components/chat/chat-summary-events";
 import { optimisticPatchChat } from "@/components/chat/optimistic-patch-chat";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { AppShellInset } from "@/components/layout/app-shell-inset";
 import {
 	ChatBreadcrumbTitleEditor,
@@ -110,7 +118,6 @@ import { useNoteNavigationPreparation } from "@/hooks/use-note-navigation-prepar
 import { usePaginatedNotes } from "@/hooks/use-paginated-notes";
 import { applyDesktopAppearancePreferenceAttributes } from "@/lib/appearance-preferences";
 import { type AuthSession, authClient } from "@/lib/auth-client";
-import { getChatId } from "@/lib/chat";
 import {
 	type ChatPluginPrefill,
 	type ChatPluginSelection,
@@ -131,7 +138,6 @@ import {
 } from "@/lib/note-capture-request";
 import { serializeMarkdownToNoteContent } from "@/lib/note-editor";
 import type { NoteTemplate } from "@/lib/note-templates";
-import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -268,6 +274,7 @@ const useAppShellState = ({
 	initialDesktopMac: boolean;
 }) => {
 	const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+	const accountId = session.user.id ?? null;
 	const [isDesktopMac, setIsDesktopMac] = React.useState(initialDesktopMac);
 	const [automationDialogOpen, setAutomationDialogOpen] = React.useState(false);
 	const [editingAutomationId, setEditingAutomationId] =
@@ -350,7 +357,7 @@ const useAppShellState = ({
 	const chatComposerId = currentChatId ?? draftChatComposerId;
 	const userPreferences = useQuery(
 		api.userPreferences.get,
-		session?.user && isConvexAuthenticated ? {} : "skip",
+		getAppShellUserPreferencesQueryArgs(isConvexAuthenticated),
 	);
 	React.useEffect(() => {
 		applyDesktopAppearancePreferenceAttributes(userPreferences);
@@ -366,7 +373,7 @@ const useAppShellState = ({
 	const currentWeekdayLabel = currentWeekdayFormatter.format(currentDate);
 	const currentDayKey = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}-${currentDate.getDate()}`;
 	const upcomingCalendar = useUpcomingCalendar({
-		accountId: session?.user?.id ?? null,
+		accountId,
 		currentDayKey,
 		isAuthenticated: isConvexAuthenticated,
 		workspaceId: resolvedActiveWorkspaceId,
@@ -388,9 +395,10 @@ const useAppShellState = ({
 	});
 	const notificationPreferences = useQuery(
 		api.notificationPreferences.get,
-		isConvexAuthenticated && resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
+		getAppShellWorkspaceQueryArgs(
+			resolvedActiveWorkspaceId,
+			isConvexAuthenticated,
+		),
 	);
 	const createNote = useMutation(api.notes.create);
 	const createNoteFromCalendarEvent = useMutation(
@@ -400,9 +408,7 @@ const useAppShellState = ({
 	const createWorkspace = useMutation(api.workspaces.create);
 	const chats = useQuery(
 		api.chats.list,
-		resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
+		getAppShellWorkspaceQueryArgs(resolvedActiveWorkspaceId),
 	);
 	const {
 		addPendingPersistedChatRouteId,
@@ -415,9 +421,7 @@ const useAppShellState = ({
 	});
 	const activeRunChatIds = useQuery(
 		api.assistantRuns.listActiveChatIds,
-		resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
+		getAppShellWorkspaceQueryArgs(resolvedActiveWorkspaceId),
 	);
 	const activeStreamingChatIds = React.useMemo(
 		() => new Set(activeRunChatIds ?? []),
@@ -425,9 +429,7 @@ const useAppShellState = ({
 	);
 	const automations = useQuery(
 		api.automations.list,
-		resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
+		getAppShellWorkspaceQueryArgs(resolvedActiveWorkspaceId),
 	);
 	useAutomationNotifications({
 		isDesktopMac,
@@ -435,9 +437,7 @@ const useAppShellState = ({
 	});
 	const projects = useQuery(
 		api.projects.list,
-		resolvedActiveWorkspaceId
-			? { workspaceId: resolvedActiveWorkspaceId }
-			: "skip",
+		getAppShellWorkspaceQueryArgs(resolvedActiveWorkspaceId),
 	);
 	const {
 		hasMore: notesHaveMore,
@@ -445,51 +445,35 @@ const useAppShellState = ({
 		loadMore: loadMoreNotes,
 		notes,
 	} = usePaginatedNotes(resolvedActiveWorkspaceId);
-	const sharedNotes = React.useMemo(
-		() => notes?.filter((note) => note.visibility === "public"),
-		[notes],
-	);
+	const sharedNotes = React.useMemo(() => getSharedNotes(notes), [notes]);
 	const normalizedRouteNoteId = useQuery(
 		api.notes.normalizeId,
-		currentView === "note" && currentRouteNoteId && currentNoteId === null
-			? {
-					id: currentRouteNoteId,
-				}
-			: "skip",
+		getNormalizedNoteIdQueryArgs({
+			currentNoteId,
+			currentRouteNoteId,
+			currentView,
+		}),
 	);
-	const resolvedCurrentNoteId = currentNoteId ?? normalizedRouteNoteId ?? null;
-	const isResolvingCurrentNoteRouteId =
-		currentView === "note" &&
-		currentRouteNoteId !== null &&
-		currentNoteId === null &&
-		normalizedRouteNoteId === undefined;
-	const hasInvalidCurrentNoteRoute =
-		// Route validity is render-time URL/query derivation; navigation is synchronized elsewhere.
-		currentView === "note" &&
-		// Route validity is render-time URL/query derivation; navigation is synchronized elsewhere.
-		currentRouteNoteId !== null &&
-		// Route validity is render-time URL/query derivation; navigation is synchronized elsewhere.
-		currentNoteId === null &&
-		normalizedRouteNoteId === null;
+	const {
+		hasInvalidRoute: hasInvalidCurrentNoteRoute,
+		isResolvingRouteId: isResolvingCurrentNoteRouteId,
+		resolvedNoteId: resolvedCurrentNoteId,
+	} = resolveCurrentNoteRouteIdentity({
+		currentNoteId,
+		currentRouteNoteId,
+		currentView,
+		normalizedRouteNoteId,
+	});
 	const selectedNote = useQuery(
 		api.notes.get,
-		currentView === "note" &&
-			!hasInvalidCurrentNoteRoute &&
-			resolvedCurrentNoteId &&
-			resolvedActiveWorkspaceId
-			? {
-					workspaceId: resolvedActiveWorkspaceId,
-					id: resolvedCurrentNoteId,
-				}
-			: "skip",
+		getSelectedNoteQueryArgs({
+			hasInvalidRoute: hasInvalidCurrentNoteRoute,
+			noteId: resolvedCurrentNoteId,
+			view: currentView,
+			workspaceId: resolvedActiveWorkspaceId,
+		}),
 	);
 	const resolvedSelectedNote = selectedNote;
-	const currentNoteTitle =
-		currentView === "note"
-			? currentNoteTitleOverride?.noteId === resolvedCurrentNoteId
-				? currentNoteTitleOverride.title
-				: (resolvedSelectedNote?.title ?? "")
-			: "";
 	const setCurrentNoteTitle = React.useCallback(
 		(title: string) => {
 			setCurrentNoteTitleOverride({
@@ -500,57 +484,26 @@ const useAppShellState = ({
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[resolvedCurrentNoteId],
 	);
-	const isResolvingCurrentNote =
-		isResolvingCurrentNoteRouteId ||
-		(currentView === "note" &&
-			resolvedCurrentNoteId !== null &&
-			resolvedSelectedNote === undefined);
-	const hasMissingCurrentNote =
-		currentView === "note" &&
-		resolvedCurrentNoteId !== null &&
-		resolvedSelectedNote === null;
-	const currentChatRoute = resolveCollectionRoute({
+	const {
+		currentChat,
+		currentNoteTitle,
+		isResolvingCurrentNote,
+		isResolvingResourceRoute,
+		resolvedCurrentView,
+		selectedProject,
+	} = resolveAppShellResourceState({
+		chats,
+		currentChatId,
+		currentNoteTitleOverride,
+		currentProjectIdString,
 		currentView,
-		expectedView: "chat",
-		// Route resolution is pure render derivation from URL state, not delayed event work.
-		id: currentChatId,
-		items: chats,
-		matches: (chat, id) => getChatId(chat) === id,
-		resolvingIds: resolvingPersistedChatIds,
+		hasInvalidCurrentNoteRoute,
+		isResolvingCurrentNoteRouteId,
+		projects,
+		resolvedCurrentNoteId,
+		resolvedSelectedNote,
+		resolvingPersistedChatIds,
 	});
-	const currentChat =
-		currentChatRoute.status === "ready" ? currentChatRoute.value : null;
-	const isResolvingPendingPersistedChat =
-		currentChatId !== null && resolvingPersistedChatIds.has(currentChatId);
-	const selectedProjectRoute = resolveCollectionRoute({
-		currentView,
-		expectedView: "project",
-		// Route resolution is pure render derivation from URL state, not delayed event work.
-		id: currentProjectIdString,
-		items: projects,
-		matches: (project, id) => project._id === id,
-		missingWhenIdNull: true,
-	});
-	const selectedProject =
-		selectedProjectRoute.status === "ready" ? selectedProjectRoute.value : null;
-	const currentNoteRoute =
-		currentView !== "note"
-			? ({ status: "inactive" } as const)
-			: hasInvalidCurrentNoteRoute || hasMissingCurrentNote
-				? ({ status: "missing" } as const)
-				: isResolvingCurrentNote
-					? ({ status: "resolving" } as const)
-					: ({ status: "ready", value: resolvedSelectedNote ?? null } as const);
-	const applicationView = resolveApplicationView({
-		chat: isResolvingPendingPersistedChat
-			? { status: "ready", value: null }
-			: currentChatRoute,
-		note: currentNoteRoute,
-		project: selectedProjectRoute,
-		view: currentView,
-	});
-	const resolvedCurrentView = applicationView.view;
-	const isResolvingResourceRoute = applicationView.isResolving;
 	useMarkAssistantCompletionRead({
 		chat: currentChat,
 		workspaceId: resolvedActiveWorkspaceId,
@@ -710,9 +663,6 @@ const useAppShellState = ({
 		() => new Set((automations ?? []).map((automation) => automation.chatId)),
 		[automations],
 	);
-	const currentChatHasAutomation = currentChatId
-		? automationChatIds.has(currentChatId)
-		: false;
 	const automationActions = useAutomationActions({
 		openChat: openStoredChat,
 		workspaceId: resolvedActiveWorkspaceId,
@@ -857,54 +807,47 @@ const useAppShellState = ({
 	);
 
 	const handleCreateNote = React.useCallback(
-		(options: {
-			autoStartCapture?: boolean;
-			calendarEvent?: UpcomingCalendarEvent | null;
-			captureRequestId?: string | null;
-			projectId: Id<"projects"> | null;
-			stopCaptureWhenMeetingEnds?: boolean;
-		}) => {
+		(options: AppShellCreateNoteOptions) => {
 			if (creatingNoteRef.current) {
 				return;
 			}
 
 			creatingNoteRef.current = true;
-			const shouldStartCapture = options.autoStartCapture === true;
-			const captureRequestId = getNoteCaptureRequestIdForAutoStart({
-				autoStartCapture: shouldStartCapture,
-				captureRequestId: options.captureRequestId,
-			});
-			const shouldStopCaptureWhenMeetingEnds =
-				options.stopCaptureWhenMeetingEnds === true;
-			const calendarEvent = options.calendarEvent ?? null;
-			const projectId = options.projectId;
-			const scheduledAutoStartAt =
-				!shouldStartCapture && calendarEvent && shouldStopCaptureWhenMeetingEnds
-					? calendarEvent.startAt
-					: null;
+			const {
+				calendarEvent,
+				captureRequestId,
+				projectId,
+				scheduledAutoStartAt,
+				shouldStartCapture,
+				shouldStopCaptureWhenMeetingEnds,
+			} = getAppShellNoteCreationIntent(options);
 
 			if (!resolvedActiveWorkspaceId) {
 				creatingNoteRef.current = false;
 				return;
 			}
 
-			const createNotePromise = calendarEvent
-				? createNoteFromCalendarEvent({
+			const createNotePromise = createAppShellNote({
+				calendarEvent,
+				createCalendarNote: (selectedCalendarEvent) =>
+					createNoteFromCalendarEvent({
 						workspaceId: resolvedActiveWorkspaceId,
-						calendarEvent,
+						calendarEvent: selectedCalendarEvent,
 						content: buildCalendarEventNoteDocument({
 							currentDate,
-							event: calendarEvent,
+							event: selectedCalendarEvent,
 						}),
 						searchableText: buildCalendarEventSearchableText({
 							currentDate,
-							event: calendarEvent,
+							event: selectedCalendarEvent,
 						}),
-					})
-				: createNote({
+					}),
+				createPlainNote: () =>
+					createNote({
 						workspaceId: resolvedActiveWorkspaceId,
 						projectId,
-					});
+					}),
+			});
 
 			void createNotePromise
 				.then((noteId) => {
@@ -1032,32 +975,14 @@ const useAppShellState = ({
 	]);
 
 	React.useEffect(() => {
-		if (
-			resolvedCurrentView !== "note" ||
-			!resolvedCurrentNoteId ||
-			shouldAutoStartNoteCapture ||
-			!scheduledAutoStartNoteCaptureAt
-		) {
-			return;
-		}
-
-		const scheduledAt = new Date(scheduledAutoStartNoteCaptureAt).getTime();
-
-		if (Number.isNaN(scheduledAt)) {
-			clearScheduledAutoStart();
-			return;
-		}
-
-		if (scheduledAt <= Date.now()) {
-			triggerScheduledAutoStart();
-			return;
-		}
-
-		const timeoutId = window.setTimeout(() => {
-			triggerScheduledAutoStart();
-		}, scheduledAt - Date.now());
-
-		return () => window.clearTimeout(timeoutId);
+		return scheduleNoteCaptureAutoStart({
+			clearScheduledAutoStart,
+			currentNoteId: resolvedCurrentNoteId,
+			currentView: resolvedCurrentView,
+			scheduledAtValue: scheduledAutoStartNoteCaptureAt,
+			shouldAutoStart: shouldAutoStartNoteCapture,
+			triggerScheduledAutoStart,
+		});
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		clearScheduledAutoStart,
@@ -1103,58 +1028,12 @@ const useAppShellState = ({
 		[setNavigationSettingsOpen],
 	);
 
-	React.useEffect(() => {
-		if (typeof window === "undefined" || !isDesktopRuntime()) {
-			return;
-		}
-
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (
-				event.defaultPrevented ||
-				!(event.metaKey || event.ctrlKey) ||
-				event.altKey ||
-				event.shiftKey ||
-				(event.key !== "," && event.code !== "Comma")
-			) {
-				return;
-			}
-
-			event.preventDefault();
-			handleSettingsOpenChange(true, "Profile");
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [handleSettingsOpenChange]);
-
-	React.useEffect(() => {
-		if (typeof window === "undefined" || !isDesktopRuntime()) {
-			return;
-		}
-
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (
-				event.defaultPrevented ||
-				!(event.metaKey || event.ctrlKey) ||
-				event.altKey ||
-				event.shiftKey ||
-				!/^[1-9]$/.test(event.key)
-			) {
-				return;
-			}
-
-			const workspace = workspaces[Number(event.key) - 1];
-			if (!workspace || workspace._id === resolvedActiveWorkspaceId) {
-				return;
-			}
-
-			event.preventDefault();
-			handleWorkspaceSelect(workspace._id);
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [handleWorkspaceSelect, resolvedActiveWorkspaceId, workspaces]);
+	useAppShellDesktopShortcuts({
+		activeWorkspaceId: resolvedActiveWorkspaceId,
+		handleSettingsOpenChange,
+		onWorkspaceSelect: handleWorkspaceSelect,
+		workspaces,
+	});
 
 	const handleOpenCalendarSettings = React.useCallback(() => {
 		handleSettingsOpenChange(true, "Calendar");
@@ -1228,29 +1107,37 @@ const useAppShellState = ({
 		},
 		[currentChatId, navigateChat, removePendingPersistedChatRouteId],
 	);
-	const currentChatTitle = currentChat?.title || "New chat";
-	const automationChatTitle = automationChatId
-		? (chats?.find((chat) => getChatId(chat) === automationChatId)?.title ?? "")
-		: "";
-	const currentChatNoteId = currentChat?.noteId ?? null;
-	const isSharedNote =
-		resolvedCurrentView === "note" &&
-		(resolvedSelectedNote?.visibility === "public" ||
-			sharedNotes?.some((note) => note._id === resolvedCurrentNoteId) === true);
+	const {
+		automationChatTitle,
+		currentChatHasAutomation,
+		currentChatNoteId,
+		currentChatTitle,
+	} = getAppShellChatMetadata({
+		automationChatId,
+		automationChatIds,
+		chats,
+		currentChat,
+		currentChatId,
+	});
+	const isSharedNote = getIsSharedNote({
+		currentView: resolvedCurrentView,
+		resolvedCurrentNoteId,
+		selectedNote: resolvedSelectedNote,
+		sharedNotes,
+	});
 
 	return {
-		accountId: session?.user?.id ?? null,
+		accountId,
 		activeWorkspaceId: resolvedActiveWorkspaceId,
-		breadcrumbDetailLabel:
-			isResolvingResourceRoute || resolvedCurrentView === "notFound"
-				? null
-				: resolvedCurrentView === "note" && !isResolvingCurrentNote
-					? getNoteDisplayTitle(currentNoteTitle)
-					: resolvedCurrentView === "chat" && currentChatId
-						? currentChatTitle
-						: resolvedCurrentView === "project"
-							? (selectedProject?.name ?? null)
-							: null,
+		breadcrumbDetailLabel: getAppShellBreadcrumbDetailLabel({
+			currentChatId,
+			currentChatTitle,
+			currentNoteTitle,
+			currentView: resolvedCurrentView,
+			isResolvingCurrentNote,
+			isResolvingResourceRoute,
+			selectedProject,
+		}),
 		breadcrumbSectionLabel: getBreadcrumbSectionLabel({
 			currentView: resolvedCurrentView,
 			isSharedNote,
@@ -1276,36 +1163,13 @@ const useAppShellState = ({
 		currentWeekdayLabel,
 		isResolvingResourceRoute,
 		handleAutoStartNoteCaptureHandled,
-		handleBreadcrumbSectionClick: () => {
-			if (resolvedCurrentView === "notFound") {
-				handleViewChange("home");
-				return;
-			}
-
-			if (resolvedCurrentView === "chat") {
-				openFreshChat();
-				return;
-			}
-
-			if (resolvedCurrentView === "automation") {
-				handleViewChange("automation");
-				return;
-			}
-
-			if (resolvedCurrentView === "calendar") {
-				handleViewChange("calendar");
-				return;
-			}
-
-			if (resolvedCurrentView === "project") {
-				handleViewChange("home");
-				return;
-			}
-
-			handleViewChange(
-				resolvedCurrentView === "shared" || isSharedNote ? "shared" : "home",
-			);
-		},
+		handleBreadcrumbSectionClick: () =>
+			handleAppShellBreadcrumbClick({
+				currentView: resolvedCurrentView,
+				isSharedNote,
+				onOpenFreshChat: openFreshChat,
+				onViewChange: handleViewChange,
+			}),
 		handleChatPersisted,
 		handleChatRemoved,
 		handleCreateNote,
@@ -1404,6 +1268,185 @@ type AppShellHeaderProps = {
 	onNewChatAutomation: (chatId: string) => void;
 };
 
+function AppShellBreadcrumbTitleEditor({
+	activeWorkspaceId,
+	chatTitleEditor,
+	currentNoteId,
+	currentNoteTitle,
+	currentProject,
+	currentView,
+	detailLabel,
+	isDesktopMac,
+	onNoteTitleChange,
+	onProjectAppearancePreviewChange,
+}: {
+	activeWorkspaceId: Id<"workspaces"> | null;
+	chatTitleEditor: ReturnType<typeof useBreadcrumbChatTitleEditor>["editor"];
+	currentNoteId: Id<"notes"> | null;
+	currentNoteTitle: string;
+	currentProject: Doc<"projects"> | null;
+	currentView: AppView;
+	detailLabel: string | null;
+	isDesktopMac: boolean;
+	onNoteTitleChange: (title: string) => void;
+	onProjectAppearancePreviewChange: (
+		preview: ProjectAppearancePreview | null,
+	) => void;
+}) {
+	if (!detailLabel) return null;
+
+	switch (currentView) {
+		case "project":
+			return currentProject ? (
+				<ProjectBreadcrumbTitleEditor
+					detailLabel={detailLabel}
+					isDesktopMac={isDesktopMac}
+					onAppearancePreviewChange={onProjectAppearancePreviewChange}
+					project={currentProject}
+					workspaceId={activeWorkspaceId}
+				/>
+			) : null;
+		case "note":
+			return currentNoteId ? (
+				<NoteBreadcrumbTitleEditor
+					detailLabel={detailLabel}
+					isDesktopMac={isDesktopMac}
+					noteId={currentNoteId}
+					onPreviewChange={onNoteTitleChange}
+					title={currentNoteTitle}
+					workspaceId={activeWorkspaceId}
+				/>
+			) : null;
+		case "chat":
+			return chatTitleEditor ? (
+				<ChatBreadcrumbTitleEditor
+					detailLabel={detailLabel}
+					editor={chatTitleEditor}
+					isDesktopMac={isDesktopMac}
+				/>
+			) : null;
+		default:
+			return null;
+	}
+}
+
+function DesktopHeaderDragRegion({
+	inboxOpen,
+	isDesktopMac,
+	leftInsetPanelWidth,
+	leftOverlayPanelWidth,
+}: {
+	inboxOpen: boolean;
+	isDesktopMac: boolean;
+	leftInsetPanelWidth: string | null;
+	leftOverlayPanelWidth: string | null;
+}) {
+	if (!isDesktopMac) return null;
+	return (
+		<div
+			aria-hidden="true"
+			data-app-region="drag"
+			className="absolute inset-y-0 right-0"
+			style={{
+				left:
+					!inboxOpen || leftInsetPanelWidth
+						? 0
+						: (leftOverlayPanelWidth ?? DESKTOP_INBOX_PANEL_WIDTH),
+			}}
+		/>
+	);
+}
+
+function AppShellHeaderLeading({
+	breadcrumbDetailLabel,
+	breadcrumbSectionLabel,
+	currentChatHasAutomation,
+	currentChatId,
+	currentView,
+	inboxOpen,
+	isDesktopMac,
+	isMobile,
+	leftInsetPanelWidth,
+	leftOverlayPanelWidth,
+	onBreadcrumbSectionClick,
+	onNewChatAutomation,
+	sidebarState,
+	titleEditor,
+}: {
+	breadcrumbDetailLabel: string | null;
+	breadcrumbSectionLabel: string;
+	currentChatHasAutomation: boolean;
+	currentChatId: string | null;
+	currentView: AppView;
+	inboxOpen: boolean;
+	isDesktopMac: boolean;
+	isMobile: boolean;
+	leftInsetPanelWidth: string | null;
+	leftOverlayPanelWidth: string | null;
+	onBreadcrumbSectionClick: () => void;
+	onNewChatAutomation: (chatId: string) => void;
+	sidebarState: "expanded" | "collapsed";
+	titleEditor: React.ReactNode;
+}) {
+	return (
+		<>
+			<DesktopHeaderDragRegion
+				inboxOpen={inboxOpen}
+				isDesktopMac={isDesktopMac}
+				leftInsetPanelWidth={leftInsetPanelWidth}
+				leftOverlayPanelWidth={leftOverlayPanelWidth}
+			/>
+			<div
+				className={cn(
+					"relative z-10 flex min-w-0 flex-1 items-center gap-2 pr-4",
+					isDesktopMac && DESKTOP_MAIN_HEADER_CONTENT_CLASS,
+					isDesktopMac && isMobile && DESKTOP_MAIN_HEADER_LEADING_CLASS,
+					isDesktopMac && isMobile && "mt-1",
+					isDesktopMac &&
+						sidebarState === "collapsed" &&
+						DESKTOP_MAIN_HEADER_LEADING_CLASS,
+				)}
+			>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<SidebarTrigger
+							data-app-region={isDesktopMac ? "no-drag" : undefined}
+						/>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">
+						<div className="flex items-center gap-2">
+							<span>Toggle sidebar</span>
+							<Kbd className="border border-border/60 bg-muted px-1.5 font-mono text-[10px] opacity-100">
+								<span className="text-xs">⌘</span>
+								<span>B</span>
+							</Kbd>
+						</div>
+					</TooltipContent>
+				</Tooltip>
+				<Separator
+					orientation="vertical"
+					className="mr-2 data-[orientation=vertical]:h-4"
+				/>
+				<AppShellBreadcrumbs
+					breadcrumbSectionLabel={breadcrumbSectionLabel}
+					breadcrumbDetailLabel={breadcrumbDetailLabel}
+					isDesktopMac={isDesktopMac}
+					onBreadcrumbSectionClick={onBreadcrumbSectionClick}
+					titleEditor={titleEditor}
+					showAutomationIcon={
+						currentView === "chat" && currentChatHasAutomation
+					}
+					onAutomationIconClick={
+						currentView === "chat" && currentChatId
+							? () => onNewChatAutomation(currentChatId)
+							: undefined
+					}
+				/>
+			</div>
+		</>
+	);
+}
+
 function AppShellHeader({
 	isDesktopMac,
 	inboxOpen,
@@ -1446,43 +1489,20 @@ function AppShellHeader({
 		noteId: currentChatNoteId,
 		title: currentChatTitle,
 	});
-	let breadcrumbTitleEditor: React.ReactNode = null;
-	if (breadcrumbDetailLabel) {
-		switch (currentView) {
-			case "project":
-				breadcrumbTitleEditor = currentProject ? (
-					<ProjectBreadcrumbTitleEditor
-						detailLabel={breadcrumbDetailLabel}
-						isDesktopMac={isDesktopMac}
-						onAppearancePreviewChange={onProjectAppearancePreviewChange}
-						project={currentProject}
-						workspaceId={activeWorkspaceId}
-					/>
-				) : null;
-				break;
-			case "note":
-				breadcrumbTitleEditor = currentNoteId ? (
-					<NoteBreadcrumbTitleEditor
-						detailLabel={breadcrumbDetailLabel}
-						isDesktopMac={isDesktopMac}
-						noteId={currentNoteId}
-						onPreviewChange={onNoteTitleChange}
-						title={currentNoteTitle}
-						workspaceId={activeWorkspaceId}
-					/>
-				) : null;
-				break;
-			case "chat":
-				breadcrumbTitleEditor = breadcrumbChatTitleEditor ? (
-					<ChatBreadcrumbTitleEditor
-						detailLabel={breadcrumbDetailLabel}
-						editor={breadcrumbChatTitleEditor}
-						isDesktopMac={isDesktopMac}
-					/>
-				) : null;
-				break;
-		}
-	}
+	const breadcrumbTitleEditor = (
+		<AppShellBreadcrumbTitleEditor
+			activeWorkspaceId={activeWorkspaceId}
+			chatTitleEditor={breadcrumbChatTitleEditor}
+			currentNoteId={currentNoteId}
+			currentNoteTitle={currentNoteTitle}
+			currentProject={currentProject}
+			currentView={currentView}
+			detailLabel={breadcrumbDetailLabel}
+			isDesktopMac={isDesktopMac}
+			onNoteTitleChange={onNoteTitleChange}
+			onProjectAppearancePreviewChange={onProjectAppearancePreviewChange}
+		/>
+	);
 
 	return (
 		<header
@@ -1492,66 +1512,22 @@ function AppShellHeader({
 				isDesktopMac && DESKTOP_MAIN_HEADER_CLASS,
 			)}
 		>
-			{isDesktopMac ? (
-				<div
-					aria-hidden="true"
-					data-app-region="drag"
-					className="absolute inset-y-0 right-0"
-					style={{
-						left:
-							!inboxOpen || leftInsetPanelWidth
-								? 0
-								: (leftOverlayPanelWidth ?? DESKTOP_INBOX_PANEL_WIDTH),
-					}}
-				/>
-			) : null}
-			<div
-				className={cn(
-					"relative z-10 flex min-w-0 flex-1 items-center gap-2 pr-4",
-					isDesktopMac && DESKTOP_MAIN_HEADER_CONTENT_CLASS,
-					isDesktopMac && isMobile && DESKTOP_MAIN_HEADER_LEADING_CLASS,
-					isDesktopMac && isMobile && "mt-1",
-					isDesktopMac &&
-						sidebarState === "collapsed" &&
-						DESKTOP_MAIN_HEADER_LEADING_CLASS,
-				)}
-			>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<SidebarTrigger
-							data-app-region={isDesktopMac ? "no-drag" : undefined}
-						/>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">
-						<div className="flex items-center gap-2">
-							<span>Toggle sidebar</span>
-							<Kbd className="border border-border/60 bg-muted px-1.5 font-mono text-[10px] opacity-100">
-								<span className="text-xs">⌘</span>
-								<span>B</span>
-							</Kbd>
-						</div>
-					</TooltipContent>
-				</Tooltip>
-				<Separator
-					orientation="vertical"
-					className="mr-2 data-[orientation=vertical]:h-4"
-				/>
-				<AppShellBreadcrumbs
-					breadcrumbSectionLabel={breadcrumbSectionLabel}
-					breadcrumbDetailLabel={breadcrumbDetailLabel}
-					isDesktopMac={isDesktopMac}
-					onBreadcrumbSectionClick={onBreadcrumbSectionClick}
-					titleEditor={breadcrumbTitleEditor}
-					showAutomationIcon={
-						currentView === "chat" && currentChatHasAutomation
-					}
-					onAutomationIconClick={
-						currentView === "chat" && currentChatId
-							? () => onNewChatAutomation(currentChatId)
-							: undefined
-					}
-				/>
-			</div>
+			<AppShellHeaderLeading
+				breadcrumbDetailLabel={breadcrumbDetailLabel}
+				breadcrumbSectionLabel={breadcrumbSectionLabel}
+				currentChatHasAutomation={currentChatHasAutomation}
+				currentChatId={currentChatId}
+				currentView={currentView}
+				inboxOpen={inboxOpen}
+				isDesktopMac={isDesktopMac}
+				isMobile={isMobile}
+				leftInsetPanelWidth={leftInsetPanelWidth}
+				leftOverlayPanelWidth={leftOverlayPanelWidth}
+				onBreadcrumbSectionClick={onBreadcrumbSectionClick}
+				onNewChatAutomation={onNewChatAutomation}
+				sidebarState={sidebarState}
+				titleEditor={breadcrumbTitleEditor}
+			/>
 			<div
 				className={cn(
 					"relative z-10 ml-auto shrink-0",
@@ -2002,29 +1978,16 @@ function ChatHeaderActions({
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<AlertDialog open={confirmTrashOpen} onOpenChange={setConfirmTrashOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Move chat to trash?</AlertDialogTitle>
-						<AlertDialogDescription>
-							This removes the chat from the list. You can restore it later from
-							Trash.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel disabled={isMovingToTrash}>
-							Cancel
-						</AlertDialogCancel>
-						<AlertDialogAction
-							className="bg-destructive/15 text-destructive hover:bg-destructive/20 hover:text-destructive dark:text-red-500 dark:hover:bg-destructive/25"
-							onClick={handleConfirmTrash}
-							disabled={isMovingToTrash}
-						>
-							{isMovingToTrash ? "Moving..." : "Move to trash"}
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			<DestructiveConfirmationDialog
+				actionLabel="Move to trash"
+				description="This removes the chat from the list. You can restore it later from Trash."
+				isPending={isMovingToTrash}
+				onConfirm={handleConfirmTrash}
+				onOpenChange={setConfirmTrashOpen}
+				open={confirmTrashOpen}
+				pendingActionLabel="Moving..."
+				title="Move chat to trash?"
+			/>
 		</div>
 	);
 }

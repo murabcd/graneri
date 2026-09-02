@@ -61,6 +61,116 @@ const PANEL_STORAGE_KEY_DESKTOP = "graneri.calendar-event-panel-width.desktop";
 const PANEL_STORAGE_KEY_MOBILE = "graneri.calendar-event-panel-width.mobile";
 const PANEL_PINNED_STORAGE_KEY = "graneri.calendar-event-panel-pinned.desktop";
 
+function CalendarEventPanelContent({
+	calendars,
+	defaultCalendarId,
+	desktopSafeTop,
+	event,
+	isMobile,
+	isPinned,
+	onClose,
+	onCreateEvent,
+	onTakeNote,
+	onTogglePinned,
+	onUpdateEvent,
+	panelMode,
+	workspaceId,
+}: Omit<CalendarEventSheetProps, "onOpenChange" | "panel"> & {
+	desktopSafeTop: boolean;
+	event: UpcomingCalendarEvent | null;
+	isMobile: boolean;
+	isPinned: boolean;
+	onClose: () => void;
+	onTogglePinned: () => void;
+	panelMode: CalendarEventPanelState["mode"] | null;
+}) {
+	if (event && panelMode === "details") {
+		return (
+			<CalendarEventDetailsPanel
+				calendars={calendars}
+				desktopSafeTop={desktopSafeTop}
+				event={event}
+				isMobile={isMobile}
+				isPinned={isPinned}
+				onClose={onClose}
+				onTakeNote={onTakeNote}
+				onTogglePinned={onTogglePinned}
+			/>
+		);
+	}
+	if (!workspaceId) {
+		return null;
+	}
+	return (
+		<CalendarEventEditorPanel
+			calendars={calendars}
+			defaultCalendarId={defaultCalendarId}
+			desktopSafeTop={desktopSafeTop}
+			event={event}
+			isMobile={isMobile}
+			isPinned={isPinned}
+			onClose={onClose}
+			onSaveEvent={(creation) =>
+				event ? onUpdateEvent(event, creation) : onCreateEvent(creation)
+			}
+			onTogglePinned={onTogglePinned}
+			workspaceId={workspaceId}
+		/>
+	);
+}
+
+function MobileCalendarEventSheet({
+	event,
+	isResizing,
+	onOpenChange,
+	onResizeKeyDown,
+	onResizeStart,
+	open,
+	panelContent,
+	panelWidth,
+}: {
+	event: UpcomingCalendarEvent | null;
+	isResizing: boolean;
+	onOpenChange: (open: boolean) => void;
+	onResizeKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
+	onResizeStart: (event: React.PointerEvent<HTMLElement>) => void;
+	open: boolean;
+	panelContent: React.ReactNode;
+	panelWidth: number;
+}) {
+	return (
+		<Sheet open={open} onOpenChange={onOpenChange}>
+			{open ? (
+				<SheetContent
+					className="group/docked-sheet gap-0 border-l bg-background p-0 shadow-none data-[side=right]:sm:max-w-none"
+					showCloseButton={false}
+					side="right"
+					style={{ width: panelWidth, maxWidth: "100vw" }}
+				>
+					<SheetTitle className="sr-only">
+						{event?.title ?? "New event"}
+					</SheetTitle>
+					<SheetDescription className="sr-only">
+						{event
+							? "View the details for this calendar event."
+							: "Add the details for your calendar event."}
+					</SheetDescription>
+					<ResizableSidePanelHandle
+						className="opacity-0 transition-opacity duration-150 group-hover/docked-sheet:opacity-100 group-focus-within/docked-sheet:opacity-100"
+						isResizing={isResizing}
+						label="Resize calendar event panel"
+						onKeyDown={onResizeKeyDown}
+						onPointerDown={onResizeStart}
+						panelWidth={panelWidth}
+						side="right"
+					/>
+					{panelContent}
+				</SheetContent>
+			) : null}
+		</Sheet>
+	);
+}
+
 export function CalendarEventSheet({
 	calendars,
 	defaultCalendarId,
@@ -113,35 +223,24 @@ export function CalendarEventSheet({
 		panelWidth,
 	});
 
-	const panelContent =
-		event && panel?.mode === "details" ? (
-			<CalendarEventDetailsPanel
-				event={event}
-				calendars={calendars}
-				desktopSafeTop={desktopSafeTop}
-				isMobile={isMobile}
-				isPinned={isPinned}
-				onClose={() => onOpenChange(false)}
-				onTakeNote={onTakeNote}
-				onTogglePinned={togglePinned}
-			/>
-		) : workspaceId ? (
-			<CalendarEventEditorPanel
-				key={`${open ? "open" : "closed"}:${eventKey ?? "new"}`}
-				calendars={calendars}
-				defaultCalendarId={defaultCalendarId}
-				desktopSafeTop={desktopSafeTop}
-				event={event}
-				isMobile={isMobile}
-				isPinned={isPinned}
-				onClose={() => onOpenChange(false)}
-				onSaveEvent={(creation) =>
-					event ? onUpdateEvent(event, creation) : onCreateEvent(creation)
-				}
-				onTogglePinned={togglePinned}
-				workspaceId={workspaceId}
-			/>
-		) : null;
+	const panelContent = (
+		<CalendarEventPanelContent
+			key={`${open ? "open" : "closed"}:${eventKey ?? "new"}`}
+			calendars={calendars}
+			defaultCalendarId={defaultCalendarId}
+			desktopSafeTop={desktopSafeTop}
+			event={event}
+			isMobile={isMobile}
+			isPinned={isPinned}
+			onClose={() => onOpenChange(false)}
+			onCreateEvent={onCreateEvent}
+			onTakeNote={onTakeNote}
+			onTogglePinned={togglePinned}
+			onUpdateEvent={onUpdateEvent}
+			panelMode={panel?.mode ?? null}
+			workspaceId={workspaceId}
+		/>
+	);
 	const panelName = event
 		? panel?.mode === "edit"
 			? "event editor"
@@ -170,34 +269,15 @@ export function CalendarEventSheet({
 	}
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			{open ? (
-				<SheetContent
-					side="right"
-					showCloseButton={false}
-					className="group/docked-sheet gap-0 border-l bg-background p-0 shadow-none data-[side=right]:sm:max-w-none"
-					style={{ width: panelWidth, maxWidth: "100vw" }}
-				>
-					<SheetTitle className="sr-only">
-						{event?.title ?? "New event"}
-					</SheetTitle>
-					<SheetDescription className="sr-only">
-						{event
-							? "View the details for this calendar event."
-							: "Add the details for your calendar event."}
-					</SheetDescription>
-					<ResizableSidePanelHandle
-						side="right"
-						label="Resize calendar event panel"
-						panelWidth={panelWidth}
-						isResizing={isResizing}
-						className="opacity-0 transition-opacity duration-150 group-hover/docked-sheet:opacity-100 group-focus-within/docked-sheet:opacity-100"
-						onPointerDown={handleResizeStart}
-						onKeyDown={handleResizeKeyDown}
-					/>
-					{panelContent}
-				</SheetContent>
-			) : null}
-		</Sheet>
+		<MobileCalendarEventSheet
+			event={event}
+			isResizing={isResizing}
+			onOpenChange={onOpenChange}
+			onResizeKeyDown={handleResizeKeyDown}
+			onResizeStart={handleResizeStart}
+			open={open}
+			panelContent={panelContent}
+			panelWidth={panelWidth}
+		/>
 	);
 }

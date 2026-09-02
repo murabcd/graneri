@@ -1,9 +1,6 @@
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import type { ChatMode } from "@workspace/ai/chat-mode";
 import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
-import { isDesktopRuntime } from "@workspace/platform/desktop";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
 import {
 	MessageScroller,
 	MessageScrollerButton,
@@ -14,15 +11,18 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
 import { useMutation, useQuery } from "convex/react";
-import { ChevronDown, ChevronUp, FileText, Search, X } from "lucide-react";
+import { FileText } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { hasUploadingAttachments } from "@/components/ai-elements/file-attachment-utils";
 import { useRevokeAttachmentObjectUrls } from "@/components/ai-elements/use-file-attachments";
 import type { AutomationListItem } from "@/components/automations/automation-types";
-import { ChatMessageSearchNavigator } from "@/components/chat/chat-message-search";
-import { getChatSearchMatches } from "@/components/chat/chat-message-search-matches";
+import {
+	ChatMessageSearchBarEntry,
+	ChatMessageSearchNavigator,
+	useChatMessageSearch,
+} from "@/components/chat/chat-message-search";
 import { ChatMessagesEntry } from "@/components/chat/chat-messages-entry";
 import {
 	type ChatSummaryOpenSourceRequest,
@@ -76,8 +76,6 @@ import { buildWorkspaceChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
-import { ensureCssHighlightStyles } from "@/lib/css-highlight-styles";
-import { getCssHighlightApi } from "@/lib/css-highlights";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { NoteListItem } from "@/lib/note-types";
@@ -85,10 +83,9 @@ import {
 	DEFAULT_SEND_SHORTCUT,
 	shouldSendFromKeyboardEvent,
 } from "@/lib/send-shortcut";
-import { createTextMatchRanges } from "@/lib/text-search-ranges";
 import { resolveWorkspaceChatComposerPlaceholder } from "@/lib/workspace-chat-composer-placeholder";
 import { api } from "../../../../../convex/_generated/api";
-import type { Doc } from "../../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import { ChatComposer, type ChatComposerMentionCatalog } from "./chat-composer";
 import { ChatHistoryList } from "./chat-history-list";
 
@@ -132,39 +129,46 @@ const getLatestUserMessageText = (messages: UIMessage[]) => {
 	return "";
 };
 
-type MessageSearchState = {
-	open: boolean;
-	query: string;
-	index: number;
+const useChatSummaryOpenSync = ({
+	canShow,
+	setOpen,
+}: {
+	canShow: boolean;
+	setOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}) => {
+	React.useEffect(() => {
+		const handleOpenSummary = () => {
+			if (canShow) {
+				setOpen((current) => !current);
+			}
+		};
+		window.addEventListener(OPEN_CHAT_SUMMARY_EVENT, handleOpenSummary);
+		return () => {
+			window.removeEventListener(OPEN_CHAT_SUMMARY_EVENT, handleOpenSummary);
+		};
+	}, [canShow, setOpen]);
+
+	React.useEffect(() => {
+		if (!canShow) {
+			setOpen(false);
+		}
+	}, [canShow, setOpen]);
 };
 
-type MessageSearchAction =
-	| { type: "close" }
-	| { type: "open" }
-	| { type: "setQuery"; query: string }
-	| { type: "setIndex"; index: number };
-
-const messageSearchReducer = (
-	state: MessageSearchState,
-	action: MessageSearchAction,
-): MessageSearchState => {
-	if (action.type === "open") {
-		return { ...state, open: true };
-	}
-
-	if (action.type === "close") {
-		return { open: false, query: "", index: 0 };
-	}
-
-	if (action.type === "setQuery") {
-		return { ...state, query: action.query, index: 0 };
-	}
-
-	return { ...state, index: action.index };
+const useResetChatHistoryScroll = ({
+	active,
+	viewportRef,
+}: {
+	active: boolean;
+	viewportRef: React.RefObject<HTMLDivElement | null>;
+}) => {
+	React.useLayoutEffect(() => {
+		if (active) {
+			return;
+		}
+		viewportRef.current?.scrollTo?.({ top: 0, behavior: "auto" });
+	}, [active, viewportRef]);
 };
-
-const CHAT_SEARCH_MATCH_HIGHLIGHT = "chat-search-match";
-const CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT = "chat-search-active-match";
 
 type ChatComposerDraftMetadata = {
 	mentions: ChatComposerMention[];
@@ -199,6 +203,71 @@ const getVisibleActiveStreamingChatIds = ({
 	return visibleActiveStreamingChatIds;
 };
 
+const getInitialChatPluginDraft = (
+	chatId: string,
+	pluginPrefill: ChatPluginPrefill | null | undefined,
+) =>
+	pluginPrefill?.composerId === chatId
+		? createChatPluginDraft(pluginPrefill)
+		: null;
+
+const getWorkspaceQueryArgs = (workspaceId: Id<"workspaces"> | null) =>
+	workspaceId ? { workspaceId } : ("skip" as const);
+
+const getWorkspaceChatQueryArgs = (
+	workspaceId: Id<"workspaces"> | null,
+	chatId: string,
+) => (workspaceId ? { workspaceId, chatId } : ("skip" as const));
+
+const isChatModelResolving = ({
+	currentChat,
+	isChatsLoading,
+	isSettingsLoading,
+}: {
+	currentChat: Doc<"chats"> | null;
+	isChatsLoading: boolean;
+	isSettingsLoading: boolean;
+}) => (isChatsLoading && !currentChat) || (!currentChat && isSettingsLoading);
+
+const getChatHistoryMarkerState = (currentChat: Doc<"chats"> | null) =>
+	currentChat?.forkedFromChatId !== undefined
+		? {
+				kind: "fork" as const,
+				historyOmittedBefore: currentChat.historyOmittedBefore === true,
+			}
+		: { kind: "original" as const };
+
+const useCreateNoteFromChatResponse = ({
+	chatId,
+	currentChatTitle,
+	messages,
+	onCreateNoteFromResponse,
+}: {
+	chatId: string;
+	currentChatTitle: string;
+	messages: UIMessage[];
+	onCreateNoteFromResponse: ChatPageProps["onCreateNoteFromResponse"];
+}) =>
+	React.useCallback(
+		(message: UIMessage) => {
+			if (!onCreateNoteFromResponse) {
+				return undefined;
+			}
+
+			const title =
+				currentChatTitle.trim() ||
+				getLatestUserMessageText(messages) ||
+				"New note";
+			return onCreateNoteFromResponse({
+				chatId,
+				content: getChatText(message),
+				messageId: message.id,
+				title,
+			});
+		},
+		[chatId, currentChatTitle, messages, onCreateNoteFromResponse],
+	);
+
 const useChatPageController = ({
 	chatId,
 	pluginPrefill,
@@ -228,10 +297,7 @@ const useChatPageController = ({
 	// Chat lookup is render-time query derivation, not deferred event handling.
 	const currentChat = chats.find((chat) => getChatId(chat) === chatId) ?? null;
 	const initialPluginDraft = React.useMemo(
-		() =>
-			pluginPrefill?.composerId === chatId
-				? createChatPluginDraft(pluginPrefill)
-				: null,
+		() => getInitialChatPluginDraft(chatId, pluginPrefill),
 		[chatId, pluginPrefill],
 	);
 	const {
@@ -285,7 +351,7 @@ const useChatPageController = ({
 	} = useLocalCapabilitySession(localCapabilityScope);
 	const recipeData = useQuery(
 		api.recipes.list,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
+		getWorkspaceQueryArgs(activeWorkspaceId),
 	);
 	const appSources = useAppSources(activeWorkspaceId);
 	const handleMentionsChange = React.useCallback(
@@ -310,11 +376,11 @@ const useChatPageController = ({
 	});
 	const activeRun = useQuery(
 		api.assistantRuns.getAttachableRun,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId, chatId } : "skip",
+		getWorkspaceChatQueryArgs(activeWorkspaceId, chatId),
 	);
 	const runningAutomationRun = useQuery(
 		api.automations.getRunningRunForChat,
-		activeWorkspaceId ? { workspaceId: activeWorkspaceId, chatId } : "skip",
+		getWorkspaceChatQueryArgs(activeWorkspaceId, chatId),
 	);
 	const stopRunningAutomation = React.useCallback(async () => {
 		if (!runningAutomationRun) {
@@ -428,8 +494,11 @@ const useChatPageController = ({
 	} = settings;
 	const selectedModel = getChatModel(settings.model);
 	// Model resolving is derived from query state and drives rendering only.
-	const isModelResolving =
-		(isChatsLoading && !currentChat) || (!currentChat && isSettingsLoading);
+	const isModelResolving = isChatModelResolving({
+		currentChat,
+		isChatsLoading,
+		isSettingsLoading,
+	});
 	const handleSelectedModelChange = React.useCallback(
 		(model: ChatModel) => {
 			updateSettings({ model: model.model });
@@ -796,13 +865,7 @@ const useChatPageController = ({
 		compactionActivity,
 		isLoading: canStop,
 		hasEarlierMessages,
-		historyMarkerState:
-			currentChat?.forkedFromChatId !== undefined
-				? {
-						kind: "fork" as const,
-						historyOmittedBefore: currentChat.historyOmittedBefore === true,
-					}
-				: { kind: "original" as const },
+		historyMarkerState: getChatHistoryMarkerState(currentChat),
 		isLoadingEarlierMessages,
 		loadEarlierMessages,
 		messages: displayMessages,
@@ -854,300 +917,30 @@ const useChatPageController = ({
 	};
 };
 
-// react-doctor-disable-next-line react-doctor/no-giant-component -- page-level orchestrator coordinates chat search, history, composer, and summary surfaces around one controller.
-export function ChatPage({
-	chatId,
-	pluginPrefill,
-	onChatPersisted,
-	chats,
-	notes,
-	isChatsLoading,
-	activeStreamingChatIds,
-	activeChatId,
-	onOpenChat,
-	onChatRemoved,
-	isDesktopMac,
+function ChatPageComposer({
+	controller,
 	onOpenConnectionsSettings,
-	onCreateNoteFromResponse,
-	automations,
-	onAddAutomation,
-}: ChatPageProps) {
-	const controller = useChatPageController({
-		// The controller hook owns route/chat synchronization for this chat id.
-		chatId,
-		pluginPrefill,
-		// The controller must call the latest parent persistence callback after submit.
-		onChatPersisted,
-		onOpenChat,
-		// Query results are inputs to render and stream reconciliation.
-		chats,
-		notes,
-		// Loading state is query-derived and controls render fallback only.
-		isChatsLoading,
-		// Parent stream registry is an external source consumed by the controller hook.
-		activeStreamingChatIds,
-	});
-	const historyViewportRef = React.useRef<HTMLDivElement | null>(null);
-	const searchInputRef = React.useRef<HTMLInputElement | null>(null);
-	const [messageSearch, dispatchMessageSearch] = React.useReducer(
-		messageSearchReducer,
-		{ open: false, query: "", index: 0 },
-	);
-	const handleCreateNoteFromResponse = React.useCallback(
-		(message: UIMessage) => {
-			if (!onCreateNoteFromResponse) {
-				return undefined;
-			}
-
-			const title =
-				controller.currentChatTitle.trim() ||
-				getLatestUserMessageText(controller.messages) ||
-				"New note";
-
-			return onCreateNoteFromResponse({
-				chatId,
-				content: getChatText(message),
-				messageId: message.id,
-				title,
-			});
-		},
-		[
-			chatId,
-			controller.currentChatTitle,
-			controller.messages,
-			onCreateNoteFromResponse,
-		],
-	);
-	// Active chat surface visibility is pure render derivation from route state.
-	const shouldShowActiveChatSurface =
-		// Active chat surface visibility is pure render derivation from route state.
-		controller.hasMessages || activeChatId === chatId;
-	const canSearchMessages =
-		shouldShowActiveChatSurface && controller.hasMessages;
-	const queuedFollowUps =
-		activeChatId === chatId ? controller.queuedFollowUps : [];
-	const messageSearchMatches = React.useMemo(
-		() => getChatSearchMatches(controller.messages, messageSearch.query),
-		[controller.messages, messageSearch.query],
-	);
-	const messageSearchIndex =
-		messageSearchMatches.length > 0
-			? Math.min(messageSearch.index, messageSearchMatches.length - 1)
-			: 0;
-	const activeMessageSearchMatch =
-		messageSearchMatches.length > 0
-			? messageSearchMatches[messageSearchIndex]
-			: null;
-	const viewportRef = React.useCallback((node: HTMLDivElement | null) => {
-		historyViewportRef.current = node;
-	}, []);
-	// Summary availability is pure route derivation for rendering and shortcuts.
-	const canShowChatSummary = activeChatId === chatId;
-	const automationChatIds = React.useMemo(
-		() => new Set((automations ?? []).map((automation) => automation.chatId)),
-		[automations],
-	);
-	const chatHistoryStreamingChatIds = React.useMemo(() => {
-		const ids = new Set(controller.activeStreamingChatIds);
-
-		if (controller.isLoading && controller.hasMessages) {
-			ids.add(chatId);
-		}
-
-		return ids;
-	}, [
-		chatId,
-		controller.activeStreamingChatIds,
-		controller.hasMessages,
-		controller.isLoading,
-	]);
-	const currentAutomation = React.useMemo(
-		() =>
-			(automations ?? []).find((automation) => automation.chatId === chatId) ??
-			null,
-		[automations, chatId],
-	);
-	React.useEffect(() => {
-		const handleOpenSummary = () => {
-			if (!canShowChatSummary) {
-				return;
-			}
-
-			controller.setSummaryOpen((current) => !current);
-		};
-
-		window.addEventListener(OPEN_CHAT_SUMMARY_EVENT, handleOpenSummary);
-
-		return () => {
-			window.removeEventListener(OPEN_CHAT_SUMMARY_EVENT, handleOpenSummary);
-		};
-	}, [canShowChatSummary, controller.setSummaryOpen]);
-	React.useEffect(() => {
-		if (!canShowChatSummary) {
-			// Closing follows route availability; no local event owns inactive-route cleanup.
-			controller.setSummaryOpen(false);
-		}
-	}, [canShowChatSummary, controller.setSummaryOpen]);
-	React.useLayoutEffect(() => {
-		if (shouldShowActiveChatSurface) {
-			return;
-		}
-
-		historyViewportRef.current?.scrollTo?.({
-			top: 0,
-			behavior: "auto",
-		});
-	}, [shouldShowActiveChatSurface]);
-	React.useEffect(() => {
-		if (!canSearchMessages) {
-			dispatchMessageSearch({ type: "close" });
-		}
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [canSearchMessages]);
-	React.useEffect(() => {
-		if (!messageSearch.open) {
-			return;
-		}
-
-		requestAnimationFrame(() => {
-			searchInputRef.current?.focus();
-			searchInputRef.current?.select();
-		});
-	}, [messageSearch.open]);
-	React.useEffect(() => {
-		const highlightApi = getCssHighlightApi();
-		if (!highlightApi) {
-			return;
-		}
-
-		const { Highlight: HighlightConstructor, registry: highlightRegistry } =
-			highlightApi;
-		if (!messageSearch.open || !messageSearch.query.trim()) {
-			highlightRegistry.delete(CHAT_SEARCH_MATCH_HIGHLIGHT);
-			highlightRegistry.delete(CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT);
-			return;
-		}
-
-		ensureCssHighlightStyles();
-
-		const matchRanges: Range[] = [];
-		const activeMatchRanges: Range[] = [];
-
-		for (const match of messageSearchMatches) {
-			const messageElement = document.querySelector<HTMLElement>(
-				`[data-chat-message-id="${CSS.escape(match.messageId)}"]`,
-			);
-
-			if (!messageElement) {
-				continue;
-			}
-
-			const ranges = createTextMatchRanges({
-				element: messageElement,
-				query: messageSearch.query,
-			});
-
-			if (match.messageId === activeMessageSearchMatch?.messageId) {
-				activeMatchRanges.push(...ranges);
-				continue;
-			}
-
-			matchRanges.push(...ranges);
-		}
-
-		highlightRegistry.set(
-			CHAT_SEARCH_MATCH_HIGHLIGHT,
-			new HighlightConstructor(...matchRanges),
-		);
-		highlightRegistry.set(
-			CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT,
-			new HighlightConstructor(...activeMatchRanges),
-		);
-
-		return () => {
-			highlightRegistry.delete(CHAT_SEARCH_MATCH_HIGHLIGHT);
-			highlightRegistry.delete(CHAT_SEARCH_ACTIVE_MATCH_HIGHLIGHT);
-		};
-	}, [
-		activeMessageSearchMatch,
-		messageSearchMatches,
-		messageSearch.open,
-		messageSearch.query,
-	]);
-	React.useEffect(() => {
-		if (!canSearchMessages || !isDesktopRuntime()) {
-			return;
-		}
-
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (
-				event.defaultPrevented ||
-				!(event.metaKey || event.ctrlKey) ||
-				event.altKey ||
-				event.shiftKey ||
-				(event.key.toLowerCase() !== "f" && event.code !== "KeyF")
-			) {
-				return;
-			}
-
-			event.preventDefault();
-			if (messageSearch.open) {
-				requestAnimationFrame(() => {
-					searchInputRef.current?.focus();
-					searchInputRef.current?.select();
-				});
-			}
-			dispatchMessageSearch({ type: "open" });
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [canSearchMessages, messageSearch.open]);
-	const handleMessageSearchPrevious = React.useCallback(() => {
-		dispatchMessageSearch({
-			type: "setIndex",
-			index:
-				messageSearchMatches.length === 0
-					? 0
-					: (messageSearchIndex - 1 + messageSearchMatches.length) %
-						messageSearchMatches.length,
-		});
-	}, [messageSearchIndex, messageSearchMatches.length]);
-	const handleMessageSearchNext = React.useCallback(() => {
-		dispatchMessageSearch({
-			type: "setIndex",
-			index:
-				messageSearchMatches.length === 0
-					? 0
-					: (messageSearchIndex + 1) % messageSearchMatches.length,
-		});
-	}, [messageSearchIndex, messageSearchMatches.length]);
-	const handleMessageSearchKeyDown = React.useCallback(
-		(event: React.KeyboardEvent<HTMLInputElement>) => {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				dispatchMessageSearch({ type: "close" });
-				return;
-			}
-
-			if (event.key !== "Enter") {
-				return;
-			}
-
-			event.preventDefault();
-			if (event.shiftKey) {
-				handleMessageSearchPrevious();
-				return;
-			}
-
-			handleMessageSearchNext();
-		},
-		[handleMessageSearchNext, handleMessageSearchPrevious],
-	);
-	const composer = (
+	queuedFollowUps,
+	useCompactLayout,
+}: {
+	controller: ReturnType<typeof useChatPageController>;
+	onOpenConnectionsSettings: () => void;
+	queuedFollowUps: ReturnType<typeof useChatPageController>["queuedFollowUps"];
+	useCompactLayout: boolean;
+}) {
+	return (
 		<ChatComposer
-			useCompactLayout={shouldShowActiveChatSurface}
+			activity={{
+				humanDecision: controller.isHumanDecisionSubmitting
+					? "submitting"
+					: "idle",
+				queuedFollowUps: controller.isResumingQueuedFollowUps
+					? "resuming"
+					: "idle",
+				settings: controller.selectedModel === null ? "loading" : "ready",
+				turn: controller.canStop ? "active" : "idle",
+			}}
+			useCompactLayout={useCompactLayout}
 			draft={controller.draft}
 			placeholder={resolveWorkspaceChatComposerPlaceholder({
 				chatMode: controller.chatMode,
@@ -1155,13 +948,10 @@ export function ChatPage({
 				hasStoredChat: controller.hasStoredChat,
 			})}
 			humanDecision={controller.pendingHumanDecision}
-			isHumanDecisionSubmitting={controller.isHumanDecisionSubmitting}
-			isSettingsLoading={controller.selectedModel === null}
 			onHumanDecisionResponse={controller.onHumanDecisionResponse}
 			queuedFollowUps={queuedFollowUps}
 			onQueuedFollowUpsReorder={controller.onQueuedFollowUpsReorder}
 			onQueuedFollowUpsResume={controller.onQueuedFollowUpsResume}
-			isResumingQueuedFollowUps={controller.isResumingQueuedFollowUps}
 			onDraftChange={controller.setDraft}
 			onDraftKeyDown={controller.handleDraftKeyDown}
 			mentions={controller.mentions}
@@ -1169,8 +959,6 @@ export function ChatPage({
 			onStop={controller.handleStop}
 			attachedFiles={controller.attachedFiles}
 			onAttachedFilesChange={controller.setAttachedFiles}
-			attachmentsDisabled={controller.canStop}
-			canStop={controller.canStop}
 			selectedModel={controller.selectedModel}
 			reasoningEffort={controller.reasoningEffort}
 			serviceTier={controller.serviceTier}
@@ -1206,6 +994,105 @@ export function ChatPage({
 			}
 		/>
 	);
+}
+
+// react-doctor-disable-next-line react-doctor/no-giant-component -- page-level orchestrator coordinates chat search, history, composer, and summary surfaces around one controller.
+export function ChatPage({
+	chatId,
+	pluginPrefill,
+	onChatPersisted,
+	chats,
+	notes,
+	isChatsLoading,
+	activeStreamingChatIds,
+	activeChatId,
+	onOpenChat,
+	onChatRemoved,
+	isDesktopMac,
+	onOpenConnectionsSettings,
+	onCreateNoteFromResponse,
+	automations,
+	onAddAutomation,
+}: ChatPageProps) {
+	const controller = useChatPageController({
+		// The controller hook owns route/chat synchronization for this chat id.
+		chatId,
+		pluginPrefill,
+		// The controller must call the latest parent persistence callback after submit.
+		onChatPersisted,
+		onOpenChat,
+		// Query results are inputs to render and stream reconciliation.
+		chats,
+		notes,
+		// Loading state is query-derived and controls render fallback only.
+		isChatsLoading,
+		// Parent stream registry is an external source consumed by the controller hook.
+		activeStreamingChatIds,
+	});
+	const historyViewportRef = React.useRef<HTMLDivElement | null>(null);
+	const handleCreateNoteFromResponse = useCreateNoteFromChatResponse({
+		chatId,
+		currentChatTitle: controller.currentChatTitle,
+		messages: controller.messages,
+		onCreateNoteFromResponse,
+	});
+	// Active chat surface visibility is pure render derivation from route state.
+	const shouldShowActiveChatSurface =
+		// Active chat surface visibility is pure render derivation from route state.
+		controller.hasMessages || activeChatId === chatId;
+	const canSearchMessages =
+		shouldShowActiveChatSurface && controller.hasMessages;
+	const queuedFollowUps =
+		activeChatId === chatId ? controller.queuedFollowUps : [];
+	const messageSearch = useChatMessageSearch({
+		canSearch: canSearchMessages,
+		messages: controller.messages,
+	});
+	const viewportRef = React.useCallback((node: HTMLDivElement | null) => {
+		historyViewportRef.current = node;
+	}, []);
+	// Summary availability is pure route derivation for rendering and shortcuts.
+	const canShowChatSummary = activeChatId === chatId;
+	const automationChatIds = React.useMemo(
+		() => new Set((automations ?? []).map((automation) => automation.chatId)),
+		[automations],
+	);
+	const chatHistoryStreamingChatIds = React.useMemo(() => {
+		const ids = new Set(controller.activeStreamingChatIds);
+
+		if (controller.isLoading && controller.hasMessages) {
+			ids.add(chatId);
+		}
+
+		return ids;
+	}, [
+		chatId,
+		controller.activeStreamingChatIds,
+		controller.hasMessages,
+		controller.isLoading,
+	]);
+	const currentAutomation = React.useMemo(
+		() =>
+			(automations ?? []).find((automation) => automation.chatId === chatId) ??
+			null,
+		[automations, chatId],
+	);
+	useChatSummaryOpenSync({
+		canShow: canShowChatSummary,
+		setOpen: controller.setSummaryOpen,
+	});
+	useResetChatHistoryScroll({
+		active: shouldShowActiveChatSurface,
+		viewportRef: historyViewportRef,
+	});
+	const composer = (
+		<ChatPageComposer
+			controller={controller}
+			onOpenConnectionsSettings={onOpenConnectionsSettings}
+			queuedFollowUps={queuedFollowUps}
+			useCompactLayout={shouldShowActiveChatSurface}
+		/>
+	);
 	const scrollContent = (
 		<div className="box-border flex min-h-full w-full max-w-full min-w-0 flex-1 justify-center px-4 md:px-6">
 			<div
@@ -1216,26 +1103,7 @@ export function ChatPage({
 			>
 				{shouldShowActiveChatSurface ? (
 					<div className="relative mx-auto flex w-full min-w-0 max-w-full flex-1 flex-col md:max-w-xl">
-						{messageSearch.open ? (
-							<ChatMessageSearchBar
-								inputRef={searchInputRef}
-								query={messageSearch.query}
-								onQueryChange={(value) => {
-									dispatchMessageSearch({
-										type: "setQuery",
-										query: value,
-									});
-								}}
-								matchCount={messageSearchMatches.length}
-								matchIndex={
-									messageSearchMatches.length > 0 ? messageSearchIndex : -1
-								}
-								onPrevious={handleMessageSearchPrevious}
-								onNext={handleMessageSearchNext}
-								onClose={() => dispatchMessageSearch({ type: "close" })}
-								onKeyDown={handleMessageSearchKeyDown}
-							/>
-						) : null}
+						<ChatMessageSearchBarEntry search={messageSearch} />
 						<div className="flex-1 pt-8 pb-28 md:pb-32">
 							<ChatMessagesEntry
 								compactionActivity={controller.compactionActivity}
@@ -1315,8 +1183,8 @@ export function ChatPage({
 				<MessageScrollerProvider autoScroll>
 					<ChatMessageSearchNavigator
 						scrollerId={
-							messageSearch.open
-								? (activeMessageSearchMatch?.scrollerId ?? null)
+							messageSearch.state.open
+								? (messageSearch.activeMatch?.scrollerId ?? null)
 								: null
 						}
 					/>
@@ -1351,91 +1219,5 @@ export function ChatPage({
 				/>
 			) : null}
 		</>
-	);
-}
-
-function ChatMessageSearchBar({
-	inputRef,
-	query,
-	onQueryChange,
-	matchCount,
-	matchIndex,
-	onPrevious,
-	onNext,
-	onClose,
-	onKeyDown,
-}: {
-	inputRef: React.RefObject<HTMLInputElement | null>;
-	query: string;
-	onQueryChange: (query: string) => void;
-	matchCount: number;
-	matchIndex: number;
-	onPrevious: () => void;
-	onNext: () => void;
-	onClose: () => void;
-	onKeyDown: React.KeyboardEventHandler<HTMLInputElement>;
-}) {
-	const matchLabel =
-		query.trim().length === 0
-			? ""
-			: matchCount > 0
-				? `${matchIndex + 1}/${matchCount}`
-				: "No results";
-
-	return (
-		<div className="fixed top-20 right-4 left-4 z-50 mx-auto flex max-w-md items-center gap-1 rounded-lg border border-border/60 bg-background/95 p-1.5 shadow-lg backdrop-blur md:right-8 md:left-auto md:w-80">
-			<Search className="ml-1 size-4 shrink-0 text-muted-foreground" />
-			<Input
-				ref={inputRef}
-				value={query}
-				onChange={(event) => onQueryChange(event.target.value)}
-				onKeyDown={onKeyDown}
-				placeholder="Search chat"
-				aria-label="Search chat"
-				className="h-7 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
-			/>
-			<span
-				className={cn(
-					"min-w-14 shrink-0 text-right text-xs tabular-nums",
-					matchCount === 0 && query.trim().length > 0
-						? "text-muted-foreground"
-						: "text-foreground/70",
-				)}
-			>
-				{matchLabel}
-			</span>
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon-sm"
-				className="size-7"
-				disabled={matchCount === 0}
-				aria-label="Previous match"
-				onClick={onPrevious}
-			>
-				<ChevronUp className="size-4" />
-			</Button>
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon-sm"
-				className="size-7"
-				disabled={matchCount === 0}
-				aria-label="Next match"
-				onClick={onNext}
-			>
-				<ChevronDown className="size-4" />
-			</Button>
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon-sm"
-				className="size-7"
-				aria-label="Close chat search"
-				onClick={onClose}
-			>
-				<X className="size-4" />
-			</Button>
-		</div>
 	);
 }

@@ -57,6 +57,12 @@ function ActiveOptionComposer({
 		<ConvexProvider client={convexClient}>
 			<TooltipProvider>
 				<ChatComposer
+					activity={{
+						humanDecision: "idle",
+						queuedFollowUps: "idle",
+						settings: isSettingsLoading ? "loading" : "ready",
+						turn: "idle",
+					}}
 					useCompactLayout={false}
 					draft={draft}
 					placeholder={
@@ -71,7 +77,6 @@ function ActiveOptionComposer({
 					onStop={vi.fn()}
 					attachedFiles={attachedFiles}
 					onAttachedFilesChange={setAttachedFiles}
-					canStop={false}
 					selectedModel={null}
 					reasoningEffort="medium"
 					serviceTier="auto"
@@ -104,9 +109,6 @@ function ActiveOptionComposer({
 					appSources={[]}
 					onOpenConnectionsSettings={vi.fn()}
 					humanDecision={humanDecision}
-					isHumanDecisionSubmitting={false}
-					isSettingsLoading={isSettingsLoading}
-					isResumingQueuedFollowUps={false}
 					onHumanDecisionResponse={vi.fn()}
 					onQueuedFollowUpsResume={vi.fn()}
 				/>

@@ -259,6 +259,55 @@ const navigateTo = (pathname: string) => {
 	window.dispatchEvent(new PopStateEvent("popstate"));
 };
 
+function SettingsPageContent({
+	activePage,
+	canDeleteData,
+	onClose,
+	onTryPlugin,
+	user,
+	workspace,
+}: {
+	activePage: SettingsPage;
+	canDeleteData: boolean;
+	onClose: () => void;
+	onTryPlugin: SettingsDialogProps["onTryPlugin"];
+	user: SettingsUser;
+	workspace: SettingsDialogProps["workspace"];
+}) {
+	switch (activePage) {
+		case "Profile":
+			return (
+				<ManageAccountForm user={user} onCancel={onClose} onSave={onClose} />
+			);
+		case "Appearance":
+			return <AppearanceSettings />;
+		case "Voice":
+			return <VoiceSettings />;
+		case "Preferences":
+			return <PreferencesSettings />;
+		case "Notifications":
+			return <NotificationsSettings />;
+		case "Workspace":
+			return (
+				<WorkspaceSettings
+					workspace={workspace}
+					onCancel={onClose}
+					onSave={onClose}
+				/>
+			);
+		case "Calendar":
+			return <CalendarSettings />;
+		case "Plugins":
+			return (
+				<ConnectionsSettings onClose={onClose} onTryPlugin={onTryPlugin} />
+			);
+		case "Data controls":
+			return (
+				<DataControlsSettings canDeleteData={canDeleteData} onClose={onClose} />
+			);
+	}
+}
+
 export function SettingsDialog({
 	open,
 	onOpenChange,
@@ -276,6 +325,7 @@ export function SettingsDialog({
 	const isDesktopApp = isDesktopRuntime();
 	const activePage = selectedPage ?? initialPage;
 	const navItems = getSettingsNav(isDesktopApp);
+	const handleClose = () => onOpenChange(false);
 
 	const handlePageSelect = (page: SettingsPage) => {
 		setSelectedPage(page);
@@ -366,39 +416,14 @@ export function SettingsDialog({
 							className="flex flex-1"
 							viewportClassName="flex flex-col gap-4 p-4 pt-0"
 						>
-							{activePage === "Profile" ? (
-								<ManageAccountForm
-									user={user}
-									onCancel={() => onOpenChange(false)}
-									onSave={() => onOpenChange(false)}
-								/>
-							) : activePage === "Appearance" ? (
-								<AppearanceSettings />
-							) : activePage === "Voice" ? (
-								<VoiceSettings />
-							) : activePage === "Preferences" ? (
-								<PreferencesSettings />
-							) : activePage === "Notifications" ? (
-								<NotificationsSettings />
-							) : activePage === "Workspace" ? (
-								<WorkspaceSettings
-									workspace={workspace}
-									onCancel={() => onOpenChange(false)}
-									onSave={() => onOpenChange(false)}
-								/>
-							) : activePage === "Calendar" ? (
-								<CalendarSettings />
-							) : activePage === "Plugins" ? (
-								<ConnectionsSettings
-									onClose={() => onOpenChange(false)}
-									onTryPlugin={onTryPlugin}
-								/>
-							) : activePage === "Data controls" ? (
-								<DataControlsSettings
-									canDeleteData={Boolean(session?.user)}
-									onClose={() => onOpenChange(false)}
-								/>
-							) : null}
+							<SettingsPageContent
+								activePage={activePage}
+								canDeleteData={Boolean(session?.user)}
+								onClose={handleClose}
+								onTryPlugin={onTryPlugin}
+								user={user}
+								workspace={workspace}
+							/>
 						</ScrollArea>
 					</main>
 				</SidebarProvider>
@@ -2117,6 +2142,63 @@ function DataControlAction({
 	);
 }
 
+const getProfileFormChanges = ({
+	formState,
+	user,
+	userPreferences,
+}: {
+	formState: ProfileFormState;
+	user: SettingsUser;
+	userPreferences: UserPreferencesState | null | undefined;
+}) => {
+	const trimmedName = formState.name.trim();
+	const trimmedJobTitle = formState.jobTitle.trim();
+	const trimmedCompanyName = formState.companyName.trim();
+	const hasAuthChanges = trimmedName !== user.name.trim();
+	const hasPreferenceChanges =
+		trimmedJobTitle !== (userPreferences?.jobTitle ?? "").trim() ||
+		trimmedCompanyName !== (userPreferences?.companyName ?? "").trim() ||
+		formState.avatarStorageId !== (userPreferences?.avatarStorageId ?? null);
+	return {
+		hasAuthChanges,
+		hasChanges: hasAuthChanges || hasPreferenceChanges,
+		hasPreferenceChanges,
+		trimmedCompanyName,
+		trimmedJobTitle,
+		trimmedName,
+	};
+};
+
+const uploadProfileAvatar = async ({
+	file,
+	generateUploadUrl,
+}: {
+	file: File;
+	generateUploadUrl: () => Promise<string>;
+}) => {
+	if (!file.type.startsWith("image/")) {
+		throw new Error("Please choose an image file");
+	}
+	if (file.size > MAX_PROFILE_AVATAR_FILE_SIZE_BYTES) {
+		throw new Error("Profile avatar must be 5MB or smaller");
+	}
+
+	const uploadUrl = await generateUploadUrl();
+	const response = await fetch(uploadUrl, {
+		method: "POST",
+		headers: { "Content-Type": file.type || "application/octet-stream" },
+		body: file,
+	});
+	if (!response.ok) {
+		throw new Error("Failed to upload profile avatar.");
+	}
+	const result = (await response.json()) as { storageId?: Id<"_storage"> };
+	if (!result.storageId) {
+		throw new Error("Profile avatar upload did not return a storage id.");
+	}
+	return result.storageId;
+};
+
 function useManageAccountFormElement({
 	user,
 	onCancel,
@@ -2170,18 +2252,14 @@ function useManageAccountFormElement({
 
 	useResetStateWhenValueChanges(profileFormSource, resetProfileFormState);
 
-	const trimmedName = formState.name.trim();
-	const trimmedJobTitle = formState.jobTitle.trim();
-	const trimmedCompanyName = formState.companyName.trim();
-	const currentJobTitle = userPreferences?.jobTitle ?? "";
-	const currentCompanyName = userPreferences?.companyName ?? "";
-	const currentAvatarStorageId = userPreferences?.avatarStorageId ?? null;
-	const hasAuthChanges = trimmedName !== user.name.trim();
-	const hasPreferenceChanges =
-		trimmedJobTitle !== currentJobTitle.trim() ||
-		trimmedCompanyName !== currentCompanyName.trim() ||
-		formState.avatarStorageId !== currentAvatarStorageId;
-	const hasChanges = hasAuthChanges || hasPreferenceChanges;
+	const {
+		hasAuthChanges,
+		hasChanges,
+		hasPreferenceChanges,
+		trimmedCompanyName,
+		trimmedJobTitle,
+		trimmedName,
+	} = getProfileFormChanges({ formState, user, userPreferences });
 
 	const initials = getInitials(formState.name, user.email);
 	const avatarSrc = getAvatarSrc({
@@ -2208,38 +2286,12 @@ function useManageAccountFormElement({
 	};
 
 	const handleAvatarUpload = async (file: File) => {
-		if (!file.type.startsWith("image/")) {
-			toast.error("Please choose an image file");
-			return;
-		}
-
-		if (file.size > MAX_PROFILE_AVATAR_FILE_SIZE_BYTES) {
-			toast.error("Profile avatar must be 5MB or smaller");
-			return;
-		}
-
 		setIsUploadingAvatar(true);
-
 		try {
-			const uploadUrl = await generateAvatarUploadUrl();
-			const response = await fetch(uploadUrl, {
-				method: "POST",
-				headers: {
-					"Content-Type": file.type || "application/octet-stream",
-				},
-				body: file,
+			const avatarStorageId = await uploadProfileAvatar({
+				file,
+				generateUploadUrl: generateAvatarUploadUrl,
 			});
-
-			if (!response.ok) {
-				throw new Error("Failed to upload profile avatar.");
-			}
-
-			const result = (await response.json()) as { storageId?: Id<"_storage"> };
-			if (!result.storageId) {
-				throw new Error("Profile avatar upload did not return a storage id.");
-			}
-			const avatarStorageId = result.storageId;
-
 			setAvatarPreviewFile(file);
 			setFormState((current) => ({
 				...current,
@@ -2256,6 +2308,41 @@ function useManageAccountFormElement({
 			);
 		} finally {
 			setIsUploadingAvatar(false);
+		}
+	};
+	const handleSave = async () => {
+		if (
+			!trimmedName ||
+			isSavingPreferences ||
+			isUploadingAvatar ||
+			!hasChanges
+		) {
+			return;
+		}
+		setIsSavingPreferences(true);
+		try {
+			if (hasAuthChanges) {
+				const { error } = await authClient.updateUser({ name: trimmedName });
+				if (error) throw new Error(error.message);
+			}
+			if (hasPreferenceChanges) {
+				await updateUserPreferences({
+					jobTitle: trimmedJobTitle || null,
+					companyName: trimmedCompanyName || null,
+					avatarStorageId: formState.avatarStorageId,
+				});
+			}
+			toast.success("Profile updated");
+			onSave();
+		} catch (error) {
+			logError({
+				event: "client.error",
+				error,
+				message: "Failed to update profile",
+			});
+			toast.error(getToastErrorMessage(error, "Failed to update profile"));
+		} finally {
+			setIsSavingPreferences(false);
 		}
 	};
 
@@ -2384,52 +2471,7 @@ function useManageAccountFormElement({
 					Cancel
 				</Button>
 				<Button
-					onClick={async () => {
-						if (
-							!trimmedName ||
-							isSavingPreferences ||
-							isUploadingAvatar ||
-							!hasChanges
-						) {
-							return;
-						}
-
-						setIsSavingPreferences(true);
-
-						try {
-							if (hasAuthChanges) {
-								const { error } = await authClient.updateUser({
-									name: trimmedName,
-								});
-
-								if (error) {
-									throw new Error(error.message);
-								}
-							}
-
-							if (hasPreferenceChanges) {
-								await updateUserPreferences({
-									jobTitle: trimmedJobTitle || null,
-									companyName: trimmedCompanyName || null,
-									avatarStorageId: formState.avatarStorageId,
-								});
-							}
-
-							toast.success("Profile updated");
-							onSave();
-						} catch (error) {
-							logError({
-								event: "client.error",
-								error: error,
-								message: "Failed to update profile",
-							});
-							toast.error(
-								getToastErrorMessage(error, "Failed to update profile"),
-							);
-						} finally {
-							setIsSavingPreferences(false);
-						}
-					}}
+					onClick={() => void handleSave()}
 					disabled={
 						!trimmedName ||
 						!hasChanges ||

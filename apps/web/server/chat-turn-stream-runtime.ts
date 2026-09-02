@@ -130,15 +130,17 @@ export const interruptHostedChatRun = async ({
 		const acceptedMessageIds = new Set(
 			boundary.steerAcceptances.map((acceptance) => acceptance.messageId),
 		);
+		const acceptedConsumed: typeof boundary.consumed = [];
+		for (const batch of boundary.consumed) {
+			const input = batch.input.filter((message) =>
+				acceptedMessageIds.has(message.id),
+			);
+			if (input.length > 0) {
+				acceptedConsumed.push({ ...batch, input });
+			}
+		}
 		const acceptedBoundary = {
-			consumed: boundary.consumed
-				.map((batch) => ({
-					...batch,
-					input: batch.input.filter((message) =>
-						acceptedMessageIds.has(message.id),
-					),
-				}))
-				.filter((batch) => batch.input.length > 0),
+			consumed: acceptedConsumed,
 			pending: boundary.pending.filter((message) =>
 				acceptedMessageIds.has(message.id),
 			),
@@ -163,23 +165,30 @@ export const interruptHostedChatRun = async ({
 				...acceptedBoundary,
 				responseMessage,
 			});
-			const assistantMessages = transcript
-				.filter((message) => message.role === "assistant")
-				.map((message) => ({
+			const assistantMessages: ReturnType<typeof toHostedStoredMessage>[] = [];
+			for (const message of transcript) {
+				if (message.role !== "assistant") {
+					continue;
+				}
+				const assistantMessage = {
 					...toHostedStoredMessage(message),
 					createdAt: boundary.preparedAt,
-				}))
-				.filter((message) => message.text.trim().length > 0);
+				};
+				if (assistantMessage.text.trim().length > 0) {
+					assistantMessages.push(assistantMessage);
+				}
+			}
 			const assistantMessageIds = new Set(
 				assistantMessages.map((message) => message.id),
 			);
+			const orderedMessageIds: string[] = [];
+			for (const message of transcript) {
+				if (message.role === "user" || assistantMessageIds.has(message.id)) {
+					orderedMessageIds.push(message.id);
+				}
+			}
 			steeredGenerationBoundary = {
-				orderedMessageIds: transcript
-					.filter(
-						(message) =>
-							message.role === "user" || assistantMessageIds.has(message.id),
-					)
-					.map((message) => message.id),
+				orderedMessageIds,
 				steerAcceptances: boundary.steerAcceptances,
 				assistantMessages,
 			};
