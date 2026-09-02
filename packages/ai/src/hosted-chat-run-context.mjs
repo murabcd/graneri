@@ -1,7 +1,7 @@
 import { buildChatAutomationContext } from "./automation-tools.mjs";
 import { CHAT_MODE } from "./chat-mode.mjs";
-import { buildCoreChatToolPolicy } from "./chat-tool-policy.mjs";
 import { buildConvexWorkspaceToolSet } from "./convex-workspace-tools.mjs";
+import { buildCoreChatTools } from "./core-chat-tools.mjs";
 import { buildHostedChatRunPlan } from "./hosted-chat-run-plan.mjs";
 import {
 	getHostedChatRecipeContext,
@@ -36,7 +36,6 @@ export const buildHostedChatRunContext = async ({
 	getUserProfileContext,
 	localCapabilitySession = null,
 	logLatency,
-	message,
 	noteContext,
 	noteId,
 	providerOptions,
@@ -93,12 +92,11 @@ export const buildHostedChatRunContext = async ({
 		localFolderCount: localFolderRoots.length,
 	});
 
-	const coreToolPolicy = buildCoreChatToolPolicy({
+	const coreTools = buildCoreChatTools({
 		artifactAuthoringApi,
 		chatAttachmentsApi,
 		chatId,
 		convexClient,
-		message,
 		webSearchEnabled,
 		workspaceId,
 	});
@@ -132,7 +130,7 @@ export const buildHostedChatRunContext = async ({
 			userProfileContext,
 		},
 		chatMode,
-		coreToolPolicy,
+		coreTools,
 		getActiveStreamSession,
 		localFolderContext,
 		localFolderTools:
@@ -153,7 +151,6 @@ export const buildHostedChatRunContext = async ({
 
 	return {
 		...runPlan,
-		coreToolPolicyState: coreToolPolicy.state,
 		localFolderRoots,
 		appConnections,
 	};

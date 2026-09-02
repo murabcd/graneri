@@ -11,6 +11,11 @@ export type AiToolDefinition<TInput = unknown> = {
 	toAITool(): ToolSet[string];
 };
 
+export type AiToolNamespace = {
+	description: string;
+	name: string;
+};
+
 export declare function defineAiTool<TInput, TOutput extends object>(args: {
 	deferLoading?: boolean;
 	description: string;
@@ -20,6 +25,7 @@ export declare function defineAiTool<TInput, TOutput extends object>(args: {
 	): Promise<TOutput> | TOutput;
 	inputSchema: z.ZodType<TInput>;
 	name: string;
+	namespace?: AiToolNamespace;
 	policy: AiToolPolicy;
 	toModelOutput?: Tool<TInput, TOutput>["toModelOutput"];
 	ui: AiToolUi;

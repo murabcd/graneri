@@ -1,5 +1,5 @@
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
-import type { PrepareStepFunction, ToolLoopAgent, ToolSet } from "ai";
+import type { ToolLoopAgent, ToolSet } from "ai";
 import type { ChatMode } from "./chat-mode.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 
@@ -11,14 +11,7 @@ export type HostedChatRunPlanContext = {
 	userProfileContext?: unknown;
 };
 
-export type HostedChatRunPlanCoreToolPolicy = {
-	enabledTools: ToolSet;
-	instruction: string;
-	prepareStep?: PrepareStepFunction<ToolSet> | undefined;
-};
-
 export type HostedChatRunPlanAutomationContext = {
-	instruction: string;
 	tools: ToolSet;
 };
 
@@ -28,7 +21,7 @@ export declare const buildHostedChatRunPlan: (args: {
 	automationContext: HostedChatRunPlanAutomationContext;
 	chatMode?: ChatMode;
 	context: HostedChatRunPlanContext;
-	coreToolPolicy: HostedChatRunPlanCoreToolPolicy;
+	coreTools: ToolSet;
 	emptyToolsWhenNone?: boolean;
 	getActiveStreamSession?: (() => HostedActiveStreamSession | null) | undefined;
 	localFolderContext?: string;

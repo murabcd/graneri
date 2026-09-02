@@ -86,11 +86,6 @@ describe("hosted chat run context", () => {
 			getUserProfileContext: async () => ({ name: "Murad" }),
 			localCapabilitySession: { id: "folder-1", label: "Project" },
 			logLatency: (stage) => latencyStages.push(stage),
-			message: {
-				id: "message-1",
-				role: "user",
-				parts: [{ type: "text", text: "Use the project" }],
-			},
 			noteId: "note-1",
 			selectedSourceIds: ["source-1"],
 			workspaceId: "workspace-1",
@@ -100,23 +95,19 @@ describe("hosted chat run context", () => {
 			{ id: "folder-1", name: "Project" },
 		]);
 		expect(context.appConnections).toHaveLength(0);
-		expect(context.coreToolPolicyState).toEqual({
-			artifactAuthoringEnabled: false,
-			artifactAuthoringRequested: false,
-			chartGenerationRequested: false,
-			imageGenerationEnabled: false,
-			imageGenerationRequested: false,
-			webSearchEnabled: false,
-		});
 		expect(context.finalizedToolSet.hasTools).toBe(true);
+		expect(context.finalizedToolSet.hasToolSearch).toBe(true);
 		expect(context.agentTools).not.toHaveProperty("request_user_input");
 		expect(context.agentTools?.wait_agent?.execute).toEqual(
 			expect.any(Function),
 		);
 		expect(Object.keys(context.tools)).toEqual(
 			expect.arrayContaining([
+				"author_artifact",
 				"create_automation",
 				"delete_automation",
+				"generate_chart",
+				"generate_image",
 				"get_automation",
 				"list_automations",
 				"pause_automation",
@@ -129,6 +120,7 @@ describe("hosted chat run context", () => {
 		expect(context.instructions).toContain("stored note");
 		expect(context.instructions).toContain("Earlier context.");
 		expect(context.instructions).toContain("Project");
+		expect(context.instructions).not.toContain("# Documents");
 		expect(automations).toEqual([]);
 		expect(latencyStages).toEqual([
 			"context.sources_loaded",
@@ -156,11 +148,6 @@ describe("hosted chat run context", () => {
 			compactionSummary: null,
 			localCapabilitySession: { id: "folder-1", label: "Project" },
 			logLatency: () => {},
-			message: {
-				id: "message-1",
-				role: "user",
-				parts: [{ type: "text", text: "Read the project" }],
-			},
 			workspaceId: "workspace-1",
 		});
 
@@ -206,11 +193,6 @@ describe("hosted chat run context", () => {
 			getStoredNoteContext: async () => "",
 			getUserProfileContext: async () => null,
 			logLatency: () => {},
-			message: {
-				id: "message-1",
-				role: "user",
-				parts: [{ type: "text", text: "Use Google Calendar" }],
-			},
 			selectedSourceIds: ["app:google-calendar"],
 			workspaceId: "workspace-1",
 		});
@@ -296,10 +278,13 @@ describe("chat automation tools", () => {
 			"run_automation_now",
 			"update_automation",
 		]);
-		expect(context.instruction).toContain(
-			"Broad local windows such as morning, afternoon, or evening are sufficient",
+		for (const automationTool of Object.values(context.tools)) {
+			expect(automationTool.providerOptions?.openai?.deferLoading).toBe(true);
+			expect(automationTool.description).toBeTruthy();
+		}
+		expect(context.tools.create_automation.description).toContain(
+			"failed_runs_only",
 		);
-		expect(context.instruction).toContain("failed_runs_only");
 	});
 
 	it("creates one-time monitoring automations with an explicit destination", async () => {

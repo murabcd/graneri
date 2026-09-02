@@ -18,7 +18,7 @@ const remoteMcpToolDefinitionSchema = z
 	.object({
 		name: z.string().min(1),
 		title: z.string().optional(),
-		description: z.string().optional(),
+		description: z.string().trim().min(1),
 		inputSchema: z
 			.object({
 				properties: z.record(z.string(), z.json()).optional(),

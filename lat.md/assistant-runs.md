@@ -29,6 +29,21 @@ tool-loop setup, message persistence payloads, and active-stream persistence
 behavior; the hosted web route provides Convex reads and writes, request
 transport, and desktop-local tool declarations through small adapter callbacks.
 
+## Tool discovery
+
+Tool availability is derived from runtime executability, authorization, connected capability scope, and explicit chat settings rather than user-message keyword classification.
+
+Graneri-owned implicit tools declare a non-empty model-facing description,
+bounded parameter schema, authority policy, and OpenAI deferred-loading metadata.
+Connected capabilities additionally use provider namespaces from the canonical
+capability registry. Both hosted-web and durable Convex producers assemble every
+eligible tool before generation and add OpenAI Tool Search whenever any deferred
+tool is present; the model decides which deferred definition to load and whether
+to call it. Graneri does not force artifact, image, chart, automation, or
+connected-app calls from prompt text. Explicit Web mode remains an immediate
+provider tool, while Plan-mode and run-control tools remain immediate protocol
+controls supplied only by their owning runtime state.
+
 ## Run preparation
 
 One route-facing interface owns follow-up coupling, branch resolution, context compaction, final message tails, and validation.
@@ -270,7 +285,7 @@ wins.
 Sanitized jobs and generation fencing make approvals, continuation, action retries, cleanup, and chat retirement durable and safe.
 
 `assistantRunJobs` retains only the sanitized model input, top-level AI SDK
-instructions, and tool-selection configuration needed to resume the same
+instructions, explicit feature settings, and connection scope needed to resume the same
 Convex producer after durable user input. Approval pauses save the assistant
 approval message and checkpoint that message into the job. Accepting the
 matching response atomically updates the checkpoint, clears the previous
@@ -627,7 +642,7 @@ Replay is server-owned: the client rebuilds request state through the
 queued-intent module with a fresh Convex token and sends
 `replayQueuedMessageId` with the row's observed `queued` or `paused` status;
 `/api/chat` must atomically reject a status mismatch, claim that exact durable row, and
-reconstruct the user message from it before branch, tool-policy, or persistence
+reconstruct the user message from it before branch, tool assembly, or persistence
 preparation. It must then atomically save the user
 message, delete the claimed queue row, consume admission, and create the next
 assistant run through `acceptQueuedUserMessageAndStartRun` in one Convex

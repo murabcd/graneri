@@ -189,11 +189,9 @@ export declare const getHostedChatRecipeContext: (
 		| undefined,
 ) => string;
 export declare const buildHostedChatRuntimeInstructions: (args: {
-	automationInstruction?: string;
 	attachedNoteContext?: string;
 	chatMode?: ChatMode;
 	compactionSummary?: string | null;
-	coreToolInstruction?: string;
 	localFolderContext?: string;
 	notesContext?: string;
 	recipeContext?: string;

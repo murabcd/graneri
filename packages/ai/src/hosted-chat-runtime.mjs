@@ -685,11 +685,9 @@ export const getHostedChatRecipeContext = (selectedRecipe) => {
 };
 
 export const buildHostedChatRuntimeInstructions = ({
-	automationInstruction = "",
 	attachedNoteContext = "",
 	chatMode = CHAT_MODE.DEFAULT,
 	compactionSummary = null,
-	coreToolInstruction = "",
 	localFolderContext = "",
 	notesContext = "",
 	recipeContext = "",
@@ -704,11 +702,7 @@ export const buildHostedChatRuntimeInstructions = ({
 		recipeContext,
 		userProfileContext: userProfileContext ?? undefined,
 		webSearchEnabled,
-	})}${chatModeInstructions ? `\n\n${chatModeInstructions}` : ""}${compactionSummary === null ? "" : `\n\n${buildChatHistoryInstructions(compactionSummary)}`}${
-		coreToolInstruction ? `\n\n${coreToolInstruction}` : ""
-	}${
-		automationInstruction ? `\n\n${automationInstruction}` : ""
-	}${localFolderContext ? `\n\n${localFolderContext}` : ""}${
+	})}${chatModeInstructions ? `\n\n${chatModeInstructions}` : ""}${compactionSummary === null ? "" : `\n\n${buildChatHistoryInstructions(compactionSummary)}`}${localFolderContext ? `\n\n${localFolderContext}` : ""}${
 		selectedAppSourceInstructions ? `\n\n${selectedAppSourceInstructions}` : ""
 	}${
 		localFolderContext

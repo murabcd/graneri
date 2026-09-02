@@ -13,7 +13,6 @@ import type { UIMessage } from "ai";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { requirePersistedNoteDocument } from "./noteDocument";
 import { createAssistantRunJob } from "./assistantRunJobState";
 import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import { createAssistantRunStream } from "./assistantRunStreamState";
@@ -22,6 +21,7 @@ import { reserveAutomationRun } from "./automationRunStateMachine";
 import { getChatContextCheckpoint } from "./chatContextCompactions";
 import type { ChatSettings } from "./chatSettingsModel";
 import { saveMessageForOwnerInternal } from "./chats";
+import { requirePersistedNoteDocument } from "./noteDocument";
 
 const MAX_CONTEXT_NOTES = 8;
 const MAX_CONTEXT_NOTE_LENGTH = 2_000;
@@ -277,9 +277,6 @@ const startAutomationAssistantRun = async (
 			}),
 			chatMode: settings.chatMode,
 			webSearchEnabled: settings.webSearchEnabled,
-			artifactAuthoringRequested: false,
-			chartGenerationRequested: false,
-			imageGenerationRequested: false,
 			appToolScope: args.automation.appsEnabled ? "selected" : "disabled",
 			shouldGenerateChatTitle: false,
 			selectedSourceIds: (args.automation.appSources ?? []).map(

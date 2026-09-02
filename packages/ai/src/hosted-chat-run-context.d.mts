@@ -1,9 +1,9 @@
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
-import type { ToolLoopAgent, ToolSet, UIMessage } from "ai";
+import type { ToolLoopAgent, ToolSet } from "ai";
 import type { AutomationActions } from "./automation-tools.mjs";
 import type { WorkspaceToolConnection } from "./capability-registry.mjs";
 import type { ChatMode } from "./chat-mode.mjs";
-import type { ArtifactAuthoringApi } from "./chat-tool-policy.mjs";
+import type { ArtifactAuthoringApi } from "./core-chat-tools.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
 import type { HostedRunPlan } from "./hosted-run-activity.mjs";
 import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
@@ -51,7 +51,6 @@ export declare const buildHostedChatRunContext: (args: {
 	getUserProfileContext: () => Promise<unknown>;
 	localCapabilitySession?: LocalCapabilitySession | null;
 	logLatency: (stage: string, details?: LogLatencyDetails) => void;
-	message?: UIMessage | null;
 	noteContext?: {
 		title?: string;
 		text?: string;
@@ -66,14 +65,6 @@ export declare const buildHostedChatRunContext: (args: {
 }) => Promise<{
 	agent: ToolLoopAgent<never, ToolSet, never>;
 	agentTools: ToolSet | undefined;
-	coreToolPolicyState: {
-		artifactAuthoringEnabled: boolean;
-		artifactAuthoringRequested: boolean;
-		chartGenerationRequested: boolean;
-		imageGenerationEnabled: boolean;
-		imageGenerationRequested: boolean;
-		webSearchEnabled: boolean;
-	};
 	enabledTools: ToolSet;
 	finalizedToolSet: {
 		tools: ToolSet;

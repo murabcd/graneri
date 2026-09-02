@@ -129,7 +129,7 @@ export type HostedChatTurnAcceptedInput = {
 
 export type HostedChatTurnPreparedPersistence = Pick<
 	ServerAssistantRunContext,
-	"chatMessages" | "coreToolPolicyState" | "instructions" | "localFolderRoots"
+	"chatMessages" | "instructions" | "localFolderRoots"
 > & {
 	assistantContinuationMessageId?: string;
 	lastUserMessage?: UIMessage;
@@ -250,7 +250,6 @@ export const acceptHostedChatTurn = async ({
 	const {
 		assistantContinuationMessageId,
 		chatMessages,
-		coreToolPolicyState,
 		instructions,
 		lastUserMessage,
 		localFolderContinuationMessage,
@@ -323,10 +322,7 @@ export const acceptHostedChatTurn = async ({
 		messagesJson: JSON.stringify(chatMessages),
 		instructions,
 		chatMode: settings.chatMode,
-		webSearchEnabled: coreToolPolicyState.webSearchEnabled,
-		artifactAuthoringRequested: coreToolPolicyState.artifactAuthoringRequested,
-		chartGenerationRequested: coreToolPolicyState.chartGenerationRequested,
-		imageGenerationRequested: coreToolPolicyState.imageGenerationRequested,
+		webSearchEnabled: settings.webSearchEnabled,
 		appToolScope: appsEnabled ? ("available" as const) : ("disabled" as const),
 		shouldGenerateChatTitle,
 		selectedSourceIds: appsEnabled ? selectedSourceIds : [],

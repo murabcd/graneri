@@ -1,40 +1,17 @@
 import { defineAiTool } from "./ai-tool-definition.mjs";
 import {
 	ARTIFACT_AUTHORING_TOOL_NAME,
+	ARTIFACT_TOOL_NAMESPACE,
 	artifactAuthoringInputSchema,
 	artifactToolOutputSchema,
 } from "./artifact-authoring-contract.mjs";
-import {
-	buildArtifactAuthoringSkillInstruction,
-	selectArtifactAuthoringSkills,
-} from "./artifact-authoring-skills.mjs";
-import { extractTextFromUIMessage } from "./local-path-references.mjs";
+import { ARTIFACT_AUTHORING_SKILL_DESCRIPTION } from "./artifact-authoring-skills.mjs";
 import { toolUiMetadata } from "./tool-ui-metadata.mjs";
 
-const artifactActionPattern =
-	/\b(add|append|build|change|convert|create|delete|draft|edit|export|format|generate|insert|make|modify|prepare|produce|remove|reorder|revise|save|turn|update|write)\b/iu;
-
-export const shouldEnableArtifactAuthoring = (message) => {
-	if (!message) {
-		return false;
-	}
-	const text = extractTextFromUIMessage(message);
-	return (
-		artifactActionPattern.test(text) &&
-		selectArtifactAuthoringSkills(message).length > 0
-	);
-};
-
-export const buildArtifactAuthoringInstruction = (message) =>
-	[
-		"Use author_artifact whenever the user asks to create or edit a DOCX, PDF, XLSX, or PPTX file.",
-		"Choose one explicit operation kind and provide complete structured content or explicit edit operations; never describe code to execute.",
-		"For an edit, copy the source filename, media type, and Graneri storage id exactly from the relevant file or earlier artifact metadata.",
-		"After author_artifact succeeds, briefly confirm completion without repeating artifact URLs or Markdown download links; the chat UI presents each returned artifact as a file card.",
-		buildArtifactAuthoringSkillInstruction(message),
-	]
-		.filter(Boolean)
-		.join("\n\n");
+const ARTIFACT_AUTHORING_TOOL_DESCRIPTION = [
+	"Create, edit, or export a downloadable DOCX, PDF, XLSX, or PPTX file only when the user explicitly asks for one of those file outputs. Do not use this for an ordinary chat answer, markdown table, visual chart, or generated image. Choose one schema operation and provide complete structured content or explicit edits; never provide code to execute. For edits, copy exact owned source metadata from the conversation. The UI presents successful outputs as file cards, so respond afterward with only a brief confirmation and no download link.",
+	ARTIFACT_AUTHORING_SKILL_DESCRIPTION,
+].join("\n\n");
 
 const artifactOutputForModel = ({ output }) => {
 	const { artifacts } = artifactToolOutputSchema.parse(output);
@@ -60,9 +37,9 @@ const artifactOutputForModel = ({ output }) => {
 export const createArtifactAuthoringTool = ({ authorArtifact }) =>
 	defineAiTool({
 		name: ARTIFACT_AUTHORING_TOOL_NAME,
-		description:
-			"Create, edit, or export validated DOCX, PDF, XLSX, and PPTX artifacts using trusted server-side authoring modules.",
+		description: ARTIFACT_AUTHORING_TOOL_DESCRIPTION,
 		inputSchema: artifactAuthoringInputSchema,
+		namespace: ARTIFACT_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "not_required",

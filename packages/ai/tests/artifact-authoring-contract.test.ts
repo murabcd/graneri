@@ -3,124 +3,19 @@ import {
 	artifactAuthoringInputSchema,
 	parseArtifactToolOutput,
 } from "../src/artifact-authoring-contract.mjs";
-import { selectArtifactAuthoringSkills } from "../src/artifact-authoring-skills.mjs";
-import {
-	buildArtifactAuthoringInstruction,
-	createArtifactAuthoringTool,
-	shouldEnableArtifactAuthoring,
-} from "../src/artifact-authoring-tool.mjs";
-import { buildCoreChatToolPolicy } from "../src/chat-tool-policy.mjs";
+import { ARTIFACT_AUTHORING_SKILL_DESCRIPTION } from "../src/artifact-authoring-skills.mjs";
+import { createArtifactAuthoringTool } from "../src/artifact-authoring-tool.mjs";
 
 describe("artifact authoring contract", () => {
-	it("detects file-first edit wording and office attachments", () => {
-		expect(
-			shouldEnableArtifactAuthoring({
-				id: "message-1",
-				role: "user",
-				parts: [{ type: "text", text: "In this DOCX, add a final line" }],
-			}),
-		).toBe(true);
-		expect(
-			shouldEnableArtifactAuthoring({
-				id: "message-2",
-				role: "user",
-				parts: [
-					{ type: "text", text: "Add a final line" },
-					{
-						type: "file",
-						filename: "report.docx",
-						mediaType:
-							"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-						url: "https://files.example/report.docx",
-					},
-				],
-			}),
-		).toBe(true);
-		expect(
-			shouldEnableArtifactAuthoring({
-				id: "message-3",
-				role: "user",
-				parts: [{ type: "text", text: "Write a launch brief as a DOCX" }],
-			}),
-		).toBe(true);
+	it("injects every canonical format skill into the deferred tool description", () => {
+		const description = ARTIFACT_AUTHORING_SKILL_DESCRIPTION;
+
+		expect(description).toContain("# Documents");
+		expect(description).toContain("# Spreadsheets");
+		expect(description).toContain("# Presentations");
+		expect(description).toContain("# PDF");
 	});
 
-	it("loads only the format skills relevant to the current artifact request", () => {
-		expect(
-			selectArtifactAuthoringSkills({
-				id: "message-1",
-				role: "user",
-				parts: [
-					{
-						type: "text",
-						text: "Convert this DOCX to PDF and keep the original DOCX too",
-					},
-				],
-			}),
-		).toEqual(["documents", "pdf"]);
-
-		expect(
-			selectArtifactAuthoringSkills({
-				id: "message-2",
-				role: "user",
-				parts: [
-					{ type: "text", text: "Add the new quarterly totals" },
-					{
-						type: "file",
-						filename: "forecast.xlsx",
-						mediaType:
-							"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-						url: "https://files.example/forecast.xlsx",
-					},
-				],
-			}),
-		).toEqual(["spreadsheets"]);
-	});
-
-	it("adds progressive format guidance without loading unrelated skills", () => {
-		const instruction = buildArtifactAuthoringInstruction({
-			id: "message-1",
-			role: "user",
-			parts: [
-				{
-					type: "text",
-					text: "Create a concise PowerPoint launch presentation",
-				},
-			],
-		});
-
-		expect(instruction).toContain("# Presentations");
-		expect(instruction).toContain("presentation_create");
-		expect(instruction).not.toContain("# Documents");
-		expect(instruction).not.toContain("# Spreadsheets");
-		expect(instruction).not.toContain("# PDF");
-	});
-
-	it("routes the selected skill through the executable chat tool policy", () => {
-		const policy = buildCoreChatToolPolicy({
-			artifactAuthoringApi: { author: {} },
-			chatAttachmentsApi: {},
-			chatId: "chat-1",
-			convexClient: {},
-			message: {
-				id: "message-1",
-				role: "user",
-				parts: [
-					{
-						type: "text",
-						text: "Add a comparison slide to this PPTX",
-					},
-				],
-			},
-			webSearchEnabled: false,
-			workspaceId: "workspace-1",
-		});
-
-		expect(policy.state.artifactAuthoringEnabled).toBe(true);
-		expect(policy.enabledTools).toHaveProperty("author_artifact");
-		expect(policy.instruction).toContain("# Presentations");
-		expect(policy.instruction).not.toContain("# Spreadsheets");
-	});
 	it("normalizes a bounded document request at the model boundary", () => {
 		expect(
 			artifactAuthoringInputSchema.parse({
@@ -296,29 +191,5 @@ describe("artifact authoring contract", () => {
 		expect(modelOutput.value).not.toContain(
 			"https://files.example/report.docx",
 		);
-	});
-
-	it("enables creation and editing language without matching ordinary chat", () => {
-		expect(
-			shouldEnableArtifactAuthoring({
-				id: "message-1",
-				role: "user",
-				parts: [{ type: "text", text: "Add a new row to this Excel file" }],
-			}),
-		).toBe(true);
-		expect(
-			shouldEnableArtifactAuthoring({
-				id: "message-2",
-				role: "user",
-				parts: [{ type: "text", text: "Tell me about spreadsheets" }],
-			}),
-		).toBe(false);
-		expect(
-			shouldEnableArtifactAuthoring({
-				id: "message-3",
-				role: "user",
-				parts: [{ type: "text", text: "Create a file for me" }],
-			}),
-		).toBe(false);
 	});
 });

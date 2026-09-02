@@ -8,7 +8,7 @@ export const buildHostedChatRunPlan = ({
 	automationContext,
 	chatMode = CHAT_MODE.DEFAULT,
 	context,
-	coreToolPolicy,
+	coreTools,
 	emptyToolsWhenNone = false,
 	getActiveStreamSession,
 	localFolderContext = "",
@@ -26,13 +26,11 @@ export const buildHostedChatRunPlan = ({
 		userProfileContext: context.userProfileContext ?? undefined,
 		chatMode,
 		webSearchEnabled,
-		coreToolInstruction: coreToolPolicy.instruction,
-		automationInstruction: automationContext.instruction,
 		localFolderContext,
 		selectedAppSourceInstructions,
 	});
 	const enabledTools = {
-		...coreToolPolicy.enabledTools,
+		...coreTools,
 		...automationContext.tools,
 		...appTools,
 		...localFolderTools,
@@ -44,7 +42,6 @@ export const buildHostedChatRunPlan = ({
 		getActiveStreamSession,
 		instructions,
 		model,
-		prepareStep: coreToolPolicy.prepareStep,
 		providerOptions,
 	});
 

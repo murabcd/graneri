@@ -408,7 +408,6 @@ export const executeHostedChatTurn = async ({
 				client.query(api.userPreferences.getAiProfileContext, {}),
 			localCapabilitySession,
 			logLatency,
-			message: effectiveMessage,
 			noteContext,
 			noteId: model.noteId,
 			providerOptions: model.providerOptions,
@@ -494,7 +493,6 @@ export const executeHostedChatTurn = async ({
 				? effectiveMessage.id
 				: undefined,
 			chatMessages: assistantRun.chatMessages,
-			coreToolPolicyState: assistantRun.coreToolPolicyState,
 			finalizedToolSet: assistantRun.finalizedToolSet,
 			instructions: assistantRun.instructions,
 			lastUserMessage,

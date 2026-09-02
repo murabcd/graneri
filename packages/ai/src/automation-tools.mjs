@@ -3,6 +3,12 @@ import { defineAiTool } from "./ai-tool-definition.mjs";
 import { automationAppSourceProviders } from "./capability-metadata.mjs";
 import { toolUiMetadata } from "./tool-ui-metadata.mjs";
 
+const AUTOMATION_TOOL_NAMESPACE = Object.freeze({
+	name: "automations",
+	description:
+		"Create scheduled work and manage existing Graneri automations only when the user asks for automatic, recurring, or later execution.",
+});
+
 const automationScheduleSchema = z.discriminatedUnion("kind", [
 	z.object({
 		kind: z.literal("once"),
@@ -161,20 +167,6 @@ export const createAutomationMutationInputNormalizer = ({
 		toAutomationUpdateMutationInput(automation, toAutomationId, toNoteId),
 });
 
-export const buildAutomationCreationInstruction = ({ now, timezone }) =>
-	[
-		"When the user asks to create, schedule, run, watch, check, summarize, remind, or report on something automatically once or on a recurring cadence, use the create_automation tool.",
-		"When the user asks to list, inspect, edit, update, pause, resume, run now, or delete existing automations, use the matching automation management tool.",
-		"Do not merely explain how to manage automations when the user's wording is an instruction to do it.",
-		"Only delete an automation when the current user message explicitly asks to delete, remove, or disable it permanently. The delete_automation tool first asks for confirmation; call it with confirmed true only after the user confirms deletion.",
-		`Current time for scheduling: ${new Date(now).toISOString()}. User timezone: ${timezone}.`,
-		"For a one-time task, provide an exact epoch-millisecond instant. For recurring work, provide a local startsAt value, an IANA timezone, and an RFC 5545 RRULE without DTSTART. Broad local windows such as morning, afternoon, or evening are sufficient: choose a reasonable local start time and make it visible in the created schedule. Ask one focused clarification question only when the intended date, timezone, recurrence, or time window is still ambiguous.",
-		"Automations cannot run more often than once per hour.",
-		"For monitoring requests, use meaningful_change delivery so routine checks stay quiet, and include a stop condition when the user says when monitoring should end.",
-		"Use failed_runs_only delivery when the user asks to be notified only when the scheduled task fails.",
-		"Use the user's requested task as the automation prompt, omitting the scheduling phrase. Keep titles short and specific.",
-	].join("\n");
-
 export const createAutomationTool = ({
 	appSources,
 	chatId,
@@ -186,12 +178,19 @@ export const createAutomationTool = ({
 	webSearchEnabled,
 }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "create_automation",
-		description:
-			"Create a one-time or recurring Graneri automation from the current chat. Use this when the user asks for a task to run automatically on a schedule.",
+		description: [
+			"Create a one-time or recurring Graneri automation only when the user asks for work to happen automatically, later, on a schedule, or as ongoing monitoring. Do not use this for work requested in the current response.",
+			`Current time: ${new Date().toISOString()}. User timezone: ${defaultTimezone}.`,
+			"For a one-time task, use an exact epoch-millisecond instant. For recurring work, use a local startsAt value, an IANA timezone, and an RFC 5545 RRULE without DTSTART; runs cannot be more frequent than hourly. A broad window such as morning may be resolved to a reasonable visible local time, but ask when the date, timezone, recurrence, or time window remains ambiguous.",
+			"Use meaningful_change for monitoring that should stay quiet without a material change, failed_runs_only when only failures should notify, and copy any requested end condition into stopCondition. Keep the title short and the prompt self-contained without the scheduling phrase.",
+		].join(" "),
 		inputSchema: z.object({
-			title: z.string().min(1).max(80),
+			title: z
+				.string()
+				.min(1)
+				.max(80)
+				.describe("Short, specific automation title."),
 			prompt: z
 				.string()
 				.min(1)
@@ -225,6 +224,7 @@ export const createAutomationTool = ({
 					`Optional selected connected app source ids to attach to the automation. Omit to use the chat's selected app sources. ${getAvailableAppSourceDescription(appSources)}`,
 				),
 		}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "required",
@@ -271,11 +271,11 @@ export const createAutomationTool = ({
 
 const createListAutomationsTool = ({ listAutomations }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "list_automations",
 		description:
 			"List the user's automations in the current workspace. Use this before updating, pausing, resuming, running, or deleting when the target automation is ambiguous.",
 		inputSchema: z.object({}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "read",
 			approval: "not_required",
@@ -288,13 +288,13 @@ const createListAutomationsTool = ({ listAutomations }) =>
 
 const createGetAutomationTool = ({ getAutomation }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "get_automation",
 		description:
-			"Get one automation by id before editing it or when the user asks for its details.",
+			"Get the full configuration and state of one existing Graneri automation by id. Use this when the user asks for its details or before editing it; list automations first when the id is unknown.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
 		}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "read",
 			approval: "not_required",
@@ -319,10 +319,9 @@ const createUpdateAutomationTool = ({
 	updateAutomation,
 }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "update_automation",
 		description:
-			"Update an existing Graneri automation. Omitted fields keep their current values.",
+			"Update the title, task prompt, schedule, delivery policy, stop condition, or app sources of an existing Graneri automation. Use only when the user asks to change an automation; omitted fields keep their current values. List or get the automation first when its id or current configuration is unknown.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
 			title: z.string().min(1).max(80).optional(),
@@ -339,6 +338,7 @@ const createUpdateAutomationTool = ({
 					`Optional replacement connected app source ids. Omit to keep current app sources. ${getAvailableAppSourceDescription(appSources)}`,
 				),
 		}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "required",
@@ -395,12 +395,13 @@ const createUpdateAutomationTool = ({
 
 const createPauseAutomationTool = ({ getAutomation, togglePaused }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "pause_automation",
-		description: "Pause an active automation by id.",
+		description:
+			"Pause an existing active Graneri automation so future scheduled runs stop until it is resumed. Use only when the user asks to pause or temporarily disable it; list automations first when its id is unknown.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
 		}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "required",
@@ -423,12 +424,13 @@ const createPauseAutomationTool = ({ getAutomation, togglePaused }) =>
 
 const createResumeAutomationTool = ({ getAutomation, togglePaused }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "resume_automation",
-		description: "Resume a paused automation by id.",
+		description:
+			"Resume a paused Graneri automation so its scheduled runs continue. Use only when the user asks to resume or reactivate it; list automations first when its id is unknown.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
 		}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "required",
@@ -451,12 +453,13 @@ const createResumeAutomationTool = ({ getAutomation, togglePaused }) =>
 
 const createRunAutomationNowTool = ({ runAutomationNow }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "run_automation_now",
-		description: "Start an automation manual run now by id.",
+		description:
+			"Start one immediate manual run of an existing Graneri automation without changing its schedule. Use only when the user explicitly asks to run that automation now; list automations first when its id is unknown.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
 		}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "required",
@@ -470,13 +473,13 @@ const createRunAutomationNowTool = ({ runAutomationNow }) =>
 
 const createDeleteAutomationTool = ({ deleteAutomation }) =>
 	defineAiTool({
-		deferLoading: false,
 		name: "delete_automation",
 		description:
-			"Delete an automation by id. Only use when the current user message explicitly asks to delete, remove, or permanently disable that automation.",
+			"Permanently delete an existing Graneri automation by id. Use only when the current user message explicitly asks to delete, remove, or permanently disable that automation; use pause_automation for temporary disabling. List automations first when its id is unknown.",
 		inputSchema: z.object({
 			automationId: automationIdSchema,
 		}),
+		namespace: AUTOMATION_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "required",
@@ -506,7 +509,6 @@ export const buildChatAutomationContext = ({
 }) => {
 	if (!chatId || !automationActions?.createAutomation) {
 		return {
-			instruction: "",
 			tools: {},
 		};
 	}
@@ -514,10 +516,6 @@ export const buildChatAutomationContext = ({
 	const appSources = normalizeAutomationAppSources(appConnections);
 
 	return {
-		instruction: buildAutomationCreationInstruction({
-			now: Date.now(),
-			timezone: defaultTimezone,
-		}),
 		tools: {
 			create_automation: createAutomationTool({
 				appSources,

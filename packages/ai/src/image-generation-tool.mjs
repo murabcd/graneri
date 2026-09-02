@@ -2,8 +2,10 @@ import { openai } from "@ai-sdk/openai";
 import { generateImage } from "ai";
 import { z } from "zod";
 import { defineAiTool } from "./ai-tool-definition.mjs";
-import { artifactSourceSchema } from "./artifact-authoring-contract.mjs";
-import { extractTextFromUIMessage } from "./local-path-references.mjs";
+import {
+	ARTIFACT_TOOL_NAMESPACE,
+	artifactSourceSchema,
+} from "./artifact-authoring-contract.mjs";
 import { toolUiMetadata } from "./tool-ui-metadata.mjs";
 
 const IMAGE_GENERATION_MODEL_ID = "gpt-image-2";
@@ -64,28 +66,6 @@ const createGeneratedImageFilename = () =>
 
 const toBlobPart = (bytes) =>
 	bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-
-export const buildImageGenerationInstruction = () =>
-	"When the user asks you to create or edit an image, use generate_image. For an edit, copy the source filename, media type, and Graneri storage id exactly from the relevant image metadata. Each result is saved as a new immutable PNG artifact; briefly confirm the result without embedding it in markdown.";
-
-const imageActionPattern =
-	/\b(add|change|create|crop|draw|edit|enhance|erase|generate|make|modify|recolor|remove|replace|resize|render|retouch|transform|update|upscale)\b/iu;
-const imageTargetPattern =
-	/\b(background|image|picture|photo|illustration|art|graphic|logo|avatar)\b/iu;
-
-export const shouldEnableImageGeneration = (message) => {
-	if (!message) {
-		return false;
-	}
-	const text = extractTextFromUIMessage(message);
-	return (
-		imageActionPattern.test(text) &&
-		(imageTargetPattern.test(text) ||
-			message.parts.some(
-				(part) => part.type === "file" && part.mediaType.startsWith("image/"),
-			))
-	);
-};
 
 export const createConvexGeneratedImageUploader =
 	({ chatAttachmentsApi, client }) =>
@@ -205,8 +185,9 @@ export const createImageGenerationTool = ({
 	defineAiTool({
 		name: "generate_image",
 		description:
-			"Create or edit an image artifact. For edits, pass the exact source image metadata and describe the requested change.",
+			"Create a new image or edit an existing image only when the user explicitly requests visual generation or modification. Do not use this to inspect, describe, compare, or extract information from images. Edits require exact owned source metadata from the conversation, and every result is saved as a new immutable PNG artifact.",
 		inputSchema: imageGenerationInputSchema,
+		namespace: ARTIFACT_TOOL_NAMESPACE,
 		policy: {
 			access: "write",
 			approval: "not_required",

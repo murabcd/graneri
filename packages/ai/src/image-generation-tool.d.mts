@@ -1,4 +1,4 @@
-import type { Tool, UIMessage } from "ai";
+import type { Tool } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
 import type { FunctionReference } from "convex/server";
 import type { GenericId } from "convex/values";
@@ -46,12 +46,6 @@ type GeneratedImageArtifact = {
 	sizeBytes: number;
 	url: string;
 };
-
-export declare const buildImageGenerationInstruction: () => string;
-
-export declare const shouldEnableImageGeneration: (
-	message: UIMessage | undefined,
-) => boolean;
 
 export declare const createConvexGeneratedImageUploader: (
 	args: ConvexGeneratedImageUploaderArgs,

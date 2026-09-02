@@ -138,11 +138,6 @@ export declare function createAutomationMutationInputNormalizer<
 	) => AutomationUpdateMutationInput<AutomationId, NoteId>;
 };
 
-export declare function buildAutomationCreationInstruction(args: {
-	now: number;
-	timezone: string;
-}): string;
-
 export declare function createAutomationTool(args: {
 	appSources: AutomationAppSource[];
 	chatId: string;
@@ -164,7 +159,6 @@ export declare function buildChatAutomationContext(args: {
 	defaultTimezone: string;
 	webSearchEnabled: boolean;
 }): {
-	instruction: string;
 	tools: ToolSet;
 };
 

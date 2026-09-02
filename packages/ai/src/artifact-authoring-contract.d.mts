@@ -1,6 +1,10 @@
 import type { z } from "zod";
 
 export declare const ARTIFACT_AUTHORING_TOOL_NAME = "author_artifact";
+export declare const ARTIFACT_TOOL_NAMESPACE: Readonly<{
+	name: "artifact_creation";
+	description: string;
+}>;
 
 export declare const ARTIFACT_MEDIA_TYPES: Readonly<{
 	docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

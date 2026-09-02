@@ -6,19 +6,19 @@ Artifact authoring turns one assistant tool operation into one or more immutable
 
 `author_artifact` is the only model-facing tool for DOCX, PDF, XLSX, and PPTX creation, editing, and DOCX-to-PDF export.
 
-[artifact-authoring-contract.mjs](../packages/ai/src/artifact-authoring-contract.mjs) owns its bounded discriminated input, canonical MIME types, source references, and multi-output result. [artifact-authoring-tool.mjs](../packages/ai/src/artifact-authoring-tool.mjs) owns request detection and the shared instruction that requires structured content or explicit edit operations instead of generated code. [artifact-authoring-skills.mjs](../packages/ai/src/artifact-authoring-skills.mjs) selects only the format guidance relevant to the current user message and its file attachments.
+[artifact-authoring-contract.mjs](../packages/ai/src/artifact-authoring-contract.mjs) owns its bounded discriminated input, canonical MIME types, source references, multi-output result, and shared artifact-discovery namespace. [artifact-authoring-tool.mjs](../packages/ai/src/artifact-authoring-tool.mjs) owns the model-facing tool description and requires structured content or explicit edit operations instead of generated code.
 
 One call may return multiple final artifacts when they represent the same authoring operation, such as a DOCX plus its PDF export. Each artifact is shown and downloaded independently; download never performs a conversion. Uploaded files and previous assistant artifacts use the same Convex storage id reference. Every edit writes a new output and never mutates the source bytes.
 
-## Progressive authoring skills
+## Deferred tool discovery
 
-Documents, spreadsheets, presentations, and PDFs each have one Graneri-owned skill that contributes only the format guidance relevant to the current authoring request.
+Artifact creation tools are available when their runtime dependencies are executable, but remain deferred until OpenAI Tool Search selects them.
 
-The `SKILL.md` files under `packages/ai/skills` are the canonical authoring guidance. They describe format-specific planning, supported editing semantics, content-density decisions, and output limitations without owning execution or validation. The current message and supported attachment MIME types select the relevant skills in stable order; unrelated format guidance is not placed in the run instructions.
+The `SKILL.md` files under `packages/ai/skills` remain the canonical format-specific authoring guidance. `generate-artifact-authoring-skills.mjs` compiles them into the server-safe registry checked by `check:artifact-skills`.
 
-`generate-artifact-authoring-skills.mjs` compiles those Markdown sources into the server-safe `artifact-authoring-skills.generated.mjs` registry because hosted runs cannot depend on runtime filesystem discovery. `check:artifact-skills` rejects a stale generated registry. This is a bounded artifact-authoring layer, not a generic installable skill or code-execution platform, and there is no legacy generic format prompt beside it.
+Graneri does not inspect user-message wording to enable artifact tools, select format guidance, inject artifact instructions into the global run prompt, or force a first-step tool call. `author_artifact`, `generate_image`, and `generate_chart` expose precise positive and negative selection guidance through their model-facing descriptions, share the `artifact_creation` namespace, and declare their bounded parameter schemas. The deferred `author_artifact` description includes all four compiled format skills, so the detailed guidance enters model context only with that tool definition and needs no prompt classifier. OpenAI Tool Search decides whether to load an artifact tool. Explicit Web mode remains an immediate provider tool and is not part of this namespace.
 
-The common instruction, selected skill guidance, typed operation schema, and format worker modules form one contract. Skills may choose and populate supported operations, but they cannot expand the schema, run model-written code, bypass validation, expose intermediate files, or publish an output directly.
+The tool description, typed operation schema, and format worker modules form one contract. Tool selection cannot expand the schema, run model-written code, bypass validation, expose intermediate files, or publish an output directly.
 
 ## Durable ownership and execution
 

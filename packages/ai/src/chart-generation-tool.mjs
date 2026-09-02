@@ -1,29 +1,9 @@
 import { z } from "zod";
 import { defineAiTool } from "./ai-tool-definition.mjs";
-import { extractTextFromUIMessage } from "./local-path-references.mjs";
+import { ARTIFACT_TOOL_NAMESPACE } from "./artifact-authoring-contract.mjs";
 import { toolUiMetadata } from "./tool-ui-metadata.mjs";
 
 export const CHART_GENERATION_TOOL_NAME = "generate_chart";
-
-export const shouldEnableChartGeneration = (message) =>
-	Boolean(
-		message &&
-			/\b(chart|graph|plot|visuali[sz]e|trend|breakdown|comparison|compare|bar chart|line chart|area chart|pie chart)\b/iu.test(
-				extractTextFromUIMessage(message),
-			),
-	);
-
-export const buildChartGenerationPrepareStep =
-	() =>
-	({ stepNumber }) =>
-		stepNumber === 0
-			? {
-					toolChoice: {
-						type: "tool",
-						toolName: CHART_GENERATION_TOOL_NAME,
-					},
-				}
-			: { toolChoice: "auto" };
 
 const chartDataValueSchema = z.union([z.string(), z.number()]);
 const chartKeySchema = z
@@ -219,17 +199,6 @@ const chartSpecSchema = z.preprocess(
 
 export const parseChartSpecInput = (value) => chartSpecSchema.parse(value);
 
-export const buildChartGenerationInstruction = () =>
-	[
-		"When the user asks for a chart, graph, trend, breakdown, comparison, or visualization, use the generate_chart tool.",
-		"Do not answer chart requests with Mermaid, markdown code fences, ASCII charts, or raw JSON.",
-		"Use rows shaped like { xKey: label, valueKey: number }, set xKey to the label field, set yKeys to numeric value fields, and prefer config labels over custom colors.",
-		"For pie charts, use exactly one numeric yKey such as value or count, and put each category in the xKey field.",
-		"Use only data provided by the user, available in the conversation, or clearly derived from note context.",
-		"If there is not enough data to chart, ask a concise follow-up instead of inventing values.",
-		"After using the tool, briefly summarize the chart insight in text.",
-	].join(" ");
-
 const isSafeChartColor = (color) =>
 	typeof color === "string" &&
 	(/^var\(--chart-[1-5]\)$/u.test(color) ||
@@ -255,11 +224,11 @@ const normalizeChartConfig = (spec) =>
 
 export const createChartGenerationTool = () =>
 	defineAiTool({
-		deferLoading: false,
 		name: CHART_GENERATION_TOOL_NAME,
 		description:
-			"Create a chart artifact from structured data supplied in the conversation or note context. Use this for bar, line, area, and pie charts.",
+			"Create a visual bar, line, area, or pie chart only when the user explicitly asks for a chart, graph, plot, or data visualization and sufficient numeric data is available. Do not use this for research, prose comparisons, comparison tables, or answers that merely contain numbers. Use only user-provided or retrieved data; never invent values.",
 		inputSchema: chartSpecSchema,
+		namespace: ARTIFACT_TOOL_NAMESPACE,
 		policy: {
 			access: "read",
 			approval: "not_required",

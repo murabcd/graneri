@@ -4,10 +4,7 @@ import { openai } from "@ai-sdk/openai";
 import type { ArtifactSource } from "@workspace/ai/artifact-authoring-contract";
 import { createArtifactAuthoringTool } from "@workspace/ai/artifact-authoring-tool";
 import { buildChatAutomationContext } from "@workspace/ai/automation-tools";
-import {
-	buildChartGenerationPrepareStep,
-	createChartGenerationTool,
-} from "@workspace/ai/chart-generation-tool";
+import { createChartGenerationTool } from "@workspace/ai/chart-generation-tool";
 import {
 	prepareHostedAssistantExecution,
 	startHostedAssistantExecution,
@@ -328,46 +325,40 @@ export const runStep = internalAction({
 							},
 						}),
 					}),
-					...(context.job.chartGenerationRequested && {
-						generate_chart: createChartGenerationTool(),
-					}),
-					...(context.job.imageGenerationRequested && {
-						generate_image: createImageGenerationTool({
-							resolveSourceImage: async (source: ArtifactSource) => {
-								const url = await ctx.runQuery(
-									internal.chatAttachments.getOwnedUrlInternal,
-									{
-										ownerTokenIdentifier: context.ownerTokenIdentifier,
-										workspaceId: context.workspaceId,
-										chatId: context.chatId,
-										storageId: source.storageId,
-									},
-								);
-								if (!url) {
-									throw new Error(
-										"The source image is not available in this chat.",
-									);
-								}
-								return await downloadSourceImage({ source, url });
-							},
-							uploadGeneratedImage: createAssistantRunGeneratedImageUploader({
-								requireActiveRun,
-								storage: ctx.storage,
-							}),
-						}),
-					}),
-					...(context.job.artifactAuthoringRequested && {
-						author_artifact: createArtifactAuthoringTool({
-							authorArtifact: ({ idempotencyKey, input }) =>
-								executeArtifactAuthoring(ctx, {
+					generate_chart: createChartGenerationTool(),
+					generate_image: createImageGenerationTool({
+						resolveSourceImage: async (source: ArtifactSource) => {
+							const url = await ctx.runQuery(
+								internal.chatAttachments.getOwnedUrlInternal,
+								{
 									ownerTokenIdentifier: context.ownerTokenIdentifier,
 									workspaceId: context.workspaceId,
 									chatId: context.chatId,
-									runId: args.runId,
-									idempotencyKey,
-									input,
-								}),
+									storageId: source.storageId,
+								},
+							);
+							if (!url) {
+								throw new Error(
+									"The source image is not available in this chat.",
+								);
+							}
+							return await downloadSourceImage({ source, url });
+						},
+						uploadGeneratedImage: createAssistantRunGeneratedImageUploader({
+							requireActiveRun,
+							storage: ctx.storage,
 						}),
+					}),
+					author_artifact: createArtifactAuthoringTool({
+						authorArtifact: ({ idempotencyKey, input }) =>
+							executeArtifactAuthoring(ctx, {
+								ownerTokenIdentifier: context.ownerTokenIdentifier,
+								workspaceId: context.workspaceId,
+								chatId: context.chatId,
+								runId: args.runId,
+								idempotencyKey,
+								input,
+							}),
 					}),
 					...automationContext.tools,
 					...appTools,
@@ -397,9 +388,6 @@ export const runStep = internalAction({
 				enabledTools,
 				instructions: context.job.instructions,
 				model: context.model,
-				prepareStep: context.job.chartGenerationRequested
-					? buildChartGenerationPrepareStep()
-					: undefined,
 				providerOptions: getOpenAiModelProviderOptions(context.model, {
 					reasoningEffort: context.reasoningEffort,
 					serviceTier: context.serviceTier,

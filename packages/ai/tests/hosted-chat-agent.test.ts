@@ -232,7 +232,6 @@ describe("hosted chat run plan", () => {
 				search_linear: immediateTool,
 			},
 			automationContext: {
-				instruction: "Automation instruction.",
 				tools: {
 					create_automation: immediateTool,
 				},
@@ -245,11 +244,8 @@ describe("hosted chat run plan", () => {
 				recipeContext: "Selected recipe.",
 				userProfileContext: { name: "Ada" },
 			},
-			coreToolPolicy: {
-				enabledTools: {
-					web_search: immediateTool,
-				},
-				instruction: "Core tool instruction.",
+			coreTools: {
+				web_search: immediateTool,
 			},
 			localFolderContext: "Local folder context.",
 			model: "gpt-5",
@@ -261,8 +257,6 @@ describe("hosted chat run plan", () => {
 		expect(runPlan.instructions).toContain("Current note.");
 		expect(runPlan.instructions).toContain("Earlier history.");
 		expect(runPlan.instructions).toContain("Selected recipe.");
-		expect(runPlan.instructions).toContain("Core tool instruction.");
-		expect(runPlan.instructions).toContain("Automation instruction.");
 		expect(runPlan.instructions).toContain("Local folder context.");
 		expect(runPlan.instructions).toContain("Selected app source instruction.");
 		expect(runPlan.instructions).toContain("Plan mode is active.");

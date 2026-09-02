@@ -2,6 +2,12 @@ import { z } from "zod";
 
 export const ARTIFACT_AUTHORING_TOOL_NAME = "author_artifact";
 
+export const ARTIFACT_TOOL_NAMESPACE = Object.freeze({
+	name: "artifact_creation",
+	description:
+		"Create visual charts, generated images, and downloadable Office or PDF files when the user explicitly requests those outputs.",
+});
+
 export const ARTIFACT_MEDIA_TYPES = Object.freeze({
 	docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 	pdf: "application/pdf",
