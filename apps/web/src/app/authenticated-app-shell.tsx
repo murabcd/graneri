@@ -16,7 +16,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
 import { Kbd } from "@workspace/ui/components/kbd";
@@ -1893,6 +1892,7 @@ function ChatHeaderActions({
 						type="button"
 						variant="ghost"
 						size="icon-sm"
+						className="text-muted-foreground hover:text-foreground focus-visible:text-foreground"
 						aria-label="New chat"
 						onClick={onNewChat}
 					>
@@ -1907,6 +1907,7 @@ function ChatHeaderActions({
 						type="button"
 						variant="ghost"
 						size="icon-sm"
+						className="text-muted-foreground hover:text-foreground focus-visible:text-foreground"
 						aria-label="Open summary"
 						onClick={() => {
 							window.dispatchEvent(new Event(OPEN_CHAT_SUMMARY_EVENT));
@@ -1926,7 +1927,7 @@ function ChatHeaderActions({
 								variant="ghost"
 								size="icon-sm"
 								aria-label="More actions"
-								className="text-muted-foreground hover:text-foreground"
+								className="text-muted-foreground hover:text-foreground focus-visible:text-foreground"
 							>
 								<MoreHorizontal className="size-4" />
 							</Button>
@@ -1966,9 +1967,7 @@ function ChatHeaderActions({
 						<Clock />
 						{hasAutomation ? "Edit automation" : "Add automation"}
 					</DropdownMenuItem>
-					<DropdownMenuSeparator />
 					<DropdownMenuItem
-						variant="destructive"
 						className="cursor-pointer"
 						disabled={!chatId}
 						onSelect={() => setConfirmTrashOpen(true)}
