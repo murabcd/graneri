@@ -17,17 +17,20 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@workspace/ui/components/select";
-import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
+import {
+	DEFAULT_FOLLOW_UP_BEHAVIOR,
+	FOLLOW_UP_BEHAVIOR_OPTIONS,
+	parseFollowUpBehavior,
+} from "@/lib/follow-up-behavior";
 import { logError } from "@/lib/logger";
 import {
 	DEFAULT_SEND_SHORTCUT,
 	parseSendShortcut,
 	SEND_SHORTCUT_OPTIONS,
 } from "@/lib/send-shortcut";
-import { mergeUserPreferencesForOptimisticUpdate } from "@/lib/user-preferences";
-import { api } from "../../../../../convex/_generated/api";
 import { SettingsSwitchRow } from "./settings-switch-row";
 
 type DesktopLaunchPreferenceState =
@@ -43,17 +46,9 @@ export function PreferencesSettings() {
 	const [desktopState, setDesktopState] =
 		useState<DesktopLaunchPreferenceState>(getInitialDesktopState);
 	const [isSavingSendShortcut, setIsSavingSendShortcut] = useState(false);
-	const userPreferences = useQuery(api.userPreferences.get, {});
-	const updateUserPreferences = useMutation(
-		api.userPreferences.update,
-	).withOptimisticUpdate((localStore, args) => {
-		const currentPreferences = localStore.getQuery(api.userPreferences.get, {});
-		localStore.setQuery(
-			api.userPreferences.get,
-			{},
-			mergeUserPreferencesForOptimisticUpdate(currentPreferences, args),
-		);
-	});
+	const [isSavingFollowUpBehavior, setIsSavingFollowUpBehavior] =
+		useState(false);
+	const { updateUserPreferences, userPreferences } = useUserPreferences();
 
 	useEffect(() => {
 		if (!isDesktopRuntime()) {
@@ -130,6 +125,24 @@ export function PreferencesSettings() {
 		}
 	};
 
+	const handleFollowUpBehaviorChange = async (value: string) => {
+		setIsSavingFollowUpBehavior(true);
+		try {
+			await updateUserPreferences({
+				followUpBehavior: parseFollowUpBehavior(value),
+			});
+		} catch (error) {
+			logError({
+				event: "client.error",
+				error,
+				message: "Failed to update follow-up behavior",
+			});
+			toast.error("Failed to update follow-up behavior");
+		} finally {
+			setIsSavingFollowUpBehavior(false);
+		}
+	};
+
 	if (desktopState.status === "loading") {
 		return <div className="py-4" aria-hidden="true" />;
 	}
@@ -174,6 +187,36 @@ export function PreferencesSettings() {
 						</SelectTrigger>
 						<SelectContent align="end">
 							{SEND_SHORTCUT_OPTIONS.map((option) => (
+								<SelectItem key={option.value} value={option.value}>
+									{option.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</Field>
+				<Field
+					orientation="responsive"
+					className="@md/field-group:items-center @md/field-group:has-[>[data-slot=field-content]]:items-center"
+				>
+					<FieldContent>
+						<Label>Follow-up behavior</Label>
+					</FieldContent>
+					<Select
+						value={
+							userPreferences?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR
+						}
+						onValueChange={handleFollowUpBehaviorChange}
+						disabled={userPreferences === undefined || isSavingFollowUpBehavior}
+					>
+						<SelectTrigger
+							size="sm"
+							className="w-full cursor-pointer justify-between @md/field-group:w-48"
+							aria-label="Select follow-up behavior"
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent align="end">
+							{FOLLOW_UP_BEHAVIOR_OPTIONS.map((option) => (
 								<SelectItem key={option.value} value={option.value}>
 									{option.label}
 								</SelectItem>

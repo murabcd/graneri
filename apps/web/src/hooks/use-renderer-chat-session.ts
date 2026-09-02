@@ -5,9 +5,6 @@ import type { LocalCapabilitySession } from "@workspace/ai/local-capability-sess
 import type { ChatAddToolOutputFunction, UIMessage } from "ai";
 import { useMutation } from "convex/react";
 import * as React from "react";
-// Optimistic insertion must commit before submit continues into DOM measurement.
-// react-doctor-disable-next-line react-doctor/no-flush-sync -- the interaction owner guarantees the optimistic message is visible before submit continues.
-import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import { stopActiveChatStream } from "@/lib/chat-active-stream";
@@ -30,6 +27,10 @@ import {
 	createDesktopLocalToolCallHandler,
 	executeDesktopLocalToolCall,
 } from "@/lib/desktop-local-tool-call";
+import {
+	DEFAULT_FOLLOW_UP_BEHAVIOR,
+	type FollowUpBehavior,
+} from "@/lib/follow-up-behavior";
 import { recoverPendingLocalCapabilityToolCalls } from "@/lib/local-capability-run-recovery";
 import { logError } from "@/lib/logger";
 import {
@@ -47,6 +48,7 @@ import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
 import { useQueuedReplayHandoff } from "./use-queued-replay-handoff";
 import { useRendererChatPresentation } from "./use-renderer-chat-presentation";
 import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
+import { useUserPreferences } from "./use-user-preferences";
 import { useWorkspaceChatTransport } from "./use-workspace-chat-transport";
 
 type SubmitRendererChatTurnInput = Omit<
@@ -134,6 +136,11 @@ export const useRendererChatSession = ({
 		[buildContinuationRequestBody, localCapabilitySession],
 	);
 	const attachableActiveRun = getAttachableActiveRun(activeRun);
+	const { updateUserPreferences, userPreferences } = useUserPreferences();
+	const followUpBehavior =
+		userPreferences?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR;
+	const [isUpdatingFollowUpBehavior, setIsUpdatingFollowUpBehavior] =
+		React.useState(false);
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
@@ -162,7 +169,7 @@ export const useRendererChatSession = ({
 	const [acceptedQueuedMessageId, setAcceptedQueuedMessageId] = React.useState<
 		string | null
 	>(null);
-	const manuallySendingQueuedMessageIdRef = React.useRef<string | null>(null);
+	const sendingQueuedMessageIdRef = React.useRef<string | null>(null);
 	const acceptedQueuedMessageIdsRef = React.useRef(new Set<string>());
 	const queuedReplayHandoff = useQueuedReplayHandoff({
 		activeRunId: activeRun?._id ?? null,
@@ -186,10 +193,8 @@ export const useRendererChatSession = ({
 				}
 			}
 			acceptedQueuedMessageIdsRef.current.add(acceptance.queuedMessageId);
-			if (
-				manuallySendingQueuedMessageIdRef.current === acceptance.queuedMessageId
-			) {
-				manuallySendingQueuedMessageIdRef.current = null;
+			if (sendingQueuedMessageIdRef.current === acceptance.queuedMessageId) {
+				sendingQueuedMessageIdRef.current = null;
 			}
 			setAcceptedQueuedMessageId(acceptance.queuedMessageId);
 		},
@@ -301,6 +306,24 @@ export const useRendererChatSession = ({
 		isChatRequestPending,
 		queueActiveRunId: queueActiveRun?._id ?? null,
 	});
+	const handleFollowUpBehaviorChange = React.useCallback(
+		(behavior: FollowUpBehavior) => {
+			setIsUpdatingFollowUpBehavior(true);
+			void updateUserPreferences({ followUpBehavior: behavior })
+				.catch((error) => {
+					logError({
+						event: "client.error",
+						error,
+						message: "Failed to update follow-up behavior",
+					});
+					toast.error("Failed to update follow-up behavior");
+				})
+				.finally(() => {
+					setIsUpdatingFollowUpBehavior(false);
+				});
+		},
+		[updateUserPreferences],
+	);
 	React.useEffect(() => {
 		const rollback = pendingUserQuestionRollbackRef.current;
 		if (!error || !rollback) return;
@@ -414,11 +437,14 @@ export const useRendererChatSession = ({
 		beginReplay: queuedReplayHandoff.beginReplay,
 		chatId,
 		contextLabel,
+		followUpBehavior,
 		isQueueHandoffPending: isQueueActionPending,
+		isUpdatingFollowUpBehavior,
 		latestRequestBodyRef,
 		localMessageIds,
-		manuallySendingQueuedMessageIdRef,
+		sendingQueuedMessageIdRef,
 		onEditMessage: onEditQueuedMessage,
+		onFollowUpBehaviorChange: handleFollowUpBehaviorChange,
 		onSteerStart: () => {
 			const handoffMessageIds = [
 				...(activeAssistantMessageId ? [activeAssistantMessageId] : []),
@@ -514,11 +540,9 @@ export const useRendererChatSession = ({
 							enqueueQueuedMessage,
 							onOptimisticMessage: (message) => {
 								optimisticMessageId = message.id;
-								flushSync(() => {
-									commitOptimisticMessage({ message });
-								});
+								commitOptimisticMessage({ message });
 							},
-							onQueuedMessageSaved: ({
+							onQueuedMessageSaved: async ({
 								optimisticMessageId: savedOptimisticMessageId,
 								queuedMessage,
 							}) => {
@@ -529,6 +553,14 @@ export const useRendererChatSession = ({
 											: message,
 									),
 								);
+								if (
+									followUpBehavior === "steer" &&
+									(isChatRequestPending || queueActiveRun?.status === "running")
+								) {
+									await queuedFollowUpControls.steerQueuedFollowUp(
+										queuedMessage,
+									);
+								}
 							},
 							queueActiveRun,
 							sendMessage,
@@ -548,7 +580,10 @@ export const useRendererChatSession = ({
 			commitOptimisticMessage,
 			displayActiveRun,
 			enqueueQueuedMessage,
+			followUpBehavior,
+			isChatRequestPending,
 			queueActiveRun,
+			queuedFollowUpControls.steerQueuedFollowUp,
 			rollbackOptimisticMessage,
 			runPreparedRequest,
 			runTurnAdmission,

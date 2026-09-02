@@ -17,8 +17,11 @@ const createQueuedFollowUp = (
 	isDeleting: false,
 	isEditing: false,
 	isSendingNow: false,
+	isUpdatingFollowUpBehavior: false,
+	followUpBehavior: "queue",
 	onDelete: vi.fn(),
 	onEdit: vi.fn(),
+	onFollowUpBehaviorChange: vi.fn(),
 	onSendNow: vi.fn(),
 	pauseReason: "failed",
 	statusLabel: "Paused",
@@ -68,6 +71,29 @@ describe("chat queued follow-up bar", () => {
 			})[0] as HTMLElement,
 		);
 		await user.click(screen.getByRole("menuitem", { name: "Turn off" }));
-		expect(interruptedFollowUp.onDelete).toHaveBeenCalledOnce();
+		expect(interruptedFollowUp.onDelete).not.toHaveBeenCalled();
+		expect(interruptedFollowUp.onFollowUpBehaviorChange).toHaveBeenCalledWith(
+			"steer",
+		);
+	});
+
+	it("turns queueing back on without changing the queued row", async () => {
+		const user = userEvent.setup();
+		const queuedFollowUp = createQueuedFollowUp({ followUpBehavior: "steer" });
+		render(
+			<TooltipProvider delayDuration={0}>
+				<ChatQueuedFollowUpBar queuedFollowUps={[queuedFollowUp]} />
+			</TooltipProvider>,
+		);
+
+		await user.click(
+			screen.getByRole("button", { name: "More queued message actions" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Turn on" }));
+
+		expect(queuedFollowUp.onDelete).not.toHaveBeenCalled();
+		expect(queuedFollowUp.onFollowUpBehaviorChange).toHaveBeenCalledWith(
+			"queue",
+		);
 	});
 });

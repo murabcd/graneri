@@ -1,5 +1,4 @@
 import { getCapabilitySettings } from "@workspace/ai/capability-metadata";
-import { isDesktopRuntime } from "@workspace/platform/desktop";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -116,6 +115,7 @@ import { useConnectedAppSettingsSession } from "@/components/settings/use-connec
 import { VoiceSettings } from "@/components/settings/voice-settings";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useLinkedAccounts } from "@/hooks/use-linked-accounts";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { authClient } from "@/lib/auth-client";
 import { getAvatarSrc } from "@/lib/avatar";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
@@ -128,10 +128,7 @@ import {
 	hasGoogleScope,
 } from "@/lib/google-integrations";
 import { logError } from "@/lib/logger";
-import {
-	mergeUserPreferencesForOptimisticUpdate,
-	type UserPreferencesState,
-} from "@/lib/user-preferences";
+import type { UserPreferencesState } from "@/lib/user-preferences";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
@@ -178,11 +175,6 @@ const settingsNav = [
 	{ name: "Plugins", icon: LayoutGrid },
 	{ name: "Data controls", icon: Database },
 ] as const;
-
-const getSettingsNav = (isDesktopApp: boolean) =>
-	isDesktopApp
-		? settingsNav
-		: settingsNav.filter((item) => item.name !== "Preferences");
 
 const SETTINGS_LABEL_CLASSNAME = "text-xs text-muted-foreground";
 const SETTINGS_COLLAPSIBLE_TRIGGER_CLASSNAME =
@@ -322,9 +314,7 @@ export function SettingsDialog({
 		null,
 	);
 	const { data: session } = authClient.useSession();
-	const isDesktopApp = isDesktopRuntime();
 	const activePage = selectedPage ?? initialPage;
-	const navItems = getSettingsNav(isDesktopApp);
 	const handleClose = () => onOpenChange(false);
 
 	const handlePageSelect = (page: SettingsPage) => {
@@ -354,7 +344,7 @@ export function SettingsDialog({
 							<SidebarGroup>
 								<SidebarGroupContent>
 									<SidebarMenu>
-										{navItems.map((item) => (
+										{settingsNav.map((item) => (
 											<SidebarMenuItem key={item.name}>
 												<SidebarMenuButton
 													asChild
@@ -395,7 +385,7 @@ export function SettingsDialog({
 									viewportClassName="w-full"
 								>
 									<div className="flex w-max gap-2 py-2">
-										{navItems.map((item) => (
+										{settingsNav.map((item) => (
 											<Button
 												key={item.name}
 												variant={
@@ -2208,20 +2198,10 @@ function useManageAccountFormElement({
 	onCancel: () => void;
 	onSave: () => void;
 }) {
-	const userPreferences = useQuery(api.userPreferences.get, {});
+	const { updateUserPreferences, userPreferences } = useUserPreferences();
 	const generateAvatarUploadUrl = useMutation(
 		api.userPreferences.generateAvatarUploadUrl,
 	);
-	const updateUserPreferences = useMutation(
-		api.userPreferences.update,
-	).withOptimisticUpdate((localStore, args) => {
-		const currentPreferences = localStore.getQuery(api.userPreferences.get, {});
-		localStore.setQuery(
-			api.userPreferences.get,
-			{},
-			mergeUserPreferencesForOptimisticUpdate(currentPreferences, args),
-		);
-	});
 	const [formState, setFormState] = useState<ProfileFormState>(() =>
 		getProfileFormState({
 			user,

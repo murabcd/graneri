@@ -131,7 +131,7 @@ export const submitChatTurn = async ({
 	onQueuedMessageSaved?: (args: {
 		optimisticMessageId: string;
 		queuedMessage: QueuedFollowUpMessage;
-	}) => void;
+	}) => Promise<void> | void;
 	queueActiveRun?: ActiveRun;
 	sendMessage: SendChatTurn;
 	text: string;
@@ -173,6 +173,20 @@ export const submitChatTurn = async ({
 		requestBody,
 		text,
 	});
+	const completeQueuedSubmission = async (
+		queuedMessage: QueuedFollowUpMessage,
+	): Promise<SubmitChatTurnResult> => {
+		if (currentRunAdmission.status === "current_run") {
+			currentRunAdmission.completeQueuedAdmission();
+		}
+		if (queuedMessageId && onQueuedMessageSaved) {
+			await onQueuedMessageSaved({
+				optimisticMessageId: queuedMessageId,
+				queuedMessage,
+			});
+		}
+		return { status: "queued" };
+	};
 
 	let exactActiveRunBecameStale = false;
 	if (queuedActiveRun && workspaceId) {
@@ -183,16 +197,7 @@ export const submitChatTurn = async ({
 				runId: queuedActiveRun._id,
 				message: queuedMessageInput,
 			});
-			if (currentRunAdmission.status === "current_run") {
-				currentRunAdmission.completeQueuedAdmission();
-			}
-			if (queuedMessageId && onQueuedMessageSaved) {
-				onQueuedMessageSaved({
-					optimisticMessageId: queuedMessageId,
-					queuedMessage,
-				});
-			}
-			return { status: "queued" };
+			return await completeQueuedSubmission(queuedMessage);
 		} catch (error) {
 			if (!isAssistantRunNoLongerActiveError(error)) {
 				throw error;
@@ -212,14 +217,7 @@ export const submitChatTurn = async ({
 			message: queuedMessageInput,
 		});
 		if (admission.status === "queued") {
-			currentRunAdmission.completeQueuedAdmission();
-			if (queuedMessageId && onQueuedMessageSaved) {
-				onQueuedMessageSaved({
-					optimisticMessageId: queuedMessageId,
-					queuedMessage: admission.queuedMessage,
-				});
-			}
-			return { status: "queued" };
+			return await completeQueuedSubmission(admission.queuedMessage);
 		}
 	}
 

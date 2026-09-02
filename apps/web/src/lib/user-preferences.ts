@@ -6,6 +6,10 @@ import {
 	DEFAULT_TRANSLUCENT_SIDEBAR,
 	type ReduceMotionPreference,
 } from "./appearance-preferences";
+import {
+	DEFAULT_FOLLOW_UP_BEHAVIOR,
+	type FollowUpBehavior,
+} from "./follow-up-behavior";
 
 export type UserPreferencesState = {
 	transcriptionLanguage: string | null;
@@ -14,6 +18,7 @@ export type UserPreferencesState = {
 	fontSmoothing: boolean;
 	reduceMotion: ReduceMotionPreference;
 	translucentSidebar: boolean;
+	followUpBehavior: FollowUpBehavior;
 	sendShortcut: SendShortcut;
 	avatarStorageId: Id<"_storage"> | null;
 	avatarUrl: string | null;
@@ -49,6 +54,10 @@ export function mergeUserPreferencesForOptimisticUpdate(
 				? args.translucentSidebar
 				: (currentPreferences?.translucentSidebar ??
 					DEFAULT_TRANSLUCENT_SIDEBAR),
+		followUpBehavior:
+			args.followUpBehavior !== undefined
+				? args.followUpBehavior
+				: (currentPreferences?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR),
 		sendShortcut:
 			args.sendShortcut !== undefined
 				? args.sendShortcut

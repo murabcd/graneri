@@ -31,6 +31,7 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import { CornerDownRight, Ellipsis, Pencil, Trash2 } from "lucide-react";
 import * as React from "react";
+import type { FollowUpBehavior } from "@/lib/follow-up-behavior";
 
 export type QueuedFollowUpBarItem = {
 	actionLabel: "Retry" | "Steer" | null;
@@ -40,8 +41,11 @@ export type QueuedFollowUpBarItem = {
 	isEditing: boolean;
 	isActionDisabled: boolean;
 	isSendingNow: boolean;
+	isUpdatingFollowUpBehavior: boolean;
+	followUpBehavior: FollowUpBehavior;
 	onDelete: () => void;
 	onEdit: () => void;
+	onFollowUpBehaviorChange: (behavior: FollowUpBehavior) => void;
 	onSendNow: () => void;
 	pauseReason?: "failed" | "interrupted";
 	statusLabel: "Paused" | "Queued";
@@ -249,35 +253,10 @@ function SortableQueuedFollowUpRow({
 				</p>
 			</div>
 			<div className="flex shrink-0 items-center gap-1">
-				{queuedFollowUp.actionLabel ? (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								disabled={
-									queuedFollowUp.isActionDisabled || queuedFollowUp.isSendingNow
-								}
-								onPointerDown={stopActionPointerDown}
-								onClick={queuedFollowUp.onSendNow}
-								className="inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
-							>
-								{queuedFollowUp.isSendingNow
-									? queuedFollowUp.actionLabel === "Steer"
-										? "Steering"
-										: "Retrying"
-									: queuedFollowUp.actionLabel}
-							</button>
-						</TooltipTrigger>
-						<TooltipContent>
-							{queuedFollowUp.helpText ??
-								(queuedFollowUp.isActionDisabled
-									? "Answer the pending question before steering"
-									: queuedFollowUp.actionLabel === "Steer"
-										? "Guide the active response with this message"
-										: "Send this message")}
-						</TooltipContent>
-					</Tooltip>
-				) : null}
+				<QueuedFollowUpPrimaryAction
+					queuedFollowUp={queuedFollowUp}
+					onPointerDown={stopActionPointerDown}
+				/>
 				<InputGroupButton
 					type="button"
 					variant="ghost"
@@ -290,41 +269,113 @@ function SortableQueuedFollowUpRow({
 				>
 					<Trash2 className="size-4" aria-hidden="true" />
 				</InputGroupButton>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<InputGroupButton
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							onPointerDown={stopActionPointerDown}
-							className="rounded-full text-muted-foreground"
-							aria-label="More queued message actions"
-						>
-							<Ellipsis className="size-4" aria-hidden="true" />
-						</InputGroupButton>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent
-						align="end"
-						className="w-36"
-						onPointerDown={(event) => event.stopPropagation()}
-					>
-						<DropdownMenuItem
-							disabled={queuedFollowUp.isEditing}
-							onClick={queuedFollowUp.onEdit}
-						>
-							<Pencil className="size-4" aria-hidden="true" />
-							Edit
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							disabled={queuedFollowUp.isDeleting}
-							onClick={queuedFollowUp.onDelete}
-						>
-							<CornerDownRight className="size-4" aria-hidden="true" />
-							Turn off
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				<QueuedFollowUpMenu
+					queuedFollowUp={queuedFollowUp}
+					onPointerDown={stopActionPointerDown}
+				/>
 			</div>
 		</div>
+	);
+}
+
+const getQueuedActionText = (queuedFollowUp: QueuedFollowUpBarItem) => {
+	if (!queuedFollowUp.isSendingNow) {
+		return queuedFollowUp.actionLabel;
+	}
+
+	return queuedFollowUp.actionLabel === "Steer" ? "Steering" : "Retrying";
+};
+
+const getQueuedActionHelpText = (queuedFollowUp: QueuedFollowUpBarItem) => {
+	if (queuedFollowUp.helpText) {
+		return queuedFollowUp.helpText;
+	}
+	if (queuedFollowUp.isActionDisabled) {
+		return "Answer the pending question before steering";
+	}
+
+	return queuedFollowUp.actionLabel === "Steer"
+		? "Guide the active response with this message"
+		: "Send this message";
+};
+
+function QueuedFollowUpPrimaryAction({
+	onPointerDown,
+	queuedFollowUp,
+}: {
+	onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
+	queuedFollowUp: QueuedFollowUpBarItem;
+}) {
+	if (!queuedFollowUp.actionLabel) {
+		return null;
+	}
+
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<button
+					type="button"
+					disabled={
+						queuedFollowUp.isActionDisabled || queuedFollowUp.isSendingNow
+					}
+					onPointerDown={onPointerDown}
+					onClick={queuedFollowUp.onSendNow}
+					className="inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+				>
+					{getQueuedActionText(queuedFollowUp)}
+				</button>
+			</TooltipTrigger>
+			<TooltipContent>{getQueuedActionHelpText(queuedFollowUp)}</TooltipContent>
+		</Tooltip>
+	);
+}
+
+function QueuedFollowUpMenu({
+	onPointerDown,
+	queuedFollowUp,
+}: {
+	onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
+	queuedFollowUp: QueuedFollowUpBarItem;
+}) {
+	const isQueueingEnabled = queuedFollowUp.followUpBehavior === "queue";
+	const nextFollowUpBehavior = isQueueingEnabled ? "steer" : "queue";
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<InputGroupButton
+					type="button"
+					variant="ghost"
+					size="icon-sm"
+					onPointerDown={onPointerDown}
+					className="rounded-full text-muted-foreground"
+					aria-label="More queued message actions"
+				>
+					<Ellipsis className="size-4" aria-hidden="true" />
+				</InputGroupButton>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent
+				align="end"
+				className="w-36"
+				onPointerDown={(event) => event.stopPropagation()}
+			>
+				<DropdownMenuItem
+					disabled={queuedFollowUp.isEditing}
+					onClick={queuedFollowUp.onEdit}
+				>
+					<Pencil className="size-4" aria-hidden="true" />
+					Edit
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					disabled={queuedFollowUp.isUpdatingFollowUpBehavior}
+					onClick={() =>
+						queuedFollowUp.onFollowUpBehaviorChange(nextFollowUpBehavior)
+					}
+				>
+					<CornerDownRight className="size-4" aria-hidden="true" />
+					{isQueueingEnabled ? "Turn off" : "Turn on"}
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }

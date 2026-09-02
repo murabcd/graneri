@@ -18,11 +18,12 @@ const createClient = () => {
 	return t.withIdentity(ownerIdentity);
 };
 
-test("user preferences use the default send shortcut", async () => {
+test("user preferences use the default composer behaviors", async () => {
 	const asOwner = createClient();
 
 	const preferences = await asOwner.query(api.userPreferences.get, {});
 
+	expect(preferences.followUpBehavior).toBe("queue");
 	expect(preferences.sendShortcut).toBe("enter");
 });
 
@@ -37,4 +38,17 @@ test("user preferences persist the send shortcut", async () => {
 	expect((await asOwner.query(api.userPreferences.get, {})).sendShortcut).toBe(
 		"command-enter",
 	);
+});
+
+test("user preferences persist follow-up behavior", async () => {
+	const asOwner = createClient();
+
+	const updated = await asOwner.mutation(api.userPreferences.update, {
+		followUpBehavior: "steer",
+	});
+
+	expect(updated.followUpBehavior).toBe("steer");
+	expect(
+		(await asOwner.query(api.userPreferences.get, {})).followUpBehavior,
+	).toBe("steer");
 });

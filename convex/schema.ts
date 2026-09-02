@@ -9,7 +9,6 @@ import {
 	assistantRunExecutionValidator,
 	assistantRunJobValidator,
 } from "./assistantRunJobModel";
-import { assistantRunSteerInputTableValidator } from "./assistantRunSteerInputModel";
 import {
 	assistantRunProducerValidator,
 	assistantRunStatusValidator,
@@ -19,6 +18,7 @@ import {
 	serviceTierValidator,
 	stopReasonValidator,
 } from "./assistantRunModel";
+import { assistantRunSteerInputTableValidator } from "./assistantRunSteerInputModel";
 import {
 	automationAppSourceProviderValidator,
 	automationDeliveryPolicyValidator,
@@ -143,6 +143,7 @@ export default defineSchema({
 			v.literal("off"),
 		),
 		translucentSidebar: v.boolean(),
+		followUpBehavior: v.union(v.literal("queue"), v.literal("steer")),
 		sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 		avatarStorageId: v.optional(v.id("_storage")),
 		createdAt: v.number(),

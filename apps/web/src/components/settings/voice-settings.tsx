@@ -17,9 +17,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@workspace/ui/components/select";
-import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { logError } from "@/lib/logger";
 import {
 	getTranscriptionLanguageSelectValue,
@@ -28,8 +28,6 @@ import {
 	parseTranscriptionLanguageSelectValue,
 	TRANSCRIPTION_LANGUAGE_OPTIONS,
 } from "@/lib/transcription-languages";
-import { mergeUserPreferencesForOptimisticUpdate } from "@/lib/user-preferences";
-import { api } from "../../../../../convex/_generated/api";
 import { SettingsSwitchRow } from "./settings-switch-row";
 import { useDesktopVoiceSettings } from "./use-desktop-voice-settings";
 
@@ -60,17 +58,7 @@ export function VoiceSettings() {
 	const isSavingDesktopVoicePreference = desktopVoice.savingPreference !== null;
 	const isDictationHotkeyDisabled =
 		desktopVoice.preferences?.dictationHotkeyMode === "off";
-	const userPreferences = useQuery(api.userPreferences.get, {});
-	const updateUserPreferences = useMutation(
-		api.userPreferences.update,
-	).withOptimisticUpdate((localStore, args) => {
-		const currentPreferences = localStore.getQuery(api.userPreferences.get, {});
-		localStore.setQuery(
-			api.userPreferences.get,
-			{},
-			mergeUserPreferencesForOptimisticUpdate(currentPreferences, args),
-		);
-	});
+	const { updateUserPreferences, userPreferences } = useUserPreferences();
 	const [isSaving, setIsSaving] = useState(false);
 	const transcriptionLanguageValue = getTranscriptionLanguageSelectValue(
 		userPreferences?.transcriptionLanguage,

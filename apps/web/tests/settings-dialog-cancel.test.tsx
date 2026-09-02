@@ -55,6 +55,26 @@ describe("settings dialog cancel actions", () => {
 		vi.clearAllMocks();
 	});
 
+	it("shows Preferences in web settings navigation", () => {
+		render(
+			<SettingsDialog
+				onTryPlugin={() => {}}
+				open
+				onOpenChange={() => {}}
+				user={{
+					name: "Jane Doe",
+					email: "jane@example.com",
+					avatar: "",
+				}}
+				workspace={null}
+			/>,
+		);
+
+		expect(screen.getAllByRole("button", { name: "Preferences" })).toHaveLength(
+			2,
+		);
+	});
+
 	it("resets profile edits and closes settings", () => {
 		const onOpenChange = vi.fn();
 

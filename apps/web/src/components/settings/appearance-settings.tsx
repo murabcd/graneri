@@ -13,9 +13,9 @@ import {
 	SelectTrigger,
 } from "@workspace/ui/components/select";
 import { useTheme } from "@workspace/ui/components/theme-provider";
-import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
 	DEFAULT_FONT_SMOOTHING,
 	DEFAULT_REDUCE_MOTION,
@@ -23,11 +23,7 @@ import {
 	type ReduceMotionPreference,
 } from "@/lib/appearance-preferences";
 import { logError } from "@/lib/logger";
-import {
-	mergeUserPreferencesForOptimisticUpdate,
-	type UserPreferencesState,
-} from "@/lib/user-preferences";
-import { api } from "../../../../../convex/_generated/api";
+import type { UserPreferencesState } from "@/lib/user-preferences";
 import { SettingsSwitchRow } from "./settings-switch-row";
 
 type UserPreferencesUpdatePatch = Partial<
@@ -82,17 +78,7 @@ function isReduceMotionPreference(
 export function AppearanceSettings() {
 	const { theme, setTheme } = useTheme();
 	const isDesktopApp = isDesktopRuntime();
-	const userPreferences = useQuery(api.userPreferences.get, {});
-	const updateUserPreferences = useMutation(
-		api.userPreferences.update,
-	).withOptimisticUpdate((localStore, args) => {
-		const currentPreferences = localStore.getQuery(api.userPreferences.get, {});
-		localStore.setQuery(
-			api.userPreferences.get,
-			{},
-			mergeUserPreferencesForOptimisticUpdate(currentPreferences, args),
-		);
-	});
+	const { updateUserPreferences, userPreferences } = useUserPreferences();
 	const [savingPreference, setSavingPreference] =
 		useState<SavingPreference | null>(null);
 

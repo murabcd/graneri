@@ -10,6 +10,7 @@ const userPreferencesValidator = v.object({
 	fontSmoothing: v.boolean(),
 	reduceMotion: v.union(v.literal("system"), v.literal("on"), v.literal("off")),
 	translucentSidebar: v.boolean(),
+	followUpBehavior: v.union(v.literal("queue"), v.literal("steer")),
 	sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 	avatarStorageId: v.union(v.id("_storage"), v.null()),
 	avatarUrl: v.union(v.string(), v.null()),
@@ -18,6 +19,11 @@ const userPreferencesValidator = v.object({
 const sendShortcutValidator = v.union(
 	v.literal("enter"),
 	v.literal("command-enter"),
+);
+
+const followUpBehaviorValidator = v.union(
+	v.literal("queue"),
+	v.literal("steer"),
 );
 
 const reduceMotionValidator = v.union(
@@ -29,6 +35,7 @@ const reduceMotionValidator = v.union(
 const DEFAULT_FONT_SMOOTHING = true;
 const DEFAULT_REDUCE_MOTION = "system";
 const DEFAULT_TRANSLUCENT_SIDEBAR = false;
+const DEFAULT_FOLLOW_UP_BEHAVIOR = "queue";
 const DEFAULT_SEND_SHORTCUT = "enter";
 
 const userAiProfileContextValidator = v.object({
@@ -74,6 +81,9 @@ const toUserPreferencesResponse = async (
 	translucentSidebar: preferences
 		? preferences.translucentSidebar
 		: DEFAULT_TRANSLUCENT_SIDEBAR,
+	followUpBehavior: preferences
+		? preferences.followUpBehavior
+		: DEFAULT_FOLLOW_UP_BEHAVIOR,
 	sendShortcut: preferences ? preferences.sendShortcut : DEFAULT_SEND_SHORTCUT,
 	avatarStorageId: preferences?.avatarStorageId ?? null,
 	avatarUrl: preferences?.avatarStorageId
@@ -121,6 +131,7 @@ export const update = mutation({
 		fontSmoothing: v.optional(v.boolean()),
 		reduceMotion: v.optional(reduceMotionValidator),
 		translucentSidebar: v.optional(v.boolean()),
+		followUpBehavior: v.optional(followUpBehaviorValidator),
 		sendShortcut: v.optional(sendShortcutValidator),
 		avatarStorageId: v.optional(v.union(v.id("_storage"), v.null())),
 	},
@@ -163,6 +174,12 @@ export const update = mutation({
 					: existing
 						? existing.translucentSidebar
 						: DEFAULT_TRANSLUCENT_SIDEBAR,
+			followUpBehavior:
+				args.followUpBehavior !== undefined
+					? args.followUpBehavior
+					: existing
+						? existing.followUpBehavior
+						: DEFAULT_FOLLOW_UP_BEHAVIOR,
 			sendShortcut:
 				args.sendShortcut !== undefined
 					? args.sendShortcut
@@ -184,6 +201,7 @@ export const update = mutation({
 				nextPreferences.fontSmoothing === existing.fontSmoothing &&
 				nextPreferences.reduceMotion === existing.reduceMotion &&
 				nextPreferences.translucentSidebar === existing.translucentSidebar &&
+				nextPreferences.followUpBehavior === existing.followUpBehavior &&
 				nextPreferences.sendShortcut === existing.sendShortcut &&
 				(nextPreferences.avatarStorageId ?? undefined) ===
 					existing.avatarStorageId
@@ -205,6 +223,7 @@ export const update = mutation({
 				fontSmoothing: nextPreferences.fontSmoothing,
 				reduceMotion: nextPreferences.reduceMotion,
 				translucentSidebar: nextPreferences.translucentSidebar,
+				followUpBehavior: nextPreferences.followUpBehavior,
 				sendShortcut: nextPreferences.sendShortcut,
 				avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 				updatedAt: now,
@@ -218,6 +237,7 @@ export const update = mutation({
 				fontSmoothing: nextPreferences.fontSmoothing,
 				reduceMotion: nextPreferences.reduceMotion,
 				translucentSidebar: nextPreferences.translucentSidebar,
+				followUpBehavior: nextPreferences.followUpBehavior,
 				sendShortcut: nextPreferences.sendShortcut,
 				avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 				updatedAt: now,
@@ -232,6 +252,7 @@ export const update = mutation({
 			fontSmoothing: nextPreferences.fontSmoothing,
 			reduceMotion: nextPreferences.reduceMotion,
 			translucentSidebar: nextPreferences.translucentSidebar,
+			followUpBehavior: nextPreferences.followUpBehavior,
 			sendShortcut: nextPreferences.sendShortcut,
 			avatarStorageId: nextPreferences.avatarStorageId ?? undefined,
 			createdAt: now,

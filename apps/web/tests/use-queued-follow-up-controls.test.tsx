@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { useQueuedFollowUpControls } from "../src/hooks/use-queued-follow-up-controls";
+import { useQueuedFollowUpControls as useProductionQueuedFollowUpControls } from "../src/hooks/use-queued-follow-up-controls";
 import type { AttachableAssistantRunQueryResult } from "../src/lib/attachable-assistant-run";
 import type { QueuedFollowUpMessage } from "../src/lib/chat-queued-followups";
 import type { ChatRequestContext } from "../src/lib/chat-request-preparation";
@@ -24,7 +24,34 @@ const workspaceId = "workspace-1" as Id<"workspaces">;
 const runId = "run-1" as Id<"assistantRuns">;
 const acceptedQueuedMessageIdsRef = { current: new Set<string>() };
 const beginReplay = () => () => undefined;
-const manuallySendingQueuedMessageIdRef = { current: null as string | null };
+const sendingQueuedMessageIdRef = { current: null as string | null };
+
+type QueuedFollowUpControlsArgs = Parameters<
+	typeof useProductionQueuedFollowUpControls
+>[0];
+
+const useQueuedFollowUpControls = (
+	args: Omit<
+		QueuedFollowUpControlsArgs,
+		| "followUpBehavior"
+		| "isUpdatingFollowUpBehavior"
+		| "onFollowUpBehaviorChange"
+	> &
+		Partial<
+			Pick<
+				QueuedFollowUpControlsArgs,
+				| "followUpBehavior"
+				| "isUpdatingFollowUpBehavior"
+				| "onFollowUpBehaviorChange"
+			>
+		>,
+) =>
+	useProductionQueuedFollowUpControls({
+		followUpBehavior: "queue",
+		isUpdatingFollowUpBehavior: false,
+		onFollowUpBehaviorChange: vi.fn(),
+		...args,
+	});
 
 const createQueuedMessage = ({
 	id = "queued-1",
@@ -64,7 +91,7 @@ describe("useQueuedFollowUpControls", () => {
 	beforeEach(() => {
 		tokenMocks.getCachedConvexToken.mockReset();
 		acceptedQueuedMessageIdsRef.current.clear();
-		manuallySendingQueuedMessageIdRef.current = null;
+		sendingQueuedMessageIdRef.current = null;
 	});
 
 	it("rolls back handoff state while keeping the server-owned row visible", async () => {
@@ -93,10 +120,13 @@ describe("useQueuedFollowUpControls", () => {
 				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
+				followUpBehavior: "queue",
+				isUpdatingFollowUpBehavior: false,
 				latestRequestBodyRef,
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
+				onFollowUpBehaviorChange: vi.fn(),
 				onSteerStart,
 				queuedMessages,
 				sendMessage,
@@ -134,7 +164,7 @@ describe("useQueuedFollowUpControls", () => {
 		const rollbackHandoff = vi.fn();
 		const sendMessage = vi.fn(async () => {
 			acceptedQueuedMessageIdsRef.current.add(queuedMessage._id);
-			manuallySendingQueuedMessageIdRef.current = null;
+			sendingQueuedMessageIdRef.current = null;
 			throw new Error("accepted stream failed");
 		});
 		tokenMocks.getCachedConvexToken.mockResolvedValue("fresh-token");
@@ -149,7 +179,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				onSteerStart: () => rollbackHandoff,
 				queuedMessages: [queuedMessage],
@@ -190,7 +220,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				onSteerStart,
 				queuedMessages,
@@ -237,7 +267,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				onSteerStart: vi.fn(),
 				queuedMessages,
@@ -314,7 +344,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				onSteerStart,
 				queuedMessages,
@@ -356,7 +386,7 @@ describe("useQueuedFollowUpControls", () => {
 			},
 		);
 		acceptedQueuedMessageIdsRef.current.add("queued-1");
-		manuallySendingQueuedMessageIdRef.current = null;
+		sendingQueuedMessageIdRef.current = null;
 		acceptedQueuedMessageId = "queued-1";
 		const nextRunId = "run-2" as Id<"assistantRuns">;
 		activeRun = { _id: nextRunId, status: "running" };
@@ -426,7 +456,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				queuedMessages,
 				sendMessage,
@@ -485,7 +515,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				queuedMessages: [firstQueuedMessage, secondQueuedMessage],
 				sendMessage: vi.fn(),
@@ -519,7 +549,7 @@ describe("useQueuedFollowUpControls", () => {
 				isQueueHandoffPending,
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				queuedMessages,
 				sendMessage,
@@ -553,6 +583,46 @@ describe("useQueuedFollowUpControls", () => {
 			expect.objectContaining({ id: "queued-2", actionLabel: "Steer" }),
 			expect.objectContaining({ id: "queued-3", actionLabel: "Steer" }),
 		]);
+	});
+
+	it("automatically steers with the admitted row run while the active-run subscription catches up", async () => {
+		const queuedMessage = createQueuedMessage();
+		const sendMessage = vi.fn().mockResolvedValue(undefined);
+		tokenMocks.getCachedConvexToken.mockResolvedValue("fresh-token");
+
+		const { result } = renderHook(() =>
+			useQueuedFollowUpControls({
+				acceptedQueuedMessageIdsRef,
+				acceptedQueuedMessageId: null,
+				activeRun: null,
+				beginReplay,
+				chatId: "chat-1",
+				contextLabel: "chat",
+				isQueueHandoffPending: true,
+				latestRequestBodyRef: { current: null },
+				localMessageIds: new Set(),
+				sendingQueuedMessageIdRef,
+				onEditMessage: vi.fn(),
+				queuedMessages: [queuedMessage],
+				sendMessage,
+				setQueuedMessages: vi.fn(),
+				workspaceId,
+			}),
+		);
+
+		await act(async () => {
+			await result.current.steerQueuedFollowUp(queuedMessage);
+		});
+
+		expect(sendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ text: "Steer now" }),
+			expect.objectContaining({
+				body: expect.objectContaining({
+					continueRunId: queuedMessage.runId,
+					steerQueuedMessageId: queuedMessage._id,
+				}),
+			}),
+		);
 	});
 
 	it.each([
@@ -590,7 +660,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				onSteerStart,
 				queuedMessages,
@@ -648,7 +718,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				queuedMessages: [queuedMessage],
 				sendMessage,
@@ -697,7 +767,7 @@ describe("useQueuedFollowUpControls", () => {
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
 				localMessageIds: new Set(),
-				manuallySendingQueuedMessageIdRef,
+				sendingQueuedMessageIdRef,
 				onEditMessage: vi.fn(),
 				queuedMessages,
 				sendMessage: vi.fn(),

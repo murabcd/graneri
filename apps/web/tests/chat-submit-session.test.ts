@@ -412,6 +412,53 @@ describe("chat submit session", () => {
 		});
 	});
 
+	it("waits for queued-message handoff work before completing submission", async () => {
+		const queuedMessage = createQueuedFollowUpMessage("Steer after admission");
+		const admitQueuedMessage = vi.fn(async () => ({
+			status: "queued" as const,
+			queuedMessage,
+		}));
+		let finishHandoff: (() => void) | undefined;
+		const onQueuedMessageSaved = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					finishHandoff = resolve;
+				}),
+		);
+		let didComplete = false;
+
+		const submission = submitChatTurn({
+			attachedFiles: [],
+			buildRequestBody: async () => ({
+				convexToken: "token",
+				localCapabilitySession: null,
+				model: "gpt-5",
+				timezone: "UTC",
+			}),
+			chatId: "chat-1",
+			currentRunAdmission: createCurrentRunAdmission(admitQueuedMessage),
+			displayActiveRun: null,
+			editingMessageId: null,
+			enqueueQueuedMessage: vi.fn(),
+			onOptimisticMessage: vi.fn(),
+			onQueuedMessageSaved,
+			onRequestPrepared: () => undefined,
+			sendMessage: vi.fn(),
+			text: "Steer after admission",
+			workspaceId,
+		}).then((result) => {
+			didComplete = true;
+			return result;
+		});
+
+		await vi.waitFor(() => expect(onQueuedMessageSaved).toHaveBeenCalledOnce());
+		expect(didComplete).toBe(false);
+
+		finishHandoff?.();
+		await expect(submission).resolves.toEqual({ status: "queued" });
+		expect(didComplete).toBe(true);
+	});
+
 	it("normal-sends an uncertain follow-up only after the server reports no active run", async () => {
 		const admitQueuedMessage = vi.fn(async () => ({
 			status: "no_active" as const,
