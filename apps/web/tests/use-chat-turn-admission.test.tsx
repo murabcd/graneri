@@ -41,6 +41,58 @@ const queuedMessage = {
 } satisfies QueuedFollowUpMessage;
 
 describe("useChatTurnAdmission", () => {
+	it("keeps a successful direct handoff queue-aware until the durable run attaches", async () => {
+		let queueActiveRun: AttachableAssistantRun | null = null;
+		const { result, rerender } = renderHook(() =>
+			useChatTurnAdmission({
+				isAiRequestPending: false,
+				queueActiveRun,
+				scopeKey: "chat-1",
+			}),
+		);
+
+		await expect(
+			result.current.runTurnAdmission(async (admission) => admission.status),
+		).resolves.toBe("direct");
+
+		await expect(
+			result.current.runTurnAdmission(async (admission) => admission.status),
+		).resolves.toBe("current_run");
+
+		queueActiveRun = activeRun;
+		rerender();
+		await act(() => Promise.resolve());
+		queueActiveRun = null;
+		rerender();
+		await act(() => Promise.resolve());
+
+		await expect(
+			result.current.runTurnAdmission(async (admission) => admission.status),
+		).resolves.toBe("direct");
+	});
+
+	it("keeps a server-approved direct fallback queue-aware", async () => {
+		const { result } = renderHook(() =>
+			useChatTurnAdmission({
+				isAiRequestPending: false,
+				queueActiveRun: null,
+				scopeKey: "chat-1",
+			}),
+		);
+
+		await result.current.runTurnAdmission(async () => undefined);
+		await result.current.runTurnAdmission(async (admission) => {
+			expect(admission.status).toBe("current_run");
+			if (admission.status === "current_run") {
+				admission.beginDirectSubmission();
+			}
+		});
+
+		await expect(
+			result.current.runTurnAdmission(async (admission) => admission.status),
+		).resolves.toBe("current_run");
+	});
+
 	it("holds concurrent B and C behind A until A owns a durable run", async () => {
 		let queueActiveRun: AttachableAssistantRun | null = null;
 		const { result, rerender } = renderHook(() =>

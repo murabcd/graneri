@@ -48,7 +48,7 @@ export const useChatTurnAdmission = ({
 }) => {
 	const scopeKeyRef = React.useRef(scopeKey);
 	const scopeVersionRef = React.useRef(0);
-	const localSubmissionBoundaryRef =
+	const unobservedDirectSubmissionRef =
 		React.useRef<LocalSubmissionBoundary | null>(null);
 	const pendingAdmissionBoundaryRef =
 		React.useRef<LocalSubmissionBoundary | null>(null);
@@ -65,33 +65,50 @@ export const useChatTurnAdmission = ({
 			boundary.release("no_active");
 		}
 		admissionBoundariesRef.current.clear();
-		localSubmissionBoundaryRef.current = null;
+		unobservedDirectSubmissionRef.current = null;
 		pendingAdmissionBoundaryRef.current = null;
 		admissionTailRef.current = NO_ACTIVE_SUBMISSION_BOUNDARY;
 		scopeKeyRef.current = scopeKey;
 		scopeVersionRef.current += 1;
 	}, [scopeKey]);
 
-	const releaseLocalSubmissionBoundary = React.useCallback(
+	const settleAdmissionBoundary = React.useCallback(
 		(boundary: LocalSubmissionBoundary, outcome: SubmissionBoundaryOutcome) => {
 			boundary.release(outcome);
 			admissionBoundariesRef.current.delete(boundary);
-			if (localSubmissionBoundaryRef.current === boundary) {
-				localSubmissionBoundaryRef.current = null;
-			}
 			if (pendingAdmissionBoundaryRef.current === boundary) {
 				pendingAdmissionBoundaryRef.current = null;
 			}
 		},
 		[],
 	);
+	const discardAdmissionBoundary = React.useCallback(
+		(boundary: LocalSubmissionBoundary, outcome: SubmissionBoundaryOutcome) => {
+			settleAdmissionBoundary(boundary, outcome);
+			if (unobservedDirectSubmissionRef.current === boundary) {
+				unobservedDirectSubmissionRef.current = null;
+			}
+		},
+		[settleAdmissionBoundary],
+	);
+	const completeAdmissionBoundary = React.useCallback(
+		(boundary: LocalSubmissionBoundary) => {
+			settleAdmissionBoundary(
+				boundary,
+				unobservedDirectSubmissionRef.current === boundary
+					? "active_run"
+					: "no_active",
+			);
+		},
+		[settleAdmissionBoundary],
+	);
 
 	React.useEffect(() => {
-		const boundary = localSubmissionBoundaryRef.current;
+		const boundary = unobservedDirectSubmissionRef.current;
 		if (queueActiveRun && boundary) {
-			releaseLocalSubmissionBoundary(boundary, "active_run");
+			discardAdmissionBoundary(boundary, "active_run");
 		}
-	}, [queueActiveRun, releaseLocalSubmissionBoundary]);
+	}, [discardAdmissionBoundary, queueActiveRun]);
 
 	React.useEffect(
 		() => () => {
@@ -100,7 +117,7 @@ export const useChatTurnAdmission = ({
 				boundary.release("no_active");
 			}
 			admissionBoundariesRef.current.clear();
-			localSubmissionBoundaryRef.current = null;
+			unobservedDirectSubmissionRef.current = null;
 			pendingAdmissionBoundaryRef.current = null;
 		},
 		[],
@@ -109,12 +126,12 @@ export const useChatTurnAdmission = ({
 	const runTurnAdmission = React.useCallback(
 		<Result>(operation: (admission: ChatTurnAdmission) => Promise<Result>) => {
 			const operationScopeVersion = scopeVersionRef.current;
-			const localSubmissionBoundary = localSubmissionBoundaryRef.current;
+			const unobservedDirectSubmission = unobservedDirectSubmissionRef.current;
 			const pendingAdmissionBoundary = pendingAdmissionBoundaryRef.current;
 			if (
 				queueActiveRun ||
 				isAiRequestPending ||
-				localSubmissionBoundary ||
+				unobservedDirectSubmission ||
 				pendingAdmissionBoundary
 			) {
 				const predecessorBoundary = admissionTailRef.current;
@@ -123,7 +140,7 @@ export const useChatTurnAdmission = ({
 				admissionTailRef.current = boundary.promise;
 				pendingAdmissionBoundaryRef.current = boundary;
 				const predecessorOwnsPendingRequest = Boolean(
-					localSubmissionBoundary || pendingAdmissionBoundary,
+					unobservedDirectSubmission || pendingAdmissionBoundary,
 				);
 				const result = predecessorBoundary.then((predecessorOutcome) => {
 					if (scopeVersionRef.current !== operationScopeVersion) {
@@ -134,30 +151,30 @@ export const useChatTurnAdmission = ({
 						predecessorOutcome === "no_active" &&
 						(predecessorOwnsPendingRequest || !isAiRequestPending)
 					) {
-						localSubmissionBoundaryRef.current = boundary;
+						unobservedDirectSubmissionRef.current = boundary;
 						return operation({ status: "direct" });
 					}
 					return operation({
 						beginDirectSubmission: () => {
 							if (scopeVersionRef.current === operationScopeVersion) {
-								localSubmissionBoundaryRef.current = boundary;
+								unobservedDirectSubmissionRef.current = boundary;
 							}
 						},
 						completeQueuedAdmission: () =>
-							releaseLocalSubmissionBoundary(boundary, "queued"),
+							discardAdmissionBoundary(boundary, "queued"),
 						status: "current_run",
 					});
 				});
 				void result.then(
-					() => releaseLocalSubmissionBoundary(boundary, "no_active"),
-					() => releaseLocalSubmissionBoundary(boundary, "no_active"),
+					() => completeAdmissionBoundary(boundary),
+					() => discardAdmissionBoundary(boundary, "no_active"),
 				);
 				return result;
 			}
 
 			const boundary = createLocalSubmissionBoundary();
 			admissionBoundariesRef.current.add(boundary);
-			localSubmissionBoundaryRef.current = boundary;
+			unobservedDirectSubmissionRef.current = boundary;
 			pendingAdmissionBoundaryRef.current = boundary;
 			admissionTailRef.current = boundary.promise;
 			const result = Promise.resolve().then(() =>
@@ -168,12 +185,17 @@ export const useChatTurnAdmission = ({
 				),
 			);
 			void result.then(
-				() => releaseLocalSubmissionBoundary(boundary, "no_active"),
-				() => releaseLocalSubmissionBoundary(boundary, "no_active"),
+				() => completeAdmissionBoundary(boundary),
+				() => discardAdmissionBoundary(boundary, "no_active"),
 			);
 			return result;
 		},
-		[isAiRequestPending, queueActiveRun, releaseLocalSubmissionBoundary],
+		[
+			completeAdmissionBoundary,
+			discardAdmissionBoundary,
+			isAiRequestPending,
+			queueActiveRun,
+		],
 	);
 
 	return { runTurnAdmission };
