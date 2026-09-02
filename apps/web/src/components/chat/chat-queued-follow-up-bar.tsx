@@ -22,13 +22,14 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
+import { InputGroupButton } from "@workspace/ui/components/input-group";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
-import { CornerDownRight, Ellipsis, Pencil, Play, Trash2 } from "lucide-react";
+import { CornerDownRight, Ellipsis, Pencil, Trash2 } from "lucide-react";
 import * as React from "react";
 
 export type QueuedFollowUpBarItem = {
@@ -64,19 +65,12 @@ const getQueuedFollowUpDisplayText = (text: string) =>
 	text.replace(/^queued\s+follow-up:\s*/i, "");
 
 export function ChatQueuedFollowUpBar({
-	isResuming,
 	onReorder,
-	onResume,
 	queuedFollowUps,
 }: {
-	isResuming: boolean;
 	onReorder?: (ids: Array<string>) => void;
-	onResume: () => void;
 	queuedFollowUps: Array<QueuedFollowUpBarItem>;
 }) {
-	const hasInterruptedQueue = queuedFollowUps.some(
-		(queuedFollowUp) => queuedFollowUp.pauseReason === "interrupted",
-	);
 	const ids = React.useMemo(
 		() => queuedFollowUps.map((queuedFollowUp) => queuedFollowUp.id),
 		[queuedFollowUps],
@@ -148,20 +142,6 @@ export function ChatQueuedFollowUpBar({
 					role="listbox"
 					aria-label="Queued follow-ups"
 				>
-					{hasInterruptedQueue ? (
-						<div className="flex h-9 items-center justify-between gap-3 border-border/20 border-b bg-muted/30 px-3.5 text-muted-foreground">
-							<span>Queue paused because you interrupted</span>
-							<button
-								type="button"
-								disabled={isResuming}
-								onClick={onResume}
-								className="inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
-							>
-								<Play className="size-3.5" aria-hidden="true" />
-								Resume
-							</button>
-						</div>
-					) : null}
 					{ids.map((id) => {
 						const queuedFollowUp = queuedFollowUpsById.get(id);
 						if (!queuedFollowUp) {
@@ -298,26 +278,30 @@ function SortableQueuedFollowUpRow({
 						</TooltipContent>
 					</Tooltip>
 				) : null}
-				<button
+				<InputGroupButton
 					type="button"
+					variant="ghost"
+					size="icon-sm"
 					disabled={queuedFollowUp.isDeleting}
 					onPointerDown={stopActionPointerDown}
 					onClick={queuedFollowUp.onDelete}
-					className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+					className="rounded-full text-muted-foreground"
 					aria-label="Delete queued message"
 				>
 					<Trash2 className="size-4" aria-hidden="true" />
-				</button>
+				</InputGroupButton>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<button
+						<InputGroupButton
 							type="button"
+							variant="ghost"
+							size="icon-sm"
 							onPointerDown={stopActionPointerDown}
-							className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							className="rounded-full text-muted-foreground"
 							aria-label="More queued message actions"
 						>
 							<Ellipsis className="size-4" aria-hidden="true" />
-						</button>
+						</InputGroupButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align="end"
@@ -335,8 +319,8 @@ function SortableQueuedFollowUpRow({
 							disabled={queuedFollowUp.isDeleting}
 							onClick={queuedFollowUp.onDelete}
 						>
-							<Trash2 className="size-4" aria-hidden="true" />
-							Delete
+							<CornerDownRight className="size-4" aria-hidden="true" />
+							Turn off
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>

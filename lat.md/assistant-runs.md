@@ -708,6 +708,14 @@ the literal FIFO head as `failed`. Replay may claim only that head, so later
 rows cannot skip a failed item. `resumeInterruptedForChat` atomically restores
 only `paused` interruption rows to `queued`; failed rows remain paused for an
 explicit Retry, Edit, or Delete.
+Renderer chat surfaces expose interruption recovery through the primary
+composer action rather than a separate queue banner. When interrupted rows
+exist and the composer has no sendable draft or attachment, the primary action
+is Resume; entering new sendable input restores Send, which submits that input
+without implicitly resuming the interrupted rows. The shared decision lives in
+[[apps/web/src/components/chat/chat-composer-primary-action.ts]], while
+[[apps/web/src/components/chat/chat-queued-follow-up-bar.tsx]] renders only the
+durable queue rows.
 
 [[convex/assistantQueuedMessageAcceptances.ts]] owns atomic acceptance and a
 durable idempotency receipt keyed by `queuedMessageId` plus `claimVersion`.

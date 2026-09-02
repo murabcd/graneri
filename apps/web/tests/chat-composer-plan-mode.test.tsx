@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ComposerProjectOption } from "@/components/ai-elements/composer-project-picker";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import type { QueuedFollowUpBarItem } from "@/components/chat/chat-queued-follow-up-bar";
 
 const convexClient = new ConvexReactClient("https://test.convex.cloud");
 const originalDesktopBridge = window.graneriDesktop;
@@ -23,10 +24,16 @@ function ActiveOptionComposer({
 	draft = "",
 	humanDecision,
 	isSettingsLoading = false,
+	onQueuedFollowUpsResume = vi.fn(),
+	onSubmit = vi.fn(),
+	queuedFollowUps = [],
 }: {
 	draft?: string;
 	humanDecision?: HostedHumanDecisionRequest;
 	isSettingsLoading?: boolean;
+	onQueuedFollowUpsResume?: () => void;
+	onSubmit?: () => void;
+	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 }) {
 	const [attachedFiles, setAttachedFiles] = React.useState<ChatAttachment[]>(
 		[],
@@ -73,7 +80,7 @@ function ActiveOptionComposer({
 					onDraftChange={vi.fn()}
 					onDraftKeyDown={vi.fn()}
 					mentions={[]}
-					onSubmit={vi.fn()}
+					onSubmit={onSubmit}
 					onStop={vi.fn()}
 					attachedFiles={attachedFiles}
 					onAttachedFilesChange={setAttachedFiles}
@@ -110,7 +117,8 @@ function ActiveOptionComposer({
 					onOpenConnectionsSettings={vi.fn()}
 					humanDecision={humanDecision}
 					onHumanDecisionResponse={vi.fn()}
-					onQueuedFollowUpsResume={vi.fn()}
+					onQueuedFollowUpsResume={onQueuedFollowUpsResume}
+					queuedFollowUps={queuedFollowUps}
 				/>
 			</TooltipProvider>
 		</ConvexProvider>
@@ -118,6 +126,49 @@ function ActiveOptionComposer({
 }
 
 describe("chat composer active options", () => {
+	it("uses the primary action to resume an interrupted queue until a new draft is entered", async () => {
+		const user = userEvent.setup();
+		const onQueuedFollowUpsResume = vi.fn();
+		const onSubmit = vi.fn();
+		const queuedFollowUp: QueuedFollowUpBarItem = {
+			actionLabel: null,
+			id: "queued-1",
+			isActionDisabled: true,
+			isDeleting: false,
+			isEditing: false,
+			isSendingNow: false,
+			onDelete: vi.fn(),
+			onEdit: vi.fn(),
+			onSendNow: vi.fn(),
+			pauseReason: "interrupted",
+			statusLabel: "Paused",
+			text: "Continue with the queued follow-up",
+		};
+		const renderComposer = (draft: string) => (
+			<ActiveOptionComposer
+				draft={draft}
+				onQueuedFollowUpsResume={onQueuedFollowUpsResume}
+				onSubmit={onSubmit}
+				queuedFollowUps={[queuedFollowUp]}
+			/>
+		);
+		const { rerender } = render(renderComposer(""));
+
+		expect(
+			screen.queryByText("Queue paused because you interrupted"),
+		).toBeNull();
+		await user.click(screen.getByRole("button", { name: "Resume" }));
+		expect(onQueuedFollowUpsResume).toHaveBeenCalledOnce();
+		expect(onSubmit).not.toHaveBeenCalled();
+
+		rerender(renderComposer("Send this as a new queued message"));
+
+		expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+		await user.click(screen.getByRole("button", { name: "Send" }));
+		expect(onSubmit).toHaveBeenCalledOnce();
+		expect(onQueuedFollowUpsResume).toHaveBeenCalledOnce();
+	});
+
 	it("blocks sends and settings controls while stored settings load", () => {
 		render(<ActiveOptionComposer draft="Prompt" isSettingsLoading />);
 

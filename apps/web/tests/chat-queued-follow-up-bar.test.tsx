@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -28,20 +29,19 @@ const createQueuedFollowUp = (
 describe("chat queued follow-up bar", () => {
 	afterEach(cleanup);
 
-	it("renders the paused interruption and failed-head actions without a send action on interrupted rows", () => {
-		const onResume = vi.fn();
+	it("renders paused rows without a separate interruption banner", async () => {
+		const user = userEvent.setup();
+		const interruptedFollowUp = createQueuedFollowUp({
+			actionLabel: null,
+			id: "queued-1",
+			helpText: undefined,
+			pauseReason: "interrupted",
+		});
 		render(
 			<TooltipProvider delayDuration={0}>
 				<ChatQueuedFollowUpBar
-					isResuming={false}
-					onResume={onResume}
 					queuedFollowUps={[
-						createQueuedFollowUp({
-							actionLabel: null,
-							id: "queued-1",
-							helpText: undefined,
-							pauseReason: "interrupted",
-						}),
+						interruptedFollowUp,
 						createQueuedFollowUp({ id: "queued-2" }),
 					]}
 				/>
@@ -49,9 +49,9 @@ describe("chat queued follow-up bar", () => {
 		);
 
 		expect(
-			screen.getByText("Queue paused because you interrupted"),
-		).not.toBeNull();
-		expect(screen.getByRole("button", { name: "Resume" })).not.toBeNull();
+			screen.queryByText("Queue paused because you interrupted"),
+		).toBeNull();
+		expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
 		expect(
 			screen.getByText("This queued message could not be sent"),
 		).not.toBeNull();
@@ -62,28 +62,12 @@ describe("chat queued follow-up bar", () => {
 			screen.getAllByRole("button", { name: "Delete queued message" }),
 		).toHaveLength(2);
 
-		fireEvent.click(screen.getByRole("button", { name: "Resume" }));
-		expect(onResume).toHaveBeenCalledOnce();
-	});
-
-	it("disables resume while queue recovery is already in progress", () => {
-		render(
-			<TooltipProvider delayDuration={0}>
-				<ChatQueuedFollowUpBar
-					isResuming
-					onResume={vi.fn()}
-					queuedFollowUps={[
-						createQueuedFollowUp({
-							actionLabel: null,
-							pauseReason: "interrupted",
-						}),
-					]}
-				/>
-			</TooltipProvider>,
+		await user.click(
+			screen.getAllByRole("button", {
+				name: "More queued message actions",
+			})[0] as HTMLElement,
 		);
-
-		expect(
-			screen.getByRole("button", { name: "Resume" }).hasAttribute("disabled"),
-		).toBe(true);
+		await user.click(screen.getByRole("menuitem", { name: "Turn off" }));
+		expect(interruptedFollowUp.onDelete).toHaveBeenCalledOnce();
 	});
 });

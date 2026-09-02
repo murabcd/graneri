@@ -56,6 +56,7 @@ import {
 	Check,
 	ChevronUp,
 	Copy,
+	Play,
 	SlidersHorizontal,
 	Square,
 } from "lucide-react";
@@ -76,6 +77,7 @@ import {
 	useFileAttachmentDropzone,
 	useRevokeAttachmentObjectUrls,
 } from "@/components/ai-elements/use-file-attachments";
+import { resolveChatComposerPrimaryAction } from "@/components/chat/chat-composer-primary-action";
 import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
 import { ChatQueuedFollowUpBar } from "@/components/chat/chat-queued-follow-up-bar";
 import {
@@ -1983,24 +1985,35 @@ const getInlineComposerActionState = ({
 	attachedFiles,
 	canSendMessage,
 	canStop,
+	hasInterruptedQueue,
 	isChatLoading,
+	isResumingQueuedFollowUps,
 }: {
 	attachedFiles: ChatAttachment[];
 	canSendMessage: boolean;
 	canStop: boolean;
+	hasInterruptedQueue: boolean;
 	isChatLoading: boolean;
+	isResumingQueuedFollowUps: boolean;
 }) => {
 	const hasSendableInput =
 		canSendMessage && (!canStop || attachedFiles.length === 0);
-	const shouldShowStop = canStop && !hasSendableInput;
+	const primaryAction = resolveChatComposerPrimaryAction({
+		canStop,
+		hasInterruptedQueue,
+		hasSendableInput,
+	});
 	return {
 		hasSendableInput,
-		shouldShowStop,
-		submitDisabled: canStop
-			? hasSendableInput && hasUploadingAttachments(attachedFiles)
-			: isChatLoading ||
-				!hasSendableInput ||
-				hasUploadingAttachments(attachedFiles),
+		primaryAction,
+		submitDisabled:
+			primaryAction === "resume"
+				? isResumingQueuedFollowUps
+				: canStop
+					? hasSendableInput && hasUploadingAttachments(attachedFiles)
+					: isChatLoading ||
+						!hasSendableInput ||
+						hasUploadingAttachments(attachedFiles),
 	};
 };
 
@@ -2042,6 +2055,7 @@ function ChatInlinePopoverFooter({
 	handleComposerPointerDown,
 	handleComposerKeyDown,
 	handleComposerValueChange,
+	onResume,
 	onStop,
 	status,
 	editingMessageId,
@@ -2070,13 +2084,16 @@ function ChatInlinePopoverFooter({
 	handleComposerPointerDown: () => void;
 	handleComposerKeyDown: (event: ComposerKeyboardEvent) => void;
 	handleComposerValueChange: (nextValue: string) => void;
+	onResume: () => void;
 	onStop: () => void;
 	status: {
 		activateInlineOnFocus: boolean;
 		isRecipeLoading: boolean;
 		canSendMessage: boolean;
 		canStop: boolean;
+		hasInterruptedQueue: boolean;
 		isChatLoading: boolean;
+		isResumingQueuedFollowUps: boolean;
 		isSidebarCompact: boolean;
 		showModelPicker: boolean;
 	};
@@ -2105,15 +2122,19 @@ function ChatInlinePopoverFooter({
 		isRecipeLoading,
 		canSendMessage,
 		canStop,
+		hasInterruptedQueue,
 		isChatLoading,
+		isResumingQueuedFollowUps,
 		isSidebarCompact,
 		showModelPicker,
 	} = status;
-	const { shouldShowStop, submitDisabled } = getInlineComposerActionState({
+	const { primaryAction, submitDisabled } = getInlineComposerActionState({
 		attachedFiles,
 		canSendMessage,
 		canStop,
+		hasInterruptedQueue,
 		isChatLoading,
+		isResumingQueuedFollowUps,
 	});
 	const shouldShowRecipeControls = !activateInlineOnFocus;
 	const activeMentionRangeRef = React.useRef<Range | null>(null);
@@ -2595,16 +2616,30 @@ function ChatInlinePopoverFooter({
 						</div>
 					) : null}
 					<InputGroupButton
-						type={shouldShowStop ? "button" : "submit"}
+						type={primaryAction === "send" ? "submit" : "button"}
 						variant="default"
 						size="icon-sm"
 						className={cn("rounded-full", !showModelPicker && "ml-auto")}
-						aria-label={shouldShowStop ? "Stop streaming" : "Send message"}
+						aria-label={
+							primaryAction === "stop"
+								? "Stop streaming"
+								: primaryAction === "resume"
+									? "Resume"
+									: "Send message"
+						}
 						disabled={submitDisabled}
-						onClick={shouldShowStop ? onStop : undefined}
+						onClick={
+							primaryAction === "stop"
+								? onStop
+								: primaryAction === "resume"
+									? onResume
+									: undefined
+						}
 					>
-						{shouldShowStop ? (
+						{primaryAction === "stop" ? (
 							<Square className="size-3.5 fill-current" />
+						) : primaryAction === "resume" ? (
+							<Play className="size-4 fill-current" />
 						) : (
 							<ArrowUp className="size-4" />
 						)}
@@ -2885,6 +2920,9 @@ function ChatComposerForm({
 	const activeTopAccessory =
 		topAccessory ??
 		(controller.runPlan ? <RunPlanProgress plan={controller.runPlan} /> : null);
+	const hasInterruptedQueue = controller.queuedFollowUps.some(
+		(queuedFollowUp) => queuedFollowUp.pauseReason === "interrupted",
+	);
 
 	return (
 		<form
@@ -2922,8 +2960,6 @@ function ChatComposerForm({
 				<ChatQueuedFollowUpBar
 					queuedFollowUps={controller.queuedFollowUps}
 					onReorder={controller.onQueuedFollowUpsReorder}
-					onResume={controller.onQueuedFollowUpsResume}
-					isResuming={controller.isResumingQueuedFollowUps}
 				/>
 			) : null}
 			<ChatInlinePopoverFooter
@@ -2933,13 +2969,16 @@ function ChatComposerForm({
 				handleComposerPointerDown={controller.handleComposerPointerDown}
 				handleComposerKeyDown={controller.handleComposerKeyDown}
 				handleComposerValueChange={controller.handleComposerValueChange}
+				onResume={controller.onQueuedFollowUpsResume}
 				onStop={controller.handleStop}
 				status={{
 					activateInlineOnFocus,
 					isRecipeLoading: controller.isRecipeLoading,
 					canSendMessage: controller.canSendMessage,
 					canStop: controller.canStop,
+					hasInterruptedQueue,
 					isChatLoading: controller.isChatLoading,
+					isResumingQueuedFollowUps: controller.isResumingQueuedFollowUps,
 					isSidebarCompact: controller.isSidebarPresentation,
 					showModelPicker:
 						controller.isChatOpen &&

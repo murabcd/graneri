@@ -15,7 +15,7 @@ import {
 import { Kbd } from "@workspace/ui/components/kbd";
 import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
-import { ArrowUp, type LucideIcon, Square } from "lucide-react";
+import { ArrowUp, type LucideIcon, Play, Square } from "lucide-react";
 import * as React from "react";
 import type { ComposerProjectOption } from "@/components/ai-elements/composer-project-picker";
 import {
@@ -30,6 +30,7 @@ import {
 import { useFileAttachmentDropzone } from "@/components/ai-elements/use-file-attachments";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatComposerOptions } from "@/components/chat/chat-composer-options";
+import { resolveChatComposerPrimaryAction } from "@/components/chat/chat-composer-primary-action";
 import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
 import {
 	ChatQueuedFollowUpBar,
@@ -251,6 +252,9 @@ export function ChatComposer({
 	appSources,
 	onOpenConnectionsSettings,
 }: ChatComposerProps) {
+	const hasInterruptedQueue = queuedFollowUps.some(
+		(queuedFollowUp) => queuedFollowUp.pauseReason === "interrupted",
+	);
 	const isHumanDecisionSubmitting = activity.humanDecision === "submitting";
 	const isResumingQueuedFollowUps = activity.queuedFollowUps === "resuming";
 	const isSettingsLoading = activity.settings === "loading";
@@ -308,8 +312,6 @@ export function ChatComposer({
 						<ChatQueuedFollowUpBar
 							queuedFollowUps={queuedFollowUps}
 							onReorder={onQueuedFollowUpsReorder}
-							onResume={onQueuedFollowUpsResume}
-							isResuming={isResumingQueuedFollowUps}
 						/>
 					) : null}
 					<InputGroup
@@ -352,10 +354,13 @@ export function ChatComposer({
 							attachmentsDisabled={canStop}
 							canStop={canStop}
 							disabled={isSettingsLoading}
+							hasInterruptedQueue={hasInterruptedQueue}
+							isResumingQueuedFollowUps={isResumingQueuedFollowUps}
 							onAttachmentUploadFailed={handleAttachmentUploadFailed}
 							onAttachmentUploaded={handleAttachmentUploaded}
 							onAttachmentsAdded={handleAttachmentsAdded}
 							onSubmit={onSubmit}
+							onResume={onQueuedFollowUpsResume}
 							onStop={onStop}
 							modelPicker={
 								selectedModel ? (
@@ -1369,9 +1374,12 @@ function ChatComposerFooter({
 	attachmentsDisabled,
 	canStop,
 	disabled,
+	hasInterruptedQueue,
+	isResumingQueuedFollowUps,
 	onAttachmentUploadFailed,
 	onAttachmentUploaded,
 	onAttachmentsAdded,
+	onResume,
 	onSubmit,
 	onStop,
 	modelPicker,
@@ -1382,9 +1390,12 @@ function ChatComposerFooter({
 	attachmentsDisabled: boolean;
 	canStop: boolean;
 	disabled: boolean;
+	hasInterruptedQueue: boolean;
+	isResumingQueuedFollowUps: boolean;
 	onAttachmentUploadFailed: (id: string) => void;
 	onAttachmentUploaded: (id: string, file: FileUIPart) => void;
 	onAttachmentsAdded: (files: ChatAttachment[]) => void;
+	onResume: () => void;
 	onSubmit: () => void | Promise<void>;
 	onStop: () => void;
 	modelPicker: React.ReactNode;
@@ -1395,8 +1406,15 @@ function ChatComposerFooter({
 		(!canStop || attachedFiles.length === 0) &&
 		(canStop ? hasDraftText : hasDraftText || attachedFiles.length > 0) &&
 		!hasUploadingAttachments(attachedFiles);
-	const shouldShowStop = canStop && !hasSendableInput;
-	const isSendDisabled = !shouldShowStop && (disabled || !hasSendableInput);
+	const primaryAction = resolveChatComposerPrimaryAction({
+		canStop,
+		hasInterruptedQueue,
+		hasSendableInput,
+	});
+	const isPrimaryActionDisabled =
+		primaryAction === "resume"
+			? isResumingQueuedFollowUps
+			: primaryAction === "send" && (disabled || !hasSendableInput);
 
 	return (
 		<InputGroupAddon
@@ -1414,22 +1432,34 @@ function ChatComposerFooter({
 				{modelPicker}
 			</div>
 			<InputGroupButton
-				aria-label={shouldShowStop ? "Stop streaming" : "Send"}
+				aria-label={
+					primaryAction === "stop"
+						? "Stop streaming"
+						: primaryAction === "resume"
+							? "Resume"
+							: "Send"
+				}
 				className="rounded-full"
 				variant="default"
 				size="icon-sm"
-				disabled={isSendDisabled}
+				disabled={isPrimaryActionDisabled}
 				onClick={() => {
-					if (shouldShowStop) {
+					if (primaryAction === "stop") {
 						onStop();
+						return;
+					}
+					if (primaryAction === "resume") {
+						onResume();
 						return;
 					}
 
 					void onSubmit();
 				}}
 			>
-				{shouldShowStop ? (
+				{primaryAction === "stop" ? (
 					<Square className="size-3.5 fill-current" />
+				) : primaryAction === "resume" ? (
+					<Play className="size-4 fill-current" />
 				) : (
 					<ArrowUp className="size-4" />
 				)}
