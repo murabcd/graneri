@@ -8,9 +8,10 @@ import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import { logError } from "@/lib/logger";
 import {
-	prepareQueuedReplayIntent,
+	type BeginQueuedChatReplay,
 	prepareQueuedSteerIntent,
 	type QueuedChatSendMessage,
+	sendQueuedChatReplay,
 } from "@/lib/queued-chat-intent";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -42,6 +43,7 @@ export const useQueuedFollowUpControls = ({
 	acceptedQueuedMessageIdsRef,
 	acceptedQueuedMessageId,
 	activeRun,
+	beginReplay,
 	chatId,
 	contextLabel,
 	isQueueHandoffPending = false,
@@ -58,6 +60,7 @@ export const useQueuedFollowUpControls = ({
 	acceptedQueuedMessageIdsRef: React.MutableRefObject<Set<string>>;
 	acceptedQueuedMessageId: string | null;
 	activeRun: AttachableAssistantRunQueryResult;
+	beginReplay: BeginQueuedChatReplay;
 	chatId: string;
 	contextLabel: string;
 	isQueueHandoffPending?: boolean;
@@ -176,21 +179,29 @@ export const useQueuedFollowUpControls = ({
 					return;
 				}
 
-				const preparedQueuedIntent = isSteer
-					? await prepareQueuedSteerIntent({
-							activeRunId: activeRun._id,
-							hasMessageId: (messageId) => localMessageIds.has(messageId),
-							queuedMessage,
-							resolveConvexToken: getCachedConvexToken,
-						})
-					: await prepareQueuedReplayIntent({
-							hasMessageId: (messageId) => localMessageIds.has(messageId),
-							origin: "manual",
-							queuedMessage,
-							resolveConvexToken: getCachedConvexToken,
-						});
+				if (!isSteer) {
+					await sendQueuedChatReplay({
+						beginReplay,
+						hasMessageId: (messageId) => localMessageIds.has(messageId),
+						origin: "manual",
+						queuedMessage,
+						resolveConvexToken: getCachedConvexToken,
+						sendMessage,
+						setLatestRequestBody: (body) => {
+							latestRequestBodyRef.current = body;
+						},
+					});
+					return;
+				}
+
+				const preparedQueuedIntent = await prepareQueuedSteerIntent({
+					activeRunId: activeRun._id,
+					hasMessageId: (messageId) => localMessageIds.has(messageId),
+					queuedMessage,
+					resolveConvexToken: getCachedConvexToken,
+				});
 				latestRequestBodyRef.current = preparedQueuedIntent.body;
-				rollbackSteerStart = isSteer ? onSteerStart?.() : undefined;
+				rollbackSteerStart = onSteerStart?.();
 				await sendMessage(preparedQueuedIntent.message, {
 					body: preparedQueuedIntent.body,
 				});
@@ -224,6 +235,7 @@ export const useQueuedFollowUpControls = ({
 		[
 			acceptedQueuedMessageIdsRef,
 			activeRun,
+			beginReplay,
 			contextLabel,
 			isQueueHandoffPending,
 			latestRequestBodyRef,

@@ -23,6 +23,7 @@ vi.mock("../src/lib/convex-token", () => ({
 const workspaceId = "workspace-1" as Id<"workspaces">;
 const runId = "run-1" as Id<"assistantRuns">;
 const acceptedQueuedMessageIdsRef = { current: new Set<string>() };
+const beginReplay = () => () => undefined;
 const manuallySendingQueuedMessageIdRef = { current: null as string | null };
 
 const createQueuedMessage = ({
@@ -89,6 +90,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: { _id: runId, status: "running" },
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef,
@@ -142,6 +144,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: { _id: runId, status: "running" },
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -182,6 +185,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: { _id: runId, status: "running" },
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -228,6 +232,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: { _id: runId, status: "running" },
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -304,6 +309,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId,
 				activeRun,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -415,6 +421,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: { _id: runId, status: "running" },
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -473,6 +480,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: queueActiveRun,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -505,6 +513,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: "queued-1",
 				activeRun,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isQueueHandoffPending,
@@ -551,6 +560,12 @@ describe("useQueuedFollowUpControls", () => {
 		"queued",
 	] as const)("labels an inactive %s row as Retry and submits a manual replay intent", async (status) => {
 		const queuedMessage = createQueuedMessage({ status });
+		const lifecycleEvents: string[] = [];
+		const finishReplay = vi.fn(() => lifecycleEvents.push("finish"));
+		const beginReplay = vi.fn(() => {
+			lifecycleEvents.push("begin");
+			return finishReplay;
+		});
 		let queuedMessages = [queuedMessage];
 		const setQueuedMessages = vi.fn(
 			(
@@ -560,7 +575,9 @@ describe("useQueuedFollowUpControls", () => {
 			},
 		);
 		const onSteerStart = vi.fn();
-		const sendMessage = vi.fn().mockResolvedValue(undefined);
+		const sendMessage = vi.fn(async () => {
+			lifecycleEvents.push("send");
+		});
 		tokenMocks.getCachedConvexToken.mockResolvedValue("fresh-token");
 
 		const { result } = renderHook(() =>
@@ -568,6 +585,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -607,6 +625,9 @@ describe("useQueuedFollowUpControls", () => {
 				},
 			},
 		);
+		expect(beginReplay).toHaveBeenCalledWith(queuedMessage);
+		expect(finishReplay).toHaveBeenCalledOnce();
+		expect(lifecycleEvents).toEqual(["begin", "send", "finish"]);
 		expect(queuedMessages).toEqual([queuedMessage]);
 	});
 
@@ -622,6 +643,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },
@@ -670,6 +692,7 @@ describe("useQueuedFollowUpControls", () => {
 				acceptedQueuedMessageIdsRef,
 				acceptedQueuedMessageId: null,
 				activeRun: { _id: runId, status: "running" },
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				latestRequestBodyRef: { current: null },

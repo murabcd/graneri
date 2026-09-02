@@ -16,6 +16,7 @@ import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import { logError } from "@/lib/logger";
 import {
+	type BeginQueuedChatReplay,
 	drainQueuedChatMessage,
 	type QueuedChatSendMessage,
 } from "@/lib/queued-chat-intent";
@@ -26,6 +27,7 @@ export const useQueuedChatDrain = ({
 	acceptedQueuedMessageId,
 	acceptedQueuedMessageIdsRef,
 	activeRun,
+	beginReplay,
 	chatId,
 	contextLabel,
 	isBlocked,
@@ -37,6 +39,7 @@ export const useQueuedChatDrain = ({
 	acceptedQueuedMessageId: string | null;
 	acceptedQueuedMessageIdsRef: React.MutableRefObject<Set<string>>;
 	activeRun: AttachableAssistantRunQueryResult;
+	beginReplay: BeginQueuedChatReplay;
 	chatId: string;
 	contextLabel: string;
 	isBlocked: boolean;
@@ -167,6 +170,7 @@ export const useQueuedChatDrain = ({
 		void (async () => {
 			try {
 				const drainResult = await drainQueuedChatMessage({
+					beginReplay,
 					// Local message ids come from the live chat state used to de-dupe drains.
 					hasMessageId: (messageId) => localMessageIds.has(messageId),
 					queuedMessage,
@@ -214,6 +218,7 @@ export const useQueuedChatDrain = ({
 		acceptedQueuedMessageId,
 		acceptedQueuedMessageIdsRef,
 		activeRun,
+		beginReplay,
 		contextLabel,
 		isBlocked,
 		latestRequestBodyRef,

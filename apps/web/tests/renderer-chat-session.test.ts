@@ -2,7 +2,6 @@ import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
 	isRendererQueueActionPending,
-	isRendererQueueHandoffPending,
 	mergeRendererChatSessionMessages,
 	prepareRendererUserQuestionMessages,
 	resolveRendererChatRunState,
@@ -40,27 +39,6 @@ describe("renderer chat session", () => {
 				isAcceptedHandoffPending: false,
 				isChatRequestPending: false,
 				queueActiveRunId: null,
-			}),
-		).toBe(false);
-	});
-
-	it("keeps an accepted replay fenced until a different active run attaches", () => {
-		expect(
-			isRendererQueueHandoffPending({
-				activeRunId: null,
-				previousRunId: "run-1",
-			}),
-		).toBe(true);
-		expect(
-			isRendererQueueHandoffPending({
-				activeRunId: "run-1",
-				previousRunId: "run-1",
-			}),
-		).toBe(true);
-		expect(
-			isRendererQueueHandoffPending({
-				activeRunId: "run-2",
-				previousRunId: "run-1",
 			}),
 		).toBe(false);
 	});

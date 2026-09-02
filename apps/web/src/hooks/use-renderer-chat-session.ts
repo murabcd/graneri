@@ -34,7 +34,6 @@ import { recoverPendingLocalCapabilityToolCalls } from "@/lib/local-capability-r
 import { logError } from "@/lib/logger";
 import {
 	isRendererQueueActionPending,
-	isRendererQueueHandoffPending,
 	prepareRendererUserQuestionMessages,
 	shouldAutomaticallyContinueRendererChat,
 } from "@/lib/renderer-chat-session";
@@ -45,6 +44,7 @@ import { useChatTurnAdmission } from "./use-chat-turn-admission";
 import { useLocalFileStorage } from "./use-local-file-storage";
 import { useQueuedChatDrain } from "./use-queued-chat-drain";
 import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
+import { useQueuedReplayHandoff } from "./use-queued-replay-handoff";
 import { useRendererChatPresentation } from "./use-renderer-chat-presentation";
 import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
 import { useWorkspaceChatTransport } from "./use-workspace-chat-transport";
@@ -101,25 +101,6 @@ const getActivePendingBranchMessageId = ({
 
 const isAiChatRequestPending = (status: string) =>
 	status === "submitted" || status === "streaming";
-
-const getQueuedRunHandoffPending = ({
-	error,
-	queueActiveRunId,
-	queuedRunHandoff,
-}: {
-	error: Error | undefined;
-	queueActiveRunId: string | null;
-	queuedRunHandoff: {
-		previousRunId: string | null;
-		queuedMessageId: string;
-	} | null;
-}) =>
-	!error &&
-	queuedRunHandoff !== null &&
-	isRendererQueueHandoffPending({
-		activeRunId: queueActiveRunId,
-		previousRunId: queuedRunHandoff.previousRunId,
-	});
 
 export const useRendererChatSession = ({
 	activeRun,
@@ -181,26 +162,30 @@ export const useRendererChatSession = ({
 	const [acceptedQueuedMessageId, setAcceptedQueuedMessageId] = React.useState<
 		string | null
 	>(null);
-	const [queuedRunHandoff, setQueuedRunHandoff] = React.useState<{
-		previousRunId: string | null;
-		queuedMessageId: string;
-	} | null>(null);
 	const manuallySendingQueuedMessageIdRef = React.useRef<string | null>(null);
 	const acceptedQueuedMessageIdsRef = React.useRef(new Set<string>());
-	const latestQueueActiveRunIdRef = React.useRef<string | null>(null);
-	const queuedMessagesRef = React.useRef<Array<QueuedFollowUpMessage>>([]);
+	const queuedReplayHandoff = useQueuedReplayHandoff({
+		activeRunId: activeRun?._id ?? null,
+		scopeKey: chatId,
+	});
 	const handleQueuedAcceptance = React.useCallback(
 		(acceptance: { queuedMessageId: string; type: "replay" | "steer" }) => {
-			acceptedQueuedMessageIdsRef.current.add(acceptance.queuedMessageId);
 			if (acceptance.type === "replay") {
-				setQueuedRunHandoff({
-					previousRunId:
-						queuedMessagesRef.current.find(
-							(message) => message._id === acceptance.queuedMessageId,
-						)?.runId ?? latestQueueActiveRunIdRef.current,
+				const acceptanceResult = queuedReplayHandoff.acceptReplay({
 					queuedMessageId: acceptance.queuedMessageId,
 				});
+				if (acceptanceResult === "stale") {
+					return;
+				}
+				if (acceptanceResult === "missing_start") {
+					logError({
+						event: "client.error",
+						error: new Error("Queued replay start is missing."),
+						message: "Queued replay handoff invariant failed",
+					});
+				}
 			}
+			acceptedQueuedMessageIdsRef.current.add(acceptance.queuedMessageId);
 			if (
 				manuallySendingQueuedMessageIdRef.current === acceptance.queuedMessageId
 			) {
@@ -208,7 +193,7 @@ export const useRendererChatSession = ({
 			}
 			setAcceptedQueuedMessageId(acceptance.queuedMessageId);
 		},
-		[],
+		[queuedReplayHandoff.acceptReplay],
 	);
 	const transport = useWorkspaceChatTransport(
 		workspaceId,
@@ -281,6 +266,11 @@ export const useRendererChatSession = ({
 	);
 	const isAiRequestPending = isAiChatRequestPending(status);
 	const isChatRequestPending = isAiRequestPending || isPreparingRequest;
+	React.useEffect(() => {
+		if (error) {
+			queuedReplayHandoff.invalidateReplay();
+		}
+	}, [error, queuedReplayHandoff.invalidateReplay]);
 	const {
 		activeAssistantMessageId,
 		displayActiveRun,
@@ -306,16 +296,8 @@ export const useRendererChatSession = ({
 		queueActiveRun,
 		scopeKey: chatId,
 	});
-	React.useEffect(() => {
-		latestQueueActiveRunIdRef.current = queueActiveRun?._id ?? null;
-	}, [queueActiveRun?._id]);
-	const isQueuedRunHandoffPending = getQueuedRunHandoffPending({
-		error,
-		queueActiveRunId: queueActiveRun?._id ?? null,
-		queuedRunHandoff,
-	});
 	const isQueueActionPending = isRendererQueueActionPending({
-		isAcceptedHandoffPending: isQueuedRunHandoffPending,
+		isAcceptedHandoffPending: !error && queuedReplayHandoff.isPending,
 		isChatRequestPending,
 		queueActiveRunId: queueActiveRun?._id ?? null,
 	});
@@ -412,6 +394,7 @@ export const useRendererChatSession = ({
 		// A stopping run is no longer attachable for row actions, but it remains
 		// non-terminal and must fence automatic replay until Convex finishes it.
 		activeRun,
+		beginReplay: queuedReplayHandoff.beginReplay,
 		chatId,
 		contextLabel,
 		isBlocked:
@@ -424,13 +407,11 @@ export const useRendererChatSession = ({
 		sendMessage,
 		workspaceId,
 	});
-	React.useEffect(() => {
-		queuedMessagesRef.current = queuedMessages;
-	}, [queuedMessages]);
 	const queuedFollowUpControls = useQueuedFollowUpControls({
 		acceptedQueuedMessageIdsRef,
 		acceptedQueuedMessageId,
 		activeRun: queueActiveRun,
+		beginReplay: queuedReplayHandoff.beginReplay,
 		chatId,
 		contextLabel,
 		isQueueHandoffPending: isQueueActionPending,

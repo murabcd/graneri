@@ -13,6 +13,10 @@ type AutomaticallyReplayableQueuedMessage = Extract<
 >;
 type PreparedQueuedMessage = Awaited<ReturnType<typeof fromQueuedUserMessage>>;
 
+export type BeginQueuedChatReplay = (
+	queuedMessage: Pick<QueuedMessage, "_id">,
+) => () => void;
+
 export type QueuedChatSendMessage = (
 	message: PreparedQueuedMessage["message"],
 	options: { body: ChatRequestContext },
@@ -84,7 +88,29 @@ export const prepareQueuedSteerIntent = async ({
 	};
 };
 
+export const sendQueuedChatReplay = async (
+	args: PrepareQueuedReplayIntentArgs & {
+		beginReplay: BeginQueuedChatReplay;
+		sendMessage: QueuedChatSendMessage;
+		setLatestRequestBody: (body: ChatRequestContext) => void;
+	},
+) => {
+	const { beginReplay, sendMessage, setLatestRequestBody, ...prepareArgs } =
+		args;
+	const preparedQueuedMessage = await prepareQueuedReplayIntent(prepareArgs);
+	setLatestRequestBody(preparedQueuedMessage.body);
+	const finishReplay = beginReplay(args.queuedMessage);
+	try {
+		await sendMessage(preparedQueuedMessage.message, {
+			body: preparedQueuedMessage.body,
+		});
+	} finally {
+		finishReplay();
+	}
+};
+
 type DrainQueuedChatMessageArgs = {
+	beginReplay: BeginQueuedChatReplay;
 	hasMessageId: (messageId: string) => boolean;
 	queuedMessage: AutomaticallyReplayableQueuedMessage | null;
 	resolveConvexToken: () => Promise<string | null>;
@@ -100,6 +126,7 @@ type DrainQueuedChatMessageResult =
 	  };
 
 export const drainQueuedChatMessage = async ({
+	beginReplay,
 	hasMessageId,
 	queuedMessage,
 	resolveConvexToken,
@@ -116,15 +143,14 @@ export const drainQueuedChatMessage = async ({
 	}
 
 	try {
-		const preparedQueuedMessage = await prepareQueuedReplayIntent({
+		await sendQueuedChatReplay({
+			beginReplay,
 			hasMessageId,
 			origin: "automatic",
 			queuedMessage,
 			resolveConvexToken: async () => convexToken,
-		});
-		setLatestRequestBody(preparedQueuedMessage.body);
-		await sendMessage(preparedQueuedMessage.message, {
-			body: preparedQueuedMessage.body,
+			sendMessage,
+			setLatestRequestBody,
 		});
 		return { status: "sent" };
 	} catch (error) {

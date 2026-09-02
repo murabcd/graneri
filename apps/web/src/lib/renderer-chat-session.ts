@@ -30,14 +30,6 @@ export const resolveRendererQueueActiveRun = <
 	isAiRequestPending: boolean;
 }) => displayActiveRun ?? (isAiRequestPending ? activeRun : null);
 
-export const isRendererQueueHandoffPending = ({
-	activeRunId,
-	previousRunId,
-}: {
-	activeRunId: string | null;
-	previousRunId: string | null;
-}) => activeRunId === null || activeRunId === previousRunId;
-
 export const isRendererQueueActionPending = ({
 	isAcceptedHandoffPending,
 	isChatRequestPending,

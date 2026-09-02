@@ -29,6 +29,7 @@ const createQueuedMessage = () => ({
 const createDrainArgs = (
 	overrides: Partial<Parameters<typeof drainQueuedChatMessage>[0]> = {},
 ) => ({
+	beginReplay: vi.fn(() => vi.fn()),
 	hasMessageId: vi.fn().mockReturnValue(false),
 	queuedMessage: createQueuedMessage(),
 	resolveConvexToken: vi.fn().mockResolvedValue("fresh-token"),
@@ -53,7 +54,17 @@ describe("queued chat drain", () => {
 	});
 
 	it("sends a visible queued row for server-owned claiming", async () => {
-		const args = createDrainArgs();
+		const lifecycleEvents: string[] = [];
+		const finishReplay = vi.fn(() => lifecycleEvents.push("finish"));
+		const args = createDrainArgs({
+			beginReplay: vi.fn(() => {
+				lifecycleEvents.push("begin");
+				return finishReplay;
+			}),
+			sendMessage: vi.fn(async () => {
+				lifecycleEvents.push("send");
+			}),
+		});
 
 		await expect(drainQueuedChatMessage(args)).resolves.toEqual({
 			status: "sent",
@@ -85,6 +96,9 @@ describe("queued chat drain", () => {
 				},
 			},
 		);
+		expect(args.beginReplay).toHaveBeenCalledWith(args.queuedMessage);
+		expect(finishReplay).toHaveBeenCalledOnce();
+		expect(lifecycleEvents).toEqual(["begin", "send", "finish"]);
 	});
 
 	it("is idle when no queued row is visible", async () => {
@@ -99,7 +113,9 @@ describe("queued chat drain", () => {
 	it("keeps the queued row available when submission rejects", async () => {
 		const queuedMessage = createQueuedMessage();
 		const sendError = new Error("send failed");
+		const finishReplay = vi.fn();
 		const args = createDrainArgs({
+			beginReplay: vi.fn(() => finishReplay),
 			queuedMessage,
 			sendMessage: vi.fn().mockRejectedValue(sendError),
 		});
@@ -109,5 +125,6 @@ describe("queued chat drain", () => {
 			status: "send_failed",
 		});
 		expect(args.queuedMessage).toBe(queuedMessage);
+		expect(finishReplay).toHaveBeenCalledOnce();
 	});
 });

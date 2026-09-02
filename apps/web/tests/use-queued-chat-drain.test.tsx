@@ -6,10 +6,14 @@ import {
 	type ChatTransport,
 	type UIMessage,
 } from "ai";
+import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useQueuedChatDrain } from "../src/hooks/use-queued-chat-drain";
+import { useQueuedReplayHandoff } from "../src/hooks/use-queued-replay-handoff";
+import type { AttachableAssistantRunQueryResult } from "../src/lib/attachable-assistant-run";
 import { resetQueuedFollowUpsCacheForTest } from "../src/lib/chat-queued-followups";
+import type { QueuedChatSendMessage } from "../src/lib/queued-chat-intent";
 
 const convexMocks = vi.hoisted(() => ({
 	listQueuedForChat: [] as unknown,
@@ -19,6 +23,7 @@ const tokenMocks = vi.hoisted(() => ({
 	getCachedConvexToken: vi.fn(),
 }));
 const acceptedQueuedMessageIdsRef = { current: new Set<string>() };
+const beginReplay = () => () => undefined;
 
 vi.mock("convex/react", () => ({
 	useQuery: () => convexMocks.listQueuedForChat,
@@ -30,9 +35,11 @@ vi.mock("../src/lib/convex-token", () => ({
 
 const createQueuedMessage = ({
 	pauseReason = "failed",
+	runId = "run-1",
 	status = "queued",
 }: {
 	pauseReason?: "failed" | "interrupted";
+	runId?: string;
 	status?: "paused" | "queued";
 } = {}) => ({
 	_id: "queued-1" as Id<"assistantQueuedMessages">,
@@ -47,7 +54,7 @@ const createQueuedMessage = ({
 		projectId: null,
 		timezone: "UTC",
 	}),
-	runId: "run-1" as Id<"assistantRuns">,
+	runId: runId as Id<"assistantRuns">,
 	status,
 	...(status === "paused" && { pauseReason }),
 	text: "Queued",
@@ -81,6 +88,49 @@ const createFailingAiSdkChat = () => {
 	return new (class extends AbstractChat<UIMessage> {})({ state, transport });
 };
 
+const useQueuedChatDrainWithHandoff = ({
+	activeRun,
+	onSend,
+}: {
+	activeRun: AttachableAssistantRunQueryResult;
+	onSend: QueuedChatSendMessage;
+}) => {
+	const handoff = useQueuedReplayHandoff({
+		activeRunId: activeRun?._id ?? null,
+		scopeKey: "chat-1",
+	});
+	const sendMessage = React.useCallback<QueuedChatSendMessage>(
+		async (message, options) => {
+			await onSend(message, options);
+			const queuedMessageId = options.body.replayQueuedMessageId;
+			if (!queuedMessageId) {
+				throw new Error("Expected an automatic queued replay.");
+			}
+			acceptedQueuedMessageIdsRef.current.add(queuedMessageId);
+			const acceptanceResult = handoff.acceptReplay({ queuedMessageId });
+			if (acceptanceResult !== "accepted") {
+				throw new Error(`Unexpected replay acceptance: ${acceptanceResult}`);
+			}
+		},
+		[handoff.acceptReplay, onSend],
+	);
+	const drain = useQueuedChatDrain({
+		acceptedQueuedMessageId: null,
+		acceptedQueuedMessageIdsRef,
+		activeRun,
+		beginReplay: handoff.beginReplay,
+		chatId: "chat-1",
+		contextLabel: "chat",
+		isBlocked: handoff.isPending,
+		latestRequestBodyRef: { current: null },
+		localMessageIds: new Set(),
+		sendMessage,
+		workspaceId: "workspace-1" as Id<"workspaces">,
+	});
+
+	return { ...drain, ...handoff };
+};
+
 describe("useQueuedChatDrain", () => {
 	beforeEach(() => {
 		acceptedQueuedMessageIdsRef.current.clear();
@@ -103,6 +153,7 @@ describe("useQueuedChatDrain", () => {
 				acceptedQueuedMessageId: null,
 				acceptedQueuedMessageIdsRef,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
@@ -129,6 +180,7 @@ describe("useQueuedChatDrain", () => {
 				acceptedQueuedMessageId: null,
 				acceptedQueuedMessageIdsRef,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
@@ -181,6 +233,7 @@ describe("useQueuedChatDrain", () => {
 				acceptedQueuedMessageId: null,
 				acceptedQueuedMessageIdsRef,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
@@ -202,11 +255,11 @@ describe("useQueuedChatDrain", () => {
 		);
 	});
 
-	it("drains three queued rows FIFO across natural completions", async () => {
-		const rows = [
-			createQueuedMessage(),
+	it("drains a resumed three-row queue once per completed successor", async () => {
+		const resumedRows = [
+			createQueuedMessage({ runId: "run-stopping" }),
 			{
-				...createQueuedMessage(),
+				...createQueuedMessage({ runId: "run-stopping" }),
 				_id: "queued-2" as Id<"assistantQueuedMessages">,
 				createdAt: 2,
 				messageId: "queued-message-2",
@@ -214,7 +267,7 @@ describe("useQueuedChatDrain", () => {
 				updatedAt: 2,
 			},
 			{
-				...createQueuedMessage(),
+				...createQueuedMessage({ runId: "run-stopping" }),
 				_id: "queued-3" as Id<"assistantQueuedMessages">,
 				createdAt: 3,
 				messageId: "queued-message-3",
@@ -222,51 +275,61 @@ describe("useQueuedChatDrain", () => {
 				updatedAt: 3,
 			},
 		];
-		convexMocks.listQueuedForChat = rows;
-		const sendMessage = vi.fn().mockResolvedValue(undefined);
+		const pausedRows = resumedRows.map((message) => ({
+			...message,
+			pauseReason: "interrupted" as const,
+			status: "paused" as const,
+		}));
+		convexMocks.listQueuedForChat = pausedRows;
+		const sendMessage = vi.fn(async () => undefined);
 		tokenMocks.getCachedConvexToken.mockResolvedValue("fresh-token");
-		let activeRun: { _id: string; status: "running" } | null = null;
-		const { rerender } = renderHook(() =>
-			useQueuedChatDrain({
-				acceptedQueuedMessageId: null,
-				acceptedQueuedMessageIdsRef,
-				activeRun,
-				chatId: "chat-1",
-				contextLabel: "chat",
-				isBlocked: false,
-				latestRequestBodyRef: { current: null },
-				localMessageIds: new Set(),
-				sendMessage,
-				workspaceId: "workspace-1" as Id<"workspaces">,
-			}),
+		let activeRun: AttachableAssistantRunQueryResult = {
+			_id: "run-stopping" as Id<"assistantRuns">,
+			status: "stopping",
+		};
+		const { result, rerender } = renderHook(() =>
+			useQueuedChatDrainWithHandoff({ activeRun, onSend: sendMessage }),
 		);
 
-		await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
-		expect(sendMessage.mock.calls[0]?.[1].body.replayQueuedMessageId).toBe(
-			"queued-1",
-		);
-		activeRun = { _id: "run-1", status: "running" };
-		convexMocks.listQueuedForChat = rows.slice(1);
+		expect(sendMessage).not.toHaveBeenCalled();
+		activeRun = null;
 		rerender();
+		expect(sendMessage).not.toHaveBeenCalled();
+
+		convexMocks.listQueuedForChat = resumedRows;
+		rerender();
+		await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+		expect(result.current.isPending).toBe(true);
+		convexMocks.listQueuedForChat = resumedRows.slice(1);
+		rerender();
+		expect(sendMessage).toHaveBeenCalledTimes(1);
+
+		activeRun = {
+			_id: "run-resumed-1" as Id<"assistantRuns">,
+			status: "running",
+		};
+		rerender();
+		expect(result.current.isPending).toBe(false);
 		expect(sendMessage).toHaveBeenCalledTimes(1);
 
 		activeRun = null;
 		rerender();
 		await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
-		expect(sendMessage.mock.calls[1]?.[1].body.replayQueuedMessageId).toBe(
-			"queued-2",
-		);
-		activeRun = { _id: "run-2", status: "running" };
-		convexMocks.listQueuedForChat = rows.slice(2);
+		expect(result.current.isPending).toBe(true);
+		convexMocks.listQueuedForChat = resumedRows.slice(2);
+		activeRun = {
+			_id: "run-resumed-2" as Id<"assistantRuns">,
+			status: "running",
+		};
 		rerender();
 		expect(sendMessage).toHaveBeenCalledTimes(2);
 
 		activeRun = null;
 		rerender();
 		await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(3));
-		expect(sendMessage.mock.calls[2]?.[1].body.replayQueuedMessageId).toBe(
-			"queued-3",
-		);
+		expect(
+			sendMessage.mock.calls.map((call) => call[1].body.replayQueuedMessageId),
+		).toEqual(["queued-1", "queued-2", "queued-3"]);
 	});
 
 	it("keeps the durable row visible when AI SDK swallows a transport error", async () => {
@@ -278,6 +341,7 @@ describe("useQueuedChatDrain", () => {
 				acceptedQueuedMessageId: null,
 				acceptedQueuedMessageIdsRef,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
@@ -305,6 +369,7 @@ describe("useQueuedChatDrain", () => {
 				acceptedQueuedMessageId: null,
 				acceptedQueuedMessageIdsRef,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
@@ -333,6 +398,7 @@ describe("useQueuedChatDrain", () => {
 					_id: "run-stopping" as Id<"assistantRuns">,
 					status: "stopping",
 				},
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
@@ -366,6 +432,7 @@ describe("useQueuedChatDrain", () => {
 				acceptedQueuedMessageId: null,
 				acceptedQueuedMessageIdsRef,
 				activeRun: null,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
@@ -405,6 +472,7 @@ describe("useQueuedChatDrain", () => {
 				acceptedQueuedMessageId: acceptedMessage._id,
 				acceptedQueuedMessageIdsRef,
 				activeRun,
+				beginReplay,
 				chatId: "chat-1",
 				contextLabel: "chat",
 				isBlocked: false,
