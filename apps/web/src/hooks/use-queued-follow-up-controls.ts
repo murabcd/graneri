@@ -3,7 +3,14 @@ import * as React from "react";
 import { toast } from "sonner";
 import type { QueuedFollowUpBarItem } from "@/components/chat/chat-queued-follow-up-bar";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
-import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
+import {
+	type QueuedFollowUpMessage,
+	type QueuedFollowUpOrderSnapshot,
+	type QueuedFollowUpSnapshot,
+	reorderQueuedFollowUps,
+	restoreQueuedFollowUp,
+	restoreQueuedFollowUpOrder,
+} from "@/lib/chat-queued-followups";
 import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import type { FollowUpBehavior } from "@/lib/follow-up-behavior";
@@ -22,10 +29,6 @@ type SetQueuedMessages = (
 		messages: Array<QueuedFollowUpMessage>,
 	) => Array<QueuedFollowUpMessage>,
 ) => void;
-type QueuedMessageEditDraft = {
-	index: number;
-	message: QueuedFollowUpMessage;
-};
 type QueuedMessageSendIntent =
 	| { type: "replay"; queuedMessage: QueuedFollowUpMessage }
 	| {
@@ -34,19 +37,6 @@ type QueuedMessageSendIntent =
 			queuedMessage: QueuedFollowUpMessage;
 			runId: Id<"assistantRuns">;
 	  };
-
-const restoreQueuedMessageAtIndex = (
-	messages: Array<QueuedFollowUpMessage>,
-	editDraft: QueuedMessageEditDraft,
-) => {
-	if (messages.some((message) => message._id === editDraft.message._id)) {
-		return messages;
-	}
-
-	const nextMessages = [...messages];
-	nextMessages.splice(editDraft.index, 0, editDraft.message);
-	return nextMessages;
-};
 
 export const useQueuedFollowUpControls = ({
 	acceptedQueuedMessageIdsRef,
@@ -107,19 +97,17 @@ export const useQueuedFollowUpControls = ({
 			: pendingSendingNowId;
 	const [isResuming, setIsResuming] = React.useState(false);
 	const [editingId, setEditingId] = React.useState<string | null>(null);
-	const [deletingId, setDeletingId] = React.useState<string | null>(null);
 	const [editDraft, setEditDraft] =
-		React.useState<QueuedMessageEditDraft | null>(null);
+		React.useState<QueuedFollowUpSnapshot | null>(null);
 	const editingIdRef = React.useRef<string | null>(null);
+	const latestReorderOperationRef = React.useRef(0);
 	const restoreEditedQueuedMessage = React.useCallback(() => {
 		if (!editDraft) {
 			return;
 		}
 
 		editingIdRef.current = null;
-		setQueuedMessages((messages) =>
-			restoreQueuedMessageAtIndex(messages, editDraft),
-		);
+		setQueuedMessages((messages) => restoreQueuedFollowUp(messages, editDraft));
 		setEditDraft(null);
 		setEditingId(null);
 	}, [editDraft, setQueuedMessages]);
@@ -362,7 +350,7 @@ export const useQueuedFollowUpControls = ({
 			});
 			setQueuedMessages((messages) => {
 				const nextMessages = editDraft
-					? restoreQueuedMessageAtIndex(messages, editDraft)
+					? restoreQueuedFollowUp(messages, editDraft)
 					: messages;
 
 				return nextMessages.filter(
@@ -376,10 +364,10 @@ export const useQueuedFollowUpControls = ({
 
 	const handleDelete = React.useCallback(
 		async (queuedMessageId: string) => {
-			const queuedMessage = queuedMessages.find(
+			const queuedMessageIndex = queuedMessages.findIndex(
 				(message) => message._id === queuedMessageId,
 			);
-			if (!queuedMessage) {
+			if (queuedMessageIndex < 0) {
 				return;
 			}
 			if (!workspaceId) {
@@ -387,17 +375,24 @@ export const useQueuedFollowUpControls = ({
 				return;
 			}
 
-			setDeletingId(queuedMessage._id);
+			const queuedMessage = queuedMessages[queuedMessageIndex];
+			const snapshot: QueuedFollowUpSnapshot = {
+				index: queuedMessageIndex,
+				message: queuedMessage,
+			};
+			setQueuedMessages((messages) =>
+				messages.filter((message) => message._id !== queuedMessage._id),
+			);
 			try {
 				await discardQueuedMessage({
 					workspaceId,
 					chatId,
 					queuedMessageId: queuedMessage._id,
 				});
-				setQueuedMessages((messages) =>
-					messages.filter((message) => message._id !== queuedMessage._id),
-				);
 			} catch (error) {
+				setQueuedMessages((messages) =>
+					restoreQueuedFollowUp(messages, snapshot),
+				);
 				logError({
 					event: "client.error",
 					error,
@@ -408,8 +403,6 @@ export const useQueuedFollowUpControls = ({
 						? error.message
 						: "Failed to delete queued message",
 				);
-			} finally {
-				setDeletingId(null);
 			}
 		},
 		[
@@ -428,35 +421,39 @@ export const useQueuedFollowUpControls = ({
 				return;
 			}
 
-			setQueuedMessages((messages) => {
-				const messagesById = new Map(
-					messages.map((message) => [message._id, message]),
-				);
-				const reorderedMessages = queuedMessageIds
-					.map((queuedMessageId) =>
-						messagesById.get(queuedMessageId as Id<"assistantQueuedMessages">),
-					)
-					.filter(
-						(message): message is (typeof messages)[number] =>
-							message !== undefined,
-					);
+			const reorderedMessages = reorderQueuedFollowUps(
+				queuedMessages,
+				queuedMessageIds,
+			);
+			if (reorderedMessages === queuedMessages) {
+				return;
+			}
 
-				return reorderedMessages.length === messages.length
-					? reorderedMessages
-					: messages;
-			});
+			const rollbackSnapshot: QueuedFollowUpOrderSnapshot = {
+				optimisticIds: reorderedMessages.map((message) => message._id),
+				previousIds: queuedMessages.map((message) => message._id),
+			};
+			setQueuedMessages(() => reorderedMessages);
+			const reorderOperation = latestReorderOperationRef.current + 1;
+			latestReorderOperationRef.current = reorderOperation;
 			void reorderQueuedMessages({
 				workspaceId,
 				chatId,
-				queuedMessageIds: queuedMessageIds as Array<
-					Id<"assistantQueuedMessages">
-				>,
+				queuedMessageIds: reorderedMessages.map((message) => message._id),
 			}).catch((error) => {
+				if (latestReorderOperationRef.current === reorderOperation) {
+					setQueuedMessages((messages) =>
+						restoreQueuedFollowUpOrder(messages, rollbackSnapshot),
+					);
+				}
 				logError({
 					event: "client.error",
 					error,
 					message: `Failed to reorder queued ${contextLabel} messages`,
 				});
+				if (latestReorderOperationRef.current !== reorderOperation) {
+					return;
+				}
 				toast.error(
 					error instanceof Error
 						? error.message
@@ -467,6 +464,7 @@ export const useQueuedFollowUpControls = ({
 		[
 			chatId,
 			contextLabel,
+			queuedMessages,
 			reorderQueuedMessages,
 			setQueuedMessages,
 			workspaceId,
@@ -502,7 +500,6 @@ export const useQueuedFollowUpControls = ({
 						isInterrupted ||
 						isHandoffBlocked ||
 						Boolean(activeRun && (!isSteer || activeRun.status !== "running")),
-					isDeleting: deletingId === queuedMessage._id,
 					isEditing: editingId === queuedMessage._id,
 					isSendingNow: sendingNowId === queuedMessage._id,
 					isUpdatingFollowUpBehavior,
@@ -525,7 +522,6 @@ export const useQueuedFollowUpControls = ({
 			}),
 		[
 			activeRun,
-			deletingId,
 			editingId,
 			followUpBehavior,
 			handleDelete,

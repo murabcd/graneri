@@ -37,7 +37,6 @@ export type QueuedFollowUpBarItem = {
 	actionLabel: "Retry" | "Steer" | null;
 	helpText?: string;
 	id: string;
-	isDeleting: boolean;
 	isEditing: boolean;
 	isActionDisabled: boolean;
 	isSendingNow: boolean;
@@ -261,7 +260,6 @@ function SortableQueuedFollowUpRow({
 					type="button"
 					variant="ghost"
 					size="icon-sm"
-					disabled={queuedFollowUp.isDeleting}
 					onPointerDown={stopActionPointerDown}
 					onClick={queuedFollowUp.onDelete}
 					className="rounded-full text-muted-foreground"

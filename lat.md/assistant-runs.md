@@ -608,6 +608,12 @@ run query yet. A pre-accept steer failure leaves the row recoverable. The queued
 row menu's Turn on or Turn off action and the Preferences select update only
 this preference: neither action deletes, sends, resumes, or reorders an existing
 row.
+[[apps/web/src/lib/chat-queued-followups.ts]] applies Delete and reorder to the
+renderer's visible queue immediately. A rejected Delete restores the row at its
+prior position, while a rejected reorder restores the prior relative order only
+when no newer reorder or external order change has superseded it. Steer and Retry
+remain visible until the hosted route confirms durable acceptance; their
+completion is not optimistic.
 When the renderer owns a just-submitted turn but its active-run subscription has
 not attached, every later input uses `enqueueForCurrentRun`: one Convex
 transaction inserts the row against either the unique current run or the oldest
