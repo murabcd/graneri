@@ -1,4 +1,4 @@
-import type { Tool, ToolExecutionOptions } from "ai";
+import type { ToolExecutionOptions, ToolSet } from "ai";
 import type {
 	ArtifactAuthoringInput,
 	ArtifactToolOutput,
@@ -9,6 +9,6 @@ export type AuthorArtifact = (args: {
 	input: ArtifactAuthoringInput;
 }) => Promise<ArtifactToolOutput>;
 
-export declare const createArtifactAuthoringTool: (args: {
+export declare const createArtifactAuthoringTools: (args: {
 	authorArtifact: AuthorArtifact;
-}) => Tool;
+}) => ToolSet;

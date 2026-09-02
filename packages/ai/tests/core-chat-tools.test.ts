@@ -15,12 +15,15 @@ describe("core chat tool catalog", () => {
 		const finalized = finalizeOpenAIToolSet(tools);
 
 		expect(Object.keys(tools).sort()).toEqual([
-			"author_artifact",
+			"author_document",
+			"author_pdf",
+			"author_presentation",
+			"author_spreadsheet",
 			"generate_chart",
 			"generate_image",
 		]);
 		expect(finalized.hasToolSearch).toBe(true);
-		expect(finalized.deferredToolCount).toBe(3);
+		expect(finalized.deferredToolCount).toBe(6);
 		for (const tool of Object.values(tools)) {
 			expect(tool.description).toBeTruthy();
 			expect(tool.providerOptions?.openai?.deferLoading).toBe(true);
@@ -31,8 +34,14 @@ describe("core chat tool catalog", () => {
 		expect(tools.generate_chart.description).toContain(
 			"Do not use this for research, prose comparisons, comparison tables",
 		);
-		expect(tools.author_artifact.description).toContain("# Documents");
-		expect(tools.author_artifact.description).toContain("# Presentations");
+		expect(tools.author_document.description).toContain("# Documents");
+		expect(tools.author_document.description).not.toContain("# Presentations");
+		expect(tools.author_pdf.description).toContain("# PDF");
+		expect(tools.author_pdf.description).not.toContain("# Spreadsheets");
+		expect(tools.author_presentation.description).toContain("# Presentations");
+		expect(tools.author_presentation.description).not.toContain("# Documents");
+		expect(tools.author_spreadsheet.description).toContain("# Spreadsheets");
+		expect(tools.author_spreadsheet.description).not.toContain("# PDF");
 	});
 
 	it("keeps explicit Web immediate and omits unavailable storage tools", () => {

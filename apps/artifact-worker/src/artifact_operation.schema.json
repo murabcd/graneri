@@ -185,26 +185,46 @@
           "maxItems": 2,
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "filename": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 240
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "format": {
+                    "type": "string",
+                    "const": "docx"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "format"
+                ],
+                "additionalProperties": false
               },
-              "format": {
-                "type": "string",
-                "enum": [
-                  "docx",
-                  "pdf"
-                ]
+              {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "format": {
+                    "type": "string",
+                    "const": "pdf"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "format"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "filename",
-              "format"
-            ],
-            "additionalProperties": false
+            ]
           }
         }
       },
@@ -429,26 +449,46 @@
           "maxItems": 2,
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "filename": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 240
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "format": {
+                    "type": "string",
+                    "const": "docx"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "format"
+                ],
+                "additionalProperties": false
               },
-              "format": {
-                "type": "string",
-                "enum": [
-                  "docx",
-                  "pdf"
-                ]
+              {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "format": {
+                    "type": "string",
+                    "const": "pdf"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "format"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "filename",
-              "format"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "source": {
@@ -498,26 +538,46 @@
           "maxItems": 1,
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "filename": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 240
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "format": {
+                    "type": "string",
+                    "const": "docx"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "format"
+                ],
+                "additionalProperties": false
               },
-              "format": {
-                "type": "string",
-                "enum": [
-                  "docx",
-                  "pdf"
-                ]
+              {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "format": {
+                    "type": "string",
+                    "const": "pdf"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "format"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "filename",
-              "format"
-            ],
-            "additionalProperties": false
+            ]
           }
         },
         "source": {

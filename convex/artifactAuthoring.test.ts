@@ -175,7 +175,7 @@ test("artifact jobs validate uploads and transfer storage lifetime to chat refer
 			messageId: "assistant-1",
 			partsJson: JSON.stringify([
 				{
-					type: "tool-author_artifact",
+					type: "tool-author_document",
 					state: "output-available",
 					output: {
 						artifacts: [

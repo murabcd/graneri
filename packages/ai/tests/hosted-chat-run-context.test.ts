@@ -103,7 +103,10 @@ describe("hosted chat run context", () => {
 		);
 		expect(Object.keys(context.tools)).toEqual(
 			expect.arrayContaining([
-				"author_artifact",
+				"author_document",
+				"author_pdf",
+				"author_presentation",
+				"author_spreadsheet",
 				"create_automation",
 				"delete_automation",
 				"generate_chart",

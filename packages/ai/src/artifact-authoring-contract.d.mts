@@ -1,6 +1,11 @@
 import type { z } from "zod";
 
-export declare const ARTIFACT_AUTHORING_TOOL_NAME = "author_artifact";
+export declare const ARTIFACT_AUTHORING_TOOL_NAMES: Readonly<{
+	document: "author_document";
+	pdf: "author_pdf";
+	presentation: "author_presentation";
+	spreadsheet: "author_spreadsheet";
+}>;
 export declare const ARTIFACT_TOOL_NAMESPACE: Readonly<{
 	name: "artifact_creation";
 	description: string;
@@ -144,9 +149,29 @@ export type ArtifactAuthoringInput =
 			kind: "pdf_edit";
 			source: ArtifactSource;
 	  };
+export type DocumentAuthoringInput = Extract<
+	ArtifactAuthoringInput,
+	{ kind: "document_create" | "document_edit" }
+>;
+export type PdfAuthoringInput = Extract<
+	ArtifactAuthoringInput,
+	{ kind: "document_create" | "document_export" | "pdf_edit" }
+>;
+export type PresentationAuthoringInput = Extract<
+	ArtifactAuthoringInput,
+	{ kind: "presentation_create" | "presentation_edit" }
+>;
+export type SpreadsheetAuthoringInput = Extract<
+	ArtifactAuthoringInput,
+	{ kind: "spreadsheet_create" | "spreadsheet_edit" }
+>;
 export declare const documentSpecSchema: z.ZodType<DocumentSpec>;
 export declare const spreadsheetSheetSchema: z.ZodType<SpreadsheetSheet>;
 export declare const presentationSpecSchema: z.ZodType<PresentationSpec>;
+export declare const documentAuthoringInputSchema: z.ZodType<DocumentAuthoringInput>;
+export declare const pdfAuthoringInputSchema: z.ZodType<PdfAuthoringInput>;
+export declare const presentationAuthoringInputSchema: z.ZodType<PresentationAuthoringInput>;
+export declare const spreadsheetAuthoringInputSchema: z.ZodType<SpreadsheetAuthoringInput>;
 export declare const artifactAuthoringInputSchema: z.ZodType<ArtifactAuthoringInput>;
 export declare const generatedArtifactSchema: z.ZodType<GeneratedArtifact>;
 export declare const artifactToolOutputSchema: z.ZodType<ArtifactToolOutput>;

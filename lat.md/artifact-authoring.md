@@ -4,9 +4,9 @@ Artifact authoring turns one assistant tool operation into one or more immutable
 
 ## Public assistant contract
 
-`author_artifact` is the only model-facing tool for DOCX, PDF, XLSX, and PPTX creation, editing, and DOCX-to-PDF export.
+`author_document`, `author_pdf`, `author_spreadsheet`, and `author_presentation` are the model-facing file tools; each exposes only its format operations and canonical skill.
 
-[artifact-authoring-contract.mjs](../packages/ai/src/artifact-authoring-contract.mjs) owns its bounded discriminated input, canonical MIME types, source references, multi-output result, and shared artifact-discovery namespace. [artifact-authoring-tool.mjs](../packages/ai/src/artifact-authoring-tool.mjs) owns the model-facing tool description and requires structured content or explicit edit operations instead of generated code.
+[artifact-authoring-contract.mjs](../packages/ai/src/artifact-authoring-contract.mjs) owns the format-specific model schemas, complete server-boundary union, canonical MIME types, source references, multi-output result, and shared artifact-discovery namespace. [artifact-authoring-tool.mjs](../packages/ai/src/artifact-authoring-tool.mjs) maps every format schema to its generated skill and requires structured content or explicit edit operations instead of generated code. All four tools delegate to the same durable authoring executor after their narrower model boundary validates the call.
 
 One call may return multiple final artifacts when they represent the same authoring operation, such as a DOCX plus its PDF export. Each artifact is shown and downloaded independently; download never performs a conversion. Uploaded files and previous assistant artifacts use the same Convex storage id reference. Every edit writes a new output and never mutates the source bytes.
 
@@ -16,7 +16,7 @@ Artifact creation tools are available when their runtime dependencies are execut
 
 The `SKILL.md` files under `packages/ai/skills` remain the canonical format-specific authoring guidance. `generate-artifact-authoring-skills.mjs` compiles them into the server-safe registry checked by `check:artifact-skills`.
 
-Graneri does not inspect user-message wording to enable artifact tools, select format guidance, inject artifact instructions into the global run prompt, or force a first-step tool call. `author_artifact`, `generate_image`, and `generate_chart` expose precise positive and negative selection guidance through their model-facing descriptions, share the `artifact_creation` namespace, and declare their bounded parameter schemas. The deferred `author_artifact` description includes all four compiled format skills, so the detailed guidance enters model context only with that tool definition and needs no prompt classifier. OpenAI Tool Search decides whether to load an artifact tool. Explicit Web mode remains an immediate provider tool and is not part of this namespace.
+Graneri does not inspect user-message wording to enable artifact tools, select format guidance, inject artifact instructions into the global run prompt, or force a first-step tool call. The four file tools, `generate_image`, and `generate_chart` expose precise positive and negative selection guidance, share the `artifact_creation` namespace, and declare bounded parameter schemas. Each deferred file tool contains exactly one compiled format skill. OpenAI Tool Search therefore loads the document, PDF, spreadsheet, or presentation definition and guidance independently while the other formats remain unloaded. Explicit Web mode remains an immediate provider tool and is not part of this namespace. The removed `author_artifact` aggregate has no compatibility alias.
 
 The tool description, typed operation schema, and format worker modules form one contract. Tool selection cannot expand the schema, run model-written code, bypass validation, expose intermediate files, or publish an output directly.
 

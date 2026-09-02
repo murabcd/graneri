@@ -199,7 +199,7 @@ describe("ChatSummarySheet", () => {
 					{
 						type: "dynamic-tool",
 						toolCallId: "author-artifact-1",
-						toolName: "author_artifact",
+						toolName: "author_pdf",
 						state: "output-available",
 						input: { title: "Generated report" },
 						output: {

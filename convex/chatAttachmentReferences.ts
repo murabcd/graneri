@@ -1,3 +1,4 @@
+import { ARTIFACT_AUTHORING_TOOL_NAMES } from "@workspace/ai/artifact-authoring-contract";
 import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
 import { z } from "zod";
@@ -27,7 +28,20 @@ const generatedAttachmentSchema = z.object({
 const authoredArtifactsOutputSchema = z.object({
 	artifacts: z.array(generatedAttachmentSchema),
 });
-const attachmentBearingToolPartSchema = z.discriminatedUnion("type", [
+const documentToolPartType =
+	`tool-${ARTIFACT_AUTHORING_TOOL_NAMES.document}` as const;
+const pdfToolPartType = `tool-${ARTIFACT_AUTHORING_TOOL_NAMES.pdf}` as const;
+const presentationToolPartType =
+	`tool-${ARTIFACT_AUTHORING_TOOL_NAMES.presentation}` as const;
+const spreadsheetToolPartType =
+	`tool-${ARTIFACT_AUTHORING_TOOL_NAMES.spreadsheet}` as const;
+const authoredArtifactToolPartTypes = [
+	documentToolPartType,
+	pdfToolPartType,
+	presentationToolPartType,
+	spreadsheetToolPartType,
+] as const;
+const attachmentBearingToolPartSchema = z.union([
 	z.object({
 		output: authoredArtifactsOutputSchema,
 		state: z.literal("output-available"),
@@ -36,7 +50,7 @@ const attachmentBearingToolPartSchema = z.discriminatedUnion("type", [
 	z.object({
 		output: authoredArtifactsOutputSchema,
 		state: z.literal("output-available"),
-		type: z.literal("tool-author_artifact"),
+		type: z.enum(authoredArtifactToolPartTypes),
 	}),
 	z.object({
 		output: z.object({
@@ -93,7 +107,10 @@ const getAttachmentReferencesFromToolPart = (part: unknown) => {
 
 	switch (result.data.type) {
 		case "tool-generate_image":
-		case "tool-author_artifact":
+		case documentToolPartType:
+		case pdfToolPartType:
+		case presentationToolPartType:
+		case spreadsheetToolPartType:
 			return result.data.output.artifacts.map((artifact) => ({
 				filename: artifact.filename,
 				mediaType: artifact.mediaType,

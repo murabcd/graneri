@@ -1,14 +1,22 @@
+import { ARTIFACT_AUTHORING_TOOL_NAMES } from "./artifact-authoring-contract.mjs";
 import { LOCAL_FOLDER_TOOL_UI_METADATA } from "./local-folder-tool-definitions.mjs";
 
+const ARTIFACT_AUTHORING_TOOL_UI_METADATA = Object.freeze({
+	groupKey: "artifact",
+	icon: "file-text",
+	running: "Authoring file",
+	complete: "Authored file",
+	error: "File authoring failed",
+	subtitleKeys: ["kind", "filename"],
+});
+
 export const toolUiMetadata = {
-	author_artifact: {
-		groupKey: "artifact",
-		icon: "file-text",
-		running: "Authoring file",
-		complete: "Authored file",
-		error: "File authoring failed",
-		subtitleKeys: ["kind", "filename"],
-	},
+	[ARTIFACT_AUTHORING_TOOL_NAMES.document]: ARTIFACT_AUTHORING_TOOL_UI_METADATA,
+	[ARTIFACT_AUTHORING_TOOL_NAMES.pdf]: ARTIFACT_AUTHORING_TOOL_UI_METADATA,
+	[ARTIFACT_AUTHORING_TOOL_NAMES.presentation]:
+		ARTIFACT_AUTHORING_TOOL_UI_METADATA,
+	[ARTIFACT_AUTHORING_TOOL_NAMES.spreadsheet]:
+		ARTIFACT_AUTHORING_TOOL_UI_METADATA,
 	create_automation: {
 		groupKey: "automation",
 		icon: "calendar",

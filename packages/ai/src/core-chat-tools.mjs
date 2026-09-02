@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { artifactToolOutputSchema } from "./artifact-authoring-contract.mjs";
-import { createArtifactAuthoringTool } from "./artifact-authoring-tool.mjs";
+import { createArtifactAuthoringTools } from "./artifact-authoring-tool.mjs";
 import { createChartGenerationTool } from "./chart-generation-tool.mjs";
 import {
 	createConvexGeneratedImageUploader,
@@ -43,19 +43,22 @@ export const buildCoreChatTools = ({
 				client: convexClient,
 			}),
 		});
-		tools.author_artifact = createArtifactAuthoringTool({
-			authorArtifact: async ({ idempotencyKey, input }) =>
-				artifactToolOutputSchema.parse(
-					JSON.parse(
-						await convexClient.action(artifactAuthoringApi.author, {
-							workspaceId,
-							chatId,
-							idempotencyKey,
-							inputJson: JSON.stringify(input),
-						}),
+		Object.assign(
+			tools,
+			createArtifactAuthoringTools({
+				authorArtifact: async ({ idempotencyKey, input }) =>
+					artifactToolOutputSchema.parse(
+						JSON.parse(
+							await convexClient.action(artifactAuthoringApi.author, {
+								workspaceId,
+								chatId,
+								idempotencyKey,
+								inputJson: JSON.stringify(input),
+							}),
+						),
 					),
-				),
-		});
+			}),
+		);
 	}
 
 	return tools;

@@ -31,7 +31,7 @@ const generatedArtifactMessage: UIMessage = {
 			url: artifactUrl,
 		},
 		{
-			type: "tool-author_artifact",
+			type: "tool-author_document",
 			toolCallId: "author-artifact-1",
 			state: "output-available",
 			input: {

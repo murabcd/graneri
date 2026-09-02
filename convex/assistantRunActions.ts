@@ -2,7 +2,7 @@
 
 import { openai } from "@ai-sdk/openai";
 import type { ArtifactSource } from "@workspace/ai/artifact-authoring-contract";
-import { createArtifactAuthoringTool } from "@workspace/ai/artifact-authoring-tool";
+import { createArtifactAuthoringTools } from "@workspace/ai/artifact-authoring-tool";
 import { buildChatAutomationContext } from "@workspace/ai/automation-tools";
 import { createChartGenerationTool } from "@workspace/ai/chart-generation-tool";
 import {
@@ -349,7 +349,7 @@ export const runStep = internalAction({
 							storage: ctx.storage,
 						}),
 					}),
-					author_artifact: createArtifactAuthoringTool({
+					...createArtifactAuthoringTools({
 						authorArtifact: ({ idempotencyKey, input }) =>
 							executeArtifactAuthoring(ctx, {
 								ownerTokenIdentifier: context.ownerTokenIdentifier,

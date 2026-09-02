@@ -1,19 +1,79 @@
 import { describe, expect, it } from "vitest";
 import {
 	artifactAuthoringInputSchema,
+	documentAuthoringInputSchema,
 	parseArtifactToolOutput,
+	pdfAuthoringInputSchema,
+	presentationAuthoringInputSchema,
+	spreadsheetAuthoringInputSchema,
 } from "../src/artifact-authoring-contract.mjs";
-import { ARTIFACT_AUTHORING_SKILL_DESCRIPTION } from "../src/artifact-authoring-skills.mjs";
-import { createArtifactAuthoringTool } from "../src/artifact-authoring-tool.mjs";
+import { createArtifactAuthoringTools } from "../src/artifact-authoring-tool.mjs";
 
 describe("artifact authoring contract", () => {
-	it("injects every canonical format skill into the deferred tool description", () => {
-		const description = ARTIFACT_AUTHORING_SKILL_DESCRIPTION;
+	it("injects only the matching canonical skill into each deferred format tool", () => {
+		const tools = createArtifactAuthoringTools({
+			authorArtifact: async () => {
+				throw new Error("Not executed by this contract test.");
+			},
+		});
+		const expectedHeadingByTool = {
+			author_document: "# Documents",
+			author_pdf: "# PDF",
+			author_presentation: "# Presentations",
+			author_spreadsheet: "# Spreadsheets",
+		};
+		const skillHeadings = Object.values(expectedHeadingByTool);
 
-		expect(description).toContain("# Documents");
-		expect(description).toContain("# Spreadsheets");
-		expect(description).toContain("# Presentations");
-		expect(description).toContain("# PDF");
+		expect(Object.keys(tools).sort()).toEqual(
+			Object.keys(expectedHeadingByTool).sort(),
+		);
+		for (const [toolName, expectedHeading] of Object.entries(
+			expectedHeadingByTool,
+		)) {
+			const description = tools[toolName]?.description;
+			expect(description).toContain(expectedHeading);
+			for (const otherHeading of skillHeadings) {
+				if (otherHeading !== expectedHeading) {
+					expect(description).not.toContain(otherHeading);
+				}
+			}
+		}
+	});
+
+	it("keeps every model-facing schema limited to its format operations", () => {
+		const documentCreate = {
+			document: {
+				blocks: [{ text: "Ready.", type: "paragraph" }],
+				title: "Brief",
+			},
+			kind: "document_create",
+		};
+
+		expect(() =>
+			documentAuthoringInputSchema.parse({
+				...documentCreate,
+				outputs: [{ filename: "brief.pdf", format: "pdf" }],
+			}),
+		).toThrow();
+		expect(() =>
+			pdfAuthoringInputSchema.parse({
+				...documentCreate,
+				outputs: [{ filename: "brief.docx", format: "docx" }],
+			}),
+		).toThrow();
+		expect(() =>
+			spreadsheetAuthoringInputSchema.parse({
+				...documentCreate,
+				outputs: [{ filename: "brief.docx", format: "docx" }],
+			}),
+		).toThrow();
+		expect(() =>
+			presentationAuthoringInputSchema.parse({
+				filename: "data.xlsx",
+				kind: "spreadsheet_create",
+				sheets: [{ name: "Data", rows: [["Value"], [1]] }],
+			}),
+		).toThrow();
 	});
 
 	it("normalizes a bounded document request at the model boundary", () => {
@@ -172,9 +232,12 @@ describe("artifact authoring contract", () => {
 				},
 			],
 		};
-		const artifactTool = createArtifactAuthoringTool({
+		const artifactTool = createArtifactAuthoringTools({
 			authorArtifact: async () => output,
-		});
+		}).author_document;
+		if (!artifactTool) {
+			throw new Error("Expected the document authoring tool.");
+		}
 
 		const modelOutput = await artifactTool.toModelOutput?.({
 			input: {},

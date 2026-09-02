@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-export const ARTIFACT_AUTHORING_TOOL_NAME = "author_artifact";
+export const ARTIFACT_AUTHORING_TOOL_NAMES = Object.freeze({
+	document: "author_document",
+	pdf: "author_pdf",
+	presentation: "author_presentation",
+	spreadsheet: "author_spreadsheet",
+});
 
 export const ARTIFACT_TOOL_NAMESPACE = Object.freeze({
 	name: "artifact_creation",
@@ -92,10 +97,18 @@ const documentEditSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
-const documentOutputSchema = z.object({
+const docxOutputSchema = z.object({
 	filename: filenameSchema,
-	format: z.enum(["docx", "pdf"]),
+	format: z.literal("docx"),
 });
+const pdfOutputSchema = z.object({
+	filename: filenameSchema,
+	format: z.literal("pdf"),
+});
+const documentOutputSchema = z.discriminatedUnion("format", [
+	docxOutputSchema,
+	pdfOutputSchema,
+]);
 
 const cellValueSchema = z.union([
 	z.string().max(20_000),
@@ -188,57 +201,79 @@ const pdfEditSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
+const documentCreateOperationSchema = z.object({
+	document: documentSpecSchema,
+	kind: z.literal("document_create"),
+	outputs: z.array(documentOutputSchema).min(1).max(2),
+});
+const documentToolCreateOperationSchema = z.object({
+	document: documentSpecSchema,
+	kind: z.literal("document_create"),
+	outputs: z.union([
+		z.tuple([docxOutputSchema]),
+		z.tuple([docxOutputSchema, pdfOutputSchema]),
+	]),
+});
+const pdfToolCreateOperationSchema = z.object({
+	document: documentSpecSchema,
+	kind: z.literal("document_create"),
+	outputs: z.tuple([pdfOutputSchema]),
+});
+const documentEditOperationSchema = z.object({
+	edits: z.array(documentEditSchema).min(1).max(100),
+	kind: z.literal("document_edit"),
+	outputs: z.array(documentOutputSchema).min(1).max(2),
+	source: artifactSourceSchema,
+});
+const documentExportOperationSchema = z.object({
+	kind: z.literal("document_export"),
+	outputs: z
+		.array(documentOutputSchema)
+		.length(1)
+		.refine(
+			([output]) => output.format === "pdf",
+			"Document export must produce one PDF output.",
+		),
+	source: artifactSourceSchema,
+});
+const spreadsheetCreateOperationSchema = z.object({
+	filename: filenameSchema,
+	kind: z.literal("spreadsheet_create"),
+	sheets: z.array(spreadsheetSheetSchema).min(1).max(20),
+});
+const spreadsheetEditOperationSchema = z.object({
+	edits: z.array(spreadsheetEditSchema).min(1).max(1_000),
+	filename: filenameSchema,
+	kind: z.literal("spreadsheet_edit"),
+	source: artifactSourceSchema,
+});
+const presentationCreateOperationSchema = z.object({
+	filename: filenameSchema,
+	kind: z.literal("presentation_create"),
+	presentation: presentationSpecSchema,
+});
+const presentationEditOperationSchema = z.object({
+	edits: z.array(presentationEditSchema).min(1).max(100),
+	filename: filenameSchema,
+	kind: z.literal("presentation_edit"),
+	source: artifactSourceSchema,
+});
+const pdfEditOperationSchema = z.object({
+	edits: z.array(pdfEditSchema).min(1).max(100),
+	filename: filenameSchema,
+	kind: z.literal("pdf_edit"),
+	source: artifactSourceSchema,
+});
+
 const artifactAuthoringOperationSchema = z.discriminatedUnion("kind", [
-	z.object({
-		document: documentSpecSchema,
-		kind: z.literal("document_create"),
-		outputs: z.array(documentOutputSchema).min(1).max(2),
-	}),
-	z.object({
-		edits: z.array(documentEditSchema).min(1).max(100),
-		kind: z.literal("document_edit"),
-		outputs: z.array(documentOutputSchema).min(1).max(2),
-		source: artifactSourceSchema,
-	}),
-	z.object({
-		kind: z.literal("document_export"),
-		outputs: z
-			.array(documentOutputSchema)
-			.length(1)
-			.refine(
-				([output]) => output.format === "pdf",
-				"Document export must produce one PDF output.",
-			),
-		source: artifactSourceSchema,
-	}),
-	z.object({
-		filename: filenameSchema,
-		kind: z.literal("spreadsheet_create"),
-		sheets: z.array(spreadsheetSheetSchema).min(1).max(20),
-	}),
-	z.object({
-		edits: z.array(spreadsheetEditSchema).min(1).max(1_000),
-		filename: filenameSchema,
-		kind: z.literal("spreadsheet_edit"),
-		source: artifactSourceSchema,
-	}),
-	z.object({
-		filename: filenameSchema,
-		kind: z.literal("presentation_create"),
-		presentation: presentationSpecSchema,
-	}),
-	z.object({
-		edits: z.array(presentationEditSchema).min(1).max(100),
-		filename: filenameSchema,
-		kind: z.literal("presentation_edit"),
-		source: artifactSourceSchema,
-	}),
-	z.object({
-		edits: z.array(pdfEditSchema).min(1).max(100),
-		filename: filenameSchema,
-		kind: z.literal("pdf_edit"),
-		source: artifactSourceSchema,
-	}),
+	documentCreateOperationSchema,
+	documentEditOperationSchema,
+	documentExportOperationSchema,
+	spreadsheetCreateOperationSchema,
+	spreadsheetEditOperationSchema,
+	presentationCreateOperationSchema,
+	presentationEditOperationSchema,
+	pdfEditOperationSchema,
 ]);
 
 const expectedExtension = (format) => `.${format}`;
@@ -247,124 +282,155 @@ const hasExpectedFormat = (filename, format, mediaType) =>
 	filename.toLowerCase().endsWith(expectedExtension(format)) &&
 	mediaType === ARTIFACT_MEDIA_TYPES[format];
 
-export const artifactAuthoringInputSchema =
-	artifactAuthoringOperationSchema.superRefine((input, context) => {
-		const addIssue = (message) => context.addIssue({ code: "custom", message });
-		const spreadsheetCellCount = (rows) =>
-			rows.reduce((total, row) => total + row.length, 0);
-		if ("outputs" in input) {
-			const filenames = input.outputs.map((output) => output.filename);
-			if (new Set(filenames).size !== filenames.length) {
-				addIssue("Document output filenames must be unique.");
-			}
-			for (const output of input.outputs) {
-				if (
-					!output.filename
-						.toLowerCase()
-						.endsWith(expectedExtension(output.format))
-				) {
-					addIssue(`Document output filename must end with .${output.format}.`);
-				}
+const validateArtifactAuthoringInput = (input, context) => {
+	const addIssue = (message) => context.addIssue({ code: "custom", message });
+	const spreadsheetCellCount = (rows) =>
+		rows.reduce((total, row) => total + row.length, 0);
+	if ("outputs" in input) {
+		const filenames = input.outputs.map((output) => output.filename);
+		if (new Set(filenames).size !== filenames.length) {
+			addIssue("Document output filenames must be unique.");
+		}
+		for (const output of input.outputs) {
+			if (
+				!output.filename
+					.toLowerCase()
+					.endsWith(expectedExtension(output.format))
+			) {
+				addIssue(`Document output filename must end with .${output.format}.`);
 			}
 		}
-		if (
-			(input.kind === "spreadsheet_create" ||
-				input.kind === "spreadsheet_edit") &&
-			!input.filename.toLowerCase().endsWith(".xlsx")
-		) {
-			addIssue("Spreadsheet output filename must end with .xlsx.");
+	}
+	if (
+		(input.kind === "spreadsheet_create" ||
+			input.kind === "spreadsheet_edit") &&
+		!input.filename.toLowerCase().endsWith(".xlsx")
+	) {
+		addIssue("Spreadsheet output filename must end with .xlsx.");
+	}
+	if (input.kind === "spreadsheet_create") {
+		const cellCount = input.sheets.reduce(
+			(total, sheet) => total + spreadsheetCellCount(sheet.rows),
+			0,
+		);
+		if (cellCount > MAX_SPREADSHEET_CELLS_PER_REQUEST) {
+			addIssue("Spreadsheet creation exceeds the 250,000-cell limit.");
 		}
-		if (input.kind === "spreadsheet_create") {
-			const cellCount = input.sheets.reduce(
-				(total, sheet) => total + spreadsheetCellCount(sheet.rows),
-				0,
-			);
-			if (cellCount > MAX_SPREADSHEET_CELLS_PER_REQUEST) {
-				addIssue("Spreadsheet creation exceeds the 250,000-cell limit.");
+	}
+	if (input.kind === "spreadsheet_edit") {
+		const cellCount = input.edits.reduce((total, edit) => {
+			if (edit.type === "append_rows") {
+				return total + spreadsheetCellCount(edit.rows);
 			}
-		}
-		if (input.kind === "spreadsheet_edit") {
-			const cellCount = input.edits.reduce((total, edit) => {
-				if (edit.type === "append_rows") {
-					return total + spreadsheetCellCount(edit.rows);
-				}
-				if (edit.type === "add_sheet") {
-					return total + spreadsheetCellCount(edit.sheet.rows);
-				}
-				return total + 1;
-			}, 0);
-			if (cellCount > MAX_SPREADSHEET_CELLS_PER_REQUEST) {
-				addIssue("Spreadsheet edits exceed the 250,000-cell limit.");
+			if (edit.type === "add_sheet") {
+				return total + spreadsheetCellCount(edit.sheet.rows);
 			}
+			return total + 1;
+		}, 0);
+		if (cellCount > MAX_SPREADSHEET_CELLS_PER_REQUEST) {
+			addIssue("Spreadsheet edits exceed the 250,000-cell limit.");
 		}
-		if (input.kind === "document_edit") {
-			const appendedBlockCount = input.edits.reduce(
-				(total, edit) =>
-					edit.type === "append_blocks" ? total + edit.blocks.length : total,
-				0,
-			);
-			if (appendedBlockCount > 1_000) {
-				addIssue("Document edits exceed the 1,000-block append limit.");
-			}
+	}
+	if (input.kind === "document_edit") {
+		const appendedBlockCount = input.edits.reduce(
+			(total, edit) =>
+				edit.type === "append_blocks" ? total + edit.blocks.length : total,
+			0,
+		);
+		if (appendedBlockCount > 1_000) {
+			addIssue("Document edits exceed the 1,000-block append limit.");
 		}
-		if (input.kind === "presentation_edit") {
-			const insertedSlideCount = input.edits.reduce(
-				(total, edit) =>
-					edit.type === "insert_slides" ? total + edit.slides.length : total,
-				0,
-			);
-			if (insertedSlideCount > 100) {
-				addIssue("Presentation edits exceed the 100-slide insertion limit.");
-			}
+	}
+	if (input.kind === "presentation_edit") {
+		const insertedSlideCount = input.edits.reduce(
+			(total, edit) =>
+				edit.type === "insert_slides" ? total + edit.slides.length : total,
+			0,
+		);
+		if (insertedSlideCount > 100) {
+			addIssue("Presentation edits exceed the 100-slide insertion limit.");
 		}
-		if (input.kind === "pdf_edit") {
-			const appendedBlockCount = input.edits.reduce(
-				(total, edit) =>
-					edit.type === "append_pages" ? total + edit.blocks.length : total,
-				0,
-			);
-			if (appendedBlockCount > 1_000) {
-				addIssue("PDF edits exceed the 1,000-block append limit.");
-			}
+	}
+	if (input.kind === "pdf_edit") {
+		const appendedBlockCount = input.edits.reduce(
+			(total, edit) =>
+				edit.type === "append_pages" ? total + edit.blocks.length : total,
+			0,
+		);
+		if (appendedBlockCount > 1_000) {
+			addIssue("PDF edits exceed the 1,000-block append limit.");
 		}
-		if (
-			(input.kind === "presentation_create" ||
-				input.kind === "presentation_edit") &&
-			!input.filename.toLowerCase().endsWith(".pptx")
-		) {
-			addIssue("Presentation output filename must end with .pptx.");
-		}
-		if (
-			input.kind === "pdf_edit" &&
-			!input.filename.toLowerCase().endsWith(".pdf")
-		) {
-			addIssue("PDF output filename must end with .pdf.");
-		}
-		if (
-			(input.kind === "document_edit" || input.kind === "document_export") &&
-			!hasExpectedFormat(input.source.filename, "docx", input.source.mediaType)
-		) {
-			addIssue("Document editing and export require a DOCX source.");
-		}
-		if (
-			input.kind === "spreadsheet_edit" &&
-			!hasExpectedFormat(input.source.filename, "xlsx", input.source.mediaType)
-		) {
-			addIssue("Spreadsheet edits require an XLSX source.");
-		}
-		if (
-			input.kind === "presentation_edit" &&
-			!hasExpectedFormat(input.source.filename, "pptx", input.source.mediaType)
-		) {
-			addIssue("Presentation edits require a PPTX source.");
-		}
-		if (
-			input.kind === "pdf_edit" &&
-			!hasExpectedFormat(input.source.filename, "pdf", input.source.mediaType)
-		) {
-			addIssue("PDF edits require a PDF source.");
-		}
-	});
+	}
+	if (
+		(input.kind === "presentation_create" ||
+			input.kind === "presentation_edit") &&
+		!input.filename.toLowerCase().endsWith(".pptx")
+	) {
+		addIssue("Presentation output filename must end with .pptx.");
+	}
+	if (
+		input.kind === "pdf_edit" &&
+		!input.filename.toLowerCase().endsWith(".pdf")
+	) {
+		addIssue("PDF output filename must end with .pdf.");
+	}
+	if (
+		(input.kind === "document_edit" || input.kind === "document_export") &&
+		!hasExpectedFormat(input.source.filename, "docx", input.source.mediaType)
+	) {
+		addIssue("Document editing and export require a DOCX source.");
+	}
+	if (
+		input.kind === "spreadsheet_edit" &&
+		!hasExpectedFormat(input.source.filename, "xlsx", input.source.mediaType)
+	) {
+		addIssue("Spreadsheet edits require an XLSX source.");
+	}
+	if (
+		input.kind === "presentation_edit" &&
+		!hasExpectedFormat(input.source.filename, "pptx", input.source.mediaType)
+	) {
+		addIssue("Presentation edits require a PPTX source.");
+	}
+	if (
+		input.kind === "pdf_edit" &&
+		!hasExpectedFormat(input.source.filename, "pdf", input.source.mediaType)
+	) {
+		addIssue("PDF edits require a PDF source.");
+	}
+};
+
+const withArtifactAuthoringValidation = (schema) =>
+	schema.superRefine(validateArtifactAuthoringInput);
+
+export const documentAuthoringInputSchema = withArtifactAuthoringValidation(
+	z.discriminatedUnion("kind", [
+		documentToolCreateOperationSchema,
+		documentEditOperationSchema,
+	]),
+);
+export const pdfAuthoringInputSchema = withArtifactAuthoringValidation(
+	z.discriminatedUnion("kind", [
+		pdfToolCreateOperationSchema,
+		documentExportOperationSchema,
+		pdfEditOperationSchema,
+	]),
+);
+export const spreadsheetAuthoringInputSchema = withArtifactAuthoringValidation(
+	z.discriminatedUnion("kind", [
+		spreadsheetCreateOperationSchema,
+		spreadsheetEditOperationSchema,
+	]),
+);
+export const presentationAuthoringInputSchema = withArtifactAuthoringValidation(
+	z.discriminatedUnion("kind", [
+		presentationCreateOperationSchema,
+		presentationEditOperationSchema,
+	]),
+);
+export const artifactAuthoringInputSchema = withArtifactAuthoringValidation(
+	artifactAuthoringOperationSchema,
+);
 
 export const generatedArtifactSchema = z.object({
 	filename: filenameSchema,
