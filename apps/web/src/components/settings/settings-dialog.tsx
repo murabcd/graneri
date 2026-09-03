@@ -115,6 +115,7 @@ import { useConnectedAppSettingsSession } from "@/components/settings/use-connec
 import { VoiceSettings } from "@/components/settings/voice-settings";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useLinkedAccounts } from "@/hooks/use-linked-accounts";
+import { useSettingsImageUpload } from "@/hooks/use-settings-image-upload";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { authClient } from "@/lib/auth-client";
 import { getAvatarSrc } from "@/lib/avatar";
@@ -128,10 +129,10 @@ import {
 	hasGoogleScope,
 } from "@/lib/google-integrations";
 import { logError } from "@/lib/logger";
+import { SETTINGS_IMAGE_ACCEPT } from "@/lib/settings-image-upload";
 import type { UserPreferencesState } from "@/lib/user-preferences";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../../convex/_generated/api";
-import type { Id } from "../../../../../convex/_generated/dataModel";
 import type {
 	SettingsDialogProps,
 	SettingsPage,
@@ -145,23 +146,6 @@ function useResetStateWhenValueChanges<T>(
 	useEffect(() => {
 		resetState(value);
 	}, [resetState, value]);
-}
-
-function useObjectUrlPreview(file: File | null) {
-	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!file) {
-			setPreviewUrl(null);
-			return;
-		}
-
-		const nextPreviewUrl = URL.createObjectURL(file);
-		setPreviewUrl(nextPreviewUrl);
-		return () => URL.revokeObjectURL(nextPreviewUrl);
-	}, [file]);
-
-	return previewUrl;
 }
 
 const settingsNav = [
@@ -179,18 +163,14 @@ const settingsNav = [
 const SETTINGS_LABEL_CLASSNAME = "text-xs text-muted-foreground";
 const SETTINGS_COLLAPSIBLE_TRIGGER_CLASSNAME =
 	"group w-full justify-between px-0 text-sm font-medium text-foreground hover:!bg-transparent hover:text-foreground active:!bg-transparent aria-expanded:!bg-transparent aria-expanded:hover:!bg-transparent focus-visible:!bg-transparent";
-const MAX_PROFILE_AVATAR_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-
 type WorkspaceFormState = {
 	name: string;
-	iconStorageId: Id<"_storage"> | null;
 };
 
 type ProfileFormState = {
 	name: string;
 	jobTitle: string;
 	companyName: string;
-	avatarStorageId: Id<"_storage"> | null;
 };
 
 type DataControlsState = {
@@ -221,7 +201,6 @@ const getWorkspaceFormState = (
 	workspace: WorkspaceRecord | null,
 ): WorkspaceFormState => ({
 	name: workspace?.name ?? "",
-	iconStorageId: workspace?.iconStorageId ?? null,
 });
 
 const getProfileFormState = ({
@@ -234,7 +213,6 @@ const getProfileFormState = ({
 	name: user.name,
 	jobTitle: userPreferences?.jobTitle ?? "",
 	companyName: userPreferences?.companyName ?? "",
-	avatarStorageId: userPreferences?.avatarStorageId ?? null,
 });
 
 const initialDataControlsState: DataControlsState = {
@@ -1587,10 +1565,15 @@ function WorkspaceSettings({
 	onCancel: () => void;
 	onSave: () => void;
 }) {
-	const generateIconUploadUrl = useMutation(
-		api.workspaces.generateIconUploadUrl,
-	);
 	const updateWorkspace = useMutation(api.workspaces.update);
+	const {
+		clearPendingUpload,
+		isUploading: isUploadingIcon,
+		markPendingUploadCommitted,
+		pendingUpload,
+		previewUrl: iconPreviewUrl,
+		upload,
+	} = useSettingsImageUpload("workspace_icon");
 	const [formState, setFormState] = useReducer(
 		(
 			current: WorkspaceFormState,
@@ -1605,20 +1588,14 @@ function WorkspaceSettings({
 		(_current: boolean, next: boolean) => next,
 		false,
 	);
-	const [isUploadingIcon, setIsUploadingIcon] = useReducer(
-		(_current: boolean, next: boolean) => next,
-		false,
-	);
-	const [iconPreviewFile, setIconPreviewFile] = useState<File | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const { name, iconStorageId } = formState;
-	const iconPreviewUrl = useObjectUrlPreview(iconPreviewFile);
+	const { name } = formState;
 	const resetWorkspaceFormState = useCallback(
 		(nextWorkspace: typeof workspace) => {
-			setIconPreviewFile(null);
+			void clearPendingUpload();
 			setFormState(getWorkspaceFormState(nextWorkspace));
 		},
-		[],
+		[clearPendingUpload],
 	);
 
 	useResetStateWhenValueChanges(workspace, resetWorkspaceFormState);
@@ -1642,9 +1619,7 @@ function WorkspaceSettings({
 	}
 
 	const trimmedName = name.trim();
-	const hasChanges =
-		trimmedName !== workspace.name ||
-		iconStorageId !== (workspace.iconStorageId ?? null);
+	const hasChanges = trimmedName !== workspace.name || pendingUpload !== null;
 	const workspaceAvatarSrc = getAvatarSrc({
 		avatar: iconPreviewUrl ?? workspace.iconUrl,
 		name: trimmedName || workspace.name,
@@ -1655,7 +1630,7 @@ function WorkspaceSettings({
 		}
 
 		if (hasChanges) {
-			setIconPreviewFile(null);
+			void clearPendingUpload();
 			setFormState(getWorkspaceFormState(workspace));
 		}
 
@@ -1663,33 +1638,8 @@ function WorkspaceSettings({
 	};
 
 	const handleUpload = async (file: File) => {
-		setIsUploadingIcon(true);
-
 		try {
-			const uploadUrl = await generateIconUploadUrl();
-			const response = await fetch(uploadUrl, {
-				method: "POST",
-				headers: {
-					"Content-Type": file.type || "application/octet-stream",
-				},
-				body: file,
-			});
-
-			if (!response.ok) {
-				throw new Error("Failed to upload workspace icon.");
-			}
-
-			const result = (await response.json()) as { storageId?: Id<"_storage"> };
-
-			if (!result.storageId) {
-				throw new Error("Workspace icon upload did not return a storage id.");
-			}
-
-			setIconPreviewFile(file);
-			setFormState((currentState) => ({
-				...currentState,
-				iconStorageId: result.storageId ?? null,
-			}));
+			await upload(file);
 		} catch (error) {
 			logError({
 				event: "client.error",
@@ -1699,8 +1649,6 @@ function WorkspaceSettings({
 			toast.error(
 				getToastErrorMessage(error, "Failed to upload workspace icon"),
 			);
-		} finally {
-			setIsUploadingIcon(false);
 		}
 	};
 
@@ -1712,14 +1660,15 @@ function WorkspaceSettings({
 		setIsSaving(true);
 
 		try {
+			const iconUploadId = pendingUpload?.uploadId;
 			await updateWorkspace({
 				workspaceId: workspace._id,
 				name: trimmedName,
-				iconStorageId:
-					iconStorageId !== (workspace.iconStorageId ?? null)
-						? (iconStorageId ?? undefined)
-						: undefined,
+				iconUploadId,
 			});
+			if (iconUploadId) {
+				markPendingUploadCommitted(iconUploadId);
+			}
 			toast.success("Workspace settings updated");
 			onSave();
 		} catch (error) {
@@ -1740,7 +1689,7 @@ function WorkspaceSettings({
 				<Field>
 					<Label className={SETTINGS_LABEL_CLASSNAME}>Icon</Label>
 					<div className="flex items-center gap-4">
-						<Avatar className="size-20 rounded-lg border">
+						<Avatar className="size-20 rounded-lg">
 							<AvatarImage
 								src={workspaceAvatarSrc}
 								alt="Workspace icon preview"
@@ -1765,7 +1714,7 @@ function WorkspaceSettings({
 								ref={fileInputRef}
 								type="file"
 								aria-label="Upload workspace icon file"
-								accept="image/png,image/jpeg,image/gif,image/webp"
+								accept={SETTINGS_IMAGE_ACCEPT}
 								className="hidden"
 								onChange={(event) => {
 									const file = event.target.files?.[0];
@@ -2147,46 +2096,14 @@ const getProfileFormChanges = ({
 	const hasAuthChanges = trimmedName !== user.name.trim();
 	const hasPreferenceChanges =
 		trimmedJobTitle !== (userPreferences?.jobTitle ?? "").trim() ||
-		trimmedCompanyName !== (userPreferences?.companyName ?? "").trim() ||
-		formState.avatarStorageId !== (userPreferences?.avatarStorageId ?? null);
+		trimmedCompanyName !== (userPreferences?.companyName ?? "").trim();
 	return {
 		hasAuthChanges,
-		hasChanges: hasAuthChanges || hasPreferenceChanges,
 		hasPreferenceChanges,
 		trimmedCompanyName,
 		trimmedJobTitle,
 		trimmedName,
 	};
-};
-
-const uploadProfileAvatar = async ({
-	file,
-	generateUploadUrl,
-}: {
-	file: File;
-	generateUploadUrl: () => Promise<string>;
-}) => {
-	if (!file.type.startsWith("image/")) {
-		throw new Error("Please choose an image file");
-	}
-	if (file.size > MAX_PROFILE_AVATAR_FILE_SIZE_BYTES) {
-		throw new Error("Profile avatar must be 5MB or smaller");
-	}
-
-	const uploadUrl = await generateUploadUrl();
-	const response = await fetch(uploadUrl, {
-		method: "POST",
-		headers: { "Content-Type": file.type || "application/octet-stream" },
-		body: file,
-	});
-	if (!response.ok) {
-		throw new Error("Failed to upload profile avatar.");
-	}
-	const result = (await response.json()) as { storageId?: Id<"_storage"> };
-	if (!result.storageId) {
-		throw new Error("Profile avatar upload did not return a storage id.");
-	}
-	return result.storageId;
 };
 
 function useManageAccountFormElement({
@@ -2199,27 +2116,29 @@ function useManageAccountFormElement({
 	onSave: () => void;
 }) {
 	const { updateUserPreferences, userPreferences } = useUserPreferences();
-	const generateAvatarUploadUrl = useMutation(
-		api.userPreferences.generateAvatarUploadUrl,
-	);
+	const {
+		clearPendingUpload,
+		isUploading: isUploadingAvatar,
+		markPendingUploadCommitted,
+		pendingUpload,
+		previewUrl: avatarPreviewUrl,
+		upload,
+	} = useSettingsImageUpload("profile_avatar");
 	const [formState, setFormState] = useState<ProfileFormState>(() =>
 		getProfileFormState({
 			user,
 			userPreferences: null,
 		}),
 	);
-	const [avatarPreviewFile, setAvatarPreviewFile] = useState<File | null>(null);
-	const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 	const [isSavingPreferences, setIsSavingPreferences] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const avatarPreviewUrl = useObjectUrlPreview(avatarPreviewFile);
 	const profileFormSource = useMemo(
 		() => [user, userPreferences] as const,
 		[user, userPreferences],
 	);
 	const resetProfileFormState = useCallback(
 		([nextUser, nextUserPreferences]: typeof profileFormSource) => {
-			setAvatarPreviewFile(null);
+			void clearPendingUpload();
 			setFormState(
 				getProfileFormState({
 					user: nextUser,
@@ -2227,19 +2146,21 @@ function useManageAccountFormElement({
 				}),
 			);
 		},
-		[],
+		[clearPendingUpload],
 	);
 
 	useResetStateWhenValueChanges(profileFormSource, resetProfileFormState);
 
-	const {
-		hasAuthChanges,
-		hasChanges,
-		hasPreferenceChanges,
-		trimmedCompanyName,
-		trimmedJobTitle,
-		trimmedName,
-	} = getProfileFormChanges({ formState, user, userPreferences });
+	const formChanges = getProfileFormChanges({
+		formState,
+		user,
+		userPreferences,
+	});
+	const { hasAuthChanges, trimmedCompanyName, trimmedJobTitle, trimmedName } =
+		formChanges;
+	const hasPreferenceChanges =
+		formChanges.hasPreferenceChanges || pendingUpload !== null;
+	const hasChanges = hasAuthChanges || hasPreferenceChanges;
 
 	const initials = getInitials(formState.name, user.email);
 	const avatarSrc = getAvatarSrc({
@@ -2253,7 +2174,7 @@ function useManageAccountFormElement({
 		}
 
 		if (hasChanges) {
-			setAvatarPreviewFile(null);
+			void clearPendingUpload();
 			setFormState(
 				getProfileFormState({
 					user,
@@ -2266,17 +2187,8 @@ function useManageAccountFormElement({
 	};
 
 	const handleAvatarUpload = async (file: File) => {
-		setIsUploadingAvatar(true);
 		try {
-			const avatarStorageId = await uploadProfileAvatar({
-				file,
-				generateUploadUrl: generateAvatarUploadUrl,
-			});
-			setAvatarPreviewFile(file);
-			setFormState((current) => ({
-				...current,
-				avatarStorageId,
-			}));
+			await upload(file);
 		} catch (error) {
 			logError({
 				event: "client.error",
@@ -2286,8 +2198,6 @@ function useManageAccountFormElement({
 			toast.error(
 				getToastErrorMessage(error, "Failed to upload profile avatar"),
 			);
-		} finally {
-			setIsUploadingAvatar(false);
 		}
 	};
 	const handleSave = async () => {
@@ -2301,6 +2211,7 @@ function useManageAccountFormElement({
 		}
 		setIsSavingPreferences(true);
 		try {
+			const avatarUploadId = pendingUpload?.uploadId;
 			if (hasAuthChanges) {
 				const { error } = await authClient.updateUser({ name: trimmedName });
 				if (error) throw new Error(error.message);
@@ -2309,8 +2220,11 @@ function useManageAccountFormElement({
 				await updateUserPreferences({
 					jobTitle: trimmedJobTitle || null,
 					companyName: trimmedCompanyName || null,
-					avatarStorageId: formState.avatarStorageId,
+					avatarUploadId,
 				});
+			}
+			if (avatarUploadId) {
+				markPendingUploadCommitted(avatarUploadId);
 			}
 			toast.success("Profile updated");
 			onSave();
@@ -2357,7 +2271,7 @@ function useManageAccountFormElement({
 								ref={fileInputRef}
 								type="file"
 								aria-label="Upload avatar file"
-								accept="image/png,image/jpeg,image/gif,image/webp"
+								accept={SETTINGS_IMAGE_ACCEPT}
 								className="hidden"
 								onChange={(event) => {
 									const file = event.target.files?.[0];

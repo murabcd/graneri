@@ -10,6 +10,7 @@ import {
 } from "./_generated/server";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import { seedDefaultRecipesForWorkspace } from "./recipes";
+import { consumeSettingsImageUpload } from "./settingsImageUploads";
 import { seedDefaultTemplatesForWorkspace } from "./templates";
 
 const workspaceFields = {
@@ -18,7 +19,6 @@ const workspaceFields = {
 	ownerTokenIdentifier: v.string(),
 	name: v.string(),
 	normalizedName: v.string(),
-	icon: v.optional(v.string()),
 	iconStorageId: v.optional(v.id("_storage")),
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -90,7 +90,7 @@ const toWorkspaceResponse = async (
 	...workspace,
 	iconUrl: workspace.iconStorageId
 		? await ctx.storage.getUrl(workspace.iconStorageId)
-		: (workspace.icon ?? null),
+		: null,
 });
 
 export const list = query({
@@ -111,20 +111,9 @@ export const list = query({
 	},
 });
 
-export const generateIconUploadUrl = mutation({
-	args: {},
-	returns: v.string(),
-	handler: async (ctx) => {
-		await requireIdentity(ctx);
-		return await ctx.storage.generateUploadUrl();
-	},
-});
-
 export const create = mutation({
 	args: {
 		name: v.string(),
-		icon: v.optional(v.string()),
-		iconStorageId: v.optional(v.id("_storage")),
 	},
 	returns: workspaceResponseValidator,
 	handler: async (ctx, args) => {
@@ -168,8 +157,6 @@ export const create = mutation({
 			ownerTokenIdentifier,
 			name,
 			normalizedName,
-			icon: args.icon,
-			iconStorageId: args.iconStorageId,
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -204,8 +191,7 @@ export const update = mutation({
 	args: {
 		workspaceId: v.id("workspaces"),
 		name: v.optional(v.string()),
-		icon: v.optional(v.string()),
-		iconStorageId: v.optional(v.id("_storage")),
+		iconUploadId: v.optional(v.id("settingsImageUploads")),
 	},
 	returns: workspaceResponseValidator,
 	handler: async (ctx, args) => {
@@ -236,11 +222,14 @@ export const update = mutation({
 		}
 
 		const nextNormalizedName = toNormalizedWorkspaceKey(nextName);
-		const nextIcon = args.icon ?? existingWorkspace.icon;
-		const nextIconStorageId =
-			args.iconStorageId ?? existingWorkspace.iconStorageId;
+		const nextIconStorageId = args.iconUploadId
+			? await consumeSettingsImageUpload(ctx, {
+					ownerTokenIdentifier: identity.tokenIdentifier,
+					purpose: "workspace_icon",
+					uploadId: args.iconUploadId,
+				})
+			: existingWorkspace.iconStorageId;
 		const hasNameChange = nextName !== existingWorkspace.name;
-		const hasIconChange = nextIcon !== existingWorkspace.icon;
 		const hasIconStorageChange =
 			nextIconStorageId !== existingWorkspace.iconStorageId;
 
@@ -265,7 +254,7 @@ export const update = mutation({
 			}
 		}
 
-		if (!hasNameChange && !hasIconChange && !hasIconStorageChange) {
+		if (!hasNameChange && !hasIconStorageChange) {
 			return await toWorkspaceResponse(ctx, existingWorkspace);
 		}
 
@@ -279,7 +268,6 @@ export const update = mutation({
 		await ctx.db.patch(args.workspaceId, {
 			name: nextName,
 			normalizedName: nextNormalizedName,
-			icon: nextIcon,
 			iconStorageId: nextIconStorageId,
 			updatedAt: Date.now(),
 		});

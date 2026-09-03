@@ -35,3 +35,18 @@ Missing hosted OAuth credentials reject configuration instead of substituting pl
 Hosted auth provider configuration is fail-closed: missing OAuth
 provider credentials must reject configuration instead of substituting
 placeholder client ids or secrets.
+
+## Settings image uploads
+
+Profile avatars and workspace icons share one authenticated, owner-bound upload lifecycle with strict image validation and bounded pending storage.
+
+[[convex/settingsImageHttp.ts]] accepts JPEG, PNG, WebP, and GIF bytes up to
+5 MiB, validates the declared media type against the file signature, stores the
+blob, and registers it through [[convex/settingsImageUploads.ts]]. Pending rows
+expire after one hour and can be explicitly discarded when a settings form is
+cancelled or its selection is replaced. [[convex/userPreferences.ts]] and
+[[convex/workspaces.ts]] consume the purpose-specific pending row in the same
+mutation that replaces the durable storage reference, then delete the previous
+avatar or icon. The client enters only through
+[[apps/web/src/lib/settings-image-upload.ts]]; the former profile- and
+workspace-specific signed-upload endpoints are not retained.

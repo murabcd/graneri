@@ -37,6 +37,7 @@ import {
 	projectColorValidator,
 	projectIconValidator,
 } from "./projectAppearance";
+import { settingsImagePurposeValidator } from "./settingsImageUploadModel";
 
 const transcriptSessionStatusValidator = v.union(
 	v.literal("capturing"),
@@ -149,6 +150,12 @@ export default defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
+	settingsImageUploads: defineTable({
+		ownerTokenIdentifier: v.string(),
+		purpose: settingsImagePurposeValidator,
+		storageId: v.id("_storage"),
+		createdAt: v.number(),
+	}).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
 	chatPreferences: defineTable({
 		ownerTokenIdentifier: v.string(),
 		...chatSettingsFields,
@@ -246,7 +253,6 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		name: v.string(),
 		normalizedName: v.string(),
-		icon: v.optional(v.string()),
 		iconStorageId: v.optional(v.id("_storage")),
 		createdAt: v.number(),
 		updatedAt: v.number(),

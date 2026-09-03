@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { createResourceAccess } from "./domain";
+import { consumeSettingsImageUpload } from "./settingsImageUploads";
 
 const userPreferencesValidator = v.object({
 	transcriptionLanguage: v.union(v.string(), v.null()),
@@ -133,7 +134,7 @@ export const update = mutation({
 		translucentSidebar: v.optional(v.boolean()),
 		followUpBehavior: v.optional(followUpBehaviorValidator),
 		sendShortcut: v.optional(sendShortcutValidator),
-		avatarStorageId: v.optional(v.union(v.id("_storage"), v.null())),
+		avatarUploadId: v.optional(v.id("settingsImageUploads")),
 	},
 	returns: userPreferencesValidator,
 	handler: async (ctx, args) => {
@@ -143,6 +144,13 @@ export const update = mutation({
 			identity.tokenIdentifier,
 		);
 		const now = Date.now();
+		const nextAvatarStorageId = args.avatarUploadId
+			? await consumeSettingsImageUpload(ctx, {
+					ownerTokenIdentifier: identity.tokenIdentifier,
+					purpose: "profile_avatar",
+					uploadId: args.avatarUploadId,
+				})
+			: (existing?.avatarStorageId ?? null);
 		const nextPreferences = {
 			transcriptionLanguage:
 				args.transcriptionLanguage !== undefined
@@ -186,10 +194,7 @@ export const update = mutation({
 					: existing
 						? existing.sendShortcut
 						: DEFAULT_SEND_SHORTCUT,
-			avatarStorageId:
-				args.avatarStorageId !== undefined
-					? args.avatarStorageId
-					: (existing?.avatarStorageId ?? null),
+			avatarStorageId: nextAvatarStorageId,
 		};
 
 		if (existing) {
@@ -261,15 +266,6 @@ export const update = mutation({
 
 		const inserted = await ctx.db.get(preferenceId);
 		return await toUserPreferencesResponse(ctx, inserted);
-	},
-});
-
-export const generateAvatarUploadUrl = mutation({
-	args: {},
-	returns: v.string(),
-	handler: async (ctx) => {
-		await requireIdentity(ctx);
-		return await ctx.storage.generateUploadUrl();
 	},
 });
 

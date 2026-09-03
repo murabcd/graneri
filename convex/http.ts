@@ -13,6 +13,10 @@ import {
 	handleNoteImageOptionsRequest,
 	handleNoteImageUploadRequest,
 } from "./noteImageHttp";
+import {
+	handleSettingsImageOptionsRequest,
+	handleSettingsImageUploadRequest,
+} from "./settingsImageHttp";
 import { handleZoomOAuthCallbackRequest } from "./zoomOAuth";
 
 const http = httpRouter();
@@ -40,6 +44,21 @@ http.route({
 	path: "/api/note-images",
 	method: "OPTIONS",
 	handler: httpAction(async () => handleNoteImageOptionsRequest()),
+});
+
+http.route({
+	path: "/api/settings-images",
+	method: "OPTIONS",
+	handler: httpAction(async () => handleSettingsImageOptionsRequest()),
+});
+
+http.route({
+	path: "/api/settings-images",
+	method: "POST",
+	handler: httpAction(
+		async (ctx, request) =>
+			await handleSettingsImageUploadRequest(ctx, request),
+	),
 });
 
 http.route({

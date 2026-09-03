@@ -6,35 +6,44 @@ import {
 	hasExpectedImageSignature,
 	isImageContentType,
 } from "./imageUploadValidation";
+import {
+	MAX_SETTINGS_IMAGE_BYTES,
+	type SettingsImagePurpose,
+} from "./settingsImageUploadModel";
 
-export const MAX_NOTE_IMAGE_BYTES = 10 * 1024 * 1024;
-
-type NoteImageUploadResult = FunctionReturnType<
-	typeof internal.noteImages.registerUploadedImage
+type SettingsImageUploadResult = FunctionReturnType<
+	typeof internal.settingsImageUploads.registerUploadedImage
 >;
 
 const corsHeaders = {
-	"Access-Control-Allow-Headers": "Authorization, Content-Type, X-File-Name",
+	"Access-Control-Allow-Headers": "Authorization, Content-Type",
 	"Access-Control-Allow-Methods": "POST, OPTIONS",
 	"Access-Control-Allow-Origin": "*",
 };
 
 const jsonResponse = (
 	status: number,
-	payload: NoteImageUploadResult | { error: string },
+	payload: SettingsImageUploadResult | { error: string },
 ) =>
 	new Response(JSON.stringify(payload), {
 		status,
-		headers: {
-			...corsHeaders,
-			"Content-Type": "application/json",
-		},
+		headers: { ...corsHeaders, "Content-Type": "application/json" },
 	});
 
-export const handleNoteImageOptionsRequest = () =>
+const parsePurpose = (value: string | null): SettingsImagePurpose | null => {
+	switch (value) {
+		case "profile_avatar":
+		case "workspace_icon":
+			return value;
+		default:
+			return null;
+	}
+};
+
+export const handleSettingsImageOptionsRequest = () =>
 	new Response(null, { status: 204, headers: corsHeaders });
 
-export const handleNoteImageUploadRequest = async (
+export const handleSettingsImageUploadRequest = async (
 	ctx: ActionCtx,
 	request: Request,
 ) => {
@@ -43,11 +52,11 @@ export const handleNoteImageUploadRequest = async (
 		return jsonResponse(401, { error: "Authentication is required." });
 	}
 
-	const url = new URL(request.url);
-	const workspaceId = url.searchParams.get("workspaceId")?.trim();
-	const noteId = url.searchParams.get("noteId")?.trim();
-	if (!workspaceId || !noteId) {
-		return jsonResponse(400, { error: "Workspace and note are required." });
+	const purpose = parsePurpose(
+		new URL(request.url).searchParams.get("purpose"),
+	);
+	if (!purpose) {
+		return jsonResponse(400, { error: "Image purpose is required." });
 	}
 
 	const contentType = request.headers.get("content-type")?.split(";", 1)[0];
@@ -58,39 +67,32 @@ export const handleNoteImageUploadRequest = async (
 	}
 
 	const contentLength = Number(request.headers.get("content-length"));
-	if (Number.isFinite(contentLength) && contentLength > MAX_NOTE_IMAGE_BYTES) {
-		return jsonResponse(413, { error: "Image must be 10 MB or smaller." });
+	if (
+		Number.isFinite(contentLength) &&
+		contentLength > MAX_SETTINGS_IMAGE_BYTES
+	) {
+		return jsonResponse(413, { error: "Image must be 5 MB or smaller." });
 	}
 
 	const blob = await request.blob();
 	if (blob.size === 0) {
 		return jsonResponse(400, { error: "Image is required." });
 	}
-	if (blob.size > MAX_NOTE_IMAGE_BYTES) {
-		return jsonResponse(413, { error: "Image must be 10 MB or smaller." });
+	if (blob.size > MAX_SETTINGS_IMAGE_BYTES) {
+		return jsonResponse(413, { error: "Image must be 5 MB or smaller." });
 	}
 	if (!(await hasExpectedImageSignature(blob, contentType))) {
 		return jsonResponse(415, { error: "The image file is invalid." });
 	}
 
-	const encodedFileName = request.headers.get("x-file-name")?.trim() || "image";
-	let rawFileName = encodedFileName;
-	try {
-		rawFileName = decodeURIComponent(encodedFileName);
-	} catch {
-		return jsonResponse(400, { error: "Image file name is invalid." });
-	}
-	const fileName = rawFileName.trim().slice(0, 200) || "image";
 	const storageId = await ctx.storage.store(blob);
 	try {
 		const result = await ctx.runMutation(
-			internal.noteImages.registerUploadedImage,
+			internal.settingsImageUploads.registerUploadedImage,
 			{
 				ownerTokenIdentifier: identity.tokenIdentifier,
-				workspaceId,
-				noteId,
+				purpose,
 				storageId,
-				fileName,
 				contentType,
 				size: blob.size,
 			},
@@ -99,9 +101,9 @@ export const handleNoteImageUploadRequest = async (
 	} catch (error) {
 		await ctx.storage.delete(storageId);
 		if (error instanceof ConvexError) {
-			return jsonResponse(400, { error: "Unable to attach this image." });
+			return jsonResponse(400, { error: "Unable to upload this image." });
 		}
-		console.error("Note image registration failed", { error });
-		return jsonResponse(500, { error: "Unable to attach this image." });
+		console.error("Settings image registration failed", { error });
+		return jsonResponse(500, { error: "Unable to upload this image." });
 	}
 };
