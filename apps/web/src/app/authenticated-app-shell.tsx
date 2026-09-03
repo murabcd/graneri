@@ -1085,12 +1085,9 @@ const useAppShellState = ({
 				consumeChatPluginPrefill({ chatId, prefill }),
 			);
 
-			if (currentChatId !== chatId) {
-				setDraftChatComposerId(crypto.randomUUID());
-			}
 			navigateChat(chatId, "replace");
 		},
-		[addPendingPersistedChatRouteId, currentChatId, navigateChat],
+		[addPendingPersistedChatRouteId, navigateChat],
 	);
 	const handleChatRemoved = React.useCallback(
 		(chatId: string) => {

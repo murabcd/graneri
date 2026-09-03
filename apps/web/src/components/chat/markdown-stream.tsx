@@ -36,7 +36,7 @@ const semanticMarkdownComponents = {
 
 export type MarkdownStreamProps = Omit<
 	StreamdownProps,
-	"children" | "linkSafety"
+	"animated" | "children" | "linkSafety"
 > & {
 	children: string;
 };
@@ -45,6 +45,7 @@ export function MarkdownStream({
 	children,
 	className,
 	components: providedComponents,
+	isAnimating = false,
 	plugins: providedPlugins,
 	...props
 }: MarkdownStreamProps) {
@@ -65,10 +66,12 @@ export function MarkdownStream({
 	return (
 		<Streamdown
 			{...props}
+			animated={isAnimating}
 			className={cn("graneri-markdown", className)}
 			codeBlockMaxHeight={0}
 			components={components}
 			controls={{ code: { copy: false, download: false } }}
+			isAnimating={isAnimating}
 			linkSafety={disabledLinkSafety}
 			plugins={plugins}
 		>

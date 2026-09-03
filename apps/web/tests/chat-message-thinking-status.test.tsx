@@ -10,6 +10,12 @@ import type { UIMessage } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatMessageListContent } from "../src/components/chat/message-list";
 
+const getRenderedParagraph = (text: string) =>
+	screen.getByText(
+		(_content, element) =>
+			element?.tagName === "P" && element.textContent === text,
+	);
+
 const streamingReasoningMessage: UIMessage = {
 	id: "assistant-1",
 	role: "assistant",
@@ -141,6 +147,12 @@ describe("chat message thinking status", () => {
 				.getByRole("button", { name: /^Working for / })
 				.closest("[data-assistant-work-group]")?.className,
 		).not.toContain("border-b");
+		expect(
+			screen
+				.getByRole("button", { name: /^Working for / })
+				.closest("[data-assistant-work-group]")
+				?.querySelector('[data-slot="collapsible-content"]')?.className,
+		).not.toContain("animate-collapsible-up");
 		expect(screen.getAllByText("Thinking")).toHaveLength(1);
 
 		rerender(
@@ -299,7 +311,9 @@ describe("chat message thinking status", () => {
 		expect(screen.getByText("I’ll inspect the first source.")).not.toBeNull();
 		expect(screen.getByText("Explored local folder")).not.toBeNull();
 		expect(
-			screen.getByText("The first source is clear; I’ll inspect the second."),
+			getRenderedParagraph(
+				"The first source is clear; I’ll inspect the second.",
+			),
 		).not.toBeNull();
 
 		const finalPart: UIMessage["parts"][number] = {
@@ -316,13 +330,15 @@ describe("chat message thinking status", () => {
 		expect(worked.getAttribute("aria-expanded")).toBe("false");
 		expect(screen.queryByText("I’ll inspect the first source.")).toBeNull();
 		expect(screen.queryByText("Explored local folder")).toBeNull();
-		expect(screen.getByText("Here is the final answer.")).not.toBeNull();
+		expect(getRenderedParagraph("Here is the final answer.")).not.toBeNull();
 
 		await user.click(worked);
 		expect(screen.getByText("I’ll inspect the first source.")).not.toBeNull();
 		expect(screen.getByText("Explored local folder")).not.toBeNull();
 		expect(
-			screen.getByText("The first source is clear; I’ll inspect the second."),
+			getRenderedParagraph(
+				"The first source is clear; I’ll inspect the second.",
+			),
 		).not.toBeNull();
 	});
 
@@ -380,6 +396,191 @@ describe("chat message thinking status", () => {
 
 		expect(screen.getByText("Working")).not.toBeNull();
 		expect(screen.getByText("Thinking")).not.toBeNull();
+	});
+
+	it("keeps the same Working row when the pending assistant reconciles", () => {
+		const userMessage: UIMessage = {
+			id: "user-pending-assistant",
+			role: "user",
+			parts: [{ type: "text", text: "Inspect the renderer" }],
+		};
+		const { rerender } = render(
+			renderMessageList({
+				isLoading: true,
+				messages: [userMessage],
+			}),
+		);
+		const workingGroup = screen
+			.getByText("Working")
+			.closest("[data-assistant-work-group]");
+		expect(workingGroup).not.toBeNull();
+
+		rerender(
+			renderMessageList({
+				isLoading: true,
+				messages: [
+					userMessage,
+					{
+						id: "assistant-reconciled",
+						role: "assistant",
+						parts: [],
+					},
+				],
+			}),
+		);
+
+		expect(
+			screen.getByText("Working").closest("[data-assistant-work-group]"),
+		).toBe(workingGroup);
+	});
+
+	it("keeps Working mounted across the request-to-run handoff", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(1_000);
+		const userMessage: UIMessage = {
+			id: "user-request-run-handoff",
+			role: "user",
+			parts: [{ type: "text", text: "Inspect the renderer" }],
+		};
+		const { rerender } = render(
+			renderMessageList({
+				isLoading: true,
+				messages: [userMessage],
+			}),
+		);
+		act(() => vi.advanceTimersByTime(2_200));
+		const workingGroup = screen
+			.getByText("Working")
+			.closest("[data-assistant-work-group]");
+		expect(workingGroup).not.toBeNull();
+		expect(screen.getByText("2s")).not.toBeNull();
+
+		rerender(renderMessageList({ messages: [userMessage] }));
+		expect(
+			screen.getByText("Working").closest("[data-assistant-work-group]"),
+		).toBe(workingGroup);
+		expect(screen.getByText("2s")).not.toBeNull();
+
+		const persistedAssistantMessage: UIMessage = {
+			id: "assistant-request-run-handoff",
+			role: "assistant",
+			parts: [],
+		};
+		rerender(
+			renderMessageList({
+				messages: [userMessage, persistedAssistantMessage],
+			}),
+		);
+		expect(
+			screen.getByText("Working").closest("[data-assistant-work-group]"),
+		).toBe(workingGroup);
+		expect(screen.getByText("2s")).not.toBeNull();
+
+		rerender(
+			renderMessageList({
+				isLoading: true,
+				messages: [userMessage, persistedAssistantMessage],
+			}),
+		);
+		expect(
+			screen.getByText("Working").closest("[data-assistant-work-group]"),
+		).toBe(workingGroup);
+	});
+
+	it("keeps the same activity row when Working becomes Worked", () => {
+		const assistantMessage: UIMessage = {
+			id: "assistant-worked-transition",
+			role: "assistant",
+			parts: [],
+		};
+		const { rerender } = render(
+			renderMessageList({
+				isLoading: true,
+				messages: [assistantMessage],
+			}),
+		);
+		const workingGroup = screen
+			.getByText("Working")
+			.closest("[data-assistant-work-group]");
+		expect(workingGroup).not.toBeNull();
+
+		rerender(
+			renderMessageList({
+				messages: [
+					{
+						...assistantMessage,
+						parts: [
+							{
+								type: "text",
+								text: "Done",
+								state: "done",
+								providerMetadata: {
+									openai: { itemId: "final-worked", phase: "final_answer" },
+								},
+							},
+						],
+					},
+				],
+			}),
+		);
+
+		expect(
+			screen.getByText("Worked").closest("[data-assistant-work-group]"),
+		).toBe(workingGroup);
+	});
+
+	it("does not reserve answer spacing before the answer exists", () => {
+		const assistantMessage: UIMessage = {
+			id: "assistant-layout-lifecycle",
+			role: "assistant",
+			parts: [],
+		};
+		const { rerender } = render(
+			renderMessageList({
+				isLoading: true,
+				messages: [assistantMessage],
+			}),
+		);
+		const workingGroup = screen
+			.getByText("Working")
+			.closest("[data-assistant-work-group]");
+		expect(workingGroup).not.toBeNull();
+		expect(workingGroup?.className).not.toContain("mb-4");
+		expect(
+			document.querySelector(
+				'[data-chat-message-scroll-row="assistant-layout-lifecycle"]',
+			),
+		).toBeNull();
+
+		rerender(
+			renderMessageList({
+				messages: [
+					{
+						...assistantMessage,
+						parts: [
+							{
+								type: "text",
+								text: "The answer is ready.",
+								state: "done",
+								providerMetadata: {
+									openai: { itemId: "layout-final", phase: "final_answer" },
+								},
+							},
+						],
+					},
+				],
+			}),
+		);
+
+		expect(
+			screen.getByText("Worked").closest("[data-assistant-work-group]"),
+		).toBe(workingGroup);
+		expect(getRenderedParagraph("The answer is ready.")).not.toBeNull();
+		expect(
+			document.querySelector(
+				'[data-chat-message-scroll-row="assistant-layout-lifecycle"]',
+			),
+		).not.toBeNull();
 	});
 
 	it("keeps one uninterrupted turn timer when optimistic message identity changes", () => {

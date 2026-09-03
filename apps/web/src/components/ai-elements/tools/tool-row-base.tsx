@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { ShimmerText } from "@/components/ai-elements/shimmer";
 
 export type ToolRowBaseProps = {
+	animateCollapse?: boolean;
 	ariaLabel?: string;
 	children?: ReactNode;
 	completeLabel: string;
@@ -99,6 +100,7 @@ function ToolRowContent({
 }
 
 export function ToolRowBase({
+	animateCollapse = true,
 	ariaLabel,
 	children,
 	completeLabel,
@@ -163,7 +165,12 @@ export function ToolRowBase({
 			>
 				{row}
 			</CollapsibleTrigger>
-			<CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+			<CollapsibleContent
+				className={cn(
+					"overflow-hidden data-[state=open]:animate-collapsible-down",
+					animateCollapse && "data-[state=closed]:animate-collapsible-up",
+				)}
+			>
 				{children}
 			</CollapsibleContent>
 		</Collapsible>

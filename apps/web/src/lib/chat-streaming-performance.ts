@@ -1,1 +1,0 @@
-export const CHAT_STREAM_UI_THROTTLE_MS = 50;

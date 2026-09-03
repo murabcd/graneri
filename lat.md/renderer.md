@@ -87,6 +87,20 @@ latest content explicitly.
 The shared `use-chat-turn-presentation.ts` module projects normalized messages
 into turn-level render snapshots and materializes one expanded, continuously
 timed `Working for N` activity group as soon as an active assistant turn exists.
+The group is owned by the logical turn rather than by a synthetic or persisted
+assistant message. Its render identity remains stable while the real assistant
+message arrives, across the request-to-persisted-run handoff, and when
+`Working` becomes `Worked`; those transitions update the existing row without
+removing, reparenting, or remounting it. A temporary idle transport status does
+not end the visual run before meaningful assistant output arrives, including
+when an empty persisted assistant shell lands during the handoff.
+Empty assistant messages create no scroll row, the work group reserves no
+answer spacing, and its automatic `Working` to `Worked` transition closes
+details without a height animation. The ordinary turn gap appears only when a
+final answer actually renders.
+A fresh chat also retains its draft composer identifier through first
+persistence so the keyed chat page is not remounted during the route replace;
+only an explicit New chat action allocates the next draft identifier.
 [[apps/web/src/lib/assistant-turn-sequence.ts]]
 uses the OpenAI Responses text-part `providerMetadata.openai.phase` contract to
 keep commentary, reasoning, and tool calls in their original source order while
@@ -129,6 +143,14 @@ contract applies the Graneri 14-pixel type scale,
 blockquote rail, and inline-code treatment. Its final top-level Markdown block
 always has zero bottom margin so element-specific prose rhythm cannot leak into
 the message-to-actions gap.
+Active streamed text has one display cadence: [[apps/web/src/lib/frame-budgeted-chat-transport.ts]]
+releases transport chunks on animation frames, React consumes those updates
+without an additional time throttle, and [[apps/web/src/components/chat/markdown-stream.tsx]]
+enables Streamdown's word-level entrance animation while `isAnimating` is true.
+The animation stylesheet is loaded once by
+[apps/web/src/index.css](../apps/web/src/index.css) and the shared reduced-motion
+preference collapses its duration. Completed and static Markdown use the same
+renderer without animated word wrappers.
 Ask AI and note discussions also share
 [[apps/web/src/components/chat/message-actions.tsx]]. Assistant content and user
 bubbles both use the same compact 4-pixel external actions offset. The user
@@ -146,6 +168,9 @@ reasoning, and speed controls while retaining the note chat's mode and web-searc
 values in every request. The note composer owns only editor, attachment,
 transcript, focus, and panel-presentation adapters; it must not reproduce
 discussion identity, settings ownership, or query orchestration.
+[[apps/web/src/components/note/note-composer-footer-ui.tsx]] owns the shared
+footer layout tokens and the inline composer's focused attachment, editor, and
+action rows, keeping those render branches out of the note session adapter.
 Workspace chat navigation commits the destination route immediately and lets the
 destination's cursor-paginated subscription load its first bounded page. The workspace composer derives its
 placeholder from the stored chat identity before hydrated messages arrive, so a

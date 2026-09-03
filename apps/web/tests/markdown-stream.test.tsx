@@ -121,6 +121,28 @@ describe("MarkdownStream code blocks", () => {
 		).toBe(true);
 	});
 
+	it("animates streamed words only while the response is active", () => {
+		const view = render(
+			<MarkdownStream isAnimating mode="streaming">
+				{"One"}
+			</MarkdownStream>,
+		);
+
+		view.rerender(
+			<MarkdownStream isAnimating mode="streaming">
+				{"One two three"}
+			</MarkdownStream>,
+		);
+
+		expect(view.container.querySelector("[data-sd-animate]")).not.toBeNull();
+
+		view.rerender(
+			<MarkdownStream mode="static">{"One two three"}</MarkdownStream>,
+		);
+
+		expect(view.container.querySelector("[data-sd-animate]")).toBeNull();
+	});
+
 	it("labels code controls with the shared tooltip treatment", async () => {
 		const user = userEvent.setup();
 		render(

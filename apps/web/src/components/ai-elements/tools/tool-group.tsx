@@ -75,29 +75,6 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 	totalDurationMs,
 }: AssistantWorkGroupProps) {
 	const [fallbackStartedAt] = useState(() => Date.now());
-
-	return (
-		<AssistantWorkGroupPhase
-			key={status}
-			fallbackStartedAt={fallbackStartedAt}
-			hasActivity={hasActivity}
-			startedAt={startedAt}
-			status={status}
-			totalDurationMs={totalDurationMs}
-		>
-			{children}
-		</AssistantWorkGroupPhase>
-	);
-});
-
-const AssistantWorkGroupPhase = ({
-	children,
-	fallbackStartedAt,
-	hasActivity,
-	startedAt,
-	status,
-	totalDurationMs,
-}: AssistantWorkGroupProps & { fallbackStartedAt: number }) => {
 	const isWorking = status === "streaming";
 	const [isWorkingCollapsed, setIsWorkingCollapsed] = useState(false);
 	const [isWorkedExpanded, setIsWorkedExpanded] = useState(false);
@@ -116,11 +93,9 @@ const AssistantWorkGroupPhase = ({
 	);
 
 	return (
-		<div
-			className="mb-4 flex w-full flex-col gap-2 first:mt-0"
-			data-assistant-work-group
-		>
+		<div className="flex w-full flex-col gap-2" data-assistant-work-group>
 			<ToolRowBase
+				animateCollapse={false}
 				ariaLabel={`${isWorking ? "Working" : "Worked"} for ${durationLabel}`}
 				shimmerLabel="Working"
 				completeLabel="Worked"
@@ -147,19 +122,21 @@ const AssistantWorkGroupPhase = ({
 			</ToolRowBase>
 		</div>
 	);
-};
+});
 
 const useWorkTimer = (isPending: boolean) => {
-	const [completedAt] = useState<number | null>(() =>
+	const [completedAt, setCompletedAt] = useState<number | null>(() =>
 		isPending ? null : Date.now(),
 	);
 	const [now, setNow] = useState(() => Date.now());
 
 	useEffect(() => {
 		if (!isPending) {
+			setCompletedAt((currentCompletedAt) => currentCompletedAt ?? Date.now());
 			return;
 		}
 
+		setCompletedAt(null);
 		setNow(Date.now());
 		const interval = window.setInterval(() => {
 			setNow(Date.now());

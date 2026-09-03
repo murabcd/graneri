@@ -21,19 +21,22 @@ import {
 const EMPTY_MESSAGE_IDS = new Set<string>();
 const EMPTY_TURN: UIMessage[] = [];
 
-type ActiveTurnTemporalState = {
+type ActiveTurnVisualState = {
 	activityUnits: AssistantActivityUnit[];
 	hasFinalAssistantStarted: boolean;
-	isLoading: boolean;
+	isActive: boolean;
 	startedAt: number | null;
 	turnId: string | null;
 };
 
-type ActiveTurnTemporalEvent = {
+type ActiveTurnVisualEvent = {
 	activityUnits: AssistantActivityUnit[];
+	hasAssistantOutput: boolean;
+	hasError: boolean;
 	hasFinalAssistantStarted: boolean;
-	isLoading: boolean;
+	isInterrupted: boolean;
 	now: number;
+	sourceIsLoading: boolean;
 	turnId: string | null;
 };
 
@@ -104,13 +107,19 @@ const getAssistantTurnActivitySnapshot = (messages: UIMessage[]) => {
 	};
 };
 
+const hasRenderableAssistantOutput = (message: UIMessage) =>
+	getChatText(message).length > 0 ||
+	extractFileParts(message).length > 0 ||
+	extractReasoningParts(message).length > 0 ||
+	extractToolParts(message).length > 0;
+
 const EMPTY_ASSISTANT_TURN_ACTIVITY_SNAPSHOT =
 	getAssistantTurnActivitySnapshot(EMPTY_TURN);
 
-const advanceActiveTurnTemporalState = (
-	state: ActiveTurnTemporalState,
-	event: ActiveTurnTemporalEvent,
-): ActiveTurnTemporalState => {
+const advanceActiveTurnVisualState = (
+	state: ActiveTurnVisualState,
+	event: ActiveTurnVisualEvent,
+): ActiveTurnVisualState => {
 	const activityUnits = mergeActivityUnits(
 		state.activityUnits,
 		event.activityUnits,
@@ -118,23 +127,52 @@ const advanceActiveTurnTemporalState = (
 	const hasFinalAssistantStarted =
 		state.hasFinalAssistantStarted || event.hasFinalAssistantStarted;
 
-	if (!event.isLoading || !event.turnId) {
-		return !state.isLoading
+	if (!event.turnId) {
+		return !state.isActive
 			? state
 			: {
 					...state,
 					activityUnits,
 					hasFinalAssistantStarted,
-					isLoading: false,
-					turnId: event.turnId ?? state.turnId,
+					isActive: false,
+					turnId: state.turnId,
 				};
 	}
 
-	if (!state.isLoading) {
+	if (!event.sourceIsLoading) {
+		if (
+			state.isActive &&
+			!event.hasAssistantOutput &&
+			!event.hasError &&
+			!event.isInterrupted &&
+			!hasFinalAssistantStarted
+		) {
+			return state.activityUnits === activityUnits &&
+				state.turnId === event.turnId
+				? state
+				: {
+						...state,
+						activityUnits,
+						turnId: event.turnId,
+					};
+		}
+
+		return !state.isActive
+			? state
+			: {
+					...state,
+					activityUnits,
+					hasFinalAssistantStarted,
+					isActive: false,
+					turnId: event.turnId,
+				};
+	}
+
+	if (!state.isActive) {
 		return {
 			activityUnits: event.activityUnits,
 			hasFinalAssistantStarted: event.hasFinalAssistantStarted,
-			isLoading: true,
+			isActive: true,
 			startedAt: event.now,
 			turnId: event.turnId,
 		};
@@ -157,11 +195,13 @@ const advanceActiveTurnTemporalState = (
 };
 
 export const useChatTurnPresentation = ({
+	hasError = false,
 	isLoading = false,
 	messages,
 	scrollAnchorUserMessages,
 	streamingMessageIds,
 }: {
+	hasError?: boolean;
 	isLoading?: boolean;
 	messages: UIMessage[];
 	scrollAnchorUserMessages: boolean;
@@ -171,27 +211,11 @@ export const useChatTurnPresentation = ({
 		() => normalizeChatMessages(messages),
 		[messages],
 	);
-	const displayMessages = React.useMemo(() => {
-		const lastMessage = normalizedMessages[normalizedMessages.length - 1];
-
-		if (!isLoading || lastMessage?.role === "assistant") {
-			return normalizedMessages;
-		}
-
-		return [
-			...normalizedMessages,
-			{
-				id: "pending-assistant-message",
-				role: "assistant" as const,
-				parts: [],
-			},
-		];
-	}, [isLoading, normalizedMessages]);
-	const lastMessage = displayMessages[displayMessages.length - 1];
+	const lastMessage = normalizedMessages[normalizedMessages.length - 1];
 	const forcedStreamingMessageIds = streamingMessageIds ?? EMPTY_MESSAGE_IDS;
 	const groupedTurns = React.useMemo(
-		() => groupMessagesIntoTurns(displayMessages),
-		[displayMessages],
+		() => groupMessagesIntoTurns(normalizedMessages),
+		[normalizedMessages],
 	);
 	const turnSnapshots = React.useMemo(
 		() =>
@@ -206,26 +230,48 @@ export const useChatTurnPresentation = ({
 	const latestTurnId = latestTurn[0]?.id ?? null;
 	const latestAssistantSequence =
 		latestTurnSnapshot?.activity ?? EMPTY_ASSISTANT_TURN_ACTIVITY_SNAPSHOT;
-	const [temporalState, setTemporalState] =
-		React.useState<ActiveTurnTemporalState>({
+	const latestTurnIsInterrupted =
+		latestAssistantSequence.assistantMessages.some((message) => {
+			const metadata = getChatMessageMetadata(message);
+			return (
+				metadata?.interrupted === true ||
+				forcedStreamingMessageIds.has(message.id)
+			);
+		});
+	const latestTurnHasAssistantOutput =
+		latestAssistantSequence.assistantMessages.some(
+			hasRenderableAssistantOutput,
+		);
+	const [activeTurnState, setActiveTurnState] =
+		React.useState<ActiveTurnVisualState>({
 			activityUnits: [],
 			hasFinalAssistantStarted: false,
-			isLoading: false,
+			isActive: false,
 			startedAt: null,
 			turnId: null,
 		});
 	React.useLayoutEffect(() => {
-		setTemporalState((state) =>
-			advanceActiveTurnTemporalState(state, {
+		setActiveTurnState((state) =>
+			advanceActiveTurnVisualState(state, {
 				activityUnits: latestAssistantSequence.activityUnits,
+				hasAssistantOutput: latestTurnHasAssistantOutput,
+				hasError,
 				hasFinalAssistantStarted:
 					latestAssistantSequence.hasFinalAssistantStarted,
-				isLoading,
+				isInterrupted: latestTurnIsInterrupted,
 				now: Date.now(),
+				sourceIsLoading: isLoading,
 				turnId: latestTurnId,
 			}),
 		);
-	}, [isLoading, latestAssistantSequence, latestTurnId]);
+	}, [
+		hasError,
+		isLoading,
+		latestAssistantSequence,
+		latestTurnHasAssistantOutput,
+		latestTurnId,
+		latestTurnIsInterrupted,
+	]);
 
 	const turns = turnSnapshots.map(
 		(
@@ -239,25 +285,26 @@ export const useChatTurnPresentation = ({
 				currentAssistantSequence.hasFinalAssistantStarted;
 			const useAccumulatedActivity = Boolean(
 				isLastTurn &&
-					(temporalState.isLoading ||
-						temporalState.turnId === turnMessages[0].id),
+					(activeTurnState.isActive ||
+						activeTurnState.turnId === turnMessages[0].id),
 			);
 			const assistantTurnActivityUnits = useAccumulatedActivity
 				? mergeActivityUnits(
-						temporalState.activityUnits,
+						activeTurnState.activityUnits,
 						currentAssistantTurnActivityUnits,
 					)
 				: currentAssistantTurnActivityUnits;
 			const hasFinalAssistantStarted =
 				currentHasFinalAssistantStarted ||
-				(useAccumulatedActivity && temporalState.hasFinalAssistantStarted);
+				(useAccumulatedActivity && activeTurnState.hasFinalAssistantStarted);
 			const latestAssistantMessage =
 				currentAssistantSequence.assistantMessages.at(-1);
 			const assistantTurnStartedAt =
 				isLastTurn &&
-				temporalState.startedAt !== null &&
-				(temporalState.isLoading || temporalState.turnId === turnMessages[0].id)
-					? temporalState.startedAt
+				activeTurnState.startedAt !== null &&
+				(activeTurnState.isActive ||
+					activeTurnState.turnId === turnMessages[0].id)
+					? activeTurnState.startedAt
 					: getChatMessageTimestampMs(turnMessages[0]);
 			const assistantTurnCompletedAt = latestAssistantMessage
 				? getChatMessageTimestampMs(latestAssistantMessage)
@@ -265,16 +312,27 @@ export const useChatTurnPresentation = ({
 			const latestAssistantMetadata = latestAssistantMessage
 				? getChatMessageMetadata(latestAssistantMessage)
 				: null;
+			const firstAssistantMessage =
+				currentAssistantSequence.assistantMessages[0];
+			const firstAssistantMetadata = firstAssistantMessage
+				? getChatMessageMetadata(firstAssistantMessage)
+				: null;
+			const isAssistantTurnInterrupted = Boolean(
+				firstAssistantMessage &&
+					(firstAssistantMetadata?.interrupted === true ||
+						forcedStreamingMessageIds.has(firstAssistantMessage.id)),
+			);
 			const isAssistantTurnStreaming = Boolean(
 				isLastTurn &&
-					isLoading &&
-					latestAssistantMessage?.id === lastMessage?.id &&
-					latestAssistantMetadata?.interrupted !== true &&
-					!forcedStreamingMessageIds.has(latestAssistantMessage.id),
+					(isLoading || activeTurnState.isActive) &&
+					(!latestAssistantMessage ||
+						(latestAssistantMessage.id === lastMessage?.id &&
+							latestAssistantMetadata?.interrupted !== true &&
+							!forcedStreamingMessageIds.has(latestAssistantMessage.id))),
 			);
 			const assistantTurnDurationMs =
 				!isAssistantTurnStreaming &&
-				!(isLastTurn && temporalState.startedAt !== null) &&
+				!(isLastTurn && activeTurnState.startedAt !== null) &&
 				assistantTurnStartedAt !== null &&
 				assistantTurnCompletedAt !== null
 					? Math.max(1, assistantTurnCompletedAt - assistantTurnStartedAt)
@@ -283,19 +341,19 @@ export const useChatTurnPresentation = ({
 			return {
 				assistantTurnActivityUnits,
 				assistantTurnDurationMs,
+				assistantTurnIsInterrupted: isAssistantTurnInterrupted,
 				assistantTurnStartedAt,
 				assistantTurnWorkStatus:
 					isAssistantTurnStreaming && !hasFinalAssistantStarted
 						? ("streaming" as const)
 						: ("ready" as const),
-				firstAssistantMessageId:
-					currentAssistantSequence.assistantMessages[0]?.id,
 				isLastTurn,
 				messages: turnMessages,
 				scrollAnchor:
 					scrollAnchorUserMessages && turnMessages[0].role === "user",
 				showAssistantWorkGroup:
-					currentAssistantSequence.assistantMessages.length > 0,
+					currentAssistantSequence.assistantMessages.length > 0 ||
+					(isLastTurn && (isLoading || activeTurnState.isActive)),
 			};
 		},
 	);
@@ -303,12 +361,8 @@ export const useChatTurnPresentation = ({
 		isLoading ||
 		(lastMessage?.role === "assistant" &&
 			getLastAssistantHasRenderableContent(
-				displayMessages,
-				(message) =>
-					getChatText(message).length > 0 ||
-					extractFileParts(message).length > 0 ||
-					extractReasoningParts(message).length > 0 ||
-					extractToolParts(message).length > 0,
+				normalizedMessages,
+				hasRenderableAssistantOutput,
 			));
 
 	return {

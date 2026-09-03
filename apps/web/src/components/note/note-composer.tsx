@@ -1,6 +1,6 @@
 import type { Editor, Range } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Tiptap, useEditor } from "@tiptap/react";
+import { useEditor } from "@tiptap/react";
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
 import {
@@ -50,24 +50,17 @@ import type { FileUIPart } from "ai";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
-	ArrowUp,
 	AtSign,
 	AudioWaveform,
 	Check,
 	ChevronUp,
 	Copy,
-	Play,
 	SlidersHorizontal,
-	Square,
 } from "lucide-react";
 import * as React from "react";
 // Composer focus and optimistic message paths need committed DOM before the next imperative line.
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import {
-	FileAttachmentButton,
-	FileAttachmentChips,
-} from "@/components/ai-elements/file-attachment-controls";
 import {
 	type ChatAttachment,
 	completeAttachmentUpload,
@@ -80,11 +73,10 @@ import {
 import { resolveChatComposerPrimaryAction } from "@/components/chat/chat-composer-primary-action";
 import { ChatHumanDecisionBar } from "@/components/chat/chat-human-decision-bar";
 import { ChatQueuedFollowUpBar } from "@/components/chat/chat-queued-follow-up-bar";
-import {
-	type ChatModel,
-	ChatModelPicker,
-	type ReasoningEffort,
-	type ServiceTier,
+import type {
+	ChatModel,
+	ReasoningEffort,
+	ServiceTier,
 } from "@/components/chat/model-picker";
 import { RunPlanProgress } from "@/components/chat/run-plan-progress";
 import {
@@ -170,6 +162,16 @@ import {
 } from "../layout/docked-panel-dimensions";
 import { NoteChatMessagesEntry } from "./note-chat-messages-entry";
 import {
+	ChatInlineAttachmentRow,
+	ChatInlineComposerControls,
+	ChatInlineEditorField,
+	type ChatInlinePopoverStatus,
+	NOTE_COMPOSER_FOOTER_BODY_SPACER_CLASS,
+	NOTE_COMPOSER_FOOTER_BOTTOM_ROW_CLASS,
+	NOTE_COMPOSER_FOOTER_SURFACE_CLASS,
+	NOTE_COMPOSER_FOOTER_TOP_ROW_CLASS,
+} from "./note-composer-footer-ui";
+import {
 	clampPanelHeight,
 	getCurrentPanelMaxHeight,
 	getCurrentPanelViewportPlatform,
@@ -198,16 +200,6 @@ const NOTE_CHAT_PANEL_DOCK_OFFSET =
 	COMPOSER_DOCK_BOTTOM_OFFSET - COMPOSER_OVERLAY_FOOTER_PADDING;
 const NOTE_CHAT_INLINE_PANEL_DOCK_OFFSET = COMPOSER_OVERLAY_FOOTER_PADDING;
 const INLINE_POPOVER_FOOTER_CONTAINER_CLASS = "px-6 pb-4";
-const NOTE_COMPOSER_FOOTER_SURFACE_CLASS =
-	"min-h-[132px] max-w-full overflow-hidden rounded-lg border-input/30 bg-background bg-clip-padding shadow-sm has-disabled:bg-background has-disabled:opacity-100 data-[drag-over=true]:border-ring data-[drag-over=true]:ring-3 data-[drag-over=true]:ring-ring/50 dark:bg-input/30 dark:has-disabled:bg-input/30";
-const NOTE_COMPOSER_FOOTER_TOP_ROW_CLASS =
-	"min-w-0 flex-wrap gap-1 px-4 pb-0 pt-2.5";
-const NOTE_COMPOSER_FOOTER_BODY_CLASS =
-	"min-h-[44px] max-h-[24rem] overflow-y-auto pb-0 text-[14px] leading-[1.6] font-normal placeholder:font-normal placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0";
-const NOTE_COMPOSER_FOOTER_BODY_SPACER_CLASS =
-	"min-h-[40px] w-full shrink-0 px-4 pt-2 pb-0";
-const NOTE_COMPOSER_FOOTER_BOTTOM_ROW_CLASS =
-	"min-w-0 flex-wrap gap-1 px-4 pb-2.5";
 const INLINE_POPOVER_FOOTER_DEFAULT_HEIGHT = 120;
 
 type NoteComposerProps = {
@@ -2086,17 +2078,7 @@ function ChatInlinePopoverFooter({
 	handleComposerValueChange: (nextValue: string) => void;
 	onResume: () => void;
 	onStop: () => void;
-	status: {
-		activateInlineOnFocus: boolean;
-		isRecipeLoading: boolean;
-		canSendMessage: boolean;
-		canStop: boolean;
-		hasInterruptedQueue: boolean;
-		isChatLoading: boolean;
-		isResumingQueuedFollowUps: boolean;
-		isSidebarCompact: boolean;
-		showModelPicker: boolean;
-	};
+	status: ChatInlinePopoverStatus;
 	editingMessageId: string | null;
 	message: string;
 	selectedRecipe: RecipePrompt | null;
@@ -2126,7 +2108,6 @@ function ChatInlinePopoverFooter({
 		isChatLoading,
 		isResumingQueuedFollowUps,
 		isSidebarCompact,
-		showModelPicker,
 	} = status;
 	const { primaryAction, submitDisabled } = getInlineComposerActionState({
 		attachedFiles,
@@ -2136,7 +2117,6 @@ function ChatInlinePopoverFooter({
 		isChatLoading,
 		isResumingQueuedFollowUps,
 	});
-	const shouldShowRecipeControls = !activateInlineOnFocus;
 	const activeMentionRangeRef = React.useRef<Range | null>(null);
 	const filteredRecipesRef = React.useRef<RecipePrompt[]>(recipes);
 	const handleRecipeSelectRef = React.useRef<(recipeSlug: RecipeSlug) => void>(
@@ -2525,126 +2505,38 @@ function ChatInlinePopoverFooter({
 				{...attachmentDropzone.dropzoneProps}
 				onPointerDown={handleInputGroupPointerDown}
 			>
-				{attachedFiles.length > 0 ? (
-					<InputGroupAddon
-						align="block-start"
-						className={cn(
-							NOTE_COMPOSER_FOOTER_TOP_ROW_CLASS,
-							isSidebarCompact && "px-3.5",
-						)}
-					>
-						<FileAttachmentChips
-							files={attachedFiles}
-							onRemove={(index) =>
-								onAttachedFilesChange(
-									attachedFiles.filter((_, fileIndex) => fileIndex !== index),
-								)
-							}
-						/>
-					</InputGroupAddon>
-				) : null}
-
-				<div
-					data-slot="input-group-control"
-					ref={composerEditorRef}
-					className={cn(
-						NOTE_COMPOSER_FOOTER_BODY_CLASS,
-						"chat-composer-editor relative flex w-full flex-1 cursor-text",
-						isSidebarCompact && "[&_.chat-composer-tiptap]:px-3.5",
-					)}
-					onFocusCapture={() => {
-						if (activateInlineOnFocus) {
-							handleComposerFocus();
-						}
-					}}
-					onPointerDownCapture={() => {
-						if (activateInlineOnFocus) {
-							handleComposerPointerDown();
-						}
-					}}
-				>
-					{activateInlineOnFocus ? (
-						<button
-							type="button"
-							className="absolute inset-0 z-10 cursor-text bg-transparent p-0 text-left"
-							aria-label="Open follow-up chat"
-							onClick={handleComposerPointerDown}
-							onPointerDown={(event) => {
-								event.preventDefault();
-								event.stopPropagation();
-								handleComposerPointerDown();
-							}}
-						/>
-					) : null}
-					{composerEditor ? (
-						<Tiptap editor={composerEditor}>
-							<Tiptap.Content />
-						</Tiptap>
-					) : null}
-				</div>
-				<InputGroupAddon
-					align="block-end"
-					className={cn(
-						NOTE_COMPOSER_FOOTER_BOTTOM_ROW_CLASS,
-						isSidebarCompact ? "flex-nowrap pl-3.5 pr-2.5" : "px-2",
-					)}
-				>
-					{shouldShowRecipeControls ? (
-						<FileAttachmentButton
-							disabled={isChatLoading}
-							onFileUploadFailed={handleAttachmentUploadFailed}
-							onFileUploaded={handleAttachmentUploaded}
-							onFilesAdded={handleAttachmentsAdded}
-						/>
-					) : null}
-					{speechControls}
-					{showModelPicker ? (
-						<div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
-							<ChatModelPicker
-								open={modelPopoverOpen}
-								onOpenChange={onModelPopoverOpenChange}
-								selectedModel={selectedModel}
-								onSelectedModelChange={onSelectedModelChange}
-								reasoningEffort={reasoningEffort}
-								onReasoningEffortChange={onReasoningEffortChange}
-								serviceTier={serviceTier}
-								onServiceTierChange={onServiceTierChange}
-								triggerClassName="min-w-0 max-w-full text-muted-foreground hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
-								triggerIconClassName="text-current"
-								modelNameClassName="min-w-0 max-w-[120px] truncate"
-							/>
-						</div>
-					) : null}
-					<InputGroupButton
-						type={primaryAction === "send" ? "submit" : "button"}
-						variant="default"
-						size="icon-sm"
-						className={cn("rounded-full", !showModelPicker && "ml-auto")}
-						aria-label={
-							primaryAction === "stop"
-								? "Stop streaming"
-								: primaryAction === "resume"
-									? "Resume"
-									: "Send message"
-						}
-						disabled={submitDisabled}
-						onClick={
-							primaryAction === "stop"
-								? onStop
-								: primaryAction === "resume"
-									? onResume
-									: undefined
-						}
-					>
-						{primaryAction === "stop" ? (
-							<Square className="size-3.5 fill-current" />
-						) : primaryAction === "resume" ? (
-							<Play className="size-4 fill-current" />
-						) : (
-							<ArrowUp className="size-4" />
-						)}
-					</InputGroupButton>
-				</InputGroupAddon>
+				<ChatInlineAttachmentRow
+					attachedFiles={attachedFiles}
+					isSidebarCompact={isSidebarCompact}
+					onAttachedFilesChange={onAttachedFilesChange}
+				/>
+				<ChatInlineEditorField
+					activateInlineOnFocus={activateInlineOnFocus}
+					composerEditor={composerEditor}
+					composerEditorRef={composerEditorRef}
+					handleComposerFocus={handleComposerFocus}
+					handleComposerPointerDown={handleComposerPointerDown}
+					isSidebarCompact={isSidebarCompact}
+				/>
+				<ChatInlineComposerControls
+					handleAttachmentUploadFailed={handleAttachmentUploadFailed}
+					handleAttachmentUploaded={handleAttachmentUploaded}
+					handleAttachmentsAdded={handleAttachmentsAdded}
+					modelPopoverOpen={modelPopoverOpen}
+					onModelPopoverOpenChange={onModelPopoverOpenChange}
+					onReasoningEffortChange={onReasoningEffortChange}
+					onResume={onResume}
+					onSelectedModelChange={onSelectedModelChange}
+					onServiceTierChange={onServiceTierChange}
+					onStop={onStop}
+					primaryAction={primaryAction}
+					reasoningEffort={reasoningEffort}
+					selectedModel={selectedModel}
+					serviceTier={serviceTier}
+					speechControls={speechControls}
+					status={status}
+					submitDisabled={submitDisabled}
+				/>
 			</InputGroup>
 			<NoteRecipeMentionPicker
 				open={recipePopoverOpen}

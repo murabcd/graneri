@@ -17,7 +17,6 @@ import type {
 	ChatRequestContext,
 } from "@/lib/chat-request-preparation";
 import { getUIMessageSeedKey } from "@/lib/chat-snapshot";
-import { CHAT_STREAM_UI_THROTTLE_MS } from "@/lib/chat-streaming-performance";
 import {
 	removeChatMessageById,
 	submitChatTurn,
@@ -241,7 +240,6 @@ export const useRendererChatSession = ({
 		clearError,
 	} = useChat({
 		id: chatId,
-		throttle: CHAT_STREAM_UI_THROTTLE_MS,
 		messages: sessionPersistedMessages,
 		transport,
 		onToolCall: handleToolCall,

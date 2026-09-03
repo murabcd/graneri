@@ -155,6 +155,7 @@ export function ChatMessageListContent({
 		showAssistantBreathingSpace,
 		turns,
 	} = useChatTurnPresentation({
+		hasError: Boolean(error),
 		isLoading,
 		messages,
 		scrollAnchorUserMessages,
@@ -190,6 +191,51 @@ export function ChatMessageListContent({
 				/>
 			) : null}
 			{turns.map((turn) => {
+				const firstAssistantIndex = turn.messages.findIndex(
+					(message) => message.role === "assistant",
+				);
+				const workRowIndex =
+					firstAssistantIndex === -1
+						? turn.messages.length
+						: firstAssistantIndex;
+				const rows: React.ReactNode[] = turn.messages.map((message) => (
+					<React.Fragment key={message.id}>
+						<ChatMessageListItem
+							message={message}
+							isLoading={isLoading}
+							lastMessageId={lastMessageId}
+							renderAssistantActions={renderAssistantActions}
+							renderUserActions={renderUserActions}
+							onOpenMention={onOpenMention}
+							scrollAnchor={scrollAnchorUserMessages && message.role === "user"}
+							streamingMessageIds={forcedStreamingMessageIds}
+							textContainerClassName={textContainerClassName}
+						/>
+						{message.id === compactionActivity?.anchorMessageId ? (
+							<ConversationCompactionActivity activity={compactionActivity} />
+						) : null}
+					</React.Fragment>
+				));
+
+				if (turn.showAssistantWorkGroup) {
+					rows.splice(
+						workRowIndex,
+						0,
+						<ChatMessageAssistantWork
+							key="assistant-turn-work"
+							activity={{
+								durationMs: turn.assistantTurnDurationMs,
+								startedAt: turn.assistantTurnStartedAt ?? undefined,
+								status: turn.assistantTurnWorkStatus,
+								units: turn.assistantTurnActivityUnits,
+							}}
+							hasActivity={turn.assistantTurnActivityUnits.length > 0}
+							isInterrupted={turn.assistantTurnIsInterrupted}
+							textContainerClassName={textContainerClassName}
+						/>,
+					);
+				}
+
 				return (
 					<MessageScrollerItem
 						key={turn.messages[0].id}
@@ -197,49 +243,7 @@ export function ChatMessageListContent({
 						scrollAnchor={turn.scrollAnchor}
 						className={turnClassName?.(turn.isLastTurn)}
 					>
-						{turn.messages.map((message) => (
-							<React.Fragment key={message.id}>
-								<div
-									data-chat-message-scroll-row={message.id}
-									data-message-id={message.id}
-									data-scroll-anchor={
-										scrollAnchorUserMessages && message.role === "user"
-											? "true"
-											: "false"
-									}
-								>
-									<ChatMessageListItem
-										assistantTurnActivityUnits={
-											message.id === turn.firstAssistantMessageId
-												? turn.assistantTurnActivityUnits
-												: undefined
-										}
-										assistantTurnWorkStatus={turn.assistantTurnWorkStatus}
-										assistantTurnStartedAt={
-											turn.assistantTurnStartedAt ?? undefined
-										}
-										assistantTurnDurationMs={turn.assistantTurnDurationMs}
-										showAssistantWorkGroup={
-											message.id === turn.firstAssistantMessageId &&
-											turn.showAssistantWorkGroup
-										}
-										message={message}
-										isLoading={isLoading}
-										lastMessageId={lastMessageId}
-										renderAssistantActions={renderAssistantActions}
-										renderUserActions={renderUserActions}
-										onOpenMention={onOpenMention}
-										streamingMessageIds={forcedStreamingMessageIds}
-										textContainerClassName={textContainerClassName}
-									/>
-								</div>
-								{message.id === compactionActivity?.anchorMessageId ? (
-									<ConversationCompactionActivity
-										activity={compactionActivity}
-									/>
-								) : null}
-							</React.Fragment>
-						))}
+						{rows}
 					</MessageScrollerItem>
 				);
 			})}
@@ -289,13 +293,11 @@ function ConversationCompactionActivity({
 }
 
 const getChatMessagePresentation = ({
-	assistantTurnActivityUnits,
 	isLoading,
 	lastMessageId,
 	message,
 	streamingMessageIds,
 }: {
-	assistantTurnActivityUnits?: AssistantActivityUnit[];
 	isLoading?: boolean;
 	lastMessageId?: string;
 	message: UIMessage;
@@ -327,7 +329,6 @@ const getChatMessagePresentation = ({
 		chartArtifacts,
 		displayText,
 		fileParts,
-		hasAssistantActivity: Boolean(assistantTurnActivityUnits?.length),
 		isEmpty: displayText.length === 0,
 		isInterruptedAssistantMessage,
 		isStreamingAssistantMessage,
@@ -363,60 +364,53 @@ function ChatMessageActions({
 
 function ChatMessageAssistantWork({
 	activity,
-	presentation,
+	hasActivity,
+	isInterrupted,
 	textContainerClassName,
 }: {
 	activity: {
 		durationMs?: number;
-		show: boolean;
 		startedAt?: number;
 		status: "streaming" | "ready";
 		units?: AssistantActivityUnit[];
 	};
-	presentation: ReturnType<typeof getChatMessagePresentation>;
+	hasActivity: boolean;
+	isInterrupted: boolean;
 	textContainerClassName?: string;
 }) {
-	if (!activity.show) {
-		return null;
-	}
-
 	return (
-		<AssistantWorkGroup
-			hasActivity={presentation.hasAssistantActivity}
-			status={activity.status}
-			startedAt={activity.startedAt}
-			totalDurationMs={activity.durationMs}
-		>
-			<AssistantActivitySequence
-				units={activity.units ?? EMPTY_ASSISTANT_ACTIVITY_UNITS}
-				chatStatus={activity.status}
-				isInterrupted={presentation.isInterruptedAssistantMessage}
-				isStreaming={activity.status === "streaming"}
-				textContainerClassName={textContainerClassName}
-			/>
-		</AssistantWorkGroup>
+		<Message align="start" data-chat-assistant-work-row>
+			<MessageContent className="w-[85%] items-start">
+				<AssistantWorkGroup
+					hasActivity={hasActivity}
+					status={activity.status}
+					startedAt={activity.startedAt}
+					totalDurationMs={activity.durationMs}
+				>
+					<AssistantActivitySequence
+						units={activity.units ?? EMPTY_ASSISTANT_ACTIVITY_UNITS}
+						chatStatus={activity.status}
+						isInterrupted={isInterrupted}
+						isStreaming={activity.status === "streaming"}
+						textContainerClassName={textContainerClassName}
+					/>
+				</AssistantWorkGroup>
+			</MessageContent>
+		</Message>
 	);
 }
 
 const ChatMessageListItem = React.memo(function ChatMessageListItem({
-	assistantTurnActivityUnits,
-	assistantTurnWorkStatus,
-	assistantTurnStartedAt,
-	assistantTurnDurationMs,
 	message,
 	isLoading,
 	lastMessageId,
 	renderAssistantActions,
 	renderUserActions,
 	onOpenMention,
+	scrollAnchor,
 	streamingMessageIds,
-	showAssistantWorkGroup,
 	textContainerClassName,
 }: {
-	assistantTurnActivityUnits?: AssistantActivityUnit[];
-	assistantTurnWorkStatus: "streaming" | "ready";
-	assistantTurnStartedAt?: number;
-	assistantTurnDurationMs?: number;
 	message: UIMessage;
 	isLoading?: boolean;
 	lastMessageId?: string;
@@ -425,12 +419,11 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	) => React.ReactNode;
 	renderUserActions?: (context: ChatMessageActionContext) => React.ReactNode;
 	onOpenMention?: (noteId: string) => void;
+	scrollAnchor: boolean;
 	streamingMessageIds: ReadonlySet<string>;
-	showAssistantWorkGroup: boolean;
 	textContainerClassName?: string;
 }) {
 	const presentation = getChatMessagePresentation({
-		assistantTurnActivityUnits,
 		isLoading,
 		lastMessageId,
 		message,
@@ -439,11 +432,9 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 
 	if (
 		presentation.isEmpty &&
-		!presentation.hasAssistantActivity &&
 		presentation.fileParts.length === 0 &&
 		presentation.chartArtifacts.length === 0 &&
-		!presentation.selectedRecipe &&
-		!showAssistantWorkGroup
+		!presentation.selectedRecipe
 	) {
 		return null;
 	}
@@ -456,61 +447,58 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	};
 
 	return (
-		<Message
-			align={message.role === "user" ? "end" : "start"}
-			data-chat-message-id={message.id}
+		<div
+			data-chat-message-scroll-row={message.id}
+			data-message-id={message.id}
+			data-scroll-anchor={scrollAnchor ? "true" : "false"}
 		>
-			<MessageContent
-				className={cn(
-					message.role === "user" ? "items-end" : "items-start",
-					message.role === "assistant"
-						? "w-[85%]"
-						: CHAT_MESSAGE_MAX_WIDTH_CLASS,
-				)}
+			<Message
+				align={message.role === "user" ? "end" : "start"}
+				data-chat-message-id={message.id}
 			>
-				{presentation.selectedRecipe ? (
-					<ChatRecipeReceipt recipe={presentation.selectedRecipe} />
-				) : null}
-				{message.role === "user" ? (
-					<FileAttachmentCards align="end" files={presentation.fileParts} />
-				) : null}
-				<ChatMessageAssistantWork
-					activity={{
-						durationMs: assistantTurnDurationMs,
-						show: showAssistantWorkGroup,
-						startedAt: assistantTurnStartedAt,
-						status: assistantTurnWorkStatus,
-						units: assistantTurnActivityUnits,
-					}}
-					presentation={presentation}
-					textContainerClassName={textContainerClassName}
-				/>
-				<ChatChartArtifacts charts={presentation.chartArtifacts} />
-				<ChatMessageText
-					displayText={presentation.displayText}
-					isInterruptedAssistantMessage={
-						presentation.isInterruptedAssistantMessage
-					}
-					isStreamingAssistantMessage={presentation.isStreamingAssistantMessage}
-					mentionPositions={presentation.metadata?.mentionPositions}
-					onOpenMention={onOpenMention}
-					role={message.role}
-					textContainerClassName={textContainerClassName}
-				/>
-				{message.role === "assistant" ? (
-					<FileAttachmentCards files={presentation.fileParts} />
-				) : null}
-				{presentation.isInterruptedAssistantMessage ? (
-					<InterruptedMessageStatus />
-				) : null}
-				<ChatMessageActions
-					actionContext={actionContext}
-					presentation={presentation}
-					renderAssistantActions={renderAssistantActions}
-					renderUserActions={renderUserActions}
-				/>
-			</MessageContent>
-		</Message>
+				<MessageContent
+					className={cn(
+						message.role === "user" ? "items-end" : "items-start",
+						message.role === "assistant"
+							? "w-[85%]"
+							: CHAT_MESSAGE_MAX_WIDTH_CLASS,
+					)}
+				>
+					{presentation.selectedRecipe ? (
+						<ChatRecipeReceipt recipe={presentation.selectedRecipe} />
+					) : null}
+					{message.role === "user" ? (
+						<FileAttachmentCards align="end" files={presentation.fileParts} />
+					) : null}
+					<ChatChartArtifacts charts={presentation.chartArtifacts} />
+					<ChatMessageText
+						displayText={presentation.displayText}
+						isInterruptedAssistantMessage={
+							presentation.isInterruptedAssistantMessage
+						}
+						isStreamingAssistantMessage={
+							presentation.isStreamingAssistantMessage
+						}
+						mentionPositions={presentation.metadata?.mentionPositions}
+						onOpenMention={onOpenMention}
+						role={message.role}
+						textContainerClassName={textContainerClassName}
+					/>
+					{message.role === "assistant" ? (
+						<FileAttachmentCards files={presentation.fileParts} />
+					) : null}
+					{presentation.isInterruptedAssistantMessage ? (
+						<InterruptedMessageStatus />
+					) : null}
+					<ChatMessageActions
+						actionContext={actionContext}
+						presentation={presentation}
+						renderAssistantActions={renderAssistantActions}
+						renderUserActions={renderUserActions}
+					/>
+				</MessageContent>
+			</Message>
+		</div>
 	);
 });
 
