@@ -691,10 +691,8 @@ function YandexCalendarDialog({
 	onEmailChange,
 	onPasswordChange,
 	onConnect,
-	onDisable,
 	isFormValid,
 	isSaving,
-	isDisabling,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -702,10 +700,8 @@ function YandexCalendarDialog({
 	onEmailChange: (email: string) => void;
 	onPasswordChange: (password: string) => void;
 	onConnect: () => void;
-	onDisable?: () => void;
 	isFormValid: boolean;
 	isSaving: boolean;
-	isDisabling: boolean;
 }) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -720,18 +716,8 @@ function YandexCalendarDialog({
 				<ConnectionDialogForm
 					onCancel={() => onOpenChange(false)}
 					onConnect={onConnect}
-					destructiveAction={
-						onDisable
-							? {
-									label: "Uninstall",
-									onClick: onDisable,
-									pendingLabel: "Uninstalling",
-								}
-							: undefined
-					}
 					isFormValid={isFormValid}
 					isSaving={isSaving}
-					isDisabling={isDisabling}
 				>
 					<FieldGroup className="gap-4">
 						<Field>
@@ -1016,14 +1002,8 @@ function CalendarTrackerDialogs({
 				onEmailChange={controller.setYandexCalendarEmail}
 				onPasswordChange={controller.setYandexCalendarPassword}
 				onConnect={() => void controller.handleConnectYandexCalendar()}
-				onDisable={
-					controller.yandexCalendarConnection
-						? controller.handleDisableYandexCalendar
-						: undefined
-				}
 				isFormValid={controller.isYandexCalendarFormValid}
 				isSaving={controller.isSavingYandexCalendarConnection}
-				isDisabling={controller.isDisablingConnection}
 			/>
 			<YandexTrackerDialog
 				open={controller.isYandexTrackerDialogOpen}
@@ -1033,14 +1013,8 @@ function CalendarTrackerDialogs({
 				onOrgIdChange={controller.setYandexTrackerOrgId}
 				onTokenChange={controller.setYandexTrackerToken}
 				onConnect={() => void controller.handleConnectYandexTracker()}
-				onDisable={
-					controller.yandexTrackerConnection
-						? controller.handleDisableYandexTracker
-						: undefined
-				}
 				isFormValid={controller.isYandexTrackerFormValid}
 				isSaving={controller.isSavingYandexTrackerConnection}
-				isDisabling={controller.isDisablingConnection}
 			/>
 		</>
 	);
@@ -1064,18 +1038,7 @@ function JiraConnectionDialogs({
 				onTokenChange={controller.setJiraToken}
 				onConnect={() => void controller.handleConnectJira()}
 				canConnect={controller.isJiraFormValid}
-				connectionStatus={
-					controller.isDisablingConnection
-						? "disabling"
-						: controller.isSavingJiraConnection
-							? "saving"
-							: "idle"
-				}
-				onDisable={
-					controller.jiraConnection
-						? controller.handleDisableJiraSync
-						: undefined
-				}
+				isSaving={controller.isSavingJiraConnection}
 				onCopyWebhookUrl={() => void controller.handleCopyJiraWebhookUrl()}
 				showSyncSettings={Boolean(controller.jiraConnection)}
 				webhookUrl={controller.jiraWebhookUrl}
@@ -1098,10 +1061,6 @@ function JiraConnectionDialogs({
 				onConnect={() => void jiraMcp.handleConnect()}
 				isFormValid={jiraMcp.isFormValid}
 				isSaving={jiraMcp.isSaving}
-				isDisabling={controller.isDisablingConnection}
-				onDisable={
-					jiraMcp.connection ? controller.handleDisableJiraMcp : undefined
-				}
 			/>
 		</>
 	);
@@ -1130,12 +1089,8 @@ function RemoteHeaderMcpConnectionDialogs({
 				onRemoveEnvVar={context7.removeEnvVar}
 				onUpdateEnvVar={context7.updateEnvVar}
 				onConnect={() => void context7.handleConnect()}
-				onDisable={
-					context7.connection ? controller.handleDisableContext7 : undefined
-				}
 				isFormValid={context7.isFormValid}
 				isSaving={context7.isSaving}
-				isDisabling={controller.isDisablingConnection}
 			/>
 			<RemoteMcpDialog
 				open={figma.isOpen}
@@ -1155,10 +1110,8 @@ function RemoteHeaderMcpConnectionDialogs({
 				onOAuthClientIdChange={figma.setOAuthClientId}
 				onOAuthClientSecretChange={figma.setOAuthClientSecret}
 				onConnect={() => void figma.handleConnect()}
-				onDisable={figma.connection ? controller.handleDisableFigma : undefined}
 				isFormValid={figma.isFormValid}
 				isSaving={figma.isSaving}
-				isDisabling={controller.isDisablingConnection}
 			/>
 			<RemoteMcpDialog
 				open={linear.isOpen}
@@ -1178,12 +1131,8 @@ function RemoteHeaderMcpConnectionDialogs({
 				onOAuthClientIdChange={linear.setOAuthClientId}
 				onOAuthClientSecretChange={linear.setOAuthClientSecret}
 				onConnect={() => void linear.handleConnect()}
-				onDisable={
-					linear.connection ? controller.handleDisableLinear : undefined
-				}
 				isFormValid={linear.isFormValid}
 				isSaving={linear.isSaving}
-				isDisabling={controller.isDisablingConnection}
 			/>
 		</>
 	);
@@ -1214,12 +1163,8 @@ function OAuthMcpConnectionDialogs({
 				onOAuthClientIdChange={posthog.setOAuthClientId}
 				onOAuthClientSecretChange={posthog.setOAuthClientSecret}
 				onConnect={() => void posthog.handleConnect()}
-				onDisable={
-					posthog.connection ? controller.handleDisablePostHog : undefined
-				}
 				isFormValid={posthog.isFormValid}
 				isSaving={posthog.isSaving}
-				isDisabling={controller.isDisablingConnection}
 			/>
 			<RemoteMcpDialog
 				open={notion.isOpen}
@@ -1237,12 +1182,8 @@ function OAuthMcpConnectionDialogs({
 				onOAuthClientIdChange={notion.setOAuthClientId}
 				onOAuthClientSecretChange={notion.setOAuthClientSecret}
 				onConnect={() => void notion.handleConnect()}
-				onDisable={
-					notion.connection ? controller.handleDisableNotion : undefined
-				}
 				isFormValid={notion.isFormValid}
 				isSaving={notion.isSaving}
-				isDisabling={controller.isDisablingConnection}
 			/>
 			<RemoteMcpDialog
 				open={zoom.isOpen}
@@ -1260,10 +1201,8 @@ function OAuthMcpConnectionDialogs({
 				onOAuthClientIdChange={zoom.setOAuthClientId}
 				onOAuthClientSecretChange={zoom.setOAuthClientSecret}
 				onConnect={() => void zoom.handleConnect()}
-				onDisable={zoom.connection ? controller.handleDisableZoom : undefined}
 				isFormValid={zoom.isFormValid}
 				isSaving={zoom.isSaving}
-				isDisabling={controller.isDisablingConnection}
 			/>
 		</>
 	);
@@ -1323,10 +1262,8 @@ function YandexTrackerDialog({
 	onOrgIdChange,
 	onTokenChange,
 	onConnect,
-	onDisable,
 	isFormValid,
 	isSaving,
-	isDisabling,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -1335,10 +1272,8 @@ function YandexTrackerDialog({
 	onOrgIdChange: (orgId: string) => void;
 	onTokenChange: (token: string) => void;
 	onConnect: () => void;
-	onDisable?: () => void;
 	isFormValid: boolean;
 	isSaving: boolean;
-	isDisabling: boolean;
 }) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -1353,18 +1288,8 @@ function YandexTrackerDialog({
 				<ConnectionDialogForm
 					onCancel={() => onOpenChange(false)}
 					onConnect={onConnect}
-					destructiveAction={
-						onDisable
-							? {
-									label: "Uninstall",
-									onClick: onDisable,
-									pendingLabel: "Uninstalling",
-								}
-							: undefined
-					}
 					isFormValid={isFormValid}
 					isSaving={isSaving}
-					isDisabling={isDisabling}
 				>
 					<FieldGroup className="gap-4">
 						<Field>
@@ -1442,9 +1367,8 @@ function JiraDialog({
 	onEmailChange,
 	onTokenChange,
 	onConnect,
-	onDisable,
 	canConnect,
-	connectionStatus,
+	isSaving,
 	showSyncSettings,
 	webhookUrl,
 }: {
@@ -1456,15 +1380,11 @@ function JiraDialog({
 	onEmailChange: (email: string) => void;
 	onTokenChange: (token: string) => void;
 	onConnect: () => void;
-	onDisable?: () => void;
 	canConnect: boolean;
-	connectionStatus: "idle" | "saving" | "disabling";
+	isSaving: boolean;
 	showSyncSettings: boolean;
 	webhookUrl: string | null;
 }) {
-	const isSaving = connectionStatus === "saving";
-	const isDisabling = connectionStatus === "disabling";
-
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-md">
@@ -1477,18 +1397,8 @@ function JiraDialog({
 				<ConnectionDialogForm
 					onCancel={() => onOpenChange(false)}
 					onConnect={onConnect}
-					destructiveAction={
-						onDisable
-							? {
-									label: "Disable",
-									onClick: onDisable,
-									pendingLabel: "Disabling",
-								}
-							: undefined
-					}
 					isFormValid={canConnect}
 					isSaving={isSaving}
-					isDisabling={isDisabling}
 				>
 					<FieldGroup className="gap-4">
 						<Field>

@@ -33,7 +33,9 @@ const useObjectUrlPreview = (file: File | null) => {
 export const useSettingsImageUpload = (purpose: SettingsImagePurpose) => {
 	const discardUpload = useMutation(api.settingsImageUploads.discard);
 	const discardUploadRef = useRef(discardUpload);
-	discardUploadRef.current = discardUpload;
+	useEffect(() => {
+		discardUploadRef.current = discardUpload;
+	}, [discardUpload]);
 	const [pendingUpload, setPendingUpload] =
 		useState<PendingSettingsImage | null>(null);
 	const [isUploading, setIsUploading] = useState(false);

@@ -55,7 +55,6 @@ describe("dialog keyboard mechanics", () => {
 				onConnect={onConnect}
 				isFormValid
 				isSaving={false}
-				isDisabling={false}
 			>
 				<label htmlFor="connection-name">Name</label>
 				<Input id="connection-name" />
@@ -78,7 +77,6 @@ describe("dialog keyboard mechanics", () => {
 				onConnect={onConnect}
 				isFormValid={false}
 				isSaving={false}
-				isDisabling={false}
 			>
 				<label htmlFor="connection-name">Name</label>
 				<Input id="connection-name" />

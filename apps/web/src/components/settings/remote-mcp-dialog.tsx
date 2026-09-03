@@ -40,10 +40,8 @@ type RemoteMcpDialogProps = {
 	onOAuthClientIdChange?: (oauthClientId: string) => void;
 	onOAuthClientSecretChange?: (oauthClientSecret: string) => void;
 	onConnect: () => void;
-	onDisable?: () => void;
 	isFormValid: boolean;
 	isSaving: boolean;
-	isDisabling: boolean;
 };
 
 export function RemoteMcpDialog({
@@ -64,10 +62,8 @@ export function RemoteMcpDialog({
 	onOAuthClientIdChange,
 	onOAuthClientSecretChange,
 	onConnect,
-	onDisable,
 	isFormValid,
 	isSaving,
-	isDisabling,
 }: RemoteMcpDialogProps) {
 	const nameInputId = `${idPrefix}-name`;
 	const baseUrlInputId = `${idPrefix}-base-url`;
@@ -82,18 +78,8 @@ export function RemoteMcpDialog({
 				<ConnectionDialogForm
 					onCancel={() => onOpenChange(false)}
 					onConnect={onConnect}
-					destructiveAction={
-						onDisable
-							? {
-									label: "Uninstall",
-									onClick: onDisable,
-									pendingLabel: "Uninstalling",
-								}
-							: undefined
-					}
 					isFormValid={isFormValid}
 					isSaving={isSaving}
-					isDisabling={isDisabling}
 				>
 					<FieldGroup className="gap-4">
 						<Field>
