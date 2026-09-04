@@ -217,3 +217,5 @@ Electron owns prompt debounce, scheduled-reminder de-duplication, dismissal,
 suppression, full-screen/workspace visibility, and action handling so the prompt
 remains predictable under Focus modes, Notification Center settings, and
 transcription state changes.
+The widget Start action is an explicit request to begin capture immediately,
+including when a scheduled reminder appears before its calendar start time.

@@ -122,6 +122,37 @@ test("opens live tray meetings with a one-shot capture request", async () => {
 	assert.deepEqual(harness.openedExternalUrls, [event.meetingUrl]);
 });
 
+test("allows meeting widgets to start capture before the calendar start", async () => {
+	const event = createMeetingEvent({
+		endAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+		startAt: new Date(Date.now() + 30_000).toISOString(),
+	});
+	const harness = createCalendarReminderHarness({
+		events: [event],
+		preferences: {
+			notifyForAutoDetectedMeetings: false,
+			notifyForScheduledMeetings: false,
+		},
+	});
+
+	await harness.calendar.openCalendarEventNote(event, {
+		autoStartCapture: true,
+	});
+
+	const searchParams = new URLSearchParams(
+		harness.openedMainWindows[0].search.slice(1),
+	);
+	assert.equal(searchParams.get("capture"), "1");
+	assert.match(searchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
+	const requestId = searchParams.get("calendarEventRequestId");
+	assert.deepEqual(
+		harness.calendar.consumeCalendarEventRequest(requestId),
+		event,
+	);
+	assert.equal(harness.calendar.consumeCalendarEventRequest(requestId), null);
+	assert.deepEqual(harness.openedExternalUrls, [event.meetingUrl]);
+});
+
 test("does not expose mutable nested tray calendar state", async () => {
 	const event = createMeetingEvent();
 	const harness = createCalendarReminderHarness({

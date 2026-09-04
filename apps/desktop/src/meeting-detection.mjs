@@ -466,7 +466,9 @@ export const createMeetingDetection = ({
 			scheduledPromptEvent ?? getDetectedMeetingCalendarEvent();
 
 		if (detectedMeetingCalendarEvent) {
-			await openCalendarEventNote(detectedMeetingCalendarEvent);
+			await openCalendarEventNote(detectedMeetingCalendarEvent, {
+				autoStartCapture: true,
+			});
 			return;
 		}
 
