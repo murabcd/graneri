@@ -15,6 +15,9 @@ import type { DockedPanelSide } from "@/components/layout/use-docked-panel-width
 
 const DOCKED_PANEL_TRANSITION_DURATION_MS = 300;
 
+export const DOCKED_PANEL_HEADER_ACTION_CLASS_NAME =
+	"text-muted-foreground hover:text-foreground focus-visible:text-foreground data-[state=open]:text-foreground aria-pressed:text-foreground";
+
 const getDismissLayerStyle = ({
 	dismissLeadingOffset,
 	dismissTrailingOffset,
@@ -125,7 +128,7 @@ export function DockedPanelPinButton({
 					size="icon-sm"
 					aria-label={isPinned ? `Unpin ${label}` : `Pin ${label}`}
 					aria-pressed={isPinned}
-					className={buttonClassName}
+					className={cn(DOCKED_PANEL_HEADER_ACTION_CLASS_NAME, buttonClassName)}
 					onClick={onTogglePinned}
 				>
 					<Pin
@@ -164,6 +167,7 @@ export function DockedPanelHideButton({
 					variant="ghost"
 					size="icon-sm"
 					aria-label={label}
+					className={DOCKED_PANEL_HEADER_ACTION_CLASS_NAME}
 					onClick={(event) => {
 						event.currentTarget.blur();
 						onHide();

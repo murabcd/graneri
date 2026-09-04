@@ -58,6 +58,7 @@ import {
 } from "@/components/layout/docked-panel-dimensions";
 import {
 	DesktopDockedSidePanel,
+	DOCKED_PANEL_HEADER_ACTION_CLASS_NAME,
 	DockedPanelHideButton,
 	DockedPanelPinButton,
 } from "@/components/layout/docked-side-panel";
@@ -547,6 +548,7 @@ function SummaryAddPopover({
 							variant="ghost"
 							size="icon-sm"
 							aria-label="Add tab"
+							className={DOCKED_PANEL_HEADER_ACTION_CLASS_NAME}
 						>
 							<Plus className="size-4" />
 						</Button>

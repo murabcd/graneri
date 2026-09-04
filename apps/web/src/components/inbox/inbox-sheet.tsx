@@ -74,6 +74,7 @@ import {
 } from "@/components/layout/docked-panel-dimensions";
 import {
 	DesktopDockedSidePanel,
+	DOCKED_PANEL_HEADER_ACTION_CLASS_NAME,
 	DockedPanelPinButton,
 } from "@/components/layout/docked-side-panel";
 import {
@@ -437,6 +438,7 @@ function InboxPaneHeader({
 									variant="ghost"
 									size="icon-sm"
 									aria-label="Inbox actions"
+									className={DOCKED_PANEL_HEADER_ACTION_CLASS_NAME}
 									data-app-region={!isMobile && open ? "no-drag" : undefined}
 								>
 									<MoreHorizontal className="size-4" />
@@ -499,6 +501,7 @@ function InboxPaneHeader({
 									variant="ghost"
 									size="icon-sm"
 									aria-label="Filter inbox"
+									className={DOCKED_PANEL_HEADER_ACTION_CLASS_NAME}
 									data-app-region={!isMobile && open ? "no-drag" : undefined}
 								>
 									<SlidersHorizontal className="size-4" />

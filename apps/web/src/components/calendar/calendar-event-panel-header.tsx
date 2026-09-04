@@ -6,7 +6,10 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import { Minus } from "lucide-react";
-import { DockedPanelPinButton } from "@/components/layout/docked-side-panel";
+import {
+	DOCKED_PANEL_HEADER_ACTION_CLASS_NAME,
+	DockedPanelPinButton,
+} from "@/components/layout/docked-side-panel";
 
 export function CalendarEventPanelHeader({
 	closeLabel,
@@ -48,6 +51,7 @@ export function CalendarEventPanelHeader({
 							variant="ghost"
 							size="icon-sm"
 							aria-label={closeLabel}
+							className={DOCKED_PANEL_HEADER_ACTION_CLASS_NAME}
 							onClick={onClose}
 						>
 							<Minus />

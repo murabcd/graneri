@@ -70,6 +70,7 @@ import {
 } from "@/components/layout/docked-panel-dimensions";
 import {
 	DesktopDockedSidePanel,
+	DOCKED_PANEL_HEADER_ACTION_CLASS_NAME,
 	DockedPanelHideButton,
 	DockedPanelPinButton,
 } from "@/components/layout/docked-side-panel";
@@ -919,6 +920,7 @@ function CommentsSheetPanel({
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Filter comments"
+										className={DOCKED_PANEL_HEADER_ACTION_CLASS_NAME}
 									>
 										<SlidersHorizontal className="size-4" />
 									</Button>
