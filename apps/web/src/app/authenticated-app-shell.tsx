@@ -353,7 +353,6 @@ const useAppShellState = ({
 		setInboxOpen: setNavigationInboxOpen,
 		setSettingsOpen: setNavigationSettingsOpen,
 		shouldAutoStartNoteCapture,
-		shouldStopNoteCaptureWhenMeetingEnds,
 		triggerScheduledAutoStart,
 	} = navigation;
 	const chatComposerId = currentChatId ?? draftChatComposerId;
@@ -787,7 +786,6 @@ const useAppShellState = ({
 				autoStartCapture?: boolean;
 				captureRequestId?: string | null;
 				scheduledAutoStartAt?: string | null;
-				stopCaptureWhenMeetingEnds?: boolean;
 			},
 		) => {
 			const captureRequestId = getNoteCaptureRequestIdForAutoStart({
@@ -799,7 +797,6 @@ const useAppShellState = ({
 					autoStartCapture: options?.autoStartCapture,
 					captureRequestId,
 					scheduledAutoStartAt: options?.scheduledAutoStartAt,
-					stopCaptureWhenMeetingEnds: options?.stopCaptureWhenMeetingEnds,
 				});
 				setCurrentNoteEditorActions(null);
 				setCurrentNoteCommentsOpener(null);
@@ -821,7 +818,6 @@ const useAppShellState = ({
 				projectId,
 				scheduledAutoStartAt,
 				shouldStartCapture,
-				shouldStopCaptureWhenMeetingEnds,
 			} = getAppShellNoteCreationIntent(options);
 
 			if (!resolvedActiveWorkspaceId) {
@@ -861,7 +857,6 @@ const useAppShellState = ({
 						autoStartCapture: shouldStartCapture,
 						captureRequestId,
 						scheduledAutoStartAt,
-						stopCaptureWhenMeetingEnds: shouldStopCaptureWhenMeetingEnds,
 					});
 				})
 				.catch((error) => {
@@ -960,7 +955,6 @@ const useAppShellState = ({
 				calendarEvent: pendingDesktopCalendarEvent.event,
 				captureRequestId: noteCaptureRequestId,
 				projectId: null,
-				stopCaptureWhenMeetingEnds: shouldStopNoteCaptureWhenMeetingEnds,
 			});
 			pendingDesktopCalendarEvent.release();
 		}
@@ -973,7 +967,6 @@ const useAppShellState = ({
 		resolvedCurrentNoteId,
 		resolvedCurrentView,
 		shouldAutoStartNoteCapture,
-		shouldStopNoteCaptureWhenMeetingEnds,
 	]);
 
 	React.useEffect(() => {
@@ -1000,14 +993,12 @@ const useAppShellState = ({
 			event: UpcomingCalendarEvent,
 			options?: {
 				autoStartCapture?: boolean;
-				stopCaptureWhenMeetingEnds?: boolean;
 			},
 		) => {
 			handleCreateNote({
 				autoStartCapture: options?.autoStartCapture,
 				calendarEvent: event,
 				projectId: null,
-				stopCaptureWhenMeetingEnds: options?.stopCaptureWhenMeetingEnds ?? true,
 			});
 		},
 		[handleCreateNote],
@@ -1227,7 +1218,6 @@ const useAppShellState = ({
 		setCurrentNoteTitle,
 		sharedNotes,
 		shouldAutoStartNoteCapture,
-		shouldStopNoteCaptureWhenMeetingEnds,
 		handleAutomationSave,
 		upcomingCalendar,
 		user,
@@ -2037,10 +2027,7 @@ function createAppShellContentView({
 			kind: "calendar",
 			accountId: controller.accountId,
 			isDesktopMac: controller.isDesktopMac,
-			onOpenCalendarEventNote: (event) =>
-				controller.handleOpenCalendarEventNote(event, {
-					stopCaptureWhenMeetingEnds: false,
-				}),
+			onOpenCalendarEventNote: controller.handleOpenCalendarEventNote,
 			onOpenCalendarSettings: controller.handleOpenCalendarSettings,
 		};
 	}
@@ -2129,8 +2116,6 @@ function createAppShellContentView({
 			noteEditorActionsStore: controller.noteEditorActionsStore,
 			onNoteTitleChange: controller.setCurrentNoteTitle,
 			shouldAutoStartNoteCapture: controller.shouldAutoStartNoteCapture,
-			shouldStopNoteCaptureWhenMeetingEnds:
-				controller.shouldStopNoteCaptureWhenMeetingEnds,
 		};
 	}
 

@@ -168,6 +168,10 @@
       "types": "./src/models.d.mts",
       "import": "./src/models.mjs"
     },
+    "./meeting-end-classification": {
+      "types": "./src/meeting-end-classification.d.mts",
+      "import": "./src/meeting-end-classification.mjs"
+    },
     "./meeting-tools": {
       "types": "./src/meeting-tools.d.mts",
       "import": "./src/meeting-tools.mjs"

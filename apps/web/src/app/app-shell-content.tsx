@@ -58,7 +58,6 @@ export type AppShellContentView =
 				event: UpcomingCalendarEvent,
 				options?: {
 					autoStartCapture?: boolean;
-					stopCaptureWhenMeetingEnds?: boolean;
 				},
 			) => Promise<void> | void;
 			onOpenCalendarSettings: () => void;
@@ -116,7 +115,6 @@ export type AppShellContentView =
 			noteEditorActionsStore: NoteEditorActionsStore;
 			onNoteTitleChange: (title: string) => void;
 			shouldAutoStartNoteCapture: boolean;
-			shouldStopNoteCaptureWhenMeetingEnds: boolean;
 	  }
 	| {
 			kind: "chat";
@@ -293,9 +291,6 @@ export const AppShellContent = React.memo(function AppShellContent({
 					onTitleChange={view.onNoteTitleChange}
 					editorActionsStore={view.noteEditorActionsStore}
 					scrollParentRef={noteViewScrollRef}
-					stopTranscriptionWhenMeetingEnds={
-						view.shouldStopNoteCaptureWhenMeetingEnds
-					}
 				/>
 			</ContentScrollArea>
 		);

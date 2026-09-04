@@ -206,6 +206,7 @@ const INLINE_POPOVER_FOOTER_DEFAULT_HEIGHT = 120;
 
 type NoteComposerProps = {
 	noteContext: {
+		calendarEventEndAt?: string | null;
 		noteId: string | null;
 		templateSlug?: string | null;
 		title?: string;
@@ -226,7 +227,6 @@ type NoteComposerProps = {
 		transcript: string,
 		transcriptionLanguage: string | null,
 	) => Promise<void>;
-	stopTranscriptionWhenMeetingEnds?: boolean;
 };
 
 type ComposerKeyboardEvent = Pick<
@@ -366,7 +366,6 @@ const useNoteComposerController = ({
 	noteCaptureRequestId,
 	onAutoStartTranscriptionHandled,
 	onEnhanceTranscript,
-	stopTranscriptionWhenMeetingEnds,
 }: NoteComposerProps) => {
 	const { isMobile, state } = useSidebarShell();
 	const {
@@ -635,11 +634,11 @@ const useNoteComposerController = ({
 		autoStartTranscription:
 			autoStartTranscription && isTranscriptionLanguageReady,
 		autoStartTranscriptionRequestId: noteCaptureRequestId,
+		calendarEventEndAt: noteContext.calendarEventEndAt ?? null,
 		noteId,
 		onAutoStartTranscriptionHandled,
 		onEnhanceTranscript,
 		shouldLoadStoredTranscriptHistory,
-		stopTranscriptionWhenMeetingEnds,
 		transcriptionLanguage,
 	});
 	const isCurrentNoteSpeechListening =

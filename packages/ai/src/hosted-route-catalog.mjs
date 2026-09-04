@@ -41,6 +41,12 @@ const routeDefinitions = Object.freeze([
 	}),
 	chatStreamRoute,
 	staticRoute({
+		id: "classifyMeetingEnd",
+		method: "POST",
+		path: "/api/classify-meeting-end",
+		proxyBodyMode: "bufferedJson",
+	}),
+	staticRoute({
 		id: "enhanceNote",
 		method: "POST",
 		path: "/api/enhance-note",

@@ -22,7 +22,6 @@ describe("application navigation session", () => {
 			result.current.openNote(noteId, {
 				autoStartCapture: true,
 				captureRequestId: "capture-1",
-				stopCaptureWhenMeetingEnds: true,
 			});
 		});
 
@@ -31,7 +30,7 @@ describe("application navigation session", () => {
 		expect(result.current.noteCaptureRequestId).toBe("capture-1");
 		expect(result.current.shouldAutoStartNoteCapture).toBe(true);
 		expect(window.location.search).toBe(
-			"?noteId=note-1&capture=1&captureRequestId=capture-1&meeting=1",
+			"?noteId=note-1&capture=1&captureRequestId=capture-1",
 		);
 
 		act(() => {

@@ -1,7 +1,3 @@
-import {
-	isDesktopRuntime,
-	onDesktopMeetingDetectionState,
-} from "@workspace/platform/desktop";
 import * as React from "react";
 import {
 	createScopedTranscriptState,
@@ -13,6 +9,7 @@ import {
 } from "@/hooks/note-transcript-session-state";
 import { useNoteTranscriptScope } from "@/hooks/use-note-transcript-scope";
 import { useTranscriptSessionStopController } from "@/hooks/use-transcript-session-stop-controller";
+import { useTranscriptionAutoStop } from "@/hooks/use-transcription-auto-stop";
 import { logError } from "@/lib/logger";
 import {
 	createVisibleTranscriptView,
@@ -27,21 +24,17 @@ import {
 	type TranscriptUtterance,
 } from "@/lib/transcript";
 import { createTranscriptText } from "@/lib/transcript-session";
-import { TranscriptionAutoStopController } from "@/lib/transcription-auto-stop";
 import { transcriptionSessionManager } from "@/lib/transcription-session-manager";
 import type { Id } from "../../../../convex/_generated/dataModel";
-
-const transcriptIdleStopMs = 15 * 60 * 1000;
-const transcriptIdleCheckIntervalMs = 15 * 1000;
 
 export const useNoteTranscriptSession = ({
 	autoStartTranscription,
 	autoStartTranscriptionRequestId,
+	calendarEventEndAt,
 	noteId,
 	onAutoStartTranscriptionHandled,
 	onEnhanceTranscript,
 	shouldLoadStoredTranscriptHistory = false,
-	stopTranscriptionWhenMeetingEnds,
 	transcriptionLanguage,
 }: UseNoteTranscriptSessionArgs) => {
 	const [isGeneratingNotes, setIsGeneratingNotes] = React.useState(false);
@@ -55,13 +48,6 @@ export const useNoteTranscriptSession = ({
 	>(null);
 	const lastQueuedAutoStartKeyRef = React.useRef<string | null>(null);
 	const hasHandledAutoStartRef = React.useRef(false);
-	const [transcriptionAutoStopState] = React.useState(
-		() => new TranscriptionAutoStopController(),
-	);
-	const [initialLastAudioActivityAt] = React.useState(Date.now);
-	const lastAudioActivityAtRef = React.useRef<number | null>(
-		initialLastAudioActivityAt,
-	);
 	const {
 		captureScopeKey,
 		captureScopeNoteId,
@@ -154,6 +140,29 @@ export const useNoteTranscriptSession = ({
 		() => createLiveTranscriptEntries(liveTranscript),
 		[liveTranscript],
 	);
+	const transcriptActivityKey = React.useMemo(() => {
+		const latestUtterance = orderedTranscriptUtterances.at(-1);
+		const committedActivity = latestUtterance
+			? `${latestUtterance.id}:${latestUtterance.endedAt}`
+			: "";
+		const liveActivity = liveTranscriptEntries
+			.map((entry) => `${entry.speaker}:${entry.startedAt}:${entry.text}`)
+			.join("|");
+		return `${committedActivity}|${liveActivity}`;
+	}, [liveTranscriptEntries, orderedTranscriptUtterances]);
+
+	useTranscriptionAutoStop({
+		activeSessionId: captureSession.activeTranscriptSessionId,
+		calendarEventEndAt,
+		captureKey: captureTranscriptDraftKey,
+		captureStartedAt: captureSession.listeningStartedAt,
+		hasPendingStart: captureSession.hasPendingStart,
+		isSpeechListening,
+		stopCaptureAfterRequest:
+			transcriptSessionStopController.stopCaptureAfterRequest,
+		transcriptActivityKey,
+		utterances: orderedTranscriptUtterances,
+	});
 
 	const hasPendingGenerateTranscript = Boolean(
 		pendingGenerateTranscript.trim(),
@@ -257,16 +266,9 @@ export const useNoteTranscriptSession = ({
 		}
 
 		lastQueuedAutoStartKeyRef.current = queuedAutoStartKey;
-		transcriptionAutoStopState.queueMeetingAutoStart({
-			enabled: stopTranscriptionWhenMeetingEnds === true && isDesktopRuntime(),
-		});
 		// Auto-start is a one-shot route request latch, not render-derived state.
 		setPendingAutoStartKey(queuedAutoStartKey);
-	}, [
-		queuedAutoStartKey,
-		stopTranscriptionWhenMeetingEnds,
-		transcriptionAutoStopState,
-	]);
+	}, [queuedAutoStartKey]);
 
 	React.useEffect(() => {
 		if (!currentPendingAutoStartKey) {
@@ -283,48 +285,6 @@ export const useNoteTranscriptSession = ({
 			window.clearTimeout(timeoutId);
 		};
 	}, [currentPendingAutoStartKey]);
-
-	React.useEffect(() => {
-		// Latch meeting-controlled auto-stop for the active capture even after
-		// the route/query state is cleaned up post-start.
-		transcriptionAutoStopState.latchMeetingAutoStop({
-			enabled: stopTranscriptionWhenMeetingEnds === true && isDesktopRuntime(),
-		});
-	}, [stopTranscriptionWhenMeetingEnds, transcriptionAutoStopState]);
-
-	React.useEffect(() => {
-		if (!isDesktopRuntime()) {
-			return;
-		}
-
-		return onDesktopMeetingDetectionState((state) => {
-			if (
-				transcriptionAutoStopState.observeMeetingSignal({
-					hasMeetingSignal: state.hasMeetingSignal,
-					isSpeechListening,
-				})
-			) {
-				void transcriptSessionStopController
-					.stopCaptureAfterRequest({
-						activeSessionId: captureSession.activeTranscriptSessionId,
-						hasPendingStart: captureSession.hasPendingStart,
-						reason: "note-transcript-meeting-ended-auto-stop",
-					})
-					.catch((error) => {
-						logError({
-							event: "client.error",
-							error,
-							message: "Failed to stop transcript session after meeting ended",
-						});
-					});
-			}
-		});
-	}, [
-		isSpeechListening,
-		captureSession,
-		transcriptSessionStopController,
-		transcriptionAutoStopState,
-	]);
 
 	const restoreTranscriptDraft = React.useCallback(
 		(draft: {
@@ -377,12 +337,9 @@ export const useNoteTranscriptSession = ({
 			...currentState,
 			pendingGenerateTranscript: "",
 		}));
-		transcriptionAutoStopState.resetRequest();
-		lastAudioActivityAtRef.current = now;
-	}, [captureSession, transcriptionAutoStopState, updateScopedTranscriptState]);
+	}, [captureSession, updateScopedTranscriptState]);
 
 	const markSpeechListeningStopped = React.useCallback(() => {
-		transcriptionAutoStopState.reset();
 		const { completedSessionId, completedTranscript } =
 			captureSession.markListeningStopped();
 		if (completedTranscript) {
@@ -397,7 +354,7 @@ export const useNoteTranscriptSession = ({
 			activeTranscriptSessionId: null,
 		}));
 		return completedSessionId;
-	}, [captureSession, transcriptionAutoStopState, updateScopedTranscriptState]);
+	}, [captureSession, updateScopedTranscriptState]);
 
 	const ensureTranscriptSession = React.useCallback(async () => {
 		try {
@@ -581,50 +538,6 @@ export const useNoteTranscriptSession = ({
 	}, [ensureTranscriptSession, isSpeechListening]);
 
 	React.useEffect(() => {
-		if (liveTranscriptEntries.some((entry) => entry.text.trim().length > 0)) {
-			lastAudioActivityAtRef.current = Date.now();
-		}
-	}, [liveTranscriptEntries]);
-
-	React.useEffect(() => {
-		if (!isSpeechListening) {
-			return;
-		}
-
-		const intervalId = window.setInterval(() => {
-			if (
-				transcriptionAutoStopState.hasRequestedStop() ||
-				Date.now() - (lastAudioActivityAtRef.current ?? Date.now()) <
-					transcriptIdleStopMs
-			) {
-				return;
-			}
-
-			transcriptionAutoStopState.markRequested();
-			void transcriptSessionStopController
-				.stopCaptureAfterRequest({
-					activeSessionId: captureSession.activeTranscriptSessionId,
-					hasPendingStart: captureSession.hasPendingStart,
-					reason: "note-transcript-idle-auto-stop",
-				})
-				.catch((error) => {
-					logError({
-						event: "client.error",
-						error,
-						message: "Failed to stop idle transcript session",
-					});
-				});
-		}, transcriptIdleCheckIntervalMs);
-
-		return () => window.clearInterval(intervalId);
-	}, [
-		captureSession,
-		isSpeechListening,
-		transcriptSessionStopController,
-		transcriptionAutoStopState,
-	]);
-
-	React.useEffect(() => {
 		if (systemAudioStatus.state !== "connected") {
 			return;
 		}
@@ -790,7 +703,6 @@ export const useNoteTranscriptSession = ({
 
 	const handleTranscriptUtterance = React.useCallback(
 		(utterance: TranscriptUtterance) => {
-			lastAudioActivityAtRef.current = Date.now();
 			const recordedUtterance = captureSession.recordUtterance(utterance);
 			updateScopedTranscriptState((currentState) => ({
 				...currentState,

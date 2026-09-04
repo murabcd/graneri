@@ -301,14 +301,12 @@ export const createNoteSearch = ({
 	captureRequestId,
 	noteId,
 	scheduledAutoStartAt,
-	stopCaptureWhenMeetingEnds = false,
 }: {
 	autoStartCapture?: boolean;
 	calendarEventRequestId?: string | null;
 	captureRequestId?: string | null;
 	noteId?: string | null;
 	scheduledAutoStartAt?: string | null;
-	stopCaptureWhenMeetingEnds?: boolean;
 }) => {
 	const searchParams = new URLSearchParams();
 
@@ -319,7 +317,6 @@ export const createNoteSearch = ({
 	appendNoteCaptureSearchParams({
 		captureRequestId: autoStartCapture ? captureRequestId : null,
 		searchParams,
-		stopCaptureWhenMeetingEnds,
 	});
 
 	if (scheduledAutoStartAt?.trim()) {
@@ -390,7 +387,6 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 			noteIdString: null,
 			noteCaptureRequestId: null,
 			shouldAutoStartNoteCapture: false,
-			shouldStopNoteCaptureWhenMeetingEnds: false,
 			scheduledAutoStartNoteCaptureAt: null,
 			pendingCalendarEventRequestId: null,
 			canonicalPath: null,
@@ -406,8 +402,6 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 		? parsedNoteCaptureRequestId
 		: null;
 	const shouldAutoStartNoteCapture = noteCaptureRequestId !== null;
-	const shouldStopNoteCaptureWhenMeetingEnds =
-		view === "note" && url.searchParams.get("meeting") === "1";
 	const scheduledAutoStartNoteCaptureAt =
 		view === "note" ? getScheduledAutoStartNoteCaptureAt(url) : null;
 	const pendingCalendarEventRequestId =
@@ -422,7 +416,6 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 		noteIdString: view === "note" ? noteIdString : null,
 		noteCaptureRequestId,
 		shouldAutoStartNoteCapture,
-		shouldStopNoteCaptureWhenMeetingEnds,
 		scheduledAutoStartNoteCaptureAt,
 		pendingCalendarEventRequestId,
 		canonicalPath: CANONICAL_PATH_BY_VIEW[view],
@@ -434,7 +427,6 @@ export const getAppLocationState = (url: URL): AppLocationState => {
 						captureRequestId: noteCaptureRequestId,
 						noteId: noteIdString,
 						scheduledAutoStartAt: scheduledAutoStartNoteCaptureAt,
-						stopCaptureWhenMeetingEnds: shouldStopNoteCaptureWhenMeetingEnds,
 					})
 				: view === "chat"
 					? createChatSearch(chatId)

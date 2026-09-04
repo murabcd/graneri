@@ -76,3 +76,14 @@ export const resolveNativeMeetingDetectionSourceName = async (
 		runAppleScriptImpl,
 	});
 };
+
+export const resolveActiveMeetingApps = async (activeMicApps, options = {}) => {
+	const resolvedApps = await Promise.all(
+		activeMicApps.map(async (app) => ({
+			...app,
+			provider: await resolveNativeMeetingDetectionSourceName(app, options),
+		})),
+	);
+
+	return resolvedApps.filter((app) => app.provider !== null);
+};

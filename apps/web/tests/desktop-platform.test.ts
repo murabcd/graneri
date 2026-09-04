@@ -90,6 +90,7 @@ describe("desktop platform bridge", () => {
 		const unsubscribe = vi.fn();
 		const onMeetingDetectionState = vi.fn().mockReturnValue(unsubscribe);
 		const getMeetingDetectionState = vi.fn().mockResolvedValue({
+			activeMeetingApps: [],
 			activeMicApps: [],
 			calendarEvent: null,
 			candidateStartedAt: null,

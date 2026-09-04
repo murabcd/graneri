@@ -14,6 +14,7 @@ describe("hosted route catalog", () => {
 			"chatSteer",
 			"chatStop",
 			"chatStream",
+			"classifyMeetingEnd",
 			"enhanceNote",
 			"generateProjectDescription",
 			"applyTemplate",
@@ -27,6 +28,10 @@ describe("hosted route catalog", () => {
 			method: "POST",
 			proxyBodyMode: "bufferedJson",
 		});
+		expect(getHostedRouteDefinition("classifyMeetingEnd")).toMatchObject({
+			method: "POST",
+			proxyBodyMode: "bufferedJson",
+		});
 		expect(
 			getHostedRouteDefinition("generateProjectDescription"),
 		).toMatchObject({
@@ -37,6 +42,9 @@ describe("hosted route catalog", () => {
 
 	it("builds and matches static and parameterized paths", () => {
 		expect(buildHostedRoutePath("chatSteer")).toBe("/api/chat/steer");
+		expect(buildHostedRoutePath("classifyMeetingEnd")).toBe(
+			"/api/classify-meeting-end",
+		);
 		expect(buildHostedRoutePath("generateProjectDescription")).toBe(
 			"/api/generate-project-description",
 		);

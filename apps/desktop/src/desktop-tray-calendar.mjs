@@ -53,13 +53,10 @@ const cloneCalendarEvent = (event) => ({
 const createCalendarEventNoteSearch = (requestId, options = {}) => {
 	const searchParams = new URLSearchParams();
 	const autoStartCapture = options.autoStartCapture === true;
-	const stopCaptureWhenMeetingEnds =
-		options.stopCaptureWhenMeetingEnds === true;
 
 	appendNoteCaptureSearchParams({
 		captureRequestId: autoStartCapture ? createNoteCaptureRequestId() : null,
 		searchParams,
-		stopCaptureWhenMeetingEnds,
 	});
 
 	appendCalendarEventRequestSearchParam({ requestId, searchParams });
@@ -164,10 +161,6 @@ export const createDesktopTrayCalendar = ({
 					autoStartCapture:
 						options.autoStartCapture === true ||
 						(options.autoStartCapture == null && hasStarted),
-					stopCaptureWhenMeetingEnds:
-						options.stopCaptureWhenMeetingEnds === true ||
-						(options.stopCaptureWhenMeetingEnds == null &&
-							normalizedEvent.isMeeting),
 				}),
 			});
 		} catch (error) {

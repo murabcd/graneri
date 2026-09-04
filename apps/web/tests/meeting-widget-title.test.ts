@@ -8,6 +8,7 @@ import {
 const createState = (
 	overrides: Partial<DesktopMeetingDetectionState> = {},
 ): DesktopMeetingDetectionState => ({
+	activeMeetingApps: [],
 	activeMicApps: [],
 	calendarEvent: null,
 	candidateStartedAt: Date.now(),

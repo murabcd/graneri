@@ -837,11 +837,11 @@ type NotePageEditorPaneProps = {
 	autoStartTranscription: boolean;
 	noteCaptureRequestId: string | null;
 	composerNoteContext: {
+		calendarEventEndAt: string | null;
 		noteId: Id<"notes"> | null;
 		templateSlug: string | null;
 	};
 	onAutoStartTranscriptionHandled?: () => void;
-	stopTranscriptionWhenMeetingEnds: boolean;
 	shouldHideEmptyBodyPlaceholder: boolean;
 	onOpenCommentComposer: () => void;
 	isDesktopMac: boolean;
@@ -1123,7 +1123,6 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 	noteCaptureRequestId,
 	composerNoteContext,
 	onAutoStartTranscriptionHandled,
-	stopTranscriptionWhenMeetingEnds,
 	shouldHideEmptyBodyPlaceholder,
 	onOpenCommentComposer,
 	isDesktopMac,
@@ -1249,9 +1248,6 @@ const NotePageEditorPane = React.memo(function NotePageEditorPane({
 										}
 										onAddMessageToNote={appendChatResponseToNote}
 										onEnhanceTranscript={handleEnhanceTranscript}
-										stopTranscriptionWhenMeetingEnds={
-											stopTranscriptionWhenMeetingEnds
-										}
 									/>
 								</div>
 							</div>
@@ -1274,7 +1270,6 @@ function NotePageContent({
 	noteCaptureRequestId,
 	composerNoteContext,
 	onAutoStartTranscriptionHandled,
-	stopTranscriptionWhenMeetingEnds,
 	shouldHideEmptyBodyPlaceholder,
 	onOpenCommentComposer,
 	commentsOpen,
@@ -1291,11 +1286,11 @@ function NotePageContent({
 	autoStartTranscription: boolean;
 	noteCaptureRequestId: string | null;
 	composerNoteContext: {
+		calendarEventEndAt: string | null;
 		noteId: Id<"notes"> | null;
 		templateSlug: string | null;
 	};
 	onAutoStartTranscriptionHandled?: () => void;
-	stopTranscriptionWhenMeetingEnds: boolean;
 	shouldHideEmptyBodyPlaceholder: boolean;
 	onOpenCommentComposer: () => void;
 	commentsOpen: boolean;
@@ -1327,7 +1322,6 @@ function NotePageContent({
 				noteCaptureRequestId={noteCaptureRequestId}
 				composerNoteContext={composerNoteContext}
 				onAutoStartTranscriptionHandled={onAutoStartTranscriptionHandled}
-				stopTranscriptionWhenMeetingEnds={stopTranscriptionWhenMeetingEnds}
 				shouldHideEmptyBodyPlaceholder={shouldHideEmptyBodyPlaceholder}
 				onOpenCommentComposer={onOpenCommentComposer}
 				isDesktopMac={isDesktopMac}
@@ -1627,7 +1621,6 @@ export type NotePageProps = {
 	onTitleChange?: (title: string) => void;
 	editorActionsStore?: NoteEditorActionsStore;
 	scrollParentRef?: React.RefObject<HTMLDivElement | null>;
-	stopTranscriptionWhenMeetingEnds?: boolean;
 };
 
 export function NotePage({
@@ -1647,7 +1640,6 @@ export function NotePage({
 	onTitleChange,
 	editorActionsStore,
 	scrollParentRef,
-	stopTranscriptionWhenMeetingEnds = false,
 }: NotePageProps) {
 	const isMobile = useIsMobile();
 	const commentPanel = useNotePageCommentPanel({
@@ -1667,10 +1659,11 @@ export function NotePage({
 	});
 	const composerNoteContext = React.useMemo(
 		() => ({
+			calendarEventEndAt: note?.calendarEvent?.endAt ?? null,
 			noteId: controller.noteId,
 			templateSlug: controller.templateSlug,
 		}),
-		[controller.noteId, controller.templateSlug],
+		[controller.noteId, controller.templateSlug, note?.calendarEvent?.endAt],
 	);
 	const shouldHideEmptyBodyPlaceholder =
 		!controller.title.trim() && !controller.searchableText.trim();
@@ -1725,7 +1718,6 @@ export function NotePage({
 				noteCaptureRequestId={noteCaptureRequestId}
 				composerNoteContext={composerNoteContext}
 				onAutoStartTranscriptionHandled={onAutoStartTranscriptionHandled}
-				stopTranscriptionWhenMeetingEnds={stopTranscriptionWhenMeetingEnds}
 				shouldHideEmptyBodyPlaceholder={shouldHideEmptyBodyPlaceholder}
 				onOpenCommentComposer={handleOpenCommentComposer}
 				commentsOpen={commentPanel.commentsOpen}

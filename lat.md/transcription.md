@@ -5,7 +5,9 @@ Transcription modules own note capture, global dictation, realtime transports, n
 - [[notes]] consumes captured transcript state.
 - [[desktop-runtime]] owns Electron lifecycle around native helpers.
 - [[apps/web/src/lib/note-transcript-capture-session.ts]]
+- [[apps/web/src/lib/transcription-auto-stop.ts]]
 - [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
+- [meeting detection](../apps/desktop/src/meeting-detection.mjs)
 
 ## Note transcript session
 
@@ -169,10 +171,25 @@ processing diagnostics. It must not print or persist raw PCM.
 
 Renderer auto-stop behavior is explicit state and cannot inherit stale meeting signals across notes.
 
-Meeting-controlled and idle-controlled automatic stops must be modeled as
+Meeting-controlled and idle-controlled automatic stops are modeled as one
 explicit transcription auto-stop state in the renderer, not scattered hook
-refs. A newly auto-started note must not inherit stale meeting-detection state
-from a previous note or from a pre-listening meeting signal.
+refs or route flags. The policy applies to every desktop recording, including
+manual starts. A capture must first observe at least one recognized
+microphone-owning meeting app. When all observed meeting apps disappear, the
+renderer waits two seconds and cancels the candidate if an app returns. It may
+then stop only after at least three minutes have elapsed since the first
+committed `them` system-audio utterance. A linked calendar end within five
+minutes stops directly; otherwise the authenticated hosted classifier receives
+only the final 100 transcript words, and only an affirmative result stops the
+capture. A negative result or classifier failure keeps recording. Transcript
+activity independently resets a 15-minute inactivity deadline. Both automatic
+stop paths notify the user and return the same-note speech control to its Mic
+state. The toast is informational; the Mic is the single start-or-resume action.
+
+There is no `meeting=1` capture mode or opt-in prop chain. Capture identity,
+meeting-app observation, candidate evaluation, and the one-shot stop claim are
+scoped to the current transcript draft key so a new note cannot inherit an old
+meeting exit or classifier result.
 
 ## Meeting detection
 
@@ -185,6 +202,12 @@ debounce, dismissal, suppression, and widget window visibility stay in
 may render it or send user actions back through `packages/platform`. Renderer
 code must not inspect running applications, microphone activity, calendar state,
 or desktop windows directly to decide whether a meeting exists.
+The native microphone-activity helper polls once per second and publishes when
+its active-client set changes, even if Graneri's own capture keeps the hardware
+device running. Electron resolves those clients against the provider registry
+and publishes `activeMeetingApps` separately from the broader aggregate prompt
+signal. Auto-stop consumes that recognized app list; browser-window and
+calendar prompt evidence cannot impersonate microphone ownership.
 Meeting prompts and scheduled calendar reminders intentionally use a
 desktop-owned custom notification-like window rather than OS notification
 delivery. On macOS this surface must be a panel-style window hidden from Mission

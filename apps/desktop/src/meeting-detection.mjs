@@ -15,7 +15,7 @@ import {
 	createMeetingSignalStatePatch,
 	isMeetingSignalDismissed,
 } from "./meeting-signal.mjs";
-import { resolveNativeMeetingDetectionSourceName } from "./meeting-source.mjs";
+import { resolveActiveMeetingApps } from "./meeting-source.mjs";
 import {
 	aggregateMeetingWindowState,
 	createInactiveBrowserMeetingWindowState,
@@ -31,6 +31,7 @@ const meetingDetectionDismissMs = 30 * 60 * 1000;
 const meetingWidgetAutoHideMs = 12 * 1000;
 
 export const createInitialMeetingDetectionState = () => ({
+	activeMeetingApps: [],
 	activeMicApps: [],
 	calendarEvent: null,
 	candidateStartedAt: null,
@@ -123,12 +124,17 @@ export const createMeetingDetection = ({
 			"activeMicApps" in (patch ?? {})
 				? normalizeActiveMicApps(patch.activeMicApps)
 				: latestMeetingDetectionState.activeMicApps;
+		const nextActiveMeetingApps =
+			"activeMeetingApps" in (patch ?? {})
+				? patch.activeMeetingApps
+				: latestMeetingDetectionState.activeMeetingApps;
 		const aggregateWindowState = getAggregateMeetingWindowState();
 		const promptCalendarEvent = scheduledMeetingReminderPrompt?.event ?? null;
 		const promptSourceName = scheduledMeetingReminderPrompt?.sourceName ?? null;
 		const nextMeetingDetectionState = {
 			...latestMeetingDetectionState,
 			...(patch ?? {}),
+			activeMeetingApps: nextActiveMeetingApps,
 			activeMicApps: nextActiveMicApps,
 			meetingWindowState: aggregateWindowState,
 			sourceName:
@@ -460,17 +466,13 @@ export const createMeetingDetection = ({
 			scheduledPromptEvent ?? getDetectedMeetingCalendarEvent();
 
 		if (detectedMeetingCalendarEvent) {
-			await openCalendarEventNote(detectedMeetingCalendarEvent, {
-				stopCaptureWhenMeetingEnds: true,
-			});
+			await openCalendarEventNote(detectedMeetingCalendarEvent);
 			return;
 		}
 
 		await showMainWindow({
 			pathname: "/note",
-			search: createAutoStartNoteSearch({
-				stopCaptureWhenMeetingEnds: true,
-			}),
+			search: createAutoStartNoteSearch(),
 		});
 	};
 
@@ -518,6 +520,7 @@ export const createMeetingDetection = ({
 		clearScheduledMeetingReminderEvent();
 		microphoneSourceName = "Test Meeting";
 		syncMeetingDetectionState({
+			activeMeetingApps: [],
 			activeMicApps: [],
 			candidateStartedAt: Date.now(),
 			calendarEvent: null,
@@ -540,6 +543,7 @@ export const createMeetingDetection = ({
 		syncMeetingDetectionState(
 			createClearedMeetingSignalPatch({
 				dismissedUntil: null,
+				activeMeetingApps: [],
 				activeMicApps: [],
 				isMicrophoneActive: false,
 				isSuppressed: false,
@@ -571,6 +575,7 @@ export const createMeetingDetection = ({
 		if (!microphoneActivitySession) {
 			syncMeetingDetectionState(
 				createClearedMeetingSignalPatch({
+					activeMeetingApps: [],
 					activeMicApps: [],
 					isMicrophoneActive: false,
 					status: "idle",
@@ -586,6 +591,7 @@ export const createMeetingDetection = ({
 		await stopLineEventHelperSession(session);
 
 		syncMeetingDetectionState({
+			activeMeetingApps: [],
 			activeMicApps: [],
 			calendarEvent: null,
 			candidateStartedAt: null,
@@ -621,13 +627,10 @@ export const createMeetingDetection = ({
 				const eventSequence = ++microphoneActivityEventSequence;
 				const isActive = event.active === true;
 				const activeMicApps = normalizeActiveMicApps(event.activeClients);
-				const activeMicApp =
-					activeMicApps.find((client) => client.name === event.sourceName) ??
-					activeMicApps[0] ??
-					event.sourceName;
-				const sourceName = isActive
-					? await resolveNativeMeetingDetectionSourceName(activeMicApp)
-					: null;
+				const activeMeetingApps = isActive
+					? await resolveActiveMeetingApps(activeMicApps)
+					: [];
+				const sourceName = activeMeetingApps[0]?.provider ?? null;
 
 				if (microphoneActivitySession === session) {
 					if (eventSequence !== microphoneActivityEventSequence) {
@@ -640,6 +643,7 @@ export const createMeetingDetection = ({
 							dismissedUntil:
 								latestMeetingDetectionState.dismissedUntil ?? null,
 						}),
+						activeMeetingApps,
 						activeMicApps,
 						isMicrophoneActive: isActive,
 					});
@@ -673,6 +677,7 @@ export const createMeetingDetection = ({
 				});
 				syncMeetingDetectionState(
 					createClearedMeetingSignalPatch({
+						activeMeetingApps: [],
 						activeMicApps: [],
 						isMicrophoneActive: false,
 						status: "idle",

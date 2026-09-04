@@ -43,6 +43,24 @@ afterEach(() => {
 });
 
 describe("NavHelp", () => {
+	it("labels the help control on hover", async () => {
+		const input = userEvent.setup();
+
+		render(
+			<SidebarProvider>
+				<NavHelp />
+			</SidebarProvider>,
+		);
+
+		await input.hover(
+			screen.getByRole("button", { name: "Help and downloads" }),
+		);
+
+		expect((await screen.findByRole("tooltip")).textContent).toBe(
+			"Open help menu",
+		);
+	});
+
 	it("opens keyboard shortcuts with Command-Slash", async () => {
 		render(
 			<SidebarProvider>

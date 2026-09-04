@@ -27,7 +27,6 @@ const noteView: AppShellContentView = {
 	},
 	onNoteTitleChange: vi.fn(),
 	shouldAutoStartNoteCapture: false,
-	shouldStopNoteCaptureWhenMeetingEnds: false,
 };
 
 const homeView: AppShellContentView = {

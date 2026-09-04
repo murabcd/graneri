@@ -3,6 +3,7 @@ export type HostedRouteId =
 	| "chatSteer"
 	| "chatStop"
 	| "chatStream"
+	| "classifyMeetingEnd"
 	| "enhanceNote"
 	| "generateProjectDescription"
 	| "applyTemplate"

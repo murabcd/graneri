@@ -82,14 +82,12 @@ const createCalendarReminderHarness = ({ events, preferences }) => {
 
 test("creates one-shot auto-start navigation for detected meeting widgets", () => {
 	const searchParams = new URLSearchParams(
-		createAutoStartNoteSearch({
-			stopCaptureWhenMeetingEnds: true,
-		}).slice(1),
+		createAutoStartNoteSearch().slice(1),
 	);
 
 	assert.equal(searchParams.get("capture"), "1");
 	assert.match(searchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
-	assert.equal(searchParams.get("meeting"), "1");
+	assert.equal(searchParams.get("meeting"), null);
 });
 
 test("opens live tray meetings with a one-shot capture request", async () => {
@@ -113,7 +111,7 @@ test("opens live tray meetings with a one-shot capture request", async () => {
 	);
 	assert.equal(searchParams.get("capture"), "1");
 	assert.match(searchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
-	assert.equal(searchParams.get("meeting"), "1");
+	assert.equal(searchParams.get("meeting"), null);
 	assert.match(searchParams.get("calendarEventRequestId"), /^[0-9a-f-]{36}$/u);
 	const requestId = searchParams.get("calendarEventRequestId");
 	assert.deepEqual(

@@ -35,6 +35,7 @@ export type ServerWideEvent = {
 	has_local_capability_session?: boolean;
 	local_folder_root_count?: number;
 	method?: string;
+	meeting_ended?: boolean;
 	mention_count?: number;
 	model?: string | null;
 	note_count?: number;
@@ -62,6 +63,7 @@ export type ServerWideEvent = {
 	timestamp: string;
 	tool_count?: number;
 	transcript_length?: number;
+	transcript_word_count?: number;
 	transcription_language?: string | null;
 	trigger?: string | null;
 	web_search_enabled?: boolean;

@@ -7,6 +7,7 @@ import {
 import { getMeetingProviderNameFromUrl } from "../src/meeting-provider-url.mjs";
 import {
 	normalizeMeetingDetectionSourceName,
+	resolveActiveMeetingApps,
 	resolveNativeMeetingDetectionSourceName,
 } from "../src/meeting-source.mjs";
 
@@ -144,6 +145,31 @@ test("ignores unknown microphone source names", async () => {
 	assert.equal(
 		await resolveNativeMeetingDetectionSourceName("Unknown Recorder"),
 		null,
+	);
+});
+
+test("keeps only recognized active microphone meeting apps", async () => {
+	assert.deepEqual(
+		await resolveActiveMeetingApps([
+			{
+				bundleId: "us.zoom.xos",
+				name: "zoom.us",
+				pid: 42,
+			},
+			{
+				bundleId: "com.example.recorder",
+				name: "Recorder",
+				pid: 84,
+			},
+		]),
+		[
+			{
+				bundleId: "us.zoom.xos",
+				name: "zoom.us",
+				pid: 42,
+				provider: "Zoom",
+			},
+		],
 	);
 });
 

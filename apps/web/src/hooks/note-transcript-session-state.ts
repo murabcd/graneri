@@ -14,6 +14,7 @@ const emptyTranscriptUtterances: TranscriptUtterance[] = [];
 export type UseNoteTranscriptSessionArgs = {
 	autoStartTranscription?: boolean;
 	autoStartTranscriptionRequestId?: string | null;
+	calendarEventEndAt: string | null;
 	noteId: Id<"notes"> | null;
 	onAutoStartTranscriptionHandled?: () => void;
 	onEnhanceTranscript?: (
@@ -21,7 +22,6 @@ export type UseNoteTranscriptSessionArgs = {
 		transcriptionLanguage: string | null,
 	) => Promise<void>;
 	shouldLoadStoredTranscriptHistory?: boolean;
-	stopTranscriptionWhenMeetingEnds?: boolean;
 	transcriptionLanguage?: string | null;
 };
 

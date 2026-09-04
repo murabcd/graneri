@@ -10,6 +10,11 @@ import {
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
 import { useSidebarShell } from "@workspace/ui/components/sidebar";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@workspace/ui/components/tooltip";
 import { ArrowDownToLine, CircleQuestionMark, Keyboard } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -60,17 +65,22 @@ export function NavHelp() {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon"
-						aria-label="Help and downloads"
-						className="size-8 shrink-0 text-muted-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-					>
-						<CircleQuestionMark />
-					</Button>
-				</DropdownMenuTrigger>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<DropdownMenuTrigger asChild>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon"
+								aria-label="Help and downloads"
+								className="size-8 shrink-0 text-muted-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+							>
+								<CircleQuestionMark />
+							</Button>
+						</DropdownMenuTrigger>
+					</TooltipTrigger>
+					<TooltipContent side="right">Open help menu</TooltipContent>
+				</Tooltip>
 				<DropdownMenuContent
 					className="min-w-56 rounded-lg"
 					side={isMobile ? "bottom" : "right"}

@@ -16,7 +16,9 @@ final class MicrophoneActivityMonitor: @unchecked Sendable {
 	private let queue = DispatchQueue(label: "com.graneri.microphone-activity.listener")
 	private var deviceIDs: [AudioDeviceID] = []
 	private var lastActive = false
+	private var lastClientSignature: [String] = []
 	private var lastSourceName: String?
+	private var pollTimer: DispatchSourceTimer?
 
 	init(emitter: LineEventStdoutEmitter, logger: LineEventStderrLogger) {
 		self.emitter = emitter
@@ -40,13 +42,25 @@ final class MicrophoneActivityMonitor: @unchecked Sendable {
 
 			let snapshot = Self.inputActivitySnapshot(deviceIDs: deviceIDs)
 			lastActive = snapshot.active
+			lastClientSignature = Self.clientSignature(snapshot.clients)
 			lastSourceName = snapshot.sourceName
 			emitter.send(event: Self.eventPayload(type: "ready", snapshot: snapshot))
+
+			let timer = DispatchSource.makeTimerSource(queue: queue)
+			timer.schedule(deadline: .now() + .seconds(1), repeating: .seconds(1))
+			timer.setEventHandler { [weak self] in
+				self?.emitIfNeededOnQueue()
+			}
+			timer.resume()
+			pollTimer = timer
 		}
 	}
 
 	func stop() {
 		queue.sync {
+			pollTimer?.cancel()
+			pollTimer = nil
+
 			for deviceID in deviceIDs {
 				var address = AudioObjectPropertyAddress(
 					mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
@@ -84,15 +98,31 @@ final class MicrophoneActivityMonitor: @unchecked Sendable {
 				return
 			}
 
-			let snapshot = Self.inputActivitySnapshot(deviceIDs: self.deviceIDs)
-			guard snapshot.active != self.lastActive || snapshot.sourceName != self.lastSourceName else {
-				return
-			}
-
-			self.lastActive = snapshot.active
-			self.lastSourceName = snapshot.sourceName
-			self.emitter.send(event: Self.eventPayload(type: "active-changed", snapshot: snapshot))
+			self.emitIfNeededOnQueue()
 		}
+	}
+
+	private func emitIfNeededOnQueue() {
+		let snapshot = Self.inputActivitySnapshot(deviceIDs: deviceIDs)
+		let clientSignature = Self.clientSignature(snapshot.clients)
+		guard
+			snapshot.active != lastActive ||
+				snapshot.sourceName != lastSourceName ||
+				clientSignature != lastClientSignature
+		else {
+			return
+		}
+
+		lastActive = snapshot.active
+		lastClientSignature = clientSignature
+		lastSourceName = snapshot.sourceName
+		emitter.send(event: Self.eventPayload(type: "active-changed", snapshot: snapshot))
+	}
+
+	private static func clientSignature(_ clients: [ActiveInputClient]) -> [String] {
+		return clients.map { client in
+			"\(client.bundleID ?? "")|\(client.name)|\(client.pid)"
+		}.sorted()
 	}
 
 	private static func eventPayload(

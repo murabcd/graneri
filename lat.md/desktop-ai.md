@@ -21,6 +21,7 @@ fetches and native capture:
 - `/api/chat/stop`
 - `/api/chat/:chatId/stream`
 - `/api/apply-template`
+- `/api/classify-meeting-end`
 - `/api/enhance-note`
 - `/api/generate-project-description`
 - `/api/realtime-transcription-session`
@@ -41,9 +42,9 @@ that owns the handler; the shared catalog contains transport metadata only.
 
 Hosted generation stays on the web or Convex, dictation crosses Convex HTTP, and local-folder execution stays inside Electron.
 
-Chat, note generation, project description generation, template application,
-and realtime session creation are transport-only proxies to the web server in
-every environment. Dictation
+Chat, note generation, meeting-end classification, project description
+generation, template application, and realtime session creation are
+transport-only proxies to the web server in every environment. Dictation
 transcription crosses the authenticated Convex HTTP boundary directly. Local
 folder tool execution remains inside the desktop process because it operates on
 folders the user explicitly shared with the installed app.
@@ -72,13 +73,13 @@ short-lived, identity-bound reservation
 that exactly one Convex producer start or continuation mutation must consume
 before scheduling paid background work. Used and expired reservations cannot be
 replayed. Reconnect and stop-only requests do not consume chat admission.
-Hosted note enhancement, project description generation, and template
-application follow the same boundary: their renderer requests carry the current
-Convex bearer token, all three routes consume one shared per-identity
-`note-generation` admission bucket, and the web handler sends only the hashed
-stable identity to OpenAI as its safety identifier. Anonymous requests and
-unavailable admission fail closed before a model request begins; there is no
-unauthenticated or client-key fallback.
+Hosted note enhancement, meeting-end classification, project description
+generation, and template application follow the same boundary: their renderer
+requests carry the current Convex bearer token, all four routes consume one
+shared per-identity `note-generation` admission bucket, and the web handler
+sends only the hashed stable identity to OpenAI as its safety identifier.
+Anonymous requests and unavailable admission fail closed before a model request
+begins; there is no unauthenticated or client-key fallback.
 
 ## Hosted OpenAI envelope
 

@@ -45,7 +45,6 @@ export type AppShellCreateNoteOptions = {
 	calendarEvent?: UpcomingCalendarEvent | null;
 	captureRequestId?: string | null;
 	projectId: Id<"projects"> | null;
-	stopCaptureWhenMeetingEnds?: boolean;
 };
 
 export const getAppShellNoteCreationIntent = (
@@ -53,8 +52,6 @@ export const getAppShellNoteCreationIntent = (
 ) => {
 	const shouldStartCapture = options.autoStartCapture === true;
 	const calendarEvent = options.calendarEvent ?? null;
-	const shouldStopCaptureWhenMeetingEnds =
-		options.stopCaptureWhenMeetingEnds === true;
 	return {
 		calendarEvent,
 		captureRequestId: getNoteCaptureRequestIdForAutoStart({
@@ -63,11 +60,10 @@ export const getAppShellNoteCreationIntent = (
 		}),
 		projectId: options.projectId,
 		scheduledAutoStartAt:
-			!shouldStartCapture && calendarEvent && shouldStopCaptureWhenMeetingEnds
+			options.autoStartCapture === false && calendarEvent
 				? calendarEvent.startAt
 				: null,
 		shouldStartCapture,
-		shouldStopCaptureWhenMeetingEnds,
 	};
 };
 

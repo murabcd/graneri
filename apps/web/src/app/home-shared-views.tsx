@@ -116,7 +116,6 @@ function HomeUpcomingEvents({
 		event: UpcomingCalendarEvent,
 		options: {
 			autoStartCapture: boolean;
-			stopCaptureWhenMeetingEnds: boolean;
 		},
 	) => Promise<void> | void;
 	onOpenCalendarSettings: () => void;
@@ -185,7 +184,6 @@ function HomeUpcomingEvents({
 										onClick={() => {
 											void onOpenCalendarEventNote(event, {
 												autoStartCapture: hasStarted,
-												stopCaptureWhenMeetingEnds: true,
 											});
 											if (event.meetingUrl) {
 												onOpenMeetingLink(event.meetingUrl);
@@ -244,7 +242,6 @@ export function HomeView({
 		event: UpcomingCalendarEvent,
 		options?: {
 			autoStartCapture?: boolean;
-			stopCaptureWhenMeetingEnds?: boolean;
 		},
 	) => Promise<void> | void;
 	onOpenCalendarSettings: () => void;

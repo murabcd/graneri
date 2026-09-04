@@ -24,7 +24,6 @@ type NoteNavigationOptions = {
 	autoStartCapture?: boolean;
 	captureRequestId?: string | null;
 	scheduledAutoStartAt?: string | null;
-	stopCaptureWhenMeetingEnds?: boolean;
 };
 
 const getBrowserUrl = () =>
@@ -215,7 +214,6 @@ export const useApplicationNavigationSession = ({
 					captureRequestId: options.captureRequestId,
 					noteId,
 					scheduledAutoStartAt: options.scheduledAutoStartAt,
-					stopCaptureWhenMeetingEnds: options.stopCaptureWhenMeetingEnds,
 				})}`,
 				{ noteId },
 			);
@@ -287,7 +285,6 @@ export const useApplicationNavigationSession = ({
 				noteCaptureRequestId: null,
 				scheduledAutoStartNoteCaptureAt: null,
 				shouldAutoStartNoteCapture: false,
-				shouldStopNoteCaptureWhenMeetingEnds: false,
 			}));
 			if (route.view === "note" && noteId) {
 				navigate(`/note?noteId=${noteId}`, {
@@ -320,8 +317,6 @@ export const useApplicationNavigationSession = ({
 		settingsOpen: settings.status === "open",
 		settingsPage: settings.status === "open" ? settings.page : "Profile",
 		shouldAutoStartNoteCapture: route.shouldAutoStartNoteCapture,
-		shouldStopNoteCaptureWhenMeetingEnds:
-			route.shouldStopNoteCaptureWhenMeetingEnds,
 		triggerScheduledAutoStart,
 	};
 };

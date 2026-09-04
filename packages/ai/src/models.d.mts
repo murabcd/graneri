@@ -12,6 +12,7 @@ export declare const GPT_5_6_TERRA_MODEL_ID: "gpt-5.6-terra";
 export declare const GPT_5_6_LUNA_MODEL_ID: "gpt-5.6-luna";
 export declare const DEFAULT_CHAT_MODEL_ID: ChatModelId;
 export declare const NOTE_GENERATION_MODEL_ID: ChatModelId;
+export declare const MEETING_END_CLASSIFICATION_MODEL_ID: ChatModelId;
 export declare const PROJECT_DESCRIPTION_MODEL_ID: ChatModelId;
 export declare const CHAT_TITLE_MODEL_ID: ChatModelId;
 export declare const CONTEXT_COMPACTION_MODEL_ID: ChatModelId;

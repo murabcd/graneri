@@ -75,11 +75,8 @@ export type DesktopTranscriptionControllerErrorCode =
 	| "unknown";
 
 export type DesktopMeetingDetectionState = {
-	activeMicApps: Array<{
-		bundleId: string | null;
-		name: string;
-		pid: number | null;
-	}>;
+	activeMeetingApps: Array<DesktopMicrophoneApp & { provider: string }>;
+	activeMicApps: DesktopMicrophoneApp[];
 	calendarEvent: {
 		id: string;
 		calendarName: string;
@@ -105,6 +102,12 @@ export type DesktopMeetingDetectionState = {
 	};
 	sourceName: string | null;
 	status: "idle" | "monitoring" | "prompting";
+};
+
+export type DesktopMicrophoneApp = {
+	bundleId: string | null;
+	name: string;
+	pid: number | null;
 };
 
 export type DesktopTrayCalendarEvent = CalendarEventPayload;

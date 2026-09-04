@@ -10,6 +10,7 @@ import {
 	handleChatRequest,
 	handleChatStopRequest,
 } from "./chat-handler.js";
+import { handleClassifyMeetingEndRequest } from "./classify-meeting-end-handler.js";
 import { handleEnhanceNoteRequest } from "./enhance-note-handler.js";
 import { handleGenerateProjectDescriptionRequest } from "./generate-project-description-handler.js";
 import {
@@ -29,6 +30,7 @@ const hostedRouteHandlers = {
 		handleChatRequest(request, response, { isSteerRoute: true }),
 	chatStop: handleChatStopRequest,
 	chatStream: handleChatReconnectRequest,
+	classifyMeetingEnd: handleClassifyMeetingEndRequest,
 	enhanceNote: handleEnhanceNoteRequest,
 	generateProjectDescription: handleGenerateProjectDescriptionRequest,
 	realtimeTranscriptionSession: handleRealtimeTranscriptionSessionRequest,
