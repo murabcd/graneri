@@ -88,7 +88,9 @@ import {
 } from "@/components/composer-mention-picker-surface";
 import {
 	COMPOSER_DOCK_BOTTOM_OFFSET,
+	COMPOSER_DOCK_SURFACE_BOTTOM_PADDING_CLASS,
 	COMPOSER_OVERLAY_FOOTER_PADDING,
+	COMPOSER_VIEWPORT_FOOTER_CONTAINER_CLASS,
 	COMPOSER_OVERLAY_FOOTER_CONTAINER_CLASS as NOTE_COMPOSER_OVERLAY_FOOTER_CONTAINER_CLASS,
 } from "@/components/layout/composer-dock";
 import { parseCssLengthToPixels } from "@/components/layout/parse-css-length";
@@ -3042,8 +3044,9 @@ function NoteComposerChatPanelContent({
 	const isFloatingComposer =
 		controller.presentationMode === "floating" && !shouldRenderInlineComposer;
 	const isOverlayComposer = shouldRenderInlineComposer || isFloatingComposer;
-	const floatingFooterContainerClassName =
-		NOTE_COMPOSER_OVERLAY_FOOTER_CONTAINER_CLASS;
+	const floatingFooterContainerClassName = controller.isMobile
+		? COMPOSER_VIEWPORT_FOOTER_CONTAINER_CLASS
+		: NOTE_COMPOSER_OVERLAY_FOOTER_CONTAINER_CLASS;
 	const inlineFooterContainerClassName =
 		NOTE_COMPOSER_OVERLAY_FOOTER_CONTAINER_CLASS;
 	const { footerHeight: overlayFooterHeight, footerRef: overlayFooterRef } =
@@ -3095,9 +3098,11 @@ function NoteComposerChatPanelContent({
 				</InlinePopoverFooterContainer>
 			) : (
 				<div
-					className={cn(
-						controller.isSidebarPresentation ? "px-2 pb-2" : "px-4 pb-4",
-					)}
+					className={
+						controller.isSidebarPresentation
+							? cn("px-2", COMPOSER_DOCK_SURFACE_BOTTOM_PADDING_CLASS)
+							: "px-4 pb-4"
+					}
 				>
 					{chatFooter}
 				</div>
