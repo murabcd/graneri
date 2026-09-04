@@ -19,6 +19,7 @@
     "typescript": "7.0.2"
   },
   "exports": {
+    "./application-shortcuts": "./src/application-shortcuts.ts",
     "./calendar-event-navigation": "./src/calendar-event-navigation.mjs",
     "./desktop": "./src/desktop.ts",
     "./desktop-bridge": "./src/desktop-bridge.ts",

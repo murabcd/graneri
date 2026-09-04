@@ -42,6 +42,7 @@ describe("NavUser", () => {
 			name: /Murad Abdulkadyrov/,
 		});
 		expect(screen.queryByText(user.email)).toBeNull();
+		expect(screen.queryByRole("menuitem", { name: "Download app" })).toBeNull();
 
 		await input.click(profileItem);
 		expect(onSettingsOpen).toHaveBeenCalledOnce();

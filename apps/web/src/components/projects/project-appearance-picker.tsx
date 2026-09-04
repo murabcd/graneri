@@ -205,20 +205,34 @@ export function ProjectIcon({
 	icon,
 	color,
 	open = false,
+	mutedDefault = false,
 	className,
 	style,
 	...props
 }: ProjectAppearance &
 	React.ComponentProps<LucideIcon> & {
 		open?: boolean;
+		mutedDefault?: boolean;
 	}) {
 	const Icon =
 		icon === "folder" && open ? FolderOpen : PROJECT_ICON_OPTIONS[icon].icon;
+	const isMutedDefault =
+		mutedDefault && icon === "folder" && color === "default";
 
 	return (
 		<Icon
-			className={cn(PROJECT_COLOR_OPTIONS[color].iconClassName, className)}
-			style={{ color: PROJECT_COLOR_OPTIONS[color].swatchColor, ...style }}
+			className={cn(
+				isMutedDefault
+					? "text-sidebar-foreground/60"
+					: PROJECT_COLOR_OPTIONS[color].iconClassName,
+				className,
+			)}
+			style={{
+				...(!isMutedDefault && {
+					color: PROJECT_COLOR_OPTIONS[color].swatchColor,
+				}),
+				...style,
+			}}
 			{...props}
 		/>
 	);

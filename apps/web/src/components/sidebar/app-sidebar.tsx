@@ -1,5 +1,6 @@
 "use client";
 
+import { matchesApplicationShortcut } from "@workspace/platform/application-shortcuts";
 import {
 	Sidebar,
 	SidebarContent,
@@ -7,13 +8,14 @@ import {
 	SidebarHeader,
 	useSidebarShell,
 } from "@workspace/ui/components/sidebar";
+import { cn } from "@workspace/ui/lib/utils";
 import { useQuery } from "convex/react";
 import { FileText, MessageCircle } from "lucide-react";
 import * as React from "react";
 import type { AppUser, AppView, NavigableAppView } from "@/app/app-types";
 import type { AutomationListItem } from "@/components/automations/automation-types";
 import { InboxSheet } from "@/components/inbox/inbox-sheet";
-import { NavMain, NavWorkspace } from "@/components/nav/nav-main";
+import { SidebarNavigation } from "@/components/nav/nav-main";
 import { NavNotes } from "@/components/nav/nav-notes";
 import { NavProjects } from "@/components/nav/nav-projects";
 import { NavStarred } from "@/components/nav/nav-starred";
@@ -27,7 +29,9 @@ import type { SearchCommandItem } from "@/components/search/search-command";
 import { SearchCommandEntry } from "@/components/search/search-command-entry";
 import { SettingsDialogEntry } from "@/components/settings/settings-dialog-entry";
 import type { SettingsPage } from "@/components/settings/settings-types";
+import { NavHelp } from "@/components/sidebar/nav-help";
 import { NavUser } from "@/components/sidebar/nav-user";
+import { SidebarHeaderUtilities } from "@/components/sidebar/sidebar-header-utilities";
 import { SidebarHistoryControls } from "@/components/sidebar/sidebar-history-controls";
 import { TemplatesDialogEntry } from "@/components/templates/templates-dialog-entry";
 import { WorkspaceSwitcher } from "@/components/workspaces/workspace-switcher";
@@ -346,13 +350,7 @@ function useAppSidebarModel({
 		}
 
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (
-				event.defaultPrevented ||
-				!(event.metaKey || event.ctrlKey) ||
-				!event.altKey ||
-				event.shiftKey ||
-				(event.key.toLowerCase() !== "k" && event.code !== "KeyK")
-			) {
+			if (!matchesApplicationShortcut(event, "search-chats")) {
 				return;
 			}
 
@@ -593,7 +591,6 @@ export function AppSidebar({
 					activeWorkspaceId={activeWorkspaceId}
 					currentView={currentView}
 					desktopSafeTop={desktopSafeTop}
-					navItems={model.navItems}
 					onCreateNote={model.handleCreateNote}
 					onSearchOpen={model.handleSearchOpen}
 					onWorkspaceCreate={onWorkspaceCreate}
@@ -695,14 +692,19 @@ const AppSidebarFooterSection = React.memo(function AppSidebarFooterSection({
 	return (
 		<SidebarFooter>
 			<NavTrash open={trashOpen} onOpenChange={onTrashOpenChange} />
-			<NavUser
-				user={user}
-				onRecipesOpen={onRecipesOpen}
-				onTemplatesOpen={onTemplatesOpen}
-				onSettingsOpen={onSettingsOpen}
-				onSignOut={onSignOut}
-				signingOut={signingOut}
-			/>
+			<div className="flex items-center gap-1">
+				<div className="min-w-0 flex-1">
+					<NavUser
+						user={user}
+						onRecipesOpen={onRecipesOpen}
+						onTemplatesOpen={onTemplatesOpen}
+						onSettingsOpen={onSettingsOpen}
+						onSignOut={onSignOut}
+						signingOut={signingOut}
+					/>
+				</div>
+				<NavHelp />
+			</div>
 		</SidebarFooter>
 	);
 });
@@ -711,7 +713,6 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 	activeWorkspaceId,
 	currentView,
 	desktopSafeTop,
-	navItems,
 	onCreateNote,
 	onSearchOpen,
 	onWorkspaceCreate,
@@ -721,7 +722,6 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 	activeWorkspaceId: Id<"workspaces"> | null;
 	currentView: AppView;
 	desktopSafeTop: boolean;
-	navItems: SidebarNavigationItem[];
 	onCreateNote: () => void;
 	onSearchOpen: () => void;
 	onWorkspaceCreate: (input: { name: string }) => Promise<WorkspaceRecord>;
@@ -731,26 +731,25 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 	return (
 		<SidebarHeader
 			data-app-region={desktopSafeTop ? "drag" : undefined}
-			className={desktopSafeTop ? "relative gap-1 pb-0 pt-8" : "gap-1 pb-0"}
+			className={desktopSafeTop ? "relative gap-1 pb-1 pt-8" : "gap-1 pb-1"}
 		>
 			{desktopSafeTop ? <SidebarHistoryControls /> : null}
 			<div
 				data-app-region={desktopSafeTop ? "no-drag" : undefined}
-				className={
-					desktopSafeTop && currentView !== "notFound" ? "mt-4" : undefined
-				}
+				className={cn(
+					"flex items-start gap-1",
+					desktopSafeTop && currentView !== "notFound" && "mt-4",
+				)}
 			>
-				<WorkspaceSwitcher
-					workspaces={workspaces}
-					activeWorkspaceId={activeWorkspaceId}
-					onSelect={onWorkspaceSelect}
-					onCreateWorkspace={onWorkspaceCreate}
-				/>
-			</div>
-			<div data-app-region={desktopSafeTop ? "no-drag" : undefined}>
-				<NavMain
-					className="px-0 py-1"
-					items={navItems}
+				<div className="min-w-0 flex-1">
+					<WorkspaceSwitcher
+						workspaces={workspaces}
+						activeWorkspaceId={activeWorkspaceId}
+						onSelect={onWorkspaceSelect}
+						onCreateWorkspace={onWorkspaceCreate}
+					/>
+				</div>
+				<SidebarHeaderUtilities
 					onCreateNote={onCreateNote}
 					onSearchOpen={onSearchOpen}
 				/>
@@ -883,7 +882,7 @@ const AppSidebarContentSection = React.memo(function AppSidebarContentSection({
 
 	return (
 		<SidebarContent viewportClassName="scroll-fade-b [--scroll-fade-reveal:2rem]">
-			<NavWorkspace
+			<SidebarNavigation
 				items={navItems}
 				onViewChange={onViewChange}
 				onInboxToggle={() => onInboxOpenChange(!inboxOpen)}

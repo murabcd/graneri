@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import {
 	deleteCompanyIfOrphaned,
+	getCompanyFallbackDisplayName,
 	getOrCreateCompany,
 	searchWorkspaceCompanies,
 } from "./companyDomain";
@@ -10,6 +11,12 @@ import schema from "./schema";
 import { modules } from "./test.setup";
 
 const ownerTokenIdentifier = "test|owner";
+
+test("company domain derives a readable fallback without the public suffix", () => {
+	expect(getCompanyFallbackDisplayName("bia-tech.ru")).toBe("Bia Tech");
+	expect(getCompanyFallbackDisplayName("events.example.co.uk")).toBe("Example");
+	expect(getCompanyFallbackDisplayName("flomni.com")).toBe("Flomni");
+});
 
 const createFixture = async () => {
 	const t = convexTest(schema, modules);
@@ -58,8 +65,13 @@ test("company domain creates and searches canonical workspace companies", async 
 		),
 	).toMatchObject({
 		hasMore: false,
-		matches: [{ _id: acmeId, displayName: "acme.com", domain: "acme.com" }],
+		matches: [{ _id: acmeId, displayName: "Acme", domain: "acme.com" }],
 	});
+	expect(
+		await t.run((ctx) =>
+			searchWorkspaceCompanies(ctx, ownerTokenIdentifier, workspaceId, "/", 5),
+		),
+	).toEqual({ hasMore: false, matches: [] });
 });
 
 test("company domain deletes a company only after its final note association", async () => {

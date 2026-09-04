@@ -12,6 +12,7 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
 	"aol.com",
 	"fastmail.com",
 	"gmail.com",
+	"google.com",
 	"googlemail.com",
 	"hey.com",
 	"hotmail.com",
@@ -35,9 +36,11 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
 	"ya.ru",
 	"yahoo.com",
 	"yahoo.co.uk",
+	"yandex.by",
 	"yandex.com",
 	"yandex.kz",
 	"yandex.ru",
+	"yandex.ua",
 ]);
 
 const EMAIL_PATTERN = /^[^\s@]+@([^\s@]+)$/u;
@@ -50,7 +53,7 @@ export const normalizeEmail = (value: string) => {
 	const match = normalizedEmail.match(EMAIL_PATTERN);
 	const domain = match?.[1]?.replace(/\.$/u, "");
 
-	if (!domain || !domain.includes(".") || domain.includes("..")) {
+	if (!domain?.includes(".") || domain.includes("..")) {
 		return null;
 	}
 
@@ -60,9 +63,12 @@ export const normalizeEmail = (value: string) => {
 export const getEmailDomain = (email: string) =>
 	email.slice(email.lastIndexOf("@") + 1);
 
+export const isPersonalEmailDomain = (domain: string) =>
+	PERSONAL_EMAIL_DOMAINS.has(domain.trim().toLowerCase());
+
 export const getBusinessEmailDomain = (email: string) => {
 	const domain = getEmailDomain(email);
-	return PERSONAL_EMAIL_DOMAINS.has(domain) ? null : domain;
+	return isPersonalEmailDomain(domain) ? null : domain;
 };
 
 const normalizeDisplayName = (value: string | undefined) => {

@@ -11,11 +11,13 @@ export type AppView =
 	| "home"
 	| "calendar"
 	| "chat"
+	| "companies"
 	| "automation"
 	| "inbox"
 	| "shared"
 	| "project"
 	| "note"
+	| "people"
 	| "notFound";
 
 export type NavigableAppView = Exclude<AppView, "notFound">;
@@ -42,11 +44,13 @@ export type AppCanonicalPath =
 	| "/home"
 	| "/calendar"
 	| "/chat"
+	| "/companies"
 	| "/automations"
 	| "/inbox"
 	| "/project"
 	| "/shared"
-	| "/note";
+	| "/note"
+	| "/people";
 
 export type AppLocationState = {
 	view: AppView;

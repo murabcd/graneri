@@ -1,8 +1,4 @@
 import {
-	isDesktopRuntime,
-	openDesktopExternalUrl,
-} from "@workspace/platform/desktop";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
@@ -18,8 +14,6 @@ import {
 } from "@workspace/ui/components/sidebar";
 import { useTheme } from "@workspace/ui/components/theme-provider";
 import {
-	ArrowDownToLine,
-	ChevronsUpDown,
 	LayoutTemplate,
 	ListMinus,
 	LogOut,
@@ -27,12 +21,9 @@ import {
 	Settings,
 	Sun,
 } from "lucide-react";
-import * as React from "react";
-import { toast } from "sonner";
 import type { AppUser } from "@/app/app-types";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
 import { SidebarIdentity } from "@/components/sidebar/sidebar-identity";
-import { resolveLatestDesktopDownloadUrl } from "@/lib/desktop-release";
 
 export function NavUser({
 	user,
@@ -51,49 +42,20 @@ export function NavUser({
 }) {
 	const { isMobile } = useSidebarShell();
 	const { theme, setTheme } = useTheme();
-	const [preparingDesktopDownload, setPreparingDesktopDownload] =
-		React.useState(false);
-	const desktopDownloadInFlightRef = React.useRef(false);
 	const isDarkTheme =
 		theme === "dark" ||
 		(theme === "system" && document.documentElement.classList.contains("dark"));
 	const nextTheme = isDarkTheme ? "light" : "dark";
 	const ThemeIcon = isDarkTheme ? Sun : Moon;
 	const themeLabel = isDarkTheme ? "Light theme" : "Dark theme";
-	const isDesktopApp = isDesktopRuntime();
-
-	const handleDesktopDownload = React.useCallback(async () => {
-		if (desktopDownloadInFlightRef.current) {
-			return;
-		}
-
-		desktopDownloadInFlightRef.current = true;
-		setPreparingDesktopDownload(true);
-
-		try {
-			const downloadUrl = await resolveLatestDesktopDownloadUrl();
-
-			if (await openDesktopExternalUrl(downloadUrl)) {
-				return;
-			}
-
-			window.location.assign(downloadUrl);
-		} catch {
-			toast.error("Failed to open the latest desktop download");
-		} finally {
-			desktopDownloadInFlightRef.current = false;
-			setPreparingDesktopDownload(false);
-		}
-	}, []);
 
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<SidebarMenuButton className="group/user-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+						<SidebarMenuButton className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
 							<SidebarIdentity avatar={user.avatar} name={user.name} />
-							<ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-colors group-hover/user-trigger:text-sidebar-accent-foreground" />
 						</SidebarMenuButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
@@ -132,18 +94,6 @@ export function NavUser({
 							<ListMinus />
 							Manage recipes
 						</DropdownMenuItem>
-						{!isDesktopApp ? (
-							<DropdownMenuItem
-								className="h-8 gap-2 px-2"
-								onSelect={() => void handleDesktopDownload()}
-								disabled={preparingDesktopDownload}
-							>
-								<ArrowDownToLine />
-								{preparingDesktopDownload
-									? "Preparing download..."
-									: "Download desktop app"}
-							</DropdownMenuItem>
-						) : null}
 						<DropdownMenuItem
 							className="group/settings-item h-8 gap-2 px-2"
 							onClick={onSettingsOpen}

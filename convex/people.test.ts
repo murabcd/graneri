@@ -94,6 +94,24 @@ test("calendar attendee ingestion creates one canonical person per normalized em
 		hasMore: false,
 		people: [{ displayName: "Mark Stone", email: "mark@acme.com" }],
 	});
+	expect(
+		await asOwner.query(api.people.listDirectory, {
+			query: "personal",
+			workspaceId,
+		}),
+	).toEqual({
+		hasMore: false,
+		people: [{ email: "personal@gmail.com" }],
+	});
+	expect(
+		await asOwner.query(api.people.listDirectory, {
+			query: "acme.com",
+			workspaceId,
+		}),
+	).toEqual({
+		hasMore: false,
+		people: [{ displayName: "Mark Stone", email: "mark@acme.com" }],
+	});
 });
 
 test("people picker queries enforce workspace ownership", async () => {
@@ -101,6 +119,9 @@ test("people picker queries enforce workspace ownership", async () => {
 
 	await expect(
 		asOther.query(api.people.listForPicker, { query: "", workspaceId }),
+	).rejects.toThrow();
+	await expect(
+		asOther.query(api.people.listDirectory, { query: "", workspaceId }),
 	).rejects.toThrow();
 });
 

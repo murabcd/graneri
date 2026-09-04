@@ -53,6 +53,11 @@ test("runs every Graneri View command against the live renderer", () => {
 	commands.toggleSidebar();
 	commands.openAskAi();
 	commands.goHome();
+	commands.openInbox();
+	commands.openKeyboardShortcuts();
+	commands.openCalendar();
+	commands.openAutomations();
+	commands.openShared();
 	commands.openSearch();
 	commands.reload();
 	commands.navigateBack();
@@ -63,6 +68,11 @@ test("runs every Graneri View command against the live renderer", () => {
 		{ channel: "app:app-command", command: "toggle-sidebar" },
 		{ channel: "app:app-command", command: "open-ask-ai" },
 		{ channel: "app:app-command", command: "go-home" },
+		{ channel: "app:app-command", command: "open-inbox" },
+		{ channel: "app:app-command", command: "open-keyboard-shortcuts" },
+		{ channel: "app:app-command", command: "open-calendar" },
+		{ channel: "app:app-command", command: "open-automations" },
+		{ channel: "app:app-command", command: "open-shared" },
 		{ channel: "app:app-command", command: "open-search" },
 		{ channel: "app:app-command", command: "navigate-back" },
 		{ channel: "app:app-command", command: "navigate-forward" },

@@ -155,6 +155,25 @@ describe("ProjectSidebarItem", () => {
 		expect(container.querySelector(`.${iconClassName}`)).not.toBeNull();
 	});
 
+	it("mutes only the untouched default project icon", () => {
+		const defaultView = renderProjectSidebarItem();
+		const defaultIcon = defaultView.container.querySelector(
+			".lucide-folder-closed",
+		);
+
+		expect(defaultIcon?.classList).toContain("text-sidebar-foreground/60");
+		expect(defaultIcon?.getAttribute("style")).toBeNull();
+
+		defaultView.unmount();
+		const customView = renderProjectSidebarItem({
+			project: { ...project, color: "blue", icon: "book" },
+		});
+		const customIcon = customView.container.querySelector(".lucide-book-open");
+
+		expect(customIcon?.classList).not.toContain("text-sidebar-foreground/60");
+		expect(customIcon?.getAttribute("style")).toContain("color:");
+	});
+
 	it("does not reserve project action space until hover", () => {
 		renderProjectSidebarItem();
 

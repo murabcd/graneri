@@ -18,6 +18,22 @@ describe("app location", () => {
 		expect(locationState.canonicalPath).toBe("/calendar");
 	});
 
+	it("routes relationship directories to canonical paths", () => {
+		const people = getAppLocationState(new URL("https://graneri.local/people"));
+		const companies = getAppLocationState(
+			new URL("https://graneri.local/companies"),
+		);
+
+		expect(people).toMatchObject({
+			canonicalPath: "/people",
+			view: "people",
+		});
+		expect(companies).toMatchObject({
+			canonicalPath: "/companies",
+			view: "companies",
+		});
+	});
+
 	it("builds canonical locations for static and resource views", () => {
 		expect(
 			getAppViewLocation({

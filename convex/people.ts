@@ -11,13 +11,23 @@ import {
 	getOrCreatePerson,
 	searchWorkspacePeople,
 } from "./peopleDomain";
+import {
+	matchesRelationshipDirectoryQuery,
+	RELATIONSHIP_DIRECTORY_SCAN_LIMIT,
+} from "./relationshipDirectory";
 
 const MAX_PEOPLE_QUERY_LENGTH = 320;
+const MAX_PEOPLE_DIRECTORY_RESULTS = 100;
 const MAX_PEOPLE_PICKER_RESULTS = 50;
 
 const personSummaryValidator = v.object({
 	displayName: v.optional(v.string()),
 	email: v.string(),
+});
+
+const peopleDirectoryResultValidator = v.object({
+	hasMore: v.boolean(),
+	people: v.array(personSummaryValidator),
 });
 
 const { requireTokenIdentifier } = createResourceAccess("people");
@@ -97,6 +107,41 @@ export const listForPicker = query({
 		return {
 			hasMore: result.hasMore,
 			people: result.matches.map((person) => ({
+				displayName: person.displayName,
+				email: person.email,
+			})),
+		};
+	},
+});
+
+export const listDirectory = query({
+	args: {
+		query: v.string(),
+		workspaceId: v.id("workspaces"),
+	},
+	returns: peopleDirectoryResultValidator,
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
+		const queryText = normalizePeopleQuery(args.query);
+		const candidates = await ctx.db
+			.query("people")
+			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_email", (q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+					.eq("workspaceId", args.workspaceId),
+			)
+			.take(RELATIONSHIP_DIRECTORY_SCAN_LIMIT + 1);
+		const matchingPeople = candidates.filter((person) =>
+			matchesRelationshipDirectoryQuery(person.searchText, queryText),
+		);
+		const people = matchingPeople.slice(0, MAX_PEOPLE_DIRECTORY_RESULTS);
+
+		return {
+			hasMore:
+				candidates.length > RELATIONSHIP_DIRECTORY_SCAN_LIMIT ||
+				matchingPeople.length > MAX_PEOPLE_DIRECTORY_RESULTS,
+			people: people.map((person) => ({
 				displayName: person.displayName,
 				email: person.email,
 			})),

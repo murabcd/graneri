@@ -19,7 +19,7 @@ import {
 	SidebarMenuItem,
 	useSidebarShell,
 } from "@workspace/ui/components/sidebar";
-import { ChevronsUpDown, LoaderCircle, Plus } from "lucide-react";
+import { LoaderCircle, Plus } from "lucide-react";
 import * as React from "react";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
 import { SidebarIdentity } from "@/components/sidebar/sidebar-identity";
@@ -94,12 +94,11 @@ export function WorkspaceSwitcher({
 				<SidebarMenuItem>
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 						<DropdownMenuTrigger asChild>
-							<SidebarMenuButton className="group/workspace-trigger data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+							<SidebarMenuButton className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
 								<SidebarIdentity
 									avatar={activeWorkspace.iconUrl}
 									name={activeWorkspace.name}
 								/>
-								<ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-colors group-hover/workspace-trigger:text-sidebar-accent-foreground" />
 							</SidebarMenuButton>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent

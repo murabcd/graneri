@@ -21,6 +21,10 @@ import { CalendarPageEntry } from "@/components/calendar/calendar-page-entry";
 import { ChatPageEntry } from "@/components/chat/chat-page-entry";
 import type { NoteEditorActionsStore } from "@/components/note/note-editor-actions-store";
 import { NotePageEntry } from "@/components/note/note-page-entry";
+import {
+	CompaniesDirectoryPage,
+	PeopleDirectoryPage,
+} from "@/components/relationships/relationship-directory-page";
 import type { ChatPluginPrefill } from "@/lib/chat-plugin-prefill";
 import type { NoteListItem, NoteRecord } from "@/lib/note-types";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -67,6 +71,16 @@ export type AppShellContentView =
 				event: UpcomingCalendarEvent,
 			) => Promise<void> | void;
 			onOpenCalendarSettings: () => void;
+	  }
+	| {
+			kind: "companies";
+			isDesktopMac: boolean;
+			workspaceId: Id<"workspaces"> | null;
+	  }
+	| {
+			kind: "people";
+			isDesktopMac: boolean;
+			workspaceId: Id<"workspaces"> | null;
 	  }
 	| ({
 			kind: "shared";
@@ -180,6 +194,24 @@ export const AppShellContent = React.memo(function AppShellContent({
 				isDesktopMac={view.isDesktopMac}
 				onOpenCalendarEventNote={view.onOpenCalendarEventNote}
 				onOpenCalendarSettings={view.onOpenCalendarSettings}
+			/>
+		);
+	}
+
+	if (view.kind === "people") {
+		return (
+			<PeopleDirectoryPage
+				isDesktopMac={view.isDesktopMac}
+				workspaceId={view.workspaceId}
+			/>
+		);
+	}
+
+	if (view.kind === "companies") {
+		return (
+			<CompaniesDirectoryPage
+				isDesktopMac={view.isDesktopMac}
+				workspaceId={view.workspaceId}
 			/>
 		);
 	}

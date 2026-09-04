@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -105,5 +105,31 @@ describe("NavTrash", () => {
 
 		expect(screen.queryByText("Archived plan")).toBeNull();
 		expect(document.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+	});
+
+	it("searches untitled notes by their displayed title", async () => {
+		const untitledArchivedNotes: Array<Doc<"notes">> = [
+			{
+				...archivedNote,
+				_id: "note-untitled" as Id<"notes">,
+				title: "",
+			},
+		];
+		usePaginatedQueryMock.mockImplementation(
+			(_reference: never, args: unknown) => ({
+				loadMore: vi.fn(),
+				results: args === "skip" ? [] : untitledArchivedNotes,
+				status: args === "skip" ? "LoadingFirstPage" : "Exhausted",
+			}),
+		);
+
+		render(createTrashTree(true));
+		expect(await screen.findByText("New note")).not.toBeNull();
+
+		fireEvent.change(screen.getByPlaceholderText("Search trash..."), {
+			target: { value: "new" },
+		});
+
+		expect(screen.getByText("New note")).not.toBeNull();
 	});
 });

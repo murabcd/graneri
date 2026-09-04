@@ -27,7 +27,11 @@ test("View menu contains only Graneri commands and native view controls", () => 
 		navigateBack: noop,
 		navigateForward: noop,
 		openAskAi: noop,
+		openAutomations: noop,
+		openCalendar: noop,
+		openInbox: noop,
 		openSearch: noop,
+		openShared: noop,
 		reload: noop,
 		toggleSidebar: noop,
 	};
@@ -40,7 +44,11 @@ test("View menu contains only Graneri commands and native view controls", () => 
 		[
 			"Toggle Sidebar",
 			"Home",
+			"Inbox",
 			"Ask AI",
+			"Calendar",
+			"Automations",
+			"Shared",
 			"Settings",
 			"separator",
 			"Search",
@@ -67,12 +75,16 @@ test("View menu contains only Graneri commands and native view controls", () => 
 		{
 			"Actual Size": "Command+0",
 			"Ask AI": "Alt+Command+N",
+			Automations: "Alt+Command+A",
 			Back: "Command+[",
+			Calendar: "Alt+Command+Y",
 			Forward: "Command+]",
 			Home: "Alt+Command+G",
+			Inbox: "Alt+Command+U",
 			Reload: "Command+R",
 			Search: "Command+K",
 			Settings: "Command+,",
+			Shared: "Alt+Command+S",
 			"Toggle Developer Tools": "Alt+Command+I",
 			"Toggle Full Screen": undefined,
 			"Toggle Sidebar": "Command+B",
@@ -95,7 +107,11 @@ test("Settings entries share the same window navigation action", () => {
 			navigateBack: noop,
 			navigateForward: noop,
 			openAskAi: noop,
+			openAutomations: noop,
+			openCalendar: noop,
+			openInbox: noop,
 			openSearch: noop,
+			openShared: noop,
 			reload: noop,
 			toggleSidebar: noop,
 		},
@@ -140,16 +156,33 @@ test("application menu keeps only the intended quit actions", () => {
 	);
 });
 
-test("Help menu exposes only Graneri troubleshooting actions", () => {
-	const helpMenu = createTemplate({}).find((item) => item.role === "help");
+test("Help menu exposes shortcuts and Graneri troubleshooting actions", () => {
+	let shortcutsOpenCount = 0;
+	const helpMenu = createTemplate({
+		openKeyboardShortcuts: () => {
+			shortcutsOpenCount += 1;
+		},
+	}).find((item) => item.role === "help");
 	const troubleshootingMenu = helpMenu.submenu.find(
 		(item) => item.label === "Troubleshooting",
 	);
 
 	assert.deepEqual(
 		helpMenu.submenu.map((item) => item.label ?? item.type),
-		["Learn More", "separator", "Troubleshooting"],
+		[
+			"Keyboard Shortcuts",
+			"separator",
+			"Learn More",
+			"separator",
+			"Troubleshooting",
+		],
 	);
+	const shortcutsItem = helpMenu.submenu.find(
+		(item) => item.label === "Keyboard Shortcuts",
+	);
+	assert.equal(shortcutsItem.accelerator, "Command+/");
+	shortcutsItem.click();
+	assert.equal(shortcutsOpenCount, 1);
 	assert.deepEqual(
 		troubleshootingMenu.submenu.map((item) => item.label),
 		[
@@ -168,7 +201,11 @@ test("custom View menu items invoke their matching commands", () => {
 			"navigateBack",
 			"navigateForward",
 			"openAskAi",
+			"openAutomations",
+			"openCalendar",
+			"openInbox",
 			"openSearch",
+			"openShared",
 			"reload",
 			"toggleSidebar",
 		].map((command) => [command, () => calls.push(command)]),
@@ -184,7 +221,11 @@ test("custom View menu items invoke their matching commands", () => {
 	assert.deepEqual(calls, [
 		"toggleSidebar",
 		"goHome",
+		"openInbox",
 		"openAskAi",
+		"openCalendar",
+		"openAutomations",
+		"openShared",
 		"openSearch",
 		"reload",
 		"navigateBack",

@@ -1,230 +1,214 @@
 import {
+	getApplicationShortcut,
+	matchesApplicationShortcut,
+} from "@workspace/platform/application-shortcuts";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu";
+import {
 	SidebarGroup,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@workspace/ui/components/sidebar";
-import type { LucideIcon } from "lucide-react";
-import { SquarePen } from "lucide-react";
+import { Building2, MoreHorizontal, UsersRound } from "lucide-react";
 import * as React from "react";
+import type { NavigableAppView } from "@/app/app-types";
 import { SidebarCollapsibleGroup } from "@/components/nav/sidebar-collapsible-group";
 import { ShortcutHint } from "@/components/sidebar/shortcut-hint";
 import { useApplicationCommand } from "@/lib/application-command";
-import type { SidebarView } from "@/lib/navigation";
+import type { SidebarNavigationItem, SidebarView } from "@/lib/navigation";
 
-type NavItem = {
-	title: string;
-	icon: LucideIcon;
-	action: "search" | "view" | "inbox" | "disabled";
-	view?: SidebarView;
-	isActive?: boolean;
-	badge?: number;
-};
-
-export function NavMain({
-	className,
-	items,
-	onCreateNote,
-	onSearchOpen,
-}: {
-	className?: string;
-	items: NavItem[];
-	onCreateNote: () => void;
-	onSearchOpen: () => void;
-}) {
-	const searchItem = items.find((item) => item.action === "search");
-
-	return (
-		<SidebarGroup className={className}>
-			<SidebarMenu>
-				<NewNoteButton onCreateNote={onCreateNote} />
-				{searchItem ? (
-					<SearchButton searchItem={searchItem} onSearchOpen={onSearchOpen} />
-				) : null}
-			</SidebarMenu>
-		</SidebarGroup>
-	);
-}
-
-export function NavWorkspace({
-	className,
+export function SidebarNavigation({
 	items,
 	onViewChange,
 	onInboxToggle,
 }: {
-	className?: string;
-	items: NavItem[];
-	onViewChange: (view: SidebarView) => void;
+	items: SidebarNavigationItem[];
+	onViewChange: (view: NavigableAppView) => void;
 	onInboxToggle: () => void;
 }) {
-	const viewItems = items.filter((item) => item.action !== "search");
+	const primaryItems = items.filter((item) => item.section === "primary");
+	const workspaceItems = items.filter((item) => item.section === "workspace");
 	const openAskAi = React.useCallback(() => {
 		onViewChange("chat");
 	}, [onViewChange]);
 	const goHome = React.useCallback(() => {
 		onViewChange("home");
 	}, [onViewChange]);
-	const handleOpenAskAiShortcut = React.useEffectEvent(openAskAi);
-	const handleGoHomeShortcut = React.useEffectEvent(goHome);
-	useApplicationCommand("open-ask-ai", openAskAi);
-	useApplicationCommand("go-home", goHome);
-
-	React.useEffect(() => {
-		const down = (event: KeyboardEvent) => {
-			if (matchesCommandShortcut(event, { altKey: true, code: "KeyN" })) {
-				event.preventDefault();
-				handleOpenAskAiShortcut();
+	const openInbox = React.useCallback(() => {
+		onInboxToggle();
+	}, [onInboxToggle]);
+	const openAutomations = React.useCallback(() => {
+		onViewChange("automation");
+	}, [onViewChange]);
+	const openCalendar = React.useCallback(() => {
+		onViewChange("calendar");
+	}, [onViewChange]);
+	const openShared = React.useCallback(() => {
+		onViewChange("shared");
+	}, [onViewChange]);
+	const handleNavigationShortcut = React.useEffectEvent(
+		(item: SidebarNavigationItem) => {
+			if (item.action === "inbox") {
+				onInboxToggle();
 				return;
 			}
 
-			if (matchesCommandShortcut(event, { altKey: true, code: "KeyG" })) {
-				event.preventDefault();
-				handleGoHomeShortcut();
+			onViewChange(item.view);
+		},
+	);
+	useApplicationCommand("open-ask-ai", openAskAi);
+	useApplicationCommand("open-automations", openAutomations);
+	useApplicationCommand("open-calendar", openCalendar);
+	useApplicationCommand("go-home", goHome);
+	useApplicationCommand("open-inbox", openInbox);
+	useApplicationCommand("open-shared", openShared);
+
+	React.useEffect(() => {
+		const down = (event: KeyboardEvent) => {
+			for (const item of items) {
+				if (matchesApplicationShortcut(event, item.shortcutId)) {
+					event.preventDefault();
+					handleNavigationShortcut(item);
+					return;
+				}
 			}
 		};
 
 		document.addEventListener("keydown", down);
 		return () => document.removeEventListener("keydown", down);
-	}, []);
+	}, [items]);
 
 	return (
-		<SidebarCollapsibleGroup
-			title="Workspace"
-			className={className}
-			storageKey="workspace"
-		>
-			<SidebarMenu>
-				{viewItems.map((item) => (
-					<SidebarMenuItem key={item.title}>
-						<SidebarMenuButton
-							asChild
-							tooltip={item.title}
-							isActive={item.isActive}
-						>
-							<button
-								type="button"
-								onClick={() => {
-									if (item.action === "inbox") {
-										onInboxToggle();
-										return;
-									}
-
-									if (item.action !== "view" || !item.view) {
-										return;
-									}
-
-									onViewChange(item.view);
-								}}
-								className="flex w-full items-center gap-2"
-							>
-								{item.icon && <item.icon />}
-								<span>{item.title}</span>
-								<WorkspaceViewShortcutHint
-									view={item.action === "view" ? item.view : undefined}
-								/>
-								{item.badge ? (
-									<span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-accent px-1 text-xs font-medium tabular-nums text-sidebar-accent-foreground">
-										{formatBadgeCount(item.badge)}
-									</span>
-								) : null}
-							</button>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				))}
-			</SidebarMenu>
-		</SidebarCollapsibleGroup>
+		<>
+			<SidebarGroup className="py-1">
+				<NavigationMenu
+					items={primaryItems}
+					onInboxToggle={onInboxToggle}
+					onViewChange={onViewChange}
+				/>
+			</SidebarGroup>
+			<SidebarCollapsibleGroup
+				title="Workspace"
+				storageKey="workspace"
+				labelClassName="[&>svg]:!opacity-100"
+			>
+				<NavigationMenu
+					items={workspaceItems}
+					onInboxToggle={onInboxToggle}
+					onViewChange={onViewChange}
+				/>
+				<ExploreMenu onViewChange={onViewChange} />
+			</SidebarCollapsibleGroup>
+		</>
 	);
 }
 
-function WorkspaceViewShortcutHint({ view }: { view: NavItem["view"] }) {
-	const keyLabel = view === "chat" ? "N" : view === "home" ? "G" : null;
+function ExploreMenu({
+	onViewChange,
+}: {
+	onViewChange: (view: NavigableAppView) => void;
+}) {
+	return (
+		<SidebarMenu>
+			<SidebarMenuItem>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<SidebarMenuButton
+							tooltip="Explore"
+							className="text-sidebar-foreground/70 hover:bg-transparent hover:text-inherit data-[state=open]:bg-transparent data-[state=open]:text-inherit"
+						>
+							<MoreHorizontal />
+							<span className="text-xs">Explore</span>
+						</SidebarMenuButton>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent
+						className="min-w-48 rounded-lg"
+						side="bottom"
+						align="start"
+						sideOffset={4}
+					>
+						<DropdownMenuGroup>
+							<DropdownMenuItem
+								className="h-8 gap-2 px-2"
+								onSelect={() => onViewChange("people")}
+							>
+								<UsersRound />
+								People
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								className="h-8 gap-2 px-2"
+								onSelect={() => onViewChange("companies")}
+							>
+								<Building2 />
+								Companies
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</SidebarMenuItem>
+		</SidebarMenu>
+	);
+}
+
+function NavigationMenu({
+	items,
+	onInboxToggle,
+	onViewChange,
+}: {
+	items: SidebarNavigationItem[];
+	onInboxToggle: () => void;
+	onViewChange: (view: SidebarView) => void;
+}) {
+	return (
+		<SidebarMenu>
+			{items.map((item) => (
+				<SidebarMenuItem key={item.title}>
+					<SidebarMenuButton
+						asChild
+						tooltip={item.title}
+						isActive={item.isActive}
+					>
+						<button
+							type="button"
+							onClick={() => {
+								if (item.action === "inbox") {
+									onInboxToggle();
+									return;
+								}
+
+								onViewChange(item.view);
+							}}
+							className="flex w-full items-center gap-2"
+						>
+							<item.icon />
+							<span>{item.title}</span>
+							<NavigationShortcutHint item={item} />
+							{item.badge ? (
+								<span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-accent px-1 text-xs font-medium tabular-nums text-sidebar-accent-foreground">
+									{formatBadgeCount(item.badge)}
+								</span>
+							) : null}
+						</button>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+			))}
+		</SidebarMenu>
+	);
+}
+
+function NavigationShortcutHint({ item }: { item: SidebarNavigationItem }) {
+	const shortcut = getApplicationShortcut(item.shortcutId);
+	const keyLabel = shortcut.keys.at(-1);
 
 	return keyLabel ? (
 		<SidebarMenuShortcutHint altKey keyLabel={keyLabel} />
 	) : null;
-}
-
-function NewNoteButton({ onCreateNote }: { onCreateNote: () => void }) {
-	const handleCreateNoteShortcut = React.useEffectEvent(() => {
-		onCreateNote();
-	});
-
-	React.useEffect(() => {
-		const down = (event: KeyboardEvent) => {
-			if (!matchesCommandShortcut(event, { code: "KeyN" })) {
-				return;
-			}
-
-			event.preventDefault();
-			handleCreateNoteShortcut();
-		};
-
-		document.addEventListener("keydown", down);
-		return () => document.removeEventListener("keydown", down);
-	}, []);
-
-	return (
-		<SidebarMenuItem>
-			<SidebarMenuButton asChild tooltip="New note">
-				<button
-					type="button"
-					onClick={onCreateNote}
-					className="flex w-full items-center gap-2"
-				>
-					<SquarePen />
-					<span>New note</span>
-					<SidebarMenuShortcutHint keyLabel="N" />
-				</button>
-			</SidebarMenuButton>
-		</SidebarMenuItem>
-	);
-}
-
-function SearchButton({
-	searchItem,
-	onSearchOpen,
-}: {
-	searchItem: NavItem;
-	onSearchOpen: () => void;
-}) {
-	const handleOpenSearchShortcut = React.useEffectEvent(() => {
-		onSearchOpen();
-	});
-	useApplicationCommand("open-search", onSearchOpen);
-
-	React.useEffect(() => {
-		const down = (event: KeyboardEvent) => {
-			if (!matchesCommandShortcut(event, { code: "KeyK" })) {
-				return;
-			}
-
-			event.preventDefault();
-			handleOpenSearchShortcut();
-		};
-
-		document.addEventListener("keydown", down);
-		return () => document.removeEventListener("keydown", down);
-	}, []);
-
-	return (
-		<SidebarMenuItem key={searchItem.title}>
-			<SidebarMenuButton
-				asChild
-				tooltip={searchItem.title}
-				isActive={searchItem.isActive}
-			>
-				<button
-					type="button"
-					onClick={onSearchOpen}
-					className="flex w-full cursor-text items-center gap-2"
-				>
-					{searchItem.icon && <searchItem.icon />}
-					<span>{searchItem.title}</span>
-					<SidebarMenuShortcutHint keyLabel="K" />
-				</button>
-			</SidebarMenuButton>
-		</SidebarMenuItem>
-	);
 }
 
 function formatBadgeCount(value: number) {
@@ -244,24 +228,5 @@ function SidebarMenuShortcutHint({
 			keyLabel={keyLabel}
 			className="border border-border/60 bg-muted px-1.5 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/menu-item:opacity-100"
 		/>
-	);
-}
-
-function matchesCommandShortcut(
-	event: KeyboardEvent,
-	{
-		altKey = false,
-		code,
-	}: {
-		altKey?: boolean;
-		code: KeyboardEvent["code"];
-	},
-) {
-	return (
-		!event.defaultPrevented &&
-		(event.metaKey || event.ctrlKey) &&
-		event.altKey === altKey &&
-		!event.shiftKey &&
-		event.code === code
 	);
 }

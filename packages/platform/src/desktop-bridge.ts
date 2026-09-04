@@ -50,7 +50,12 @@ export type DesktopAppCommand =
 	| "navigate-back"
 	| "navigate-forward"
 	| "open-ask-ai"
+	| "open-automations"
+	| "open-calendar"
+	| "open-inbox"
+	| "open-keyboard-shortcuts"
 	| "open-search"
+	| "open-shared"
 	| "select-all"
 	| "toggle-sidebar";
 

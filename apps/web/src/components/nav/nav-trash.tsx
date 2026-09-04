@@ -271,7 +271,10 @@ function TrashPopoverContent({
 		}
 
 		return archivedNotes.filter((note) => {
-			const haystack = [note.title, note.authorName ?? ""].join(" ");
+			const haystack = [
+				getNoteDisplayTitle(note.title),
+				note.authorName ?? "",
+			].join(" ");
 
 			return haystack.toLowerCase().includes(query);
 		});
@@ -491,6 +494,7 @@ function TrashSearchInput({
 			<div className="relative">
 				<Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
 				<Input
+					name="trash-search"
 					value={search}
 					onChange={onSearchChange}
 					className="h-8 bg-secondary pr-2 pl-8 focus-visible:border-input focus-visible:ring-0"
@@ -606,7 +610,6 @@ function TrashItemRow({
 					label={`Delete ${title}`}
 					onClick={onDelete}
 					tooltip="Delete"
-					destructive
 				>
 					<Trash2 className="size-4" />
 				</TrashItemAction>
@@ -619,13 +622,11 @@ function TrashItemAction({
 	label,
 	onClick,
 	tooltip,
-	destructive = false,
 	children,
 }: {
 	label: string;
 	onClick: () => void;
 	tooltip: string;
-	destructive?: boolean;
 	children: React.ReactNode;
 }) {
 	return (
@@ -633,11 +634,7 @@ function TrashItemAction({
 			<TooltipTrigger asChild>
 				<button
 					type="button"
-					className={
-						destructive
-							? "flex size-5 cursor-pointer items-center justify-center rounded-md p-0 text-destructive outline-hidden transition-transform focus-visible:ring-2 hover:bg-sidebar-accent hover:text-destructive [&>svg]:size-4 [&>svg]:shrink-0 dark:text-red-500"
-							: "flex size-5 cursor-pointer items-center justify-center rounded-md p-0 text-sidebar-foreground outline-hidden transition-transform focus-visible:ring-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0"
-					}
+					className="flex size-5 cursor-pointer items-center justify-center rounded-md p-0 text-muted-foreground outline-hidden transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:text-foreground [&>svg]:size-4 [&>svg]:shrink-0"
 					onClick={onClick}
 					aria-label={label}
 				>

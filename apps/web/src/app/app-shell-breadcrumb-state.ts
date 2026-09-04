@@ -42,7 +42,12 @@ export const handleAppShellBreadcrumbClick = ({
 		onOpenFreshChat();
 		return;
 	}
-	if (currentView === "automation" || currentView === "calendar") {
+	if (
+		currentView === "automation" ||
+		currentView === "calendar" ||
+		currentView === "companies" ||
+		currentView === "people"
+	) {
 		onViewChange(currentView);
 		return;
 	}

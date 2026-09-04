@@ -1,5 +1,38 @@
+import { getDomainWithoutSuffix } from "tldts";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { normalizeRelationshipSearchText } from "./relationshipDirectory";
+
+export const getCompanyFallbackDisplayName = (domain: string) => {
+	const domainLabel =
+		getDomainWithoutSuffix(domain, { allowPrivateDomains: true }) ??
+		domain.split(".")[0] ??
+		domain;
+	const words = domainLabel
+		.split(/[-_]+/u)
+		.filter(Boolean)
+		.map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`);
+
+	return words.join(" ") || domain;
+};
+
+export const getCompanyDisplayName = (
+	company: Pick<Doc<"companies">, "displayName" | "domain">,
+) => {
+	const displayName = company.displayName.trim();
+	return displayName &&
+		displayName.toLowerCase() !== company.domain.toLowerCase()
+		? displayName
+		: getCompanyFallbackDisplayName(company.domain);
+};
+
+export const getCompanySearchText = ({
+	displayName,
+	domain,
+}: {
+	displayName: string;
+	domain: string;
+}) => normalizeRelationshipSearchText(`${displayName} ${domain}`);
 
 const normalizeDomainSearch = (value: string) => {
 	const candidate = value.replace(/^@/u, "").toLowerCase();
@@ -22,7 +55,7 @@ const mergeCompanyMatches = (
 	}
 
 	return {
-		hasMore: matches.size > limit,
+		hasMore: searchMatches.length > limit || matches.size > limit,
 		matches: [...matches.values()].slice(0, limit),
 	};
 };
@@ -35,6 +68,7 @@ export const searchWorkspaceCompanies = async (
 	limit: number,
 ) => {
 	const exactDomain = normalizeDomainSearch(queryText);
+	const normalizedQueryText = normalizeRelationshipSearchText(queryText);
 	const [exactMatch, searchMatches] = await Promise.all([
 		exactDomain
 			? ctx.db
@@ -49,15 +83,28 @@ export const searchWorkspaceCompanies = async (
 					)
 					.unique()
 			: null,
-		ctx.db
-			.query("companies")
-			.withSearchIndex("search_companies", (q) =>
-				q
-					.search("searchText", queryText.replaceAll(".", " "))
-					.eq("ownerTokenIdentifier", ownerTokenIdentifier)
-					.eq("workspaceId", workspaceId),
-			)
-			.take(limit + 1),
+		normalizedQueryText
+			? ctx.db
+					.query("companies")
+					.withSearchIndex("search_companies", (q) =>
+						q
+							.search("searchText", normalizedQueryText)
+							.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+							.eq("workspaceId", workspaceId),
+					)
+					.take(limit + 1)
+			: queryText
+				? []
+				: ctx.db
+						.query("companies")
+						.withIndex(
+							"by_ownerTokenIdentifier_and_workspaceId_and_domain",
+							(q) =>
+								q
+									.eq("ownerTokenIdentifier", ownerTokenIdentifier)
+									.eq("workspaceId", workspaceId),
+						)
+						.take(limit + 1),
 	]);
 
 	return mergeCompanyMatches(exactMatch, searchMatches, limit);
@@ -87,15 +134,28 @@ export const getOrCreateCompany = async ({
 		.unique();
 
 	if (existing) {
+		const displayName = getCompanyDisplayName(existing);
+		const searchText = getCompanySearchText({ displayName, domain });
+		if (
+			existing.displayName !== displayName ||
+			existing.searchText !== searchText
+		) {
+			await ctx.db.patch(existing._id, {
+				displayName,
+				searchText,
+				updatedAt: now,
+			});
+		}
 		return existing._id;
 	}
+	const displayName = getCompanyFallbackDisplayName(domain);
 
 	return await ctx.db.insert("companies", {
 		ownerTokenIdentifier,
 		workspaceId,
 		domain,
-		displayName: domain,
-		searchText: domain.replaceAll(/[.-]/gu, " "),
+		displayName,
+		searchText: getCompanySearchText({ displayName, domain }),
 		createdAt: now,
 		updatedAt: now,
 	});

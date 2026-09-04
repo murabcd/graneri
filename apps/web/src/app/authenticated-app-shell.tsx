@@ -18,7 +18,6 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import { Kbd } from "@workspace/ui/components/kbd";
 import { Separator } from "@workspace/ui/components/separator";
 import {
 	SidebarProvider,
@@ -34,6 +33,7 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
+	Archive,
 	Clock,
 	MoreHorizontal,
 	Pencil,
@@ -41,7 +41,6 @@ import {
 	Star,
 	StarOff,
 	TextSearch,
-	Trash2,
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -192,10 +191,14 @@ const getBreadcrumbSectionLabel = ({
 			return getSidebarViewTitle("chat");
 		case "calendar":
 			return getSidebarViewTitle("calendar");
+		case "companies":
+			return "Companies";
 		case "automation":
 			return getSidebarViewTitle("automation");
 		case "project":
 			return "Projects";
+		case "people":
+			return "People";
 		case "shared":
 			return getSidebarViewTitle("shared");
 		default:
@@ -1406,18 +1409,11 @@ function AppShellHeaderLeading({
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<SidebarTrigger
+							className="text-muted-foreground hover:text-foreground focus-visible:text-foreground"
 							data-app-region={isDesktopMac ? "no-drag" : undefined}
 						/>
 					</TooltipTrigger>
-					<TooltipContent side="bottom">
-						<div className="flex items-center gap-2">
-							<span>Toggle sidebar</span>
-							<Kbd className="border border-border/60 bg-muted px-1.5 font-mono text-[10px] opacity-100">
-								<span className="text-xs">⌘</span>
-								<span>B</span>
-							</Kbd>
-						</div>
-					</TooltipContent>
+					<TooltipContent side="bottom">Toggle sidebar</TooltipContent>
 				</Tooltip>
 				<Separator
 					orientation="vertical"
@@ -1969,7 +1965,7 @@ function ChatHeaderActions({
 						disabled={!chatId}
 						onSelect={() => setConfirmTrashOpen(true)}
 					>
-						<Trash2 />
+						<Archive className="text-muted-foreground" />
 						Move to trash
 					</DropdownMenuItem>
 				</DropdownMenuContent>
@@ -2046,6 +2042,17 @@ function createAppShellContentView({
 					stopCaptureWhenMeetingEnds: false,
 				}),
 			onOpenCalendarSettings: controller.handleOpenCalendarSettings,
+		};
+	}
+
+	if (
+		controller.currentView === "people" ||
+		controller.currentView === "companies"
+	) {
+		return {
+			kind: controller.currentView,
+			isDesktopMac: controller.isDesktopMac,
+			workspaceId: controller.activeWorkspaceId,
 		};
 	}
 

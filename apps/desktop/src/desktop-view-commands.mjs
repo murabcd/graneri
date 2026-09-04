@@ -66,6 +66,21 @@ export const createDesktopViewCommands = ({
 		openAskAi: () => {
 			sendRendererCommand("open-ask-ai");
 		},
+		openAutomations: () => {
+			sendRendererCommand("open-automations");
+		},
+		openCalendar: () => {
+			sendRendererCommand("open-calendar");
+		},
+		openInbox: () => {
+			sendRendererCommand("open-inbox");
+		},
+		openKeyboardShortcuts: () => {
+			sendRendererCommand("open-keyboard-shortcuts");
+		},
+		openShared: () => {
+			sendRendererCommand("open-shared");
+		},
 		reload: () => {
 			getLiveWindow()?.webContents.reload();
 		},

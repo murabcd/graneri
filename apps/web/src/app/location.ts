@@ -43,10 +43,12 @@ const APP_VIEW_BY_PATH: Record<string, NavigableAppView> = {
 	"/automations": "automation",
 	"/calendar": "calendar",
 	"/chat": "chat",
+	"/companies": "companies",
 	"/home": "home",
 	"/inbox": "inbox",
 	"/note": "note",
 	"/project": "project",
+	"/people": "people",
 	"/shared": "shared",
 };
 
@@ -63,10 +65,12 @@ const CANONICAL_PATH_BY_VIEW: Record<NavigableAppView, AppCanonicalPath> = {
 	automation: "/automations",
 	calendar: "/calendar",
 	chat: "/chat",
+	companies: "/companies",
 	home: "/home",
 	inbox: "/inbox",
 	note: "/note",
 	project: "/project",
+	people: "/people",
 	shared: "/shared",
 };
 

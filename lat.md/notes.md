@@ -91,8 +91,19 @@ Convex transaction that stores the immutable event/attendee snapshot, resolves
 workspace-scoped people by email, resolves companies by non-personal business
 email domain, and creates the note-to-person and note-to-company associations.
 `companyDomain` owns canonical Company creation, domain-aware search, and
-orphan cleanup; note relationships own atomic association persistence, while
-meeting search owns result composition.
+orphan cleanup. The domain remains the stable identity and secondary label;
+until a canonical company name is available, presentation uses a
+public-suffix-aware registrable-domain fallback and searches both that label
+and the full domain. Note relationships own atomic association persistence,
+while meeting search owns result composition.
+The authenticated `/people` and `/companies` directories are workspace-scoped
+read models over those canonical identities. The Companies directory also
+derives non-personal domains from workspace People so calendar guests are
+represented before a note creates a canonical Company. They expose bounded,
+searchable name/email and name/domain summaries without maintaining a second
+calendar guest store; directory rows remain informational until dedicated
+relationship detail routes own note-history navigation. [[convex/people.ts]]
+[[convex/companies.ts]]
 Archiving mirrors state onto those associations for indexed reads; permanent
 deletion removes the associations and any now-orphaned canonical identities.
 An invalid attendee or an event above the supported attendee bound rejects the

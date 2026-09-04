@@ -1,56 +1,70 @@
+import type { ApplicationShortcutKeyBindingId } from "@workspace/platform/application-shortcuts";
 import {
 	CalendarDays,
 	Clock,
 	Home,
 	Inbox,
 	MessageCircle,
-	Search,
 	UsersRound,
 } from "lucide-react";
 import type { AppView } from "@/app/app-types";
 
 export const SIDEBAR_NAVIGATION = [
 	{
-		title: "Search",
-		action: "search",
-		icon: Search,
-	},
-	{
 		title: "Home",
+		shortcutId: "home",
 		action: "view",
 		view: "home",
 		icon: Home,
-	},
-	{
-		title: "Calendar",
-		action: "view",
-		view: "calendar",
-		icon: CalendarDays,
-	},
-	{
-		title: "Shared",
-		action: "view",
-		view: "shared",
-		icon: UsersRound,
-	},
-	{
-		title: "Ask AI",
-		action: "view",
-		view: "chat",
-		icon: MessageCircle,
-	},
-	{
-		title: "Automations",
-		action: "view",
-		view: "automation",
-		icon: Clock,
+		section: "primary",
 	},
 	{
 		title: "Inbox",
+		shortcutId: "inbox",
 		action: "inbox",
 		icon: Inbox,
+		section: "primary",
 	},
-] as const;
+	{
+		title: "Ask AI",
+		shortcutId: "ask-ai",
+		action: "view",
+		view: "chat",
+		icon: MessageCircle,
+		section: "primary",
+	},
+	{
+		title: "Calendar",
+		shortcutId: "calendar",
+		action: "view",
+		view: "calendar",
+		icon: CalendarDays,
+		section: "workspace",
+	},
+	{
+		title: "Automations",
+		shortcutId: "automations",
+		action: "view",
+		view: "automation",
+		icon: Clock,
+		section: "workspace",
+	},
+	{
+		title: "Shared",
+		shortcutId: "shared",
+		action: "view",
+		view: "shared",
+		icon: UsersRound,
+		section: "workspace",
+	},
+] as const satisfies ReadonlyArray<{
+	action: "inbox" | "view";
+	icon: typeof Home;
+	section: "primary" | "workspace";
+	shortcutId: ApplicationShortcutKeyBindingId;
+	title: string;
+	view?: AppView;
+}>;
 
 export type SidebarView = Extract<
 	(typeof SIDEBAR_NAVIGATION)[number],

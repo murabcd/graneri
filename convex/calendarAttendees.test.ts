@@ -36,4 +36,7 @@ test("normalizes canonical attendee identity and merges conflicting duplicates d
 test("creates companies only for explicit business email domains", () => {
 	expect(getBusinessEmailDomain("mark@acme.com")).toBe("acme.com");
 	expect(getBusinessEmailDomain("mark@gmail.com")).toBe(null);
+	expect(getBusinessEmailDomain("mark@google.com")).toBe(null);
+	expect(getBusinessEmailDomain("mark@yandex.by")).toBe(null);
+	expect(getBusinessEmailDomain("mark@yandex.ru")).toBe(null);
 });

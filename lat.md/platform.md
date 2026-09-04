@@ -4,6 +4,7 @@ The platform package is the sole renderer-safe interface to Electron capabilitie
 
 - [[renderer]] consumes the bridge.
 - [[desktop-runtime]] implements the native adapters.
+- [[packages/platform/src/application-shortcuts.ts]]
 - [[packages/platform/src/desktop-ipc-contract.ts]]
 
 ## Desktop bridge
@@ -33,7 +34,11 @@ Native commands cross the typed bridge and reuse renderer action owners instead 
 Native application-menu commands and Electron-owned shortcuts that act on
 renderer state cross this same bridge as typed semantic commands. Electron must
 not synthesize keyboard input; renderer command owners share the action handlers
-used by web shortcuts and editable surfaces. Select All is intercepted in
+used by web shortcuts and editable surfaces. The shared application-shortcut
+catalog owns user-facing labels, keycaps, and Electron accelerators so the native
+menu and renderer shortcut reference remain aligned. Keyboard Shortcuts opens
+through this command path from the native Help menu, while Command-Slash invokes
+the same renderer-owned dialog on the web. Select All is intercepted in
 [desktop-view-commands.mjs](../apps/desktop/src/desktop-view-commands.mjs)
 before Chromium can select the whole document, then
 [[apps/web/src/lib/application-command.ts]] scopes it through

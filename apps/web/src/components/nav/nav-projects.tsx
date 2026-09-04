@@ -1005,6 +1005,7 @@ function ProjectSidebarRow({
 							<span className="absolute inset-0 flex items-center justify-center opacity-100 transition-opacity group-hover/menu-button:opacity-0">
 								<ProjectIcon
 									{...identityEditor.previewAppearance}
+									mutedDefault
 									open={isOpen}
 								/>
 							</span>

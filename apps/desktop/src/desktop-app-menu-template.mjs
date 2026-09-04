@@ -1,3 +1,5 @@
+import { getApplicationShortcut } from "../../../packages/platform/src/application-shortcuts.ts";
+
 export const createDesktopAppMenuTemplate = ({
 	appName,
 	confirmAndQuitCompletely,
@@ -35,7 +37,7 @@ export const createDesktopAppMenuTemplate = ({
 				},
 				{
 					label: "Settings",
-					accelerator: "Command+,",
+					accelerator: getApplicationShortcut("settings").accelerator,
 					click: openSettings,
 				},
 				{ type: "separator" },
@@ -43,7 +45,7 @@ export const createDesktopAppMenuTemplate = ({
 				{ type: "separator" },
 				{
 					label: `Hide ${appName()}`,
-					accelerator: "Command+H",
+					accelerator: getApplicationShortcut("hide-app").accelerator,
 					click: () => {
 						hideApp();
 					},
@@ -53,7 +55,7 @@ export const createDesktopAppMenuTemplate = ({
 				{ type: "separator" },
 				{
 					label: "Quit Completely",
-					accelerator: "Command+Q",
+					accelerator: getApplicationShortcut("quit-completely").accelerator,
 					click: () => {
 						void confirmAndQuitCompletely();
 					},
@@ -73,67 +75,87 @@ export const createDesktopAppMenuTemplate = ({
 			submenu: [
 				{
 					label: "Toggle Sidebar",
-					accelerator: "Command+B",
+					accelerator: getApplicationShortcut("toggle-sidebar").accelerator,
 					click: desktopViewCommands.toggleSidebar,
 				},
 				{
 					label: "Home",
-					accelerator: "Alt+Command+G",
+					accelerator: getApplicationShortcut("home").accelerator,
 					click: desktopViewCommands.goHome,
 				},
 				{
+					label: "Inbox",
+					accelerator: getApplicationShortcut("inbox").accelerator,
+					click: desktopViewCommands.openInbox,
+				},
+				{
 					label: "Ask AI",
-					accelerator: "Alt+Command+N",
+					accelerator: getApplicationShortcut("ask-ai").accelerator,
 					click: desktopViewCommands.openAskAi,
 				},
 				{
+					label: "Calendar",
+					accelerator: getApplicationShortcut("calendar").accelerator,
+					click: desktopViewCommands.openCalendar,
+				},
+				{
+					label: "Automations",
+					accelerator: getApplicationShortcut("automations").accelerator,
+					click: desktopViewCommands.openAutomations,
+				},
+				{
+					label: "Shared",
+					accelerator: getApplicationShortcut("shared").accelerator,
+					click: desktopViewCommands.openShared,
+				},
+				{
 					label: "Settings",
-					accelerator: "Command+,",
+					accelerator: getApplicationShortcut("settings").accelerator,
 					click: openSettings,
 				},
 				{ type: "separator" },
 				{
 					label: "Search",
-					accelerator: "Command+K",
+					accelerator: getApplicationShortcut("search").accelerator,
 					click: desktopViewCommands.openSearch,
 				},
 				{ type: "separator" },
 				{
 					label: "Reload",
-					accelerator: "Command+R",
+					accelerator: getApplicationShortcut("reload").accelerator,
 					click: desktopViewCommands.reload,
 				},
 				{
 					label: "Toggle Developer Tools",
 					role: "toggleDevTools",
-					accelerator: "Alt+Command+I",
+					accelerator: getApplicationShortcut("developer-tools").accelerator,
 				},
 				{ type: "separator" },
 				{
 					label: "Back",
-					accelerator: "Command+[",
+					accelerator: getApplicationShortcut("back").accelerator,
 					click: desktopViewCommands.navigateBack,
 				},
 				{
 					label: "Forward",
-					accelerator: "Command+]",
+					accelerator: getApplicationShortcut("forward").accelerator,
 					click: desktopViewCommands.navigateForward,
 				},
 				{ type: "separator" },
 				{
 					label: "Actual Size",
 					role: "resetZoom",
-					accelerator: "Command+0",
+					accelerator: getApplicationShortcut("actual-size").accelerator,
 				},
 				{
 					label: "Zoom In",
 					role: "zoomIn",
-					accelerator: "Command+Plus",
+					accelerator: getApplicationShortcut("zoom-in").accelerator,
 				},
 				{
 					label: "Zoom Out",
 					role: "zoomOut",
-					accelerator: "Command+-",
+					accelerator: getApplicationShortcut("zoom-out").accelerator,
 				},
 				{ type: "separator" },
 				{
@@ -148,7 +170,10 @@ export const createDesktopAppMenuTemplate = ({
 				{ role: "minimize" },
 				{ role: "zoom" },
 				{ type: "separator" },
-				{ role: "close", accelerator: "Command+W" },
+				{
+					role: "close",
+					accelerator: getApplicationShortcut("close-window").accelerator,
+				},
 				{ type: "separator" },
 				{ role: "front" },
 			],
@@ -156,6 +181,12 @@ export const createDesktopAppMenuTemplate = ({
 		{
 			role: "help",
 			submenu: [
+				{
+					label: "Keyboard Shortcuts",
+					accelerator: getApplicationShortcut("keyboard-shortcuts").accelerator,
+					click: desktopViewCommands.openKeyboardShortcuts,
+				},
+				{ type: "separator" },
 				{
 					label: "Learn More",
 					click: () => {

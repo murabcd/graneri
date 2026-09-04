@@ -7,7 +7,10 @@ import {
 	requireOwnedWorkspace,
 	truncate,
 } from "./domain";
-import { searchWorkspaceCompanies } from "./companyDomain";
+import {
+	getCompanyDisplayName,
+	searchWorkspaceCompanies,
+} from "./companyDomain";
 import { requirePersistedNoteDocument } from "./noteDocument";
 import { searchWorkspacePeople } from "./peopleDomain";
 
@@ -183,7 +186,7 @@ const loadCompanyAssociations = async ({
 
 	return {
 		associations: await query.take(limit + 1),
-		label: company.displayName,
+		label: getCompanyDisplayName(company),
 	};
 };
 
@@ -373,7 +376,7 @@ const searchMeetingNotesForOwner = async ({
 	return {
 		hasMore,
 		matchedCompanies: companies.map((company) => ({
-			displayName: company.displayName,
+			displayName: getCompanyDisplayName(company),
 			domain: company.domain,
 		})),
 		matchedPeople: people.map((person) => ({
