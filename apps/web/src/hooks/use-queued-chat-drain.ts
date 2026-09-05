@@ -3,13 +3,13 @@ import * as React from "react";
 import { toast } from "sonner";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import {
+	applyQueuedFollowUpChange,
 	getQueuedFollowUpCacheKey,
 	QUEUED_FOLLOW_UP_DRAIN_RETRY_MS,
-	type QueuedFollowUpMessage,
+	type QueuedFollowUpChange,
 	readQueuedFollowUpsCache,
+	reconcileQueuedFollowUpsCache,
 	subscribeQueuedFollowUpsCache,
-	updateQueuedFollowUpsCache,
-	writeQueuedFollowUpsCache,
 } from "@/lib/chat-queued-followups";
 import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
@@ -76,20 +76,16 @@ export const useQueuedChatDrain = ({
 			return;
 		}
 
-		writeQueuedFollowUpsCache(
+		reconcileQueuedFollowUpsCache(
 			queuedMessagesCacheKey,
 			queuedMessages.filter((message) => !acceptedIds.has(message._id)),
 		);
 		session.reconcileAccepted(queuedMessages);
 	}, [acceptedIds, session, queuedMessages, queuedMessagesCacheKey]);
 
-	const updateVisibleQueuedMessages = React.useCallback(
-		(
-			updater: (
-				messages: Array<QueuedFollowUpMessage>,
-			) => Array<QueuedFollowUpMessage>,
-		) => {
-			updateQueuedFollowUpsCache(queuedMessagesCacheKey, updater);
+	const changeQueuedMessages = React.useCallback(
+		(change: QueuedFollowUpChange) => {
+			applyQueuedFollowUpChange(queuedMessagesCacheKey, change);
 		},
 		[queuedMessagesCacheKey],
 	);
@@ -177,6 +173,6 @@ export const useQueuedChatDrain = ({
 
 	return {
 		queuedMessages: visibleQueuedMessages,
-		setQueuedMessages: updateVisibleQueuedMessages,
+		changeQueuedMessages,
 	};
 };

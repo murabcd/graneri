@@ -367,7 +367,6 @@ describe("renderer follow-up composition", () => {
 		act(() => {
 			sending = Promise.resolve(
 				h.result.current.onQueuedMessageSaved({
-					optimisticMessageId: "optimistic",
 					queuedMessage: row("q1"),
 				}),
 			);
@@ -429,5 +428,162 @@ describe("renderer follow-up composition", () => {
 			actionLabel: "Steer",
 			isActionDisabled: false,
 		});
+	});
+	it("keeps a pending deletion hidden across a newer server snapshot", async () => {
+		backend.rows = [row("q1"), row("q2")];
+		const deletion = deferred<null>();
+		backend.discard.mockReturnValue(deletion.promise);
+		const h = mount();
+		act(() => h.result.current.queuedFollowUps[0].onDelete());
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q2",
+		]);
+		backend.rows = [row("q1"), row("q2"), row("q3")];
+		h.rerender();
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q2",
+			"q3",
+		]);
+		await act(async () => {
+			deletion.reject(new Error("delete failed"));
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q1",
+			"q2",
+			"q3",
+		]);
+	});
+
+	it("does not resurrect a consumed row when a pending Delete fails", async () => {
+		backend.rows = [row("q1"), row("q2")];
+		const deletion = deferred<null>();
+		backend.discard.mockReturnValue(deletion.promise);
+		const h = mount();
+		act(() => h.result.current.queuedFollowUps[0].onDelete());
+		backend.rows = [row("q2")];
+		h.rerender();
+		await act(async () => {
+			deletion.reject(new Error("delete failed"));
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q2",
+		]);
+	});
+	it("keeps a pending reorder through insertion and rolls back only its survivors", async () => {
+		backend.rows = [row("q1"), row("q2"), row("q3")];
+		const reorder = deferred<null>();
+		backend.reorder.mockReturnValue(reorder.promise);
+		const h = mount();
+		act(() => h.result.current.onQueuedFollowUpsReorder(["q3", "q1", "q2"]));
+		backend.rows = [row("q1"), row("q2"), row("q3"), row("q4")];
+		h.rerender();
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q3",
+			"q1",
+			"q2",
+			"q4",
+		]);
+		backend.rows = [row("q1"), row("q3"), row("q4")];
+		h.rerender();
+		await act(async () => {
+			reorder.reject(new Error("reorder failed"));
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q1",
+			"q3",
+			"q4",
+		]);
+	});
+
+	it("preserves a newer external order when a local reorder fails", async () => {
+		backend.rows = [row("q1"), row("q2"), row("q3")];
+		const reorder = deferred<null>();
+		backend.reorder.mockReturnValue(reorder.promise);
+		const h = mount();
+		act(() => h.result.current.onQueuedFollowUpsReorder(["q3", "q1", "q2"]));
+		backend.rows = [row("q2"), row("q1"), row("q3")];
+		h.rerender();
+		await act(async () => {
+			reorder.reject(new Error("reorder failed"));
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q2",
+			"q1",
+			"q3",
+		]);
+	});
+
+	it("rolls back only the latest failed local reorder", async () => {
+		backend.rows = [row("q1"), row("q2"), row("q3")];
+		const first = deferred<null>();
+		const second = deferred<null>();
+		backend.reorder
+			.mockReturnValueOnce(first.promise)
+			.mockReturnValueOnce(second.promise);
+		const h = mount();
+		act(() => h.result.current.onQueuedFollowUpsReorder(["q3", "q1", "q2"]));
+		act(() => h.result.current.onQueuedFollowUpsReorder(["q2", "q3", "q1"]));
+		await act(async () => {
+			first.reject(new Error("old reorder failed"));
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q2",
+			"q3",
+			"q1",
+		]);
+		await act(async () => {
+			second.reject(new Error("new reorder failed"));
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q3",
+			"q1",
+			"q2",
+		]);
+	});
+
+	it("restores current server content when a Delete fails", async () => {
+		backend.rows = [row("q1"), row("q2")];
+		const deletion = deferred<null>();
+		backend.discard.mockReturnValue(deletion.promise);
+		const h = mount();
+		act(() => h.result.current.queuedFollowUps[0].onDelete());
+		backend.rows = [{ ...row("q1"), text: "Changed elsewhere" }, row("q2")];
+		h.rerender();
+		await act(async () => {
+			deletion.reject(new Error("delete failed"));
+		});
+		expect(h.result.current.queuedFollowUps[0].text).toBe("Changed elsewhere");
+	});
+
+	it("does not let an older edit completion clear a newer edit", () => {
+		backend.rows = [row("q1"), row("q2")];
+		const h = mount();
+		act(() => h.result.current.queuedFollowUps[0].onEdit());
+		const finishFirst = h.result.current.finishQueuedMessageEdit;
+		act(() => h.result.current.queuedFollowUps[0].onEdit());
+		let finished = true;
+		act(() => {
+			finished = finishFirst({ ...row("q1"), text: "Saved edit" });
+		});
+		expect(finished).toBe(false);
+		expect(h.result.current.editDraft?.message._id).toBe("q2");
+		expect(h.result.current.queuedFollowUps.map((item) => item.text)).toEqual([
+			"Saved edit",
+		]);
+	});
+
+	it("does not leave a queued editor draft hidden after navigation", () => {
+		backend.rows = [row("q1"), row("q2")];
+		const h = mount();
+		act(() => h.result.current.queuedFollowUps[0].onEdit());
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q2",
+		]);
+		h.unmount();
+		const next = mount();
+		expect(next.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"q1",
+			"q2",
+		]);
 	});
 });

@@ -129,7 +129,6 @@ export const submitChatTurn = async ({
 		requestBody: ChatRequestBody;
 	}) => void;
 	onQueuedMessageSaved?: (args: {
-		optimisticMessageId: string;
 		queuedMessage: QueuedFollowUpMessage;
 	}) => Promise<void> | void;
 	queueActiveRun?: ActiveRun;
@@ -181,7 +180,6 @@ export const submitChatTurn = async ({
 		}
 		if (queuedMessageId && onQueuedMessageSaved) {
 			await onQueuedMessageSaved({
-				optimisticMessageId: queuedMessageId,
 				queuedMessage,
 			});
 		}

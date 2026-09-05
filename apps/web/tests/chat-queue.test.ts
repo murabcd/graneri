@@ -9,13 +9,13 @@ import {
 } from "@/lib/chat-queue";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
+	applyQueuedFollowUpChange,
 	getQueuedFollowUpCacheKey,
 	type QueuedFollowUpMessage,
 	readQueuedFollowUpsCache,
+	reconcileQueuedFollowUpsCache,
 	resetQueuedFollowUpsCacheForTest,
 	subscribeQueuedFollowUpsCache,
-	updateQueuedFollowUpsCache,
-	writeQueuedFollowUpsCache,
 } from "../src/lib/chat-queued-followups";
 
 const workspaceId = "workspace-1" as Id<"workspaces">;
@@ -395,7 +395,7 @@ describe("queued follow-up lifecycle", () => {
 		});
 		const queuedMessage = createQueuedFollowUp("queued-1");
 
-		writeQueuedFollowUpsCache(cacheKey, [queuedMessage]);
+		reconcileQueuedFollowUpsCache(cacheKey, [queuedMessage]);
 
 		expect(readQueuedFollowUpsCache(cacheKey)).toEqual([queuedMessage]);
 		expect(readQueuedFollowUpsCache(otherCacheKey)).toEqual([]);
@@ -412,13 +412,17 @@ describe("queued follow-up lifecycle", () => {
 			notificationCount += 1;
 		});
 
-		writeQueuedFollowUpsCache(cacheKey, [createQueuedFollowUp("queued-1")]);
-		updateQueuedFollowUpsCache(cacheKey, (messages) => [
-			...messages,
+		reconcileQueuedFollowUpsCache(cacheKey, [
+			createQueuedFollowUp("queued-1"),
 			createQueuedFollowUp("queued-2"),
 		]);
+		applyQueuedFollowUpChange(cacheKey, {
+			type: "hide",
+			messageId: "queued-1",
+			restore: null,
+		});
 		unsubscribe();
-		writeQueuedFollowUpsCache(cacheKey, []);
+		reconcileQueuedFollowUpsCache(cacheKey, []);
 
 		expect(notificationCount).toBe(2);
 		expect(readQueuedFollowUpsCache(cacheKey)).toEqual([]);

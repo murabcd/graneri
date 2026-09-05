@@ -349,7 +349,6 @@ describe("chat submit session", () => {
 			}),
 		);
 		expect(onQueuedMessageSaved).toHaveBeenCalledWith({
-			optimisticMessageId: expect.stringMatching(/^queued-/),
 			queuedMessage: expect.objectContaining({
 				_id: "queued-message-1",
 				runId,
@@ -407,7 +406,6 @@ describe("chat submit session", () => {
 		expect(sendMessage).not.toHaveBeenCalled();
 		expect(onOptimisticMessage).not.toHaveBeenCalled();
 		expect(onQueuedMessageSaved).toHaveBeenCalledWith({
-			optimisticMessageId: expect.stringMatching(/^queued-/),
 			queuedMessage,
 		});
 	});
@@ -545,7 +543,6 @@ describe("chat submit session", () => {
 		expect(enqueueQueuedMessage).toHaveBeenCalledOnce();
 		expect(admitQueuedMessage).toHaveBeenCalledOnce();
 		expect(onQueuedMessageSaved).toHaveBeenCalledWith({
-			optimisticMessageId: expect.stringMatching(/^queued-/),
 			queuedMessage,
 		});
 		expect(onOptimisticMessage).not.toHaveBeenCalled();

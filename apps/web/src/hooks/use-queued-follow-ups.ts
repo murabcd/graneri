@@ -70,7 +70,7 @@ export const useQueuedFollowUps = ({
 		},
 		[updateUserPreferences],
 	);
-	const { queuedMessages, setQueuedMessages } = useQueuedChatDrain({
+	const { queuedMessages, changeQueuedMessages } = useQueuedChatDrain({
 		...input,
 		// Stopping runs still fence drain, even when row actions cannot attach.
 		activeRun,
@@ -88,17 +88,12 @@ export const useQueuedFollowUps = ({
 		isUpdatingFollowUpBehavior,
 		onFollowUpBehaviorChange,
 		queuedMessages,
-		setQueuedMessages,
+		changeQueuedMessages,
 	});
 	const onQueuedMessageSaved = React.useCallback<
 		NonNullable<Parameters<typeof submitChatTurn>[0]["onQueuedMessageSaved"]>
 	>(
-		async ({ optimisticMessageId, queuedMessage }) => {
-			setQueuedMessages((messages) =>
-				messages.map((message) =>
-					message._id === optimisticMessageId ? queuedMessage : message,
-				),
-			);
+		async ({ queuedMessage }) => {
 			if (
 				followUpBehavior === "steer" &&
 				(isChatRequestPending || queueActiveRun?.status === "running")
@@ -111,7 +106,6 @@ export const useQueuedFollowUps = ({
 			followUpBehavior,
 			isChatRequestPending,
 			queueActiveRun?.status,
-			setQueuedMessages,
 		],
 	);
 	return { ...controls, onQueuedMessageSaved };

@@ -4,12 +4,11 @@ import { toast } from "sonner";
 import type { QueuedFollowUpBarItem } from "@/components/chat/chat-queued-follow-up-bar";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import {
+	type QueuedFollowUpChange,
 	type QueuedFollowUpMessage,
 	type QueuedFollowUpOrderSnapshot,
 	type QueuedFollowUpSnapshot,
 	reorderQueuedFollowUps,
-	restoreQueuedFollowUp,
-	restoreQueuedFollowUpOrder,
 } from "@/lib/chat-queued-followups";
 import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
@@ -23,11 +22,6 @@ import type {
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-type SetQueuedMessages = (
-	updater: (
-		messages: Array<QueuedFollowUpMessage>,
-	) => Array<QueuedFollowUpMessage>,
-) => void;
 type QueuedMessageSendIntent = Exclude<
 	QueuedChatSendIntent,
 	{ type: "replay"; origin: "automatic" }
@@ -48,7 +42,7 @@ export const useQueuedFollowUpControls = ({
 	onFollowUpBehaviorChange,
 	queuedMessages,
 	sendMessage,
-	setQueuedMessages,
+	changeQueuedMessages,
 	workspaceId,
 }: {
 	session: QueuedChatSession;
@@ -65,7 +59,7 @@ export const useQueuedFollowUpControls = ({
 	onFollowUpBehaviorChange: (behavior: FollowUpBehavior) => void;
 	queuedMessages: Array<QueuedFollowUpMessage>;
 	sendMessage: QueuedChatSendMessage;
-	setQueuedMessages: SetQueuedMessages;
+	changeQueuedMessages: (change: QueuedFollowUpChange) => void;
 	workspaceId: Id<"workspaces"> | null | undefined;
 }) => {
 	const discardQueuedMessage = useMutation(
@@ -95,10 +89,10 @@ export const useQueuedFollowUpControls = ({
 		}
 
 		editingIdRef.current = null;
-		setQueuedMessages((messages) => restoreQueuedFollowUp(messages, editDraft));
+		changeQueuedMessages({ type: "restore", snapshot: editDraft });
 		setEditDraft(null);
 		setEditingId(null);
-	}, [editDraft, setQueuedMessages]);
+	}, [editDraft, changeQueuedMessages]);
 
 	const finishQueuedMessageEdit = React.useCallback(
 		(updatedQueuedMessage: QueuedFollowUpMessage) => {
@@ -106,12 +100,9 @@ export const useQueuedFollowUpControls = ({
 				return false;
 			}
 
-			setQueuedMessages((messages) => {
-				const nextMessages = messages.filter(
-					(message) => message._id !== updatedQueuedMessage._id,
-				);
-				nextMessages.splice(editDraft.index, 0, updatedQueuedMessage);
-				return nextMessages;
+			changeQueuedMessages({
+				type: "save",
+				snapshot: { index: editDraft.index, message: updatedQueuedMessage },
 			});
 
 			if (editingIdRef.current !== updatedQueuedMessage._id) {
@@ -129,7 +120,7 @@ export const useQueuedFollowUpControls = ({
 			);
 			return true;
 		},
-		[editDraft, setQueuedMessages],
+		[editDraft, changeQueuedMessages],
 	);
 	const isQueuedMessageEditCurrent = React.useCallback(
 		(queuedMessageId: string) => editingIdRef.current === queuedMessageId,
@@ -246,16 +237,7 @@ export const useQueuedFollowUpControls = ({
 		setIsResuming(true);
 		try {
 			await resumeInterruptedQueuedMessages({ workspaceId, chatId });
-			setQueuedMessages((messages) =>
-				messages.map((message) =>
-					message.status === "paused" && message.pauseReason === "interrupted"
-						? {
-								...message,
-								status: "queued",
-							}
-						: message,
-				),
-			);
+			changeQueuedMessages({ type: "resume" });
 		} catch (error) {
 			logError({
 				event: "client.error",
@@ -276,7 +258,7 @@ export const useQueuedFollowUpControls = ({
 		isResuming,
 		queuedMessages,
 		resumeInterruptedQueuedMessages,
-		setQueuedMessages,
+		changeQueuedMessages,
 		workspaceId,
 	]);
 
@@ -296,18 +278,14 @@ export const useQueuedFollowUpControls = ({
 				index: queuedMessageIndex,
 				message: queuedMessage,
 			});
-			setQueuedMessages((messages) => {
-				const nextMessages = editDraft
-					? restoreQueuedFollowUp(messages, editDraft)
-					: messages;
-
-				return nextMessages.filter(
-					(message) => message._id !== queuedMessage._id,
-				);
+			changeQueuedMessages({
+				type: "hide",
+				messageId: queuedMessage._id,
+				restore: editDraft,
 			});
 			onEditMessage(queuedMessage);
 		},
-		[editDraft, onEditMessage, queuedMessages, setQueuedMessages],
+		[editDraft, onEditMessage, queuedMessages, changeQueuedMessages],
 	);
 
 	const handleDelete = React.useCallback(
@@ -328,9 +306,11 @@ export const useQueuedFollowUpControls = ({
 				index: queuedMessageIndex,
 				message: queuedMessage,
 			};
-			setQueuedMessages((messages) =>
-				messages.filter((message) => message._id !== queuedMessage._id),
-			);
+			changeQueuedMessages({
+				type: "hide",
+				messageId: queuedMessage._id,
+				restore: null,
+			});
 			try {
 				await discardQueuedMessage({
 					workspaceId,
@@ -338,9 +318,7 @@ export const useQueuedFollowUpControls = ({
 					queuedMessageId: queuedMessage._id,
 				});
 			} catch (error) {
-				setQueuedMessages((messages) =>
-					restoreQueuedFollowUp(messages, snapshot),
-				);
+				changeQueuedMessages({ type: "restore", snapshot });
 				logError({
 					event: "client.error",
 					error,
@@ -358,7 +336,7 @@ export const useQueuedFollowUpControls = ({
 			contextLabel,
 			discardQueuedMessage,
 			queuedMessages,
-			setQueuedMessages,
+			changeQueuedMessages,
 			workspaceId,
 		],
 	);
@@ -381,7 +359,7 @@ export const useQueuedFollowUpControls = ({
 				optimisticIds: reorderedMessages.map((message) => message._id),
 				previousIds: queuedMessages.map((message) => message._id),
 			};
-			setQueuedMessages(() => reorderedMessages);
+			changeQueuedMessages({ type: "reorder", messageIds: queuedMessageIds });
 			const reorderOperation = latestReorderOperationRef.current + 1;
 			latestReorderOperationRef.current = reorderOperation;
 			void reorderQueuedMessages({
@@ -390,9 +368,10 @@ export const useQueuedFollowUpControls = ({
 				queuedMessageIds: reorderedMessages.map((message) => message._id),
 			}).catch((error) => {
 				if (latestReorderOperationRef.current === reorderOperation) {
-					setQueuedMessages((messages) =>
-						restoreQueuedFollowUpOrder(messages, rollbackSnapshot),
-					);
+					changeQueuedMessages({
+						type: "restore_order",
+						snapshot: rollbackSnapshot,
+					});
 				}
 				logError({
 					event: "client.error",
@@ -414,7 +393,7 @@ export const useQueuedFollowUpControls = ({
 			contextLabel,
 			queuedMessages,
 			reorderQueuedMessages,
-			setQueuedMessages,
+			changeQueuedMessages,
 			workspaceId,
 		],
 	);
