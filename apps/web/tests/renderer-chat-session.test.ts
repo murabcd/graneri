@@ -1,7 +1,6 @@
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
-	isRendererQueueActionPending,
 	mergeRendererChatSessionMessages,
 	prepareRendererUserQuestionMessages,
 	resolveRendererChatRunState,
@@ -19,30 +18,6 @@ const message = (
 });
 
 describe("renderer chat session", () => {
-	it("withholds replay while a continuation request has no attached queue run", () => {
-		expect(
-			isRendererQueueActionPending({
-				isAcceptedHandoffPending: false,
-				isChatRequestPending: true,
-				queueActiveRunId: null,
-			}),
-		).toBe(true);
-		expect(
-			isRendererQueueActionPending({
-				isAcceptedHandoffPending: false,
-				isChatRequestPending: true,
-				queueActiveRunId: "run-2",
-			}),
-		).toBe(false);
-		expect(
-			isRendererQueueActionPending({
-				isAcceptedHandoffPending: false,
-				isChatRequestPending: false,
-				queueActiveRunId: null,
-			}),
-		).toBe(false);
-	});
-
 	it("hides a stale durable run after its assistant message completes locally", () => {
 		const assistantMessage = message("assistant-1", "assistant", "Complete");
 

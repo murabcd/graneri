@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useQueuedFollowUpControls } from "../src/hooks/use-queued-follow-up-controls";
 import type { QueuedFollowUpMessage } from "../src/lib/chat-queued-followups";
+import { createQueuedChatSession } from "../src/lib/queued-chat-session";
 
 const convexMocks = vi.hoisted(() => ({
 	discardQueued: vi.fn(),
@@ -29,8 +30,7 @@ vi.mock("convex/react", () => ({
 
 const workspaceId = "workspace-1" as Id<"workspaces">;
 const runId = "run-1" as Id<"assistantRuns">;
-const acceptedQueuedMessageIdsRef = { current: new Set<string>() };
-const sendingQueuedMessageIdRef = { current: null as string | null };
+let session = createQueuedChatSession("workspace-1:chat-1");
 
 const createDeferredRejection = <T,>() => {
 	let reject: (reason?: unknown) => void = () => {};
@@ -81,17 +81,16 @@ const renderQueuedMutationControls = ({
 }: ReturnType<typeof createQueuedMessagesHarness>) =>
 	renderHook(() =>
 		useQueuedFollowUpControls({
-			acceptedQueuedMessageIdsRef,
-			acceptedQueuedMessageId: null,
+			session,
 			activeRun: { _id: runId, status: "running" },
-			beginReplay: () => () => undefined,
 			chatId: "chat-1",
 			contextLabel: "chat",
 			followUpBehavior: "queue",
+			isQueueHandoffPending: false,
 			isUpdatingFollowUpBehavior: false,
 			latestRequestBodyRef: { current: null },
 			localMessageIds: new Set(),
-			sendingQueuedMessageIdRef,
+			steerMessageIds: [],
 			onEditMessage: vi.fn(),
 			onFollowUpBehaviorChange: vi.fn(),
 			queuedMessages: state.messages,
@@ -106,8 +105,7 @@ describe("queued follow-up optimistic controls", () => {
 		convexMocks.discardQueued.mockReset().mockResolvedValue(null);
 		convexMocks.reorderQueuedForChat.mockReset().mockResolvedValue(null);
 		convexMocks.resumeInterruptedForChat.mockReset().mockResolvedValue(null);
-		acceptedQueuedMessageIdsRef.current.clear();
-		sendingQueuedMessageIdRef.current = null;
+		session = createQueuedChatSession("workspace-1:chat-1");
 	});
 
 	it("restores a failed optimistic deletion at its exact position", async () => {

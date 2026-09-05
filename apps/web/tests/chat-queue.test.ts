@@ -13,7 +13,6 @@ import {
 	type QueuedFollowUpMessage,
 	readQueuedFollowUpsCache,
 	resetQueuedFollowUpsCacheForTest,
-	shouldDrainQueuedFollowUp,
 	subscribeQueuedFollowUpsCache,
 	updateQueuedFollowUpsCache,
 	writeQueuedFollowUpsCache,
@@ -423,62 +422,5 @@ describe("queued follow-up lifecycle", () => {
 
 		expect(notificationCount).toBe(2);
 		expect(readQueuedFollowUpsCache(cacheKey)).toEqual([]);
-	});
-
-	it("drains only when a workspace has queued work and no active blocker", () => {
-		expect(
-			shouldDrainQueuedFollowUp({
-				activeRun: null,
-				hasQueuedMessage: true,
-				isBlocked: false,
-				isDraining: false,
-				workspaceId,
-			}),
-		).toBe(true);
-		expect(
-			shouldDrainQueuedFollowUp({
-				activeRun: { _id: "run-1" },
-				hasQueuedMessage: true,
-				isBlocked: false,
-				isDraining: false,
-				workspaceId,
-			}),
-		).toBe(false);
-		expect(
-			shouldDrainQueuedFollowUp({
-				activeRun: null,
-				hasQueuedMessage: false,
-				isBlocked: false,
-				isDraining: false,
-				workspaceId,
-			}),
-		).toBe(false);
-		expect(
-			shouldDrainQueuedFollowUp({
-				activeRun: null,
-				hasQueuedMessage: true,
-				isBlocked: true,
-				isDraining: false,
-				workspaceId,
-			}),
-		).toBe(false);
-		expect(
-			shouldDrainQueuedFollowUp({
-				activeRun: null,
-				hasQueuedMessage: true,
-				isBlocked: false,
-				isDraining: true,
-				workspaceId,
-			}),
-		).toBe(false);
-		expect(
-			shouldDrainQueuedFollowUp({
-				activeRun: null,
-				hasQueuedMessage: true,
-				isBlocked: false,
-				isDraining: false,
-				workspaceId: null,
-			}),
-		).toBe(false);
 	});
 });

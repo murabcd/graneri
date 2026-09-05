@@ -7,7 +7,6 @@ import {
 	QUEUED_FOLLOW_UP_DRAIN_RETRY_MS,
 	type QueuedFollowUpMessage,
 	readQueuedFollowUpsCache,
-	shouldDrainQueuedFollowUp,
 	subscribeQueuedFollowUpsCache,
 	updateQueuedFollowUpsCache,
 	writeQueuedFollowUpsCache,
@@ -15,19 +14,14 @@ import {
 import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import { logError } from "@/lib/logger";
-import {
-	type BeginQueuedChatReplay,
-	drainQueuedChatMessage,
-	type QueuedChatSendMessage,
-} from "@/lib/queued-chat-intent";
+import type { QueuedChatSendMessage } from "@/lib/queued-chat-intent";
+import type { QueuedChatSession } from "@/lib/queued-chat-session";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export const useQueuedChatDrain = ({
-	acceptedQueuedMessageId,
-	acceptedQueuedMessageIdsRef,
+	session,
 	activeRun,
-	beginReplay,
 	chatId,
 	contextLabel,
 	isBlocked,
@@ -36,10 +30,8 @@ export const useQueuedChatDrain = ({
 	sendMessage,
 	workspaceId,
 }: {
-	acceptedQueuedMessageId: string | null;
-	acceptedQueuedMessageIdsRef: React.MutableRefObject<Set<string>>;
+	session: QueuedChatSession;
 	activeRun: AttachableAssistantRunQueryResult;
-	beginReplay: BeginQueuedChatReplay;
 	chatId: string;
 	contextLabel: string;
 	isBlocked: boolean;
@@ -70,7 +62,11 @@ export const useQueuedChatDrain = ({
 		getVisibleQueuedMessagesSnapshot,
 		getVisibleQueuedMessagesSnapshot,
 	);
-	const isDrainingQueuedMessageRef = React.useRef(false);
+	const { acceptedIds } = React.useSyncExternalStore(
+		session.subscribe,
+		session.getSnapshot,
+		session.getSnapshot,
+	);
 	const retryTimerRef = React.useRef<number | null>(null);
 	const isMountedRef = React.useRef(true);
 	const [retryNonce, setRetryNonce] = React.useState(0);
@@ -82,25 +78,10 @@ export const useQueuedChatDrain = ({
 
 		writeQueuedFollowUpsCache(
 			queuedMessagesCacheKey,
-			queuedMessages.filter(
-				(message) =>
-					message._id !== acceptedQueuedMessageId &&
-					!acceptedQueuedMessageIdsRef.current.has(message._id),
-			),
+			queuedMessages.filter((message) => !acceptedIds.has(message._id)),
 		);
-		for (const acceptedMessageId of acceptedQueuedMessageIdsRef.current) {
-			if (
-				!queuedMessages.some((message) => message._id === acceptedMessageId)
-			) {
-				acceptedQueuedMessageIdsRef.current.delete(acceptedMessageId);
-			}
-		}
-	}, [
-		acceptedQueuedMessageId,
-		acceptedQueuedMessageIdsRef,
-		queuedMessages,
-		queuedMessagesCacheKey,
-	]);
+		session.reconcileAccepted(queuedMessages);
+	}, [acceptedIds, session, queuedMessages, queuedMessagesCacheKey]);
 
 	const updateVisibleQueuedMessages = React.useCallback(
 		(
@@ -143,82 +124,46 @@ export const useQueuedChatDrain = ({
 		// The queue is ordered server-side: a paused or failed head must block later
 		// rows until the user resolves it, rather than letting the drain skip ahead.
 		const queueHead =
-			queuedMessages?.find(
-				(message) =>
-					message._id !== acceptedQueuedMessageId &&
-					!acceptedQueuedMessageIdsRef.current.has(message._id),
-			) ?? null;
+			queuedMessages?.find((message) => !acceptedIds.has(message._id)) ?? null;
 		const queuedMessage = queueHead?.status === "queued" ? queueHead : null;
 
-		if (
-			!shouldDrainQueuedFollowUp({
-				activeRun,
-				hasQueuedMessage: Boolean(queuedMessage),
-				isBlocked,
-				isDraining: isDrainingQueuedMessageRef.current,
-				workspaceId,
-			})
-		) {
-			return;
-		}
-		// Queue draining is driven by external run/queue state, not a local UI event.
-		if (!workspaceId) {
-			return;
-		}
+		if (!workspaceId || activeRun || isBlocked || !queuedMessage) return;
 
-		isDrainingQueuedMessageRef.current = true;
 		void (async () => {
-			try {
-				const drainResult = await drainQueuedChatMessage({
-					beginReplay,
-					// Local message ids come from the live chat state used to de-dupe drains.
+			const drainResult = await session.send(
+				{ type: "replay", origin: "automatic", queuedMessage },
+				{
 					hasMessageId: (messageId) => localMessageIds.has(messageId),
-					queuedMessage,
 					resolveConvexToken: getCachedConvexToken,
-					// Sending hands the visible queue id to the hosted route for claiming.
 					sendMessage,
 					setLatestRequestBody: (body) => {
-						// Latest request body is stored for the next queued drain handoff.
 						latestRequestBodyRef.current = body;
 					},
-				});
-				if (drainResult.status === "retry") {
-					scheduleRetry();
-					return;
-				}
+					steerMessageIds: [],
+				},
+			);
+			if (drainResult.status === "retry") {
+				scheduleRetry();
+				return;
+			}
 
-				if (drainResult.status === "send_failed") {
-					logError({
-						event: "client.error",
-						error: drainResult.error,
-						message: `Failed to drain queued ${contextLabel} message`,
-					});
-					toast.error(
-						drainResult.error instanceof Error
-							? drainResult.error.message
-							: "Failed to send queued follow-up",
-					);
-				}
-			} catch (error) {
+			if (drainResult.status === "failed") {
 				logError({
 					event: "client.error",
-					error,
+					error: drainResult.error,
 					message: `Failed to drain queued ${contextLabel} message`,
 				});
 				toast.error(
-					error instanceof Error
-						? error.message
+					drainResult.error instanceof Error
+						? drainResult.error.message
 						: "Failed to send queued follow-up",
 				);
-			} finally {
-				isDrainingQueuedMessageRef.current = false;
 			}
 		})();
 	}, [
-		acceptedQueuedMessageId,
-		acceptedQueuedMessageIdsRef,
+		acceptedIds,
+		session,
 		activeRun,
-		beginReplay,
 		contextLabel,
 		isBlocked,
 		latestRequestBodyRef,

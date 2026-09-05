@@ -13,10 +13,6 @@ type AutomaticallyReplayableQueuedMessage = Extract<
 >;
 type PreparedQueuedMessage = Awaited<ReturnType<typeof fromQueuedUserMessage>>;
 
-export type BeginQueuedChatReplay = (
-	queuedMessage: Pick<QueuedMessage, "_id">,
-) => () => void;
-
 export type QueuedChatSendMessage = (
 	message: PreparedQueuedMessage["message"],
 	options: { body: ChatRequestContext },
@@ -86,77 +82,4 @@ export const prepareQueuedSteerIntent = async ({
 		},
 		message: preparedQueuedMessage.message,
 	};
-};
-
-export const sendQueuedChatReplay = async (
-	args: PrepareQueuedReplayIntentArgs & {
-		beginReplay: BeginQueuedChatReplay;
-		sendMessage: QueuedChatSendMessage;
-		setLatestRequestBody: (body: ChatRequestContext) => void;
-	},
-) => {
-	const { beginReplay, sendMessage, setLatestRequestBody, ...prepareArgs } =
-		args;
-	const preparedQueuedMessage = await prepareQueuedReplayIntent(prepareArgs);
-	setLatestRequestBody(preparedQueuedMessage.body);
-	const finishReplay = beginReplay(args.queuedMessage);
-	try {
-		await sendMessage(preparedQueuedMessage.message, {
-			body: preparedQueuedMessage.body,
-		});
-	} finally {
-		finishReplay();
-	}
-};
-
-type DrainQueuedChatMessageArgs = {
-	beginReplay: BeginQueuedChatReplay;
-	hasMessageId: (messageId: string) => boolean;
-	queuedMessage: AutomaticallyReplayableQueuedMessage | null;
-	resolveConvexToken: () => Promise<string | null>;
-	sendMessage: QueuedChatSendMessage;
-	setLatestRequestBody: (body: ChatRequestContext) => void;
-};
-
-type DrainQueuedChatMessageResult =
-	| { status: "idle" | "retry" | "sent" }
-	| {
-			error: unknown;
-			status: "send_failed";
-	  };
-
-export const drainQueuedChatMessage = async ({
-	beginReplay,
-	hasMessageId,
-	queuedMessage,
-	resolveConvexToken,
-	sendMessage,
-	setLatestRequestBody,
-}: DrainQueuedChatMessageArgs): Promise<DrainQueuedChatMessageResult> => {
-	const convexToken = await resolveConvexToken();
-	if (!convexToken) {
-		return { status: "retry" };
-	}
-
-	if (!queuedMessage) {
-		return { status: "idle" };
-	}
-
-	try {
-		await sendQueuedChatReplay({
-			beginReplay,
-			hasMessageId,
-			origin: "automatic",
-			queuedMessage,
-			resolveConvexToken: async () => convexToken,
-			sendMessage,
-			setLatestRequestBody,
-		});
-		return { status: "sent" };
-	} catch (error) {
-		return {
-			error,
-			status: "send_failed",
-		};
-	}
 };

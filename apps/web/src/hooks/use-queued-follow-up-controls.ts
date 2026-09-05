@@ -15,12 +15,11 @@ import type { ChatRequestContext } from "@/lib/chat-request-preparation";
 import { getCachedConvexToken } from "@/lib/convex-token";
 import type { FollowUpBehavior } from "@/lib/follow-up-behavior";
 import { logError } from "@/lib/logger";
-import {
-	type BeginQueuedChatReplay,
-	prepareQueuedSteerIntent,
-	type QueuedChatSendMessage,
-	sendQueuedChatReplay,
-} from "@/lib/queued-chat-intent";
+import type { QueuedChatSendMessage } from "@/lib/queued-chat-intent";
+import type {
+	QueuedChatSendIntent,
+	QueuedChatSession,
+} from "@/lib/queued-chat-session";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
@@ -29,29 +28,22 @@ type SetQueuedMessages = (
 		messages: Array<QueuedFollowUpMessage>,
 	) => Array<QueuedFollowUpMessage>,
 ) => void;
-type QueuedMessageSendIntent =
-	| { type: "replay"; queuedMessage: QueuedFollowUpMessage }
-	| {
-			type: "steer";
-			origin: "automatic" | "manual";
-			queuedMessage: QueuedFollowUpMessage;
-			runId: Id<"assistantRuns">;
-	  };
+type QueuedMessageSendIntent = Exclude<
+	QueuedChatSendIntent,
+	{ type: "replay"; origin: "automatic" }
+>;
 
 export const useQueuedFollowUpControls = ({
-	acceptedQueuedMessageIdsRef,
-	acceptedQueuedMessageId,
+	session,
 	activeRun,
-	beginReplay,
 	chatId,
 	contextLabel,
-	isQueueHandoffPending = false,
+	isQueueHandoffPending,
 	followUpBehavior,
 	isUpdatingFollowUpBehavior,
 	latestRequestBodyRef,
 	localMessageIds,
-	sendingQueuedMessageIdRef,
-	onSteerStart,
+	steerMessageIds,
 	onEditMessage,
 	onFollowUpBehaviorChange,
 	queuedMessages,
@@ -59,19 +51,16 @@ export const useQueuedFollowUpControls = ({
 	setQueuedMessages,
 	workspaceId,
 }: {
-	acceptedQueuedMessageIdsRef: React.MutableRefObject<Set<string>>;
-	acceptedQueuedMessageId: string | null;
+	session: QueuedChatSession;
 	activeRun: AttachableAssistantRunQueryResult;
-	beginReplay: BeginQueuedChatReplay;
 	chatId: string;
 	contextLabel: string;
-	isQueueHandoffPending?: boolean;
+	isQueueHandoffPending: boolean;
 	followUpBehavior: FollowUpBehavior;
 	isUpdatingFollowUpBehavior: boolean;
 	latestRequestBodyRef: React.MutableRefObject<ChatRequestContext | null>;
 	localMessageIds: ReadonlySet<string>;
-	sendingQueuedMessageIdRef: React.MutableRefObject<string | null>;
-	onSteerStart?: () => (() => void) | undefined;
+	steerMessageIds: readonly string[];
 	onEditMessage: (message: QueuedFollowUpMessage) => void;
 	onFollowUpBehaviorChange: (behavior: FollowUpBehavior) => void;
 	queuedMessages: Array<QueuedFollowUpMessage>;
@@ -88,13 +77,12 @@ export const useQueuedFollowUpControls = ({
 	const resumeInterruptedQueuedMessages = useMutation(
 		api.assistantQueuedMessages.resumeInterruptedForChat,
 	);
-	const [pendingSendingNowId, setPendingSendingNowId] = React.useState<
-		string | null
-	>(null);
-	const sendingNowId =
-		pendingSendingNowId === acceptedQueuedMessageId
-			? null
-			: pendingSendingNowId;
+	const { sending } = React.useSyncExternalStore(
+		session.subscribe,
+		session.getSnapshot,
+		session.getSnapshot,
+	);
+	const sendingNowId = sending?.type === "row_action" ? sending.id : null;
 	const [isResuming, setIsResuming] = React.useState(false);
 	const [editingId, setEditingId] = React.useState<string | null>(null);
 	const [editDraft, setEditDraft] =
@@ -151,7 +139,6 @@ export const useQueuedFollowUpControls = ({
 	const sendQueuedMessage = React.useCallback(
 		async (intent: QueuedMessageSendIntent) => {
 			const { queuedMessage } = intent;
-			const queuedMessageId = queuedMessage._id;
 			if (!workspaceId) {
 				return;
 			}
@@ -161,84 +148,45 @@ export const useQueuedFollowUpControls = ({
 			) {
 				return;
 			}
-			if (sendingQueuedMessageIdRef.current !== null) {
+			if (
+				queuedMessage.status === "paused" &&
+				queuedMessage.pauseReason === "interrupted"
+			)
 				return;
-			}
-			sendingQueuedMessageIdRef.current = queuedMessageId;
-			setPendingSendingNowId(queuedMessageId);
-			let rollbackSteerStart: (() => void) | undefined;
-			try {
-				if (
-					queuedMessage.status === "paused" &&
-					queuedMessage.pauseReason === "interrupted"
-				) {
-					return;
-				}
-				if (intent.type === "replay") {
-					await sendQueuedChatReplay({
-						beginReplay,
-						hasMessageId: (messageId) => localMessageIds.has(messageId),
-						origin: "manual",
-						queuedMessage,
-						resolveConvexToken: getCachedConvexToken,
-						sendMessage,
-						setLatestRequestBody: (body) => {
-							latestRequestBodyRef.current = body;
-						},
-					});
-					return;
-				}
-				if (queuedMessage.status !== "queued") {
-					return;
-				}
-
-				const preparedQueuedIntent = await prepareQueuedSteerIntent({
-					activeRunId: intent.runId,
-					hasMessageId: (messageId) => localMessageIds.has(messageId),
-					queuedMessage,
-					resolveConvexToken: getCachedConvexToken,
-				});
-				latestRequestBodyRef.current = preparedQueuedIntent.body;
-				rollbackSteerStart = onSteerStart?.();
-				await sendMessage(preparedQueuedIntent.message, {
-					body: preparedQueuedIntent.body,
-				});
-			} catch (error) {
-				const wasAccepted =
-					acceptedQueuedMessageIdsRef.current.has(queuedMessageId);
-				if (!wasAccepted) {
-					rollbackSteerStart?.();
-				}
+			if (intent.type === "steer" && queuedMessage.status !== "queued") return;
+			const result = await session.send(intent, {
+				hasMessageId: (messageId) => localMessageIds.has(messageId),
+				resolveConvexToken: getCachedConvexToken,
+				sendMessage,
+				setLatestRequestBody: (body) => {
+					latestRequestBodyRef.current = body;
+				},
+				steerMessageIds,
+			});
+			if (result.status === "failed") {
 				logError({
 					event: "client.error",
-					error,
-					message: wasAccepted
+					error: result.error,
+					message: result.accepted
 						? `Queued ${contextLabel} message was accepted, but its response stream failed`
 						: `Failed to send queued ${contextLabel} message now`,
 				});
 				toast.error(
-					wasAccepted
+					result.accepted
 						? "Queued message was accepted, but its response stream disconnected."
-						: error instanceof Error
-							? error.message
+						: result.error instanceof Error
+							? result.error.message
 							: "Failed to send queued message now",
 				);
-			} finally {
-				if (sendingQueuedMessageIdRef.current === queuedMessageId) {
-					sendingQueuedMessageIdRef.current = null;
-					setPendingSendingNowId(null);
-				}
 			}
 		},
 		[
-			acceptedQueuedMessageIdsRef,
-			beginReplay,
+			session,
 			contextLabel,
 			isQueueHandoffPending,
 			latestRequestBodyRef,
 			localMessageIds,
-			sendingQueuedMessageIdRef,
-			onSteerStart,
+			steerMessageIds,
 			sendMessage,
 			workspaceId,
 		],
@@ -266,7 +214,7 @@ export const useQueuedFollowUpControls = ({
 							queuedMessage,
 							runId: activeRun._id,
 						}
-					: { type: "replay", queuedMessage },
+					: { type: "replay", origin: "manual", queuedMessage },
 			);
 		},
 		[activeRun, queuedMessages, sendQueuedMessage],

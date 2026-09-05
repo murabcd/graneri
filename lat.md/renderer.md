@@ -72,6 +72,18 @@ before persisted messages enter the controller. Persisted/external/local stop
 ordering enters through `chat-interaction-session.ts`. Chat surfaces provide
 request-body and presentation adapters, but must not maintain parallel pending,
 optimistic-message, queued-edit, or branch-replacement state.
+[[apps/web/src/lib/queued-chat-session.ts]] owns each mounted chat's follow-up
+send reservation, accepted-input identity, replay successor handoff, and steer
+presentation rollback. Manual row actions and automatic FIFO replay cross that
+same session; acceptance releases its send reservation atomically and remains
+attached to the request even after reactive queue rows disappear. The transport
+reports receipts directly to the scoped owner. Its React binding,
+[[apps/web/src/hooks/use-queued-chat-session.ts]], observes committed run state
+and disconnects the old owner on navigation. [[apps/web/src/hooks/use-queued-follow-ups.ts]]
+composes drain, row controls, and follow-up preference behavior behind that
+owner; the renderer chat session must not reconstruct their acceptance sets,
+send locks, or replay-start ordering. Automatic replay retains its existing
+presentation without the pending indicator used by explicit row actions.
 `chat-composer-turn-intent.ts` owns the recoverable commit boundary above those
 commands. It prepares one semantic turn, chooses queued-edit or new-turn
 submission, runs request-prepared effects, fences stale queued edits, and

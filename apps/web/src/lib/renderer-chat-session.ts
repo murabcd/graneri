@@ -30,18 +30,6 @@ export const resolveRendererQueueActiveRun = <
 	isAiRequestPending: boolean;
 }) => displayActiveRun ?? (isAiRequestPending ? activeRun : null);
 
-export const isRendererQueueActionPending = ({
-	isAcceptedHandoffPending,
-	isChatRequestPending,
-	queueActiveRunId,
-}: {
-	isAcceptedHandoffPending: boolean;
-	isChatRequestPending: boolean;
-	queueActiveRunId: string | null;
-}) =>
-	isAcceptedHandoffPending ||
-	(isChatRequestPending && queueActiveRunId === null);
-
 const hasHostedUserQuestionOutput = (messages: UIMessage[]) =>
 	messages
 		.at(-1)

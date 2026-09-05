@@ -10,6 +10,7 @@ import * as React from "react";
 import type { QueuedReplayOrigin } from "@/lib/chat-request-preparation";
 import { prepareChatReconnectToStreamRequest } from "@/lib/chat-resume";
 import { FrameBudgetedChatTransport } from "@/lib/frame-budgeted-chat-transport";
+import type { QueuedChatAcceptance } from "@/lib/queued-chat-session";
 import {
 	getChatApiUrl,
 	getChatStreamApiUrl,
@@ -21,11 +22,6 @@ type ChatTransportRoutingBody = {
 	replayQueuedMessageOrigin?: QueuedReplayOrigin;
 	replayQueuedMessageStatus?: "paused" | "queued";
 	steerQueuedMessageId?: string;
-};
-
-export type QueuedChatAcceptance = {
-	queuedMessageId: string;
-	type: "replay" | "steer";
 };
 
 type QueuedReplayRequestBody = {

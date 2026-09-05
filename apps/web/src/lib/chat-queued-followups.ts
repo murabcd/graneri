@@ -172,25 +172,6 @@ export const subscribeQueuedFollowUpsCache = (
 	};
 };
 
-export const shouldDrainQueuedFollowUp = ({
-	activeRun,
-	hasQueuedMessage,
-	isBlocked,
-	isDraining,
-	workspaceId,
-}: {
-	activeRun: unknown;
-	hasQueuedMessage: boolean;
-	isBlocked: boolean;
-	isDraining: boolean;
-	workspaceId: Id<"workspaces"> | null | undefined;
-}) =>
-	Boolean(workspaceId) &&
-	hasQueuedMessage &&
-	!activeRun &&
-	!isBlocked &&
-	!isDraining;
-
 export const resetQueuedFollowUpsCacheForTest = () => {
 	queuedFollowUpsCache.clear();
 	queuedFollowUpsCacheListeners.clear();
