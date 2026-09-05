@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { FunctionReturnType } from "convex/server";
+import { Suspense } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -27,6 +28,15 @@ const resolvedResult: PeopleDirectoryResult = {
 		},
 	],
 };
+
+const pendingRender = new Promise<never>(() => {});
+
+function SuspendRender({ suspend }: { suspend: boolean }) {
+	if (suspend) {
+		throw pendingRender;
+	}
+	return null;
+}
 
 describe("PeopleDirectoryPage", () => {
 	let peopleResult: PeopleDirectoryResult | undefined;
@@ -84,5 +94,31 @@ describe("PeopleDirectoryPage", () => {
 
 		expect(screen.queryByText("Alice Example")).toBeNull();
 		expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
+	});
+
+	it("retains only committed results when a render suspends", () => {
+		const directory = (suspend: boolean) => (
+			<Suspense fallback={<p>Loading</p>}>
+				<PeopleDirectoryPage
+					isDesktopMac={false}
+					workspaceId={primaryWorkspaceId}
+				/>
+				<SuspendRender suspend={suspend} />
+			</Suspense>
+		);
+		const view = render(directory(false));
+		expect(screen.getByText("Alice Example")).not.toBeNull();
+
+		peopleResult = {
+			hasMore: false,
+			people: [{ displayName: "Bob Example", email: "bob@example.com" }],
+		};
+		view.rerender(directory(true));
+		expect(screen.getByText("Loading")).not.toBeNull();
+
+		peopleResult = undefined;
+		view.rerender(directory(false));
+		expect(screen.getByText("Alice Example")).not.toBeNull();
+		expect(screen.queryByText("Bob Example")).toBeNull();
 	});
 });

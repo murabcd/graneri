@@ -184,9 +184,11 @@ function useRetainedDirectoryResult<Result>(
 		workspaceId: Id<"workspaces">;
 	} | null>(null);
 
-	if (workspaceId && result !== undefined) {
-		resolvedSnapshotRef.current = { result, workspaceId };
-	}
+	React.useLayoutEffect(() => {
+		if (workspaceId && result !== undefined) {
+			resolvedSnapshotRef.current = { result, workspaceId };
+		}
+	}, [result, workspaceId]);
 
 	return result !== undefined
 		? result
