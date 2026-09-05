@@ -49,6 +49,7 @@ export const upsertCalendarAttendeeBatch = internalMutation({
 		for (const attendee of attendees) {
 			await getOrCreatePerson({
 				attendee,
+				source: "calendar",
 				ctx,
 				now,
 				ownerTokenIdentifier: args.ownerTokenIdentifier,

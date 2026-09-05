@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { getCalendarEventKey } from "./calendarNoteRelationships";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -360,4 +360,249 @@ test("ambiguous person searches report omitted canonical identities", async () =
 	expect(result.hasMore).toBe(true);
 	expect(result.matchedPeople).toHaveLength(5);
 	expect(result.meetings).toHaveLength(5);
+});
+
+test.each([
+	"before",
+	"after",
+] as const)("calendar discovery %s note creation retains the same Person after last-note deletion", async (discoveryOrder) => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const event = createEvent({
+		id: "calendar-retention",
+		startAt: "2026-09-05T10:00:00.000Z",
+		title: "Calendar retention",
+	});
+	const ingest = () =>
+		t.mutation(internal.people.upsertCalendarAttendeeBatch, {
+			attendees: event.attendees.map((attendee) => ({
+				...attendee,
+				displayName: undefined,
+			})),
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			workspaceId,
+		});
+	if (discoveryOrder === "before") await ingest();
+	const noteId = await createCalendarNote({ asOwner, event, workspaceId });
+	const originalPeople = await t.run((ctx) => ctx.db.query("people").take(10));
+	if (discoveryOrder === "after") await ingest();
+	const discoveredPeople = await t.run((ctx) =>
+		ctx.db.query("people").take(10),
+	);
+	expect(discoveredPeople.map((person) => person._id)).toEqual(
+		originalPeople.map((person) => person._id),
+	);
+	for (const person of discoveredPeople) {
+		expect(person.calendarDiscoveredAt).toEqual(expect.any(Number));
+	}
+
+	// Reuse from another note and another sync must not reset discovery.
+	const secondNoteId = await createCalendarNote({
+		asOwner,
+		event: {
+			...event,
+			id: "calendar-retention-second",
+			providerEventId: "calendar-retention-second",
+		},
+		workspaceId,
+	});
+	await ingest();
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: noteId });
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: secondNoteId });
+	expect(await t.run((ctx) => ctx.db.query("people").take(10))).toEqual(
+		discoveredPeople,
+	);
+	expect(
+		await asOwner.query(api.people.listForPicker, {
+			workspaceId,
+			query: "mark",
+		}),
+	).toEqual({
+		hasMore: false,
+		people: [{ displayName: "Mark Stone", email: "mark@acme.com" }],
+	});
+	expect(
+		await asOwner.query(api.relationshipDirectory.listPeople, {
+			workspaceId,
+			query: "mark",
+			paginationOpts: { cursor: null, numItems: 100 },
+		}),
+	).toMatchObject({
+		page: [],
+		isDone: true,
+	});
+	expect(await t.run((ctx) => ctx.db.query("companies").take(10))).toEqual([]);
+	expect(
+		await asOwner.query(api.relationshipDirectory.listCompanies, {
+			workspaceId,
+			query: "acme",
+			paginationOpts: { cursor: null, numItems: 100 },
+		}),
+	).toMatchObject({
+		page: [],
+		isDone: true,
+	});
+	expect(
+		await asOwner.query(api.meetingRelationships.searchMeetingNotes, {
+			workspaceId,
+			query: "mark",
+		}),
+	).toMatchObject({ meetings: [] });
+});
+
+test("note-only People remain while an archived note references them and retire with the final note", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const event = createEvent({
+		id: "first-reference",
+		startAt: "2026-09-05T10:00:00.000Z",
+		title: "First reference",
+	});
+	const firstNoteId = await createCalendarNote({ asOwner, event, workspaceId });
+	const secondNoteId = await createCalendarNote({
+		asOwner,
+		event: {
+			...event,
+			id: "last-reference",
+			providerEventId: "last-reference",
+		},
+		workspaceId,
+	});
+	const people = await t.run((ctx) => ctx.db.query("people").take(10));
+	expect(people).toHaveLength(2);
+	for (const person of people)
+		expect(person.calendarDiscoveredAt).toBeUndefined();
+	await asOwner.mutation(api.notes.moveToTrash, {
+		workspaceId,
+		id: secondNoteId,
+	});
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: firstNoteId });
+	expect(await t.run((ctx) => ctx.db.query("people").take(10))).toEqual(people);
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: secondNoteId });
+	expect(await t.run((ctx) => ctx.db.query("people").take(10))).toEqual([]);
+
+	await t.mutation(internal.people.upsertCalendarAttendeeBatch, {
+		attendees: event.attendees,
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+	});
+	expect(
+		await asOwner.query(api.people.listForPicker, {
+			workspaceId,
+			query: "mark",
+		}),
+	).toMatchObject({
+		people: [{ email: "mark@acme.com", displayName: "Mark Stone" }],
+	});
+});
+
+test("calendar provenance is isolated to the Person's owner and workspace", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const event = createEvent({
+		id: "isolated-retention",
+		startAt: "2026-09-05T10:00:00.000Z",
+		title: "Isolated retention",
+	});
+	await t.mutation(internal.people.upsertCalendarAttendeeBatch, {
+		attendees: event.attendees,
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+	});
+	const retainedPeople = await t.run((ctx) => ctx.db.query("people").take(10));
+	for (const identity of [ownerIdentity, otherIdentity]) {
+		const otherWorkspaceId = await t.run((ctx) =>
+			ctx.db.insert("workspaces", {
+				ownerTokenIdentifier: identity.tokenIdentifier,
+				name: "Other workspace",
+				normalizedName: "other workspace",
+				createdAt: 1_000,
+				updatedAt: 1_000,
+			}),
+		);
+		const caller = t.withIdentity(identity);
+		const noteId = await createCalendarNote({
+			asOwner: caller,
+			event,
+			workspaceId: otherWorkspaceId,
+		});
+		await caller.mutation(api.notes.remove, {
+			workspaceId: otherWorkspaceId,
+			id: noteId,
+		});
+		expect(
+			await caller.query(api.people.listForPicker, {
+				workspaceId: otherWorkspaceId,
+				query: "",
+			}),
+		).toEqual({ people: [], hasMore: false });
+	}
+	expect(await t.run((ctx) => ctx.db.query("people").take(10))).toEqual(
+		retainedPeople,
+	);
+	expect(
+		await asOwner.query(api.people.listForPicker, {
+			workspaceId,
+			query: "mark",
+		}),
+	).toMatchObject({
+		people: [{ email: "mark@acme.com", displayName: "Mark Stone" }],
+	});
+});
+
+test("directories follow active note history while the guest picker keeps calendar People", async () => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const event = createEvent({
+		id: "directory-history",
+		startAt: "2026-09-05T10:00:00.000Z",
+		title: "Directory history",
+	});
+	const directoryCounts = async () =>
+		Promise.all(
+			[
+				api.relationshipDirectory.listPeople,
+				api.relationshipDirectory.listCompanies,
+			].map(async (reference) => {
+				const result = await asOwner.query(reference, {
+					workspaceId,
+					query: "",
+					paginationOpts: { cursor: null, numItems: 100 },
+				});
+				return result.page.length;
+			}),
+		);
+	await t.mutation(internal.people.upsertCalendarAttendeeBatch, {
+		attendees: event.attendees,
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		workspaceId,
+	});
+	expect(await directoryCounts()).toEqual([0, 0]);
+	const first = await createCalendarNote({ asOwner, event, workspaceId });
+	const second = await createCalendarNote({
+		asOwner,
+		event: {
+			...event,
+			id: "directory-history-second",
+			providerEventId: "directory-history-second",
+		},
+		workspaceId,
+	});
+	expect(await directoryCounts()).toEqual([2, 1]);
+	await asOwner.mutation(api.notes.moveToTrash, { workspaceId, id: first });
+	expect(await directoryCounts()).toEqual([2, 1]);
+	await asOwner.mutation(api.notes.moveToTrash, { workspaceId, id: second });
+	expect(await directoryCounts()).toEqual([0, 0]);
+	await asOwner.mutation(api.notes.restore, { workspaceId, id: first });
+	expect(await directoryCounts()).toEqual([2, 1]);
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: first });
+	expect(await directoryCounts()).toEqual([0, 0]);
+	await asOwner.mutation(api.notes.restore, { workspaceId, id: second });
+	expect(await directoryCounts()).toEqual([2, 1]);
+	await asOwner.mutation(api.notes.remove, { workspaceId, id: second });
+	expect(await directoryCounts()).toEqual([0, 0]);
+	const picker = await asOwner.query(api.people.listForPicker, {
+		workspaceId,
+		query: "",
+	});
+	expect(picker.people.map((person) => person.email)).toEqual([
+		"mark@acme.com",
+		"personal@gmail.com",
+	]);
 });

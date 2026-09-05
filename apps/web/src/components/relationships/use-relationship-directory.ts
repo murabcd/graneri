@@ -23,40 +23,23 @@ export function useRelationshipDirectory(
 		args,
 		{ initialNumItems: RELATIONSHIP_DIRECTORY_PAGE_SIZE },
 	);
-	const derived = usePaginatedQuery(
-		api.relationshipDirectory.listCompaniesFromPeople,
-		kind === "companies" ? args : "skip",
-		{ initialNumItems: RELATIONSHIP_DIRECTORY_PAGE_SIZE },
-	);
-	const primaryComplete =
+	const complete =
 		primary.status === "Exhausted" ||
 		(kind === "people" &&
 			primary.results.length > RELATIONSHIP_DIRECTORY_RESULT_LIMIT);
-	const complete =
-		primaryComplete && (kind === "people" || derived.status === "Exhausted");
 
 	React.useEffect(() => {
-		if (!primaryComplete && primary.status === "CanLoadMore") {
+		if (!complete && primary.status === "CanLoadMore") {
 			primary.loadMore(RELATIONSHIP_DIRECTORY_PAGE_SIZE);
 		}
-	}, [primaryComplete, primary.status, primary.loadMore]);
-	React.useEffect(() => {
-		if (kind === "companies" && derived.status === "CanLoadMore") {
-			derived.loadMore(RELATIONSHIP_DIRECTORY_PAGE_SIZE);
-		}
-	}, [kind, derived.status, derived.loadMore]);
+	}, [complete, primary.status, primary.loadMore]);
 
 	const result = React.useMemo(
 		() =>
 			workspaceId && complete
-				? selectDirectoryEntries(
-						kind === "people"
-							? primary.results
-							: [...primary.results, ...derived.results],
-						kind,
-					)
+				? selectDirectoryEntries(primary.results, kind)
 				: undefined,
-		[workspaceId, complete, kind, primary.results, derived.results],
+		[workspaceId, complete, kind, primary.results],
 	);
 	const snapshotRef = React.useRef<{
 		result: ReturnType<typeof selectDirectoryEntries>;

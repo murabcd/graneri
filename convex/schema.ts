@@ -413,6 +413,7 @@ export default defineSchema({
 		email: v.string(),
 		displayName: v.optional(v.string()),
 		searchText: v.string(),
+		calendarDiscoveredAt: v.optional(v.number()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})

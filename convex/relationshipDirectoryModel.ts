@@ -21,21 +21,17 @@ export const selectDirectoryEntries = (
 	entries: DirectoryEntry[],
 	kind: "people" | "companies",
 ) => {
-	const entriesByKey = new Map<string, DirectoryEntry>();
-	for (const entry of entries) {
-		if (!entriesByKey.has(entry.key)) entriesByKey.set(entry.key, entry);
-	}
-	const uniqueEntries = [...entriesByKey.values()];
-	if (kind === "companies") {
-		uniqueEntries.sort(
-			(left, right) =>
-				left.label.localeCompare(right.label) ||
-				left.key.localeCompare(right.key),
-		);
-	}
+	const orderedEntries =
+		kind === "companies"
+			? entries.toSorted(
+					(left, right) =>
+						left.label.localeCompare(right.label) ||
+						left.key.localeCompare(right.key),
+				)
+			: entries;
 	return {
-		entities: uniqueEntries.slice(0, RELATIONSHIP_DIRECTORY_RESULT_LIMIT),
-		hasMore: uniqueEntries.length > RELATIONSHIP_DIRECTORY_RESULT_LIMIT,
+		entities: orderedEntries.slice(0, RELATIONSHIP_DIRECTORY_RESULT_LIMIT),
+		hasMore: orderedEntries.length > RELATIONSHIP_DIRECTORY_RESULT_LIMIT,
 	};
 };
 

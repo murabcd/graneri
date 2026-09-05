@@ -98,14 +98,55 @@ const createFixture = async () => {
 	});
 
 	const asOwner = t.withIdentity(ownerIdentity);
+	const linkAllToNotes = async () => {
+		const { people, companies } = await t.run(async (ctx) => ({
+			people: await ctx.db.query("people").collect(),
+			companies: await ctx.db.query("companies").collect(),
+		}));
+		for (
+			let offset = 0;
+			offset < Math.max(people.length, companies.length);
+			offset += 100
+		) {
+			const noteId = await asOwner.mutation(api.notes.create, {
+				workspaceId,
+				projectId: null,
+			});
+			await t.run(async (ctx) => {
+				const association = {
+					ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+					workspaceId,
+					noteId,
+					eventStartAt: "2026-09-05T10:00:00.000Z",
+					noteIsArchived: false,
+					createdAt: 1_000,
+				};
+				for (const person of people.slice(offset, offset + 100)) {
+					await ctx.db.insert("noteAttendees", {
+						...association,
+						personId: person._id,
+						email: person.email,
+						isOrganizer: false,
+						isSelf: false,
+						responseStatus: "accepted",
+					});
+				}
+				for (const company of companies.slice(offset, offset + 100)) {
+					await ctx.db.insert("noteCompanies", {
+						...association,
+						companyId: company._id,
+					});
+				}
+			});
+		}
+	};
+	await linkAllToNotes();
 	const read = async (kind: "people" | "companies", query: string) => {
-		const queries =
+		const queries = [
 			kind === "people"
-				? [api.relationshipDirectory.listPeople]
-				: [
-						api.relationshipDirectory.listCompanies,
-						api.relationshipDirectory.listCompaniesFromPeople,
-					];
+				? api.relationshipDirectory.listPeople
+				: api.relationshipDirectory.listCompanies,
+		];
 		const entries: DirectoryEntry[] = [];
 		for (const reference of queries) {
 			let cursor: string | null = null;
@@ -142,6 +183,7 @@ const createFixture = async () => {
 		t,
 		read,
 		readCompanies,
+		linkAllToNotes,
 		workspaceId,
 	};
 };
@@ -152,13 +194,12 @@ test("company directory lists and searches workspace companies", async () => {
 	expect(await readCompanies("")).toEqual({
 		companies: [
 			{ displayName: "Acme", domain: "acme.com" },
-			{ displayName: "Contoso", domain: "contoso.com" },
 			{ displayName: "Northwind", domain: "northwind.example" },
 		],
 		hasMore: false,
 	});
 	expect(await readCompanies("contoso")).toEqual({
-		companies: [{ displayName: "Contoso", domain: "contoso.com" }],
+		companies: [],
 		hasMore: false,
 	});
 	expect(await readCompanies("northwind")).toEqual({
@@ -197,7 +238,7 @@ test("company directory enforces workspace ownership", async () => {
 });
 
 test("directory search reaches people and companies beyond the old scan prefix", async () => {
-	const { t, asOwner, workspaceId, read, readCompanies } =
+	const { t, asOwner, workspaceId, read, readCompanies, linkAllToNotes } =
 		await createFixture();
 	await t.run(async (ctx) => {
 		for (let index = 0; index < 550; index++) {
@@ -249,6 +290,7 @@ test("directory search reaches people and companies beyond the old scan prefix",
 		});
 	});
 
+	await linkAllToNotes();
 	const firstPage = await asOwner.query(api.relationshipDirectory.listPeople, {
 		workspaceId,
 		query: "КОЛОВА зар",
@@ -279,7 +321,7 @@ test("directory search reaches people and companies beyond the old scan prefix",
 		hasMore: false,
 	});
 	expect(await readCompanies("derived")).toEqual({
-		companies: [{ displayName: "Zz Derived", domain: "zz-derived.co.uk" }],
+		companies: [],
 		hasMore: false,
 	});
 	expect(await readCompanies("missing")).toEqual({
@@ -292,28 +334,18 @@ test("directory search reaches people and companies beyond the old scan prefix",
 	});
 });
 
-test("company overflow counts distinct matching domains, not pages or people", async () => {
-	const { t, workspaceId, readCompanies } = await createFixture();
-	await t.run(async (ctx) => {
-		for (let index = 0; index < 550; index++) {
-			await ctx.db.insert("people", {
-				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-				workspaceId,
-				email: `person-${index}@repeated.example`,
-				searchText: "repeated",
-				createdAt: 1,
-				updatedAt: 1,
-			});
-		}
-	});
-	expect(await readCompanies("repeated")).toEqual({
-		companies: [{ displayName: "Repeated", domain: "repeated.example" }],
+test("company overflow counts identities rather than note associations", async () => {
+	const { linkAllToNotes, readCompanies } = await createFixture();
+	await linkAllToNotes();
+	expect(await readCompanies("acme")).toEqual({
+		companies: [{ displayName: "Acme", domain: "acme.com" }],
 		hasMore: false,
 	});
 });
 
-test("directories cap matching entries after global ordering and deduplication", async () => {
-	const { t, workspaceId, read, readCompanies } = await createFixture();
+test("directories cap matching entries after global ordering", async () => {
+	const { t, workspaceId, read, readCompanies, linkAllToNotes } =
+		await createFixture();
 	await t.run(async (ctx) => {
 		for (let index = 0; index < 101; index++) {
 			const key = index.toString().padStart(3, "0");
@@ -336,6 +368,7 @@ test("directories cap matching entries after global ordering and deduplication",
 			});
 		}
 	});
+	await linkAllToNotes();
 	const people = await read("people", "overflow");
 	expect(people.hasMore).toBe(true);
 	expect(people.entities).toHaveLength(100);
@@ -355,7 +388,6 @@ test("every directory source rejects unauthorized reads and invalid query bounds
 	for (const reference of [
 		api.relationshipDirectory.listPeople,
 		api.relationshipDirectory.listCompanies,
-		api.relationshipDirectory.listCompaniesFromPeople,
 	]) {
 		const args = {
 			workspaceId,
@@ -375,5 +407,52 @@ test("every directory source rejects unauthorized reads and invalid query bounds
 				}),
 			).rejects.toThrow(/between 1 and 100/);
 		}
+	}
+});
+
+test("matching identities without active notes neither appear nor cause overflow", async () => {
+	const { t, workspaceId, asOwner, read } = await createFixture();
+	await t.run(async (ctx) => {
+		for (let index = 0; index < 550; index++) {
+			await ctx.db.insert("people", {
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				workspaceId,
+				email: `a${index}@calendar.example`,
+				displayName: "Contoso calendar guest",
+				searchText: "contoso",
+				calendarDiscoveredAt: 1,
+				createdAt: 1,
+				updatedAt: 1,
+			});
+			await ctx.db.insert("companies", {
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				workspaceId,
+				domain: `a${index}.example`,
+				displayName: "Acme unlinked",
+				searchText: "acme",
+				createdAt: 1,
+				updatedAt: 1,
+			});
+		}
+	});
+	for (const [kind, query, key] of [
+		["people", "contoso", "person@contoso.com"],
+		["companies", "acme", "acme.com"],
+	] as const) {
+		const reference =
+			kind === "people"
+				? api.relationshipDirectory.listPeople
+				: api.relationshipDirectory.listCompanies;
+		const firstPage = await asOwner.query(reference, {
+			workspaceId,
+			query,
+			paginationOpts: { cursor: null, numItems: 100 },
+		});
+		expect(firstPage.page).toEqual([]);
+		expect(firstPage.isDone).toBe(false);
+		expect(await read(kind, query)).toMatchObject({
+			entities: [{ key }],
+			hasMore: false,
+		});
 	}
 });

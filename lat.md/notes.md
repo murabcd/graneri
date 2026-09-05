@@ -90,6 +90,11 @@ through parsing before normalization. Creating a calendar-linked note is one
 Convex transaction that stores the immutable event/attendee snapshot, resolves
 workspace-scoped people by email, resolves companies by non-personal business
 email domain, and creates the note-to-person and note-to-company associations.
+[[convex/peopleDomain.ts]] owns Person identity reuse and retirement. Calendar
+ingestion records the first `calendarDiscoveredAt` timestamp, retaining that
+Person for future meeting guest selection independently of notes. Note-only
+People have no calendar discovery timestamp; later calendar ingestion promotes
+the same identity, and subsequent note creation never clears that provenance.
 `companyDomain` owns canonical Company creation, domain-aware search, and
 orphan cleanup. The domain remains the stable identity and secondary label;
 until a canonical company name is available, presentation uses a
@@ -97,21 +102,19 @@ public-suffix-aware registrable-domain fallback and searches both that label
 and the full domain. Note relationships own atomic association persistence,
 while meeting search owns result composition.
 The authenticated `/people` and `/companies` directories are workspace-scoped
-read models over those canonical identities. The Companies directory also
-derives non-personal domains from workspace People so calendar guests are
-represented before a note creates a canonical Company, without a second guest
-store. [[convex/relationshipDirectory.ts]] owns authorized paginated reads,
-name/email and name/domain substring matching, and Company reconciliation;
+read models of meeting history: only identities with at least one non-trashed
+note association appear. [[convex/relationshipDirectory.ts]] owns authorized
+paginated reads, name/email and name/domain substring matching, and indexed
+active-association checks. Companies come only from canonical note-linked
+Companies; calendar-only People do not produce directory Companies.
 [[convex/relationshipDirectoryModel.ts]] owns their shared row contract and
 100-result selection. Queries paginate source records before filtering, preserve
 native continuation/split metadata, and can return an empty page that still has
-more source records. There is no fixed workspace scan prefix. Derived domains
-with a canonical Company are omitted from the People source so canonical names
-remain authoritative regardless of page position.
+more source records. There is no fixed workspace scan prefix.
 [[apps/web/src/components/relationships/use-relationship-directory.ts]] drains
 those reactive pages behind the existing directory presentation. People stop
 once the source is exhausted or more than 100 matching rows are known; Companies
-finish both sources before deduplication and global display-name ordering.
+finish their source before global display-name ordering.
 Substring search can require scanning the workspace across many bounded pages;
 Company ordering requires finishing that scan rather than ranking a partial
 prefix. Only actual matching overflow produces the existing refine-search hint.
@@ -120,7 +123,10 @@ same workspace and directory kind, and incomplete scans never produce a false
 empty state. Directory rows remain informational until dedicated relationship
 detail routes own note-history navigation. [[convex/people.ts]]
 Archiving mirrors state onto those associations for indexed reads; permanent
-deletion removes the associations and any now-orphaned canonical identities.
+deletion removes the associations, note-only People with no remaining note
+associations, and orphaned Companies. Calendar-discovered People survive, so
+the Calendar guest picker retains them independently of directory membership. Person
+retirement runs in the same transaction as note relationship removal.
 An invalid attendee or an event above the supported attendee bound rejects the
 whole note creation instead of persisting a partial relationship snapshot.
 

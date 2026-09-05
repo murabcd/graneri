@@ -72,9 +72,11 @@ export const getOrCreatePerson = async ({
 	ctx,
 	now,
 	ownerTokenIdentifier,
+	source,
 	workspaceId,
 }: {
 	attendee: CalendarAttendee;
+	source: "calendar" | "note";
 	ctx: MutationCtx;
 	now: number;
 	ownerTokenIdentifier: string;
@@ -89,24 +91,26 @@ export const getOrCreatePerson = async ({
 				.eq("email", attendee.email),
 		)
 		.unique();
-	const searchText = [attendee.displayName, attendee.email]
-		.filter(Boolean)
-		.join(" ")
-		.toLowerCase();
+	const displayName = attendee.displayName || existing?.displayName;
+	const calendarDiscoveredAt =
+		existing?.calendarDiscoveredAt ?? (source === "calendar" ? now : undefined);
+	const details = {
+		displayName,
+		calendarDiscoveredAt,
+		searchText: [displayName, attendee.email]
+			.filter(Boolean)
+			.join(" ")
+			.toLowerCase(),
+	};
 
 	if (existing) {
 		if (
-			attendee.displayName &&
-			(existing.displayName !== attendee.displayName ||
-				existing.searchText !== searchText)
+			existing.displayName !== details.displayName ||
+			existing.searchText !== details.searchText ||
+			existing.calendarDiscoveredAt !== details.calendarDiscoveredAt
 		) {
-			await ctx.db.patch(existing._id, {
-				displayName: attendee.displayName,
-				searchText,
-				updatedAt: now,
-			});
+			await ctx.db.patch(existing._id, { ...details, updatedAt: now });
 		}
-
 		return existing._id;
 	}
 
@@ -114,9 +118,27 @@ export const getOrCreatePerson = async ({
 		ownerTokenIdentifier,
 		workspaceId,
 		email: attendee.email,
-		displayName: attendee.displayName,
-		searchText,
+		...details,
 		createdAt: now,
 		updatedAt: now,
 	});
+};
+
+export const deletePersonIfOrphaned = async (
+	ctx: MutationCtx,
+	personId: Id<"people">,
+) => {
+	const person = await ctx.db.get(personId);
+	if (!person || person.calendarDiscoveredAt !== undefined) return;
+
+	const remaining = await ctx.db
+		.query("noteAttendees")
+		.withIndex("by_owner_ws_person_arch_start", (q) =>
+			q
+				.eq("ownerTokenIdentifier", person.ownerTokenIdentifier)
+				.eq("workspaceId", person.workspaceId)
+				.eq("personId", personId),
+		)
+		.first();
+	if (!remaining) await ctx.db.delete(personId);
 };

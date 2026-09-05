@@ -35,7 +35,7 @@ export function PeopleDirectoryPage(props: RelationshipDirectoryPageProps) {
 	return (
 		<RelationshipDirectoryPage
 			{...props}
-			emptyDescription="People from your calendar-linked notes will appear here."
+			emptyDescription="People from your meeting notes will appear here."
 			emptySearchDescription="Try another name or email."
 			entities={entities}
 			hasMore={currentResult?.hasMore ?? false}
@@ -61,7 +61,7 @@ export function CompaniesDirectoryPage(props: RelationshipDirectoryPageProps) {
 	return (
 		<RelationshipDirectoryPage
 			{...props}
-			emptyDescription="Companies from business email domains in your calendar-linked notes will appear here."
+			emptyDescription="Companies from your meeting notes will appear here."
 			emptySearchDescription="Try another company name or domain."
 			entities={entities}
 			hasMore={currentResult?.hasMore ?? false}

@@ -1,6 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { UsePaginatedQueryResult } from "convex/react";
-import { getFunctionName } from "convex/server";
 import { Suspense } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -10,13 +9,10 @@ import {
 	PeopleDirectoryPage,
 } from "../src/components/relationships/relationship-directory-page";
 
-const { usePaginatedQueryMock, loadPrimaryMore, loadDerivedMore } = vi.hoisted(
-	() => ({
-		usePaginatedQueryMock: vi.fn(),
-		loadPrimaryMore: vi.fn(),
-		loadDerivedMore: vi.fn(),
-	}),
-);
+const { usePaginatedQueryMock, loadPrimaryMore } = vi.hoisted(() => ({
+	usePaginatedQueryMock: vi.fn(),
+	loadPrimaryMore: vi.fn(),
+}));
 vi.mock("convex/react", () => ({ usePaginatedQuery: usePaginatedQueryMock }));
 
 const primaryWorkspaceId = "workspace-1" as Id<"workspaces">;
@@ -33,7 +29,6 @@ function SuspendRender({ suspend }: { suspend: boolean }) {
 
 describe("relationship directories", () => {
 	let primary: UsePaginatedQueryResult<DirectoryEntry>;
-	let derived: UsePaginatedQueryResult<DirectoryEntry>;
 	beforeEach(() => {
 		primary = {
 			results: [alice],
@@ -41,25 +36,7 @@ describe("relationship directories", () => {
 			isLoading: false,
 			loadMore: loadPrimaryMore,
 		};
-		derived = {
-			results: [],
-			status: "Exhausted",
-			isLoading: false,
-			loadMore: loadDerivedMore,
-		};
-		usePaginatedQueryMock.mockImplementation((reference, args) => {
-			if (args === "skip")
-				return {
-					results: [],
-					status: "LoadingFirstPage",
-					isLoading: true,
-					loadMore: loadDerivedMore,
-				};
-			return getFunctionName(reference) ===
-				"relationshipDirectory:listCompaniesFromPeople"
-				? derived
-				: primary;
-		});
+		usePaginatedQueryMock.mockImplementation(() => primary);
 	});
 	afterEach(() => {
 		cleanup();
@@ -208,20 +185,17 @@ describe("relationship directories", () => {
 		).not.toBeNull();
 	});
 
-	it("waits for both company sources and preserves canonical names and global ordering", () => {
-		primary = {
-			results: [
-				{ key: "zulu.example", label: "Zulu", subtitle: "zulu.example" },
-			],
-			status: "Exhausted",
-			isLoading: false,
-			loadMore: loadPrimaryMore,
+	it("waits for all company pages before global ordering", () => {
+		const zulu = {
+			key: "zulu.example",
+			label: "Zulu",
+			subtitle: "zulu.example",
 		};
-		derived = {
-			results: [],
+		primary = {
+			results: [zulu],
 			status: "CanLoadMore",
 			isLoading: false,
-			loadMore: loadDerivedMore,
+			loadMore: loadPrimaryMore,
 		};
 		const view = render(
 			<CompaniesDirectoryPage
@@ -229,21 +203,16 @@ describe("relationship directories", () => {
 				workspaceId={primaryWorkspaceId}
 			/>,
 		);
-		expect(loadDerivedMore).toHaveBeenCalledWith(100);
+		expect(loadPrimaryMore).toHaveBeenCalledWith(100);
 		expect(screen.queryByText("No companies yet")).toBeNull();
-		derived = {
+		primary = {
 			results: [
+				zulu,
 				{ key: "alpha.example", label: "Alpha", subtitle: "alpha.example" },
-				{ key: "alpha.example", label: "Alpha", subtitle: "alpha.example" },
-				{
-					key: "zulu.example",
-					label: "Stale derived name",
-					subtitle: "zulu.example",
-				},
 			],
 			status: "Exhausted",
 			isLoading: false,
-			loadMore: loadDerivedMore,
+			loadMore: loadPrimaryMore,
 		};
 		view.rerender(
 			<CompaniesDirectoryPage
@@ -251,8 +220,6 @@ describe("relationship directories", () => {
 				workspaceId={primaryWorkspaceId}
 			/>,
 		);
-		expect(screen.queryByText("Stale derived name")).toBeNull();
-		expect(screen.getAllByText("Alpha")).toHaveLength(1);
 		const rows = document.querySelector("[data-directory-scroll-viewport]");
 		expect(rows?.children[0]?.textContent).toContain("Alpha");
 		expect(rows?.children[1]?.textContent).toContain("Zulu");

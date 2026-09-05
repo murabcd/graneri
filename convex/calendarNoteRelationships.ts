@@ -9,7 +9,7 @@ import {
 } from "./calendarAttendees";
 import type { UpcomingCalendarEvent } from "./calendarTypes";
 import { deleteCompanyIfOrphaned, getOrCreateCompany } from "./companyDomain";
-import { getOrCreatePerson } from "./peopleDomain";
+import { deletePersonIfOrphaned, getOrCreatePerson } from "./peopleDomain";
 
 const MAX_CALENDAR_DESCRIPTION_LENGTH = 100_000;
 const MAX_CALENDAR_ID_LENGTH = 4_096;
@@ -190,6 +190,7 @@ export const createCalendarNoteRelationships = async ({
 		if (isRelationshipAttendee(attendee)) {
 			personId = await getOrCreatePerson({
 				attendee,
+				source: "note",
 				ctx,
 				now,
 				ownerTokenIdentifier,
@@ -329,19 +330,7 @@ export const removeCalendarNoteRelationships = async (
 	]);
 
 	for (const personId of personIds) {
-		const remaining = await ctx.db
-			.query("noteAttendees")
-			.withIndex("by_owner_ws_person_arch_start", (q) =>
-				q
-					.eq("ownerTokenIdentifier", note.ownerTokenIdentifier)
-					.eq("workspaceId", note.workspaceId)
-					.eq("personId", personId),
-			)
-			.first();
-
-		if (!remaining) {
-			await ctx.db.delete(personId);
-		}
+		await deletePersonIfOrphaned(ctx, personId);
 	}
 
 	for (const companyId of companyIds) {
