@@ -3,6 +3,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { query } from "./_generated/server";
 import { assistantRunEventValidator } from "./assistantRunEventModel";
+import { releaseChatContent, retainChatContent } from "./chatContentStorage";
+import {
+	chatToolContentValidator,
+	readChatToolContent,
+} from "./chatToolContent";
 import { createResourceAccess } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess("assistantRunEvents");
@@ -31,6 +36,8 @@ export const appendAssistantRunEvent = async (
 		.first();
 	const eventIndex = latestEvent ? latestEvent.eventIndex + 1 : 0;
 
+	if (event.type === "tool.started" || event.type === "tool.completed")
+		await retainChatContent(ctx, event.contentId);
 	await ctx.db.insert("assistantRunEvents", {
 		ownerTokenIdentifier: run.ownerTokenIdentifier,
 		workspaceId: run.workspaceId,
@@ -83,3 +90,46 @@ export const listRunEventsAfter = query({
 			.take(limit);
 	},
 });
+
+export const readEventToolContent = query({
+	args: { runId: v.id("assistantRuns"), eventIndex: v.number() },
+	returns: v.union(chatToolContentValidator, v.null()),
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		await requireOwnedRun(ctx, ownerTokenIdentifier, args.runId);
+		const record = await ctx.db
+			.query("assistantRunEvents")
+			.withIndex("by_runId_and_eventIndex", (q) =>
+				q.eq("runId", args.runId).eq("eventIndex", args.eventIndex),
+			)
+			.unique();
+		if (
+			!record ||
+			(record.event.type !== "tool.started" &&
+				record.event.type !== "tool.completed")
+		)
+			return null;
+		return await readChatToolContent(ctx, record.event.contentId);
+	},
+});
+
+/** Release shared payload ownership before removing lifecycle headers. */
+export const deleteRunEventsBatch = async (
+	ctx: MutationCtx,
+	runId: Id<"assistantRuns">,
+	limit: number,
+) => {
+	const events = await ctx.db
+		.query("assistantRunEvents")
+		.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", runId))
+		.take(limit);
+	for (const record of events) {
+		if (
+			record.event.type === "tool.started" ||
+			record.event.type === "tool.completed"
+		)
+			await releaseChatContent(ctx, record.event.contentId);
+		await ctx.db.delete(record._id);
+	}
+	return events.length === limit;
+};

@@ -1,5 +1,9 @@
 import type { ToolSet } from "ai";
 
+type RemoteMcpExecutionOptions = Parameters<
+	NonNullable<ToolSet[string]["execute"]>
+>[1];
+
 export type RemoteMcpToolConnection = {
 	sourceId?: string;
 	provider: string;
@@ -22,7 +26,10 @@ export declare function buildRemoteMcpTools(
 
 export type RemoteMcpToolProxy = {
 	listTools(): Promise<string>;
-	executeTool(args: { inputJson: string; toolName: string }): Promise<string>;
+	executeTool(
+		args: { inputJson: string; toolName: string },
+		options: RemoteMcpExecutionOptions,
+	): Promise<string>;
 };
 
 export type RemoteMcpProxyToolConnection = {
@@ -42,6 +49,7 @@ export declare function executeRemoteMcpToolForProxy(
 		inputJson: string;
 		toolName: string;
 	},
+	options?: Pick<RemoteMcpExecutionOptions, "abortSignal">,
 ): Promise<string>;
 
 export declare function buildRemoteMcpProxyTools(

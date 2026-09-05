@@ -1,5 +1,6 @@
 import { isRateLimitError } from "@convex-dev/rate-limiter";
 import rateLimiterTest from "@convex-dev/rate-limiter/test";
+import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -44,12 +45,37 @@ test("connected app tool proxies reject unbounded inputs before execution", asyn
 	const { t, workspaceId } = await createWorkspace();
 	const asOwner = t.withIdentity(ownerIdentity);
 
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "proxy-test",
+		projectId: null,
+		settings: DEFAULT_CHAT_SETTINGS,
+		message: {
+			id: "user-1",
+			role: "user",
+			partsJson: '[{"type":"text","text":"Prompt"}]',
+			text: "Prompt",
+			createdAt: 1,
+		},
+	});
+	const run = await asOwner.mutation(api.assistantRuns.startAssistantRun, {
+		workspaceId,
+		chatId: "proxy-test",
+		assistantMessageId: "assistant",
+		localCapabilitySession: null,
+		model: "gpt-5",
+		serviceTier: "auto",
+		policy: "reject",
+	});
+
 	await expect(
 		asOwner.action(api.connectedAppTools.executeRemoteMcpTool, {
 			workspaceId,
 			sourceId: "app:connection-id",
 			toolName: "search",
 			inputJson: "x".repeat(1_000_001),
+			runId: run._id,
+			assistantMessageId: "assistant",
 		}),
 	).rejects.toThrow("tool input is invalid");
 });

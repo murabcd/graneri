@@ -3,11 +3,13 @@ import workflowTest from "@convex-dev/workflow/test";
 import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
+import { getDocumentSize } from "convex/values";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { runAssistantWorkflow } from "./assistantRunWorkflow";
+import { readChatPayload } from "./chatPayloads";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -38,7 +40,7 @@ const backgroundJob = {
 	serviceTier: "auto" as const,
 };
 
-const createBackgroundRun = async () => {
+const createBackgroundRun = async (job = backgroundJob) => {
 	const t = convexTest(schema, modules);
 	workflowTest.register(t);
 	const asOwner = t.withIdentity(ownerIdentity);
@@ -72,7 +74,7 @@ const createBackgroundRun = async () => {
 		assistantMessageId: "assistant-1",
 		admissionReservationId: admission.admissionReservationId,
 		policy: "reject",
-		job: backgroundJob,
+		job,
 	});
 	return { asOwner, chatId, run, t, workspaceId };
 };
@@ -162,6 +164,56 @@ test("background runs start with durable workflow ownership", async () => {
 	expect(job?.googleAuthUserId).toBe(ownerIdentity.subject);
 	expect(job?.job.chatMode).toBe(CHAT_MODE.DEFAULT);
 	expect(job?.execution.workflowId).toEqual(expect.any(String));
+});
+
+test("large workflow context survives checkpoints and is removed when the run ends", async () => {
+	const text = "History ".repeat(160_000);
+	const messagesJson = JSON.stringify([
+		{ id: "user-1", role: "user", parts: [{ type: "text", text }] },
+	]);
+	const { run, t } = await createBackgroundRun({
+		...backgroundJob,
+		messagesJson,
+	});
+	const context = await t.query(
+		internal.assistantRunBackgroundState.getRunnableContext,
+		{ runId: run._id },
+	);
+	expect(context?.job.messagesJson).toBe(messagesJson);
+	const job = await t.run((ctx) => ctx.db.query("assistantRunJobs").unique());
+	if (!job) throw new Error("Missing fixture job");
+	expect(getDocumentSize(job)).toBeLessThan(10_000);
+	expect(job.job).not.toHaveProperty("messagesJson");
+	await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		stepIndex: 0,
+		text: "Step complete.",
+		partsJson: JSON.stringify([{ type: "text", text: "Step complete." }]),
+		outcome: "continue",
+		usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+	});
+	const resumed = await t.query(
+		internal.assistantRunBackgroundState.getRunnableContext,
+		{ runId: run._id },
+	);
+	expect(JSON.parse(resumed?.job.messagesJson ?? "[]")).toMatchObject([
+		{ id: "user-1", parts: [{ text }] },
+		{ id: run.assistantMessageId, parts: [{ text: "Step complete." }] },
+	]);
+	await t.mutation(internal.assistantRunBackgroundState.fail, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		errorText: "End the fixture run.",
+	});
+	expect(
+		await t.run((ctx) =>
+			ctx.db
+				.query("chatPayloadChunks")
+				.withIndex("by_key_and_sequence", (q) => q.eq("key", job.messages.key))
+				.collect(),
+		),
+	).toEqual([]);
 });
 
 test("step checkpoints are idempotent and accumulate usage once", async () => {
@@ -288,7 +340,11 @@ test("user answers resolve the question and continue the durable workflow", asyn
 		usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
 		workflowId: expect.any(String),
 	});
-	const messages = JSON.parse(state.job?.job.messagesJson ?? "[]") as Array<{
+	const messages = JSON.parse(
+		await t.run(async (ctx) =>
+			state.job ? await readChatPayload(ctx, state.job.messages) : "[]",
+		),
+	) as Array<{
 		id: string;
 		parts: Array<{ state?: string; output?: unknown }>;
 	}>;
@@ -356,6 +412,86 @@ test("tool execution receipts reuse completed effects and fail closed when ambig
 	).rejects.toThrow("cannot be completed");
 });
 
+test("large tool receipts replay the exact output without an inline document payload", async () => {
+	const { run, t } = await createBackgroundRun();
+	const identity = {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		stepIndex: 0,
+		ordinal: 0,
+		toolCallId: "large-receipt",
+		toolName: "search",
+		inputJson: '{"query":"large"}',
+	};
+	await t.mutation(internal.assistantRunToolExecutions.claim, identity);
+	const output = { result: "x".repeat(1_200_000) };
+	const outputJson = JSON.stringify({ hasValue: true, value: output });
+	await t.mutation(internal.assistantRunToolExecutions.complete, {
+		...identity,
+		outputJson,
+	});
+	const replay = await t.mutation(
+		internal.assistantRunToolExecutions.claim,
+		identity,
+	);
+	expect(replay.type).toBe("reuse");
+	if (replay.type !== "reuse") throw new Error("Expected a saved tool result.");
+	expect(replay.outputJson === outputJson).toBe(true);
+	const receipt = await t.run((ctx) =>
+		ctx.db.query("assistantRunToolExecutions").unique(),
+	);
+	expect(JSON.stringify(receipt).length).toBeLessThan(1000);
+	const partsJson = JSON.stringify([
+		{
+			type: "tool-search",
+			toolCallId: identity.toolCallId,
+			state: "output-available",
+			input: { query: "large" },
+			output,
+		},
+	]);
+	expect(
+		await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
+			runId: run._id,
+			assistantMessageId: run.assistantMessageId,
+			stepIndex: 0,
+			text: "",
+			partsJson,
+			outcome: "continue",
+			usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+		}),
+	).toBe(true);
+	const state = await t.run(async (ctx) => {
+		const toolCall = await ctx.db.query("chatToolCalls").unique();
+		const events = await ctx.db
+			.query("assistantRunEvents")
+			.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", run._id))
+			.collect();
+		const job = await ctx.db.query("assistantRunJobs").unique();
+		if (!toolCall || !job)
+			throw new Error("Expected durable checkpoint state.");
+		return {
+			content: await ctx.db.get(toolCall.contentId),
+			toolEvents: events.filter(
+				(record) =>
+					record.event.type === "tool.started" ||
+					record.event.type === "tool.completed",
+			),
+			messagesJson: await readChatPayload(ctx, job.messages),
+		};
+	});
+	expect(state.content?.referenceCount).toBe(3);
+	expect(
+		state.toolEvents.every(
+			(record) =>
+				(record.event.type === "tool.started" ||
+					record.event.type === "tool.completed") &&
+				record.event.contentId === state.content?._id,
+		),
+	).toBe(true);
+	expect(state.messagesJson.includes(output.result)).toBe(true);
+});
+
 test("step limits fail the active generation and clean tool receipts", async () => {
 	const { run, t } = await createBackgroundRun();
 	await t.mutation(internal.assistantRunToolExecutions.claim, {
@@ -385,4 +521,32 @@ test("step limits fail the active generation and clean tool receipts", async () 
 		errorText: "Assistant run reached its 20-step execution limit.",
 	});
 	expect(state.receipts).toHaveLength(0);
+});
+
+test("persists elapsed work independently from the stream ordering timestamp", async () => {
+	const { asOwner, chatId, run, t, workspaceId } = await createBackgroundRun();
+	vi.setSystemTime(run.startedAt + 27000);
+	await t.mutation(internal.assistantRunBackgroundState.checkpointStep, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		stepIndex: 0,
+		text: "Finished.",
+		partsJson: JSON.stringify([{ type: "text", text: "Finished." }]),
+		outcome: "completed",
+		usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
+	});
+	await t.mutation(internal.assistantRunBackgroundState.applyStepOutcome, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		stepIndex: 0,
+	});
+	const message = await asOwner.query(api.chatThreads.readMessage, {
+		workspaceId,
+		chatId,
+		messageId: run.assistantMessageId,
+	});
+	expect(JSON.parse(message?.metadataJson ?? "{}")).toEqual({
+		workDurationMs: 27000,
+	});
+	expect(message?.createdAt).toBeLessThan(run.startedAt + 27000);
 });

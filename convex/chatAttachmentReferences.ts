@@ -274,3 +274,27 @@ export const deleteChatMessageAttachmentReferences = async (
 		}
 	}
 };
+
+/** Forks retain the same files without reparsing or copying large message bodies. */
+export const copyChatMessageAttachmentReferences = async (
+	ctx: MutationCtx,
+	args: {
+		sourceChatId: Id<"chats">;
+		targetChatId: Id<"chats">;
+		messageId: string;
+	},
+) => {
+	const references = await ctx.db
+		.query("chatAttachmentReferences")
+		.withIndex("by_chatId_and_messageId", (q) =>
+			q.eq("chatId", args.sourceChatId).eq("messageId", args.messageId),
+		)
+		.collect();
+	for (const reference of references) {
+		const { _id, _creationTime, ...fields } = reference;
+		await ctx.db.insert("chatAttachmentReferences", {
+			...fields,
+			chatId: args.targetChatId,
+		});
+	}
+};

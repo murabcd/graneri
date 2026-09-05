@@ -98,7 +98,7 @@ describe("ChatMessageListContent performance", () => {
 		streamdownRenderCounts.clear();
 	});
 
-	it("does not rerender historical markdown when only the active stream changes", () => {
+	it("does not rerender historical markdown when only the active stream changes", async () => {
 		const longHistoricalText = [
 			"# Earlier city morning",
 			"",
@@ -163,12 +163,14 @@ describe("ChatMessageListContent performance", () => {
 			</TestMessageScroller>,
 		);
 
+		await waitFor(() => {
+			expect(
+				streamdownRenderCounts.get(
+					"The morning starts softly. More light gathers on the street.",
+				),
+			).toBe(1);
+		});
 		expect(streamdownRenderCounts.get(longHistoricalText)).toBe(1);
-		expect(
-			streamdownRenderCounts.get(
-				"The morning starts softly. More light gathers on the street.",
-			),
-		).toBe(1);
 	});
 
 	it("renders interrupted assistant markdown through the markdown renderer", () => {
@@ -204,7 +206,7 @@ describe("ChatMessageListContent performance", () => {
 		expect(markdown?.getAttribute("data-animating")).toBe("false");
 		expect(markdown?.getAttribute("data-link-safety")).toBe("false");
 		expect(document.body.textContent).toContain("# Interrupted answer");
-		expect(document.body.textContent).toContain("Steered conversation");
+		expect(document.body.textContent).toContain("Response interrupted");
 		expect(
 			document.querySelector('[data-slot="marker-icon"] svg'),
 		).not.toBeNull();
@@ -237,10 +239,10 @@ describe("ChatMessageListContent performance", () => {
 		expect(streamdownRenderCounts.get(assistantText)).toBe(1);
 		expect(markdown?.getAttribute("data-mode")).toBe("streaming");
 		expect(markdown?.getAttribute("data-animating")).toBe("false");
-		expect(document.body.textContent).toContain("Steered conversation");
+		expect(document.body.textContent).toContain("Response interrupted");
 	});
 
-	it("keeps historical markdown stable through the production chat message wrapper", () => {
+	it("keeps historical markdown stable through the production chat message wrapper", async () => {
 		const longHistoricalText = [
 			"# Earlier city morning",
 			"",
@@ -314,12 +316,14 @@ describe("ChatMessageListContent performance", () => {
 			</TooltipProvider>,
 		);
 
+		await waitFor(() => {
+			expect(
+				streamdownRenderCounts.get(
+					"The morning starts softly. More light gathers on the street.",
+				),
+			).toBe(1);
+		});
 		expect(streamdownRenderCounts.get(longHistoricalText)).toBe(1);
-		expect(
-			streamdownRenderCounts.get(
-				"The morning starts softly. More light gathers on the street.",
-			),
-		).toBe(1);
 	});
 
 	it("anchors note composer user messages above streaming replies", () => {

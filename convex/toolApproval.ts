@@ -11,6 +11,10 @@ import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import type { pendingDecisionValidator } from "./assistantRunModel";
+import {
+	type HydratedChatMessage,
+	hydrateChatMessage,
+} from "./chatMessageContent";
 
 type ToolApprovalDecision = Extract<
 	Infer<typeof pendingDecisionValidator>,
@@ -54,10 +58,11 @@ export const requireAssistantRunToolApproval = async (
 			message: "Stored tool approval request was not found.",
 		});
 	}
+	const content = await hydrateChatMessage(ctx, storedMessage);
 	const request = getToolApprovalRequest({
 		id: storedMessage.messageId,
 		role: storedMessage.role,
-		parts: parseParts(storedMessage.partsJson),
+		parts: parseParts(content.partsJson),
 	});
 	if (
 		!request ||
@@ -113,7 +118,7 @@ export const requireMatchingToolApprovalResponse = (
 };
 
 export const createCanonicalToolApprovalMessage = (
-	existingMessage: Doc<"chatMessages">,
+	existingMessage: HydratedChatMessage,
 	pendingDecision: ToolApprovalDecision,
 	approvalResponses: ToolApprovalResponse[],
 ) => {

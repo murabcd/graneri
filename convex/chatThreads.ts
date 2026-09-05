@@ -6,8 +6,9 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import { getActiveStreamForChat } from "./assistantRunStreamState";
-import { syncChatMessageAttachmentReferences } from "./chatAttachmentReferences";
-import { normalizeChatPreview } from "./chatFormatting";
+import { copyChatMessageAttachmentReferences } from "./chatAttachmentReferences";
+import { retainChatContent } from "./chatContentStorage";
+import { hydrateChatMessage } from "./chatMessageContent";
 import { clampWhitespace, createResourceAccess, truncate } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess("chat threads");
@@ -29,7 +30,13 @@ export const readPage = query({
 		chatId: v.string(),
 		paginationOpts: paginationOptsValidator,
 	},
-	returns: paginationResultValidator(storedUiMessageValidator),
+	returns: paginationResultValidator(
+		v.object({
+			id: v.string(),
+			role: v.union(v.literal("user"), v.literal("assistant")),
+			createdAt: v.number(),
+		}),
+	),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		const chat = await getOwnedActiveChatById(
@@ -50,31 +57,72 @@ export const readPage = query({
 		const page = result.page.map((message) => ({
 			id: message.messageId,
 			role: message.role,
-			partsJson: message.partsJson,
-			metadataJson: message.metadataJson,
-			text: message.text,
 			createdAt: message.createdAt,
 		}));
 
 		if (args.paginationOpts.cursor === null) {
-			const stream = await getActiveStreamForChat(ctx, chat._id);
+			const stream = await ctx.db
+				.query("chatActiveStreams")
+				.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+				.unique();
 			if (
-				stream &&
-				(stream.text.length > 0 || stream.partsJson !== "[]") &&
+				stream?.hasContent &&
 				!page.some((message) => message.id === stream.assistantMessageId)
 			) {
 				page.unshift({
 					id: stream.assistantMessageId,
 					role: "assistant",
-					partsJson: stream.partsJson,
-					metadataJson: undefined,
-					text: stream.text,
 					createdAt: stream._creationTime,
 				});
 			}
 		}
 
 		return { ...result, page };
+	},
+});
+
+export const readMessage = query({
+	args: {
+		workspaceId: v.id("workspaces"),
+		chatId: v.string(),
+		messageId: v.string(),
+	},
+	returns: v.union(storedUiMessageValidator, v.null()),
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		const chat = await getOwnedActiveChatById(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			args.chatId,
+		);
+		if (!chat) return null;
+		const stored = await ctx.db
+			.query("chatMessages")
+			.withIndex("by_chatId_and_messageId", (q) =>
+				q.eq("chatId", chat._id).eq("messageId", args.messageId),
+			)
+			.unique();
+		if (stored) {
+			const message = await hydrateChatMessage(ctx, stored);
+			return {
+				id: message.messageId,
+				role: message.role,
+				partsJson: message.partsJson,
+				metadataJson: message.metadataJson,
+				text: message.text,
+				createdAt: message.createdAt,
+			};
+		}
+		const stream = await getActiveStreamForChat(ctx, chat._id);
+		if (!stream || stream.assistantMessageId !== args.messageId) return null;
+		return {
+			id: stream.assistantMessageId,
+			role: "assistant" as const,
+			partsJson: stream.partsJson,
+			text: stream.text,
+			createdAt: stream._creationTime,
+		};
 	},
 });
 
@@ -185,7 +233,7 @@ export const forkFromAssistantMessage = mutation({
 			isStarred: false,
 			starredSortOrder: now,
 			title,
-			preview: normalizeChatPreview(targetMessage.text),
+			preview: targetMessage.preview,
 			chatMode: sourceChat.chatMode,
 			model: sourceChat.model,
 			reasoningEffort: sourceChat.reasoningEffort,
@@ -199,20 +247,21 @@ export const forkFromAssistantMessage = mutation({
 		});
 
 		for (const message of sourceMessages) {
+			await retainChatContent(ctx, message.contentId);
 			await ctx.db.insert("chatMessages", {
 				chatId: forkId,
 				ownerTokenIdentifier,
 				messageId: message.messageId,
 				role: message.role,
-				partsJson: message.partsJson,
+				contentId: message.contentId,
 				metadataJson: message.metadataJson,
-				text: message.text,
+				preview: message.preview,
 				createdAt: message.createdAt,
 			});
-			await syncChatMessageAttachmentReferences(ctx, {
-				chatId: forkId,
+			await copyChatMessageAttachmentReferences(ctx, {
+				sourceChatId: sourceChat._id,
+				targetChatId: forkId,
 				messageId: message.messageId,
-				partsJson: message.partsJson,
 			});
 		}
 

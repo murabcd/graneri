@@ -7,7 +7,8 @@ import { decodeStoredUiMessage } from "@workspace/ai/ui-message-codec";
 import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { requireConvexDocumentWithinLimit } from "./documentSize";
+import { hydrateChatMessage } from "./chatMessageContent";
+import { writeChatMessage } from "./chatMessagePersistence";
 
 type UserQuestionDecision = Extract<
 	NonNullable<Doc<"assistantRuns">["pendingDecision"]>,
@@ -36,12 +37,13 @@ const requireStoredUserQuestion = async (
 		});
 	}
 
+	const content = await hydrateChatMessage(ctx, storedMessage);
 	let questionMessage: Awaited<ReturnType<typeof decodeStoredUiMessage>> | null;
 	try {
 		questionMessage = await decodeStoredUiMessage({
 			id: storedMessage.messageId,
 			role: storedMessage.role,
-			partsJson: storedMessage.partsJson,
+			partsJson: content.partsJson,
 			metadataJson: storedMessage.metadataJson,
 			createdAt: storedMessage.createdAt,
 		});
@@ -61,7 +63,7 @@ const requireStoredUserQuestion = async (
 			message: "Stored assistant question does not match the pending request.",
 		});
 	}
-	return { questionMessage, storedMessage };
+	return { questionMessage, storedMessage: content };
 };
 
 export const requireAssistantRunUserQuestion = async (
@@ -113,16 +115,7 @@ export const persistAssistantRunUserQuestionResolution = async (
 		text: storedMessage.text,
 		createdAt: storedMessage.createdAt,
 	};
-	requireConvexDocumentWithinLimit({
-		document: {
-			...replacement,
-			_id: storedMessage._id,
-			_creationTime: storedMessage._creationTime,
-		},
-		errorCode: "CHAT_MESSAGE_TOO_LARGE",
-		message: "Chat message exceeds Convex's 1 MiB document limit.",
-	});
-	await ctx.db.replace(storedMessage._id, replacement);
+	await writeChatMessage(ctx, replacement);
 	return {
 		id: storedMessage.messageId,
 		role: "assistant" as const,

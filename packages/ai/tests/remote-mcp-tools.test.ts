@@ -92,10 +92,13 @@ describe("remote MCP tool discovery", () => {
 			{ messages: [], toolCallId: "tool-call" },
 		);
 
-		expect(executeTool).toHaveBeenCalledWith({
-			inputJson: JSON.stringify({ query: "roadmap" }),
-			toolName: "search",
-		});
+		expect(executeTool).toHaveBeenCalledWith(
+			{
+				inputJson: JSON.stringify({ query: "roadmap" }),
+				toolName: "search",
+			},
+			{ messages: [], toolCallId: "tool-call" },
+		);
 	});
 
 	it("executes remote tools inside the credential-holding proxy", async () => {
@@ -118,6 +121,7 @@ describe("remote MCP tool discovery", () => {
 		expect(mcpMocks.callTool).toHaveBeenCalledWith({
 			name: "search",
 			arguments: { query: "roadmap" },
+			options: { signal: undefined },
 		});
 	});
 
@@ -254,4 +258,80 @@ describe("remote MCP tool discovery", () => {
 			}),
 		).rejects.toThrow("more than 256 MCP tools");
 	});
+});
+
+const paginatedConnection = {
+	provider: "notion",
+	displayName: "Notion",
+	baseUrl: "https://mcp.example.com",
+};
+const definition = (name: string) => ({
+	name,
+	description: `Use ${name}.`,
+	inputSchema: { type: "object", properties: {} },
+});
+
+it("loads every MCP page before exposing the catalog", async () => {
+	mcpMocks.listTools
+		.mockResolvedValueOnce({
+			tools: [definition("first")],
+			nextCursor: "page-2",
+		})
+		.mockResolvedValueOnce({ tools: [definition("second")] });
+	const tools = await buildRemoteMcpTools(paginatedConnection);
+	expect(Object.keys(tools)).toEqual(["notion_first", "notion_second"]);
+	expect(mcpMocks.listTools).toHaveBeenLastCalledWith({
+		params: { cursor: "page-2" },
+		options: { signal: expect.any(AbortSignal) },
+	});
+});
+
+it("rejects repeated pagination cursors without exposing a partial catalog", async () => {
+	mcpMocks.listTools
+		.mockResolvedValueOnce({ tools: [definition("first")], nextCursor: "loop" })
+		.mockResolvedValueOnce({
+			tools: [definition("second")],
+			nextCursor: "loop",
+		});
+	await expect(buildRemoteMcpTools(paginatedConnection)).rejects.toThrow(
+		"invalid MCP pagination",
+	);
+});
+
+it("rejects a pending proxy call when its execution is cancelled", async () => {
+	const controller = new AbortController();
+	let resolveTool!: (value: string) => void;
+	const executeTool = vi.fn(
+		() =>
+			new Promise<string>((resolve) => {
+				resolveTool = resolve;
+			}),
+	);
+	const tools = await buildRemoteMcpProxyTools(
+		{
+			sourceId: "app:cancel",
+			provider: "notion",
+			displayName: "Notion",
+			toolPrefix: "notion",
+		},
+		{
+			listTools: async () => JSON.stringify({ tools: [definition("search")] }),
+			executeTool,
+		},
+	);
+	const execute = tools.notion_search?.execute;
+	if (!execute) throw new Error("Expected tool");
+	const options = {
+		messages: [],
+		toolCallId: "call",
+		abortSignal: controller.signal,
+	};
+	const result = execute({}, options);
+	controller.abort(new Error("Stopped"));
+	await expect(result).rejects.toThrow("Stopped");
+	expect(executeTool).toHaveBeenCalledWith(
+		{ inputJson: "{}", toolName: "search" },
+		options,
+	);
+	resolveTool(JSON.stringify({ content: [] }));
 });

@@ -3,25 +3,33 @@ import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
-import { requireConvexDocumentWithinLimit } from "./documentSize";
+import {
+	type ChatMessageContent,
+	hydrateChatMessage,
+	writeChatMessageContent,
+} from "./chatMessageContent";
 
 export const getActiveStreamForChat = async (
 	ctx: QueryCtx | MutationCtx,
 	chatId: Id<"chats">,
-) =>
-	await ctx.db
+) => {
+	const stream = await ctx.db
 		.query("chatActiveStreams")
 		.withIndex("by_chatId", (q) => q.eq("chatId", chatId))
 		.unique();
+	return stream ? await hydrateChatMessage(ctx, stream) : null;
+};
 
 export const getActiveStreamForRun = async (
 	ctx: QueryCtx | MutationCtx,
 	runId: Id<"assistantRuns">,
-) =>
-	await ctx.db
+) => {
+	const stream = await ctx.db
 		.query("chatActiveStreams")
 		.withIndex("by_runId", (q) => q.eq("runId", runId))
 		.unique();
+	return stream ? await hydrateChatMessage(ctx, stream) : null;
+};
 
 export const createAssistantRunStream = async (
 	ctx: MutationCtx,
@@ -41,12 +49,16 @@ export const createAssistantRunStream = async (
 		});
 	}
 
+	const contentId = await writeChatMessageContent(ctx, {
+		text: "",
+		partsJson: "[]",
+	});
 	const streamId = await ctx.db.insert("chatActiveStreams", {
 		runId: run._id,
 		chatId: run.chatId,
 		assistantMessageId: run.assistantMessageId,
-		text: "",
-		partsJson: "[]",
+		contentId,
+		hasContent: false,
 		updatedAt: Date.now(),
 	});
 	await appendAssistantRunEvent(ctx, run, {
@@ -62,7 +74,7 @@ export const createAssistantRunStream = async (
 		});
 	}
 
-	return stream;
+	return await hydrateChatMessage(ctx, stream);
 };
 
 export const updateAssistantRunStream = async (
@@ -114,29 +126,35 @@ export const updateAssistantRunStream = async (
 		}
 	}
 
-	const stream = await getActiveStreamForRun(ctx, run._id);
-	if (!stream || stream.chatId !== run.chatId) {
+	const stored = await ctx.db
+		.query("chatActiveStreams")
+		.withIndex("by_runId", (q) => q.eq("runId", run._id))
+		.unique();
+	if (!stored || stored.chatId !== run.chatId) {
 		throw new ConvexError({
 			code: "ACTIVE_STREAM_NOT_FOUND",
 			message: "Active stream snapshot not found.",
 		});
 	}
 
-	const updatedAt = Date.now();
-	const text = args.text ?? `${stream.text}${args.delta ?? ""}`;
-	const partsJson = args.partsJson ?? stream.partsJson;
-	requireConvexDocumentWithinLimit({
-		document: {
-			runId: stream.runId,
-			chatId: stream.chatId,
-			assistantMessageId: stream.assistantMessageId,
-			text,
-			partsJson,
-			updatedAt,
-		},
-		errorCode: "ACTIVE_STREAM_TOO_LARGE",
-		message: "Active stream snapshot exceeds the Convex document limit.",
+	let content: ChatMessageContent;
+	if (args.text !== undefined && args.partsJson !== undefined) {
+		content = { text: args.text, partsJson: args.partsJson };
+	} else {
+		const previous = await hydrateChatMessage(ctx, stored);
+		content = {
+			text: args.text ?? `${previous.text}${args.delta ?? ""}`,
+			partsJson: args.partsJson ?? previous.partsJson,
+		};
+	}
+	const contentId = await writeChatMessageContent(
+		ctx,
+		content,
+		stored.contentId,
+	);
+	await ctx.db.patch(stored._id, {
+		contentId,
+		hasContent: content.text.length > 0 || content.partsJson !== "[]",
+		updatedAt: Date.now(),
 	});
-
-	await ctx.db.patch(stream._id, { text, partsJson, updatedAt });
 };

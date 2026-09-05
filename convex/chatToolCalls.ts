@@ -1,4 +1,5 @@
 import { parseUiMessagePartsJson } from "@workspace/ai/ui-message-codec";
+import type { Infer } from "convex/values";
 import { ConvexError, v } from "convex/values";
 import { z } from "zod";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -6,6 +7,11 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
+import {
+	type chatToolContentValidator,
+	readChatToolContent,
+	writeChatToolContent,
+} from "./chatToolContent";
 import { createResourceAccess } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess("chatToolCalls");
@@ -107,101 +113,96 @@ const stringifyPayload = (
 	value: z.infer<typeof toolPayloadSchema> | undefined,
 ) => (value === undefined ? undefined : JSON.stringify(value));
 
+type ToolCallInput = Pick<
+	Doc<"chatToolCalls">,
+	"toolCallId" | "toolName" | "status"
+> &
+	Infer<typeof chatToolContentValidator> & { errorText?: string };
+
+const saveToolCall = async (
+	ctx: MutationCtx,
+	run: Doc<"assistantRuns">,
+	data: ToolCallInput,
+	existing: Doc<"chatToolCalls"> | null,
+) => {
+	const now = Date.now();
+	const { inputJson, outputJson, ...metadata } = data;
+	const contentId = await writeChatToolContent(
+		ctx,
+		{ inputJson, outputJson },
+		existing?.contentId,
+	);
+	const stored = {
+		...metadata,
+		contentId,
+		runId: run._id,
+		chatId: run.chatId,
+		createdAt: existing?.createdAt ?? now,
+		updatedAt: now,
+	};
+	const id = existing?._id ?? (await ctx.db.insert("chatToolCalls", stored));
+	if (existing) await ctx.db.replace(existing._id, stored);
+	return { id, contentId };
+};
+
 export const syncAssistantRunToolCalls = async (
 	ctx: MutationCtx,
 	run: Doc<"assistantRuns">,
 	partsJson: string,
 ) => {
-	const parts = parseUiMessagePartsJson(partsJson);
-
-	for (const value of parts) {
+	for (const value of parseUiMessagePartsJson(partsJson)) {
 		const result = toolSnapshotPartSchema.safeParse(value);
-		if (!result.success) {
-			continue;
-		}
+		if (!result.success) continue;
 		const part = result.data;
-		const toolCallId = part.toolCallId;
 		const toolName = getSnapshotToolName(part);
+		if (!toolName) continue;
 		const status = getSnapshotToolStatus(part.state);
-		if (!toolCallId || !toolName || !status) {
-			continue;
-		}
-
+		const toolCallId = part.toolCallId;
 		const inputJson = stringifyPayload(part.input);
 		const outputJson = stringifyPayload(part.output);
-		const errorText = getNonEmptyString(part.errorText);
+		const errorText = getNonEmptyString(part.errorText) ?? undefined;
 		const existing = await getToolCallByRunIdAndToolCallId(
 			ctx,
 			run._id,
 			toolCallId,
 		);
-		const now = Date.now();
-		if (!existing) {
-			await ctx.db.insert("chatToolCalls", {
-				runId: run._id,
-				chatId: run.chatId,
+		if (existing && existing.status !== "pending") continue;
+		const previous = existing
+			? await readChatToolContent(ctx, existing.contentId)
+			: null;
+		if (
+			existing?.status === status &&
+			(inputJson === undefined || inputJson === previous?.inputJson)
+		)
+			continue;
+		const saved = await saveToolCall(
+			ctx,
+			run,
+			{
 				toolCallId,
 				toolName,
 				status,
-				inputJson,
+				inputJson: inputJson ?? previous?.inputJson,
 				outputJson,
-				errorText: errorText ?? undefined,
-				createdAt: now,
-				updatedAt: now,
-			});
+				errorText,
+			},
+			existing,
+		);
+		if (!existing)
 			await appendAssistantRunEvent(ctx, run, {
 				type: "tool.started",
 				toolCallId,
 				toolName,
-				inputJson,
+				contentId: saved.contentId,
 			});
-			if (status !== "pending") {
-				await appendAssistantRunEvent(ctx, run, {
-					type: "tool.completed",
-					toolCallId,
-					status,
-					outputJson,
-					errorText: errorText ?? undefined,
-				});
-			}
-			continue;
-		}
-
-		if (existing.status === status) {
-			if (
-				status === "pending" &&
-				inputJson !== undefined &&
-				inputJson !== existing.inputJson
-			) {
-				await ctx.db.patch(existing._id, {
-					toolName,
-					inputJson,
-					updatedAt: now,
-				});
-			}
-			continue;
-		}
-		if (existing.status !== "pending") {
-			continue;
-		}
-
-		await ctx.db.patch(existing._id, {
-			toolName,
-			status,
-			inputJson: inputJson ?? existing.inputJson,
-			outputJson,
-			errorText: errorText ?? undefined,
-			updatedAt: now,
-		});
-		if (status !== "pending") {
+		if (status !== "pending")
 			await appendAssistantRunEvent(ctx, run, {
 				type: "tool.completed",
 				toolCallId,
 				status,
-				outputJson,
-				errorText: errorText ?? undefined,
+				contentId: saved.contentId,
+				errorText,
 			});
-		}
 	}
 };
 
@@ -272,51 +273,30 @@ export const startActiveStreamToolCall = mutation({
 	},
 	returns: chatToolCallValidator,
 	handler: async (ctx, args) => {
-		const { chat, run } = await requireOwnedActiveStream(ctx, args);
-		const now = Date.now();
-		const existingToolCall = await getToolCallByRunIdAndToolCallId(
+		const { run } = await requireOwnedActiveStream(ctx, args);
+		const existing = await getToolCallByRunIdAndToolCallId(
 			ctx,
 			run._id,
 			args.toolCallId,
 		);
-
-		if (existingToolCall) {
-			await ctx.db.patch(existingToolCall._id, {
+		const saved = await saveToolCall(
+			ctx,
+			run,
+			{
+				toolCallId: args.toolCallId,
 				toolName: args.toolName,
 				status: "pending",
 				inputJson: args.inputJson,
-				outputJson: undefined,
-				errorText: undefined,
-				updatedAt: now,
-			});
-			await appendAssistantRunEvent(ctx, run, {
-				type: "tool.started",
-				toolCallId: args.toolCallId,
-				toolName: args.toolName,
-				inputJson: args.inputJson,
-			});
-
-			return await requireToolCall(ctx, existingToolCall._id);
-		}
-
-		const toolCallId = await ctx.db.insert("chatToolCalls", {
-			runId: run._id,
-			chatId: chat._id,
-			toolCallId: args.toolCallId,
-			toolName: args.toolName,
-			status: "pending",
-			inputJson: args.inputJson,
-			createdAt: now,
-			updatedAt: now,
-		});
+			},
+			existing,
+		);
 		await appendAssistantRunEvent(ctx, run, {
 			type: "tool.started",
 			toolCallId: args.toolCallId,
 			toolName: args.toolName,
-			inputJson: args.inputJson,
+			contentId: saved.contentId,
 		});
-
-		return await requireToolCall(ctx, toolCallId);
+		return await requireToolCall(ctx, saved.id);
 	},
 });
 
@@ -351,17 +331,25 @@ export const finishActiveStreamToolCall = mutation({
 			});
 		}
 
-		await ctx.db.patch(toolCall._id, {
-			status: args.status,
-			outputJson: args.outputJson,
-			errorText: args.errorText,
-			updatedAt: Date.now(),
-		});
+		const previous = await readChatToolContent(ctx, toolCall.contentId);
+		const saved = await saveToolCall(
+			ctx,
+			run,
+			{
+				toolCallId: args.toolCallId,
+				toolName: toolCall.toolName,
+				status: args.status,
+				inputJson: previous.inputJson,
+				outputJson: args.outputJson,
+				errorText: args.errorText,
+			},
+			toolCall,
+		);
 		await appendAssistantRunEvent(ctx, run, {
 			type: "tool.completed",
 			toolCallId: args.toolCallId,
 			status: args.status,
-			outputJson: args.outputJson,
+			contentId: saved.contentId,
 			errorText: args.errorText,
 		});
 
@@ -382,5 +370,6 @@ const requireToolCall = async (
 		});
 	}
 
-	return toolCall;
+	const { contentId, ...metadata } = toolCall;
+	return { ...metadata, ...(await readChatToolContent(ctx, contentId)) };
 };

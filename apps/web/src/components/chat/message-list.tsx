@@ -26,6 +26,7 @@ import {
 	AssistantActivityGroup,
 	AssistantWorkGroup,
 } from "@/components/ai-elements/tools/tool-group";
+import { isRenderableAssistantWorkPart } from "@/components/ai-elements/tools/tool-part-like";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
@@ -229,7 +230,6 @@ export function ChatMessageListContent({
 								status: turn.assistantTurnWorkStatus,
 								units: turn.assistantTurnActivityUnits,
 							}}
-							hasActivity={turn.assistantTurnActivityUnits.length > 0}
 							isInterrupted={turn.assistantTurnIsInterrupted}
 							textContainerClassName={textContainerClassName}
 						/>,
@@ -364,7 +364,6 @@ function ChatMessageActions({
 
 function ChatMessageAssistantWork({
 	activity,
-	hasActivity,
 	isInterrupted,
 	textContainerClassName,
 }: {
@@ -374,21 +373,35 @@ function ChatMessageAssistantWork({
 		status: "streaming" | "ready";
 		units?: AssistantActivityUnit[];
 	};
-	hasActivity: boolean;
 	isInterrupted: boolean;
 	textContainerClassName?: string;
 }) {
+	const units = React.useMemo(
+		() =>
+			(activity.units ?? EMPTY_ASSISTANT_ACTIVITY_UNITS).filter((unit) =>
+				unit.kind === "commentary"
+					? unit.part.text.trim().length > 0
+					: filterSupersededChartToolFailures(unit.parts).some((part) =>
+							isRenderableAssistantWorkPart(
+								part,
+								activity.status === "streaming",
+							),
+						),
+			),
+		[activity.units, activity.status],
+	);
+
 	return (
 		<Message align="start" data-chat-assistant-work-row>
 			<MessageContent className="w-[85%] items-start">
 				<AssistantWorkGroup
-					hasActivity={hasActivity}
+					hasActivity={units.length > 0}
 					status={activity.status}
 					startedAt={activity.startedAt}
 					totalDurationMs={activity.durationMs}
 				>
 					<AssistantActivitySequence
-						units={activity.units ?? EMPTY_ASSISTANT_ACTIVITY_UNITS}
+						units={units}
 						chatStatus={activity.status}
 						isInterrupted={isInterrupted}
 						isStreaming={activity.status === "streaming"}
@@ -660,7 +673,7 @@ const InterruptedMessageStatus = React.memo(
 				<MarkerIcon>
 					<CornerDownRight className="size-4" />
 				</MarkerIcon>
-				<MarkerContent>Steered conversation</MarkerContent>
+				<MarkerContent>Response interrupted</MarkerContent>
 			</Marker>
 		);
 	},

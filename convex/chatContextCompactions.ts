@@ -13,6 +13,10 @@ import {
 	query,
 } from "./_generated/server";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
+import {
+	hydrateChatMessage,
+	selectChatMessageBatch,
+} from "./chatMessageContent";
 import { requireConvexDocumentWithinLimit } from "./documentSize";
 import { createResourceAccess } from "./domain";
 
@@ -125,11 +129,17 @@ const readPreparationState = async (
 		.order("asc")
 		.take(CHAT_CONTEXT_POLICY.exactTailMessageLimit + 1);
 
+	const selected = await selectChatMessageBatch(ctx, messages);
 	return {
 		compaction: checkpoint,
 		hasMoreMessages:
-			messages.length > CHAT_CONTEXT_POLICY.exactTailMessageLimit,
-		messages: messages.map(toContextMessage),
+			messages.length > CHAT_CONTEXT_POLICY.exactTailMessageLimit ||
+			selected.length < messages.length,
+		messages: await Promise.all(
+			selected.map(async (message) =>
+				toContextMessage(await hydrateChatMessage(ctx, message)),
+			),
+		),
 	};
 };
 
@@ -342,9 +352,15 @@ export const save = mutation({
 			})
 			.order("asc")
 			.take(CHAT_CONTEXT_POLICY.compactionBatchSize);
-		const boundary = boundaryCandidates.at(-1);
+		const selectedBoundaryCandidates = await selectChatMessageBatch(
+			ctx,
+			boundaryCandidates,
+		);
+		const boundary = selectedBoundaryCandidates.at(-1);
 		if (
-			boundaryCandidates.length !== CHAT_CONTEXT_POLICY.compactionBatchSize ||
+			(selectedBoundaryCandidates.length <
+				CHAT_CONTEXT_POLICY.compactionBatchSize &&
+				selectedBoundaryCandidates.length === boundaryCandidates.length) ||
 			!boundary ||
 			boundary.messageId !== args.throughMessageId ||
 			boundary._creationTime !== args.throughCreationTime

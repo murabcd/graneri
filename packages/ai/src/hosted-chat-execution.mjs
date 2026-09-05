@@ -116,9 +116,11 @@ export const startHostedAssistantExecution = async ({
 		};
 	}
 
-	const [observationStream, deliveryStream] = stream.tee();
+	const observation = new TransformStream();
+	const writer = observation.writable.getWriter();
+	const reader = stream.getReader();
 	const completion = consumeHostedAssistantExecutionStream({
-		stream: observationStream,
+		stream: observation.readable,
 		onMessage: delivery.onMessage,
 	}).then((latestMessage) =>
 		requireHostedAssistantExecutionOutcome({
@@ -126,9 +128,33 @@ export const startHostedAssistantExecution = async ({
 			outcome: finishedOutcome,
 		}),
 	);
-
+	let observationError = null;
+	void completion.catch(async (error) => {
+		observationError = error;
+		await Promise.allSettled([reader.cancel(error), writer.abort(error)]);
+	});
 	return {
 		completion,
-		stream: deliveryStream,
+		stream: new ReadableStream({
+			async pull(controller) {
+				try {
+					const result = await reader.read();
+					if (result.done) {
+						await writer.close();
+						await completion;
+						controller.close();
+						return;
+					}
+					await writer.write(result.value);
+					controller.enqueue(result.value);
+				} catch (error) {
+					controller.error(observationError ?? error);
+					await Promise.allSettled([reader.cancel(error), writer.abort(error)]);
+				}
+			},
+			async cancel(reason) {
+				await Promise.allSettled([reader.cancel(reason), writer.abort(reason)]);
+			},
+		}),
 	};
 };

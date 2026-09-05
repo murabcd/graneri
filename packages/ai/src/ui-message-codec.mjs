@@ -182,3 +182,12 @@ export const normalizeStoredUiMessage = async (message) => {
 		),
 	};
 };
+
+export const hasUiMessageContent = (message) =>
+	message.parts.some((part) => {
+		if (part.type === "step-start") return false;
+		if (part.type === "text" || part.type === "reasoning") {
+			return part.text.trim().length > 0;
+		}
+		return true;
+	});

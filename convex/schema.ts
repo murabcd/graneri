@@ -32,6 +32,7 @@ import {
 	calendarAttendeeResponseStatusValidator,
 	calendarEventSnapshotValidator,
 } from "./calendarValidators";
+import { chatPayloadReferenceValidator } from "./chatPayloadModel";
 import { chatSettingsFields } from "./chatSettingsModel";
 import {
 	projectColorValidator,
@@ -720,9 +721,9 @@ export default defineSchema({
 		ownerTokenIdentifier: v.string(),
 		messageId: v.string(),
 		role: v.union(v.literal("user"), v.literal("assistant")),
-		partsJson: v.string(),
+		contentId: v.id("chatContents"),
 		metadataJson: v.optional(v.string()),
-		text: v.string(),
+		preview: v.string(),
 		createdAt: v.number(),
 	})
 		.index("by_chatId", ["chatId"])
@@ -790,9 +791,9 @@ export default defineSchema({
 		sequence: v.number(),
 		messageId: v.string(),
 		role: v.union(v.literal("user"), v.literal("assistant")),
-		partsJson: v.string(),
+		contentId: v.id("chatContents"),
 		metadataJson: v.optional(v.string()),
-		text: v.string(),
+		preview: v.string(),
 		createdAt: v.number(),
 	})
 		.index("by_chatId", ["chatId"])
@@ -847,11 +848,21 @@ export default defineSchema({
 		runId: v.id("assistantRuns"),
 		authorName: v.string(),
 		googleAuthUserId: v.union(v.string(), v.null()),
-		job: assistantRunJobValidator,
+		job: assistantRunJobValidator.omit("messagesJson"),
+		messages: chatPayloadReferenceValidator,
 		execution: assistantRunExecutionValidator,
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_runId", ["runId"]),
+	chatPayloadChunks: defineTable({
+		key: v.string(),
+		sequence: v.number(),
+		content: v.string(),
+	}).index("by_key_and_sequence", ["key", "sequence"]),
+	chatContents: defineTable({
+		payload: chatPayloadReferenceValidator,
+		referenceCount: v.number(),
+	}),
 	assistantRunToolExecutions: defineTable({
 		runId: v.id("assistantRuns"),
 		assistantMessageId: v.string(),
@@ -859,13 +870,12 @@ export default defineSchema({
 		ordinal: v.number(),
 		toolCallId: v.string(),
 		toolName: v.string(),
-		inputJson: v.string(),
+		contentId: v.id("chatContents"),
 		status: v.union(
 			v.literal("executing"),
 			v.literal("completed"),
 			v.literal("failed"),
 		),
-		outputJson: v.optional(v.string()),
 		errorText: v.optional(v.string()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
@@ -920,8 +930,8 @@ export default defineSchema({
 		runId: v.id("assistantRuns"),
 		chatId: v.id("chats"),
 		assistantMessageId: v.string(),
-		text: v.string(),
-		partsJson: v.string(),
+		contentId: v.id("chatContents"),
+		hasContent: v.boolean(),
 		updatedAt: v.number(),
 	})
 		.index("by_runId", ["runId"])
@@ -937,8 +947,7 @@ export default defineSchema({
 			v.literal("failed"),
 			v.literal("denied"),
 		),
-		inputJson: v.optional(v.string()),
-		outputJson: v.optional(v.string()),
+		contentId: v.id("chatContents"),
 		errorText: v.optional(v.string()),
 		createdAt: v.number(),
 		updatedAt: v.number(),

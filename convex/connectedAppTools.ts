@@ -19,6 +19,7 @@ import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action } from "./_generated/server";
 import type { ChatToolConnection } from "./appConnections";
+import { withAssistantRunCancellation } from "./assistantRunCancellation";
 import { createResourceAccess } from "./domain";
 
 const { requireIdentity } = createResourceAccess("connected app tools");
@@ -161,6 +162,8 @@ export const executeRemoteMcpTool = action({
 		sourceId: v.string(),
 		toolName: v.string(),
 		inputJson: v.string(),
+		runId: v.id("assistantRuns"),
+		assistantMessageId: v.string(),
 	},
 	returns: v.string(),
 	handler: async (ctx, args): Promise<string> => {
@@ -180,10 +183,25 @@ export const executeRemoteMcpTool = action({
 			workspaceId: args.workspaceId,
 			sourceId: args.sourceId,
 		});
-		return await executeRemoteMcpToolForProxy(connection, {
-			inputJson: args.inputJson,
-			toolName: args.toolName,
-		});
+		return await withAssistantRunCancellation(
+			async () =>
+				await ctx.runQuery(internal.assistantRuns.isExecutionActive, {
+					ownerTokenIdentifier: identity.tokenIdentifier,
+					workspaceId: args.workspaceId,
+					runId: args.runId,
+					assistantMessageId: args.assistantMessageId,
+				}),
+			async (abortSignal) =>
+				await executeRemoteMcpToolForProxy(
+					connection,
+					{
+						inputJson: args.inputJson,
+						toolName: args.toolName,
+					},
+					{ abortSignal },
+				),
+			new Error("Assistant run is no longer active."),
+		);
 	},
 });
 

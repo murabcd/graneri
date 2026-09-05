@@ -1,6 +1,10 @@
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
+import {
+	readToolExecutionContent,
+	writeChatToolContent,
+} from "./chatToolContent";
 
 const receiptIdentityValidator = {
 	runId: v.id("assistantRuns"),
@@ -55,25 +59,29 @@ export const claim = internalMutation({
 		const existing = await getReceipt(ctx, args);
 		if (!existing) {
 			const now = Date.now();
+			const { inputJson, ...identity } = args;
+			const contentId = await writeChatToolContent(ctx, { inputJson });
 			await ctx.db.insert("assistantRunToolExecutions", {
-				...args,
+				...identity,
+				contentId,
 				status: "executing",
 				createdAt: now,
 				updatedAt: now,
 			});
 			return { type: "execute" } as const;
 		}
+		const content = await readToolExecutionContent(ctx, existing.contentId);
 		if (
 			existing.toolName !== args.toolName ||
-			existing.inputJson !== args.inputJson
+			content.inputJson !== args.inputJson
 		) {
 			throw new ConvexError({
 				code: "ASSISTANT_TOOL_RETRY_MISMATCH",
 				message: "Retried assistant step produced a different tool operation.",
 			});
 		}
-		if (existing.status === "completed" && existing.outputJson) {
-			return { type: "reuse", outputJson: existing.outputJson } as const;
+		if (existing.status === "completed" && content.outputJson) {
+			return { type: "reuse", outputJson: content.outputJson } as const;
 		}
 		if (existing.status === "failed") {
 			return {
@@ -98,10 +106,13 @@ export const complete = internalMutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const receipt = await getReceipt(ctx, args);
+		const content = receipt
+			? await readToolExecutionContent(ctx, receipt.contentId)
+			: null;
 		if (
 			!receipt ||
 			receipt.toolName !== args.toolName ||
-			receipt.inputJson !== args.inputJson
+			content?.inputJson !== args.inputJson
 		) {
 			throw new ConvexError({
 				code: "ASSISTANT_TOOL_RECEIPT_NOT_FOUND",
@@ -117,10 +128,15 @@ export const complete = internalMutation({
 				message: "Failed assistant tool execution cannot be completed.",
 			});
 		}
+		const contentId = await writeChatToolContent(
+			ctx,
+			{ inputJson: args.inputJson, outputJson: args.outputJson },
+			receipt.contentId,
+		);
 		await ctx.db.patch(receipt._id, {
 			status: "completed",
 			toolCallId: args.toolCallId,
-			outputJson: args.outputJson,
+			contentId,
 			errorText: undefined,
 			updatedAt: Date.now(),
 		});

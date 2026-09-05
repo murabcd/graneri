@@ -98,15 +98,14 @@ export class HostedActiveChatStreamPersister {
 	}
 
 	#scheduleFlush() {
-		if (this.#flushTimer) {
+		if (this.#flushTimer || this.#flushPromise || this.#flushError) {
 			return;
 		}
 
 		this.#flushTimer = setTimeout(() => {
 			this.#flushTimer = null;
-			void this.flush().catch((error) => {
-				this.#flushError = error;
-			});
+			// flush retains failures for the terminal caller; scheduled work is observed.
+			void this.flush().catch(() => undefined);
 		}, HOSTED_ACTIVE_STREAM_FLUSH_INTERVAL_MS);
 	}
 
@@ -154,66 +153,56 @@ export class HostedActiveChatStreamPersister {
 	}
 
 	async flush() {
-		if (this.#discarded) {
-			return;
-		}
-
-		if (this.#flushError) {
-			const error = this.#flushError;
-			this.#flushError = null;
-			throw error;
-		}
-
+		if (this.#discarded) return;
+		if (this.#flushError) throw this.#flushError;
 		if (this.#flushTimer) {
 			clearTimeout(this.#flushTimer);
 			this.#flushTimer = null;
 		}
-
-		while (this.#buffer || this.#parts !== null) {
-			const delta = this.#buffer;
-			this.#buffer = "";
-			const parts = this.#parts;
-			this.#parts = null;
-			const previousFlush = this.#flushPromise ?? Promise.resolve();
-			const flushPromise = previousFlush
-				.then(async () => {
-					if (this.#discarded) {
-						return undefined;
-					}
-					await this.#updateActiveStream({
-						workspaceId: this.#workspaceId,
-						chatId: this.#chatId,
-						runId: this.#runId,
-						assistantMessageId: this.#messageId,
-						...(delta && { delta }),
-						...(parts !== null && {
-							partsJson: stringifyToolPayload(parts),
-						}),
+		do {
+			if (!this.#flushPromise) {
+				this.#flushPromise = this.#drain()
+					.catch((error) => {
+						this.#flushError =
+							error instanceof Error
+								? error
+								: new Error("Active stream persistence failed.", {
+										cause: error,
+									});
+						throw this.#flushError;
+					})
+					.finally(() => {
+						this.#flushPromise = null;
+						if (!this.#discarded && (this.#buffer || this.#parts !== null))
+							this.#scheduleFlush();
 					});
-					return undefined;
-				})
-				.then(() => undefined);
-
-			this.#flushPromise = flushPromise;
-			try {
-				await flushPromise;
-			} finally {
-				if (this.#flushPromise === flushPromise) {
-					this.#flushPromise = null;
-				}
 			}
-		}
+			await this.#flushPromise;
+		} while (
+			!this.#discarded &&
+			(this.#flushPromise || this.#buffer || this.#parts !== null)
+		);
+	}
 
-		await this.#flushPromise;
-
-		if (this.#flushError) {
-			const error = this.#flushError;
-			this.#flushError = null;
-			throw error;
+	async #drain() {
+		while (!this.#discarded && (this.#buffer || this.#parts !== null)) {
+			const delta = this.#buffer;
+			const parts = this.#parts;
+			this.#buffer = "";
+			this.#parts = null;
+			await this.#updateActiveStream({
+				workspaceId: this.#workspaceId,
+				chatId: this.#chatId,
+				runId: this.#runId,
+				assistantMessageId: this.#messageId,
+				...(delta && { delta }),
+				...(parts !== null && { partsJson: stringifyToolPayload(parts) }),
+			});
 		}
 	}
 
 	async finish() {
+		this.#acceptingAppends = false;
 		await this.flush();
 		if (this.#discarded) {
 			return;

@@ -2,6 +2,8 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
+import { hydrateChatMessage } from "./chatMessageContent";
+import { writeChatMessage } from "./chatMessagePersistence";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -51,7 +53,7 @@ test("chat thread pages expose complete history newest first", async () => {
 			lastMessageAt: 2_204,
 		});
 		for (let index = 0; index < 205; index += 1) {
-			await ctx.db.insert("chatMessages", {
+			await writeChatMessage(ctx, {
 				chatId,
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				messageId: `message-${index}`,
@@ -296,4 +298,91 @@ test("forked chats retain shared attachments until the last chat is removed", as
 	});
 	await t.finishAllScheduledFunctions(vi.runAllTimers);
 	expect(await t.run((ctx) => ctx.db.system.get(storageId))).toBeNull();
+});
+
+test("large message bodies load independently and forks copy on write", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const text = "large answer ".repeat(90_000);
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "large-source",
+		projectId: null,
+		settings: DEFAULT_CHAT_SETTINGS,
+		message: {
+			id: "answer",
+			role: "assistant",
+			partsJson: JSON.stringify([{ type: "text", text }]),
+			text,
+			createdAt: 2000,
+		},
+	});
+	const headers = await asOwner.query(api.chatThreads.readPage, {
+		workspaceId,
+		chatId: "large-source",
+		paginationOpts: { cursor: null, numItems: 25 },
+	});
+	expect(JSON.stringify(headers).length).toBeLessThan(1000);
+	expect(headers.page[0]).not.toHaveProperty("partsJson");
+	const body = await asOwner.query(api.chatThreads.readMessage, {
+		workspaceId,
+		chatId: "large-source",
+		messageId: "answer",
+	});
+	expect(body?.text.length).toBe(text.length);
+	expect(body?.text === text).toBe(true);
+	await asOwner.mutation(api.chatThreads.forkFromAssistantMessage, {
+		workspaceId,
+		chatId: "large-source",
+		messageId: "answer",
+		forkChatId: "large-fork",
+	});
+	const shared = await t.run((ctx) => ctx.db.query("chatContents").collect());
+	expect(shared).toHaveLength(1);
+	expect(shared[0]?.referenceCount).toBe(2);
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId: "large-fork",
+		projectId: null,
+		settings: DEFAULT_CHAT_SETTINGS,
+		message: {
+			id: "answer",
+			role: "assistant",
+			partsJson: JSON.stringify([{ type: "text", text: "Changed fork" }]),
+			text: "Changed fork",
+			createdAt: 2000,
+		},
+	});
+	const source = await asOwner.query(api.chatThreads.readMessage, {
+		workspaceId,
+		chatId: "large-source",
+		messageId: "answer",
+	});
+	expect(source?.text === text).toBe(true);
+	const fork = await asOwner.query(api.chatThreads.readMessage, {
+		workspaceId,
+		chatId: "large-fork",
+		messageId: "answer",
+	});
+	expect(fork?.text).toBe("Changed fork");
+	await asOwner.mutation(api.chatBranches.branchFromMessage, {
+		workspaceId,
+		chatId: "large-source",
+		messageId: "answer",
+	});
+	const archived = await t.run(async (ctx) => {
+		const message = await ctx.db.query("chatBranchMessages").unique();
+		return message ? await hydrateChatMessage(ctx, message) : null;
+	});
+	expect(archived?.text === text).toBe(true);
+	for (const chatId of ["large-source", "large-fork"]) {
+		await asOwner.mutation(api.chats.remove, { workspaceId, chatId });
+	}
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+	expect(await t.run((ctx) => ctx.db.query("chatContents").collect())).toEqual(
+		[],
+	);
+	expect(
+		await t.run((ctx) => ctx.db.query("chatPayloadChunks").collect()),
+	).toEqual([]);
 });

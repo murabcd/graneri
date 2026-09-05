@@ -15,15 +15,16 @@ import {
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
 import {
-	createAssistantRunStream,
-	getActiveStreamForRun,
-} from "./assistantRunStreamState";
-import {
 	deleteAssistantRunSteerInputs,
 	loadPendingAssistantRunSteerMessages,
 } from "./assistantRunSteerInputState";
+import {
+	createAssistantRunStream,
+	getActiveStreamForRun,
+} from "./assistantRunStreamState";
 import { persistAssistantRunUserQuestionResolution } from "./assistantRunUserQuestions";
-import { requireConvexDocumentWithinLimit } from "./documentSize";
+import { hydrateChatMessage } from "./chatMessageContent";
+import { writeChatMessage } from "./chatMessagePersistence";
 import {
 	createCanonicalToolApprovalMessage,
 	requireMatchingToolApprovalResponse,
@@ -144,7 +145,7 @@ const persistToolApprovalResolution = async (
 	}
 
 	const canonicalMessage = createCanonicalToolApprovalMessage(
-		existingMessage,
+		await hydrateChatMessage(ctx, existingMessage),
 		pendingDecision,
 		approval.responses,
 	);
@@ -158,16 +159,7 @@ const persistToolApprovalResolution = async (
 		text: canonicalMessage.text,
 		createdAt: canonicalMessage.createdAt,
 	};
-	requireConvexDocumentWithinLimit({
-		document: {
-			...storedMessage,
-			_id: existingMessage._id,
-			_creationTime: existingMessage._creationTime,
-		},
-		errorCode: "CHAT_MESSAGE_TOO_LARGE",
-		message: "Chat message exceeds Convex's 1 MiB document limit.",
-	});
-	await ctx.db.replace(existingMessage._id, storedMessage);
+	await writeChatMessage(ctx, storedMessage);
 
 	return {
 		jobMessage: canonicalMessage,

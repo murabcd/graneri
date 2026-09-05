@@ -1,4 +1,5 @@
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { usePaginatedQuery, useQueries, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import * as React from "react";
 import type { StoredChatMessage } from "@/lib/chat-snapshot";
 import { api } from "../../../../convex/_generated/api";
@@ -34,9 +35,37 @@ export const usePaginatedChatMessages = ({
 		api.chatContextCompactions.getActivity,
 		chatId && workspaceId ? { chatId, workspaceId } : "skip",
 	);
-	const messages = React.useMemo(
-		() => toChronologicalMessages([...pagination.results]),
-		[pagination.results],
+	const bodyQueries = React.useMemo(
+		() =>
+			Object.fromEntries(
+				chatId && workspaceId
+					? pagination.results.map((message) => [
+							message.id,
+							{
+								query: api.chatThreads.readMessage,
+								args: { chatId, workspaceId, messageId: message.id },
+							},
+						])
+					: [],
+			),
+		[chatId, workspaceId, pagination.results],
+	);
+	// useQueries erases each function's return type; all entries use this one API.
+	const bodies: Record<
+		string,
+		FunctionReturnType<typeof api.chatThreads.readMessage> | Error | undefined
+	> = useQueries(bodyQueries);
+	const messages = React.useMemo(() => {
+		const loaded: StoredChatMessage[] = [];
+		for (const header of pagination.results) {
+			const body = bodies[header.id];
+			if (body instanceof Error) throw body;
+			if (body) loaded.push(body);
+		}
+		return toChronologicalMessages(loaded);
+	}, [bodies, pagination.results]);
+	const isLoadingBodies = pagination.results.some(
+		(message) => bodies[message.id] === undefined,
 	);
 	const loadEarlierMessages = React.useCallback(() => {
 		if (pagination.status === "CanLoadMore") {
@@ -49,8 +78,12 @@ export const usePaginatedChatMessages = ({
 		hasEarlierMessages:
 			pagination.status === "CanLoadMore" ||
 			pagination.status === "LoadingMore",
-		isLoadingEarlierMessages: pagination.status === "LoadingMore",
-		isLoadingFirstPage: pagination.status === "LoadingFirstPage",
+		isLoadingEarlierMessages:
+			pagination.status === "LoadingMore" ||
+			(isLoadingBodies && messages.length > 0),
+		isLoadingFirstPage:
+			pagination.status === "LoadingFirstPage" ||
+			(isLoadingBodies && messages.length === 0),
 		loadEarlierMessages,
 		messages,
 	};

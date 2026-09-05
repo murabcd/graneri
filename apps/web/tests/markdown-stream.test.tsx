@@ -87,7 +87,7 @@ describe("MarkdownStream code blocks", () => {
 		).toBe(true);
 	});
 
-	it("animates streamed words only while the response is active", () => {
+	it("keeps animation until the completed response finishes draining", async () => {
 		const view = render(
 			<MarkdownStream isAnimating mode="streaming">
 				{"One"}
@@ -106,7 +106,11 @@ describe("MarkdownStream code blocks", () => {
 			<MarkdownStream mode="static">{"One two three"}</MarkdownStream>,
 		);
 
-		expect(view.container.querySelector("[data-sd-animate]")).toBeNull();
+		expect(view.container.querySelector("[data-sd-animate]")).not.toBeNull();
+		await waitFor(() => {
+			expect(view.container.querySelector("[data-sd-animate]")).toBeNull();
+			expect(view.container.textContent).toBe("One two three");
+		});
 	});
 
 	it("copies code and shows success", async () => {

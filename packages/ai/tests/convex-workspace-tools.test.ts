@@ -36,6 +36,10 @@ describe("hosted Convex workspace tools", () => {
 		);
 		const workspaceId = "workspace-id" as never;
 		const catalog = await buildConvexWorkspaceToolSet({
+			getActiveExecution: () => ({
+				runId: "run-1" as Id<"assistantRuns">,
+				assistantMessageId: "assistant-1",
+			}),
 			chatId: "chat-1",
 			connections: [
 				{
@@ -66,6 +70,8 @@ describe("hosted Convex workspace tools", () => {
 			workspaceId,
 			sourceId: "app:notion-id",
 			inputJson: JSON.stringify({ query: "roadmap" }),
+			runId: "run-1",
+			assistantMessageId: "assistant-1",
 			toolName: "search",
 		});
 		expect(JSON.stringify(action.mock.calls)).not.toContain("token");
@@ -88,6 +94,10 @@ describe("hosted Convex workspace tools", () => {
 		);
 		const workspaceId = "workspace-id" as never;
 		const catalog = await buildConvexWorkspaceToolSet({
+			getActiveExecution: () => ({
+				runId: "run-1" as Id<"assistantRuns">,
+				assistantMessageId: "assistant-1",
+			}),
 			chatId: "chat-1",
 			connections: [
 				{

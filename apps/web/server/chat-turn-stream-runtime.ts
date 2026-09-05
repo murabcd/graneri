@@ -14,6 +14,7 @@ import {
 	type HostedActiveStreamSession,
 	startHostedChatRun,
 } from "@workspace/ai/hosted-chat-turn";
+import { hasUiMessageContent } from "@workspace/ai/ui-message-codec";
 import type { UIMessageChunk } from "ai";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api.js";
@@ -174,7 +175,7 @@ export const interruptHostedChatRun = async ({
 					...toHostedStoredMessage(message),
 					createdAt: boundary.preparedAt,
 				};
-				if (assistantMessage.text.trim().length > 0) {
+				if (hasUiMessageContent(message)) {
 					assistantMessages.push(assistantMessage);
 				}
 			}

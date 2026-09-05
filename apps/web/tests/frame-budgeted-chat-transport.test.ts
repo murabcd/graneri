@@ -1,5 +1,7 @@
+import { Chat } from "@ai-sdk/react";
 import type { ChatTransport, UIMessageChunk } from "ai";
 import { describe, expect, it, vi } from "vitest";
+import { createBrowserFrameScheduler } from "../src/lib/browser-frame-scheduler";
 import {
 	createFrameBudgetedStream,
 	FrameBudgetedChatTransport,
@@ -148,7 +150,8 @@ describe("createFrameBudgetedStream", () => {
 		expect(nextValue).toBeLessThanOrEqual(5);
 		await expect(reader.read()).resolves.toEqual({ done: false, value: 1 });
 		await flushMicrotasks();
-		expect(scheduler.pendingFrames).toBe(1);
+		expect(scheduler.pendingFrames).toBe(0);
+		await expect(reader.read()).resolves.toEqual({ done: false, value: 2 });
 
 		await reader.cancel();
 	});
@@ -210,4 +213,123 @@ describe("FrameBudgetedChatTransport", () => {
 
 		await expect(reconnected).resolves.toEqual([chunk("a"), chunk("b")]);
 	});
+});
+
+it("uses the available frame budget with a real SDK chat consumer", async () => {
+	let frames = 0;
+	const chunks: UIMessageChunk[] = [
+		{ type: "start", messageId: "assistant" },
+		{ type: "text-start", id: "text" },
+		...Array.from(
+			{ length: 600 },
+			(): UIMessageChunk => ({ type: "text-delta", id: "text", delta: "x" }),
+		),
+		{ type: "text-end", id: "text" },
+		{ type: "finish" },
+	];
+	const transport = new FrameBudgetedChatTransport(
+		{
+			sendMessages: async () =>
+				new ReadableStream({
+					start(controller) {
+						for (const chunk of chunks) controller.enqueue(chunk);
+						controller.close();
+					},
+				}),
+			reconnectToStream: async () => null,
+		},
+		{
+			maxItemsPerFrame: 120,
+			now: () => 0,
+			scheduleFrame: (callback) => {
+				const id = setTimeout(() => {
+					frames += 1;
+					callback();
+				}, 0);
+				return () => clearTimeout(id);
+			},
+		},
+	);
+	const chat = new Chat({ transport });
+	await chat.sendMessage({ text: "Test" });
+	expect(chat.status).toBe("ready");
+	expect(chat.messages.at(-1)?.parts).toEqual([
+		{ type: "text", text: "x".repeat(600), state: "done" },
+	]);
+	expect(frames).toBe(Math.ceil(chunks.length / 120));
+});
+
+it("continues draining when a visible tab is hidden before its scheduled frame", async () => {
+	vi.useFakeTimers();
+	const visibility = Object.assign(new EventTarget(), {
+		visibilityState: "visible" as DocumentVisibilityState,
+	});
+	const requestFrame = vi.fn(() => 7);
+	const cancelFrame = vi.fn();
+	const scheduleFrame = createBrowserFrameScheduler({
+		document: visibility,
+		requestAnimationFrame: requestFrame,
+		cancelAnimationFrame: cancelFrame,
+	});
+	try {
+		const stream = createFrameBudgetedStream(
+			new ReadableStream<number>({
+				start(controller) {
+					controller.enqueue(1);
+					controller.enqueue(2);
+					controller.close();
+				},
+			}),
+			{ maxItemsPerFrame: 1, scheduleFrame },
+		);
+		const collected = collectStream(stream);
+		await flushMicrotasks();
+		expect(requestFrame).toHaveBeenCalledOnce();
+		visibility.visibilityState = "hidden";
+		visibility.dispatchEvent(new Event("visibilitychange"));
+		expect(cancelFrame).toHaveBeenCalledWith(7);
+		await vi.runAllTimersAsync();
+		await expect(collected).resolves.toEqual([1, 2]);
+		expect(vi.getTimerCount()).toBe(0);
+		visibility.visibilityState = "visible";
+		visibility.dispatchEvent(new Event("visibilitychange"));
+		expect(requestFrame).toHaveBeenCalledOnce();
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+it("cancellation releases a hidden frame and its visibility listener", async () => {
+	vi.useFakeTimers();
+	const visibility = Object.assign(new EventTarget(), {
+		visibilityState: "hidden" as DocumentVisibilityState,
+	});
+	const requestFrame = vi.fn(() => 7);
+	const cancelSource = vi.fn();
+	const scheduleFrame = createBrowserFrameScheduler({
+		document: visibility,
+		requestAnimationFrame: requestFrame,
+		cancelAnimationFrame: vi.fn(),
+	});
+	try {
+		const stream = createFrameBudgetedStream(
+			new ReadableStream<number>({
+				start(controller) {
+					controller.enqueue(1);
+				},
+				cancel: cancelSource,
+			}),
+			{ scheduleFrame },
+		);
+		await flushMicrotasks();
+		expect(vi.getTimerCount()).toBe(1);
+		await stream.cancel();
+		expect(cancelSource).toHaveBeenCalledOnce();
+		expect(vi.getTimerCount()).toBe(0);
+		visibility.visibilityState = "visible";
+		visibility.dispatchEvent(new Event("visibilitychange"));
+		expect(requestFrame).not.toHaveBeenCalled();
+	} finally {
+		vi.useRealTimers();
+	}
 });

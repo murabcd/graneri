@@ -1,6 +1,6 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -37,6 +37,75 @@ const createWorkspace = async () => {
 type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
 type AsOwner = WorkspaceFixture["asOwner"];
 type WorkspaceId = WorkspaceFixture["workspaceId"];
+
+test("large tool results survive terminal cleanup in independently loaded events and release when history is deleted", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "large-tool";
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId,
+		projectId: null,
+		settings: DEFAULT_CHAT_SETTINGS,
+		message: {
+			id: "user",
+			role: "user",
+			text: "Search",
+			partsJson: '[{"type":"text","text":"Search"}]',
+			createdAt: 1000,
+		},
+	});
+	const run = await startRunAndStream({ asOwner, chatId, workspaceId });
+	const identity = {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		toolCallId: "large-result",
+	};
+	await asOwner.mutation(api.chatToolCalls.startActiveStreamToolCall, {
+		...identity,
+		toolName: "search",
+		inputJson: '{"query":"large"}',
+	});
+	const outputJson = JSON.stringify({ result: "🌲".repeat(300_000) });
+	const finished = await asOwner.mutation(
+		api.chatToolCalls.finishActiveStreamToolCall,
+		{ ...identity, status: "completed", outputJson },
+	);
+	expect(finished.outputJson === outputJson).toBe(true);
+	await asOwner.mutation(api.assistantRuns.finishAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+	const events = await asOwner.query(
+		api.assistantRunEvents.listRunEventsAfter,
+		{ runId: run._id },
+	);
+	expect(JSON.stringify(events).length).toBeLessThan(5000);
+	const completed = events.find(
+		(event) => event.event.type === "tool.completed",
+	);
+	if (!completed) throw new Error("Expected completed tool event.");
+	const body = await asOwner.query(
+		api.assistantRunEvents.readEventToolContent,
+		{ runId: run._id, eventIndex: completed.eventIndex },
+	);
+	expect(body?.outputJson === outputJson).toBe(true);
+	expect(await t.run((ctx) => ctx.db.query("chatToolCalls").collect())).toEqual(
+		[],
+	);
+	await asOwner.mutation(api.chats.remove, { workspaceId, chatId });
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+	expect(await t.run((ctx) => ctx.db.query("chatContents").collect())).toEqual(
+		[],
+	);
+	expect(
+		await t.run((ctx) => ctx.db.query("chatPayloadChunks").collect()),
+	).toEqual([]);
+	vi.useRealTimers();
+});
 
 const startRunAndStream = async ({
 	asOwner,
@@ -151,13 +220,13 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 			type: "tool.started",
 			toolCallId: "tool-call-1",
 			toolName: "search",
-			inputJson: JSON.stringify({ query: "note" }),
+			contentId: expect.any(String),
 		},
 		{
 			type: "tool.completed",
 			toolCallId: "tool-call-1",
 			status: "completed",
-			outputJson: JSON.stringify({ result: "found" }),
+			contentId: expect.any(String),
 		},
 	]);
 
@@ -192,16 +261,38 @@ test("active stream tool calls persist lifecycle for the current stream", async 
 			type: "tool.started",
 			toolCallId: "tool-call-1",
 			toolName: "search",
-			inputJson: JSON.stringify({ query: "note" }),
+			contentId: expect.any(String),
 		},
 		{
 			type: "tool.completed",
 			toolCallId: "tool-call-1",
 			status: "completed",
-			outputJson: JSON.stringify({ result: "found" }),
+			contentId: expect.any(String),
 		},
 		{ type: "run.completed" },
 	]);
+	const toolEvents = terminalRows.events.filter(
+		(record) =>
+			record.event.type === "tool.started" ||
+			record.event.type === "tool.completed",
+	);
+	if (!toolEvents[0] || !toolEvents[1])
+		throw new Error("Expected both tool events.");
+	expect(
+		await asOwner.query(api.assistantRunEvents.readEventToolContent, {
+			runId: run._id,
+			eventIndex: toolEvents[0].eventIndex,
+		}),
+	).toEqual({ inputJson: JSON.stringify({ query: "note" }) });
+	expect(
+		await asOwner.query(api.assistantRunEvents.readEventToolContent, {
+			runId: run._id,
+			eventIndex: toolEvents[1].eventIndex,
+		}),
+	).toEqual({
+		inputJson: JSON.stringify({ query: "note" }),
+		outputJson: JSON.stringify({ result: "found" }),
+	});
 });
 
 test("active stream tool calls reject stale run ids", async () => {

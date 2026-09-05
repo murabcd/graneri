@@ -10,7 +10,12 @@ import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { AssistantRunJob } from "./assistantRunJobModel";
-import { requireConvexDocumentWithinLimit } from "./documentSize";
+import {
+	deleteChatPayload,
+	readChatPayload,
+	updateChatPayload,
+	writeChatPayload,
+} from "./chatPayloads";
 
 export const getAssistantRunJob = async (
 	ctx: QueryCtx | MutationCtx,
@@ -20,6 +25,14 @@ export const getAssistantRunJob = async (
 		.query("assistantRunJobs")
 		.withIndex("by_runId", (q) => q.eq("runId", runId))
 		.unique();
+
+export const readAssistantRunJob = async (
+	ctx: QueryCtx | MutationCtx,
+	runJob: Doc<"assistantRunJobs">,
+): Promise<AssistantRunJob> => ({
+	...runJob.job,
+	messagesJson: await readChatPayload(ctx, runJob.messages),
+});
 
 export const createAssistantRunJob = async (
 	ctx: MutationCtx,
@@ -44,12 +57,19 @@ export const createAssistantRunJob = async (
 	}
 
 	const now = Date.now();
+	const { messagesJson, ...job } = args.job;
+	const messages = await writeChatPayload(
+		ctx,
+		`${run._id}:messages`,
+		messagesJson,
+	);
 	await ctx.db.insert("assistantRunJobs", {
 		ownerTokenIdentifier: run.ownerTokenIdentifier,
 		runId: run._id,
 		authorName: args.authorName,
 		googleAuthUserId: args.googleAuthUserId,
-		job: args.job,
+		job,
+		messages,
 		execution: {
 			assistantMessageId: run.assistantMessageId,
 			completedStepCount: 0,
@@ -93,6 +113,7 @@ export const deleteAssistantRunJob = async (
 ) => {
 	const job = await getAssistantRunJob(ctx, runId);
 	if (job) {
+		await deleteChatPayload(ctx, job.messages);
 		await ctx.db.delete(job._id);
 	}
 };
@@ -122,14 +143,18 @@ export const projectPersistedAssistantRunJobForNewGeneration = async (
 			message: "Assistant run background job not found.",
 		});
 	}
-	const job = await projectAssistantRunJobForNewGeneration(runJob.job);
-	const updatedAt = Date.now();
-	requireConvexDocumentWithinLimit({
-		document: { ...runJob, job, updatedAt },
-		errorCode: "ASSISTANT_RUN_JOB_TOO_LARGE",
-		message: "Assistant run background job exceeds the Convex document limit.",
-	});
-	await ctx.db.patch(runJob._id, { job, updatedAt });
+	const messages = await updateChatPayload(
+		ctx,
+		runJob.messages,
+		async (messagesJson) => {
+			const job = await projectAssistantRunJobForNewGeneration({
+				...runJob.job,
+				messagesJson,
+			});
+			return job.messagesJson;
+		},
+	);
+	await ctx.db.patch(runJob._id, { messages, updatedAt: Date.now() });
 };
 
 export const upsertAssistantRunJobMessage = async (
@@ -163,45 +188,39 @@ export const upsertAssistantRunJobMessages = async (
 		});
 	}
 
-	let messages: unknown[];
-	let uiMessages: Array<Awaited<ReturnType<typeof decodeStoredUiMessage>>>;
-	try {
-		messages = parseUiMessagesJson(runJob.job.messagesJson);
-		uiMessages = await Promise.all(
-			messagesToUpsert.map((message) => decodeStoredUiMessage(message)),
-		);
-	} catch {
-		throw new ConvexError({
-			code: "INVALID_ASSISTANT_RUN_JOB",
-			message: "Assistant run background messages are invalid.",
-		});
-	}
-	const nextMessages = [...messages];
-	for (const uiMessage of uiMessages) {
-		const existingIndex = nextMessages.findIndex(
-			(value) =>
-				value !== null &&
-				typeof value === "object" &&
-				!Array.isArray(value) &&
-				"id" in value &&
-				value.id === uiMessage.id,
-		);
-		if (existingIndex === -1) {
-			nextMessages.push(uiMessage);
-		} else {
-			nextMessages[existingIndex] = uiMessage;
-		}
-	}
+	const payload = await updateChatPayload(
+		ctx,
+		runJob.messages,
+		async (content) => {
+			let messages: Awaited<ReturnType<typeof validateUiMessages>>;
+			let uiMessages: Array<Awaited<ReturnType<typeof decodeStoredUiMessage>>>;
+			try {
+				messages = await validateUiMessages({
+					messages: parseUiMessagesJson(content),
+				});
+				uiMessages = await Promise.all(
+					messagesToUpsert.map((message) => decodeStoredUiMessage(message)),
+				);
+			} catch {
+				throw new ConvexError({
+					code: "INVALID_ASSISTANT_RUN_JOB",
+					message: "Assistant run background messages are invalid.",
+				});
+			}
+			const nextMessages = [...messages];
+			for (const uiMessage of uiMessages) {
+				const existingIndex = nextMessages.findIndex(
+					(value) => value.id === uiMessage.id,
+				);
+				if (existingIndex === -1) {
+					nextMessages.push(uiMessage);
+				} else {
+					nextMessages[existingIndex] = uiMessage;
+				}
+			}
 
-	const updatedAt = Date.now();
-	const job = {
-		...runJob.job,
-		messagesJson: JSON.stringify(nextMessages),
-	};
-	requireConvexDocumentWithinLimit({
-		document: { ...runJob, job, updatedAt },
-		errorCode: "ASSISTANT_RUN_JOB_TOO_LARGE",
-		message: "Assistant run background job exceeds the Convex document limit.",
-	});
-	await ctx.db.patch(runJob._id, { job, updatedAt });
+			return JSON.stringify(nextMessages);
+		},
+	);
+	await ctx.db.patch(runJob._id, { messages: payload, updatedAt: Date.now() });
 };

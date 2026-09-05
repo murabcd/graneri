@@ -85,5 +85,8 @@
       "apps/web/src/vite-env.d.ts",
       "apps/web/tests/setup.ts"
     ]
+  },
+  "patchedDependencies": {
+    "ai@7.0.31": "patches/ai@7.0.31.patch"
   }
 }

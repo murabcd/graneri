@@ -6,6 +6,7 @@ import {
 	MarkdownCodeBlock,
 	MarkdownInlineCode,
 } from "@/components/chat/markdown-code-block";
+import { useChatTextPresentation } from "@/hooks/use-chat-text-presentation";
 import {
 	graneriDarkCodeTheme,
 	graneriLightCodeTheme,
@@ -49,6 +50,7 @@ export function MarkdownStream({
 	plugins: providedPlugins,
 	...props
 }: MarkdownStreamProps) {
+	const presentation = useChatTextPresentation(children, isAnimating);
 	const components = React.useMemo(
 		() => ({
 			...semanticMarkdownComponents,
@@ -66,16 +68,17 @@ export function MarkdownStream({
 	return (
 		<Streamdown
 			{...props}
-			animated={isAnimating}
+			animated={isAnimating || presentation.isPending}
 			className={cn("graneri-markdown", className)}
 			codeBlockMaxHeight={0}
 			components={components}
 			controls={{ code: { copy: false, download: false } }}
-			isAnimating={isAnimating}
+			isAnimating={isAnimating || presentation.isPending}
+			mode={presentation.isPending ? "streaming" : props.mode}
 			linkSafety={disabledLinkSafety}
 			plugins={plugins}
 		>
-			{children}
+			{presentation.text}
 		</Streamdown>
 	);
 }

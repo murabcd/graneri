@@ -40,6 +40,7 @@ import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalAction } from "./_generated/server";
 import { executeArtifactAuthoring } from "./artifactAuthoring";
 import { createAssistantRunAutomationActions } from "./assistantRunAutomationActions";
+import { withAssistantRunCancellation } from "./assistantRunCancellation";
 import { createAssistantRunGeneratedImageUploader } from "./assistantRunGeneratedImage";
 import type {
 	AssistantRunJob,
@@ -419,23 +420,35 @@ export const runStep = internalAction({
 				lastFlushAt = Date.now();
 			};
 
-			const execution = await startHostedAssistantExecution({
-				agent,
-				assistantMessageId: args.assistantMessageId,
-				messages,
-				timeout: { totalMs: BACKGROUND_STEP_TIMEOUT_MS },
-				onStepEnd: (step) => {
-					stepUsage = step.usage;
-				},
-				delivery: {
-					mode: "consume",
-					onMessage: async (message) => {
-						if (Date.now() - lastFlushAt >= SNAPSHOT_FLUSH_INTERVAL_MS) {
-							await persistSnapshot(message);
-						}
-					},
-				},
-			});
+			const execution = await withAssistantRunCancellation(
+				async () =>
+					await ctx.runQuery(internal.assistantRuns.isExecutionActive, {
+						ownerTokenIdentifier: context.ownerTokenIdentifier,
+						workspaceId: context.workspaceId,
+						runId: args.runId,
+						assistantMessageId: args.assistantMessageId,
+					}),
+				async (abortSignal) =>
+					await startHostedAssistantExecution({
+						abortSignal,
+						agent,
+						assistantMessageId: args.assistantMessageId,
+						messages,
+						timeout: { totalMs: BACKGROUND_STEP_TIMEOUT_MS },
+						onStepEnd: (step) => {
+							stepUsage = step.usage;
+						},
+						delivery: {
+							mode: "consume",
+							onMessage: async (message) => {
+								if (Date.now() - lastFlushAt >= SNAPSHOT_FLUSH_INTERVAL_MS) {
+									await persistSnapshot(message);
+								}
+							},
+						},
+					}),
+				new BackgroundRunStoppedError(),
+			);
 
 			const { outcome: executionOutcome } = execution;
 			const { responseMessage } = executionOutcome;

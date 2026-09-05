@@ -8,6 +8,12 @@ import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { createQueuedRequestBodyJson } from "./assistantQueuedMessage.fixtures";
 import type { AssistantQueuedMessageReplayClaimAttempt } from "./assistantQueuedMessageModel";
+import {
+	hydrateChatMessage,
+	writeChatMessageContent,
+} from "./chatMessageContent";
+import { readChatPayload } from "./chatPayloads";
+import { readChatToolContent, writeChatToolContent } from "./chatToolContent";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -513,7 +519,11 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 		status: "running",
 		assistantMessageId: "msg-assistant-background",
 	});
-	expect(initialState.stream).toMatchObject({
+	expect(
+		await t.run(async (ctx) =>
+			initialState.stream ? hydrateChatMessage(ctx, initialState.stream) : null,
+		),
+	).toMatchObject({
 		text: "",
 		partsJson: "[]",
 	});
@@ -541,10 +551,11 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 			.withIndex("by_runId", (q) => q.eq("runId", run._id))
 			.unique(),
 	);
-	expect(pendingToolCall).toMatchObject({
-		status: "pending",
-		inputJson: JSON.stringify({ query: "answer" }),
-	});
+	expect(pendingToolCall?.status).toBe("pending");
+	if (!pendingToolCall) throw new Error("Expected pending tool call.");
+	expect(
+		await t.run((ctx) => readChatToolContent(ctx, pendingToolCall.contentId)),
+	).toEqual({ inputJson: JSON.stringify({ query: "answer" }) });
 
 	const partsJson = JSON.stringify([
 		{ type: "reasoning", text: "Considered the request." },
@@ -619,7 +630,13 @@ test("background start atomically creates a Convex-owned run and finalizes its r
 			.collect(),
 	}));
 	expect(finalState.storedRun).toMatchObject({ status: "completed" });
-	expect(finalState.messages).toContainEqual(
+	expect(
+		await t.run((ctx) =>
+			Promise.all(
+				finalState.messages.map((message) => hydrateChatMessage(ctx, message)),
+			),
+		),
+	).toContainEqual(
 		expect.objectContaining({
 			messageId: "msg-assistant-background",
 			text: "Background answer.",
@@ -765,13 +782,21 @@ test("background approval waits durably and failure cleans its runtime snapshot"
 		status: "running",
 		assistantMessageId: "msg-assistant-after-approval",
 	});
-	expect(resumedState.stream).toMatchObject({
+	expect(
+		await t.run(async (ctx) =>
+			resumedState.stream ? hydrateChatMessage(ctx, resumedState.stream) : null,
+		),
+	).toMatchObject({
 		assistantMessageId: "msg-assistant-after-approval",
 		partsJson: "[]",
 	});
 	expect(resumedState.jobCount).toBe(1);
 	const resumedMessages = JSON.parse(
-		resumedState.job?.job.messagesJson ?? "[]",
+		await t.run(async (ctx) =>
+			resumedState.job
+				? await readChatPayload(ctx, resumedState.job.messages)
+				: "[]",
+		),
 	) as Array<{
 		id: string;
 		parts: Array<{
@@ -958,7 +983,11 @@ test("accepted steering waits for a pending decision and continues exactly once 
 	expect(resumedState.run?.pendingDecision).toBeUndefined();
 	expect(resumedState.pendingSteerInputs).toHaveLength(0);
 	const resumedMessages = JSON.parse(
-		resumedState.job?.job.messagesJson ?? "[]",
+		await t.run(async (ctx) =>
+			resumedState.job
+				? await readChatPayload(ctx, resumedState.job.messages)
+				: "[]",
+		),
 	) as Array<{ id: string }>;
 	expect(resumedMessages.slice(-2).map((message) => message.id)).toEqual([
 		run.assistantMessageId,
@@ -1021,7 +1050,9 @@ test("background steering completes the current generation and continues the sam
 			.query("assistantRunJobs")
 			.withIndex("by_runId", (q) => q.eq("runId", run._id))
 			.unique();
-		return JSON.parse(job?.job.messagesJson ?? "[]") as Array<{
+		return JSON.parse(
+			job ? await readChatPayload(ctx, job.messages) : "[]",
+		) as Array<{
 			id: string;
 			parts: Array<{
 				providerMetadata?: { openai?: { itemId?: string } };
@@ -1120,7 +1151,11 @@ test("background steering completes the current generation and continues the sam
 		status: "running",
 	});
 	expect(state.run?.assistantMessageId).not.toBe(run.assistantMessageId);
-	expect(state.stream).toMatchObject({
+	expect(
+		await t.run(async (ctx) =>
+			state.stream ? hydrateChatMessage(ctx, state.stream) : null,
+		),
+	).toMatchObject({
 		assistantMessageId: state.run?.assistantMessageId,
 		partsJson: "[]",
 	});
@@ -1132,7 +1167,11 @@ test("background steering completes the current generation and continues the sam
 			expect.objectContaining({ messageId: "msg-user-steer" }),
 		]),
 	);
-	const jobMessages = JSON.parse(state.job?.job.messagesJson ?? "[]") as Array<{
+	const jobMessages = JSON.parse(
+		await t.run(async (ctx) =>
+			state.job ? await readChatPayload(ctx, state.job.messages) : "[]",
+		),
+	) as Array<{
 		id: string;
 		parts: Array<{
 			providerMetadata?: {
@@ -1384,7 +1423,9 @@ test("queued replay projects prior provider items onto its new generation", asyn
 			.query("assistantRunJobs")
 			.withIndex("by_runId", (q) => q.eq("runId", replay.run._id))
 			.unique();
-		return JSON.parse(job?.job.messagesJson ?? "[]") as Array<{
+		return JSON.parse(
+			job ? await readChatPayload(ctx, job.messages) : "[]",
+		) as Array<{
 			parts: Array<{
 				text?: string;
 				providerMetadata?: {
@@ -1606,14 +1647,20 @@ test("finishAssistantRun deletes all snapshots for runId without batch caps", as
 				runId: run._id,
 				chatId: run.chatId,
 				assistantMessageId: run.assistantMessageId,
-				text: `Partial ${index}`,
-				partsJson: JSON.stringify([{ type: "text", text: `Partial ${index}` }]),
+				contentId: await writeChatMessageContent(ctx, {
+					text: `Partial ${index}`,
+					partsJson: JSON.stringify([
+						{ type: "text", text: `Partial ${index}` },
+					]),
+				}),
+				hasContent: true,
 				updatedAt: 3_000 + index,
 			});
 		}
 
 		for (let index = 0; index < 125; index += 1) {
 			await ctx.db.insert("chatToolCalls", {
+				contentId: await writeChatToolContent(ctx, {}),
 				runId: run._id,
 				chatId: run.chatId,
 				toolCallId: `tool-call-${index}`,
@@ -2652,7 +2699,15 @@ test("a tool answer resolves the question without appending a user message", asy
 			.filter((message) => message.role === "user")
 			.map((message) => message.messageId),
 	).toEqual(userMessageIdsBeforeAnswer);
-	expect(JSON.parse(resolvedQuestion?.partsJson ?? "[]")).toEqual([
+	expect(
+		JSON.parse(
+			await t.run(async (ctx) =>
+				resolvedQuestion
+					? (await hydrateChatMessage(ctx, resolvedQuestion)).partsJson
+					: "[]",
+			),
+		),
+	).toEqual([
 		expect.objectContaining({
 			state: "output-available",
 			output: {
@@ -2929,3 +2984,89 @@ test("cleanupExpiredAssistantRuns preserves waiting-for-user runs", async () => 
 		),
 	);
 });
+
+for (const transition of ["stop", "fail", "expire"] as const) {
+	test(`${transition} preserves tool-only output exactly once`, async () => {
+		const { asOwner, t, workspaceId } = await createWorkspace();
+		const chatId = `tool-only-${transition}`;
+		await createChat({ asOwner, chatId, workspaceId });
+		const run = await startRunWithSnapshots({ asOwner, chatId, workspaceId });
+		const partsJson = JSON.stringify([
+			{
+				type: "tool-search",
+				toolCallId: "tool-call-1",
+				state: "output-available",
+				input: { query: "example" },
+				output: { results: ["saved result"] },
+			},
+		]);
+		await t.run(async (ctx) => {
+			const stream = await ctx.db
+				.query("chatActiveStreams")
+				.withIndex("by_runId", (q) => q.eq("runId", run._id))
+				.unique();
+			if (!stream) throw new Error("Expected active snapshot");
+			await ctx.db.patch(stream._id, {
+				contentId: await writeChatMessageContent(
+					ctx,
+					{ text: "", partsJson },
+					stream.contentId,
+				),
+				hasContent: true,
+				updatedAt: 1,
+			});
+		});
+		if (transition === "stop") {
+			await asOwner.mutation(api.assistantRuns.requestStopAssistantRun, {
+				runId: run._id,
+				assistantMessageId: run.assistantMessageId,
+			});
+			for (let attempt = 0; attempt < 2; attempt += 1) {
+				await asOwner.mutation(api.chats.stopActiveStream, {
+					workspaceId,
+					chatId,
+					runId: run._id,
+					assistantMessageId: run.assistantMessageId,
+				});
+				await asOwner.mutation(api.assistantRuns.finishStoppedAssistantRun, {
+					runId: run._id,
+					assistantMessageId: run.assistantMessageId,
+				});
+			}
+		} else if (transition === "fail") {
+			await asOwner.mutation(api.assistantRuns.failAssistantRun, {
+				runId: run._id,
+				assistantMessageId: run.assistantMessageId,
+				errorText: "Producer failed",
+			});
+		} else {
+			await t.run(async (ctx) => {
+				await ctx.db.patch(run._id, { updatedAt: 1 });
+			});
+			await t.mutation(internal.assistantRuns.cleanupExpiredAssistantRuns, {
+				scheduleContinuation: false,
+			});
+		}
+		const messages = await t.run(
+			async (ctx) =>
+				await ctx.db
+					.query("chatMessages")
+					.withIndex("by_chatId_and_messageId", (q) =>
+						q.eq("chatId", run.chatId).eq("messageId", run.assistantMessageId),
+					)
+					.collect(),
+		);
+		expect(messages).toHaveLength(1);
+		expect(
+			await t.run(async (ctx) =>
+				messages[0]
+					? (await hydrateChatMessage(ctx, messages[0])).partsJson
+					: undefined,
+			),
+		).toBe(partsJson);
+		expect(JSON.parse(messages[0]?.metadataJson ?? "{}")).toEqual({
+			interrupted: true,
+			workDurationMs: expect.any(Number),
+		});
+	});
+}

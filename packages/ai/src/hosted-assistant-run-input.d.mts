@@ -40,6 +40,7 @@ export declare const prepareHostedAssistantRunInput: <
 	getMessagesSnapshot: (args: {
 		workspaceId: WorkspaceId;
 		chatId: ChatId;
+		targetMessageId?: string;
 	}) => Promise<HostedChatStoredContextMessage[]>;
 	listRunEventsAfter: (args: {
 		runId: RunId;

@@ -44,3 +44,12 @@ export const isAssistantWorkPart = (
 	part: UIMessage["parts"][number],
 ): part is AssistantWorkPart =>
 	part.type === "reasoning" || isRenderableToolUiPart(part);
+
+export const isRenderableAssistantWorkPart = (
+	part: UIMessage["parts"][number],
+	isWorking: boolean,
+): part is AssistantWorkPart =>
+	isAssistantWorkPart(part) &&
+	(part.type !== "reasoning" ||
+		part.text.trim().length > 0 ||
+		(isWorking && part.state !== "done"));

@@ -103,7 +103,8 @@ describe("hosted Assistant Run input", () => {
 					messages: [contextMessage(retained)],
 				};
 			}),
-			getMessagesSnapshot: async () => {
+			getMessagesSnapshot: async (args) => {
+				expect(args.targetMessageId).toBe("user-1");
 				events.push("snapshot");
 				return [retained, original];
 			},

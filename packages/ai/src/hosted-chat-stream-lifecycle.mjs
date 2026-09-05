@@ -138,125 +138,120 @@ export const createHostedChatRunResponseStream = async ({
 		rejectObservedExecution = reject;
 	});
 	void observedExecution.catch(() => undefined);
-	const responseStream = new ReadableStream({
-		start(controller) {
-			void (async () => {
-				let execution = firstExecution;
-				let messages = chatMessages;
-				try {
-					for (;;) {
-						for await (const chunk of execution.stream) {
-							controller.enqueue(chunk);
-						}
-						const terminalization = await execution.completion;
-						const generationResponseMessage =
-							"responseMessage" in terminalization
-								? terminalization.responseMessage
-								: null;
-						let responseMessage = generationResponseMessage;
-						const canContinueFromSteer =
-							terminalization.status === "completed" ||
-							terminalization.status === "waiting_for_user";
-						if (canContinueFromSteer) {
-							activeStreamSession.closeSteeredUserMessageAcceptance();
-							await activeStreamSession.waitForSteeredUserMessageReservations();
-						}
-						const steerBoundary = canContinueFromSteer
-							? activeStreamSession.takeSteeredUserMessageGenerationBoundary()
-							: { consumed: [], pending: [], steerAcceptances: [] };
-						const steeredGenerationTranscript = generationResponseMessage
-							? buildHostedSteeredGenerationTranscript({
-									consumed: steerBoundary.consumed,
-									pending: steerBoundary.pending,
-									responseMessage: generationResponseMessage,
-								})
-							: [];
-						const consumedSteerCount = steerBoundary.consumed.reduce(
-							(count, batch) => count + batch.input.length,
-							0,
-						);
-						const shouldCommitSteeredGeneration =
-							generationResponseMessage &&
-							(consumedSteerCount > 0 || steerBoundary.pending.length > 0) &&
-							(terminalization.status === "completed" ||
-								steerBoundary.pending.length === 0);
-						if (shouldCommitSteeredGeneration) {
-							const assistantMessages = steeredGenerationTranscript.filter(
-								(message) => message.role === "assistant",
-							);
-							const activeAssistantMessage =
-								steerBoundary.pending.length === 0
-									? (assistantMessages.at(-1) ?? null)
-									: null;
-							const completedAssistantMessages = activeAssistantMessage
-								? assistantMessages.slice(0, -1)
-								: assistantMessages;
-							const nextAssistantMessageId =
-								activeAssistantMessage?.id ?? `stream-${crypto.randomUUID()}`;
-							await activeStreamSession.transitionGeneration({
-								activeAssistantMessage,
-								completedAssistantMessages,
-								nextAssistantMessageId,
-								orderedMessageIds: steeredGenerationTranscript.map(
-									(message) => message.id,
-								),
-								steerAcceptances: steerBoundary.steerAcceptances,
-							});
-							currentAssistantMessageId = nextAssistantMessageId;
-							if (activeAssistantMessage) {
-								responseMessage = activeAssistantMessage;
-							}
-						}
-						if (
-							terminalization.status === "completed" &&
-							generationResponseMessage &&
-							steerBoundary.pending.length > 0
-						) {
-							messages = projectUiMessagesForAssistantGeneration([
-								...messages,
-								...steeredGenerationTranscript,
-							]);
-							execution = await startExecution(messages);
-							if (execution.ok === false) {
-								throw execution.error;
-							}
-							activeStreamSession.openSteeredUserMessageAcceptance();
-							continue;
-						}
-						const finalTerminalization = responseMessage
-							? { ...terminalization, responseMessage }
-							: terminalization;
-						activeStreamSession.closeSteeredUserMessageAcceptance();
-						logLatency(
-							"stream.finish",
-							streamLatencyTracker.getFinishDetails(),
-						);
-						if (finalTerminalization.status !== "aborted") {
-							finalizationQueue.setTerminalization(finalTerminalization);
-						}
-						resolveObservedExecution({ ok: true });
-						controller.close();
-						return;
-					}
-				} catch (error) {
-					rejectObservedExecution(error);
-					finalizationQueue.setTerminalization({
-						errorText:
-							error instanceof Error
-								? error.message
-								: "Unknown active stream persistence error",
-						status: "failed",
-					});
-					try {
-						await finalizationQueue.flushAfterClientStream();
-					} catch {
-						// The client stream still receives the original execution failure.
-					}
-					controller.error(error);
+	const responseStream = new TransformStream();
+	const responseWriter = responseStream.writable.getWriter();
+	void (async () => {
+		let execution = firstExecution;
+		let messages = chatMessages;
+		try {
+			for (;;) {
+				for await (const chunk of execution.stream) {
+					await responseWriter.write(chunk);
 				}
-			})();
-		},
-	});
+				const terminalization = await execution.completion;
+				const generationResponseMessage =
+					"responseMessage" in terminalization
+						? terminalization.responseMessage
+						: null;
+				let responseMessage = generationResponseMessage;
+				const canContinueFromSteer =
+					terminalization.status === "completed" ||
+					terminalization.status === "waiting_for_user";
+				if (canContinueFromSteer) {
+					activeStreamSession.closeSteeredUserMessageAcceptance();
+					await activeStreamSession.waitForSteeredUserMessageReservations();
+				}
+				const steerBoundary = canContinueFromSteer
+					? activeStreamSession.takeSteeredUserMessageGenerationBoundary()
+					: { consumed: [], pending: [], steerAcceptances: [] };
+				const steeredGenerationTranscript = generationResponseMessage
+					? buildHostedSteeredGenerationTranscript({
+							consumed: steerBoundary.consumed,
+							pending: steerBoundary.pending,
+							responseMessage: generationResponseMessage,
+						})
+					: [];
+				const consumedSteerCount = steerBoundary.consumed.reduce(
+					(count, batch) => count + batch.input.length,
+					0,
+				);
+				const shouldCommitSteeredGeneration =
+					generationResponseMessage &&
+					(consumedSteerCount > 0 || steerBoundary.pending.length > 0) &&
+					(terminalization.status === "completed" ||
+						steerBoundary.pending.length === 0);
+				if (shouldCommitSteeredGeneration) {
+					const assistantMessages = steeredGenerationTranscript.filter(
+						(message) => message.role === "assistant",
+					);
+					const activeAssistantMessage =
+						steerBoundary.pending.length === 0
+							? (assistantMessages.at(-1) ?? null)
+							: null;
+					const completedAssistantMessages = activeAssistantMessage
+						? assistantMessages.slice(0, -1)
+						: assistantMessages;
+					const nextAssistantMessageId =
+						activeAssistantMessage?.id ?? `stream-${crypto.randomUUID()}`;
+					await activeStreamSession.transitionGeneration({
+						activeAssistantMessage,
+						completedAssistantMessages,
+						nextAssistantMessageId,
+						orderedMessageIds: steeredGenerationTranscript.map(
+							(message) => message.id,
+						),
+						steerAcceptances: steerBoundary.steerAcceptances,
+					});
+					currentAssistantMessageId = nextAssistantMessageId;
+					if (activeAssistantMessage) {
+						responseMessage = activeAssistantMessage;
+					}
+				}
+				if (
+					terminalization.status === "completed" &&
+					generationResponseMessage &&
+					steerBoundary.pending.length > 0
+				) {
+					messages = projectUiMessagesForAssistantGeneration([
+						...messages,
+						...steeredGenerationTranscript,
+					]);
+					execution = await startExecution(messages);
+					if (execution.ok === false) {
+						throw execution.error;
+					}
+					activeStreamSession.openSteeredUserMessageAcceptance();
+					continue;
+				}
+				const finalTerminalization = responseMessage
+					? { ...terminalization, responseMessage }
+					: terminalization;
+				activeStreamSession.closeSteeredUserMessageAcceptance();
+				logLatency("stream.finish", streamLatencyTracker.getFinishDetails());
+				if (finalTerminalization.status !== "aborted") {
+					finalizationQueue.setTerminalization(finalTerminalization);
+				}
+				resolveObservedExecution({ ok: true });
+				await responseWriter.close();
+				return;
+			}
+		} catch (error) {
+			rejectObservedExecution(error);
+			finalizationQueue.setTerminalization({
+				errorText:
+					error instanceof Error
+						? error.message
+						: "Unknown active stream persistence error",
+				status: "failed",
+			});
+			try {
+				await finalizationQueue.flushAfterClientStream();
+			} catch {
+				// The client stream still receives the original execution failure.
+			}
+			await responseWriter.abort(error);
+		}
+	})();
 	const requireObservedExecution = async () => {
 		const result = await observedExecution;
 		if (!result.ok) {
@@ -284,7 +279,7 @@ export const createHostedChatRunResponseStream = async ({
 			await finalizationQueue.flushAfterClientStream();
 		},
 		persister: activeStreamSession,
-		stream: streamLatencyTracker.wrapStream(responseStream),
+		stream: streamLatencyTracker.wrapStream(responseStream.readable),
 	});
 
 	return {

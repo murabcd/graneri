@@ -306,9 +306,6 @@ export const useChatTurnPresentation = ({
 					activeTurnState.turnId === turnMessages[0].id)
 					? activeTurnState.startedAt
 					: getChatMessageTimestampMs(turnMessages[0]);
-			const assistantTurnCompletedAt = latestAssistantMessage
-				? getChatMessageTimestampMs(latestAssistantMessage)
-				: null;
 			const latestAssistantMetadata = latestAssistantMessage
 				? getChatMessageMetadata(latestAssistantMessage)
 				: null;
@@ -330,13 +327,9 @@ export const useChatTurnPresentation = ({
 							latestAssistantMetadata?.interrupted !== true &&
 							!forcedStreamingMessageIds.has(latestAssistantMessage.id))),
 			);
-			const assistantTurnDurationMs =
-				!isAssistantTurnStreaming &&
-				!(isLastTurn && activeTurnState.startedAt !== null) &&
-				assistantTurnStartedAt !== null &&
-				assistantTurnCompletedAt !== null
-					? Math.max(1, assistantTurnCompletedAt - assistantTurnStartedAt)
-					: undefined;
+			const assistantTurnDurationMs = !isAssistantTurnStreaming
+				? latestAssistantMetadata?.workDurationMs
+				: undefined;
 
 			return {
 				assistantTurnActivityUnits,

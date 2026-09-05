@@ -1,3 +1,4 @@
+import { encodeChatMessageWorkDuration } from "@workspace/ai/chat-message-metadata";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import {
@@ -15,6 +16,7 @@ import {
 import {
 	getAssistantRunJob,
 	projectPersistedAssistantRunJobForNewGeneration,
+	readAssistantRunJob,
 	upsertAssistantRunJobMessage,
 	upsertAssistantRunJobMessages,
 } from "./assistantRunJobState";
@@ -24,20 +26,20 @@ import {
 	reasoningEffortValidator,
 	serviceTierValidator,
 } from "./assistantRunModel";
+import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
 import {
 	cleanupAssistantRunSnapshots,
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
 import {
+	deleteAssistantRunSteerInputs,
+	loadPendingAssistantRunSteerMessages,
+} from "./assistantRunSteerInputState";
+import {
 	createAssistantRunStream,
 	getActiveStreamForRun,
 	updateAssistantRunStream,
 } from "./assistantRunStreamState";
-import { scheduleAssistantRunExecution } from "./assistantRunScheduling";
-import {
-	deleteAssistantRunSteerInputs,
-	loadPendingAssistantRunSteerMessages,
-} from "./assistantRunSteerInputState";
 import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
 import { saveMessageForOwnerInternal } from "./chats";
 import { syncAssistantRunToolCalls } from "./chatToolCalls";
@@ -101,6 +103,10 @@ const saveActiveAssistantMessage = async (
 			partsJson: context.stream.partsJson,
 			text: context.stream.text,
 			createdAt: context.stream._creationTime,
+			metadataJson: encodeChatMessageWorkDuration({
+				startedAt: run.startedAt,
+				completedAt: Date.now(),
+			}),
 		},
 	});
 	await appendAssistantRunEvent(ctx, run, {
@@ -247,7 +253,7 @@ export const getRunnableContext = internalQuery({
 			model: run.model,
 			reasoningEffort: run.reasoningEffort,
 			serviceTier: run.serviceTier,
-			job: runJob.job,
+			job: await readAssistantRunJob(ctx, runJob),
 			execution: runJob.execution,
 		};
 	},

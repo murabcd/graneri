@@ -1,3 +1,4 @@
+import { encodeChatMessageWorkDuration } from "@workspace/ai/chat-message-metadata";
 import type {
 	StoredUiMessageRole,
 	TrustedStoredUiMessageInput,
@@ -156,8 +157,12 @@ export const commitAssistantRunGenerationBoundary = async (
 		await args.saveAssistantMessage({
 			...assistantMessage,
 			createdAt,
-			...(interrupted && {
-				metadataJson: JSON.stringify({ interrupted: true }),
+			metadataJson: encodeChatMessageWorkDuration({
+				metadataJson: interrupted
+					? JSON.stringify({ interrupted: true })
+					: assistantMessage.metadataJson,
+				startedAt: args.run.startedAt,
+				completedAt: Date.now(),
 			}),
 		});
 		if (messageId !== args.run.assistantMessageId) {

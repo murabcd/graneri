@@ -120,3 +120,23 @@ describe("active turn presentation", () => {
 		expect(result.current.turns[1]?.assistantTurnStartedAt).toBe(5_000);
 	});
 });
+
+it("uses the persisted work duration across unmount and reload", () => {
+	const messages: UIMessage[] = [
+		optimisticUserMessage,
+		{
+			...emptyAssistantMessage,
+			parts: [{ type: "text", text: "Finished.", state: "done" }],
+			metadata: { workDurationMs: 27000 },
+		},
+	];
+	const mounted = renderHook(renderPresentation, {
+		initialProps: { isLoading: false, messages },
+	});
+	expect(mounted.result.current.turns[0]?.assistantTurnDurationMs).toBe(27000);
+	mounted.unmount();
+	const reloaded = renderHook(renderPresentation, {
+		initialProps: { isLoading: false, messages },
+	});
+	expect(reloaded.result.current.turns[0]?.assistantTurnDurationMs).toBe(27000);
+});

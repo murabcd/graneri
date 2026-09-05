@@ -42,7 +42,8 @@ const remoteMcpDefinitionsSchema = z
 const remoteMcpToolArgumentsSchema = z.record(z.string(), z.json());
 const remoteMcpToolResultSchema = z.json();
 
-const withRemoteMcpClient = async (connection, callback) => {
+const withRemoteMcpClient = async (connection, callback, abortSignal) => {
+	abortSignal?.throwIfAborted();
 	const headers = {};
 
 	for (const [key, value] of Object.entries(connection.env ?? {})) {
@@ -65,6 +66,16 @@ const withRemoteMcpClient = async (connection, callback) => {
 			url: connection.baseUrl,
 			...(Object.keys(headers).length > 0 && { headers }),
 			redirect: "error",
+			fetch: (url, init) =>
+				fetch(url, {
+					...init,
+					signal: abortSignal
+						? AbortSignal.any([
+								abortSignal,
+								...(init?.signal ? [init.signal] : []),
+							])
+						: init?.signal,
+				}),
 		},
 		clientName: "graneri",
 		version: "0.0.1",
@@ -149,18 +160,22 @@ const remoteMcpToolOutputForModel = ({ output }) => {
 };
 
 const executeRemoteMcpTool = async (connection, definition, args, options) =>
-	await withRemoteMcpClient(connection, async (client) => {
-		const tools = client.toolsFromDefinitions({ tools: [definition] });
-		const tool = tools[definition.name];
+	await withRemoteMcpClient(
+		connection,
+		async (client) => {
+			const tools = client.toolsFromDefinitions({ tools: [definition] });
+			const tool = tools[definition.name];
 
-		if (!tool?.execute) {
-			throw new Error(
-				`${connection.displayName} MCP tool "${definition.name}" is unavailable.`,
-			);
-		}
+			if (!tool?.execute) {
+				throw new Error(
+					`${connection.displayName} MCP tool "${definition.name}" is unavailable.`,
+				);
+			}
 
-		return await tool.execute(args, options);
-	});
+			return await tool.execute(args, options);
+		},
+		options?.abortSignal,
+	);
 
 const getRemoteMcpDiscoveryCacheKey = (connection) =>
 	connection.sourceId
@@ -205,14 +220,6 @@ const cacheRemoteMcpDefinitions = (connection, definitions) => {
 	}
 };
 
-const listRemoteMcpDefinitions = async (client) =>
-	await client.listTools({
-		options: {
-			timeout: REMOTE_MCP_DISCOVERY_TIMEOUT_MS,
-			maxTotalTimeout: REMOTE_MCP_DISCOVERY_TIMEOUT_MS,
-		},
-	});
-
 const validateRemoteMcpDefinitions = (connection, definitions) => {
 	const serializedDefinitions = JSON.stringify(definitions);
 	if (typeof serializedDefinitions !== "string") {
@@ -239,6 +246,60 @@ const validateRemoteMcpDefinitions = (connection, definitions) => {
 	}
 
 	return result.data;
+};
+
+const listRemoteMcpDefinitions = async (connection, client, signal) => {
+	const tools = [];
+	const cursors = new Set();
+	const names = new Set();
+	let cursor;
+	for (;;) {
+		const page = await client.listTools({
+			...(cursor && { params: { cursor } }),
+			options: { signal },
+		});
+		const inventory = validateRemoteMcpDefinitions(connection, {
+			tools: [...tools, ...page.tools],
+		});
+		for (const tool of page.tools) {
+			if (names.has(tool.name)) {
+				throw new Error(
+					`${connection.displayName} returned duplicate MCP tool names.`,
+				);
+			}
+			names.add(tool.name);
+		}
+		tools.push(...inventory.tools.slice(tools.length));
+		if (!page.nextCursor) return { tools };
+		if (cursors.has(page.nextCursor) || cursors.size >= REMOTE_MCP_TOOL_LIMIT) {
+			throw new Error(
+				`${connection.displayName} returned invalid MCP pagination.`,
+			);
+		}
+		cursors.add(page.nextCursor);
+		cursor = page.nextCursor;
+	}
+};
+
+const loadRemoteMcpDefinitions = async (connection) => {
+	const controller = new AbortController();
+	const timer = setTimeout(
+		() =>
+			controller.abort(
+				new Error(`${connection.displayName} MCP discovery timed out.`),
+			),
+		REMOTE_MCP_DISCOVERY_TIMEOUT_MS,
+	);
+	try {
+		return await withRemoteMcpClient(
+			connection,
+			async (client) =>
+				await listRemoteMcpDefinitions(connection, client, controller.signal),
+			controller.signal,
+		);
+	} finally {
+		clearTimeout(timer);
+	}
 };
 
 const parseRemoteMcpJson = (value, schema, errorMessage) => {
@@ -279,12 +340,7 @@ const discoverRemoteMcpDefinitions = async (connection) => {
 		return await pendingDiscovery;
 	}
 
-	const discovery = withRemoteMcpClient(connection, async (client) =>
-		validateRemoteMcpDefinitions(
-			connection,
-			await listRemoteMcpDefinitions(client),
-		),
-	).then((definitions) => {
+	const discovery = loadRemoteMcpDefinitions(connection).then((definitions) => {
 		cacheRemoteMcpDefinitions(connection, definitions);
 		return definitions;
 	});
@@ -302,13 +358,7 @@ const discoverRemoteMcpDefinitions = async (connection) => {
 };
 
 export const validateRemoteMcpConnection = async (connection) =>
-	await withRemoteMcpClient(connection, async (client) => {
-		const result = validateRemoteMcpDefinitions(
-			connection,
-			await listRemoteMcpDefinitions(client),
-		);
-		return result.tools;
-	});
+	(await loadRemoteMcpDefinitions(connection)).tools;
 
 const buildRemoteMcpToolsFromDefinitions = (
 	connection,
@@ -376,8 +426,11 @@ export const listRemoteMcpToolsForProxy = async (connection) =>
 export const executeRemoteMcpToolForProxy = async (
 	connection,
 	{ inputJson, toolName },
+	options,
 ) => {
-	const definitions = await discoverRemoteMcpDefinitions(connection);
+	const definitions = await withRemoteMcpAbort(options?.abortSignal, () =>
+		discoverRemoteMcpDefinitions(connection),
+	);
 	if (!definitions.tools.some((definition) => definition.name === toolName)) {
 		throw new Error(
 			`${connection.displayName} MCP tool "${toolName}" is unavailable.`,
@@ -391,13 +444,33 @@ export const executeRemoteMcpToolForProxy = async (
 	const output = await withRemoteMcpClient(
 		connection,
 		async (client) =>
-			await client.callTool({ name: toolName, arguments: args }),
+			await client.callTool({
+				name: toolName,
+				arguments: args,
+				options: { signal: options?.abortSignal },
+			}),
+		options?.abortSignal,
 	);
 
 	return serializeRemoteMcpJson(
 		output,
 		`${connection.displayName} MCP tool result could not be serialized.`,
 	);
+};
+
+const withRemoteMcpAbort = async (signal, execute) => {
+	signal?.throwIfAborted();
+	if (!signal) return await execute();
+	let onAbort;
+	const aborted = new Promise((_, reject) => {
+		onAbort = () => reject(signal.reason);
+		signal.addEventListener("abort", onAbort, { once: true });
+	});
+	try {
+		return await Promise.race([execute(), aborted]);
+	} finally {
+		signal.removeEventListener("abort", onAbort);
+	}
 };
 
 export const buildRemoteMcpProxyTools = async (connection, proxy) => {
@@ -419,16 +492,15 @@ export const buildRemoteMcpProxyTools = async (connection, proxy) => {
 	return buildRemoteMcpToolsFromDefinitions(
 		connection,
 		definitions,
-		async (definition, args) => {
+		async (definition, args, options) => {
 			const inputJson = serializeRemoteMcpJson(
 				remoteMcpToolArgumentsSchema.parse(args),
 				`${connection.displayName} MCP tool input could not be serialized.`,
 			);
 			return parseRemoteMcpJson(
-				await proxy.executeTool({
-					inputJson,
-					toolName: definition.name,
-				}),
+				await withRemoteMcpAbort(options?.abortSignal, () =>
+					proxy.executeTool({ inputJson, toolName: definition.name }, options),
+				),
 				remoteMcpToolResultSchema,
 				`${connection.displayName} returned an invalid MCP tool result.`,
 			);

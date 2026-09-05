@@ -1,3 +1,4 @@
+import { encodeChatMessageWorkDuration } from "@workspace/ai/chat-message-metadata";
 import { isNoteChatSettings } from "@workspace/ai/chat-settings";
 import { createCanonicalLocalFolderToolContinuation } from "@workspace/ai/local-folder-tool-contract";
 import {
@@ -17,8 +18,12 @@ import {
 } from "./_generated/server";
 import { deleteQueuedMessage } from "./assistantQueuedMessageAttachments";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
-import { appendAssistantRunEvent } from "./assistantRunEvents";
+import {
+	appendAssistantRunEvent,
+	deleteRunEventsBatch,
+} from "./assistantRunEvents";
 import { commitAssistantRunGenerationBoundary } from "./assistantRunGenerationBoundaryState";
+import { preserveInterruptedAssistantMessage } from "./assistantRunInterruptedMessage";
 import { deleteAssistantRunJob } from "./assistantRunJobState";
 import {
 	getOwnedActiveChatById,
@@ -39,12 +44,15 @@ import {
 	pauseLinkedAutomationForChat,
 	resumeLinkedAutomationForChat,
 } from "./automationRunStateMachine";
-import {
-	deleteChatMessageAttachmentReferences,
-	syncChatMessageAttachmentReferences,
-} from "./chatAttachmentReferences";
+import { deleteChatMessageAttachmentReferences } from "./chatAttachmentReferences";
+import { releaseChatContent } from "./chatContentStorage";
 import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
+import {
+	hydrateChatMessage,
+	selectChatMessageBatch,
+} from "./chatMessageContent";
+import { writeChatMessage } from "./chatMessagePersistence";
 import { upsertChatPreferences } from "./chatPreferences";
 import {
 	requireValidNoteChatProject,
@@ -56,7 +64,6 @@ import {
 	chatSettingsValidator,
 } from "./chatSettingsModel";
 import { clearUnreadAssistantCompletion } from "./chatUnreadState";
-import { requireConvexDocumentWithinLimit } from "./documentSize";
 import {
 	clampWhitespace,
 	createResourceAccess,
@@ -314,12 +321,17 @@ const setOwnedChatArchiveState = async (
 const getStoredChatMessages = async (
 	ctx: QueryCtx | MutationCtx,
 	chatId: Doc<"chats">["_id"],
-) =>
-	await ctx.db
+) => {
+	const messages = await ctx.db
 		.query("chatMessages")
 		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
 		.order("desc")
 		.take(MAX_CHAT_MESSAGE_SNAPSHOT_SIZE);
+	const selected = await selectChatMessageBatch(ctx, messages);
+	return await Promise.all(
+		selected.map((message) => hydrateChatMessage(ctx, message)),
+	);
+};
 
 const getActiveStreamByChatId = async (
 	ctx: QueryCtx | MutationCtx,
@@ -330,20 +342,6 @@ const getActiveStreamByRunId = async (
 	ctx: QueryCtx | MutationCtx,
 	runId: Id<"assistantRuns">,
 ) => await getActiveStreamForRun(ctx, runId);
-
-const deleteRunEventsBatch = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	const events = await ctx.db
-		.query("assistantRunEvents")
-		.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", runId))
-		.take(REMOVE_CHAT_RUNTIME_BATCH_SIZE);
-
-	await Promise.all(events.map((event) => ctx.db.delete(event._id)));
-
-	return events.length === REMOVE_CHAT_RUNTIME_BATCH_SIZE;
-};
 
 const deleteChatRuntimeBatch = async (
 	ctx: MutationCtx,
@@ -384,22 +382,33 @@ const deleteChatRuntimeBatch = async (
 	]);
 
 	const eventBatchesHaveMore = await Promise.all(
-		runs.map((run) => deleteRunEventsBatch(ctx, run._id)),
+		runs.map((run) =>
+			deleteRunEventsBatch(ctx, run._id, REMOVE_CHAT_RUNTIME_BATCH_SIZE),
+		),
 	);
 	const deletableRuns = runs.filter((_, index) => !eventBatchesHaveMore[index]);
 	await Promise.all(
 		deletableRuns.map((run) => cleanupAssistantRunToolExecutions(ctx, run._id)),
 	);
 
+	for (const stream of activeStreams) {
+		await releaseChatContent(ctx, stream.contentId);
+		await ctx.db.delete(stream._id);
+	}
+
+	for (const toolCall of toolCalls) {
+		await releaseChatContent(ctx, toolCall.contentId);
+		await ctx.db.delete(toolCall._id);
+	}
+
 	await Promise.all([
 		clearChatContextState(ctx, chatId),
-		...activeStreams.map((stream) => ctx.db.delete(stream._id)),
 		...queuedMessages.map((message) => deleteQueuedMessage(ctx, message._id)),
 		...queuedMessageAcceptances.map((acceptance) =>
 			ctx.db.delete(acceptance._id),
 		),
 		...steerInputs.map((input) => ctx.db.delete(input._id)),
-		...toolCalls.map((toolCall) => ctx.db.delete(toolCall._id)),
+
 		...deletableRuns.map((run) => deleteAssistantRunJob(ctx, run._id)),
 		...deletableRuns.map((run) => ctx.db.delete(run._id)),
 	]);
@@ -430,7 +439,9 @@ const deleteChatRuntimeRecords = async (
 	}
 };
 
-const toStoredUiMessageSnapshot = (message: Doc<"chatMessages">) => ({
+const toStoredUiMessageSnapshot = (
+	message: Awaited<ReturnType<typeof getStoredChatMessages>>[number],
+) => ({
 	id: message.messageId,
 	role: message.role,
 	partsJson: message.partsJson,
@@ -439,7 +450,7 @@ const toStoredUiMessageSnapshot = (message: Doc<"chatMessages">) => ({
 });
 
 const toActiveStreamMessageSnapshot = (
-	stream: Doc<"chatActiveStreams">,
+	stream: NonNullable<Awaited<ReturnType<typeof getActiveStreamForRun>>>,
 ): StoredUiMessageSnapshot => ({
 	id: stream.assistantMessageId,
 	role: "assistant",
@@ -460,7 +471,7 @@ type StoredUiMessage = StoredUiMessageSnapshot & {
 };
 
 const shouldAppendActiveStreamMessage = (
-	stream: Doc<"chatActiveStreams"> | null,
+	stream: NonNullable<Awaited<ReturnType<typeof getActiveStreamForRun>>> | null,
 	messages: Array<{ id: string }>,
 ) =>
 	Boolean(
@@ -473,7 +484,9 @@ const withActiveStreamSnapshot = async <T extends StoredUiMessageSnapshot>(
 	ctx: QueryCtx | MutationCtx,
 	chatId: Doc<"chats">["_id"],
 	messages: T[],
-	toActiveMessage: (stream: Doc<"chatActiveStreams">) => T,
+	toActiveMessage: (
+		stream: NonNullable<Awaited<ReturnType<typeof getActiveStreamForRun>>>,
+	) => T,
 ) => {
 	const stream = await getActiveStreamByChatId(ctx, chatId);
 
@@ -566,9 +579,10 @@ const deleteChatMessageBatch = async (
 		.take(REMOVE_CHAT_MESSAGES_BATCH_SIZE);
 	if (activeMessages.length > 0) {
 		await deleteChatMessageAttachmentReferences(ctx, activeMessages);
-		await Promise.all(
-			activeMessages.map((message) => ctx.db.delete(message._id)),
-		);
+		for (const message of activeMessages) {
+			await releaseChatContent(ctx, message.contentId);
+			await ctx.db.delete(message._id);
+		}
 		let hasPreservedBranches =
 			activeMessages.length === REMOVE_CHAT_MESSAGES_BATCH_SIZE;
 		if (!hasPreservedBranches) {
@@ -596,9 +610,10 @@ const deleteChatMessageBatch = async (
 		.take(REMOVE_CHAT_MESSAGES_BATCH_SIZE);
 	if (branchMessages.length > 0) {
 		await deleteChatMessageAttachmentReferences(ctx, branchMessages);
-		await Promise.all(
-			branchMessages.map((message) => ctx.db.delete(message._id)),
-		);
+		for (const message of branchMessages) {
+			await releaseChatContent(ctx, message.contentId);
+			await ctx.db.delete(message._id);
+		}
 		return {
 			deletedCount: branchMessages.length,
 			hasMore: true,
@@ -758,13 +773,7 @@ export const saveMessageForOwnerInternal = async (
 		}
 	}
 
-	const existingMessage = await ctx.db
-		.query("chatMessages")
-		.withIndex("by_chatId_and_messageId", (q) =>
-			q.eq("chatId", chatId).eq("messageId", storedMessageId),
-		)
-		.unique();
-	const storedMessageDocument = {
+	const messageId = await writeChatMessage(ctx, {
 		chatId,
 		ownerTokenIdentifier: args.ownerTokenIdentifier,
 		messageId: storedMessageId,
@@ -773,30 +782,6 @@ export const saveMessageForOwnerInternal = async (
 		metadataJson: normalizedMessage.metadataJson,
 		text: normalizedMessage.text,
 		createdAt: messageCreatedAt,
-	};
-	requireConvexDocumentWithinLimit({
-		document: existingMessage
-			? {
-					...storedMessageDocument,
-					_id: existingMessage._id,
-					_creationTime: existingMessage._creationTime,
-				}
-			: storedMessageDocument,
-		errorCode: "CHAT_MESSAGE_TOO_LARGE",
-		message: "Chat message exceeds Convex's 1 MiB document limit.",
-	});
-
-	const messageId =
-		existingMessage?._id ??
-		(await ctx.db.insert("chatMessages", storedMessageDocument));
-
-	if (existingMessage) {
-		await ctx.db.replace(existingMessage._id, storedMessageDocument);
-	}
-	await syncChatMessageAttachmentReferences(ctx, {
-		chatId,
-		messageId: storedMessageId,
-		partsJson: storedMessageDocument.partsJson,
 	});
 
 	const [chat, message] = await Promise.all([
@@ -813,7 +798,7 @@ export const saveMessageForOwnerInternal = async (
 
 	return {
 		chat,
-		message,
+		message: await hydrateChatMessage(ctx, message),
 	};
 };
 
@@ -978,6 +963,7 @@ export const getMessagesSnapshot = query({
 	args: {
 		workspaceId: v.id("workspaces"),
 		chatId: v.string(),
+		targetMessageId: v.optional(v.string()),
 	},
 	returns: v.array(storedUiMessageSnapshotValidator),
 	handler: async (ctx, args) => {
@@ -994,6 +980,19 @@ export const getMessagesSnapshot = query({
 		}
 
 		const messages = await getStoredChatMessages(ctx, chat._id);
+		const targetMessageId = args.targetMessageId;
+		if (
+			targetMessageId &&
+			!messages.some((message) => message.messageId === targetMessageId)
+		) {
+			const target = await ctx.db
+				.query("chatMessages")
+				.withIndex("by_chatId_and_messageId", (q) =>
+					q.eq("chatId", chat._id).eq("messageId", targetMessageId),
+				)
+				.unique();
+			if (target) messages.push(await hydrateChatMessage(ctx, target));
+		}
 
 		return await withActiveStreamSnapshot(
 			ctx,
@@ -1203,6 +1202,7 @@ export const completeLocalFolderToolMessage = mutation({
 			});
 		}
 
+		const existingContent = await hydrateChatMessage(ctx, existingMessage);
 		const canonicalMessage = (() => {
 			try {
 				return createCanonicalLocalFolderToolContinuation({
@@ -1214,7 +1214,7 @@ export const completeLocalFolderToolMessage = mutation({
 					storedMessage: {
 						id: existingMessage.messageId,
 						role: existingMessage.role,
-						partsJson: existingMessage.partsJson,
+						partsJson: existingContent.partsJson,
 						metadataJson: existingMessage.metadataJson,
 					},
 				});
@@ -1231,7 +1231,7 @@ export const completeLocalFolderToolMessage = mutation({
 			role: canonicalMessage.role,
 			partsJson: JSON.stringify(canonicalMessage.parts),
 			metadataJson: existingMessage.metadataJson,
-			text: existingMessage.text,
+			text: existingContent.text,
 			createdAt: existingMessage.createdAt,
 		});
 		const replacement = {
@@ -1244,25 +1244,8 @@ export const completeLocalFolderToolMessage = mutation({
 			text: normalizedMessage.text,
 			createdAt: normalizedMessage.createdAt,
 		};
-		requireConvexDocumentWithinLimit({
-			document: {
-				...replacement,
-				_id: existingMessage._id,
-				_creationTime: existingMessage._creationTime,
-			},
-			errorCode: "CHAT_MESSAGE_TOO_LARGE",
-			message: "Chat message exceeds Convex's 1 MiB document limit.",
-		});
-
-		await Promise.all([
-			ctx.db.replace(existingMessage._id, replacement),
-			clearChatContextState(ctx, chat._id),
-			syncChatMessageAttachmentReferences(ctx, {
-				chatId: chat._id,
-				messageId: existingMessage.messageId,
-				partsJson: replacement.partsJson,
-			}),
-		]);
+		await writeChatMessage(ctx, replacement);
+		await clearChatContextState(ctx, chat._id);
 
 		const completedMessage = await ctx.db.get(existingMessage._id);
 		if (!completedMessage) {
@@ -1271,7 +1254,7 @@ export const completeLocalFolderToolMessage = mutation({
 				message: "Failed to save local folder tool message.",
 			});
 		}
-		return completedMessage;
+		return await hydrateChatMessage(ctx, completedMessage);
 	},
 });
 
@@ -1554,6 +1537,11 @@ export const saveAssistantMessageForRun = mutation({
 			message: {
 				...args.message,
 				role: "assistant",
+				metadataJson: encodeChatMessageWorkDuration({
+					metadataJson: args.message.metadataJson,
+					startedAt: run.startedAt,
+					completedAt: Date.now(),
+				}),
 			},
 		});
 		await appendAssistantRunEvent(ctx, run, {
@@ -1619,7 +1607,6 @@ export const stopActiveStream = mutation({
 		if (stream && stream.assistantMessageId !== args.assistantMessageId) {
 			return null;
 		}
-		const stoppedText = stream?.text.trim() ?? "";
 		const stoppedAt = Date.now();
 
 		if (
@@ -1657,25 +1644,7 @@ export const stopActiveStream = mutation({
 			return null;
 		}
 
-		if (stream && stoppedText.length > 0) {
-			await saveMessageForOwnerInternal(ctx, {
-				ownerTokenIdentifier,
-				workspaceId: args.workspaceId,
-				chatId: args.chatId,
-				message: {
-					id: stream.assistantMessageId,
-					role: "assistant",
-					partsJson: stream.partsJson,
-					metadataJson: JSON.stringify({ interrupted: true }),
-					text: stoppedText,
-					createdAt: stoppedAt,
-				},
-			});
-			await appendAssistantRunEvent(ctx, run, {
-				type: "assistant.message.interrupted",
-				assistantMessageId: stream.assistantMessageId,
-			});
-		}
+		await preserveInterruptedAssistantMessage(ctx, run);
 
 		await cleanupAssistantRunSnapshots(ctx, args.runId);
 

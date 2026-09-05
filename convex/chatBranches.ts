@@ -4,7 +4,6 @@ import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import { clearChatContextState } from "./chatContextCompactions";
 import { normalizeChatPreview } from "./chatFormatting";
-import { requireConvexDocumentWithinLimit } from "./documentSize";
 import { clampWhitespace, createResourceAccess } from "./domain";
 
 const { requireTokenIdentifier } = createResourceAccess("chat branches");
@@ -86,7 +85,7 @@ export const branchFromMessage = mutation({
 				retainedThroughMessageId: previousMessage.messageId,
 			}),
 			messageCount: messagesToBranch.length,
-			preview: normalizeChatPreview(messagesToBranch.at(-1)?.text),
+			preview: normalizeChatPreview(messagesToBranch.at(-1)?.preview),
 			createdAt: now,
 		};
 		const branchId = await ctx.db.insert("chatBranches", branchDocument);
@@ -99,21 +98,15 @@ export const branchFromMessage = mutation({
 					sequence,
 					messageId: sourceMessage.messageId,
 					role: sourceMessage.role,
-					partsJson: sourceMessage.partsJson,
+					contentId: sourceMessage.contentId,
 					metadataJson: sourceMessage.metadataJson,
-					text: sourceMessage.text,
+					preview: sourceMessage.preview,
 					createdAt: sourceMessage.createdAt,
 				},
 				sourceMessage,
 			}),
 		);
-		for (const { document } of branchMessagePairs) {
-			requireConvexDocumentWithinLimit({
-				document,
-				errorCode: "CHAT_BRANCH_MESSAGE_TOO_LARGE",
-				message: "Chat branch message exceeds Convex's document limit.",
-			});
-		}
+
 		await Promise.all(
 			branchMessagePairs.map(async ({ document, sourceMessage }) => {
 				await ctx.db.insert("chatBranchMessages", document);
@@ -132,7 +125,7 @@ export const branchFromMessage = mutation({
 			});
 		}
 		await ctx.db.patch(chat._id, {
-			preview: normalizeChatPreview(previousMessage?.text),
+			preview: normalizeChatPreview(previousMessage?.preview),
 			updatedAt: now,
 			lastMessageAt: previousMessage?.createdAt ?? chat.createdAt,
 		});

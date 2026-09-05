@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import { writeChatMessage } from "./chatMessagePersistence";
 import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -59,7 +60,7 @@ test("workspace removal clears scheduled Convex cleanup across notes, chats, tra
 			updatedAt: now,
 			lastMessageAt: now,
 		});
-		await ctx.db.insert("chatMessages", {
+		await writeChatMessage(ctx, {
 			chatId,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			messageId: "message-1",

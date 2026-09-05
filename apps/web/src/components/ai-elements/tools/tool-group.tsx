@@ -4,7 +4,7 @@ import { Reasoning } from "@/components/ai-elements/reasoning";
 import { ToolDetails } from "@/components/ai-elements/tools/tool-details";
 import {
 	type AssistantWorkPart,
-	isAssistantWorkPart,
+	isRenderableAssistantWorkPart,
 	type ToolUiPart,
 	toToolPartLike,
 } from "@/components/ai-elements/tools/tool-part-like";
@@ -30,17 +30,11 @@ export const AssistantActivityGroup = memo(function AssistantActivityGroup({
 	chatStatus,
 	parts,
 }: AssistantActivityGroupProps) {
-	const workParts = useMemo(() => parts.filter(isAssistantWorkPart), [parts]);
 	const isWorking = chatStatus === "streaming";
 	const renderableWorkParts = useMemo(
 		() =>
-			workParts.filter(
-				(part) =>
-					part.type !== "reasoning" ||
-					part.text.trim().length > 0 ||
-					(isWorking && part.state !== "done"),
-			),
-		[isWorking, workParts],
+			parts.filter((part) => isRenderableAssistantWorkPart(part, isWorking)),
+		[isWorking, parts],
 	);
 	if (renderableWorkParts.length === 0) {
 		return null;
@@ -83,20 +77,20 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 			? !isWorkingCollapsed
 			: isWorkedExpanded
 		: false;
-	const { completedAt, now } = useWorkTimer(isWorking);
+	const now = useWorkTimer(isWorking);
 	const measuredDurationMs = Math.max(
 		1,
-		(completedAt ?? now) - (startedAt ?? fallbackStartedAt),
+		now - (startedAt ?? fallbackStartedAt),
 	);
-	const durationLabel = formatElapsedTime(
-		totalDurationMs ?? measuredDurationMs,
-	);
+	const durationMs = isWorking ? measuredDurationMs : totalDurationMs;
+	const durationLabel =
+		durationMs === undefined ? null : formatElapsedTime(durationMs);
 
 	return (
 		<div className="flex w-full flex-col gap-2" data-assistant-work-group>
 			<ToolRowBase
 				animateCollapse={false}
-				ariaLabel={`${isWorking ? "Working" : "Worked"} for ${durationLabel}`}
+				ariaLabel={`${isWorking ? "Working" : "Worked"}${durationLabel === null ? "" : ` for ${durationLabel}`}`}
 				shimmerLabel="Working"
 				completeLabel="Worked"
 				isAnimating={isWorking}
@@ -112,10 +106,12 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 				}}
 				separatorAfterRow
 				trailingContent={
-					<span className="shrink-0 font-normal tabular-nums text-muted-foreground/60">
-						{" for "}
-						<span>{durationLabel}</span>
-					</span>
+					durationLabel !== null && (
+						<span className="shrink-0 font-normal tabular-nums text-muted-foreground/60">
+							{" for "}
+							<span>{durationLabel}</span>
+						</span>
+					)
 				}
 			>
 				<div className="flex flex-col gap-3">{children}</div>
@@ -125,18 +121,10 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 });
 
 const useWorkTimer = (isPending: boolean) => {
-	const [completedAt, setCompletedAt] = useState<number | null>(() =>
-		isPending ? null : Date.now(),
-	);
 	const [now, setNow] = useState(() => Date.now());
 
 	useEffect(() => {
-		if (!isPending) {
-			setCompletedAt((currentCompletedAt) => currentCompletedAt ?? Date.now());
-			return;
-		}
-
-		setCompletedAt(null);
+		if (!isPending) return;
 		setNow(Date.now());
 		const interval = window.setInterval(() => {
 			setNow(Date.now());
@@ -145,10 +133,7 @@ const useWorkTimer = (isPending: boolean) => {
 		return () => window.clearInterval(interval);
 	}, [isPending]);
 
-	return {
-		completedAt,
-		now,
-	};
+	return now;
 };
 
 const getWorkPartKey = (part: AssistantWorkPart, index: number) =>

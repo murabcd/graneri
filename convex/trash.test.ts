@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
+import { writeChatMessage } from "./chatMessagePersistence";
 import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -80,7 +81,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			updatedAt: 5_000,
 			lastMessageAt: 5_000,
 		});
-		await ctx.db.insert("chatMessages", {
+		await writeChatMessage(ctx, {
 			chatId: expiredLinkedChatId,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			messageId: "expired-linked-message",
@@ -221,7 +222,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 			updatedAt: 5_000,
 			lastMessageAt: 5_000,
 		});
-		await ctx.db.insert("chatMessages", {
+		await writeChatMessage(ctx, {
 			chatId: expiredStandaloneChatId,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			messageId: "expired-standalone-message",
@@ -279,7 +280,7 @@ test("trash cleanup removes expired archived items without touching recent trash
 				lastMessageAt: 15_000,
 			},
 		);
-		await ctx.db.insert("chatMessages", {
+		await writeChatMessage(ctx, {
 			chatId: recentStandaloneChatId,
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			messageId: "recent-standalone-message",

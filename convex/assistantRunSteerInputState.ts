@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { MAX_ASSISTANT_QUEUE_MESSAGES } from "./assistantQueuedMessageStateMachine";
+import { hydrateChatMessage } from "./chatMessageContent";
 
 type SteerInputScope = {
 	runId: Id<"assistantRuns">;
@@ -107,6 +108,8 @@ export const loadPendingAssistantRunSteerMessages = async (
 
 	return {
 		inputs,
-		messages: validatedMessages,
+		messages: await Promise.all(
+			validatedMessages.map((message) => hydrateChatMessage(ctx, message)),
+		),
 	};
 };

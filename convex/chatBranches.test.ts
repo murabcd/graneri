@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
+import { writeChatMessage } from "./chatMessagePersistence";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -54,7 +55,7 @@ test("branching distinguishes an old target from a missing target", async () => 
 		}
 
 		for (let index = 1; index <= 201; index += 1) {
-			await ctx.db.insert("chatMessages", {
+			await writeChatMessage(ctx, {
 				chatId: chat._id,
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				messageId: `message-${index}`,

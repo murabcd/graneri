@@ -24,6 +24,7 @@ import {
 import { transitionAssistantRun } from "./assistantRunStateMachine";
 import { createPendingAssistantRunSteerInput } from "./assistantRunSteerInputState";
 import { startAssistantRunForOwner } from "./assistantRuns";
+import { hydrateChatMessage } from "./chatMessageContent";
 import { chatSettingsValidator } from "./chatSettingsModel";
 import {
 	chatMessageInputValidator,
@@ -225,7 +226,7 @@ const loadQueuedMessageAcceptanceResult = async (
 			message: "Queued message acceptance result is unavailable.",
 		});
 	}
-	return { chat, message, run };
+	return { chat, message: await hydrateChatMessage(ctx, message), run };
 };
 
 export const acceptSteeredUserMessage = mutation({

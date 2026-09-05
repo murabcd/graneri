@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
+import { hydrateChatMessage } from "./chatMessageContent";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -160,7 +161,15 @@ test("accepting a matching tool approval resumes the same run atomically", async
 			toolCallId: "call-1",
 		},
 	});
-	expect(JSON.parse(state.message?.partsJson ?? "[]")).toEqual([
+	expect(
+		JSON.parse(
+			await t.run(async (ctx) =>
+				state.message
+					? (await hydrateChatMessage(ctx, state.message)).partsJson
+					: "[]",
+			),
+		),
+	).toEqual([
 		expect.objectContaining({
 			state: "approval-responded",
 			approval: expect.objectContaining({

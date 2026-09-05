@@ -9,6 +9,7 @@ import {
 	scheduleAutomationRun,
 	scheduleNextAutomationRun,
 } from "./automationSchedule";
+import { hydrateChatMessage } from "./chatMessageContent";
 
 type RunIdentity = {
 	automationId: Id<"automations">;
@@ -212,7 +213,9 @@ export const syncAutomationRunFromAssistant = async (
 						error: "Automation result message was not found.",
 					});
 				}
-				const resultText = truncateResult(resultMessage.text.trim());
+				const resultText = truncateResult(
+					(await hydrateChatMessage(ctx, resultMessage)).text.trim(),
+				);
 				const needsClassification =
 					Boolean(automation.stopCondition) ||
 					(automation.deliveryPolicy === "meaningful_change" &&

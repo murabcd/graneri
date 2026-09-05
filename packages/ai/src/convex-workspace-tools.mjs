@@ -16,6 +16,7 @@ export const buildConvexWorkspaceToolSet = async ({
 	chatId,
 	connections,
 	convexClient,
+	getActiveExecution,
 	scope = "available",
 	selectedSourceIds = [],
 	workspaceId,
@@ -172,6 +173,7 @@ export const buildConvexWorkspaceToolSet = async ({
 										{
 											workspaceId,
 											sourceId,
+											...getActiveExecution(),
 											inputJson,
 											toolName,
 										},

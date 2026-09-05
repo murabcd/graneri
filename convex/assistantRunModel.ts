@@ -128,3 +128,10 @@ export const assistantRunValidator = v.object({
 	updatedAt: v.number(),
 	finishedAt: v.optional(v.number()),
 });
+
+export const assistantRunExecutionIdentityValidator = v.object({
+	ownerTokenIdentifier: v.string(),
+	workspaceId: v.id("workspaces"),
+	runId: v.id("assistantRuns"),
+	assistantMessageId: v.string(),
+});

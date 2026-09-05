@@ -76,3 +76,5 @@ export declare const normalizeStoredUiMessage: <
 >(
 	message: Message,
 ) => Promise<Message>;
+
+export declare const hasUiMessageContent: (message: UIMessage) => boolean;

@@ -1,6 +1,9 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 
-type FrameScheduler = (callback: () => void) => () => void;
+import {
+	createBrowserFrameScheduler,
+	type FrameScheduler,
+} from "./browser-frame-scheduler";
 
 export type FrameBudgetedStreamOptions = {
 	maxItemsPerFrame?: number;
@@ -16,32 +19,13 @@ const DEFAULT_MAX_BUFFERED_ITEMS = 600;
 
 const getDefaultNow = () => performance.now();
 
-const scheduleBrowserFrame: FrameScheduler = (callback) => {
-	const requestFrame =
-		globalThis.requestAnimationFrame ??
-		((frameCallback: FrameRequestCallback) =>
-			globalThis.setTimeout(() => frameCallback(getDefaultNow()), 16));
-	const cancelFrame =
-		globalThis.cancelAnimationFrame ??
-		((handle: number) => {
-			globalThis.clearTimeout(handle);
-		});
-	const frameId = requestFrame(() => {
-		callback();
-	});
-
-	return () => {
-		cancelFrame(frameId);
-	};
-};
-
 export const createFrameBudgetedStream = <T>(
 	source: ReadableStream<T>,
 	{
 		maxItemsPerFrame = DEFAULT_MAX_ITEMS_PER_FRAME,
 		maxFrameMs = DEFAULT_MAX_FRAME_MS,
 		maxBufferedItems = DEFAULT_MAX_BUFFERED_ITEMS,
-		scheduleFrame = scheduleBrowserFrame,
+		scheduleFrame = createBrowserFrameScheduler(globalThis),
 		now = getDefaultNow,
 	}: FrameBudgetedStreamOptions = {},
 ) => {
@@ -90,12 +74,27 @@ export const createFrameBudgetedStream = <T>(
 				}
 			};
 
+			let frameStartedAt = Number.NEGATIVE_INFINITY;
+			let emittedItems = 0;
+			let isDraining = false;
+			const hasFrameBudget = () =>
+				emittedItems < maxItemsPerFrame && now() - frameStartedAt <= maxFrameMs;
+
 			const scheduleDrain = () => {
-				if (cancelFrame || isClosed || !hasDownstreamDemand()) {
+				if (isDraining || cancelFrame || isClosed || !hasDownstreamDemand()) {
 					return;
 				}
 
-				cancelFrame = scheduleFrame(drain);
+				if (hasFrameBudget()) {
+					drain();
+					return;
+				}
+				cancelFrame = scheduleFrame(() => {
+					cancelFrame = null;
+					frameStartedAt = now();
+					emittedItems = 0;
+					drain();
+				});
 			};
 
 			const closeIfDone = () => {
@@ -148,24 +147,24 @@ export const createFrameBudgetedStream = <T>(
 
 			function drain() {
 				cancelFrame = null;
-				if (isClosed) {
+				if (isClosed || isDraining) {
 					return;
 				}
 
-				const frameStartedAt = now();
-				let emittedItems = 0;
+				isDraining = true;
 				while (
 					queuedItemCount() > 0 &&
 					hasDownstreamDemand() &&
-					emittedItems < maxItemsPerFrame &&
-					now() - frameStartedAt <= maxFrameMs
+					hasFrameBudget()
 				) {
-					controller.enqueue(queue[queueHead] as T);
+					const value = queue[queueHead] as T;
 					queueHead += 1;
 					emittedItems += 1;
+					controller.enqueue(value);
 				}
 
 				compactQueue();
+				isDraining = false;
 
 				if (queuedItemCount() > 0 && hasDownstreamDemand()) {
 					scheduleDrain();

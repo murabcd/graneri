@@ -115,6 +115,52 @@ to an incomplete protocol stream. The Node SSE writer waits for
 `ServerResponse` drain and cancels its subscription when the socket closes; it
 must not attach a fast tee consumer that bypasses response pressure.
 
+## Interrupted output preservation
+
+Interrupted assistant output is promoted to history before its durable run or active snapshot can be removed.
+
+[[convex/assistantRunInterruptedMessage.ts]] owns snapshot promotion for Stop,
+producer failure, and expiry. It shares [[convex/chatMessagePersistence.ts]]
+with ordinary message writes, preserves structured tool and reasoning output
+without requiring prose, and keeps an already committed final message
+unchanged. Terminal transitions promote output in the same Convex transaction;
+failed promotion rolls back cleanup. Hosted orphan recovery saves the snapshot
+before requesting final terminalization, so a transient save failure leaves a
+retryable stopping run. Steered Stop uses the same meaningful-content policy
+for each assistant segment and retains its immutable accepted-input boundary.
+
+## Execution cancellation
+
+External execution belongs to one durable run and assistant generation, and ends when that identity is no longer running.
+
+[[convex/assistantRunCancellation.ts]] checks the lightweight generation identity
+before execution and every second while work is pending. Both Convex model
+steps and hosted MCP proxy actions use its abort signal. Proxy calls carry the
+run and generation identity without credentials; the action checks ownership
+and workspace before executing. Cancellation releases local waits and aborts
+transport work; it does not promise rollback of effects already accepted by an
+external service.
+
+## Streaming demand
+
+Stream reconstruction, persistence, and delivery propagate consumer demand through every Graneri-owned queue.
+
+Hosted execution feeds rich-message observation from delivery reads through a
+bounded writer, and lifecycle forwarding waits for downstream demand. Consumed
+Convex snapshots also block reconstruction while persistence is pending. The
+pinned `ai@7.0.31` Bun patch makes the SDK's public `readUIMessageStream` wait for
+snapshot demand before cloning state and propagates cancellation to its source.
+This preserves the SDK reducer and message contract; no private reducer is
+copied into Graneri. Regression tests exercise both blocked persistence and an
+unread delivery stream through a real ToolLoopAgent with a mock provider.
+This bounds buffered snapshots; it does not claim constant total CPU cost or
+remove the SDK's independent internal stream retention.
+
+Renderer frame pacing shares its time and item budget across successive
+consumer pulls inside a frame. A full downstream queue pauses delivery without
+wasting the remainder of that frame after the consumer resumes. The regression
+uses an actual SDK Chat consumer to verify order, final content, and frame count.
+
 ## User message persistence
 
 Every normal, replayed, steered, or continued user message enters one ordered accepted-turn transaction and the shared persistence helper.
@@ -150,21 +196,23 @@ preparation, acceptance ordering, or producer policy.
 
 ## Rolling context compaction
 
-A durable checkpoint compacts fixed history batches without changing saved transcripts and exposes one fenced activity lifecycle.
+A durable checkpoint compacts bounded history batches without changing saved transcripts and exposes one fenced activity lifecycle.
 
 Long chat context is prepared through a durable rolling compaction checkpoint.
 Ordinary input uses that context directly. Editing and regeneration first move
 the replaced active suffix into its durable branch, clear the invalidated
 checkpoint, and only then prepare the final Assistant Run input from the new
 active history. Convex stores the authoritative summary boundary by
-message ID and insertion time; the AI layer summarizes fixed oldest-first
-batches and then sends the trusted summary through top-level AI SDK instructions
+message ID and insertion time; the AI layer summarizes oldest-first
+batches bounded by both message count and 4 MiB of serialized content and then sends the trusted summary through top-level AI SDK instructions
 followed by the exact uncompacted user/assistant tail. Compaction never creates
 or stores synthetic system messages, and it never deletes or rewrites saved chat
 messages, so the user-visible transcript and future pagination retain complete
 history. The shared chat-context policy owns the exact Assistant Run tail,
 compaction batch size, and maximum compaction rounds as one coherent model-input
-policy. Renderer snapshots and preserved replacement branches own independent
+policy. [[convex/chatMessageContent.ts]] selects a contiguous batch using content
+metadata before reading chunks; preparation and boundary validation use the same
+byte bound, so large messages trigger smaller verified compaction batches. Renderer snapshots and preserved replacement branches own independent
 bounds; changing either operational limit must not silently alter compaction.
 Automations deliberately use the same exact-tail policy because they assemble
 the same checkpoint-backed model context. The checkpoint is private
@@ -203,14 +251,44 @@ Run input is prepared. Workspace chat and note chat use the same regeneration
 session, which owns stop, request preparation, target-preserving regeneration,
 and exactly-once preparation cleanup; callers own only presentation and error
 display. The renderer reads active
-history through cursor-paginated `chatThreads.readPage` pages and explicitly
-offers older pages instead of silently truncating the transcript. Preserved
+history through cursor-paginated `chatThreads.readPage` metadata pages.
+[[apps/web/src/hooks/use-paginated-chat-messages.ts]] subscribes separately to
+each authorized `chatThreads.readMessage` body and explicitly offers older pages instead of silently truncating the transcript. Preserved
 replacement branches remain durable recovery data. Separately, an assistant
 message can be continued in a new immutable chat: Convex copies the bounded
 prefix through that answer, records the source chat and message, leaves the
 source unchanged, and visibly marks the fork when still-earlier ancestry could
 not be copied. Graneri does not expose a switcher for preserved replacement
 branches.
+
+## Message content ownership
+
+Saved messages, replacement branches, active snapshots, tool receipts, and events keep small headers while ordered chunks store their complete content.
+
+[[convex/chatContentStorage.ts]] owns reference counts and copy-on-write updates
+through `chatContents`. [[convex/chatMessageContent.ts]] owns typed message
+hydration and [[convex/chatToolContent.ts]] owns typed tool payload hydration.
+[[convex/chatMessagePersistence.ts]] is the canonical message writer. Bodies
+contain exact SDK parts and denormalized text, with a 4 MiB serialized payload
+limit enforced before writes. Headers retain identity, timestamps, metadata, and
+a bounded preview. Branching transfers ownership; forks retain shared content
+and attachment references. Updating a shared message creates independent content.
+Deleting the last owner schedules one bounded payload cleanup transaction, so
+bulk history removal does not hydrate all bodies at once. An unreferenced body
+is deleted only when its reference count is still zero.
+
+Bounded snapshot APIs retain their bounded newest-first window, now limited by
+both 200 messages and 4 MiB of content; the paginated renderer reads complete
+bodies separately. Explicit edit/regeneration targets are fetched independently
+when outside that window, so branch preparation still identifies the selected
+message. Automated context uses the same byte bound on its exact tail and tells
+the model explicitly when earlier uncompacted messages were omitted.
+No inline-body compatibility reader or fallback schema remains.
+
+Workflow payload transformations read chunks once before replacing changed chunks.
+Full stream replacements avoid hydrating the previous body. These paths leave
+transaction headroom for the stream, tool content, and resumable job to checkpoint
+atomically; lifecycle events retain tool content instead of writing another copy.
 
 ## Producer start
 
@@ -324,7 +402,8 @@ Temporary stream and tool snapshots update atomically and disappear when their o
 
 Together they enforce stop/failure/completion history and the
 one-active-run-per-chat invariant. `chatActiveStreams` stores the latest complete
-AI SDK message parts plus denormalized text, while active `chatToolCalls` stores
+reference to the latest complete AI SDK message parts plus denormalized text,
+with a small `hasContent` marker, while active `chatToolCalls` stores
 the auditable tool lifecycle. Text and message parts are coalesced into one
 atomic snapshot update so reactive clients never observe a split producer
 checkpoint. Both tables are temporary render snapshots scoped to a run;
@@ -355,9 +434,14 @@ Append-only typed events preserve lifecycle and tool details without duplicating
 events such as run start/stop/fail/complete, tool lifecycle changes, completed
 assistant messages, and human-input requests. Events are append-only per run and
 queried by `runId` plus `eventIndex`. Tool lifecycle events must be
-self-contained for replay/debugging: started events carry the serialized tool
-input when available, and completed events carry serialized output or error
-details when available. High-frequency streamed text belongs in the active
+self-contained for replay/debugging: their retained content references preserve
+serialized inputs and outputs after temporary tool snapshots are removed.
+`readEventToolContent` authorizes the run and reads one event body independently;
+the event timeline query returns metadata only. Tool snapshot updates copy shared
+content, so an earlier event cannot change when a tool input or result changes.
+[[convex/assistantRunEvents.ts]] owns event payload retention and batched release.
+Execution receipts also reference content, preserving exact retry results without
+putting large inputs or outputs in status rows. High-frequency streamed text belongs in the active
 stream snapshot during the run and in the saved assistant message after
 completion; it should not be duplicated as per-token event rows.
 
@@ -861,9 +945,21 @@ identical storage.
 | Editing or regeneration does not destroy the replaced history. | Convex archives the replaced active suffix and retains its attachment references before starting the replacement turn. A full thread-fork and branch-switching UI is not exposed yet. | Partial |
 | A model can create and manage live subagents. | Graneri does not expose subagent tools because the product does not have subagents. Runtime tools such as `spawn_agent`, `send_message`, `followup_task`, `list_agents`, and `interrupt_agent` are intentionally out of scope. | Not applicable |
 
+## Workflow context storage
+
+Workflow execution metadata and model conversation content have separate storage lifetimes and read paths.
+
+[[convex/assistantRunJobState.ts]] stores workflow settings and execution state on `assistantRunJobs`, while `messages` references ordered `chatPayloadChunks`. [[convex/chatPayloads.ts]] atomically writes, reads, and deletes these chunks with the owning record; it preserves unchanged chunks and rejects incomplete reads. [[convex/chatPayloadModel.ts]] bounds each payload to 4 MiB and splits Unicode safely into chunks below the document limit. Only runnable execution hydrates the full context; scheduling and lifecycle status reads use the small metadata document. Terminal cleanup deletes the payload with its job. The canonical schema has no inline workflow `messagesJson` field and no legacy read branch.
+
 ## Renderer interaction ownership
 
 Renderer chat surfaces share optimistic state, stop arbitration, queue drain, and note discussion sessions.
+
+Frame scheduling switches to timed delivery while the document is hidden, including when visibility changes after a frame was scheduled. Completion and cancellation release both the scheduled callback and the visibility listener.
+
+[[apps/web/src/lib/browser-frame-scheduler.ts]] owns that visibility-aware scheduler for the SSE transport and text presentation. [[apps/web/src/lib/chat-text-presentation.ts]] retains one latest target string and reveals appended text at 24 UTF-16 code units per frame, preserving surrogate pairs. Completion drains the remaining text within eight frames; hidden views catch up in full. Loaded history and non-append replacements render immediately. [[apps/web/src/hooks/use-chat-text-presentation.ts]] applies updates only after React commits and cancels pending work when the last subscriber unmounts. [[apps/web/src/components/chat/markdown-stream.tsx]] applies this policy to both SSE and Convex text, retaining streaming Markdown parsing until the visible tail catches up. Reasoning summaries keep their existing immediate presentation.
+
+The [hosted active stream persister](../packages/ai/src/hosted-chat-active-stream.mjs) permits one in-flight persistence write and one pending accumulator: text deltas concatenate while structured parts replace the pending snapshot. Flush callers join the same writer rather than queueing obsolete captured snapshots. Finish and close seal further appends and wait for all accepted data, including data arriving while a previous drain settles. A failed write remains a terminal error on subsequent flush attempts; the persister never treats a failed final flush as successful cleanup.
 
 The queue, steering, replay, and run-lifecycle slice keeps Stop and Steer as
 separate user actions: composer Stop always interrupts the active generation and
@@ -875,3 +971,12 @@ reference subagents. Graneri injects accepted input at the next safe AI SDK
 generation completes first, Graneri drains the input across the stream restart
 into a projected replacement prompt. Convex remains the durable source of truth
 for user input, chat runs, crash recovery, and cross-process coordination.
+
+
+### Recorded work duration
+
+Completed assistant message metadata carries `workDurationMs`, computed from the durable run start when its response is saved or interrupted.
+
+The Working/Worked row is expandable only when its details contain visible commentary, reasoning or tools. The row and details renderer share the same work-part visibility predicate; empty completed reasoning and hidden transport tools do not create a disclosure or chevron. The duration label remains visible without an interactive trigger.
+
+Both producers and generation-boundary saves use the shared [metadata encoder](../packages/ai/src/chat-message-metadata.mjs). Message `createdAt` remains an ordering timestamp and must not be used as a completion clock. The renderer displays recorded elapsed time after completion; messages without a recorded measurement show “Worked” without an inferred duration.

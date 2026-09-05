@@ -11,7 +11,11 @@ import {
 	releaseClaimedForRunInternal,
 } from "./assistantQueuedMessageStateMachine";
 import { deleteAssistantRunActivity } from "./assistantRunActivity";
-import { appendAssistantRunEvent } from "./assistantRunEvents";
+import {
+	appendAssistantRunEvent,
+	deleteRunEventsBatch,
+} from "./assistantRunEvents";
+import { preserveInterruptedAssistantMessage } from "./assistantRunInterruptedMessage";
 import { deleteAssistantRunJob } from "./assistantRunJobState";
 import type {
 	AssistantRunPendingDecision,
@@ -22,6 +26,8 @@ import type {
 	stopReasonValidator,
 } from "./assistantRunModel";
 import { deleteAssistantRunSteerInputsForRun } from "./assistantRunSteerInputState";
+import { releaseChatContent } from "./chatContentStorage";
+
 import { markUnreadAssistantCompletion } from "./chatUnreadState";
 
 type AssistantRunProducer = Infer<typeof assistantRunProducerValidator>;
@@ -84,6 +90,7 @@ export const cleanupAssistantRunToolExecutions = async (
 	for await (const toolExecution of ctx.db
 		.query("assistantRunToolExecutions")
 		.withIndex("by_runId", (q) => q.eq("runId", runId))) {
+		await releaseChatContent(ctx, toolExecution.contentId);
 		toolExecutionIds.push(toolExecution._id);
 	}
 
@@ -100,6 +107,7 @@ export const cleanupAssistantRunSnapshots = async (
 	for await (const stream of ctx.db
 		.query("chatActiveStreams")
 		.withIndex("by_runId", (q) => q.eq("runId", runId))) {
+		await releaseChatContent(ctx, stream.contentId);
 		streamIds.push(stream._id);
 	}
 
@@ -107,6 +115,7 @@ export const cleanupAssistantRunSnapshots = async (
 	for await (const toolCall of ctx.db
 		.query("chatToolCalls")
 		.withIndex("by_runId", (q) => q.eq("runId", runId))) {
+		await releaseChatContent(ctx, toolCall.contentId);
 		toolCallIds.push(toolCall._id);
 	}
 	await Promise.all([
@@ -356,6 +365,7 @@ export const transitionAssistantRun = async (
 				return run;
 			}
 			{
+				await preserveInterruptedAssistantMessage(ctx, run);
 				const shouldPauseQueue = await isCurrentNonTerminalRunForChat(ctx, run);
 				await ctx.db.patch(run._id, {
 					status: "failed",
@@ -403,6 +413,7 @@ export const transitionAssistantRun = async (
 				return invalidTransition("Assistant run stop has not been requested.");
 			}
 			{
+				await preserveInterruptedAssistantMessage(ctx, run);
 				const shouldPauseQueue = await isCurrentNonTerminalRunForChat(ctx, run);
 				await ctx.db.patch(run._id, {
 					status: "stopped",
@@ -456,6 +467,7 @@ export const transitionAssistantRun = async (
 				return invalidTransition("Assistant run cannot expire.");
 			}
 			{
+				await preserveInterruptedAssistantMessage(ctx, run);
 				const shouldPauseQueue = await isCurrentNonTerminalRunForChat(ctx, run);
 				if (run.status === "stopping") {
 					const stopReason = run.stopReason ?? "cleanup_failed";
@@ -498,20 +510,6 @@ export const transitionAssistantRun = async (
 	}
 };
 
-const deleteRunEventsBatch = async (
-	ctx: MutationCtx,
-	runId: Id<"assistantRuns">,
-) => {
-	const events = await ctx.db
-		.query("assistantRunEvents")
-		.withIndex("by_runId_and_eventIndex", (q) => q.eq("runId", runId))
-		.take(ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE);
-
-	await Promise.all(events.map((event) => ctx.db.delete(event._id)));
-
-	return events.length === ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE;
-};
-
 const deleteQueuedMessagesBatch = async (
 	ctx: MutationCtx,
 	runId: Id<"assistantRuns">,
@@ -543,7 +541,7 @@ export const deleteAssistantRunRuntimeBatch = async (
 	runId: Id<"assistantRuns">,
 ) => {
 	const [eventsHaveMore, queuedMessagesHaveMore] = await Promise.all([
-		deleteRunEventsBatch(ctx, runId),
+		deleteRunEventsBatch(ctx, runId, ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE),
 		deleteQueuedMessagesBatch(ctx, runId),
 	]);
 

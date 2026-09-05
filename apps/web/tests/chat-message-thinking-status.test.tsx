@@ -107,6 +107,48 @@ const renderMessageList = ({
 );
 
 describe("chat message thinking status", () => {
+	it("removes the disclosure when working details become empty or hidden", () => {
+		const { rerender } = render(
+			renderMessageList({
+				isLoading: true,
+				messages: [streamingReasoningMessage],
+			}),
+		);
+		expect(screen.getByRole("button", { name: /^Working/ })).not.toBeNull();
+		for (const text of ["", "   "]) {
+			rerender(
+				renderMessageList({
+					messages: [
+						{
+							id: streamingReasoningMessage.id,
+							role: "assistant",
+							metadata: { workDurationMs: 19_000 },
+							parts: [
+								{ type: "reasoning", text, state: "done" },
+								{
+									type: "dynamic-tool",
+									toolName: "internal_transport",
+									toolCallId: "hidden",
+									state: "output-available",
+									input: {},
+									output: {},
+								},
+								{ type: "text", text: "Answer", state: "done" },
+							],
+						},
+					],
+				}),
+			);
+			expect(screen.queryByRole("button", { name: /^Worked/ })).toBeNull();
+			const group = screen
+				.getByText("Worked")
+				.closest("[data-assistant-work-group]");
+			expect(group?.querySelector("svg")).toBeNull();
+			expect(group?.querySelector("[aria-expanded]")).toBeNull();
+			expect(screen.getByText("19s")).not.toBeNull();
+		}
+	});
+
 	afterEach(() => {
 		cleanup();
 		vi.useRealTimers();
@@ -168,7 +210,9 @@ describe("chat message thinking status", () => {
 				.getByRole("button", { name: /^Worked/ })
 				.getAttribute("aria-expanded"),
 		).toBe("false");
-		expect(screen.getByRole("button", { name: /^Worked for / })).not.toBeNull();
+		expect(
+			screen.getByRole("button", { name: "Worked", exact: true }),
+		).not.toBeNull();
 		expect(screen.queryByRole("button", { name: "Thought" })).toBeNull();
 		await user.click(screen.getByRole("button", { name: /^Worked/ }));
 		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
@@ -179,6 +223,7 @@ describe("chat message thinking status", () => {
 		const message: UIMessage = {
 			id: "assistant-ordered",
 			role: "assistant",
+			metadata: { workDurationMs: 123 },
 			parts: [
 				{
 					type: "text",
@@ -633,6 +678,7 @@ describe("chat message thinking status", () => {
 					},
 					{
 						...assistantMessage,
+						metadata: { workDurationMs: 4200 },
 						parts: [
 							{
 								type: "text",
@@ -697,6 +743,7 @@ describe("chat message thinking status", () => {
 										role: "assistant",
 										parts: [{ type: "text", text: "Done", state: "done" }],
 										createdAt: 3_750,
+										metadata: { workDurationMs: 2750 },
 									} satisfies UIMessage & { createdAt: number },
 								]}
 							/>
@@ -748,6 +795,7 @@ describe("chat message thinking status", () => {
 				id: "assistant-direct",
 				role: "assistant",
 				parts: [{ type: "text", text: "Done", state: "done" }],
+				metadata: { workDurationMs: 3750 },
 			}),
 		);
 

@@ -199,6 +199,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "ai@7.0.31": "patches/ai@7.0.31.patch",
+  },
   "overrides": {
     "prosemirror-model": "1.25.11",
     "prosemirror-transform": "1.12.0",

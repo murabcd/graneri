@@ -47,7 +47,7 @@ export const prepareHostedAssistantRunInput = async ({
 
 	if (shouldPrepareBranch) {
 		const [storedMessages, runEvents] = await Promise.all([
-			getMessagesSnapshot({ workspaceId, chatId }),
+			getMessagesSnapshot({ workspaceId, chatId, targetMessageId: messageId }),
 			runEventsPromise,
 		]);
 		interruptedAssistantMessageIds =

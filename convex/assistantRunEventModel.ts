@@ -46,7 +46,7 @@ export const assistantRunEventValidator = v.union(
 		type: v.literal("tool.started"),
 		toolCallId: v.string(),
 		toolName: v.string(),
-		inputJson: v.optional(v.string()),
+		contentId: v.id("chatContents"),
 	}),
 	v.object({
 		type: v.literal("tool.completed"),
@@ -56,7 +56,7 @@ export const assistantRunEventValidator = v.union(
 			v.literal("failed"),
 			v.literal("denied"),
 		),
-		outputJson: v.optional(v.string()),
+		contentId: v.id("chatContents"),
 		errorText: v.optional(v.string()),
 	}),
 	v.object({

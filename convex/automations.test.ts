@@ -74,14 +74,26 @@ const readChatMessages = async (
 	asOwner: WorkspaceFixture["asOwner"],
 	workspaceId: WorkspaceFixture["workspaceId"],
 	chatId: string,
-) =>
-	(
+) => {
+	const result = (
 		await asOwner.query(api.chatThreads.readPage, {
 			workspaceId,
 			chatId,
 			paginationOpts: { cursor: null, numItems: 100 },
 		})
 	).page;
+	return await Promise.all(
+		result.map(async (header) => {
+			const message = await asOwner.query(api.chatThreads.readMessage, {
+				workspaceId,
+				chatId,
+				messageId: header.id,
+			});
+			if (!message) throw new Error("Missing fixture message");
+			return message;
+		}),
+	);
+};
 
 const saveChatMessage = async ({
 	asOwner,

@@ -61,6 +61,14 @@ export const buildHostedChatRunContext = async ({
 	const workspaceToolCatalog = await buildConvexWorkspaceToolSet({
 		chatId,
 		connections: appConnections,
+		getActiveExecution: () => {
+			const session = getActiveStreamSession();
+			if (!session) throw new Error("Assistant execution is unavailable.");
+			return {
+				runId: session.persister.runId,
+				assistantMessageId: session.persister.messageId,
+			};
+		},
 		convexClient,
 		scope: appsEnabled ? "available" : "disabled",
 		selectedSourceIds,

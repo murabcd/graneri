@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
+import { writeChatMessage } from "./chatMessagePersistence";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -10,6 +11,81 @@ const ownerIdentity = {
 	subject: "owner-subject",
 	tokenIdentifier: "test|owner",
 };
+
+test("large message context compacts at a verified byte boundary before the count limit", async () => {
+	vi.useFakeTimers();
+	const t = convexTest(schema, modules);
+	const asOwner = t.withIdentity(ownerIdentity);
+	const workspaceId = await t.run((ctx) =>
+		ctx.db.insert("workspaces", {
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			name: "Workspace",
+			normalizedName: "workspace",
+			createdAt: 1000,
+			updatedAt: 1000,
+		}),
+	);
+	const text = "x".repeat(600_000);
+	for (let index = 0; index < 4; index += 1) {
+		await asOwner.mutation(api.chats.saveMessage, {
+			workspaceId,
+			chatId: "byte-context",
+			projectId: null,
+			settings: DEFAULT_CHAT_SETTINGS,
+			message: {
+				id: `large-${index}`,
+				role: "user",
+				text,
+				partsJson: JSON.stringify([{ type: "text", text }]),
+				createdAt: index + 1000,
+			},
+		});
+	}
+	const branchSnapshot = await asOwner.query(api.chats.getMessagesSnapshot, {
+		workspaceId,
+		chatId: "byte-context",
+		targetMessageId: "large-0",
+	});
+	expect(branchSnapshot.map((message) => message.id)).toEqual([
+		"large-0",
+		"large-1",
+		"large-2",
+		"large-3",
+	]);
+
+	const initial = await asOwner.query(
+		api.chatContextCompactions.getPreparationState,
+		{ workspaceId, chatId: "byte-context" },
+	);
+	expect(initial.hasMoreMessages).toBe(true);
+	expect(initial.messages.map((message) => message.id)).toEqual([
+		"large-0",
+		"large-1",
+		"large-2",
+	]);
+	await asOwner.mutation(api.chatContextCompactions.startActivity, {
+		workspaceId,
+		chatId: "byte-context",
+		activityId: "bytes",
+		anchorMessageId: "large-3",
+	});
+	const boundary = initial.messages[2];
+	if (!boundary) throw new Error("Expected byte compaction boundary.");
+	const next = await asOwner.mutation(api.chatContextCompactions.save, {
+		workspaceId,
+		chatId: "byte-context",
+		activityId: "bytes",
+		throughMessageId: boundary.id,
+		throughCreationTime: boundary.creationTime,
+		summary: "First three large messages.",
+	});
+	expect(next.hasMoreMessages).toBe(false);
+	expect(next.messages.map((message) => message.id)).toEqual(["large-3"]);
+	expect(
+		next.messages[0]?.partsJson === JSON.stringify([{ type: "text", text }]),
+	).toBe(true);
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+});
 
 test("context compaction advances a verified chat message boundary", async () => {
 	vi.useFakeTimers();
@@ -38,7 +114,7 @@ test("context compaction advances a verified chat message boundary", async () =>
 			lastMessageAt: 1_000,
 		});
 		for (let index = 1; index <= 301; index += 1) {
-			await ctx.db.insert("chatMessages", {
+			await writeChatMessage(ctx, {
 				chatId,
 				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 				messageId: `message-${index}`,

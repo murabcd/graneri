@@ -21,6 +21,7 @@ export type ChatRecipeReceipt = {
 
 export type ChatMessageMetadata = {
 	interrupted?: boolean;
+	workDurationMs?: number;
 	mentionPositions?: ChatMessageMention[];
 } & (
 	| { recipe: ChatRecipeReceipt; recipeOnly: boolean }
@@ -30,3 +31,9 @@ export type ChatMessageMetadata = {
 export declare const parseChatMessageMetadata: (
 	value: unknown,
 ) => ChatMessageMetadata | null;
+
+export declare const encodeChatMessageWorkDuration: (input: {
+	metadataJson?: string;
+	startedAt: number;
+	completedAt: number;
+}) => string;

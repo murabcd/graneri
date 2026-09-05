@@ -89,3 +89,16 @@ sessions; they must not reimplement form reset, OAuth navigation, connection
 failure cleanup, or workspace-scoped loading. Remote MCP providers enter through
 `use-remote-mcp-connection-session.ts`, while capability identity and defaults
 remain authoritative in `@workspace/ai/capability-metadata`.
+
+## MCP discovery and cancellation
+
+Remote MCP catalogs are complete, bounded inventories discovered within one deadline before tools are exposed to the model.
+
+The shared adapter applies a five-second abort deadline to initialization and
+all discovery pages. It follows `nextCursor`, rejects repeated cursors,
+duplicate tool names, and inventories exceeding the configured tool or character
+limits, and caches only a complete validated inventory. Native OpenAI deferred
+loading remains model-driven. Execution signals reach direct MCP transports;
+hosted proxy requests also carry the durable run and generation identity for
+[[assistant-runs]]. Local HTTP regression tests use the
+installed MCP client to verify timeouts, pagination, and aborted execution.

@@ -3,6 +3,8 @@ import { DEFAULT_CHAT_MODEL_ID } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
+import { writeChatMessageContent } from "./chatMessageContent";
+import { writeChatMessage } from "./chatMessagePersistence";
 import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -48,7 +50,7 @@ test("chat retirement reports progress and retries exact message batches", async
 		});
 
 		for (let index = 0; index < 101; index += 1) {
-			await ctx.db.insert("chatMessages", {
+			await writeChatMessage(ctx, {
 				chatId,
 				ownerTokenIdentifier,
 				messageId: `message-${index}`,
@@ -218,8 +220,11 @@ test("chat retirement deletes preserved branch messages and metadata", async () 
 			sequence: 0,
 			messageId: "replaced-message",
 			role: "assistant",
-			partsJson: "[]",
-			text: "Replaced branch",
+			contentId: await writeChatMessageContent(ctx, {
+				partsJson: "[]",
+				text: "Replaced branch",
+			}),
+			preview: "Replaced branch",
 			createdAt: 1_050,
 		});
 		return { branchId, chatId };

@@ -4,7 +4,12 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import {
 	getNonTerminalRunsForChat,
 	getOwnedActiveChatById,
@@ -12,6 +17,7 @@ import {
 	requireSingleNonTerminalRun,
 } from "./assistantRunLifecycle";
 import {
+	assistantRunExecutionIdentityValidator,
 	assistantRunValidator,
 	localCapabilitySessionValidator,
 	pendingDecisionValidator,
@@ -25,6 +31,7 @@ import {
 	transitionAssistantRun,
 } from "./assistantRunStateMachine";
 import { requireAssistantRunUserQuestion } from "./assistantRunUserQuestions";
+import { readChatToolContent } from "./chatToolContent";
 import { createResourceAccess, requireOwnedWorkspace } from "./domain";
 import { requireAssistantRunToolApproval } from "./toolApproval";
 
@@ -440,19 +447,21 @@ export const getAttachableRun = query({
 					.withIndex("by_runId", (q) => q.eq("runId", run._id))
 					.collect()
 			: [];
-		const pendingLocalCapabilityToolCalls = toolCalls.flatMap((toolCall) =>
-			toolCall.status === "pending" &&
-			isLocalFolderToolName(toolCall.toolName) &&
-			toolCall.inputJson
-				? [
-						{
-							inputJson: toolCall.inputJson,
-							toolCallId: toolCall.toolCallId,
-							toolName: toolCall.toolName,
-						},
-					]
-				: [],
-		);
+		const pendingLocalCapabilityToolCalls = [];
+		for (const toolCall of toolCalls) {
+			if (
+				toolCall.status !== "pending" ||
+				!isLocalFolderToolName(toolCall.toolName)
+			)
+				continue;
+			const content = await readChatToolContent(ctx, toolCall.contentId);
+			if (content.inputJson)
+				pendingLocalCapabilityToolCalls.push({
+					inputJson: content.inputJson,
+					toolCallId: toolCall.toolCallId,
+					toolName: toolCall.toolName,
+				});
+		}
 
 		return {
 			...run,
@@ -521,5 +530,20 @@ export const listActiveChatIds = query({
 		}
 
 		return Array.from(activeChatIds);
+	},
+});
+
+export const isExecutionActive = internalQuery({
+	args: assistantRunExecutionIdentityValidator.fields,
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const run = await ctx.db.get(args.runId);
+		return (
+			run !== null &&
+			run.ownerTokenIdentifier === args.ownerTokenIdentifier &&
+			run.workspaceId === args.workspaceId &&
+			run.status === "running" &&
+			run.assistantMessageId === args.assistantMessageId
+		);
 	},
 });

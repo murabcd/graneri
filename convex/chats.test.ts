@@ -7,7 +7,13 @@ import { api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { createQueuedRequestBodyJson } from "./assistantQueuedMessage.fixtures";
 import { transitionAssistantRun } from "./assistantRunStateMachine";
-import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
+import {
+	hydrateChatMessage,
+	writeChatMessageContent,
+} from "./chatMessageContent";
+import { MAX_CHAT_PAYLOAD_BYTES } from "./chatPayloadModel";
+import { writeChatPayload } from "./chatPayloads";
+import { writeChatToolContent } from "./chatToolContent";
 import { insertTestNote } from "./noteDocument.fixtures";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -72,14 +78,26 @@ const readChatMessages = async (
 	asOwner: AsOwner,
 	workspaceId: WorkspaceId,
 	chatId: string,
-) =>
-	(
+) => {
+	const result = (
 		await asOwner.query(api.chatThreads.readPage, {
 			workspaceId,
 			chatId,
 			paginationOpts: { cursor: null, numItems: 100 },
 		})
 	).page;
+	return await Promise.all(
+		result.map(async (header) => {
+			const message = await asOwner.query(api.chatThreads.readMessage, {
+				workspaceId,
+				chatId,
+				messageId: header.id,
+			});
+			if (!message) throw new Error("Missing fixture message");
+			return message;
+		}),
+	);
+};
 
 const userQuestionDecision = (
 	assistantMessageId: string,
@@ -376,7 +394,7 @@ test("note chats reject capabilities that their composer does not expose", async
 
 test("oversized user messages are rejected before chat persistence", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
-	const oversizedInput = "x".repeat(MAX_CONVEX_DOCUMENT_BYTES);
+	const oversizedInput = "x".repeat(MAX_CHAT_PAYLOAD_BYTES);
 
 	await expect(
 		asOwner.mutation(api.chats.saveMessage, {
@@ -393,7 +411,7 @@ test("oversized user messages are rejected before chat persistence", async () =>
 				createdAt: 2_000,
 			},
 		}),
-	).rejects.toThrow("Chat message exceeds Convex's 1 MiB document limit.");
+	).rejects.toThrow("Chat content exceeds the 4 MiB payload limit.");
 });
 
 test("local folder tool completion canonically updates the stored assistant message", async () => {
@@ -848,9 +866,11 @@ test("branching from an edited message preserves the replaced branch", async () 
 			ordinal: 0,
 			toolCallId: "tool-call-1",
 			toolName: "search",
-			inputJson: "{}",
+			contentId: await writeChatToolContent(ctx, {
+				inputJson: "{}",
+				outputJson: '{"hasValue":true,"value":{}}',
+			}),
 			status: "completed",
-			outputJson: '{"hasValue":true,"value":{}}',
 			createdAt: 2_000,
 			updatedAt: 2_000,
 		}),
@@ -1231,7 +1251,11 @@ test("stale stream operations cannot mutate a replacement generation", async () 
 		assistantMessageId: currentAssistantMessageId,
 		status: "running",
 	});
-	expect(state.stream).toMatchObject({
+	expect(
+		await t.run(async (ctx) =>
+			state.stream ? hydrateChatMessage(ctx, state.stream) : null,
+		),
+	).toMatchObject({
 		assistantMessageId: currentAssistantMessageId,
 		text: "",
 	});
@@ -1422,7 +1446,12 @@ test("stopActiveStream saves interrupted assistant text before deleting the snap
 			.withIndex("by_runId", (q) => q.eq("runId", run._id))
 			.collect();
 
-		return { messages, streams };
+		return {
+			messages: await Promise.all(
+				messages.map((message) => hydrateChatMessage(ctx, message)),
+			),
+			streams,
+		};
 	});
 
 	expect(state.streams).toHaveLength(0);
@@ -1634,6 +1663,7 @@ test("stopActiveStream preserves a consumed steer generation boundary", async ()
 	]);
 	expect(JSON.parse(messages[3]?.metadataJson ?? "{}")).toEqual({
 		interrupted: true,
+		workDurationMs: expect.any(Number),
 	});
 	const runtime = await t.run(async (ctx) => ({
 		queuedMessages: await Promise.all([
@@ -1651,7 +1681,7 @@ test("stopActiveStream preserves a consumed steer generation boundary", async ()
 	expect(runtime.steerInputs).toEqual([]);
 });
 
-test("stopActiveStream deletes stale terminal snapshots without saving interrupted text", async () => {
+test("stopActiveStream discards late snapshots and keeps the output saved at failure", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	const chatId = "chat-stop-terminal-snapshot";
 
@@ -1691,10 +1721,13 @@ test("stopActiveStream deletes stale terminal snapshots without saving interrupt
 			runId: run._id,
 			chatId: run.chatId,
 			assistantMessageId: run.assistantMessageId,
-			text: "Late stale terminal text.",
-			partsJson: JSON.stringify([
-				{ type: "text", text: "Late stale terminal text." },
-			]),
+			contentId: await writeChatMessageContent(ctx, {
+				text: "Late stale terminal text.",
+				partsJson: JSON.stringify([
+					{ type: "text", text: "Late stale terminal text." },
+				]),
+			}),
+			hasContent: true,
 			updatedAt: 4_000,
 		});
 	});
@@ -1738,10 +1771,19 @@ test("stopActiveStream deletes stale terminal snapshots without saving interrupt
 	});
 
 	expect(state.streams).toHaveLength(0);
-	expect(state.messages.map((message) => message.text)).toEqual(["Prompt"]);
+	expect(
+		await t.run((ctx) =>
+			Promise.all(
+				state.messages.map(
+					async (message) => (await hydrateChatMessage(ctx, message)).text,
+				),
+			),
+		),
+	).toEqual(["Prompt", "Stale terminal text."]);
 	expect(state.events.map((eventRecord) => eventRecord.event.type)).toEqual([
 		"run.started",
 		"assistant.message.started",
+		"assistant.message.interrupted",
 		"run.failed",
 	]);
 });
@@ -1910,7 +1952,14 @@ test("web steer completion preserves the durable assistant-user-assistant genera
 				.collect(),
 		]);
 
-		return { messages, queuedMessages, runs, steerInputs };
+		return {
+			messages: await Promise.all(
+				messages.map((message) => hydrateChatMessage(ctx, message)),
+			),
+			queuedMessages,
+			runs,
+			steerInputs,
+		};
 	});
 
 	expect(state.runs).toHaveLength(1);
@@ -2138,8 +2187,8 @@ test("removing a chat deletes assistant run runtime records", async () => {
 			runId: run._id,
 			authorName: "Owner",
 			googleAuthUserId: null,
+			messages: await writeChatPayload(ctx, `${run._id}:messages`, "[]"),
 			job: {
-				messagesJson: "[]",
 				instructions: "Test",
 				chatMode: CHAT_MODE.DEFAULT,
 				webSearchEnabled: false,
@@ -2277,4 +2326,54 @@ test("message snapshots return only replay fields", async () => {
 	]);
 	expect("text" in snapshots[0]).toBe(false);
 	expect(snapshots[0]?.createdAt).toBe(2_500);
+});
+
+test("Stop promotes an assistant snapshot larger than one document without truncation", async () => {
+	vi.useFakeTimers();
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const chatId = "large-stop";
+	await asOwner.mutation(api.chats.saveMessage, {
+		workspaceId,
+		chatId,
+		projectId: null,
+		settings: DEFAULT_CHAT_SETTINGS,
+		message: {
+			id: "user",
+			role: "user",
+			partsJson: JSON.stringify([{ type: "text", text: "Write" }]),
+			text: "Write",
+			createdAt: 2000,
+		},
+	});
+	const run = await startRunAndStream({ asOwner, workspaceId, chatId });
+	const text = "streamed answer ".repeat(80_000);
+	await asOwner.mutation(api.chats.updateActiveStream, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		delta: text,
+		partsJson: JSON.stringify([{ type: "text", text }]),
+	});
+	await asOwner.mutation(api.chats.stopActiveStream, {
+		workspaceId,
+		chatId,
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+	});
+	const message = await asOwner.query(api.chatThreads.readMessage, {
+		workspaceId,
+		chatId,
+		messageId: run.assistantMessageId,
+	});
+	expect(message?.text.length).toBe(text.length);
+	expect(message?.text === text).toBe(true);
+	expect(JSON.parse(message?.metadataJson ?? "{}")).toEqual({
+		interrupted: true,
+		workDurationMs: expect.any(Number),
+	});
+	await t.finishAllScheduledFunctions(vi.runAllTimers);
+	const contents = await t.run((ctx) => ctx.db.query("chatContents").collect());
+	expect(contents).toHaveLength(2);
+	expect(contents.every((content) => content.referenceCount === 1)).toBe(true);
 });

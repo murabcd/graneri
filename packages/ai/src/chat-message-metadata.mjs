@@ -27,6 +27,7 @@ const chatRecipeReceiptSchema = z.strictObject({
 const chatMessageMetadataSchema = z
 	.strictObject({
 		interrupted: z.boolean().optional(),
+		workDurationMs: z.number().finite().nonnegative().optional(),
 		mentionPositions: z
 			.array(z.union([noteMentionSchema, toolMentionSchema]))
 			.optional(),
@@ -49,3 +50,15 @@ export const parseChatMessageMetadata = (value) => {
 	const result = chatMessageMetadataSchema.safeParse(value);
 	return result.success ? result.data : null;
 };
+
+export const encodeChatMessageWorkDuration = ({
+	metadataJson,
+	startedAt,
+	completedAt,
+}) =>
+	JSON.stringify({
+		...chatMessageMetadataSchema.parse(
+			metadataJson === undefined ? {} : JSON.parse(metadataJson),
+		),
+		workDurationMs: Math.max(0, completedAt - startedAt),
+	});

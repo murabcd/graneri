@@ -6,6 +6,10 @@ import type { WorkspaceToolScope } from "./workspace-tool-catalog.mjs";
 
 export declare function buildConvexWorkspaceToolSet(args: {
 	chatId: string | null;
+	getActiveExecution: () => {
+		runId: Id<"assistantRuns">;
+		assistantMessageId: string;
+	};
 	connections: WorkspaceToolConnection[];
 	convexClient: ConvexHttpClient | null;
 	scope?: WorkspaceToolScope;

@@ -1,0 +1,226 @@
+diff --git a/dist/index.js b/dist/index.js
+index 2633595e8aac70e59f4f0a34495de2774bbc596a..dc52dee9dadfe34d878fd52349ee3cc49a8ff8f6 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -10267,50 +10267,71 @@ function createUIMessageStream({
+ }
+-
++
+ // src/ui-message-stream/read-ui-message-stream.ts
+-function readUIMessageStream({
+-  message,
+-  stream,
+-  onError,
+-  terminateOnError = false
+-}) {
+-  var _a22;
++function readUIMessageStream({ message, stream, onError, terminateOnError = false }) {
+   let controller;
+-  let hasErrored = false;
++  let wake;
++  let closed = false;
++  let reader;
+   const outputStream = new ReadableStream({
+-    start(controllerParam) {
+-      controller = controllerParam;
++    start(value) {
++      controller = value;
++    },
++    pull() {
++      wake?.();
++    },
++    async cancel(reason) {
++      closed = true;
++      wake?.();
++      await reader.cancel(reason);
+     }
+   });
+   const state = createStreamingUIMessageState({
+-    messageId: (_a22 = message == null ? void 0 : message.id) != null ? _a22 : "",
++    messageId: message?.id ?? "",
+     lastMessage: message
+   });
+   const handleError = (error) => {
+-    onError == null ? void 0 : onError(error);
+-    if (!hasErrored && terminateOnError) {
+-      hasErrored = true;
+-      controller == null ? void 0 : controller.error(error);
++    onError?.(error);
++    if (!closed && terminateOnError) {
++      closed = true;
++      controller.error(error);
++      wake?.();
+     }
+   };
+-  consumeStream({
+-    stream: processUIMessageStream({
+-      stream,
+-      runUpdateMessageJob(job) {
+-        return job({
+-          state,
+-          write: () => {
+-            controller == null ? void 0 : controller.enqueue(structuredClone(state.message));
+-          }
++  reader = processUIMessageStream({
++    stream,
++    async runUpdateMessageJob(job) {
++      while (!closed && (controller.desiredSize ?? 0) <= 0) {
++        await new Promise((resolve) => {
++          wake = resolve;
+         });
+-      },
+-      onError: handleError
+-    }),
++        wake = undefined;
++      }
++      if (closed)
++        return;
++      await job({
++        state,
++        write: () => {
++          controller.enqueue(structuredClone(state.message));
++        }
++      });
++    },
+     onError: handleError
+-  }).finally(() => {
+-    if (!hasErrored) {
+-      controller == null ? void 0 : controller.close();
++  }).getReader();
++  (async () => {
++    try {
++      while (!closed && !(await reader.read()).done) {}
++      if (closed)
++        await reader.cancel();
++    } catch (error) {
++      handleError(error);
++    } finally {
++      reader.releaseLock();
++      if (!closed) {
++        closed = true;
++        controller.close();
++      }
+     }
+-  });
++  })();
+   return createAsyncIterableStream(outputStream);
+ }
+-
++
+diff --git a/src/ui-message-stream/read-ui-message-stream.ts b/src/ui-message-stream/read-ui-message-stream.ts
+index 4d46c37b75434599737ed4e8790758bdb9cb7ea1..befc5860b2f84da3c3a2f21464eddc83366d1a29 100644
+--- a/src/ui-message-stream/read-ui-message-stream.ts
++++ b/src/ui-message-stream/read-ui-message-stream.ts
+@@ -3,13 +3,11 @@ import type { UIMessageChunk } from './ui-message-chunks';
+ import {
+   createStreamingUIMessageState,
+   processUIMessageStream,
+-  type StreamingUIMessageState,
+ } from '../ui/process-ui-message-stream';
+ import {
+   createAsyncIterableStream,
+   type AsyncIterableStream,
+ } from '../util/async-iterable-stream';
+-import { consumeStream } from '../util/consume-stream';
+-
++
+ /**
+  * Transforms a stream of `UIMessageChunk`s into an `AsyncIterableStream` of `UIMessage`s.
+@@ -33,55 +31,60 @@ export function readUIMessageStream<UI_MESSAGE extends UIMessage>({
+   onError?: (error: unknown) => void;
+   terminateOnError?: boolean;
+ }): AsyncIterableStream<UI_MESSAGE> {
+-  let controller: ReadableStreamDefaultController<UI_MESSAGE> | undefined;
+-  let hasErrored = false;
+-
++  let controller: ReadableStreamDefaultController<UI_MESSAGE>;
++  let wake: (() => void) | undefined;
++  let closed = false;
++  let reader: ReadableStreamDefaultReader<UIMessageChunk>;
+   const outputStream = new ReadableStream<UI_MESSAGE>({
+-    start(controllerParam) {
+-      controller = controllerParam;
++    start(value) { controller = value; },
++    pull() { wake?.(); },
++    async cancel(reason) {
++      closed = true;
++      wake?.();
++      await reader.cancel(reason);
+     },
+   });
+-
+   const state = createStreamingUIMessageState<UI_MESSAGE>({
+     messageId: message?.id ?? '',
+     lastMessage: message,
+   });
+-
+   const handleError = (error: unknown) => {
+     onError?.(error);
+-
+-    if (!hasErrored && terminateOnError) {
+-      hasErrored = true;
+-      controller?.error(error);
++    if (!closed && terminateOnError) {
++      closed = true;
++      controller.error(error);
++      wake?.();
+     }
+   };
+-
+-  consumeStream({
+-    stream: processUIMessageStream({
+-      stream,
+-      runUpdateMessageJob(
+-        job: (options: {
+-          state: StreamingUIMessageState<UI_MESSAGE>;
+-          write: () => void;
+-        }) => Promise<void>,
+-      ) {
+-        return job({
+-          state,
+-          write: () => {
+-            controller?.enqueue(structuredClone(state.message));
+-          },
+-        });
+-      },
+-      onError: handleError,
+-    }),
++  reader = processUIMessageStream({
++    stream,
++    async runUpdateMessageJob(job) {
++      while (!closed && (controller.desiredSize ?? 0) <= 0) {
++        await new Promise<void>(resolve => { wake = resolve; });
++        wake = undefined;
++      }
++      if (closed) return;
++      await job({
++        state,
++        write: () => { controller.enqueue(structuredClone(state.message)); },
++      });
++    },
+     onError: handleError,
+-  }).finally(() => {
+-    // Only close if no error occurred. Calling close() on an errored controller
+-    // throws "Invalid state: Controller is already closed" TypeError.
+-    if (!hasErrored) {
+-      controller?.close();
++  }).getReader();
++  void (async () => {
++    try {
++      while (!closed && !(await reader.read()).done) {}
++      if (closed) await reader.cancel();
++    } catch (error) {
++      handleError(error);
++    } finally {
++      reader.releaseLock();
++      if (!closed) {
++        closed = true;
++        controller.close();
++      }
+     }
+-  });
++  })();
+-
++
+   return createAsyncIterableStream(outputStream);
+ }
