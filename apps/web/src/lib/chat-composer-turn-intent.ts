@@ -3,6 +3,7 @@ import type { LocalCapabilitySession } from "@workspace/ai/local-capability-sess
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import type { ChatRequestBody } from "@/lib/chat-request-preparation";
 import type { SubmitChatTurnResult } from "@/lib/chat-submit-session";
+import type { FollowUpBehavior } from "@/lib/follow-up-behavior";
 
 type PreparedComposerTurn = {
 	buildRequestBody: () => Promise<ChatRequestBody>;
@@ -17,6 +18,7 @@ type RequestPrepared = (args: {
 
 type SubmitComposerTurn = (
 	input: PreparedComposerTurn & {
+		followUpBehaviorOverride?: FollowUpBehavior;
 		attachedFiles: ChatAttachment[];
 		editingMessageId: string | null;
 		onRequestPrepared: RequestPrepared;
@@ -90,6 +92,7 @@ export const commitChatComposerTurnIntent = async ({
 	attachedFiles,
 	claimIntent,
 	editingMessageId,
+	followUpBehaviorOverride,
 	isQueuedMessageEditCurrent,
 	onBeforeSubmit,
 	onRequestPrepared,
@@ -101,6 +104,7 @@ export const commitChatComposerTurnIntent = async ({
 	attachedFiles: ChatAttachment[];
 	claimIntent: () => ComposerTurnIntentClaim | null;
 	editingMessageId: string | null;
+	followUpBehaviorOverride?: FollowUpBehavior;
 	isQueuedMessageEditCurrent: (queuedMessageId: string) => boolean;
 	onBeforeSubmit: () => void;
 	onRequestPrepared: RequestPrepared;
@@ -132,6 +136,7 @@ export const commitChatComposerTurnIntent = async ({
 
 		onBeforeSubmit();
 		const result = await submitTurn({
+			followUpBehaviorOverride,
 			...preparedTurn,
 			attachedFiles,
 			editingMessageId,

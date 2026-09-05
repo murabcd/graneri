@@ -83,6 +83,27 @@ describe("chat composer turn intent", () => {
 		expect(args.restoreIfCurrent).not.toHaveBeenCalled();
 	});
 
+	it("carries a one-off behavior through admission but never applies it to a checked-out edit", async () => {
+		const args = createArgs();
+		await commitChatComposerTurnIntent({
+			...args,
+			followUpBehaviorOverride: "steer",
+		});
+		expect(args.submitTurn).toHaveBeenCalledWith(
+			expect.objectContaining({ followUpBehaviorOverride: "steer" }),
+		);
+		args.submitTurn.mockClear();
+		await commitChatComposerTurnIntent({
+			...args,
+			queuedMessageEditId: "queue-1",
+			followUpBehaviorOverride: "steer",
+		});
+		expect(args.submitTurn).not.toHaveBeenCalled();
+		expect(args.updateQueuedTurn.mock.calls[0][0]).not.toHaveProperty(
+			"followUpBehaviorOverride",
+		);
+	});
+
 	it("updates a queued edit without starting a new turn", async () => {
 		const args = createArgs();
 		args.queuedMessageEditId = "queued-1";

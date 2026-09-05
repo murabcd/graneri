@@ -331,6 +331,55 @@ describe("renderer follow-up composition", () => {
 		});
 	});
 
+	it.each([
+		"queue",
+		"steer",
+	] as const)("overrides %s for one follow-up without changing the preference or the next send", async (preference) => {
+		backend.preference = preference;
+		const h = mount();
+		const override = preference === "queue" ? "steer" : "queue";
+		let sending!: Promise<void>;
+		act(() => {
+			sending = Promise.resolve(
+				h.result.current.onQueuedMessageSaved({
+					queuedMessage: row("q1"),
+					followUpBehaviorOverride: override,
+				}),
+			);
+		});
+		if (override === "steer") {
+			await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledOnce());
+			await act(async () => {
+				h.responses[0].resolve(accepted("q1", "steer"));
+				await sending;
+			});
+		} else {
+			await act(async () => {
+				await sending;
+			});
+			expect(h.fetchImpl).not.toHaveBeenCalled();
+		}
+		act(() => {
+			sending = Promise.resolve(
+				h.result.current.onQueuedMessageSaved({ queuedMessage: row("q2") }),
+			);
+		});
+		if (preference === "steer") {
+			await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledOnce());
+			await act(async () => {
+				h.responses[0].resolve(accepted("q2", "steer"));
+				await sending;
+			});
+		} else {
+			await act(async () => {
+				await sending;
+			});
+		}
+		expect(h.fetchImpl).toHaveBeenCalledOnce();
+		expect(backend.preference).toBe(preference);
+		expect(backend.updatePreference).not.toHaveBeenCalled();
+	});
+
 	it("changes queue preference without changing existing rows", async () => {
 		backend.rows = [row("q1")];
 		const h = mount();

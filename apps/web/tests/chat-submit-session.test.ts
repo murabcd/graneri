@@ -385,6 +385,7 @@ describe("chat submit session", () => {
 		const onQueuedMessageSaved = vi.fn();
 
 		const result = await submitChatTurn({
+			followUpBehaviorOverride: "steer",
 			attachedFiles: [],
 			buildRequestBody: async () => ({
 				convexToken: "token",
@@ -419,6 +420,7 @@ describe("chat submit session", () => {
 		expect(sendMessage).not.toHaveBeenCalled();
 		expect(onOptimisticMessage).not.toHaveBeenCalled();
 		expect(onQueuedMessageSaved).toHaveBeenCalledWith({
+			followUpBehaviorOverride: "steer",
 			queuedMessage,
 		});
 	});

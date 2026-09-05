@@ -79,12 +79,16 @@ import { buildWorkspaceChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
+import {
+	DEFAULT_FOLLOW_UP_BEHAVIOR,
+	type FollowUpBehavior,
+} from "@/lib/follow-up-behavior";
 import { logError } from "@/lib/logger";
 import { getNoteDisplayTitle } from "@/lib/note-title";
 import type { NoteListItem } from "@/lib/note-types";
 import {
 	DEFAULT_SEND_SHORTCUT,
-	shouldSendFromKeyboardEvent,
+	resolveComposerKeyboardSubmit,
 } from "@/lib/send-shortcut";
 import { resolveWorkspaceChatComposerPlaceholder } from "@/lib/workspace-chat-composer-placeholder";
 import { api } from "../../../../../convex/_generated/api";
@@ -559,155 +563,158 @@ const useChatPageController = ({
 			})),
 		[notes],
 	);
-	const handleSubmit = React.useCallback(async () => {
-		const draftSnapshot = getDraftSnapshot();
-		const attachedFilesSnapshot = getAttachedFilesSnapshot();
-		const draftText = draftSnapshot.text;
-		const submittedAttachedFiles = attachedFilesSnapshot.value;
+	const handleSubmit = React.useCallback(
+		async (mode?: FollowUpBehavior) => {
+			const draftSnapshot = getDraftSnapshot();
+			const attachedFilesSnapshot = getAttachedFilesSnapshot();
+			const draftText = draftSnapshot.text;
+			const submittedAttachedFiles = attachedFilesSnapshot.value;
 
-		if (
-			isModelResolving ||
-			(!draftText.trim() && submittedAttachedFiles.length === 0) ||
-			hasUploadingAttachments(submittedAttachedFiles) ||
-			isAutomationRunning ||
-			(displayActiveRun && submittedAttachedFiles.length > 0)
-		) {
-			return;
-		}
-
-		try {
-			const queuedMessageEditId = queuedMessageEditDraft?._id ?? null;
-			const result = await commitChatComposerTurnIntent({
-				attachedFiles: submittedAttachedFiles,
-				claimIntent: () =>
-					claimChatComposerTurnIntent({
-						claimAttachments: () =>
-							claimAttachedFilesSnapshot(attachedFilesSnapshot, []),
-						claimDraft: () => claimDraftSnapshot(draftSnapshot),
-						isAttachmentsClaimCurrent: isAttachedFilesClaimCurrent,
-						isDraftClaimCurrent,
-						onClaim: () => setEditingMessageId(null),
-						onRestore: () => setEditingMessageId(editingMessageId),
-						restoreAttachments: restoreAttachedFilesClaim,
-						restoreDraft: restoreDraftClaim,
-					}),
-				editingMessageId,
-				isQueuedMessageEditCurrent,
-				onBeforeSubmit: () => {
-					chatPersistedCallback?.(chatId);
-				},
-				onRequestPrepared: ({ localCapabilitySession }) => {
-					reconcileLocalCapabilitySession(localCapabilitySession);
-				},
-				prepareTurn: () => {
-					const submission = prepareChatComposerSubmission({
-						draft: draftText,
-						mentions,
-						recipes,
-					});
-					const metadata: ChatMessageMetadata | undefined = submission.recipe
-						? {
-								recipe: submission.recipe,
-								recipeOnly: submission.recipeOnly,
-								...(submission.mentionPositions.length > 0 && {
-									mentionPositions: submission.mentionPositions,
-								}),
-							}
-						: submission.mentionPositions.length > 0
-							? { mentionPositions: submission.mentionPositions }
-							: undefined;
-					const { mentionIds, requestSelectedSourceIds } =
-						getWorkspaceChatMentionContext(mentions);
-					return {
-						buildRequestBody: () =>
-							buildWorkspaceChatRequestBody({
-								localCapability: {
-									source: "message",
-									scope: localCapabilityScope,
-									text: submission.displayText,
-								},
-								mentions: mentionIds,
-								projectId,
-								recipeSlug: submission.recipeSlug,
-								resolveConvexToken: getCachedConvexToken,
-								selectedSourceIds: requestSelectedSourceIds,
-								settings,
-								workspaceId: activeWorkspaceId,
-							}),
-						metadata,
-						text: submission.displayText,
-					};
-				},
-				queuedMessageEditId,
-				submitTurn,
-				updateQueuedTurn,
-			});
-
-			if (result.status === "queued") {
-				await waitForBrowserPaint();
-				return;
-			}
-		} catch (error) {
-			logError({
-				event: "client.error",
-				error: error,
-				message: "Failed to prepare chat request",
-			});
-			toast.error(
-				error instanceof Error
-					? error.message
-					: "Failed to prepare chat request",
-			);
-		}
-	}, [
-		activeWorkspaceId,
-		chatId,
-		claimAttachedFilesSnapshot,
-		claimDraftSnapshot,
-		displayActiveRun,
-		editingMessageId,
-		getAttachedFilesSnapshot,
-		getDraftSnapshot,
-		isAttachedFilesClaimCurrent,
-		isAutomationRunning,
-		isDraftClaimCurrent,
-		isModelResolving,
-		isQueuedMessageEditCurrent,
-		localCapabilityScope,
-		reconcileLocalCapabilitySession,
-		mentions,
-		projectId,
-		// The submit callback must capture the latest parent persistence callback.
-		chatPersistedCallback,
-		queuedMessageEditDraft,
-		recipes,
-		restoreAttachedFilesClaim,
-		restoreDraftClaim,
-		settings,
-		submitTurn,
-		updateQueuedTurn,
-	]);
-
-	const handleDraftKeyDown = React.useCallback(
-		(event: KeyboardEvent) => {
 			if (
-				!shouldSendFromKeyboardEvent(
-					{
-						isComposing: event.isComposing,
-						key: event.key,
-						metaKey: event.metaKey,
-						shiftKey: event.shiftKey,
-					},
-					userPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT,
-				)
+				isModelResolving ||
+				(!draftText.trim() && submittedAttachedFiles.length === 0) ||
+				hasUploadingAttachments(submittedAttachedFiles) ||
+				isAutomationRunning ||
+				(displayActiveRun && submittedAttachedFiles.length > 0)
 			) {
 				return;
 			}
 
-			event.preventDefault();
-			void handleSubmit();
+			try {
+				const queuedMessageEditId = queuedMessageEditDraft?._id ?? null;
+				const result = await commitChatComposerTurnIntent({
+					followUpBehaviorOverride: mode,
+					attachedFiles: submittedAttachedFiles,
+					claimIntent: () =>
+						claimChatComposerTurnIntent({
+							claimAttachments: () =>
+								claimAttachedFilesSnapshot(attachedFilesSnapshot, []),
+							claimDraft: () => claimDraftSnapshot(draftSnapshot),
+							isAttachmentsClaimCurrent: isAttachedFilesClaimCurrent,
+							isDraftClaimCurrent,
+							onClaim: () => setEditingMessageId(null),
+							onRestore: () => setEditingMessageId(editingMessageId),
+							restoreAttachments: restoreAttachedFilesClaim,
+							restoreDraft: restoreDraftClaim,
+						}),
+					editingMessageId,
+					isQueuedMessageEditCurrent,
+					onBeforeSubmit: () => {
+						chatPersistedCallback?.(chatId);
+					},
+					onRequestPrepared: ({ localCapabilitySession }) => {
+						reconcileLocalCapabilitySession(localCapabilitySession);
+					},
+					prepareTurn: () => {
+						const submission = prepareChatComposerSubmission({
+							draft: draftText,
+							mentions,
+							recipes,
+						});
+						const metadata: ChatMessageMetadata | undefined = submission.recipe
+							? {
+									recipe: submission.recipe,
+									recipeOnly: submission.recipeOnly,
+									...(submission.mentionPositions.length > 0 && {
+										mentionPositions: submission.mentionPositions,
+									}),
+								}
+							: submission.mentionPositions.length > 0
+								? { mentionPositions: submission.mentionPositions }
+								: undefined;
+						const { mentionIds, requestSelectedSourceIds } =
+							getWorkspaceChatMentionContext(mentions);
+						return {
+							buildRequestBody: () =>
+								buildWorkspaceChatRequestBody({
+									localCapability: {
+										source: "message",
+										scope: localCapabilityScope,
+										text: submission.displayText,
+									},
+									mentions: mentionIds,
+									projectId,
+									recipeSlug: submission.recipeSlug,
+									resolveConvexToken: getCachedConvexToken,
+									selectedSourceIds: requestSelectedSourceIds,
+									settings,
+									workspaceId: activeWorkspaceId,
+								}),
+							metadata,
+							text: submission.displayText,
+						};
+					},
+					queuedMessageEditId,
+					submitTurn,
+					updateQueuedTurn,
+				});
+
+				if (result.status === "queued") {
+					await waitForBrowserPaint();
+					return;
+				}
+			} catch (error) {
+				logError({
+					event: "client.error",
+					error: error,
+					message: "Failed to prepare chat request",
+				});
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to prepare chat request",
+				);
+			}
 		},
-		[handleSubmit, userPreferences?.sendShortcut],
+		[
+			activeWorkspaceId,
+			chatId,
+			claimAttachedFilesSnapshot,
+			claimDraftSnapshot,
+			displayActiveRun,
+			editingMessageId,
+			getAttachedFilesSnapshot,
+			getDraftSnapshot,
+			isAttachedFilesClaimCurrent,
+			isAutomationRunning,
+			isDraftClaimCurrent,
+			isModelResolving,
+			isQueuedMessageEditCurrent,
+			localCapabilityScope,
+			reconcileLocalCapabilitySession,
+			mentions,
+			projectId,
+			// The submit callback must capture the latest parent persistence callback.
+			chatPersistedCallback,
+			queuedMessageEditDraft,
+			recipes,
+			restoreAttachedFilesClaim,
+			restoreDraftClaim,
+			settings,
+			submitTurn,
+			updateQueuedTurn,
+		],
+	);
+
+	const handleDraftKeyDown = React.useCallback(
+		(event: KeyboardEvent) => {
+			const behavior = resolveComposerKeyboardSubmit(event, {
+				shortcut: userPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT,
+				followUpBehavior:
+					userPreferences?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR,
+				isFollowUp: canStop && !queuedMessageEditDraft,
+			});
+			if (!behavior) return;
+			event.preventDefault();
+			void handleSubmit(behavior);
+		},
+		[
+			canStop,
+			handleSubmit,
+			queuedMessageEditDraft,
+			userPreferences?.followUpBehavior,
+			userPreferences?.sendShortcut,
+		],
 	);
 
 	const handleEditMessage = React.useCallback(

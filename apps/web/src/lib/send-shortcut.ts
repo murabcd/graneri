@@ -1,3 +1,4 @@
+import type { FollowUpBehavior } from "./follow-up-behavior";
 export const SEND_SHORTCUT_OPTIONS = [
 	{ label: "Enter", value: "enter" },
 	{ label: "⌘ Enter", value: "command-enter" },
@@ -15,23 +16,30 @@ export const parseSendShortcut = (value: string): SendShortcut => {
 	throw new Error("Send shortcut is invalid.");
 };
 
-export const shouldSendFromKeyboardEvent = (
+export const resolveComposerKeyboardSubmit = (
+	event: Pick<
+		KeyboardEvent,
+		"isComposing" | "key" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey"
+	>,
 	{
-		isComposing,
-		key,
-		metaKey,
-		shiftKey,
+		shortcut,
+		followUpBehavior,
+		isFollowUp,
 	}: {
-		isComposing: boolean;
-		key: string;
-		metaKey: boolean;
-		shiftKey: boolean;
+		shortcut: SendShortcut;
+		followUpBehavior: FollowUpBehavior;
+		isFollowUp: boolean;
 	},
-	shortcut: SendShortcut,
-) => {
-	if (key !== "Enter" || shiftKey || isComposing) {
-		return false;
-	}
-
-	return shortcut === "command-enter" ? metaKey : !metaKey;
+): FollowUpBehavior | null => {
+	if (event.key !== "Enter" || event.isComposing || event.altKey) return null;
+	const commandKey = event.metaKey || event.ctrlKey;
+	const isOverride =
+		isFollowUp &&
+		commandKey &&
+		event.shiftKey === (shortcut === "command-enter");
+	if (isOverride) return followUpBehavior === "queue" ? "steer" : "queue";
+	const isDefaultSend =
+		!event.shiftKey &&
+		(shortcut === "command-enter" ? commandKey : !commandKey);
+	return isDefaultSend ? followUpBehavior : null;
 };

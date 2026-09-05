@@ -127,6 +127,10 @@ import { buildNoteChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
 import { getCachedConvexToken, prefetchConvexToken } from "@/lib/convex-token";
+import {
+	DEFAULT_FOLLOW_UP_BEHAVIOR,
+	type FollowUpBehavior,
+} from "@/lib/follow-up-behavior";
 import { logError } from "@/lib/logger";
 import { resolveCanGenerateNotes } from "@/lib/note-generate-action";
 import { createPlainTextEditorExtensions } from "@/lib/plain-text-editor";
@@ -137,7 +141,7 @@ import {
 } from "@/lib/recipes";
 import {
 	DEFAULT_SEND_SHORTCUT,
-	shouldSendFromKeyboardEvent,
+	resolveComposerKeyboardSubmit,
 } from "@/lib/send-shortcut";
 import {
 	getMentionPickerAnchorRect,
@@ -230,12 +234,10 @@ type NoteComposerProps = {
 	) => Promise<void>;
 };
 
-type ComposerKeyboardEvent = Pick<
-	KeyboardEvent,
-	"key" | "metaKey" | "shiftKey" | "preventDefault" | "isComposing"
-> & {
-	nativeEvent?: Pick<KeyboardEvent, "isComposing">;
-};
+type ComposerKeyboardEvent = Parameters<
+	typeof resolveComposerKeyboardSubmit
+>[0] &
+	Pick<KeyboardEvent, "preventDefault">;
 
 type NoteComposerDraftMetadata = {
 	selectedRecipeSlug: RecipeSlug;
@@ -1225,145 +1227,150 @@ const useNoteComposerController = ({
 		schedulePendingComposerFocus();
 	});
 
-	const handleSend = React.useCallback(async () => {
-		const draftSnapshot = getDraftSnapshot();
-		const attachedFilesSnapshot = getAttachedFilesSnapshot();
-		const submittedDraftText = draftSnapshot.text;
-		const submittedAttachedFiles = attachedFilesSnapshot.value;
-		const nextMessage = getMessageTextWithoutRecipeMention(
-			submittedDraftText,
-			selectedRecipe,
-		);
-
-		if (
-			shouldBlockNoteChatSubmit({
-				attachedFiles: submittedAttachedFiles,
-				displayActiveRun: Boolean(displayActiveRun),
-				isSettingsLoading,
-				message: nextMessage,
+	const handleSend = React.useCallback(
+		async (mode?: FollowUpBehavior) => {
+			const draftSnapshot = getDraftSnapshot();
+			const attachedFilesSnapshot = getAttachedFilesSnapshot();
+			const submittedDraftText = draftSnapshot.text;
+			const submittedAttachedFiles = attachedFilesSnapshot.value;
+			const nextMessage = getMessageTextWithoutRecipeMention(
+				submittedDraftText,
 				selectedRecipe,
-			})
-		) {
-			return;
-		}
+			);
 
-		try {
-			const queuedMessageEditId = queuedMessageEditDraft?._id ?? null;
-			const result = await commitChatComposerTurnIntent({
-				attachedFiles: submittedAttachedFiles,
-				claimIntent: () =>
-					claimChatComposerTurnIntent({
-						claimAttachments: () =>
-							claimAttachedFilesSnapshot(attachedFilesSnapshot, []),
-						claimDraft: () => claimDraftSnapshot(draftSnapshot),
-						isAttachmentsClaimCurrent: isAttachedFilesClaimCurrent,
-						isDraftClaimCurrent,
-						onClaim: () => setEditingMessageId(null),
-						onRestore: () => {
-							setEditingMessageId(editingMessageId);
-							resetTextareaHeight();
-							requestComposerFocus();
-						},
-						restoreAttachments: restoreAttachedFilesClaim,
-						restoreDraft: restoreDraftClaim,
-					}),
-				editingMessageId,
-				isQueuedMessageEditCurrent,
-				onBeforeSubmit: () => {
-					if (presentationMode === "inline") {
-						setPanelMode("chat");
-					} else {
-						openRightSidebar(presentationMode);
-					}
-				},
-				onRequestPrepared: ({ localCapabilitySession }) => {
-					resetTextareaHeight();
-					reconcileLocalCapabilitySession(localCapabilitySession);
-					requestComposerFocus();
-				},
-				prepareTurn: () => {
-					const outgoingText = nextMessage || selectedRecipe?.name || "";
-					const recipeMetadata: ChatMessageMetadata | undefined = selectedRecipe
-						? {
-								recipe: {
-									slug: selectedRecipe.slug,
-									name: selectedRecipe.name,
-								},
-								recipeOnly: nextMessage.length === 0,
-							}
-						: undefined;
-					return {
-						buildRequestBody: () => {
-							const currentNoteContext = readNoteContext();
-							return buildNoteChatRequestBody({
-								localCapability: {
-									source: "message",
-									scope: localCapabilityScope,
-									text: outgoingText,
-								},
-								noteContext: {
-									noteId: currentNoteContext.noteId,
-									title: currentNoteContext.title,
-									text: currentNoteContext.text,
-								},
-								recipeSlug: selectedRecipe?.slug ?? null,
-								resolveConvexToken: getCachedConvexToken,
-								settings: chatSettings,
-							});
-						},
-						metadata: recipeMetadata,
-						text: outgoingText,
-					};
-				},
-				queuedMessageEditId,
-				submitTurn,
-				updateQueuedTurn,
-			});
-
-			if (result.status === "queued") {
-				await waitForBrowserPaint();
+			if (
+				shouldBlockNoteChatSubmit({
+					attachedFiles: submittedAttachedFiles,
+					displayActiveRun: Boolean(displayActiveRun),
+					isSettingsLoading,
+					message: nextMessage,
+					selectedRecipe,
+				})
+			) {
 				return;
 			}
-		} catch (error) {
-			logError({
-				event: "client.error",
-				error: error,
-				message: "Failed to prepare note chat request",
-			});
-			toast.error(
-				error instanceof Error
-					? error.message
-					: "Failed to prepare note chat request",
-			);
-		}
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
-	}, [
-		claimAttachedFilesSnapshot,
-		claimDraftSnapshot,
-		displayActiveRun,
-		isQueuedMessageEditCurrent,
-		isSettingsLoading,
-		getDraftSnapshot,
-		getAttachedFilesSnapshot,
-		isAttachedFilesClaimCurrent,
-		isDraftClaimCurrent,
-		localCapabilityScope,
-		reconcileLocalCapabilitySession,
-		openRightSidebar,
-		presentationMode,
-		queuedMessageEditDraft,
-		readNoteContext,
-		resetTextareaHeight,
-		chatSettings,
-		selectedRecipe,
-		editingMessageId,
-		setPanelMode,
-		requestComposerFocus,
-		restoreAttachedFilesClaim,
-		restoreDraftClaim,
-		submitTurn,
-		updateQueuedTurn,
-	]);
+
+			try {
+				const queuedMessageEditId = queuedMessageEditDraft?._id ?? null;
+				const result = await commitChatComposerTurnIntent({
+					followUpBehaviorOverride: mode,
+					attachedFiles: submittedAttachedFiles,
+					claimIntent: () =>
+						claimChatComposerTurnIntent({
+							claimAttachments: () =>
+								claimAttachedFilesSnapshot(attachedFilesSnapshot, []),
+							claimDraft: () => claimDraftSnapshot(draftSnapshot),
+							isAttachmentsClaimCurrent: isAttachedFilesClaimCurrent,
+							isDraftClaimCurrent,
+							onClaim: () => setEditingMessageId(null),
+							onRestore: () => {
+								setEditingMessageId(editingMessageId);
+								resetTextareaHeight();
+								requestComposerFocus();
+							},
+							restoreAttachments: restoreAttachedFilesClaim,
+							restoreDraft: restoreDraftClaim,
+						}),
+					editingMessageId,
+					isQueuedMessageEditCurrent,
+					onBeforeSubmit: () => {
+						if (presentationMode === "inline") {
+							setPanelMode("chat");
+						} else {
+							openRightSidebar(presentationMode);
+						}
+					},
+					onRequestPrepared: ({ localCapabilitySession }) => {
+						resetTextareaHeight();
+						reconcileLocalCapabilitySession(localCapabilitySession);
+						requestComposerFocus();
+					},
+					prepareTurn: () => {
+						const outgoingText = nextMessage || selectedRecipe?.name || "";
+						const recipeMetadata: ChatMessageMetadata | undefined =
+							selectedRecipe
+								? {
+										recipe: {
+											slug: selectedRecipe.slug,
+											name: selectedRecipe.name,
+										},
+										recipeOnly: nextMessage.length === 0,
+									}
+								: undefined;
+						return {
+							buildRequestBody: () => {
+								const currentNoteContext = readNoteContext();
+								return buildNoteChatRequestBody({
+									localCapability: {
+										source: "message",
+										scope: localCapabilityScope,
+										text: outgoingText,
+									},
+									noteContext: {
+										noteId: currentNoteContext.noteId,
+										title: currentNoteContext.title,
+										text: currentNoteContext.text,
+									},
+									recipeSlug: selectedRecipe?.slug ?? null,
+									resolveConvexToken: getCachedConvexToken,
+									settings: chatSettings,
+								});
+							},
+							metadata: recipeMetadata,
+							text: outgoingText,
+						};
+					},
+					queuedMessageEditId,
+					submitTurn,
+					updateQueuedTurn,
+				});
+
+				if (result.status === "queued") {
+					await waitForBrowserPaint();
+					return;
+				}
+			} catch (error) {
+				logError({
+					event: "client.error",
+					error: error,
+					message: "Failed to prepare note chat request",
+				});
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to prepare note chat request",
+				);
+			}
+			// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
+		},
+		[
+			claimAttachedFilesSnapshot,
+			claimDraftSnapshot,
+			displayActiveRun,
+			isQueuedMessageEditCurrent,
+			isSettingsLoading,
+			getDraftSnapshot,
+			getAttachedFilesSnapshot,
+			isAttachedFilesClaimCurrent,
+			isDraftClaimCurrent,
+			localCapabilityScope,
+			reconcileLocalCapabilitySession,
+			openRightSidebar,
+			presentationMode,
+			queuedMessageEditDraft,
+			readNoteContext,
+			resetTextareaHeight,
+			chatSettings,
+			selectedRecipe,
+			editingMessageId,
+			setPanelMode,
+			requestComposerFocus,
+			restoreAttachedFilesClaim,
+			restoreDraftClaim,
+			submitTurn,
+			updateQueuedTurn,
+		],
+	);
 
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
@@ -1375,22 +1382,15 @@ const useNoteComposerController = ({
 	};
 
 	const handleComposerKeyDown = (event: ComposerKeyboardEvent) => {
-		if (
-			!shouldSendFromKeyboardEvent(
-				{
-					isComposing: event.nativeEvent?.isComposing ?? event.isComposing,
-					key: event.key,
-					metaKey: event.metaKey,
-					shiftKey: event.shiftKey,
-				},
-				userPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT,
-			)
-		) {
-			return;
-		}
-
+		const behavior = resolveComposerKeyboardSubmit(event, {
+			shortcut: userPreferences?.sendShortcut ?? DEFAULT_SEND_SHORTCUT,
+			followUpBehavior:
+				userPreferences?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR,
+			isFollowUp: canStop && !queuedMessageEditDraft,
+		});
+		if (!behavior) return;
 		event.preventDefault();
-		void handleSend();
+		void handleSend(behavior);
 	};
 
 	const handleEditMessage = React.useCallback(

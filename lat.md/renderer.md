@@ -96,6 +96,14 @@ automatic dispatcher remains.
 commands. It prepares one semantic turn, chooses queued-edit or new-turn
 submission, runs request-prepared effects, fences stale queued edits, and
 restores the captured draft and attachments on current-intent failure.
+[[apps/web/src/lib/send-shortcut.ts]] resolves keyboard sends for both composers.
+For a new active follow-up, Command/Ctrl+Enter in Enter mode or
+Command/Ctrl+Shift+Enter in Command Enter mode inverts the saved Queue/Steer
+preference for that submission. The explicit override travels through the
+composer intent and server admission callback; it never changes preferences or
+becomes replay context. Idle chat, queue editing, IME, Alt and newline handling
+retain normal send behavior. Button submission follows the saved preference;
+Queue remains the default.
 Queue admission captures ready uploaded files through [[apps/web/src/lib/chat-queue.ts]];
 editing restores those same files into the existing attachment chips in both
 chat and note composers. Local previews and upload-in-progress state never enter

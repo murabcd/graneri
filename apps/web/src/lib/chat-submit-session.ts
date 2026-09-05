@@ -14,6 +14,7 @@ import type {
 	ChatRequestBody,
 	ChatRequestContext,
 } from "@/lib/chat-request-preparation";
+import type { FollowUpBehavior } from "@/lib/follow-up-behavior";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export type ActiveRun =
@@ -102,6 +103,7 @@ export const submitChatTurn = async ({
 	displayActiveRun,
 	editingMessageId,
 	enqueueQueuedMessage,
+	followUpBehaviorOverride,
 	metadata,
 	onOptimisticMessage,
 	onRequestPrepared,
@@ -119,6 +121,7 @@ export const submitChatTurn = async ({
 	displayActiveRun: ActiveRun;
 	editingMessageId: string | null;
 	enqueueQueuedMessage: EnqueueQueuedChatTurn;
+	followUpBehaviorOverride?: FollowUpBehavior;
 	metadata?: ChatMessageMetadata;
 	onOptimisticMessage: (message: UIMessage) => void;
 	onRequestPrepared: (args: {
@@ -126,6 +129,7 @@ export const submitChatTurn = async ({
 		requestBody: ChatRequestBody;
 	}) => void;
 	onQueuedMessageSaved?: (args: {
+		followUpBehaviorOverride?: FollowUpBehavior;
 		queuedMessage: QueuedFollowUpMessage;
 	}) => Promise<void> | void;
 	queueActiveRun?: ActiveRun;
@@ -172,6 +176,7 @@ export const submitChatTurn = async ({
 		}
 		if (queuedMessageId && onQueuedMessageSaved) {
 			await onQueuedMessageSaved({
+				followUpBehaviorOverride,
 				queuedMessage,
 			});
 		}

@@ -81,9 +81,9 @@ export const useQueuedFollowUps = ({
 	const onQueuedMessageSaved = React.useCallback<
 		NonNullable<Parameters<typeof submitChatTurn>[0]["onQueuedMessageSaved"]>
 	>(
-		async ({ queuedMessage }) => {
+		async ({ queuedMessage, followUpBehaviorOverride }) => {
 			if (
-				followUpBehavior === "steer" &&
+				(followUpBehaviorOverride ?? followUpBehavior) === "steer" &&
 				(isChatRequestPending || queueActiveRun?.status === "running")
 			) {
 				await controls.steerQueuedFollowUp(queuedMessage);
