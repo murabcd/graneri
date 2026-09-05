@@ -55,19 +55,6 @@ describe("ChatHumanDecisionBar", () => {
 		expect(
 			document.querySelector('[data-slot="approval-status-icon"]'),
 		).not.toBeNull();
-		expect(
-			document
-				.querySelector('[data-slot="approval-status-icon"]')
-				?.classList.contains("text-emerald-500"),
-		).toBe(true);
-		expect(
-			screen
-				.getByText("Allow Graneri to delete automation?")
-				.classList.contains("text-muted-foreground"),
-		).toBe(true);
-		expect(
-			screen.getByText("Approval").parentElement?.classList.contains("flex"),
-		).toBe(true);
 
 		const approve = screen.getByRole("button", { name: /Allow once/u });
 		const deny = screen.getByRole("button", { name: /Deny/u });
@@ -77,7 +64,6 @@ describe("ChatHumanDecisionBar", () => {
 		expect(deny.textContent).toBe("Deny");
 		expect(approve.parentElement).toBe(deny.parentElement);
 		expect(approve.parentElement?.lastElementChild).toBe(approve);
-		expect(approve.parentElement?.classList.contains("border-t-0")).toBe(true);
 
 		fireEvent.click(approve);
 		expect(onRespond).toHaveBeenCalledWith({
@@ -165,16 +151,6 @@ describe("ChatHumanDecisionBar", () => {
 		expect(
 			document.querySelector('[data-slot="question-status-icon"]'),
 		).not.toBeNull();
-		expect(
-			document
-				.querySelector('[data-slot="question-status-icon"]')
-				?.classList.contains("text-blue-500"),
-		).toBe(true);
-		expect(
-			screen
-				.getByText("Which scope should I inspect?")
-				.classList.contains("text-muted-foreground"),
-		).toBe(true);
 		expect(screen.getByText("Recommended")).not.toBeNull();
 		expect(screen.getByText("Use only the current folder.")).not.toBeNull();
 		expect(screen.queryByRole("checkbox")).toBeNull();

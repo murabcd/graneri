@@ -39,10 +39,6 @@ describe("ComposerMentionPickerSurface", () => {
 		expect(screen.getByRole("button", { name: /Yandex Calendar/ })).toBe(
 			picker.firstElementChild?.firstElementChild,
 		);
-		const description = screen.getByText("Schedules, events, and availability");
-		expect(description.classList.contains("truncate")).toBe(true);
-		expect(description.classList.contains("text-xs")).toBe(true);
-		expect(description.classList.contains("text-muted-foreground")).toBe(true);
 	});
 
 	it("preserves editor focus when the picker handles pointer input", () => {

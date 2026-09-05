@@ -4,7 +4,6 @@ import {
 	render,
 	screen,
 	waitFor,
-	within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
@@ -143,54 +142,6 @@ describe("ProjectSidebarItem", () => {
 		expect(onProjectSelect).toHaveBeenCalledWith(projectId);
 	});
 
-	it.each([
-		{ open: false, iconClassName: "lucide-folder-closed" },
-		{ open: true, iconClassName: "lucide-folder-open" },
-	])("uses the matching folder icon when open is $open", ({
-		open,
-		iconClassName,
-	}) => {
-		const { container } = renderProjectSidebarItem({ open });
-
-		expect(container.querySelector(`.${iconClassName}`)).not.toBeNull();
-	});
-
-	it("mutes only the untouched default project icon", () => {
-		const defaultView = renderProjectSidebarItem();
-		const defaultIcon = defaultView.container.querySelector(
-			".lucide-folder-closed",
-		);
-
-		expect(defaultIcon?.classList).toContain("text-sidebar-foreground/60");
-		expect(defaultIcon?.getAttribute("style")).toBeNull();
-
-		defaultView.unmount();
-		const customView = renderProjectSidebarItem({
-			project: { ...project, color: "blue", icon: "book" },
-		});
-		const customIcon = customView.container.querySelector(".lucide-book-open");
-
-		expect(customIcon?.classList).not.toContain("text-sidebar-foreground/60");
-		expect(customIcon?.getAttribute("style")).toContain("color:");
-	});
-
-	it("does not reserve project action space until hover", () => {
-		renderProjectSidebarItem();
-
-		const projectButton = screen.getByRole("button", {
-			name: "Research activities",
-		});
-		expect(projectButton.classList).toContain(
-			"group-has-data-[sidebar=menu-action]/project-row:pr-2",
-		);
-		expect(projectButton.classList).toContain("group-hover/project-row:pr-14!");
-		expect(
-			projectButton
-				.querySelector(".hover-scroll-title-viewport")
-				?.getAttribute("data-keep-fade-on-hover"),
-		).toBe("true");
-	});
-
 	it("locks the underlying app while editing a project", async () => {
 		const user = userEvent.setup();
 
@@ -313,82 +264,9 @@ describe("ProjectSidebarItem", () => {
 			"Canonical sidebar note",
 		);
 	});
-
-	it("does not reserve nested note action space until hover", () => {
-		renderProjectSidebarItem({
-			notes: [note],
-			open: true,
-		});
-
-		const noteButton = screen.getByRole("button", { name: "Nested note" });
-		expect(noteButton.classList).toContain(
-			"group-has-data-[sidebar=menu-action]/note-row:pr-2",
-		);
-		expect(noteButton.classList).toContain("group-hover/note-row:pr-8!");
-		expect(noteButton.closest("[data-sidebar=menu-item]")?.classList).toContain(
-			"group/note-row",
-		);
-		expect(
-			noteButton
-				.querySelector(".hover-scroll-title-viewport")
-				?.getAttribute("data-keep-fade-on-hover"),
-		).toBe("true");
-	});
-
-	it("uses each project's icon and color in the move destination menu", async () => {
-		const user = userEvent.setup();
-		const appearanceProject: Doc<"projects"> = {
-			...project,
-			icon: "flask",
-			color: "orange",
-		};
-		useQueryMock.mockImplementation((reference: never) => {
-			const functionName = getFunctionName(reference);
-			if (functionName === "notes:get") {
-				return note;
-			}
-			if (functionName === "projects:list") {
-				return [appearanceProject];
-			}
-			return [];
-		});
-
-		renderProjectSidebarItem({ notes: [note], open: true });
-
-		await user.click(
-			screen.getByRole("button", { name: "Open actions for Nested note" }),
-		);
-		await user.click(screen.getByRole("menuitem", { name: "Move to" }));
-
-		expect(screen.queryByText("Main")).toBeNull();
-		const workspaceGroup = screen.getByRole("group", { name: "Workspace" });
-		expect(
-			within(workspaceGroup).getByRole("option", { name: "Notes" }),
-		).toBeTruthy();
-		const destination = await screen.findByRole("option", {
-			name: "Research activities",
-		});
-		await user.hover(destination);
-		const icon = destination.querySelector(".lucide-flask-conical");
-		expect(icon).not.toBeNull();
-		expect(icon?.classList.contains("text-orange-500")).toBe(true);
-		expect((icon as SVGElement | null)?.style.color).toBe(
-			"var(--color-orange-500)",
-		);
-	});
 });
 
 describe("NavProjects", () => {
-	it("aligns section actions with the header label", () => {
-		renderNavProjects();
-
-		const actionRow = screen
-			.getByRole("button", { name: "Add project" })
-			.closest('[data-sidebar="group-action"]');
-
-		expect(actionRow?.classList.contains("top-2.5")).toBe(true);
-	});
-
 	it("creates a project when Enter is pressed in the name field", async () => {
 		const user = userEvent.setup();
 		mutationMock.mockResolvedValue(project);

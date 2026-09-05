@@ -150,7 +150,10 @@ warnings fail the build; NFT's known script-parser fallback warning is accepted
 only when an `.mjs` file is subsequently parsed as a module.
 `packaged-runtime-verification.mjs` owns executable verification of the unpacked
 JavaScript, Python, SQLite, and native helper runtimes; the main package verifier
-remains responsible for static ASAR, configuration, and import checks.
+runs static ASAR, configuration, and import checks through
+[package-verification.mjs](../apps/desktop/scripts/package-verification.mjs)
+before executing runtime smoke tests. Static checks are exercised against temporary
+ASAR archives and their unpacked mirrors, without reading verifier source text.
 
 ## ASAR layout
 

@@ -139,20 +139,6 @@ describe("chat message thinking status", () => {
 		expect(
 			screen.getByRole("button", { name: /^Working for / }),
 		).not.toBeNull();
-		expect(
-			screen.getByRole("button", { name: /^Working for / }).className,
-		).toContain("border-b");
-		expect(
-			screen
-				.getByRole("button", { name: /^Working for / })
-				.closest("[data-assistant-work-group]")?.className,
-		).not.toContain("border-b");
-		expect(
-			screen
-				.getByRole("button", { name: /^Working for / })
-				.closest("[data-assistant-work-group]")
-				?.querySelector('[data-slot="collapsible-content"]')?.className,
-		).not.toContain("animate-collapsible-up");
 		expect(screen.getAllByText("Thinking")).toHaveLength(1);
 
 		rerender(
@@ -545,7 +531,6 @@ describe("chat message thinking status", () => {
 			.getByText("Working")
 			.closest("[data-assistant-work-group]");
 		expect(workingGroup).not.toBeNull();
-		expect(workingGroup?.className).not.toContain("mb-4");
 		expect(
 			document.querySelector(
 				'[data-chat-message-scroll-row="assistant-layout-lifecycle"]',

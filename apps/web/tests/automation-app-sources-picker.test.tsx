@@ -57,7 +57,6 @@ describe("automation app sources picker", () => {
 			name: "Turn off Web search",
 		});
 		expect(webControl.textContent).toContain("Web");
-		expect(webControl.querySelectorAll("svg")).toHaveLength(2);
 
 		await user.click(webControl);
 
@@ -80,11 +79,6 @@ describe("automation app sources picker", () => {
 			name: "Remove Research activities",
 		});
 		expect(projectControl.textContent).toContain("Research activities");
-		expect(
-			projectControl
-				.querySelector(".lucide-flask-conical")
-				?.classList.contains("text-orange-500"),
-		).toBe(true);
 
 		await user.click(projectControl);
 		expect(

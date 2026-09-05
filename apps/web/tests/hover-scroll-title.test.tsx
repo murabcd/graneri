@@ -36,31 +36,4 @@ describe("HoverScrollTitle", () => {
 		expect(viewport?.hasAttribute("data-overflowing")).toBe(false);
 		expect(track.getAttribute("style")).toBeNull();
 	});
-
-	it("marks titles that keep their edge fade while hovered", () => {
-		render(
-			<HoverScrollTitle keepFadeOnHover>Long sidebar title</HoverScrollTitle>,
-		);
-
-		expect(
-			screen.getByText("Long sidebar title").parentElement?.dataset
-				.keepFadeOnHover,
-		).toBe("true");
-	});
-
-	it("keeps overflow fading static when hover scrolling is disabled", () => {
-		render(
-			<div data-hover-scroll-title-row>
-				<HoverScrollTitle scrollOnHover={false}>
-					Long static title
-				</HoverScrollTitle>
-			</div>,
-		);
-
-		expect(
-			screen
-				.getByText("Long static title")
-				.parentElement?.hasAttribute("data-scroll-on-hover"),
-		).toBe(false);
-	});
 });

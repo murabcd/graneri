@@ -120,8 +120,6 @@ describe("note comments thread summary", () => {
 
 		const deleteButton = within(dialog).getByRole("button", { name: "Delete" });
 		expect(deleteButton.getAttribute("data-variant")).toBe("destructive");
-		expect(deleteButton.classList).toContain("bg-destructive/10");
-		expect(deleteButton.classList).toContain("text-destructive");
 
 		await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());

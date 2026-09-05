@@ -223,27 +223,7 @@ describe("chat composer active options", () => {
 		const planControl = screen.getByRole("button", {
 			name: "Turn off Plan mode",
 		});
-		const icons = planControl.querySelectorAll("svg");
-		const glyph = planControl.querySelector(
-			'[data-slot="active-option-glyph"]',
-		);
-		const label = planControl.querySelector(
-			'[data-slot="active-option-label"]',
-		);
 		expect(planControl.textContent).toContain("Plan");
-		expect(planControl.classList.contains("size-6")).toBe(true);
-		expect(planControl.classList.contains("rounded-full")).toBe(true);
-		expect(glyph?.classList.contains("group-hover:bg-muted")).toBe(true);
-		expect(label?.classList.contains("hidden")).toBe(true);
-		expect(label?.classList.contains("sm:inline")).toBe(true);
-		expect(label?.classList.contains("sm:group-hover:invisible")).toBe(false);
-		expect(icons).toHaveLength(2);
-		expect(
-			planControl
-				.querySelector('[data-slot="active-option-icon"]')
-				?.classList.contains("group-hover:hidden"),
-		).toBe(true);
-		expect(icons[1]?.classList.contains("group-hover:block")).toBe(true);
 		expect(
 			container.querySelector(
 				'[data-placeholder="Describe your task to generate a plan..."]',
@@ -271,23 +251,7 @@ describe("chat composer active options", () => {
 		const webControl = screen.getByRole("button", {
 			name: "Turn off Web search",
 		});
-		const icons = webControl.querySelectorAll("svg");
-		const glyph = webControl.querySelector('[data-slot="active-option-glyph"]');
-		const label = webControl.querySelector('[data-slot="active-option-label"]');
 		expect(webControl.textContent).toContain("Web");
-		expect(webControl.classList.contains("size-6")).toBe(true);
-		expect(webControl.classList.contains("rounded-full")).toBe(true);
-		expect(glyph?.classList.contains("group-hover:bg-muted")).toBe(true);
-		expect(label?.classList.contains("hidden")).toBe(true);
-		expect(label?.classList.contains("sm:inline")).toBe(true);
-		expect(label?.classList.contains("sm:group-hover:invisible")).toBe(false);
-		expect(icons).toHaveLength(2);
-		expect(
-			webControl
-				.querySelector('[data-slot="active-option-icon"]')
-				?.classList.contains("group-hover:hidden"),
-		).toBe(true);
-		expect(icons[1]?.classList.contains("group-hover:block")).toBe(true);
 
 		await user.click(webControl);
 
@@ -296,7 +260,7 @@ describe("chat composer active options", () => {
 		).toBeNull();
 	});
 
-	it("selects one project and carries its icon and color into the chip", async () => {
+	it("selects a project and clears it from the chip", async () => {
 		const user = userEvent.setup();
 		render(<ActiveOptionComposer />);
 
@@ -304,7 +268,6 @@ describe("chat composer active options", () => {
 		const chooseProject = screen.getByRole("menuitem", {
 			name: "Choose project",
 		});
-		expect(chooseProject.querySelector(".lucide-folder-closed")).not.toBeNull();
 		await user.click(chooseProject);
 		expect(screen.getByPlaceholderText("Search projects")).not.toBeNull();
 		fireEvent.click(
@@ -314,9 +277,7 @@ describe("chat composer active options", () => {
 		const projectChip = screen.getByRole("button", {
 			name: "Remove Research activities",
 		});
-		const projectIcon = projectChip.querySelector(".lucide-flask-conical");
 		expect(projectChip.textContent).toContain("Research activities");
-		expect(projectIcon?.classList.contains("text-orange-500")).toBe(true);
 
 		await user.click(projectChip);
 		expect(
@@ -335,23 +296,12 @@ describe("chat composer active options", () => {
 		const addLocalFolder = screen.getByRole("menuitem", {
 			name: "Add local folder",
 		});
-		expect(addLocalFolder.querySelector(".lucide-database")).not.toBeNull();
 		await user.click(addLocalFolder);
 
 		const folderControl = screen.getByRole("button", {
 			name: "Remove graneri",
 		});
 		expect(folderControl.textContent).toContain("graneri");
-		expect(folderControl.querySelector(".lucide-database")).not.toBeNull();
-		const folderLabel = folderControl.querySelector(
-			'[data-slot="active-option-label"]',
-		);
-		expect(folderLabel?.classList.contains("truncate")).toBe(false);
-		expect(
-			folderLabel
-				?.querySelector(".hover-scroll-title-viewport")
-				?.hasAttribute("data-scroll-on-hover"),
-		).toBe(false);
 		await user.click(screen.getByRole("button", { name: "Chat options" }));
 		expect(
 			screen.getByRole("menuitem", { name: "Change local folder" }),

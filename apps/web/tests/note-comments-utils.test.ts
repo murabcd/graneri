@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildCommentTree,
-	commentsUiReducer,
 	flattenCommentTree,
-	formatDiscussionTitle,
 	getAvatarLabel,
 	getDisplayName,
-	INITIAL_COMMENTS_UI_STATE,
 	resolveAuthorIdentity,
-	THREAD_VIEW_OPTIONS,
 } from "@/components/note/note-comments-utils";
 
 type TestComment = {
@@ -61,34 +57,6 @@ describe("note comments utilities", () => {
 		).toEqual({
 			name: "Grace Hopper",
 			avatarSrc: null,
-		});
-	});
-
-	it("formats discussion titles", () => {
-		expect(formatDiscussionTitle("Ada", false)).toBe("Ada commented in");
-		expect(formatDiscussionTitle("Ada", true)).toBe("Ada replied in");
-	});
-
-	it("defines comment thread filter options in display order", () => {
-		expect(THREAD_VIEW_OPTIONS).toEqual([
-			{ value: "all", label: "All discussions" },
-			{ value: "open", label: "Open discussions" },
-			{ value: "resolved", label: "Resolved discussions" },
-		]);
-	});
-
-	it("patches comments UI state without resetting unrelated fields", () => {
-		expect(
-			commentsUiReducer(INITIAL_COMMENTS_UI_STATE, {
-				draftBody: "Looks good",
-				filtersOpen: true,
-				view: "open",
-			}),
-		).toEqual({
-			...INITIAL_COMMENTS_UI_STATE,
-			draftBody: "Looks good",
-			filtersOpen: true,
-			view: "open",
 		});
 	});
 

@@ -32,13 +32,9 @@ describe("ManageDialogSidebarNav", () => {
 		const scrollingList = document.querySelector(
 			'[data-slot="sidebar-content"]',
 		);
-		const scrollingViewport = scrollingList?.querySelector(
-			'[data-slot="scroll-area-viewport"]',
-		);
 
 		expect(footer).not.toBeNull();
 		expect(scrollingList).not.toBeNull();
 		expect(scrollingList?.contains(restoreButton)).toBe(false);
-		expect(scrollingViewport?.classList.contains("scroll-fade-b")).toBe(true);
 	});
 });

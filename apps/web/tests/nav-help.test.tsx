@@ -43,24 +43,6 @@ afterEach(() => {
 });
 
 describe("NavHelp", () => {
-	it("labels the help control on hover", async () => {
-		const input = userEvent.setup();
-
-		render(
-			<SidebarProvider>
-				<NavHelp />
-			</SidebarProvider>,
-		);
-
-		await input.hover(
-			screen.getByRole("button", { name: "Help and downloads" }),
-		);
-
-		expect((await screen.findByRole("tooltip")).textContent).toBe(
-			"Open help menu",
-		);
-	});
-
 	it("opens keyboard shortcuts with Command-Slash", async () => {
 		render(
 			<SidebarProvider>
@@ -122,25 +104,10 @@ describe("NavHelp", () => {
 			await screen.findByRole("menuitem", { name: "Keyboard shortcuts" }),
 		);
 
-		const dialogTitle = await screen.findByRole("heading", {
+		await screen.findByRole("heading", {
 			name: "Keyboard shortcuts",
 		});
-		expect(dialogTitle.className).toContain("text-base");
-		expect(dialogTitle.className).not.toContain("text-lg");
-		expect(screen.getByRole("dialog").className).toContain(
-			"h-[min(42rem,calc(100vh-2rem))]",
-		);
-		expect(screen.getByRole("dialog").className).toContain("sm:max-w-lg");
-		const generalHeading = screen.getByRole("heading", { name: "General" });
-		expect(generalHeading.className).toContain("text-xs");
-		expect(generalHeading.className).toContain("text-muted-foreground");
 		expect(screen.getByText("Inbox")).not.toBeNull();
-		expect(screen.getByText("Inbox").parentElement?.className).toContain(
-			"text-foreground",
-		);
-		expect(screen.getByText("Inbox").parentElement?.className).not.toContain(
-			"px-2",
-		);
 		expect(screen.getByText("U")).not.toBeNull();
 		expect(screen.getByText("Calendar")).not.toBeNull();
 		expect(screen.getByText("Y")).not.toBeNull();
@@ -152,8 +119,6 @@ describe("NavHelp", () => {
 		const searchInput = screen.getByRole("textbox", {
 			name: "Search shortcuts",
 		});
-		expect(searchInput.className).toContain("h-8");
-		expect(searchInput.className).toContain("focus-visible:ring-0");
 
 		await input.type(searchInput, "inbox");
 
@@ -179,10 +144,5 @@ describe("NavHelp", () => {
 		expect(
 			screen.getByRole("menuitem", { name: "Keyboard shortcuts" }),
 		).not.toBeNull();
-		const shortcutHint = screen.getByText("/").closest("kbd");
-		expect(shortcutHint?.className).toContain("opacity-0");
-		expect(shortcutHint?.className).toContain(
-			"group-hover/keyboard-shortcuts-item:opacity-100",
-		);
 	});
 });

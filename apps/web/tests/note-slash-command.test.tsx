@@ -80,12 +80,9 @@ describe("note slash command", () => {
 		const { editor } = await renderSlashCommandHarness();
 		openSlashCommands(editor);
 
-		const commandList = await screen.findByRole("listbox", {
+		await screen.findByRole("listbox", {
 			name: "Note commands",
 		});
-		expect(
-			commandList.classList.contains("w-[min(14rem,calc(100vw-1rem))]"),
-		).toBe(true);
 		expect(screen.getByText("Style")).toBeTruthy();
 		expect(screen.getByText("Insert")).toBeTruthy();
 		expect(screen.getByText("Upload")).toBeTruthy();
@@ -106,15 +103,6 @@ describe("note slash command", () => {
 		]) {
 			expect(screen.getByRole("option", { name })).toBeTruthy();
 		}
-		const textOption = screen.getByRole("option", { name: "Text" });
-		expect(textOption.classList.contains("h-8")).toBe(true);
-		const textIcon = textOption.querySelector(
-			'[data-slot="note-slash-command-icon"]',
-		);
-		expect(textIcon?.parentElement).toBe(textOption);
-		expect(
-			textOption.querySelector('[data-slot="note-slash-command-check"]'),
-		).toBeNull();
 		const insertGroup = screen.getByRole("group", { name: "Insert" });
 		const uploadGroup = screen.getByRole("group", { name: "Upload" });
 		expect(
@@ -128,7 +116,6 @@ describe("note slash command", () => {
 		expect(
 			within(insertGroup).queryByRole("option", { name: "Image" }),
 		).toBeNull();
-		expect(commandList.querySelector(".border-t")).toBeNull();
 		fireEvent.keyDown(editor.view.dom, { key: "Escape" });
 	});
 

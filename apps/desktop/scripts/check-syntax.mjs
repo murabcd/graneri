@@ -43,6 +43,7 @@ const files = [
 	"scripts/packaged-runtime-verification.mjs",
 	"scripts/runtime-file-trace.mjs",
 	"scripts/verify-package.mjs",
+	"scripts/package-verification.mjs",
 	"scripts/build-system-audio-helper.mjs",
 	"scripts/forward-electron-output.mjs",
 	"scripts/generate-app-icon.mjs",

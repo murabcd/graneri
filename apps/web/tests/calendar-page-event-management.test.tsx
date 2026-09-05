@@ -80,9 +80,6 @@ describe("CalendarPage event management", () => {
 			guests.compareDocumentPosition(description) &
 				Node.DOCUMENT_POSITION_FOLLOWING,
 		).toBeTruthy();
-		expect(description.parentElement?.parentElement?.className).toContain(
-			"items-start",
-		);
 		expect(link.getAttribute("href")).toBe(
 			"https://wiki.example.com/team-sync",
 		);
@@ -430,8 +427,6 @@ describe("CalendarPage event management", () => {
 			),
 		).not.toBeNull();
 		const removeButton = screen.getByRole("button", { name: "Remove" });
-		expect(removeButton.className).toContain("bg-destructive/15");
-		expect(removeButton.className).toContain("text-destructive");
 		await user.click(removeButton);
 
 		await waitFor(() =>
@@ -528,8 +523,6 @@ describe("CalendarPage event management", () => {
 			name: "Delete",
 			hidden: false,
 		});
-		expect(deleteButton.className).toContain("bg-destructive/15");
-		expect(deleteButton.className).toContain("text-destructive");
 		await user.click(deleteButton);
 
 		await waitFor(() =>

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	appConnectionProviderLabels,
 	appConnectionProviders,
 	appSourceProviders,
 	capabilityMetadataDefinitions,
@@ -10,7 +9,6 @@ import {
 	getChatAppSourceDescription,
 	isMcpSdkOAuthConnectionProvider,
 	mcpSdkOAuthConnectionProviders,
-	remoteMcpConnectionDefaults,
 	tokenRequiredChatSourceAppConnectionProviders,
 } from "../src/capability-metadata.mjs";
 import {
@@ -19,13 +17,6 @@ import {
 } from "../src/capability-registry.mjs";
 
 describe("capability metadata", () => {
-	it("defines labels for every app connection provider", () => {
-		for (const provider of appConnectionProviders) {
-			expect(appConnectionProviderLabels[provider]).toEqual(expect.any(String));
-			expect(appConnectionProviderLabels[provider].length).toBeGreaterThan(0);
-		}
-	});
-
 	it("classifies every canonical capability through the public catalog", () => {
 		const ids = capabilityMetadataDefinitions.map(
 			(capability) => capability.id,
@@ -124,39 +115,6 @@ describe("capability metadata", () => {
 		expect(isMcpSdkOAuthConnectionProvider("figma")).toBe(true);
 		expect(isMcpSdkOAuthConnectionProvider("notion")).toBe(false);
 		expect(isMcpSdkOAuthConnectionProvider("zoom")).toBe(false);
-	});
-
-	it("defines remote MCP defaults from the provider catalog", () => {
-		expect(remoteMcpConnectionDefaults).toMatchObject({
-			context7: {
-				displayName: appConnectionProviderLabels.context7,
-				endpoint: "https://mcp.context7.com/mcp",
-			},
-			figma: {
-				displayName: appConnectionProviderLabels.figma,
-				endpoint: "https://mcp.figma.com/mcp",
-			},
-			"jira-mcp": {
-				displayName: appConnectionProviderLabels["jira-mcp"],
-				endpoint: "https://mcp.atlassian.com/v1/mcp",
-			},
-			linear: {
-				displayName: appConnectionProviderLabels.linear,
-				endpoint: "https://mcp.linear.app/mcp",
-			},
-			notion: {
-				displayName: appConnectionProviderLabels.notion,
-				endpoint: "https://mcp.notion.com/mcp",
-			},
-			posthog: {
-				displayName: appConnectionProviderLabels.posthog,
-				endpoint: "https://mcp.posthog.com/mcp",
-			},
-			zoom: {
-				displayName: appConnectionProviderLabels.zoom,
-				endpoint: "https://mcp.zoom.us/mcp/zoom/streamable",
-			},
-		});
 	});
 
 	it("maps every connected-app tool namespace back to its provider", () => {

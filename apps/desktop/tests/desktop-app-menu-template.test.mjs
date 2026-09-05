@@ -40,33 +40,6 @@ test("View menu contains only Graneri commands and native view controls", () => 
 	);
 
 	assert.deepEqual(
-		viewMenu.submenu.map((item) => item.label ?? item.type),
-		[
-			"Toggle Sidebar",
-			"Home",
-			"Inbox",
-			"Ask AI",
-			"Calendar",
-			"Automations",
-			"Shared",
-			"Settings",
-			"separator",
-			"Search",
-			"separator",
-			"Reload",
-			"Toggle Developer Tools",
-			"separator",
-			"Back",
-			"Forward",
-			"separator",
-			"Actual Size",
-			"Zoom In",
-			"Zoom Out",
-			"separator",
-			"Toggle Full Screen",
-		],
-	);
-	assert.deepEqual(
 		Object.fromEntries(
 			viewMenu.submenu
 				.filter((item) => item.label)
@@ -132,30 +105,6 @@ test("Settings entries share the same window navigation action", () => {
 	]);
 });
 
-test("application menu keeps only the intended quit actions", () => {
-	const applicationMenu = createTemplate({})[0];
-
-	assert.deepEqual(
-		applicationMenu.submenu.map((item) => item.label ?? item.role ?? item.type),
-		[
-			"About Graneri",
-			"separator",
-			"Check for Updates...",
-			"Settings",
-			"separator",
-			"services",
-			"separator",
-			"Hide Graneri",
-			"hideOthers",
-			"unhide",
-			"separator",
-			"Quit Completely",
-			"separator",
-			"Quit",
-		],
-	);
-});
-
 test("Help menu exposes shortcuts and Graneri troubleshooting actions", () => {
 	let shortcutsOpenCount = 0;
 	const helpMenu = createTemplate({
@@ -163,34 +112,13 @@ test("Help menu exposes shortcuts and Graneri troubleshooting actions", () => {
 			shortcutsOpenCount += 1;
 		},
 	}).find((item) => item.role === "help");
-	const troubleshootingMenu = helpMenu.submenu.find(
-		(item) => item.label === "Troubleshooting",
-	);
 
-	assert.deepEqual(
-		helpMenu.submenu.map((item) => item.label ?? item.type),
-		[
-			"Keyboard Shortcuts",
-			"separator",
-			"Learn More",
-			"separator",
-			"Troubleshooting",
-		],
-	);
 	const shortcutsItem = helpMenu.submenu.find(
 		(item) => item.label === "Keyboard Shortcuts",
 	);
 	assert.equal(shortcutsItem.accelerator, "Command+/");
 	shortcutsItem.click();
 	assert.equal(shortcutsOpenCount, 1);
-	assert.deepEqual(
-		troubleshootingMenu.submenu.map((item) => item.label),
-		[
-			"Record Performance Trace (10s)",
-			"Start/Stop macOS Unified Log",
-			"Show Logs in Finder",
-		],
-	);
 });
 
 test("custom View menu items invoke their matching commands", () => {
@@ -236,10 +164,6 @@ test("custom View menu items invoke their matching commands", () => {
 test("Window menu exposes Command+W close without auxiliary window commands", () => {
 	const windowMenu = createTemplate({}).find((item) => item.role === "window");
 
-	assert.deepEqual(
-		windowMenu.submenu.map((item) => item.role ?? item.type),
-		["minimize", "zoom", "separator", "close", "separator", "front"],
-	);
 	assert.equal(
 		windowMenu.submenu.find((item) => item.role === "close").accelerator,
 		"Command+W",

@@ -32,9 +32,7 @@ describe("sidebar navigation", () => {
 		);
 
 		expect(screen.getByText("Workspace")).not.toBeNull();
-		const badge = screen.getByText("3");
-		expect(badge.className).toContain("rounded-full");
-		expect(badge.className).toContain("tabular-nums");
+		expect(screen.getByText("3")).not.toBeNull();
 	});
 
 	it("opens Explore below the Workspace navigation", async () => {
@@ -63,19 +61,8 @@ describe("sidebar navigation", () => {
 
 		const sharedButton = screen.getByText("Shared").closest("button");
 		const exploreButton = screen.getByRole("button", { name: "Explore" });
-		const exploreLabel = screen.getByText("Explore");
 
 		expect(sharedButton).not.toBeNull();
-		expect(exploreButton.className).toContain("text-sidebar-foreground/70");
-		expect(exploreButton.className).toContain("hover:bg-transparent");
-		expect(exploreButton.className).toContain("hover:text-inherit");
-		expect(exploreButton.className).toContain(
-			"[&_svg]:text-sidebar-foreground/60",
-		);
-		expect(exploreButton.className).not.toContain(
-			"hover:[&_svg]:text-sidebar-accent-foreground",
-		);
-		expect(exploreLabel.className).toContain("text-xs");
 		expect(
 			(sharedButton?.compareDocumentPosition(exploreButton) ?? 0) &
 				Node.DOCUMENT_POSITION_FOLLOWING,
@@ -97,7 +84,7 @@ describe("sidebar navigation", () => {
 		expect(onViewChange).toHaveBeenCalledWith("companies");
 	});
 
-	it("opens Ask AI with Command-Option-N and shows its shortcut hint", () => {
+	it("opens Ask AI with Command-Option-N", () => {
 		const onViewChange = vi.fn();
 
 		render(
@@ -146,9 +133,6 @@ describe("sidebar navigation", () => {
 		);
 
 		const newNoteButton = screen.getByRole("button", { name: "New note" });
-		expect(newNoteButton.className).toContain("text-sidebar-foreground");
-		expect(newNoteButton.className).toContain("hover:text-sidebar-foreground");
-		expect(newNoteButton.className).not.toContain("text-sidebar-foreground/60");
 		fireEvent.click(newNoteButton);
 		fireEvent.keyDown(document, { code: "KeyN", key: "n", metaKey: true });
 
@@ -168,15 +152,13 @@ describe("sidebar navigation", () => {
 		);
 
 		const searchButton = screen.getByRole("button", { name: "Search" });
-		expect(searchButton.className).toContain("text-sidebar-foreground/60");
-		expect(searchButton.className).toContain("hover:text-sidebar-foreground");
 		fireEvent.click(searchButton);
 		fireEvent.keyDown(document, { code: "KeyK", key: "k", metaKey: true });
 
 		expect(onSearchOpen).toHaveBeenCalledTimes(2);
 	});
 
-	it("opens Home with Command-Option-G and shows its shortcut hint", () => {
+	it("opens Home with Command-Option-G", () => {
 		const onViewChange = vi.fn();
 
 		render(
@@ -201,10 +183,6 @@ describe("sidebar navigation", () => {
 
 		expect(screen.getByText("⌥")).not.toBeNull();
 		expect(screen.getByText("G")).not.toBeNull();
-		const shortcut = screen.getByText("G").closest("kbd");
-		expect(shortcut?.className).toContain("opacity-0");
-		expect(shortcut?.className).toContain("group-hover/menu-item:opacity-100");
-		expect(shortcut?.className).not.toContain("group-focus-within");
 
 		fireEvent.keyDown(document, {
 			altKey: true,
@@ -216,7 +194,7 @@ describe("sidebar navigation", () => {
 		expect(onViewChange).toHaveBeenCalledWith("home");
 	});
 
-	it("opens Inbox with Command-Option-U and shows its shortcut hint", () => {
+	it("opens Inbox with Command-Option-U", () => {
 		const onInboxToggle = vi.fn();
 
 		render(
@@ -239,10 +217,6 @@ describe("sidebar navigation", () => {
 			</SidebarProvider>,
 		);
 
-		const shortcut = screen.getByText("U").closest("kbd");
-		expect(shortcut?.className).toContain("opacity-0");
-		expect(shortcut?.className).toContain("group-hover/menu-item:opacity-100");
-		expect(shortcut?.className).not.toContain("group-focus-within");
 		fireEvent.keyDown(document, {
 			altKey: true,
 			code: "KeyU",
@@ -253,7 +227,7 @@ describe("sidebar navigation", () => {
 		expect(onInboxToggle).toHaveBeenCalledOnce();
 	});
 
-	it("opens Workspace views with their Command-Option shortcuts and shows hints", () => {
+	it("opens Workspace views with their Command-Option shortcuts", () => {
 		const onViewChange = vi.fn();
 
 		render(
@@ -299,12 +273,6 @@ describe("sidebar navigation", () => {
 			["KeyA", "A", "automation"],
 			["KeyS", "S", "shared"],
 		] as const) {
-			const shortcut = screen.getByText(keyLabel).closest("kbd");
-			expect(shortcut?.className).toContain("opacity-0");
-			expect(shortcut?.className).toContain(
-				"group-hover/menu-item:opacity-100",
-			);
-
 			fireEvent.keyDown(document, {
 				altKey: true,
 				code,

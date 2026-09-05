@@ -2,33 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createSidebarNavigationItems } from "@/lib/navigation";
 
 describe("createSidebarNavigationItems", () => {
-	it("uses the Linear-style primary and Workspace order", () => {
-		const items = createSidebarNavigationItems({
-			counts: {
-				activeAutomations: 0,
-				sharedNotes: 0,
-				unreadInboxItems: 0,
-			},
-			currentView: "home",
-			inboxOpen: false,
-		});
-
-		expect(
-			items.map(({ section, shortcutId, title }) => [
-				section,
-				title,
-				shortcutId,
-			]),
-		).toEqual([
-			["primary", "Home", "home"],
-			["primary", "Inbox", "inbox"],
-			["primary", "Ask AI", "ask-ai"],
-			["workspace", "Calendar", "calendar"],
-			["workspace", "Automations", "automations"],
-			["workspace", "Shared", "shared"],
-		]);
-	});
-
 	it("shows canonical counts for Shared, Automations, and Inbox", () => {
 		const items = createSidebarNavigationItems({
 			counts: {

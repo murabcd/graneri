@@ -52,6 +52,10 @@ local when it describes genuinely private implementation state; do not export
 implementation details merely to avoid a local type.
 
 ## Testing Guidelines
+Do not write tests for reversible, low-impact changes that mirror the implementation. If you do choose to verify your work with tests, make sure that the tests are meaningful and necessary to verify implementation.
+
+Run tests appropriate to the change and complete required checks. Once those pass, broaden or repeat testing only when new changes, failures, or unresolved concerns justify it; otherwise, continue toward completing the task.
+
 Web tests use Vitest with Testing Library and `jsdom`. Name tests `*.test.tsx` and keep them near feature-level behavior, as in `apps/web/tests/chat-page.test.tsx`. Run `bun run test` before opening a PR; for frontend changes, also run `bun run typecheck` and `bun run check`. Desktop changes should pass `bun --filter=desktop run typecheck` and `bun --filter=desktop run check`; native behavior should include targeted tests when practical or a clear manual verification note when it depends on macOS permissions, packaging, or system audio.
 
 ## Commit & Pull Request Guidelines

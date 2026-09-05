@@ -123,7 +123,7 @@ describe("dialog keyboard mechanics", () => {
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
 
-	it("matches regular dialog dimming and cancels on backdrop click", async () => {
+	it("cancels on backdrop click", async () => {
 		const user = userEvent.setup();
 		const onConfirm = vi.fn();
 		const onOpenChange = vi.fn();
@@ -136,9 +136,6 @@ describe("dialog keyboard mechanics", () => {
 			'[data-slot="alert-dialog-overlay"]',
 		);
 		expect(overlay).not.toBeNull();
-		expect(overlay?.className).toContain("bg-foreground/10");
-		expect(overlay?.className).toContain("backdrop-blur-xs");
-		expect(overlay?.className).not.toContain("bg-black/80");
 
 		if (!overlay) {
 			throw new Error("Expected the alert dialog overlay to be rendered");
@@ -148,14 +145,5 @@ describe("dialog keyboard mechanics", () => {
 
 		expect(onConfirm).not.toHaveBeenCalled();
 		expect(onOpenChange).toHaveBeenCalledWith(false);
-	});
-
-	it("matches the regular dialog surface elevation", () => {
-		render(<ConfirmationDialog onConfirm={vi.fn()} onOpenChange={vi.fn()} />);
-
-		const content = screen.getByRole("alertdialog");
-		expect(content.className).toContain("ring-foreground/10");
-		expect(content.className).not.toContain("shadow-lg");
-		expect(content.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
 	});
 });

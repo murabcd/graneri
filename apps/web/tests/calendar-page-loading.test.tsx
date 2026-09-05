@@ -89,36 +89,7 @@ describe("CalendarPage loading", () => {
 
 		await user.click(screen.getByRole("button", { name: "Today" }));
 
-		expect(agenda.classList.contains("scroll-fade-b")).toBe(true);
 		expect(agenda.scrollTop).toBe(0);
-	});
-
-	it("gives the agenda the same light shadow as other cards", async () => {
-		renderCalendarPage(workspaceId);
-		await screen.findByText("Planning");
-
-		const agenda = screen.getByRole("region", { name: "Calendar agenda" });
-
-		expect(agenda.parentElement?.classList.contains("shadow-sm")).toBe(true);
-	});
-
-	it("scrolls long event titles on hover without showing a tooltip", async () => {
-		const user = userEvent.setup();
-		renderCalendarPage(workspaceId);
-		const title = await screen.findByText("Planning");
-		const eventButton = screen.getByRole("button", {
-			name: /Planning,/u,
-		});
-
-		expect(eventButton.hasAttribute("data-hover-scroll-title-row")).toBe(true);
-		expect(
-			title.parentElement?.classList.contains("hover-scroll-title-viewport"),
-		).toBe(true);
-
-		await user.hover(eventButton);
-		await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
-
-		expect(screen.queryByRole("tooltip")).toBeNull();
 	});
 
 	it("keeps the current agenda visible until an uncached range is ready", async () => {
@@ -278,7 +249,6 @@ describe("CalendarPage loading", () => {
 		const newCalendar = screen.getByRole("menuitem", {
 			name: "New calendar",
 		});
-		expect(actions.className).toContain("hover:bg-accent");
 		await user.hover(actions);
 		await act(
 			async () =>
@@ -489,17 +459,6 @@ describe("CalendarPage loading", () => {
 		await screen.findByRole("heading", { name: "New event" });
 
 		expect(document.activeElement).toBe(trigger);
-	});
-
-	it("places the new event action after the form content", async () => {
-		const user = userEvent.setup();
-		renderCalendarPageWithNewEventTrigger(workspaceId);
-		await screen.findByText("Planning");
-
-		await user.click(screen.getByRole("button", { name: "New event" }));
-
-		const createButton = await screen.findByRole("button", { name: "Create" });
-		expect(createButton.closest(".overflow-y-auto")).not.toBeNull();
 	});
 
 	it("uses native minute-precision time inputs for new events", async () => {

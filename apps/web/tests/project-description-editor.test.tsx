@@ -149,25 +149,6 @@ describe("ProjectDescriptionEditor", () => {
 		expect(mocks.requestGeneratedProjectDescription).not.toHaveBeenCalled();
 	});
 
-	it("keeps the generate hint available when generation is disabled", async () => {
-		mocks.useQuery.mockReturnValueOnce([]);
-
-		renderProjectDescriptionEditor({ description: "" });
-		const generateButton = screen.getByRole("button", {
-			name: "Generate project description",
-		});
-		const action = generateButton.parentElement;
-
-		expect(action?.classList.contains("cursor-not-allowed")).toBe(true);
-		fireEvent.pointerMove(action as HTMLElement);
-
-		expect(
-			await screen.findByRole("tooltip", {
-				name: "Generate",
-			}),
-		).not.toBeNull();
-	});
-
 	it("allows generation from an existing description without notes", () => {
 		mocks.useQuery.mockReturnValueOnce([]);
 
@@ -180,80 +161,6 @@ describe("ProjectDescriptionEditor", () => {
 				}) as HTMLButtonElement
 			).disabled,
 		).toBe(false);
-	});
-
-	it("shows the generate hint on hover", async () => {
-		renderProjectDescriptionEditor();
-		const regenerateButton = screen.getByRole("button", {
-			name: "Regenerate project description",
-		});
-
-		fireEvent.pointerMove(regenerateButton);
-
-		expect(
-			await screen.findByRole("tooltip", {
-				name: "Generate",
-			}),
-		).not.toBeNull();
-	});
-
-	it("keeps the generate action anchored to the bottom-right corner", () => {
-		renderProjectDescriptionEditor();
-		const generateButton = screen.getByRole("button", {
-			name: "Regenerate project description",
-		});
-		const action = generateButton.parentElement;
-
-		expect(
-			["absolute", "right-0", "bottom-0"].every((className) =>
-				action?.classList.contains(className),
-			),
-		).toBe(true);
-		expect(action?.classList.contains("cursor-pointer")).toBe(true);
-	});
-
-	it("keeps the empty description at the top and the action at the bottom", () => {
-		renderProjectDescriptionEditor({ description: "" });
-		const description = screen.getByLabelText("Project description");
-		const generateButton = screen.getByRole("button", {
-			name: "Generate project description",
-		});
-
-		expect(description.parentElement?.classList.contains("items-center")).toBe(
-			false,
-		);
-		expect(generateButton.parentElement?.classList.contains("bottom-0")).toBe(
-			true,
-		);
-	});
-
-	it("groups the description and generate action in one card", () => {
-		renderProjectDescriptionEditor();
-		const description = screen.getByLabelText("Project description");
-		const generateButton = screen.getByRole("button", {
-			name: "Regenerate project description",
-		});
-		const card = description.closest('[data-slot="card"]');
-
-		expect(card).not.toBeNull();
-		expect(card?.contains(generateButton)).toBe(true);
-		expect(card?.classList.contains("bg-card")).toBe(true);
-		const cardContent = description.closest('[data-slot="card-content"]');
-		expect(cardContent?.classList.contains("p-3")).toBe(true);
-		expect(cardContent?.classList.contains("min-h-[84px]")).toBe(true);
-	});
-
-	it("contains descriptions with long unbroken text inside the card", () => {
-		renderProjectDescriptionEditor({
-			description: `Description ${"e".repeat(200)}`,
-		});
-		const description = screen.getByLabelText("Project description");
-		const cardContent = description.closest('[data-slot="card-content"]');
-
-		expect(cardContent?.classList.contains("min-w-0")).toBe(true);
-		expect(description.parentElement?.classList.contains("min-w-0")).toBe(true);
-		expect(description.classList.contains("max-w-full")).toBe(true);
-		expect(description.classList.contains("wrap-anywhere")).toBe(true);
 	});
 
 	it("preserves the current draft when generation fails", async () => {

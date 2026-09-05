@@ -50,12 +50,10 @@ const renderHistory = (activeChatId: string | null) =>
 describe("chat unread response indicator", () => {
 	afterEach(() => cleanup());
 
-	it("shows for an unread history row and yields to row actions on hover", () => {
+	it("shows for an unread history row", () => {
 		renderHistory(null);
 
-		const indicator = screen.getByLabelText("Unread AI response");
-		expect(indicator.className).toContain("bg-chart-1");
-		expect(indicator.className).toContain("group-hover:opacity-0");
+		expect(screen.getByLabelText("Unread AI response")).not.toBeNull();
 	});
 
 	it("is suppressed immediately for the active chat", () => {

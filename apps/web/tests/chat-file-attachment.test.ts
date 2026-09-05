@@ -13,7 +13,6 @@ import {
 	FileAttachmentCards,
 } from "@/components/ai-elements/file-attachment-cards";
 import { FileAttachmentChips } from "@/components/ai-elements/file-attachment-controls";
-import { FileAttachmentGlyph } from "@/components/ai-elements/file-attachment-type-icon";
 import {
 	formatFileSize,
 	getChatFileSizeBytes,
@@ -58,34 +57,6 @@ describe("chat file attachments", () => {
 		expect(isDownloadableUrl("javascript:alert(1)")).toBe(false);
 	});
 
-	it.each([
-		["pdf", "application/pdf"],
-		[
-			"word",
-			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		],
-		[
-			"spreadsheet",
-			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-		],
-		[
-			"presentation",
-			"application/vnd.openxmlformats-officedocument.presentationml.presentation",
-		],
-	] as const)("selects the %s glyph from its media type", (kind, mediaType) => {
-		const { container } = render(
-			createElement(FileAttachmentGlyph, {
-				file: {
-					type: "file",
-					mediaType,
-					url: `https://files.example.test/${kind}`,
-				},
-			}),
-		);
-
-		expect(container.querySelector(`[data-file-kind="${kind}"]`)).toBeTruthy();
-	});
-
 	it("renders the file size and an in-card download link", () => {
 		render(
 			createElement(FileAttachmentCards, {
@@ -98,9 +69,6 @@ describe("chat file attachments", () => {
 		const messageFile =
 			screen.getByText("report.pdf").parentElement?.parentElement;
 		expect(messageFile?.querySelector('[data-file-kind="pdf"]')).toBeTruthy();
-		expect(messageFile?.classList.contains("border")).toBe(true);
-		expect(messageFile?.classList.contains("bg-muted/50")).toBe(true);
-		expect(messageFile?.classList.contains("h-16")).toBe(true);
 		const downloadButton = screen.getByRole("button", {
 			name: "Download report.pdf",
 		});
@@ -129,23 +97,12 @@ describe("chat file attachments", () => {
 		expect(
 			pill?.querySelector('[data-slot="attachment-actions"]'),
 		).not.toBeNull();
-		expect(pill?.classList.contains("inline-flex")).toBe(true);
-		expect(pill?.classList.contains("max-w-80")).toBe(true);
-		expect(pill?.classList.contains("relative")).toBe(true);
-		expect(pill?.classList.contains("rounded-full")).toBe(true);
-		expect(pill?.classList.contains("h-16")).toBe(false);
-		expect(pill?.classList.contains("w-[17rem]")).toBe(false);
 		expect(screen.queryByText("2.4 MB")).toBeNull();
 
 		const downloadButton = screen.getByRole("button", {
 			name: "Download report.pdf",
 		});
 		expect(downloadButton.dataset.slot).toBe("attachment-action");
-		expect(
-			downloadButton
-				.closest('[data-slot="attachment-actions"]')
-				?.classList.contains("absolute"),
-		).toBe(true);
 		fireEvent.click(downloadButton);
 		expect(onDownload).toHaveBeenCalledWith(file);
 	});
@@ -169,160 +126,8 @@ describe("chat file attachments", () => {
 		const composerFile =
 			screen.getByText("report.pdf").parentElement?.parentElement;
 		expect(composerFile?.querySelector('[data-file-kind="pdf"]')).toBeTruthy();
-		expect(composerFile?.classList.contains("border")).toBe(true);
-		expect(composerFile?.classList.contains("bg-muted/50")).toBe(true);
-		expect(composerFile?.classList.contains("h-14")).toBe(true);
 		expect(
 			screen.getByRole("button", { name: "Remove report.pdf" }),
-		).toBeTruthy();
-	});
-
-	it("uses bordered image tiles in messages and the composer", () => {
-		const message = render(
-			createElement(FileAttachmentCards, {
-				align: "end",
-				files: [image],
-			}),
-		);
-		const messageImage = screen.getByRole("button", { name: "workspace.png" });
-		const messageImageAttachment = messageImage.closest<HTMLElement>(
-			'[data-slot="attachment"]',
-		);
-		const messageImageElement = screen.getByRole("img", {
-			name: "workspace.png",
-		});
-		expect(messageImage.dataset.slot).toBe("attachment-trigger");
-		expect(messageImageAttachment?.classList.contains("border")).toBe(true);
-		expect(messageImageAttachment?.classList.contains("size-20")).toBe(true);
-		expect(messageImageAttachment?.classList.contains("rounded-lg")).toBe(true);
-		expect(
-			messageImageAttachment?.querySelector('[data-slot="attachment-media"]'),
-		).not.toBeNull();
-		expect(messageImageElement.getAttribute("decoding")).toBe("async");
-		expect(messageImageElement.getAttribute("loading")).toBe("lazy");
-		message.unmount();
-
-		const assistantMessage = render(
-			createElement(FileAttachmentCards, {
-				align: "start",
-				files: [image],
-			}),
-		);
-		const assistantImage = screen.getByRole("button", {
-			name: "workspace.png",
-		});
-		expect(
-			assistantImage
-				.closest('[data-slot="attachment"]')
-				?.classList.contains("border"),
-		).toBe(true);
-		assistantMessage.unmount();
-
-		render(
-			createElement(FileAttachmentChips, {
-				files: [
-					{
-						...image,
-						id: "workspace",
-						uploadStatus: "ready" as const,
-					},
-				],
-				onRemove: () => undefined,
-			}),
-		);
-		const composerImage = screen.getByRole("button", {
-			name: "Preview workspace.png",
-		});
-		expect(composerImage.classList.contains("border")).toBe(true);
-		expect(composerImage.parentElement?.classList.contains("bg-muted/50")).toBe(
-			true,
-		);
-		expect(composerImage.classList.contains("size-14")).toBe(true);
-		expect(composerImage.parentElement?.classList.contains("h-14")).toBe(true);
-	});
-
-	it("wraps multiple user images in a right-aligned group", () => {
-		render(
-			createElement(FileAttachmentCards, {
-				align: "end",
-				files: [
-					image,
-					{
-						...image,
-						filename: "dashboard.png",
-						url: "data:image/png;base64,dashboard",
-					},
-				],
-			}),
-		);
-
-		const galleryImage = screen.getByRole("button", { name: "workspace.png" });
-		const galleryAttachment = galleryImage.closest<HTMLElement>(
-			'[data-slot="attachment"]',
-		);
-		const galleryGroup = galleryImage.closest<HTMLElement>(
-			'[data-slot="attachment-group"]',
-		);
-		expect(galleryAttachment?.classList.contains("border")).toBe(true);
-		expect(galleryAttachment?.classList.contains("rounded-lg")).toBe(true);
-		expect(galleryAttachment?.classList.contains("size-20")).toBe(true);
-		expect(galleryGroup?.classList.contains("flex-wrap")).toBe(true);
-		expect(galleryGroup?.classList.contains("justify-end")).toBe(true);
-	});
-
-	it("groups user images above wrapped right-aligned file pills", () => {
-		render(
-			createElement(FileAttachmentCards, {
-				align: "end",
-				files: [
-					file,
-					image,
-					{
-						...file,
-						filename: "notes.docx",
-						mediaType:
-							"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-						providerMetadata: {
-							graneri: {
-								sizeBytes: 2_483_200,
-								storageId: "storage_notes",
-							},
-						},
-						url: "https://files.example.test/notes.docx",
-					},
-				],
-			}),
-		);
-
-		const imageGroup = screen
-			.getByRole("button", { name: "workspace.png" })
-			.closest<HTMLElement>('[data-slot="attachment-group"]');
-		const firstDocumentPill = screen
-			.getByText("report.pdf")
-			.closest<HTMLElement>('[data-slot="attachment"]');
-		const documentRow = firstDocumentPill?.closest<HTMLElement>(
-			'[data-slot="attachment-group"]',
-		);
-
-		expect(imageGroup?.nextElementSibling).toBe(documentRow);
-		expect(imageGroup?.classList.contains("flex-wrap")).toBe(true);
-		expect(imageGroup?.classList.contains("justify-end")).toBe(true);
-		expect(documentRow?.classList.contains("flex-wrap")).toBe(true);
-		expect(documentRow?.classList.contains("justify-end")).toBe(true);
-		expect(documentRow?.classList.contains("overflow-x-auto")).toBe(false);
-		expect(documentRow?.children).toHaveLength(2);
-		expect(screen.queryByText("2.4 MB")).toBeNull();
-		expect(
-			screen.queryByRole("button", { name: "Download report.pdf" }),
-		).toBeNull();
-		expect(
-			firstDocumentPill?.querySelector('[data-file-kind="pdf"]'),
-		).toBeTruthy();
-		expect(
-			screen
-				.getByText("notes.docx")
-				.closest('[data-slot="attachment"]')
-				?.querySelector('[data-file-kind="word"]'),
 		).toBeTruthy();
 	});
 

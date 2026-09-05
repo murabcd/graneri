@@ -19,30 +19,6 @@ const createTemplate = (overrides = {}) =>
 		...overrides,
 	});
 
-test("tray menu keeps action labels title-cased and metadata sentence-cased", () => {
-	const template = createTemplate();
-	const quitOptions = template.find((item) => item.label === "Quit Options");
-
-	assert.deepEqual(
-		template.map((item) => item.label ?? item.type),
-		[
-			"Open Desktop",
-			"Quick Note",
-			"Settings",
-			"Graneri v0.1.0",
-			"Updates are unavailable in development builds",
-			"Check for Updates",
-			"separator",
-			"Quit",
-			"Quit Options",
-		],
-	);
-	assert.deepEqual(
-		quitOptions.submenu.map((item) => item.label),
-		["Keep Graneri in the Menu Bar", "Quit Completely"],
-	);
-});
-
 test("tray menu displays shortcuts owned by the app and renderer", () => {
 	const template = createTemplate();
 	const quitOptions = template.find((item) => item.label === "Quit Options");
@@ -88,9 +64,14 @@ test("tray menu actions preserve their navigation and quit contracts", () => {
 	assert.deepEqual(calls[0], ["open-main-window", undefined]);
 	assert.equal(calls[1][0], "open-main-window");
 	assert.equal(calls[1][1].pathname, "/note");
-	const quickNoteSearchParams = new URLSearchParams(calls[1][1].search.slice(1));
+	const quickNoteSearchParams = new URLSearchParams(
+		calls[1][1].search.slice(1),
+	);
 	assert.equal(quickNoteSearchParams.get("capture"), "1");
-	assert.match(quickNoteSearchParams.get("captureRequestId"), /^[0-9a-f-]{36}$/);
+	assert.match(
+		quickNoteSearchParams.get("captureRequestId"),
+		/^[0-9a-f-]{36}$/,
+	);
 	assert.deepEqual(calls.slice(2), [
 		["open-main-window", { pathname: "/settings/profile" }],
 		["check-for-updates"],

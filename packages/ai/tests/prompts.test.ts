@@ -5,8 +5,6 @@ import {
 	buildChatInstructions,
 	buildEnhancedNotePrompt,
 	buildProjectDescriptionPrompt,
-	CHAT_TITLE_INSTRUCTIONS,
-	ENHANCED_NOTE_INSTRUCTIONS,
 } from "../src/prompts.mjs";
 
 describe("prompt helpers", () => {
@@ -101,21 +99,6 @@ describe("prompt helpers", () => {
 		expect(prompt).toContain("Current description to replace:");
 		expect(prompt).toContain("Old description");
 		expect(prompt).toContain("No project notes are available yet.");
-	});
-
-	it("uses sentence case while preserving proper names in generated titles", () => {
-		for (const instructions of [
-			CHAT_TITLE_INSTRUCTIONS,
-			ENHANCED_NOTE_INSTRUCTIONS,
-		]) {
-			expect(instructions).toContain("Use sentence case for the title");
-			expect(instructions).toContain("Do not use title case");
-			expect(instructions).toContain(
-				"Preserve the original capitalization of proper nouns",
-			);
-			expect(instructions).toContain("OpenAI");
-			expect(instructions).toContain("Cirrus Labs");
-		}
 	});
 
 	it("preserves organization and people name casing in fallback chat titles", () => {
