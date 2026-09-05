@@ -15,6 +15,7 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
+import { deleteQueuedMessage } from "./assistantQueuedMessageAttachments";
 import { stopActiveRunsForChat } from "./assistantRunCleanup";
 import { appendAssistantRunEvent } from "./assistantRunEvents";
 import { commitAssistantRunGenerationBoundary } from "./assistantRunGenerationBoundaryState";
@@ -393,7 +394,7 @@ const deleteChatRuntimeBatch = async (
 	await Promise.all([
 		clearChatContextState(ctx, chatId),
 		...activeStreams.map((stream) => ctx.db.delete(stream._id)),
-		...queuedMessages.map((message) => ctx.db.delete(message._id)),
+		...queuedMessages.map((message) => deleteQueuedMessage(ctx, message._id)),
 		...queuedMessageAcceptances.map((acceptance) =>
 			ctx.db.delete(acceptance._id),
 		),

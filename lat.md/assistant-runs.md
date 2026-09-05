@@ -649,7 +649,7 @@ gates: HTTP chat routes and client queue serialization reject empty user text
 before it can enter the AI SDK loop or durable queue state. Convex chat and
 queued-message mutations enforce the actual 1 MiB document limit with
 `getDocumentSize` at the write boundary instead of approximating storage size
-from character counts. Queued rows persist one canonical text value plus the
+from character counts. Queued rows persist canonical text, a required uploaded-file payload, and the
 minimum replay context: they omit credentials, local filesystem paths,
 duplicate workspace identity, and note contents that can be reloaded by note ID.
 The renderer and Convex parse that replay context through the single
@@ -739,8 +739,8 @@ replacement generation reopens admission only after its execution starts.
 When the response is waiting for a human decision, accepted steer input remains
 durable without starting a replacement; the decision resolves first, then the
 same input is projected exactly once into the resumed generation. Both replay
-and steer accept mutations validate the saved user message id, text, and model
-text parts against the claimed durable queue row; callers must not trust
+and steer accept mutations validate the saved user message id, text, and canonical text/file
+parts against the claimed durable queue row; callers must not trust
 client-supplied message bodies over durable queue state. The streaming response
 carries `X-Graneri-Steer-Accepted: true`, `X-Graneri-Turn-Id`, and
 `X-Graneri-Queued-Message-Id` headers after the atomic accept succeeds so clients
@@ -778,6 +778,15 @@ Receipts are retained for a bounded 24-hour retry window. Each insert schedules
 deletion through an acceptance-owned internal mutation fenced by receipt id,
 queued message id, and claim version, so a stale cleanup cannot delete a newer
 receipt. Chat retirement also deletes remaining receipts.
+
+Queued files use the strict [queued-chat-files contract](../packages/ai/src/queued-chat-files.mjs).
+[[convex/assistantQueuedMessageAttachments.ts]] validates each storage URL and
+size against the uploaded file and owns indexed queue storage references.
+Admission, edits, and reference changes are atomic. Replay and steer construct
+text and files from the claimed row; acceptance rejects changed or extra parts.
+Accepted history acquires its references before queue references are released.
+Discard and chat/run removal release queue references; physical storage remains
+while any queue, chat, or note owns it.
 
 ## Cleanup and attachments
 

@@ -75,6 +75,7 @@ const row = (
 	createdAt: 1,
 	messageId: `message-${id}`,
 	ownerTokenIdentifier: "owner",
+	filesJson: "[]",
 	requestBodyJson: JSON.stringify({
 		...DEFAULT_CHAT_SETTINGS,
 		localCapabilitySession: null,

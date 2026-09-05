@@ -243,6 +243,10 @@
     "./zoom-mcp-tools": {
       "types": "./src/zoom-mcp-tools.d.mts",
       "import": "./src/zoom-mcp-tools.mjs"
+    },
+    "./queued-chat-files": {
+      "types": "./src/queued-chat-files.d.mts",
+      "import": "./src/queued-chat-files.mjs"
     }
   }
 }

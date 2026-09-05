@@ -20,6 +20,7 @@ const queuedMessage = {
 	createdAt: 1,
 	messageId: "queued-message-1",
 	ownerTokenIdentifier: "owner",
+	filesJson: "[]",
 	requestBodyJson: JSON.stringify({
 		...DEFAULT_CHAT_SETTINGS,
 		localCapabilitySession: null,

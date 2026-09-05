@@ -741,6 +741,7 @@ describe("hosted chat route contract", () => {
 	it("reconstructs accepted steer messages from durable queued content", () => {
 		expect(
 			toHostedQueuedUserMessage({
+				filesJson: "[]",
 				messageId: "queued-message-1",
 				metadataJson: JSON.stringify({ client: "ignored-for-trust" }),
 				text: "Use the queued text",
@@ -753,6 +754,7 @@ describe("hosted chat route contract", () => {
 		});
 		expect(() =>
 			toHostedQueuedUserMessage({
+				filesJson: "[]",
 				messageId: "queued-message-empty",
 				text: "   ",
 			}),

@@ -43,6 +43,7 @@ const createTurnInput = (attachableRun: AttachableRun | null) =>
 			status: "claimed",
 			claimedMessage: {
 				_id: queuedMessageId,
+				filesJson: "[]",
 				claimVersion: 7,
 				messageId: "user-1",
 				text: "Continue",
@@ -50,6 +51,7 @@ const createTurnInput = (attachableRun: AttachableRun | null) =>
 		}),
 		claimForSteer: async ({ queuedMessageId }) => ({
 			_id: queuedMessageId,
+			filesJson: "[]",
 			claimVersion: 7,
 			messageId: "user-1",
 			text: "Continue",

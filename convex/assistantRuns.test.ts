@@ -197,6 +197,7 @@ const startRunWithSnapshots = async ({
 const queuedMessageInput = (messageId: string, text: string) => ({
 	messageId,
 	text,
+	filesJson: "[]",
 	requestBodyJson: createQueuedRequestBodyJson(),
 });
 
@@ -1954,6 +1955,7 @@ test("finishStoppedAssistantRun terminal re-entry only cleans run-scoped runtime
 			runId: run._id,
 			messageId: "stale-queued",
 			text: "Stale queued",
+			filesJson: "[]",
 			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "queued",
 			createdAt: 3_000,
@@ -1967,6 +1969,7 @@ test("finishStoppedAssistantRun terminal re-entry only cleans run-scoped runtime
 			runId: run._id,
 			messageId: "stale-claimed",
 			text: "Stale claimed",
+			filesJson: "[]",
 			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "claimed",
 			createdAt: 3_001,
@@ -2044,6 +2047,7 @@ test("waitForUserDecision terminal re-entry does not pause queued rows", async (
 			runId: run._id,
 			messageId: "stale-terminal-queued",
 			text: "Stale queued",
+			filesJson: "[]",
 			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "queued",
 			createdAt: 4_000,
@@ -2057,6 +2061,7 @@ test("waitForUserDecision terminal re-entry does not pause queued rows", async (
 			runId: run._id,
 			messageId: "stale-terminal-claimed",
 			text: "Stale claimed",
+			filesJson: "[]",
 			requestBodyJson: createQueuedRequestBodyJson(),
 			status: "claimed",
 			createdAt: 4_001,

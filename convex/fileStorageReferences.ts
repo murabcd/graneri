@@ -5,7 +5,7 @@ export const deleteFileStorageIfUnreferenced = async (
 	ctx: MutationCtx,
 	storageId: Id<"_storage">,
 ) => {
-	const [chatReference, noteReference] = await Promise.all([
+	const [chatReference, noteReference, queueReference] = await Promise.all([
 		ctx.db
 			.query("chatAttachmentReferences")
 			.withIndex("by_storageId", (query) => query.eq("storageId", storageId))
@@ -14,8 +14,12 @@ export const deleteFileStorageIfUnreferenced = async (
 			.query("noteAttachmentReferences")
 			.withIndex("by_storageId", (query) => query.eq("storageId", storageId))
 			.first(),
+		ctx.db
+			.query("queuedMessageAttachmentReferences")
+			.withIndex("by_storageId", (q) => q.eq("storageId", storageId))
+			.first(),
 	]);
-	if (chatReference || noteReference) {
+	if (chatReference || noteReference || queueReference) {
 		return;
 	}
 

@@ -99,6 +99,7 @@ export const startRun = async ({
 export const queuedMessageInput = (messageId: string, text: string) => ({
 	messageId,
 	text,
+	filesJson: "[]",
 	requestBodyJson: createQueuedRequestBodyJson(),
 });
 export type QueuedMessageInput = ReturnType<typeof queuedMessageInput> & {

@@ -865,6 +865,7 @@ describe("chat handler persistence failures", () => {
 			status: "claimed",
 			claimedMessage: {
 				_id: "queued_1",
+				filesJson: "[]",
 				claimVersion: 2,
 				messageId: "message_1",
 				text: "queued replay",
@@ -970,6 +971,7 @@ describe("chat handler persistence failures", () => {
 		});
 		convexMock.mutation.mockResolvedValueOnce({
 			_id: "queued_1",
+			filesJson: "[]",
 			claimVersion: 2,
 			messageId: "message_1",
 			text: "queued steer",
@@ -1025,6 +1027,7 @@ describe("chat handler persistence failures", () => {
 		});
 		convexMock.mutation.mockResolvedValueOnce({
 			_id: "queued_1",
+			filesJson: "[]",
 			claimVersion: 2,
 			messageId: "message_1",
 			text: "queued steer",
@@ -1076,6 +1079,7 @@ describe("chat handler persistence failures", () => {
 		convexMock.mutation
 			.mockResolvedValueOnce({
 				_id: "queued_1",
+				filesJson: "[]",
 				claimVersion: 2,
 				messageId: "message_1",
 				text: "queued steer",
@@ -1133,6 +1137,7 @@ describe("chat handler persistence failures", () => {
 		});
 		convexMock.mutation.mockResolvedValueOnce({
 			_id: "queued_1",
+			filesJson: "[]",
 			claimVersion: 2,
 			messageId: "message_1",
 			text: "queued steer",
@@ -1187,6 +1192,7 @@ describe("chat handler persistence failures", () => {
 		});
 		convexMock.mutation.mockResolvedValueOnce({
 			_id: "queued_1",
+			filesJson: "[]",
 			claimVersion: 2,
 			messageId: "message_1",
 			text: "queued steer",
@@ -1244,6 +1250,7 @@ describe("chat handler persistence failures", () => {
 		});
 		convexMock.mutation.mockResolvedValueOnce({
 			_id: "queued_1",
+			filesJson: "[]",
 			claimVersion: 2,
 			messageId: "message_1",
 			text: "queued steer",
@@ -1318,6 +1325,7 @@ describe("chat handler persistence failures", () => {
 		convexMock.mutation
 			.mockResolvedValueOnce({
 				_id: "queued_1",
+				filesJson: "[]",
 				claimVersion: 2,
 				messageId: "message_1",
 				text: "queued steer",

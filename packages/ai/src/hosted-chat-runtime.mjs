@@ -20,6 +20,7 @@ import {
 	buildChatInstructions,
 	CHAT_TITLE_INSTRUCTIONS,
 } from "./prompts.mjs";
+import { parseQueuedChatFilesJson } from "./queued-chat-files.mjs";
 import { projectStoredUiMessagesForAssistantRun } from "./stored-ui-message-context.mjs";
 import { getToolApprovalResponse } from "./tool-approval-state.mjs";
 import {
@@ -544,7 +545,10 @@ export const toHostedQueuedUserMessage = (queuedMessage) => {
 		id: queuedMessage.messageId,
 		role: "user",
 		metadata: tryParseUiMessageMetadataJson(queuedMessage.metadataJson),
-		parts: [{ type: "text", text: queuedMessage.text }],
+		parts: [
+			{ type: "text", text: queuedMessage.text },
+			...parseQueuedChatFilesJson(queuedMessage.filesJson),
+		],
 	};
 };
 

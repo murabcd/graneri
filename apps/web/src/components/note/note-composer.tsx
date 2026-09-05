@@ -122,6 +122,7 @@ import {
 	claimChatComposerTurnIntent,
 	commitChatComposerTurnIntent,
 } from "@/lib/chat-composer-turn-intent";
+import { getQueuedChatAttachments } from "@/lib/chat-queue";
 import { buildNoteChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getNoteComposerDraftScope } from "@/lib/composer-draft";
@@ -727,7 +728,7 @@ const useNoteComposerController = ({
 			setEditingMessageId(queuedMessage._id);
 			setMessage(queuedMessage.text);
 			setDraftMetadata(null);
-			setAttachedFiles([]);
+			setAttachedFiles(getQueuedChatAttachments(queuedMessage));
 			pendingComposerFocusRef.current = true;
 		},
 		persistedMessages: initialMessages,
@@ -1322,11 +1323,6 @@ const useNoteComposerController = ({
 			if (result.status === "queued") {
 				await waitForBrowserPaint();
 				return;
-			}
-			if (result.status === "attachments_blocked") {
-				toast.info(
-					"Wait for the current response to finish before sending attachments.",
-				);
 			}
 		} catch (error) {
 			logError({

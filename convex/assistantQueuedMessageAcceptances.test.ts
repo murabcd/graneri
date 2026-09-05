@@ -104,6 +104,7 @@ const enqueue = async ({
 		message: {
 			messageId,
 			text,
+			filesJson: "[]",
 			requestBodyJson: createQueuedRequestBodyJson(),
 		},
 	});

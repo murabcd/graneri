@@ -18,6 +18,7 @@ import type * as artifactAuthoring from "../artifactAuthoring.js";
 import type * as artifactAuthoringHttp from "../artifactAuthoringHttp.js";
 import type * as assistantQueuedMessageAcceptanceModel from "../assistantQueuedMessageAcceptanceModel.js";
 import type * as assistantQueuedMessageAcceptances from "../assistantQueuedMessageAcceptances.js";
+import type * as assistantQueuedMessageAttachments from "../assistantQueuedMessageAttachments.js";
 import type * as assistantQueuedMessageDispatch from "../assistantQueuedMessageDispatch.js";
 import type * as assistantQueuedMessageEditing from "../assistantQueuedMessageEditing.js";
 import type * as assistantQueuedMessageModel from "../assistantQueuedMessageModel.js";
@@ -179,6 +180,7 @@ declare const fullApi: ApiFromModules<{
   artifactAuthoringHttp: typeof artifactAuthoringHttp;
   assistantQueuedMessageAcceptanceModel: typeof assistantQueuedMessageAcceptanceModel;
   assistantQueuedMessageAcceptances: typeof assistantQueuedMessageAcceptances;
+  assistantQueuedMessageAttachments: typeof assistantQueuedMessageAttachments;
   assistantQueuedMessageDispatch: typeof assistantQueuedMessageDispatch;
   assistantQueuedMessageEditing: typeof assistantQueuedMessageEditing;
   assistantQueuedMessageModel: typeof assistantQueuedMessageModel;

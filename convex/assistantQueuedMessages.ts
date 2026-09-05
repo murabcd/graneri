@@ -9,10 +9,16 @@ import {
 	query,
 } from "./_generated/server";
 import {
+	deleteQueuedMessage,
+	syncQueuedMessageAttachments,
+} from "./assistantQueuedMessageAttachments";
+import {
 	assistantQueuedMessageReplayClaimAttemptValidator,
 	type ClaimedAssistantQueuedMessage,
 	claimedAssistantQueuedMessageValidator,
+	type QueuedMessageInput,
 	queuedAssistantQueuedMessageValidator,
+	queuedMessageInputValidator,
 	restoreEditingMessage,
 	type VisibleAssistantQueuedMessage,
 	visibleAssistantQueuedMessageValidator,
@@ -26,7 +32,6 @@ import {
 	getScopedQueuedMessageForChat,
 	isCurrentNonTerminalRunForChat,
 	MAX_ASSISTANT_QUEUE_MESSAGES,
-	type QueuedMessageInput,
 	releaseClaimIfCurrent,
 	requireOwnedAssistantRun,
 	requireSavedQueuedMessage,
@@ -45,12 +50,6 @@ const { requireTokenIdentifier } = createResourceAccess(
 	"assistantQueuedMessages",
 );
 
-const queuedMessageInputValidator = v.object({
-	messageId: v.string(),
-	metadataJson: v.optional(v.string()),
-	text: v.string(),
-	requestBodyJson: v.string(),
-});
 const currentRunAdmissionValidator = v.union(
 	v.object({
 		status: v.literal("queued"),
@@ -143,6 +142,7 @@ const insertQueuedMessage = async (
 		messageId: message.messageId,
 		metadataJson: message.metadataJson,
 		text: message.text,
+		filesJson: message.filesJson,
 		requestBodyJson: message.requestBodyJson,
 		status: "queued",
 		createdAt: now,
@@ -154,6 +154,7 @@ const insertQueuedMessage = async (
 		"assistantQueuedMessages",
 		queuedMessageDocument,
 	);
+	await syncQueuedMessageAttachments(ctx, queuedMessageId, message.filesJson);
 	const queuedMessage = await ctx.db.get(queuedMessageId);
 
 	if (queuedMessage?.status !== "queued") {
@@ -490,7 +491,7 @@ export const discardQueued = mutation({
 			});
 		}
 
-		await ctx.db.delete(queuedMessage._id);
+		await deleteQueuedMessage(ctx, queuedMessage._id);
 
 		return null;
 	},
@@ -541,12 +542,14 @@ export const updateQueued = mutation({
 			messageId: args.message.messageId,
 			metadataJson: args.message.metadataJson,
 			text: args.message.text,
+			filesJson: args.message.filesJson,
 			requestBodyJson: args.message.requestBodyJson,
 			updatedAt: now,
 		};
 		requireQueuedMessageWithinDocumentLimit(updatedQueuedMessage);
 		const { _creationTime, _id, ...replacement } = updatedQueuedMessage;
 		await ctx.db.replace(_id, replacement);
+		await syncQueuedMessageAttachments(ctx, _id, args.message.filesJson);
 
 		return updatedQueuedMessage;
 	},

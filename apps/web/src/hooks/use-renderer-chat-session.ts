@@ -6,6 +6,7 @@ import type { UIMessage } from "ai";
 import { useMutation } from "convex/react";
 import * as React from "react";
 import { toast } from "sonner";
+import { getReadyFileParts } from "@/components/ai-elements/file-attachment-utils";
 import type { AttachableAssistantRunQueryResult } from "@/lib/attachable-assistant-run";
 import { stopActiveChatStream } from "@/lib/chat-active-stream";
 import { stopChatInteraction } from "@/lib/chat-interaction-session";
@@ -51,7 +52,7 @@ type SubmitRendererChatTurnInput = Omit<
 
 type UpdateQueuedRendererChatTurnInput = Pick<
 	SubmitRendererChatTurnInput,
-	"buildRequestBody" | "metadata" | "text"
+	"buildRequestBody" | "metadata" | "text" | "attachedFiles"
 > & {
 	onRequestPrepared?: SubmitRendererChatTurnInput["onRequestPrepared"];
 };
@@ -504,6 +505,7 @@ export const useRendererChatSession = ({
 					queuedMessageId: editDraft._id,
 					claimVersion: editDraft.claimVersion,
 					message: toQueuedUserMessageInput({
+						files: getReadyFileParts(input.attachedFiles),
 						messageId: editDraft.messageId,
 						metadata: input.metadata,
 						requestBody,

@@ -123,6 +123,7 @@ export declare const toHostedStoredMessage: (message: UIMessage) => {
 export declare const toHostedQueuedUserMessage: (queuedMessage: {
 	messageId: string;
 	metadataJson?: string;
+	filesJson: string;
 	text: string;
 }) => UIMessage;
 export declare const buildHostedChatSaveMessageArgs: <

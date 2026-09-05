@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
 	createQueuedUserMessageId,
 	fromQueuedUserMessage,
+	getQueuedChatAttachments,
 	getQueuedChatComposerEditDraft,
 	toQueuedUserMessageInput,
 } from "@/lib/chat-queue";
@@ -31,6 +32,7 @@ const createQueuedFollowUp = (
 		createdAt: 1,
 		messageId: id,
 		metadataJson: undefined,
+		filesJson: "[]",
 		requestBodyJson: "{}",
 		runId: "run-1" as Id<"assistantRuns">,
 		text: `message ${id}`,
@@ -371,6 +373,7 @@ describe("chat queue serialization", () => {
 				queuedMessage: {
 					_id: "queued-message-1",
 					messageId: "queued-1",
+					filesJson: "[]",
 					requestBodyJson: "[]",
 					status: "queued",
 					text: "Follow up",
@@ -425,5 +428,42 @@ describe("queued follow-up lifecycle", () => {
 
 		expect(notificationCount).toBe(2);
 		expect(readQueuedFollowUpsCache(cacheKey)).toEqual([]);
+	});
+});
+
+describe("queued attachments", () => {
+	it("restores uploaded files for editing and manual replay without local upload state", async () => {
+		const file = {
+			type: "file" as const,
+			filename: "diagram.png",
+			mediaType: "image/png",
+			url: "https://storage.test/file",
+			providerMetadata: { graneri: { storageId: "storage-1", sizeBytes: 42 } },
+		};
+		const input = toQueuedUserMessageInput({
+			files: [file],
+			text: "Use this diagram",
+			requestBody: {
+				...DEFAULT_CHAT_SETTINGS,
+				projectId: null,
+				localCapabilitySession: null,
+				timezone: "UTC",
+			},
+		});
+		const row = createQueuedFollowUp("queue-file", {
+			...input,
+			status: "paused",
+			pauseReason: "failed",
+		});
+		const attachments = getQueuedChatAttachments(row);
+		expect(attachments).toEqual([
+			{ ...file, id: expect.any(String), uploadStatus: "ready" },
+		]);
+		const replay = await fromQueuedUserMessage({
+			queuedMessage: row,
+			resolveConvexToken: async () => "fresh-token",
+		});
+		expect(replay.message.files).toEqual([file]);
+		expect(replay.body.replayQueuedMessageStatus).toBe("paused");
 	});
 });

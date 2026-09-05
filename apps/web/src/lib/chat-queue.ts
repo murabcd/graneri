@@ -7,10 +7,16 @@ import {
 	clampHostedNoteContext,
 } from "@workspace/ai/hosted-chat-runtime";
 import {
+	parseQueuedChatFiles,
+	parseQueuedChatFilesJson,
+} from "@workspace/ai/queued-chat-files";
+import {
 	type DurableQueuedChatRequest,
 	parseDurableQueuedChatRequest,
 } from "@workspace/ai/queued-chat-request";
 import { parseUiMessageMetadataJson } from "@workspace/ai/ui-message-codec";
+import type { FileUIPart } from "ai";
+import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { createChatComposerEditDraft } from "@/lib/chat-composer-mentions";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import type { QueueableChatRequestBody } from "@/lib/chat-request-preparation";
@@ -99,11 +105,13 @@ const sanitizeQueuedRequestBody = (
 };
 
 export const toQueuedUserMessageInput = ({
+	files = [],
 	messageId,
 	metadata,
 	requestBody,
 	text,
 }: {
+	files?: FileUIPart[];
 	messageId?: string;
 	metadata?: ChatMessageMetadata;
 	requestBody: QueueableChatRequestBody;
@@ -117,6 +125,7 @@ export const toQueuedUserMessageInput = ({
 
 	return {
 		messageId: resolvedMessageId,
+		filesJson: JSON.stringify(parseQueuedChatFiles(files)),
 		metadataJson: metadata === undefined ? undefined : JSON.stringify(metadata),
 		text: canonicalText,
 		requestBodyJson: JSON.stringify(sanitizeQueuedRequestBody(requestBody)),
@@ -157,7 +166,17 @@ export const fromQueuedUserMessage = async ({
 					? queuedMessage.messageId
 					: undefined,
 			text: queuedMessage.text,
+			files: parseQueuedChatFilesJson(queuedMessage.filesJson),
 			metadata,
 		},
 	};
 };
+
+export const getQueuedChatAttachments = (
+	queuedMessage: Pick<QueuedFollowUpMessage, "filesJson">,
+): ChatAttachment[] =>
+	parseQueuedChatFilesJson(queuedMessage.filesJson).map((file) => ({
+		...file,
+		id: crypto.randomUUID(),
+		uploadStatus: "ready",
+	}));

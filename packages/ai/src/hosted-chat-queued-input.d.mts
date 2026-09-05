@@ -4,6 +4,7 @@ type QueuedUserMessage<QueuedMessageId extends string> = {
 	_id: QueuedMessageId;
 	messageId: string;
 	metadataJson?: string;
+	filesJson: string;
 	text: string;
 	claimVersion: number;
 };

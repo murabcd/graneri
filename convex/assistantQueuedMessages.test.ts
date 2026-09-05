@@ -381,6 +381,7 @@ test("queued follow-ups reject invalid durable payloads before claim", async () 
 	await expect(
 		enqueue({
 			...queuedMessageInput("queued-invalid-body", "Valid text"),
+			filesJson: "[]",
 			requestBodyJson: JSON.stringify([]),
 		}),
 	).rejects.toThrow("Queued message request body is invalid.");
@@ -392,6 +393,7 @@ test("queued follow-ups reject invalid durable payloads before claim", async () 
 	await expect(
 		enqueue({
 			...queuedMessageInput("queued-local-folders", "Valid text"),
+			filesJson: "[]",
 			requestBodyJson: JSON.stringify({
 				...createQueuedRequestBody(),
 				localFolders: [{ id: "folder-1", path: "/tmp" }],
@@ -801,6 +803,7 @@ test("claimForSteer rejects invalid durable payloads before claiming", async () 
 	);
 	await t.run(async (ctx) => {
 		await ctx.db.patch(queuedMessage._id, {
+			filesJson: "[]",
 			requestBodyJson: "[]",
 		});
 	});
@@ -1995,6 +1998,7 @@ test("claimForReplay rejects invalid durable payloads before claiming", async ()
 	});
 	await t.run(async (ctx) => {
 		await ctx.db.patch(queuedMessage._id, {
+			filesJson: "[]",
 			requestBodyJson: "[]",
 		});
 	});

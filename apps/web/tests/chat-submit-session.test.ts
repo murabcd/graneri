@@ -28,6 +28,7 @@ const createQueuedFollowUpMessage = (text: string): QueuedFollowUpMessage =>
 		createdAt: 1,
 		messageId: "queued-user-message-1",
 		ownerTokenIdentifier: "owner",
+		filesJson: "[]",
 		requestBodyJson: JSON.stringify({
 			chatMode: CHAT_MODE.DEFAULT,
 			localCapabilitySession: null,
@@ -128,14 +129,17 @@ describe("chat submit session", () => {
 		);
 	});
 
-	it("keeps attachments out of an uncertain admission without clearing or sending", async () => {
+	it("admits uploaded attachments while the active run is uncertain", async () => {
 		const buildRequestBody = vi.fn(async () => ({
 			convexToken: "token",
 			localCapabilitySession: null,
 			model: "gpt-5",
 			timezone: "UTC",
 		}));
-		const admitQueuedMessage = vi.fn();
+		const admitQueuedMessage = vi.fn(async () => ({
+			status: "queued" as const,
+			queuedMessage: createQueuedFollowUpMessage("Use this file"),
+		}));
 		const enqueueQueuedMessage = vi.fn();
 		const onOptimisticMessage = vi.fn();
 		const onRequestPrepared = vi.fn();
@@ -148,7 +152,8 @@ describe("chat submit session", () => {
 					type: "file",
 					mediaType: "text/plain",
 					filename: "notes.txt",
-					url: "convex://file",
+					url: "https://storage.test/file",
+					providerMetadata: { graneri: { storageId: "file-1", sizeBytes: 10 } },
 					uploadStatus: "ready",
 				},
 			],
@@ -165,12 +170,20 @@ describe("chat submit session", () => {
 			workspaceId,
 		});
 
-		expect(result).toEqual({ status: "attachments_blocked" });
-		expect(buildRequestBody).not.toHaveBeenCalled();
-		expect(admitQueuedMessage).not.toHaveBeenCalled();
+		expect(result).toEqual({ status: "queued" });
+		expect(
+			JSON.parse(admitQueuedMessage.mock.calls[0][0].message.filesJson),
+		).toMatchObject([
+			{
+				filename: "notes.txt",
+				providerMetadata: { graneri: { storageId: "file-1" } },
+			},
+		]);
+		expect(buildRequestBody).toHaveBeenCalledOnce();
+		expect(admitQueuedMessage).toHaveBeenCalledOnce();
 		expect(enqueueQueuedMessage).not.toHaveBeenCalled();
 		expect(onOptimisticMessage).not.toHaveBeenCalled();
-		expect(onRequestPrepared).not.toHaveBeenCalled();
+		expect(onRequestPrepared).toHaveBeenCalledOnce();
 		expect(sendMessage).not.toHaveBeenCalled();
 	});
 

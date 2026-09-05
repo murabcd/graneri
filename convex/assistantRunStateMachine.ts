@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { deleteQueuedMessage } from "./assistantQueuedMessageAttachments";
 import type { AssistantQueuedMessagePauseReason } from "./assistantQueuedMessageModel";
 import {
 	isCurrentNonTerminalRunForChat,
@@ -515,7 +516,7 @@ const deleteQueuedMessagesBatch = async (
 	ctx: MutationCtx,
 	runId: Id<"assistantRuns">,
 ) => {
-	const statuses = ["queued", "paused", "claimed"] as const;
+	const statuses = ["queued", "paused", "claimed", "editing"] as const;
 	const batches = await Promise.all(
 		statuses.map((status) =>
 			ctx.db
@@ -528,7 +529,9 @@ const deleteQueuedMessagesBatch = async (
 	);
 	const messages = batches.flat();
 
-	await Promise.all(messages.map((message) => ctx.db.delete(message._id)));
+	await Promise.all(
+		messages.map((message) => deleteQueuedMessage(ctx, message._id)),
+	);
 
 	return batches.some(
 		(batch) => batch.length === ASSISTANT_RUN_RUNTIME_DELETE_BATCH_SIZE,

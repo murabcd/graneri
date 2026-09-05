@@ -152,6 +152,7 @@ const steerRunToGeneration = async ({
 			message: {
 				messageId: `user-${nextAssistantMessageId}`,
 				text,
+				filesJson: "[]",
 				requestBodyJson: createQueuedRequestBodyJson(),
 			},
 		},
@@ -823,6 +824,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 			message: {
 				messageId: "msg-queued-1",
 				text: "queued follow-up",
+				filesJson: "[]",
 				requestBodyJson: createQueuedRequestBodyJson(),
 			},
 		},
@@ -834,6 +836,7 @@ test("branching from an edited message preserves the replaced branch", async () 
 		message: {
 			messageId: "msg-queued-2",
 			text: "next follow-up",
+			filesJson: "[]",
 			requestBodyJson: createQueuedRequestBodyJson(),
 		},
 	});
@@ -1462,6 +1465,7 @@ test("stopActiveStream preserves a consumed steer generation boundary", async ()
 			message: {
 				messageId: "user-b",
 				text: "B",
+				filesJson: "[]",
 				requestBodyJson: createQueuedRequestBodyJson(),
 			},
 		},
@@ -1506,6 +1510,7 @@ test("stopActiveStream preserves a consumed steer generation boundary", async ()
 			message: {
 				messageId: "user-c",
 				text: "C",
+				filesJson: "[]",
 				requestBodyJson: createQueuedRequestBodyJson(),
 			},
 		},
@@ -1780,6 +1785,7 @@ test("web steer completion preserves the durable assistant-user-assistant genera
 			message: {
 				messageId: "msg-user-2",
 				text: "Steer",
+				filesJson: "[]",
 				requestBodyJson: createQueuedRequestBodyJson(),
 			},
 		},
@@ -2006,6 +2012,7 @@ test("failed web replacement setup does not restore the accepted steer row", asy
 			message: {
 				messageId: "user-b",
 				text: "B",
+				filesJson: "[]",
 				requestBodyJson: createQueuedRequestBodyJson(),
 			},
 		},
@@ -2168,6 +2175,7 @@ test("removing a chat deletes assistant run runtime records", async () => {
 		message: {
 			messageId: "queued-message-1",
 			text: "Next",
+			filesJson: "[]",
 			requestBodyJson: createQueuedRequestBodyJson(),
 		},
 	});

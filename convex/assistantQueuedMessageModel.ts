@@ -1,15 +1,20 @@
 import type { Infer } from "convex/values";
 import { v } from "convex/values";
 
-const assistantQueuedMessageBaseValidator = v.object({
+export const queuedMessageInputValidator = v.object({
+	messageId: v.string(),
+	metadataJson: v.optional(v.string()),
+	text: v.string(),
+	filesJson: v.string(),
+	requestBodyJson: v.string(),
+});
+export type QueuedMessageInput = Infer<typeof queuedMessageInputValidator>;
+
+const assistantQueuedMessageBaseValidator = queuedMessageInputValidator.extend({
 	ownerTokenIdentifier: v.string(),
 	workspaceId: v.id("workspaces"),
 	chatId: v.id("chats"),
 	runId: v.id("assistantRuns"),
-	messageId: v.string(),
-	metadataJson: v.optional(v.string()),
-	text: v.string(),
-	requestBodyJson: v.string(),
 	createdAt: v.number(),
 	updatedAt: v.number(),
 	claimVersion: v.number(),

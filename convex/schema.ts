@@ -877,6 +877,12 @@ export default defineSchema({
 			"stepIndex",
 			"ordinal",
 		]),
+	queuedMessageAttachmentReferences: defineTable({
+		queuedMessageId: v.id("assistantQueuedMessages"),
+		storageId: v.id("_storage"),
+	})
+		.index("by_queuedMessageId", ["queuedMessageId"])
+		.index("by_storageId", ["storageId"]),
 	assistantQueuedMessages: defineTable(assistantQueuedMessageTableValidator)
 		.index("by_ownerTokenIdentifier_and_workspaceId", [
 			"ownerTokenIdentifier",

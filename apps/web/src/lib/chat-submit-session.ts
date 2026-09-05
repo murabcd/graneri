@@ -69,9 +69,6 @@ export type SubmitChatTurnResult =
 			status: "canceled";
 	  }
 	| {
-			status: "attachments_blocked";
-	  }
-	| {
 			status: "queued";
 	  }
 	| {
@@ -145,13 +142,6 @@ export const submitChatTurn = async ({
 	const shouldAdmitCurrentRun =
 		!continueRunId && currentRunAdmission.status === "current_run";
 	const readyFiles = getReadyFileParts(attachedFiles);
-	if (
-		readyFiles.length > 0 &&
-		!continueRunId &&
-		(Boolean(queuedActiveRun) || shouldAdmitCurrentRun)
-	) {
-		return { status: "attachments_blocked" };
-	}
 	const filePayload = readyFiles.length > 0 ? { files: readyFiles } : {};
 	const queuedMessageId =
 		editingMessageId === null
@@ -166,12 +156,14 @@ export const submitChatTurn = async ({
 		requestBody,
 	});
 
-	const queuedMessageInput = toQueuedUserMessageInput({
-		messageId: editingMessageId ?? queuedMessageId ?? undefined,
-		metadata,
-		requestBody,
-		text,
-	});
+	const queuedMessageInput = () =>
+		toQueuedUserMessageInput({
+			files: readyFiles,
+			messageId: editingMessageId ?? queuedMessageId ?? undefined,
+			metadata,
+			requestBody,
+			text,
+		});
 	const completeQueuedSubmission = async (
 		queuedMessage: QueuedFollowUpMessage,
 	): Promise<SubmitChatTurnResult> => {
@@ -193,7 +185,7 @@ export const submitChatTurn = async ({
 				workspaceId,
 				chatId,
 				runId: queuedActiveRun._id,
-				message: queuedMessageInput,
+				message: queuedMessageInput(),
 			});
 			return await completeQueuedSubmission(queuedMessage);
 		} catch (error) {
@@ -212,7 +204,7 @@ export const submitChatTurn = async ({
 		const admission = await currentRunAdmission.admitQueuedMessage({
 			workspaceId,
 			chatId,
-			message: queuedMessageInput,
+			message: queuedMessageInput(),
 		});
 		if (admission.status === "queued") {
 			return await completeQueuedSubmission(admission.queuedMessage);

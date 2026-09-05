@@ -32,6 +32,7 @@ const queuedMessage = {
 	createdAt: 1,
 	messageId: "message-c",
 	ownerTokenIdentifier: "owner",
+	filesJson: "[]",
 	requestBodyJson: "{}",
 	runId: activeRun._id,
 	status: "queued",

@@ -25,6 +25,7 @@ type SubmitComposerTurn = (
 
 type UpdateQueuedComposerTurn = (
 	input: PreparedComposerTurn & {
+		attachedFiles: ChatAttachment[];
 		onRequestPrepared: RequestPrepared;
 	},
 ) => Promise<boolean>;
@@ -117,6 +118,7 @@ export const commitChatComposerTurnIntent = async ({
 		}
 		if (queuedMessageEditId) {
 			const didUpdateCurrentEdit = await updateQueuedTurn({
+				attachedFiles,
 				...preparedTurn,
 				onRequestPrepared,
 			});
@@ -135,10 +137,7 @@ export const commitChatComposerTurnIntent = async ({
 			editingMessageId,
 			onRequestPrepared,
 		});
-		if (
-			result.status === "attachments_blocked" ||
-			result.status === "canceled"
-		) {
+		if (result.status === "canceled") {
 			intentClaim.restoreIfCurrent();
 		}
 		return result;

@@ -12,6 +12,7 @@ const queuedMessage = ({
 }) => ({
 	_id: id,
 	claimVersion: 3,
+	filesJson: "[]",
 	messageId,
 	text,
 });

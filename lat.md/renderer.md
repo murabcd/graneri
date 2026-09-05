@@ -96,6 +96,10 @@ automatic dispatcher remains.
 commands. It prepares one semantic turn, chooses queued-edit or new-turn
 submission, runs request-prepared effects, fences stale queued edits, and
 restores the captured draft and attachments on current-intent failure.
+Queue admission captures ready uploaded files through [[apps/web/src/lib/chat-queue.ts]];
+editing restores those same files into the existing attachment chips in both
+chat and note composers. Local previews and upload-in-progress state never enter
+the durable queue.
 Workspace and note composers retain their distinct recipe, mention, note
 context, panel, and focus adapters; they must not reconstruct this commit and
 rollback ordering. Both surfaces retain the initiating user message as the

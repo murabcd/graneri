@@ -11,6 +11,7 @@ import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import { createResourceAccess } from "./domain";
+import { deleteFileStorageIfUnreferenced } from "./fileStorageReferences";
 
 const ARTIFACT_JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
 const ARTIFACT_JOB_PROCESSING_LEASE_MS = 10 * 60 * 1000;
@@ -643,21 +644,10 @@ export const cleanupUnclaimed = internalMutation({
 			.withIndex("by_jobId", (query) => query.eq("jobId", args.jobId))
 			.collect();
 		for (const output of outputs) {
-			if (!output.claimed) {
-				const reference = await ctx.db
-					.query("chatAttachmentReferences")
-					.withIndex("by_storageId", (query) =>
-						query.eq("storageId", output.storageId),
-					)
-					.first();
-				if (!reference) {
-					const metadata = await ctx.db.system.get(output.storageId);
-					if (metadata) {
-						await ctx.storage.delete(output.storageId);
-					}
-				}
-			}
 			await ctx.db.delete(output._id);
+			if (!output.claimed) {
+				await deleteFileStorageIfUnreferenced(ctx, output.storageId);
+			}
 		}
 		await ctx.db.delete(args.jobId);
 		return null;

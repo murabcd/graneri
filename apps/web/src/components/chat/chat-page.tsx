@@ -71,7 +71,10 @@ import {
 	type ChatPluginPrefill,
 	createChatPluginDraft,
 } from "@/lib/chat-plugin-prefill";
-import { getQueuedChatComposerEditDraft } from "@/lib/chat-queue";
+import {
+	getQueuedChatAttachments,
+	getQueuedChatComposerEditDraft,
+} from "@/lib/chat-queue";
 import { buildWorkspaceChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
 import { getChatComposerDraftScope } from "@/lib/composer-draft";
@@ -477,7 +480,7 @@ const useChatPageController = ({
 			setDraftMetadata(
 				editDraft.mentions.length > 0 ? { mentions: editDraft.mentions } : null,
 			);
-			setAttachedFiles([]);
+			setAttachedFiles(getQueuedChatAttachments(queuedMessage));
 		},
 		persistedMessages,
 		stopExternalRun: stopRunningAutomation,
@@ -643,11 +646,6 @@ const useChatPageController = ({
 			if (result.status === "queued") {
 				await waitForBrowserPaint();
 				return;
-			}
-			if (result.status === "attachments_blocked") {
-				toast.info(
-					"Wait for the current response to finish before sending attachments.",
-				);
 			}
 		} catch (error) {
 			logError({

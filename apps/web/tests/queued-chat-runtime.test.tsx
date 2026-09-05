@@ -53,6 +53,7 @@ const head = (id: string): NonNullable<typeof state.head> => ({
 	messageId: `queued-${id}`,
 	text: id,
 	status: "queued",
+	filesJson: "[]",
 	requestBodyJson: JSON.stringify({
 		...DEFAULT_CHAT_SETTINGS,
 		projectId: null,
@@ -169,6 +170,7 @@ describe("app-owned queue execution", () => {
 		const capability = { id: "capability", label: "Folder" };
 		state.head = {
 			...head("local"),
+			filesJson: "[]",
 			requestBodyJson: JSON.stringify({
 				...DEFAULT_CHAT_SETTINGS,
 				projectId: null,

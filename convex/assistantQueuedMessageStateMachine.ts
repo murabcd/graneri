@@ -1,4 +1,8 @@
 import { parseChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
+import {
+	parseQueuedChatFiles,
+	parseQueuedChatFilesJson,
+} from "@workspace/ai/queued-chat-files";
 import { parseDurableQueuedChatRequest } from "@workspace/ai/queued-chat-request";
 import {
 	parseUiMessageMetadataJson,
@@ -8,10 +12,12 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { deleteQueuedMessage } from "./assistantQueuedMessageAttachments";
 import type {
 	AssistantQueuedMessagePauseReason,
 	AssistantQueuedMessageReplayClaimAttempt,
 	ClaimedAssistantQueuedMessage,
+	QueuedMessageInput,
 } from "./assistantQueuedMessageModel";
 import {
 	getNonTerminalRunsForChat,
@@ -25,14 +31,8 @@ const modelTextPartSchema = z.object({
 	text: z.string().refine((text) => text.trim().length > 0),
 });
 
-export type QueuedMessageInput = {
-	messageId: string;
-	metadataJson?: string;
-	text: string;
-	requestBodyJson: string;
-};
-
 export const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
+	parseQueuedChatFilesJson(message.filesJson);
 	if (!message.messageId.trim()) {
 		throw new ConvexError({
 			code: "QUEUED_MESSAGE_ID_EMPTY",
@@ -82,13 +82,7 @@ export const requireValidQueuedMessageInput = (message: QueuedMessageInput) => {
 
 export const requireValidStoredQueuedMessage = (
 	message: Doc<"assistantQueuedMessages">,
-) =>
-	requireValidQueuedMessageInput({
-		messageId: message.messageId,
-		metadataJson: message.metadataJson,
-		requestBodyJson: message.requestBodyJson,
-		text: message.text,
-	});
+) => requireValidQueuedMessageInput(message);
 
 const requireNoDuplicateActiveRunsForChat = async (
 	ctx: QueryCtx | MutationCtx,
@@ -209,6 +203,7 @@ export const queuedMessageDocumentBase = (
 	messageId: message.messageId,
 	metadataJson: message.metadataJson,
 	text: message.text,
+	filesJson: message.filesJson,
 	requestBodyJson: message.requestBodyJson,
 	createdAt: message.createdAt,
 	updatedAt: message.updatedAt,
@@ -476,19 +471,17 @@ export const claimQueuedMessageForChat = async (
 	} satisfies AssistantQueuedMessageReplayClaimAttempt;
 };
 
-const getModelTextPartSignature = (partsJson: string) => {
+const getModelPartSignature = (partsJson: string) => {
 	const parts = tryParseUiMessagePartsJson(partsJson);
-	if (!parts) {
+	if (!parts) return null;
+	const [text, ...files] = parts;
+	const result = modelTextPartSchema.strict().safeParse(text);
+	if (!result.success) return null;
+	try {
+		return JSON.stringify([result.data, ...parseQueuedChatFiles(files)]);
+	} catch {
 		return null;
 	}
-	return JSON.stringify(
-		parts.flatMap((part) => {
-			const result = modelTextPartSchema.safeParse(part);
-			return result.success
-				? [{ type: result.data.type, text: result.data.text }]
-				: [];
-		}),
-	);
 };
 
 const requireClaimedFollowUpAcceptance = async (
@@ -543,8 +536,11 @@ const requireClaimedFollowUpAcceptance = async (
 	if (
 		message.id !== queuedMessage.messageId ||
 		message.text !== queuedMessage.text ||
-		getModelTextPartSignature(message.partsJson) !==
-			JSON.stringify([{ type: "text", text: queuedMessage.text }])
+		getModelPartSignature(message.partsJson) !==
+			JSON.stringify([
+				{ type: "text", text: queuedMessage.text },
+				...parseQueuedChatFilesJson(queuedMessage.filesJson),
+			])
 	) {
 		throw new ConvexError({
 			code: contentErrorCode,
@@ -597,7 +593,7 @@ export const acceptClaimedFollowUp = async <Result>(
 		workspaceId: args.workspaceId,
 	});
 	const result = await args.commit(claimedMessage);
-	await ctx.db.delete(claimedMessage._id);
+	await deleteQueuedMessage(ctx, claimedMessage._id);
 	return result;
 };
 
@@ -616,7 +612,9 @@ const discardMessagesForRunByStatus = async (
 			ids.push(message._id);
 		}
 	}
-	await Promise.all(ids.map((messageId) => ctx.db.delete(messageId)));
+	await Promise.all(
+		ids.map((messageId) => deleteQueuedMessage(ctx, messageId)),
+	);
 };
 
 export const discardQueuedForRunInternal = async (
