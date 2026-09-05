@@ -1,5 +1,6 @@
 import { Brain } from "lucide-react";
 import { ToolRowBase } from "@/components/ai-elements/tools/tool-row-base";
+import { MarkdownStream } from "@/components/chat/markdown-stream";
 
 export function Reasoning({
 	isStreaming,
@@ -24,9 +25,13 @@ export function Reasoning({
 			hideChevronUntilHover
 		>
 			<div className="max-h-[175px] overflow-y-auto">
-				<p className="whitespace-pre-wrap text-sm text-muted-foreground">
+				<MarkdownStream
+					className="text-sm text-muted-foreground"
+					isAnimating={isStreaming}
+					mode={isStreaming ? "streaming" : "static"}
+				>
 					{trimmedText}
-				</p>
+				</MarkdownStream>
 			</div>
 		</ToolRowBase>
 	);

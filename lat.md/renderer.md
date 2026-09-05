@@ -175,6 +175,10 @@ shared Markdown root and note editor use the semantic prose contract in
 [apps/web/src/styles/prose.css](../apps/web/src/styles/prose.css), while
 [apps/web/src/styles/chat-markdown.css](../apps/web/src/styles/chat-markdown.css)
 owns only the Streamdown boundary and chat-specific code presentation. The shared
+Markdown renderer also handles expanded `Thinking` and `Thought` summaries in
+[[apps/web/src/components/ai-elements/reasoning.tsx]], preserving their muted
+color and bounded scroll area while parsing streamed and completed Markdown.
+The shared
 contract applies the Graneri 14-pixel type scale,
 1.625 line height, compact heading ratios, paragraph rhythm, list indentation,
 blockquote rail, and inline-code treatment. Its final top-level Markdown block
