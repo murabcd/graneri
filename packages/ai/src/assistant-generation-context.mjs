@@ -1,3 +1,5 @@
+import { isToolUIPart } from "ai";
+
 const projectOpenAiProviderMetadata = (providerMetadata) => {
 	const openai = providerMetadata?.openai;
 	if (
@@ -17,6 +19,15 @@ const projectOpenAiProviderMetadata = (providerMetadata) => {
 };
 
 const projectPartForAssistantGeneration = (part) => {
+	// Hosted tool receipts depend on their original reasoning item. Preserve both
+	// identities; rebuilding one without the other produces invalid API input.
+	if (
+		part.type === "reasoning" ||
+		(isToolUIPart(part) && part.providerExecuted)
+	) {
+		return part;
+	}
+
 	const providerMetadata = projectOpenAiProviderMetadata(part.providerMetadata);
 	const callProviderMetadata = projectOpenAiProviderMetadata(
 		part.callProviderMetadata,

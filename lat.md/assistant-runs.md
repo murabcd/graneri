@@ -82,14 +82,20 @@ scheduling, and transactional finalization.
 
 ## Assistant generation context
 
-Every new assistant generation receives one semantic projection of prior UI messages without response-item references owned by an earlier provider generation.
+Every new assistant generation receives one projection of prior UI messages that rebuilds local content while preserving provider-owned receipts and their reasoning dependencies.
 
 [assistant-generation-context.mjs](../packages/ai/src/assistant-generation-context.mjs) is the canonical boundary
 projection for ordinary turns, queued replay, steer replacement, and resumed
-human decisions. It removes only OpenAI `itemId` values from part, tool-call,
-and tool-result provider metadata; visible text, reasoning summaries, encrypted
-reasoning, stable tool call ids, tool inputs and outputs, phases, and all other
-provider metadata remain intact. Hosted preparation applies the projection
+human decisions. It removes OpenAI `itemId` values from regenerated text and
+locally executed tool metadata. Provider-executed tool parts retain their distinct
+call and result item ids, and reasoning parts retain their item ids: hosted tool
+receipts depend on that original reasoning item. Removing either identity can
+produce duplicate search items or an invalid missing-reasoning reference at the
+Responses API boundary. Visible text, reasoning summaries, encrypted reasoning,
+stable tool call ids, tool inputs and outputs, phases, and all other provider
+metadata remain intact. The [tool-search continuation regression](../packages/ai/tests/tool-search-continuation.test.ts)
+checks persisted receipts through the installed SDK's actual request serializer.
+Hosted preparation applies the projection
 before validating a new turn, and Convex applies the same contract when a
 durable job is created or its assistant message generation changes. Workflow
 checkpoints inside one uninterrupted assistant generation deliberately retain
@@ -821,8 +827,8 @@ If the current response naturally completes before the input can enter another
 step, the producer saves the completed assistant response and starts a
 replacement generation in the same run. Only that replacement boundary projects
 the full ordered transcript through the canonical assistant-generation context,
-discards generation-bound OpenAI item references while preserving semantic
-reasoning content, and rotates the assistant message id.
+discards regenerated-content OpenAI item references while preserving hosted
+receipts and their reasoning references, and rotates the assistant message id.
 Web-produced runs reserve a single-use acceptance lease on their exact active
 generation before the durable commit. Terminal cutover seals the generation
 before waiting for issued leases, rejects every new reservation, and lets only

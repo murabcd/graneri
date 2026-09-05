@@ -1190,6 +1190,7 @@ test("background steering completes the current generation and continues the sam
 		(message) => message.id === "msg-assistant-before-steer",
 	);
 	expect(continuedJobMessage?.parts[0]?.providerMetadata?.openai).toEqual({
+		itemId: "rs_current_generation",
 		reasoningEncryptedContent: "encrypted-current-reasoning",
 	});
 	expect(
@@ -1405,7 +1406,13 @@ test("queued replay projects prior provider items onto its new generation", asyn
 										},
 									},
 								},
-								{ type: "text", text: "Prior answer" },
+								{
+									type: "text",
+									text: "Prior answer",
+									providerMetadata: {
+										openai: { itemId: "msg_before_replay" },
+									},
+								},
 							],
 						},
 						{
@@ -1446,8 +1453,11 @@ test("queued replay projects prior provider items onto its new generation", asyn
 		},
 		{ text: "Prior answer" },
 	]);
+	expect(replayJobMessages[0]?.parts[0]?.providerMetadata?.openai?.itemId).toBe(
+		"rs_before_replay",
+	);
 	expect(
-		replayJobMessages[0]?.parts[0]?.providerMetadata?.openai?.itemId,
+		replayJobMessages[0]?.parts[1]?.providerMetadata?.openai?.itemId,
 	).toBeUndefined();
 	await t.mutation(internal.assistantRunBackgroundState.fail, {
 		runId: replay.run._id,

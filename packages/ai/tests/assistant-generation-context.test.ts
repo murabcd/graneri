@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { projectUiMessagesForAssistantGeneration } from "../src/assistant-generation-context.mjs";
 
 describe("assistant generation context", () => {
-	it("drops only generation-bound OpenAI item ids", () => {
+	it("drops regenerated item ids while preserving reasoning receipts", () => {
 		const messages: UIMessage[] = [
 			{
 				id: "assistant-1",
@@ -57,6 +57,7 @@ describe("assistant generation context", () => {
 						text: "Reasoning summary",
 						providerMetadata: {
 							openai: {
+								itemId: "rs_generation_1",
 								reasoningEncryptedContent: "encrypted-reasoning",
 							},
 						},
