@@ -1,5 +1,5 @@
-import { cn } from "@workspace/ui/lib/utils";
 import type { VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import { Toggle as TogglePrimitive } from "radix-ui";
 import type * as React from "react";
 import { toggleVariants } from "./toggle-variants";

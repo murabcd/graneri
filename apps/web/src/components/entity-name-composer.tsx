@@ -5,7 +5,7 @@ import {
 	FieldLabel,
 } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 
 export function EntityNameComposer({
 	className,

@@ -4,7 +4,7 @@ import {
 	HoverCardTrigger,
 } from "@workspace/ui/components/hover-card";
 import { Spinner } from "@workspace/ui/components/spinner";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import type { FunctionReturnType } from "convex/server";
 import { CheckCircle2, Circle } from "lucide-react";
 import type { api } from "../../../../../convex/_generated/api";

@@ -30,7 +30,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
 	Archive,

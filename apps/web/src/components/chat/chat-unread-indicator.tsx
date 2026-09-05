@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 
 export function ChatUnreadIndicator({ className }: { className?: string }) {
 	return (

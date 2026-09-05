@@ -14,7 +14,7 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@workspace/ui/components/toggle-group";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import {
 	Asterisk,
 	BookOpen,

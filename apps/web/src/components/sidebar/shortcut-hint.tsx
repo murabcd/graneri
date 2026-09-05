@@ -1,5 +1,5 @@
 import { Kbd } from "@workspace/ui/components/kbd";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 
 export function ShortcutHint({
 	altKey = false,

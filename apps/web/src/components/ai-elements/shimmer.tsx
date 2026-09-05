@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import type { CSSProperties, ElementType, ReactNode } from "react";
 
 type ShimmerTextProps = {

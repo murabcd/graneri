@@ -7,7 +7,7 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { markPanelLayoutTransition } from "@workspace/ui/lib/panel-layout-activity";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { Minus, Pin } from "lucide-react";
 import * as React from "react";
 import { ResizableSidePanelHandle } from "@/components/layout/resizable-side-panel";

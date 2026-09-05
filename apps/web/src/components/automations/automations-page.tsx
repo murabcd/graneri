@@ -27,7 +27,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import {
 	Clock,
 	MoreHorizontal,

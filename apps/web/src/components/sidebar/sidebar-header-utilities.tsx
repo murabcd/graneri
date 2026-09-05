@@ -4,7 +4,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { Search, SquarePen } from "lucide-react";
 import type * as React from "react";
 import { useApplicationShortcut } from "@/hooks/use-application-shortcut";

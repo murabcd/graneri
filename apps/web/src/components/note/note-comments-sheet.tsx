@@ -48,7 +48,7 @@ import {
 	APP_SIDEBAR_COLLAPSED_WIDTH,
 	APP_SIDEBAR_EXPANDED_WIDTH,
 } from "@workspace/ui/lib/panel-dimensions";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { LucideIcon } from "lucide-react";
 import {

@@ -4,7 +4,7 @@ import {
 	CollapsibleTrigger,
 } from "@workspace/ui/components/collapsible";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { ChevronRight, FileText, Globe2 } from "lucide-react";
 import * as React from "react";
 import { FileAttachmentGlyph } from "@/components/ai-elements/file-attachment-type-icon";

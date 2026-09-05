@@ -22,7 +22,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { useMutation } from "convex/react";
 import { Archive, Clock, Pencil, Star, StarOff } from "lucide-react";
 import * as React from "react";

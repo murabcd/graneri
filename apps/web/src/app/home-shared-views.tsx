@@ -10,7 +10,7 @@ import {
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
 import { Skeleton } from "@workspace/ui/components/skeleton";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { CalendarClock, FileText, UsersRound } from "lucide-react";
 import * as React from "react";
 import type {

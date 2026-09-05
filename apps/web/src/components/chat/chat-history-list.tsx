@@ -6,7 +6,7 @@ import {
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
 import { Spinner } from "@workspace/ui/components/spinner";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { Clock, MessageCircle, MoreHorizontal } from "lucide-react";
 import { getChatId } from "@/lib/chat";
 import { formatRelativeTimestamp } from "@/lib/chat-timestamp";

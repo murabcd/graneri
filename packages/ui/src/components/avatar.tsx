@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { Avatar as AvatarPrimitive } from "radix-ui";
 import type * as React from "react";
 

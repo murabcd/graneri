@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
 import * as React from "react";
 import { SCROLL_RAIL_HIDE_DELAY_MS } from "../lib/scroll-rail";

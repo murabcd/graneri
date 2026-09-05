@@ -7,7 +7,7 @@ import {
 	MessageScrollerProvider,
 	MessageScrollerViewport,
 } from "@workspace/ui/components/message-scroller";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import * as React from "react";
 import {
 	ASSISTANT_CHAT_CONTENT_CLASS,

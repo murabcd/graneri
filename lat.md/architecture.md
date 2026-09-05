@@ -31,7 +31,10 @@ The workspace assigns each runtime and shared concern to one primary module whil
   capability metadata.
 - [packages/platform](../packages/platform/package.json) owns renderer-safe
   desktop bridge types and platform helpers.
-- [packages/ui](../packages/ui/package.json) owns shared UI primitives.
+- [packages/ui](../packages/ui/package.json) owns shared UI primitives. UI and
+  renderer components import the `cn` package directly for Tailwind class
+  merging. There is no local compatibility wrapper. The web renderer keeps `cn`
+  in its shared UI vendor chunk.
 - [convex](../convex/package.json) owns backend functions, schema, durable state,
   authentication, HTTP actions, and server integrations.
 

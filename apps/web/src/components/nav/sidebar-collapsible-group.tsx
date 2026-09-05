@@ -14,7 +14,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { ChevronRight } from "lucide-react";
 import * as React from "react";
 

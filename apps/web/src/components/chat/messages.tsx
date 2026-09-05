@@ -1,5 +1,5 @@
-import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
+import { cn } from "cn";
 import { Plus } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";

@@ -39,8 +39,8 @@ import {
 	APP_SIDEBAR_COLLAPSED_WIDTH,
 	APP_SIDEBAR_EXPANDED_WIDTH,
 } from "@workspace/ui/lib/panel-dimensions";
-import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
+import { cn } from "cn";
 import { useQuery } from "convex/react";
 import { Clock3, FileText, Plus, X } from "lucide-react";
 import * as React from "react";

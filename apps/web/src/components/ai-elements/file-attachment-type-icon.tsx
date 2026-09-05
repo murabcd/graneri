@@ -10,8 +10,8 @@ import {
 	FileWordIcon,
 	type Icon,
 } from "@workspace/ui/components/icons";
-import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
+import { cn } from "cn";
 
 const getFilenameExtension = (filename?: string) => {
 	const extension = filename?.split(".").at(-1)?.trim();

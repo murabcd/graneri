@@ -9,8 +9,8 @@ import {
 	AttachmentTitle,
 	AttachmentTrigger,
 } from "@workspace/ui/components/attachment";
-import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
+import { cn } from "cn";
 import { Download, LoaderCircle } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";

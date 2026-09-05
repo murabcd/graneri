@@ -8,8 +8,8 @@ import {
 	MessageScrollerViewport,
 } from "@workspace/ui/components/message-scroller";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
+import { cn } from "cn";
 import { useMutation, useQuery } from "convex/react";
 import { FileText } from "lucide-react";
 import * as React from "react";

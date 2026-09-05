@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import type { CalendarSource } from "@/components/calendar/calendar-view-model";
 
 export function CalendarSourceDot({

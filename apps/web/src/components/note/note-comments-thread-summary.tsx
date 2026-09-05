@@ -14,7 +14,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import {
 	Bell,
 	BellOff,

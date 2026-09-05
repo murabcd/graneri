@@ -10,8 +10,8 @@ import {
 	InputGroupAddon,
 } from "@workspace/ui/components/input-group";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { cn } from "@workspace/ui/lib/utils";
 import { Command as CommandPrimitive } from "cmdk";
+import { cn } from "cn";
 import { CheckIcon, SearchIcon } from "lucide-react";
 import * as React from "react";
 

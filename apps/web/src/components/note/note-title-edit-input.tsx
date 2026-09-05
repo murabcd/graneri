@@ -1,5 +1,5 @@
 import { Input } from "@workspace/ui/components/input";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import * as React from "react";
 
 type NoteTitleEditInputProps = {

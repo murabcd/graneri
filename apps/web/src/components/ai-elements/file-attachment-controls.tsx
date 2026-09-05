@@ -6,8 +6,8 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
-import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
+import { cn } from "cn";
 import { Paperclip, X } from "lucide-react";
 import * as React from "react";
 import {

@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { HoverCard as HoverCardPrimitive } from "radix-ui";
 
 function HoverCardContent({

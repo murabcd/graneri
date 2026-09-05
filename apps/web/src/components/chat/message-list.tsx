@@ -10,8 +10,8 @@ import {
 	MessageScrollerItem,
 	useMessageScrollerScrollable,
 } from "@workspace/ui/components/message-scroller";
-import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
+import { cn } from "cn";
 import {
 	CornerDownRight,
 	FileText,

@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import * as React from "react";
 import { createPortal } from "react-dom";
 

@@ -1,5 +1,5 @@
 import { Button } from "@workspace/ui/components/button";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import {
 	ChevronDownIcon,
 	ChevronLeftIcon,

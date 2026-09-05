@@ -18,8 +18,8 @@ import {
 } from "@workspace/ui/components/card";
 import { Field } from "@workspace/ui/components/field";
 import { GraneriMark } from "@workspace/ui/components/graneri-mark";
-import { cn } from "@workspace/ui/lib/utils";
 import confetti from "canvas-confetti";
+import { cn } from "cn";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
 	Check,

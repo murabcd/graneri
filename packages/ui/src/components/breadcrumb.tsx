@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
 import { Slot } from "radix-ui";
 import type * as React from "react";

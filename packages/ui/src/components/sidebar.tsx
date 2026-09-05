@@ -26,8 +26,8 @@ import {
 	MOBILE_DOCKED_PANEL_DEFAULT_WIDTH_CSS,
 } from "@workspace/ui/lib/panel-dimensions";
 import { markPanelLayoutTransition } from "@workspace/ui/lib/panel-layout-activity";
-import { cn } from "@workspace/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import { PanelLeftIcon } from "lucide-react";
 import { Slot } from "radix-ui";
 import * as React from "react";

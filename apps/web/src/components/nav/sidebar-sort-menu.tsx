@@ -4,7 +4,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { Check, MoreHorizontal } from "lucide-react";
 import type { SidebarSortOption } from "./sidebar-sort-options";
 

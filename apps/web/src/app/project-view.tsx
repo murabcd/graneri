@@ -7,7 +7,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { FileText } from "lucide-react";
 import * as React from "react";
 import type { AppUser } from "@/app/app-types";

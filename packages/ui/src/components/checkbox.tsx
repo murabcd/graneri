@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { CheckIcon } from "lucide-react";
 import { Checkbox as CheckboxPrimitive } from "radix-ui";
 import type * as React from "react";

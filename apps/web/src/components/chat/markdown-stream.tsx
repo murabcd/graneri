@@ -1,5 +1,5 @@
 import { createCodePlugin } from "@streamdown/code";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import * as React from "react";
 import { Streamdown, type StreamdownProps } from "streamdown";
 import {

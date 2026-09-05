@@ -1,5 +1,5 @@
-import { cn } from "@workspace/ui/lib/utils";
 import type { VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import { Slot } from "radix-ui";
 import type * as React from "react";
 import { MarkerContent } from "./marker-content";

@@ -137,6 +137,7 @@ const vendorChunkPolicies: VendorChunkPolicy[] = [
 	{
 		name: "ui-vendors",
 		match: includesAny(
+			"/node_modules/cn/",
 			"/node_modules/clsx/",
 			"/node_modules/class-variance-authority/",
 			"/node_modules/tailwind-merge/",

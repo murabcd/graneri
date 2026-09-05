@@ -10,7 +10,7 @@ import type { DesktopMeetingDetectionState } from "@workspace/platform/desktop-b
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent } from "@workspace/ui/components/card";
 import { Separator } from "@workspace/ui/components/separator";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { X } from "lucide-react";
 import * as React from "react";
 import {

@@ -29,7 +29,7 @@ import { Label } from "@workspace/ui/components/label";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { useMutation, useQuery } from "convex/react";
 import {
 	CalendarDays,

@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import * as React from "react";
 import type { TooltipValueType } from "recharts";
 // This package exports chart primitives; callers decide whether to lazy-load chart surfaces.

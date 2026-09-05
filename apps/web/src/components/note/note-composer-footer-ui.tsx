@@ -4,8 +4,8 @@ import {
 	InputGroupAddon,
 	InputGroupButton,
 } from "@workspace/ui/components/input-group";
-import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
+import { cn } from "cn";
 import { ArrowUp, Play, Square } from "lucide-react";
 import type * as React from "react";
 import {

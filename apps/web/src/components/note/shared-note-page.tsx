@@ -8,7 +8,7 @@ import {
 } from "@workspace/ui/components/empty";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { FileText } from "lucide-react";
 import * as React from "react";
 import {

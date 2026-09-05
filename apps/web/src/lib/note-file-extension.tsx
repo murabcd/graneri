@@ -4,8 +4,8 @@ import {
 	type ReactNodeViewProps,
 	ReactNodeViewRenderer,
 } from "@tiptap/react";
-import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
+import { cn } from "cn";
 import * as React from "react";
 import { FileAttachmentCard } from "@/components/ai-elements/file-attachment-cards";
 

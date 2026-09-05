@@ -1,4 +1,4 @@
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { FileText } from "lucide-react";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import type { AutomationNoteSource } from "@/components/automations/automation-prompt-mentions";

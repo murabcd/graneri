@@ -13,8 +13,8 @@ import {
 	InputGroupButton,
 } from "@workspace/ui/components/input-group";
 import { Kbd } from "@workspace/ui/components/kbd";
-import { cn } from "@workspace/ui/lib/utils";
 import type { FileUIPart } from "ai";
+import { cn } from "cn";
 import { ArrowUp, type LucideIcon, Play, Square } from "lucide-react";
 import * as React from "react";
 import type { ComposerProjectOption } from "@/components/ai-elements/composer-project-picker";

@@ -1,6 +1,6 @@
 import { Button } from "@workspace/ui/components/button";
-import { cn } from "@workspace/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import { Slot } from "radix-ui";
 import type * as React from "react";
 

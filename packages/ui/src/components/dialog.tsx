@@ -3,7 +3,7 @@ import {
 	MODAL_OVERLAY_CLASS_NAME,
 	MODAL_SURFACE_CLASS_NAME,
 } from "@workspace/ui/lib/dialog-styles";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import type * as React from "react";

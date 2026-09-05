@@ -19,7 +19,7 @@ import {
 } from "@workspace/ui/components/dialog";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { SidebarProvider } from "@workspace/ui/components/sidebar";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { History, Undo2 } from "lucide-react";

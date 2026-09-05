@@ -1,6 +1,6 @@
 import { Button } from "@workspace/ui/components/button";
-import { cn } from "@workspace/ui/lib/utils";
 import type { UIMessage } from "ai";
+import { cn } from "cn";
 import { useState } from "react";
 import { MarkdownStream } from "@/components/chat/markdown-stream";
 

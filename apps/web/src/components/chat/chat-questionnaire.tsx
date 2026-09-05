@@ -13,7 +13,7 @@ import {
 	CardHeader,
 } from "@workspace/ui/components/card";
 import { Kbd } from "@workspace/ui/components/kbd";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import {
 	ChevronLeft,
 	ChevronRight,

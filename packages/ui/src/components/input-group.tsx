@@ -1,6 +1,6 @@
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import * as React from "react";
 import { InputGroupAddon } from "./input-group-addon";
 import { InputGroupButton } from "./input-group-button";

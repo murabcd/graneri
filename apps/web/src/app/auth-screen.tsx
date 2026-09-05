@@ -15,7 +15,7 @@ import {
 } from "@workspace/ui/components/field";
 import { GraneriMark } from "@workspace/ui/components/graneri-mark";
 import { GithubLogo, GoogleLogo } from "@workspace/ui/components/icons";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import * as React from "react";
 import type { SocialAuthProvider } from "@/app/app-types";

@@ -1,5 +1,5 @@
 import { SidebarInset } from "@workspace/ui/components/sidebar";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import type * as React from "react";
 
 type AppShellInsetProps = React.ComponentProps<typeof SidebarInset>;

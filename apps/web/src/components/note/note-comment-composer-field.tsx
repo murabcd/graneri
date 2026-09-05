@@ -7,7 +7,7 @@ import {
 	InputGroupInput,
 	InputGroupTextarea,
 } from "@workspace/ui/components/input-group";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { ArrowUp, LoaderCircle } from "lucide-react";
 import * as React from "react";
 

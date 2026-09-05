@@ -6,7 +6,7 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "@workspace/ui/components/chart";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 // Generated chart variants are UI primitives; route-level code owns lazy-loading policy.
 // react-doctor-disable-next-line react-doctor/prefer-dynamic-import -- ChatChartArtifacts loads this entire module through React.lazy and import.meta.glob.
 import {

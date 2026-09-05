@@ -1,6 +1,6 @@
 import { Button } from "@workspace/ui/components/button";
 import { SidebarRecordingSpinner } from "@workspace/ui/components/icons";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { FileText, MoreHorizontal } from "lucide-react";
 import type { AppUser } from "@/app/app-types";
 import { NoteActionsMenu } from "@/components/note/note-actions-menu";

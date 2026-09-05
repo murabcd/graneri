@@ -1,5 +1,5 @@
-import { cn } from "@workspace/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import { Tabs as TabsPrimitive } from "radix-ui";
 import type * as React from "react";
 

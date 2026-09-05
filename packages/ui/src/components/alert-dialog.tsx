@@ -2,8 +2,8 @@ import {
 	MODAL_OVERLAY_CLASS_NAME,
 	MODAL_SURFACE_CLASS_NAME,
 } from "@workspace/ui/lib/dialog-styles";
-import { cn } from "@workspace/ui/lib/utils";
 import type { VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import { Dialog as DismissibleAlertDialogPrimitive } from "radix-ui";
 import type * as React from "react";
 import { buttonVariants } from "./button-variants";

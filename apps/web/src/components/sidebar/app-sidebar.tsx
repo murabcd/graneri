@@ -8,7 +8,7 @@ import {
 	SidebarHeader,
 	useSidebarShell,
 } from "@workspace/ui/components/sidebar";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { useQuery } from "convex/react";
 import { FileText, MessageCircle } from "lucide-react";
 import * as React from "react";

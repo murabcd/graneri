@@ -1,7 +1,7 @@
 "use client";
 
 import { DESKTOP_DOCKED_PANEL_MIN_CONTENT_WIDTH } from "@workspace/ui/lib/panel-dimensions";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import * as React from "react";
 
 type PanelSide = "left" | "right";

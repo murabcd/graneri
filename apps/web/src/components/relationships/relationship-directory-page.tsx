@@ -7,7 +7,7 @@ import {
 	EmptyTitle,
 } from "@workspace/ui/components/empty";
 import { Input } from "@workspace/ui/components/input";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "cn";
 import { Building2, Search, UsersRound } from "lucide-react";
 import * as React from "react";
 import { PageTitle } from "@/components/layout/page-title";
