@@ -1,40 +1,40 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-	buildProjectNoteToolDefinitions,
-	buildProjectNoteTools,
-	PROJECT_NOTE_SEARCH_QUERY_MAX_LENGTH,
-	PROJECT_NOTE_SEARCH_RESULT_LIMIT,
-} from "../src/project-note-tools.mjs";
+	buildNoteToolDefinitions,
+	buildNoteTools,
+	NOTE_SEARCH_QUERY_MAX_LENGTH,
+	NOTE_SEARCH_RESULT_LIMIT,
+} from "../src/note-tools.mjs";
 import { toolUiMetadata } from "../src/tool-ui-metadata.mjs";
 
-describe("project note tools", () => {
+describe("note tools", () => {
 	it("enforces bounded search and read input at the tool boundary", () => {
-		const definitions = buildProjectNoteToolDefinitions({
-			searchProjectNotes: vi.fn(),
-			getProjectNote: vi.fn(),
+		const definitions = buildNoteToolDefinitions({
+			searchNotes: vi.fn(),
+			getNote: vi.fn(),
 		});
 		const searchDefinition = definitions.find(
-			(definition) => definition.name === "search_project_notes",
+			(definition) => definition.name === "search_notes",
 		);
 		const readDefinition = definitions.find(
-			(definition) => definition.name === "get_project_note",
+			(definition) => definition.name === "get_note",
 		);
 
 		expect(
 			searchDefinition?.inputSchema.safeParse({
-				query: "x".repeat(PROJECT_NOTE_SEARCH_QUERY_MAX_LENGTH + 1),
+				query: "x".repeat(NOTE_SEARCH_QUERY_MAX_LENGTH + 1),
 			}).success,
 		).toBe(false);
 		expect(
 			searchDefinition?.inputSchema.safeParse({
 				query: "roadmap",
-				limit: PROJECT_NOTE_SEARCH_RESULT_LIMIT + 1,
+				limit: NOTE_SEARCH_RESULT_LIMIT + 1,
 			}).success,
 		).toBe(false);
 		expect(
 			searchDefinition?.inputSchema.safeParse({
 				query: "roadmap",
-				limit: PROJECT_NOTE_SEARCH_RESULT_LIMIT,
+				limit: NOTE_SEARCH_RESULT_LIMIT,
 			}).success,
 		).toBe(true);
 		expect(
@@ -44,12 +44,12 @@ describe("project note tools", () => {
 		expect(readDefinition?.policy).toMatchObject({
 			access: "read",
 			approval: "not_required",
-			provider: "graneri-project",
+			provider: "graneri-notes",
 		});
 	});
 
-	it("searches only through the project-scoped adapter", async () => {
-		const searchProjectNotes = vi.fn(async () => ({
+	it("searches only through the chat-scoped adapter", async () => {
+		const searchNotes = vi.fn(async () => ({
 			hasMore: false,
 			notes: [
 				{
@@ -60,17 +60,17 @@ describe("project note tools", () => {
 				},
 			],
 		}));
-		const tools = buildProjectNoteTools({
-			searchProjectNotes,
-			getProjectNote: vi.fn(),
+		const tools = buildNoteTools({
+			searchNotes,
+			getNote: vi.fn(),
 		});
 
-		const result = await tools.search_project_notes.execute?.({
+		const result = await tools.search_notes.execute?.({
 			query: "release",
 			limit: 5,
 		});
 
-		expect(searchProjectNotes).toHaveBeenCalledWith({
+		expect(searchNotes).toHaveBeenCalledWith({
 			query: "release",
 			limit: 5,
 		});
@@ -85,31 +85,31 @@ describe("project note tools", () => {
 				},
 			],
 		});
-		expect(toolUiMetadata.search_project_notes).toMatchObject({
+		expect(toolUiMetadata.search_notes).toMatchObject({
 			icon: "search",
-			running: "Searching project notes",
+			running: "Searching notes",
 		});
 	});
 
-	it("reads project notes through the scoped adapter", async () => {
-		const getProjectNote = vi.fn(async () => ({
+	it("reads notes through the scoped adapter", async () => {
+		const getNote = vi.fn(async () => ({
 			noteId: "note-1",
 			nextOffset: null,
 			text: "Full launch notes",
 			title: "Launch",
 			updatedAt: 2,
 		}));
-		const tools = buildProjectNoteTools({
-			searchProjectNotes: vi.fn(),
-			getProjectNote,
+		const tools = buildNoteTools({
+			searchNotes: vi.fn(),
+			getNote,
 		});
 
-		const result = await tools.get_project_note.execute?.({
+		const result = await tools.get_note.execute?.({
 			noteId: "note-1",
 			offset: 16_000,
 		});
 
-		expect(getProjectNote).toHaveBeenCalledWith({
+		expect(getNote).toHaveBeenCalledWith({
 			noteId: "note-1",
 			offset: 16_000,
 		});
@@ -120,9 +120,9 @@ describe("project note tools", () => {
 			title: "Launch",
 			updatedAt: 2,
 		});
-		expect(toolUiMetadata.get_project_note).toMatchObject({
+		expect(toolUiMetadata.get_note).toMatchObject({
 			icon: "file-text",
-			running: "Reading project note",
+			running: "Reading note",
 		});
 	});
 });

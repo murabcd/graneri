@@ -99,17 +99,17 @@ export const toolUiMetadata = {
 		complete: "Searched meeting notes",
 		subtitleKeys: ["query"],
 	},
-	search_project_notes: {
+	search_notes: {
 		groupKey: "search",
 		icon: "search",
-		running: "Searching project notes",
-		complete: "Searched project notes",
+		running: "Searching notes",
+		complete: "Searched notes",
 		subtitleKeys: ["query"],
 	},
-	get_project_note: {
+	get_note: {
 		icon: "file-text",
-		running: "Reading project note",
-		complete: "Read project note",
+		running: "Reading note",
+		complete: "Read note",
 		subtitleKeys: ["noteId"],
 	},
 	google_calendar_list_events: {

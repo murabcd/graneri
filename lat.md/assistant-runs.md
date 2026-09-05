@@ -566,13 +566,20 @@ project-scoped chat mutation, and forks copy the source relationship.
 while [[convex/chatProjectState.ts]] validates that both the chat and selected
 project belong to the authenticated workspace.
 
-Project membership grants access to project-owned notes without injecting every
-note into every prompt. The assistant receives bounded `search_project_notes`
-and `get_project_note` tools from
-[project-note-tools.mjs](../packages/ai/src/project-note-tools.mjs); the Convex
-executors in [[convex/chatProjectNotes.ts]] derive scope from the persisted chat,
+Chats without an attached project can search the owner’s active notes throughout
+the current workspace without mentioning or attaching notes first. An attached
+project narrows this scope to that project’s notes, without injecting every note
+into every prompt. The assistant receives bounded `search_notes`
+and `get_note` tools from
+[note-tools.mjs](../packages/ai/src/note-tools.mjs); the Convex
+executors in [[convex/chatNotes.ts]] derive scope from the persisted chat,
 enforce workspace ownership again, and return only requested note content.
-Search results and reads are bounded; long reads return an explicit continuation
+Search uses the title and body keyword indexes; the tool directs the model to
+retry shorter queries, synonyms, or language variants when an exact query misses.
+The same canonical tools and result contracts serve hosted and desktop runs.
+Missing or archived chats grant no note access, and archived notes, other owners,
+and other workspaces remain excluded. Search results and reads are bounded; long
+reads return an explicit continuation
 offset so the model can retrieve the rest without mistaking a clipped excerpt
 for the complete note.
 Project scope is available to normal, queued, steered, and background turns.

@@ -1,5 +1,5 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
-import { PROJECT_NOTE_READ_CHUNK_LENGTH } from "@workspace/ai/project-note-tools";
+import { NOTE_READ_CHUNK_LENGTH } from "@workspace/ai/note-tools";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -279,7 +279,7 @@ test("project note tools search and read only the persisted chat project", async
 		},
 	);
 
-	const result = await asOwner.query(api.chatProjectNotes.search, {
+	const result = await asOwner.query(api.chatNotes.search, {
 		workspaceId: ownerWorkspaceId,
 		chatId: "research-chat",
 		searchQuery: "roadmap",
@@ -287,42 +287,150 @@ test("project note tools search and read only the persisted chat project", async
 	});
 	expect(result.hasMore).toBe(true);
 	expect(result.notes).toHaveLength(1);
-	expect([firstNoteId, secondNoteId]).toContain(result.notes[0]?.id);
+	expect([firstNoteId, secondNoteId]).toContain(result.notes[0]?.noteId);
 	expect(result.notes[0]?.preview.length).toBeLessThanOrEqual(500);
 
 	await expect(
-		asOwner.query(api.chatProjectNotes.get, {
+		asOwner.query(api.chatNotes.get, {
 			workspaceId: ownerWorkspaceId,
 			chatId: "research-chat",
 			noteId: firstNoteId,
 		}),
 	).resolves.toMatchObject({
-		id: firstNoteId,
+		noteId: firstNoteId,
 		title: "Roadmap alpha",
 		text: "The project roadmap launches in September.",
 	});
 	await expect(
-		asOwner.query(api.chatProjectNotes.get, {
+		asOwner.query(api.chatNotes.get, {
 			workspaceId: ownerWorkspaceId,
 			chatId: "research-chat",
 			noteId: unrelatedNoteId,
 		}),
 	).resolves.toBeNull();
 	await expect(
-		asOther.query(api.chatProjectNotes.search, {
+		asOther.query(api.chatNotes.search, {
 			workspaceId: ownerWorkspaceId,
 			chatId: "research-chat",
 			searchQuery: "roadmap",
 		}),
 	).rejects.toThrow("Workspace not found");
 	await expect(
-		t.query(internal.chatProjectNotes.getForOwner, {
+		t.query(internal.chatNotes.getForOwner, {
 			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 			workspaceId: ownerWorkspaceId,
 			chatId: "research-chat",
 			noteId: unrelatedNoteId,
 		}),
 	).resolves.toBeNull();
+});
+
+test("workspace chats search and read unmentioned notes without crossing ownership or workspace boundaries", async () => {
+	const { asOwner, ownerWorkspaceId, otherWorkspaceId, projectId, t } =
+		await createFixture();
+	await saveMessage({
+		asOwner,
+		workspaceId: ownerWorkspaceId,
+		chatId: "workspace-search",
+		messageId: "find-design",
+		projectId: null,
+	});
+	const { rootNoteId, projectNoteId, excludedNoteIds } = await t.run(
+		async (ctx) => {
+			const createNote = (
+				overrides: Partial<Parameters<typeof insertTestNote>[1]>,
+			) =>
+				insertTestNote(ctx, {
+					ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+					workspaceId: ownerWorkspaceId,
+					title: "Подход к дизайн-инжинирингу",
+					searchableText: "Design critique and shared engineering practices.",
+					visibility: "private",
+					isArchived: false,
+					isStarred: false,
+					starredSortOrder: 1_000,
+					createdAt: 1_000,
+					updatedAt: 1_000,
+					...overrides,
+				});
+			return {
+				rootNoteId: await createNote({}),
+				projectNoteId: await createNote({ projectId }),
+				excludedNoteIds: [
+					await createNote({ isArchived: true }),
+					await createNote({ workspaceId: otherWorkspaceId }),
+					await createNote({
+						ownerTokenIdentifier: otherIdentity.tokenIdentifier,
+					}),
+				],
+			};
+		},
+	);
+	const scope = { workspaceId: ownerWorkspaceId, chatId: "workspace-search" };
+	for (const searchQuery of ["дизайн", "design"]) {
+		const result = await asOwner.query(api.chatNotes.search, {
+			...scope,
+			searchQuery,
+		});
+		expect(result.notes.map((note) => note.noteId).sort()).toEqual(
+			[rootNoteId, projectNoteId].sort(),
+		);
+		expect(result.hasMore).toBe(false);
+		await expect(
+			t.query(internal.chatNotes.searchForOwner, {
+				...scope,
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+				searchQuery,
+			}),
+		).resolves.toEqual(result);
+	}
+	await expect(
+		asOwner.query(api.chatNotes.get, { ...scope, noteId: rootNoteId }),
+	).resolves.toMatchObject({
+		noteId: rootNoteId,
+		text: "Design critique and shared engineering practices.",
+	});
+	for (const noteId of excludedNoteIds) {
+		await expect(
+			asOwner.query(api.chatNotes.get, { ...scope, noteId }),
+		).resolves.toBeNull();
+		await expect(
+			t.query(internal.chatNotes.getForOwner, {
+				...scope,
+				noteId,
+				ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			}),
+		).resolves.toBeNull();
+	}
+	await t.run(async (ctx) => {
+		const chat = await ctx.db
+			.query("chats")
+			.withIndex("by_ownerTokenIdentifier_and_workspaceId_and_chatId", (q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
+					.eq("workspaceId", ownerWorkspaceId)
+					.eq("chatId", scope.chatId),
+			)
+			.unique();
+		if (!chat) throw new Error("Expected workspace chat");
+		await ctx.db.patch(chat._id, { isArchived: true });
+	});
+	for (const chatId of ["missing-chat", "workspace-search"]) {
+		await expect(
+			asOwner.query(api.chatNotes.search, {
+				...scope,
+				chatId,
+				searchQuery: "design",
+			}),
+		).resolves.toEqual({ hasMore: false, notes: [] });
+		await expect(
+			asOwner.query(api.chatNotes.get, {
+				...scope,
+				chatId,
+				noteId: rootNoteId,
+			}),
+		).resolves.toBeNull();
+	}
 });
 
 test("project note reads expose an explicit continuation offset", async () => {
@@ -334,7 +442,7 @@ test("project note reads expose an explicit continuation offset", async () => {
 		messageId: "first",
 		projectId,
 	});
-	const noteText = `${"a".repeat(PROJECT_NOTE_READ_CHUNK_LENGTH)}remaining`;
+	const noteText = `${"a".repeat(NOTE_READ_CHUNK_LENGTH)}remaining`;
 	const noteId = await t.run(
 		async (ctx) =>
 			await insertTestNote(ctx, {
@@ -356,16 +464,16 @@ test("project note reads expose an explicit continuation offset", async () => {
 			}),
 	);
 
-	const firstChunk = await asOwner.query(api.chatProjectNotes.get, {
+	const firstChunk = await asOwner.query(api.chatNotes.get, {
 		workspaceId: ownerWorkspaceId,
 		chatId: "long-note-chat",
 		noteId,
 	});
-	expect(firstChunk?.text).toHaveLength(PROJECT_NOTE_READ_CHUNK_LENGTH);
-	expect(firstChunk?.nextOffset).toBe(PROJECT_NOTE_READ_CHUNK_LENGTH);
+	expect(firstChunk?.text).toHaveLength(NOTE_READ_CHUNK_LENGTH);
+	expect(firstChunk?.nextOffset).toBe(NOTE_READ_CHUNK_LENGTH);
 
 	await expect(
-		asOwner.query(api.chatProjectNotes.get, {
+		asOwner.query(api.chatNotes.get, {
 			workspaceId: ownerWorkspaceId,
 			chatId: "long-note-chat",
 			noteId,

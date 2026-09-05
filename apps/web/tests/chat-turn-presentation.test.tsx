@@ -14,7 +14,7 @@ const commentary: UIMessage["parts"][number] = {
 	providerMetadata: { openai: { phase: "commentary" } },
 };
 const tool: UIMessage["parts"][number] = {
-	type: "tool-search_project_notes",
+	type: "tool-search_notes",
 	toolCallId: "search-1",
 	state: "output-available",
 	input: { query: "design engineering" },
@@ -56,7 +56,7 @@ it("replaces a message's activity snapshot when inserted parts shift source posi
 	expect(
 		units
 			.flatMap((unit) => (unit.kind === "activity" ? unit.parts : []))
-			.filter((part) => part.type === "tool-search_project_notes"),
+			.filter((part) => part.type === "tool-search_notes"),
 	).toHaveLength(1);
 });
 

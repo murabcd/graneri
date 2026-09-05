@@ -1,6 +1,6 @@
 import { api } from "../../../convex/_generated/api.js";
 import { buildMeetingTools } from "./meeting-tools.mjs";
-import { buildProjectNoteTools } from "./project-note-tools.mjs";
+import { buildNoteTools } from "./note-tools.mjs";
 import { buildRemoteMcpProxyTools } from "./remote-mcp-tools.mjs";
 import {
 	buildWorkspaceToolCatalog,
@@ -38,46 +38,23 @@ export const buildConvexWorkspaceToolSet = async ({
 					),
 			})
 		: {};
-	const projectNoteTools =
+	const noteTools =
 		canUseWorkspaceTools && chatId
-			? buildProjectNoteTools({
-					searchProjectNotes: async ({ query, limit }) => {
-						const result = await convexClient.query(
-							api.chatProjectNotes.search,
-							{
-								workspaceId,
-								chatId,
-								searchQuery: query,
-								...(typeof limit === "number" && { limit }),
-							},
-						);
-						return {
-							hasMore: result.hasMore,
-							notes: result.notes.map((note) => ({
-								noteId: note.id,
-								preview: note.preview,
-								title: note.title,
-								updatedAt: note.updatedAt,
-							})),
-						};
-					},
-					getProjectNote: async ({ noteId, offset }) => {
-						const note = await convexClient.query(api.chatProjectNotes.get, {
+			? buildNoteTools({
+					searchNotes: async ({ query: searchQuery, limit }) =>
+						await convexClient.query(api.chatNotes.search, {
+							workspaceId,
+							chatId,
+							searchQuery,
+							...(limit !== undefined && { limit }),
+						}),
+					getNote: async ({ noteId, offset }) =>
+						await convexClient.query(api.chatNotes.get, {
 							workspaceId,
 							chatId,
 							noteId,
-							...(typeof offset === "number" && { offset }),
-						});
-						return note
-							? {
-									noteId: note.id,
-									nextOffset: note.nextOffset,
-									text: note.text,
-									title: note.title,
-									updatedAt: note.updatedAt,
-								}
-							: null;
-					},
+							...(offset !== undefined && { offset }),
+						}),
 				})
 			: {};
 	const adapters = {
@@ -204,7 +181,7 @@ export const buildConvexWorkspaceToolSet = async ({
 
 	return await buildWorkspaceToolCatalog({
 		adapters,
-		builtInTools: { ...meetingTools, ...projectNoteTools },
+		builtInTools: { ...meetingTools, ...noteTools },
 		connections,
 		scope,
 		selectedSourceIds,

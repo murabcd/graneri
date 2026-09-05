@@ -60,7 +60,7 @@ busy chat.
 
 Each automation also stores one required nullable cloud `projectId`, separate
 from its model and capability settings. A standalone run assigns that project
-to its dedicated destination chat before execution, so project-note tools can
+to its dedicated destination chat before execution, so note tools can
 retrieve relevant notes on demand. Creating a standalone definition from chat
 copies the source chat's project inside the same [[convex/automations.ts]]
 mutation that creates the definition; both hosted and durable-run adapters pass

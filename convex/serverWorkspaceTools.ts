@@ -6,7 +6,7 @@ import type {
 	YandexCalendarToolConnection,
 } from "@workspace/ai/capability-registry";
 import { buildMeetingTools } from "@workspace/ai/meeting-tools";
-import { buildProjectNoteTools } from "@workspace/ai/project-note-tools";
+import { buildNoteTools } from "@workspace/ai/note-tools";
 import {
 	buildWorkspaceToolCatalog,
 	loadWorkspaceToolConnections,
@@ -84,52 +84,23 @@ export const buildServerWorkspaceTools = async (
 		selectedSourceIds: string[];
 	},
 ) => {
-	const projectNoteTools = buildProjectNoteTools({
-		searchProjectNotes: async ({ query: searchQuery, limit }) => {
-			const queryArgs = {
+	const noteTools = buildNoteTools({
+		searchNotes: async ({ query: searchQuery, limit }) =>
+			await ctx.runQuery(internal.chatNotes.searchForOwner, {
 				ownerTokenIdentifier: args.ownerTokenIdentifier,
 				workspaceId: args.workspaceId,
 				chatId: args.chatId,
 				searchQuery,
-			};
-			const result =
-				limit === undefined
-					? await ctx.runQuery(
-							internal.chatProjectNotes.searchForOwner,
-							queryArgs,
-						)
-					: await ctx.runQuery(internal.chatProjectNotes.searchForOwner, {
-							...queryArgs,
-							limit,
-						});
-			return {
-				hasMore: result.hasMore,
-				notes: result.notes.map((note) => ({
-					noteId: note.id,
-					title: note.title,
-					preview: note.preview,
-					updatedAt: note.updatedAt,
-				})),
-			};
-		},
-		getProjectNote: async ({ noteId, offset }) => {
-			const note = await ctx.runQuery(internal.chatProjectNotes.getForOwner, {
+				...(limit !== undefined && { limit }),
+			}),
+		getNote: async ({ noteId, offset }) =>
+			await ctx.runQuery(internal.chatNotes.getForOwner, {
 				ownerTokenIdentifier: args.ownerTokenIdentifier,
 				workspaceId: args.workspaceId,
 				chatId: args.chatId,
 				noteId,
-				...(typeof offset === "number" && { offset }),
-			});
-			return note
-				? {
-						noteId: note.id,
-						nextOffset: note.nextOffset,
-						title: note.title,
-						text: note.text,
-						updatedAt: note.updatedAt,
-					}
-				: null;
-		},
+				...(offset !== undefined && { offset }),
+			}),
 	});
 	const meetingTools = buildMeetingTools({
 		searchMeetings: async ({ query, from, to, limit }) =>
@@ -203,7 +174,7 @@ export const buildServerWorkspaceTools = async (
 				}
 			: undefined;
 	const catalog = await buildWorkspaceToolCatalog({
-		builtInTools: { ...meetingTools, ...projectNoteTools },
+		builtInTools: { ...meetingTools, ...noteTools },
 		connections,
 		scope: args.appToolScope,
 		selectedSourceIds: args.selectedSourceIds,
