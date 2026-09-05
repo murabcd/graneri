@@ -71,10 +71,10 @@ export const recoverPendingLocalCapabilityToolCalls = async ({
 
 		try {
 			const requestBody = await buildRequestBody(session);
-			setLatestRequestBody(requestBody);
 			const options = {
 				body: { ...requestBody, continueRunId: run._id },
 			};
+			setLatestRequestBody(options.body);
 			const toolCall = {
 				input: parsePersistedLocalToolInput(pendingToolCall.inputJson),
 				toolCallId: pendingToolCall.toolCallId,

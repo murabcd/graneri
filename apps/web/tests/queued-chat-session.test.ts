@@ -8,6 +8,10 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { createQueuedChatSession } from "../src/lib/queued-chat-session";
+import {
+	getQueuedChatSession,
+	retainQueuedChatSession,
+} from "../src/lib/queued-chat-sessions";
 
 const queuedMessage = {
 	_id: "queued-1" as Id<"assistantQueuedMessages">,
@@ -28,7 +32,7 @@ const queuedMessage = {
 	updatedAt: 1,
 	workspaceId: "workspace-1" as Id<"workspaces">,
 };
-const replay = { type: "replay", origin: "automatic", queuedMessage } as const;
+const replay = { type: "replay", origin: "manual", queuedMessage } as const;
 const receipt = { queuedMessageId: queuedMessage._id, type: "replay" } as const;
 const environment = () => ({
 	hasMessageId: () => false,
@@ -114,7 +118,7 @@ describe("queued chat session", () => {
 		expect(session.getSnapshot().isReplayPending).toBe(false);
 	});
 
-	it("shares one send reservation between automatic replay and manual steer", async () => {
+	it("shares one send reservation between manual replay and steer", async () => {
 		const session = createQueuedChatSession("workspace-1:chat-1");
 		const token = deferred<string>();
 		const env = environment();
@@ -243,13 +247,10 @@ describe("queued chat session", () => {
 		expect(session.getSnapshot().isReplayPending).toBe(false);
 	});
 
-	it("waits for a token on automatic replay but reports manual preparation failure", async () => {
+	it("reports missing authentication for manual replay", async () => {
 		const session = createQueuedChatSession("workspace-1:chat-1");
 		const env = environment();
 		env.resolveConvexToken.mockResolvedValue(null);
-		await expect(session.send(replay, env)).resolves.toEqual({
-			status: "retry",
-		});
 		await expect(
 			session.send({ ...replay, origin: "manual" }, env),
 		).resolves.toMatchObject({ status: "failed", accepted: false });
@@ -278,5 +279,27 @@ describe("queued chat session", () => {
 		await session.send(replay, env);
 		expect(session.getSnapshot().isReplayPending).toBe(false);
 		expect(session.getSnapshot().acceptedIds.size).toBe(0);
+	});
+	it("keeps the app dispatch reservation when its visible consumer navigates away", async () => {
+		const scope = "shared-workspace:shared-chat";
+		const visible = getQueuedChatSession(scope);
+		const app = getQueuedChatSession(scope);
+		expect(app).toBe(visible);
+		const leaveView = retainQueuedChatSession(visible);
+		const leaveApp = retainQueuedChatSession(app);
+		const token = deferred<string>();
+		const env = environment();
+		env.resolveConvexToken.mockReturnValue(token.promise);
+		const sending = app.send({ ...replay, origin: "automatic" }, env);
+		await expect(
+			visible.send({ ...replay, origin: "manual" }, environment()),
+		).resolves.toEqual({ status: "busy" });
+		leaveView();
+		token.resolve("token");
+		await expect(sending).resolves.toEqual({ status: "sent" });
+		leaveApp();
+		await Promise.resolve();
+		expect(getQueuedChatSession(scope)).not.toBe(app);
+		retainQueuedChatSession(getQueuedChatSession(scope))();
 	});
 });

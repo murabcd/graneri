@@ -24,11 +24,6 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 
 import { useQueuedMessageEdit } from "./use-queued-message-edit";
 
-type QueuedMessageSendIntent = Exclude<
-	QueuedChatSendIntent,
-	{ type: "replay"; origin: "automatic" }
->;
-
 export const useQueuedFollowUpControls = ({
 	session,
 	activeRun,
@@ -90,7 +85,7 @@ export const useQueuedFollowUpControls = ({
 	} = useQueuedMessageEdit({ chatId, workspaceId, onEditMessage });
 
 	const sendQueuedMessage = React.useCallback(
-		async (intent: QueuedMessageSendIntent) => {
+		async (intent: QueuedChatSendIntent) => {
 			const { queuedMessage } = intent;
 			if (!workspaceId) {
 				return;

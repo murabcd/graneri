@@ -1,5 +1,8 @@
 import * as React from "react";
-import { createQueuedChatSession } from "@/lib/queued-chat-session";
+import {
+	getQueuedChatSession,
+	retainQueuedChatSession,
+} from "@/lib/queued-chat-sessions";
 
 export const useQueuedChatSession = ({
 	activeRunId,
@@ -9,10 +12,10 @@ export const useQueuedChatSession = ({
 	scopeKey: string;
 }) => {
 	const session = React.useMemo(
-		() => createQueuedChatSession(scopeKey),
+		() => getQueuedChatSession(scopeKey),
 		[scopeKey],
 	);
-	React.useLayoutEffect(() => session.connect(), [session]);
+	React.useLayoutEffect(() => retainQueuedChatSession(session), [session]);
 	React.useLayoutEffect(() => {
 		session.observeRun(activeRunId);
 	}, [activeRunId, session]);

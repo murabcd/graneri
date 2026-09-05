@@ -192,35 +192,26 @@ export const createDesktopLocalToolCallHandler =
 		addToolOutputRef,
 		fetchImpl,
 		fileStorage,
-		latestRequestBodyRef,
+		resolveRequestBody,
 	}: {
 		addToolOutputRef: RefObject<ChatAddToolOutputFunction<UIMessage> | null>;
 		fetchImpl: typeof fetch;
 		fileStorage: LocalFileStorage;
-		latestRequestBodyRef: RefObject<DesktopLocalToolRequestBody | null>;
+		resolveRequestBody: () => Promise<DesktopLocalToolRequestBody>;
 	}): ChatOnToolCallCallback<UIMessage> =>
-	({ toolCall }) => {
-		if (toolCall.dynamic) {
-			return;
-		}
-
-		const toolName = toolCall.toolName;
-		if (!isLocalFolderToolName(toolName)) {
-			return;
-		}
-
-		const requestBody = latestRequestBodyRef.current;
-		const requestOptions = requestBody ? { body: requestBody } : undefined;
-		void submitDesktopLocalToolCall({
+	async ({ toolCall }) => {
+		if (toolCall.dynamic || !isLocalFolderToolName(toolCall.toolName)) return;
+		const requestBody = await resolveRequestBody();
+		await submitDesktopLocalToolCall({
 			addToolOutputRef,
 			fetchImpl,
 			fileStorage,
 			requestBody,
-			requestOptions,
+			requestOptions: { body: requestBody },
 			toolCall: {
 				input: toolCall.input,
 				toolCallId: toolCall.toolCallId,
-				toolName,
+				toolName: toolCall.toolName,
 			},
 		});
 	};

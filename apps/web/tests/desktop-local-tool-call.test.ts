@@ -42,7 +42,7 @@ describe("desktop local tool calls", () => {
 			addToolOutputRef: { current: addToolOutput },
 			fetchImpl: fetchMock,
 			fileStorage: { generateUploadUrl, getUrl },
-			latestRequestBodyRef: { current: { localCapabilitySession } },
+			resolveRequestBody: async () => ({ localCapabilitySession }),
 		});
 
 		handler({
@@ -105,7 +105,7 @@ describe("desktop local tool calls", () => {
 				),
 				getUrl: vi.fn(async () => null),
 			},
-			latestRequestBodyRef: { current: { localCapabilitySession } },
+			resolveRequestBody: async () => ({ localCapabilitySession }),
 		});
 
 		handler({

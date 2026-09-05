@@ -173,13 +173,11 @@ const mount = (
 		});
 		const controls = useQueuedFollowUps({
 			session,
-			activeRun: state.activeRun,
 			queueActiveRun,
 			chatId: state.chatId,
 			contextLabel: "chat",
 			error: state.error,
 			isChatRequestPending: state.isChatRequestPending,
-			isExternallyBlocked: false,
 			latestRequestBodyRef,
 			localMessageIds,
 			onEditMessage,
@@ -222,93 +220,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("renderer follow-up composition", () => {
-	it("drains a resumed three-row queue once per completed successor", async () => {
-		backend.rows = [
-			row("q1", "interrupted"),
-			row("q2", "interrupted"),
-			row("q3", "interrupted"),
-		];
+	it("resumes the durable queue without starting execution in its view", async () => {
+		backend.rows = [row("q1", "interrupted")];
 		const h = mount(null);
-		expect(h.fetchImpl).not.toHaveBeenCalled();
-		await act(async () => {
-			await h.result.current.onQueuedFollowUpsResume();
-		});
+		await act(async () => h.result.current.onQueuedFollowUpsResume());
 		expect(backend.resume).toHaveBeenCalledWith({
 			workspaceId,
 			chatId: "chat-1",
 		});
-		backend.rows = [row("q1"), row("q2"), row("q3")];
+		backend.rows = [row("q1")];
 		h.rerender();
-		for (let index = 0; index < 3; index++) {
-			await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledTimes(index + 1));
-			const id = `q${index + 1}`;
-			await act(async () => {
-				h.responses[index].resolve(accepted(id, "replay"));
-			});
-			expect(h.result.current.snapshot.isReplayPending).toBe(true);
-			expect(
-				h.result.current.queuedFollowUps.some((item) => item.id === id),
-			).toBe(false);
-			backend.rows = backend.rows.slice(1);
-			h.state.activeRun = run(`successor-${index}`);
-			h.rerender();
-			expect(h.result.current.snapshot.isReplayPending).toBe(false);
-			expect(h.fetchImpl).toHaveBeenCalledTimes(index + 1);
-			h.state.activeRun = null;
-			h.rerender();
-		}
-		expect(h.result.current.queuedFollowUps).toEqual([]);
-	});
-
-	it("does not relatch when a successor completes before response headers arrive", async () => {
-		backend.rows = [row("q1"), row("q2")];
-		const h = mount(null);
-		await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledOnce());
-		backend.rows = [row("q2")];
-		h.state.activeRun = run("successor");
-		h.rerender();
-		h.state.activeRun = null;
-		h.rerender();
-		await act(async () => {
-			h.responses[0].resolve(accepted("q1", "replay"));
-		});
-		await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledTimes(2));
-		expect(h.result.current.snapshot.isReplayPending).toBe(false);
-	});
-
-	it("blocks row actions and drain until a replay successor attaches", async () => {
-		backend.rows = [row("q1"), row("q2")];
-		const h = mount(null);
-		await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledOnce());
-		await act(async () => {
-			h.responses[0].resolve(accepted("q1", "replay"));
-		});
-		expect(h.result.current.queuedFollowUps[0]).toMatchObject({
-			id: "q2",
-			actionLabel: null,
-			isActionDisabled: true,
-		});
-		await act(async () => {
-			await h.result.current.sendQueuedFollowUpNow("q2");
-		});
-		expect(h.fetchImpl).toHaveBeenCalledOnce();
-		h.state.activeRun = run("next");
-		h.rerender();
-		expect(h.result.current.queuedFollowUps[0]).toMatchObject({
-			actionLabel: "Steer",
-			isActionDisabled: false,
-		});
-	});
-
-	it("serializes manual clicks with an automatic replay still awaiting headers", async () => {
-		backend.rows = [row("q1"), row("q2")];
-		const h = mount(null);
-		await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledOnce());
-		expect(h.result.current.queuedFollowUps[0].isSendingNow).toBe(false);
-		await act(async () => {
-			await h.result.current.sendQueuedFollowUpNow("q2");
-		});
-		expect(h.fetchImpl).toHaveBeenCalledOnce();
+		expect(h.fetchImpl).not.toHaveBeenCalled();
 	});
 
 	it.each([
@@ -428,6 +350,9 @@ describe("renderer follow-up composition", () => {
 	it("ignores old-chat headers after navigation", async () => {
 		backend.rows = [row("q1")];
 		const h = mount(null);
+		act(() => {
+			void h.result.current.sendQueuedFollowUpNow("q1");
+		});
 		await waitFor(() => expect(h.fetchImpl).toHaveBeenCalledOnce());
 		h.state.chatId = "chat-2";
 		backend.rows = [];

@@ -54,7 +54,10 @@ describe("local capability run recovery", () => {
 				toolName: "list_local_directory",
 			},
 		});
-		expect(setLatestRequestBody).toHaveBeenCalledWith(requestBody);
+		expect(setLatestRequestBody).toHaveBeenCalledWith({
+			...requestBody,
+			continueRunId: run._id,
+		});
 		expect(submitToolOutput).toHaveBeenCalledWith({
 			options: { body: { ...requestBody, continueRunId: "run-1" } },
 			output: { entries: [] },

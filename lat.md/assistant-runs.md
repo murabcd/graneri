@@ -596,7 +596,9 @@ There is one draft per chat; switching edits restores the previous draft in
 the same transaction. Stop and failure pause its return state without making
 it executable. [[apps/web/src/hooks/use-queued-message-edit.ts]] restores the
 composer from that draft after navigation. The renderer never claims or deletes a row as part of
-submission. After no non-terminal run remains, it sends the first `queued` row
+submission. [[convex/assistantQueuedMessageDispatch.ts]] reads the run and FIFO
+head in one snapshot. It returns a dispatchable row only when no non-terminal
+run remains and the head is queued; the authenticated app sends that row
 id with the observed `queued` status, and the hosted route claims that exact row
 only if its durable status still matches. Row-level Retry sends the observed
 `paused` status instead. Stop therefore invalidates an already-started automatic
@@ -624,8 +626,10 @@ restores only a surviving row using its current server content. A rejected
 reorder restores the prior relative order only when no newer reorder or
 external order change supersedes it. The last subscriber clears presentation
 changes. Editing belongs entirely to the durable state machine.
-Automatic drain reads the durable query rather than this
-visible projection. Steer and Retry remain visible until the hosted route confirms
+Automatic dispatch is mounted at the authenticated app level for every
+workspace. Chat discovery paginates the owner/workspace queue index with bounded
+row and byte reads. Navigation does not stop execution. Each dispatched request
+uses the shared chat client, including desktop-local tool continuation. Steer and Retry remain visible until the hosted route confirms
 durable acceptance; their completion is not optimistic.
 When the renderer owns a just-submitted turn but its active-run subscription has
 not attached, every later input uses `enqueueForCurrentRun`: one Convex
@@ -638,7 +642,7 @@ the row appends behind the existing reservation. Only `no_active` permits the
 renderer to start a normal turn, so AI SDK request status and subscription
 timing never decide whether a follow-up queues. During any request-to-run
 handoff frame where no exact queue run is attached, remaining rows expose no
-replay action and the automatic drain stays blocked; row-level Steer appears
+replay action; row-level Steer appears
 only after that run is known.
 Input uses upstream app-server input
 gates: HTTP chat routes and client queue serialization reject empty user text
@@ -747,8 +751,8 @@ must treat non-2xx steer responses with these headers as accepted empty streams
 instead of rolling back the queued UI item; pre-accept failures without the
 headers still surface as normal send failures. Normal completion releases any
 unaccepted claim to its exact prior visible state. Stop and supersede pause all
-unsent rows as `interrupted`; a failed or non-stopping expired run pauses only
-the literal FIFO head as `failed`. Replay may claim only that head, so later
+unsent rows as `interrupted`; a failed or non-stopping expired run pauses
+the executable FIFO head and any editing draft return state as `failed`. Replay may claim only that head, so later
 rows cannot skip a failed item. `resumeInterruptedForChat` atomically restores
 only `paused` interruption rows to `queued`; failed rows remain paused for an
 explicit Retry, Edit, or Delete.

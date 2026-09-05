@@ -2,7 +2,7 @@ import { useChat } from "@ai-sdk/react";
 import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
 import { HOSTED_REQUEST_USER_INPUT_TOOL_NAME } from "@workspace/ai/hosted-user-question";
 import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
-import type { ChatAddToolOutputFunction, UIMessage } from "ai";
+import type { UIMessage } from "ai";
 import { useMutation } from "convex/react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -22,26 +22,19 @@ import {
 	submitChatTurn,
 } from "@/lib/chat-submit-session";
 import { applyPendingBranchReplacement } from "@/lib/chat-thread";
-import {
-	createDesktopLocalToolCallHandler,
-	executeDesktopLocalToolCall,
-} from "@/lib/desktop-local-tool-call";
+import { executeDesktopLocalToolCall } from "@/lib/desktop-local-tool-call";
 import { recoverPendingLocalCapabilityToolCalls } from "@/lib/local-capability-run-recovery";
 import { logError } from "@/lib/logger";
-import {
-	prepareRendererUserQuestionMessages,
-	shouldAutomaticallyContinueRendererChat,
-} from "@/lib/renderer-chat-session";
+import { prepareRendererUserQuestionMessages } from "@/lib/renderer-chat-session";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useChatInteractionSession } from "./use-chat-interaction-session";
 import { useChatTurnAdmission } from "./use-chat-turn-admission";
-import { useLocalFileStorage } from "./use-local-file-storage";
 import { useQueuedChatSession } from "./use-queued-chat-session";
 import { useQueuedFollowUps } from "./use-queued-follow-ups";
 import { useRendererChatPresentation } from "./use-renderer-chat-presentation";
 import { useResumeActiveChatRun } from "./use-resume-active-chat-run";
-import { useWorkspaceChatTransport } from "./use-workspace-chat-transport";
+import { useWorkspaceChatClient } from "./use-workspace-chat-client";
 
 type SubmitRendererChatTurnInput = Omit<
 	Parameters<typeof submitChatTurn>[0],
@@ -158,28 +151,22 @@ export const useRendererChatSession = ({
 			activeRunId: activeRun?._id ?? null,
 			scopeKey: `${workspaceId}:${chatId}`,
 		});
-	const transport = useWorkspaceChatTransport(workspaceId, queueSession.accept);
-	const localFileStorage = useLocalFileStorage();
-	const latestRequestBodyRef = React.useRef<ChatRequestContext | null>(null);
+	const {
+		chat,
+		fileStorage: localFileStorage,
+		latestRequestBodyRef,
+	} = useWorkspaceChatClient({
+		chatId,
+		workspaceId,
+		onQueuedAcceptance: queueSession.accept,
+	});
 	const pendingUserQuestionRollbackRef = React.useRef<{
 		assistantMessageId: string;
 		chatId: string;
 		messages: UIMessage[];
 		toolCallId: string;
 	} | null>(null);
-	const addToolOutputRef =
-		React.useRef<ChatAddToolOutputFunction<UIMessage> | null>(null);
 	const recoveredLocalToolCallsRef = React.useRef(new Set<string>());
-	const handleToolCall = React.useMemo(
-		() =>
-			createDesktopLocalToolCallHandler({
-				addToolOutputRef,
-				fetchImpl: fetch,
-				fileStorage: localFileStorage,
-				latestRequestBodyRef,
-			}),
-		[localFileStorage],
-	);
 	const {
 		messages,
 		setMessages,
@@ -193,11 +180,7 @@ export const useRendererChatSession = ({
 		addToolApprovalResponse,
 		clearError,
 	} = useChat({
-		id: chatId,
-		messages: sessionPersistedMessages,
-		transport,
-		onToolCall: handleToolCall,
-		sendAutomaticallyWhen: shouldAutomaticallyContinueRendererChat,
+		chat,
 	});
 	const {
 		commitOptimisticMessage,
@@ -207,15 +190,6 @@ export const useRendererChatSession = ({
 		runPreparedRequest,
 		branchMessagesFrom,
 	} = useChatInteractionSession({ chatId, setMessages });
-	React.useEffect(() => {
-		addToolOutputRef.current = addToolOutput;
-
-		return () => {
-			if (addToolOutputRef.current === addToolOutput) {
-				addToolOutputRef.current = null;
-			}
-		};
-	}, [addToolOutput]);
 
 	const controllerMessages = React.useMemo(
 		() => normalizeChatMessages(messages),
@@ -346,13 +320,11 @@ export const useRendererChatSession = ({
 	);
 	const queuedFollowUpControls = useQueuedFollowUps({
 		session: queueSession,
-		activeRun,
 		queueActiveRun,
 		chatId,
 		contextLabel,
 		error,
 		isChatRequestPending,
-		isExternallyBlocked,
 		latestRequestBodyRef,
 		localMessageIds,
 		onEditMessage: onEditQueuedMessage,
@@ -514,6 +486,7 @@ export const useRendererChatSession = ({
 			runPreparedRequest,
 			sendMessage,
 			setMessages,
+			latestRequestBodyRef,
 		],
 	);
 	const updateQueuedTurn = React.useCallback(
@@ -557,6 +530,7 @@ export const useRendererChatSession = ({
 			runPreparedRequest,
 			updateQueuedMessage,
 			workspaceId,
+			latestRequestBodyRef,
 		],
 	);
 	const submitToolApproval = React.useCallback(
@@ -604,6 +578,7 @@ export const useRendererChatSession = ({
 			isPreparingRequest,
 			pendingHumanDecision,
 			runPreparedRequest,
+			latestRequestBodyRef,
 		],
 	);
 	const submitHumanDecision = React.useCallback(
@@ -671,6 +646,7 @@ export const useRendererChatSession = ({
 			regenerate,
 			runPreparedRequest,
 			stopCurrentStream,
+			latestRequestBodyRef,
 		],
 	);
 	React.useEffect(() => {
@@ -714,6 +690,7 @@ export const useRendererChatSession = ({
 		attachableActiveRun,
 		buildContinuationRequestBody,
 		localFileStorage,
+		latestRequestBodyRef,
 	]);
 
 	return {

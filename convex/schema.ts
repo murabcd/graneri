@@ -878,6 +878,10 @@ export default defineSchema({
 			"ordinal",
 		]),
 	assistantQueuedMessages: defineTable(assistantQueuedMessageTableValidator)
+		.index("by_ownerTokenIdentifier_and_workspaceId", [
+			"ownerTokenIdentifier",
+			"workspaceId",
+		])
 		.index("by_runId_and_status", ["runId", "status"])
 		.index("by_runId_and_status_and_createdAt", [
 			"runId",

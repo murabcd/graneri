@@ -139,6 +139,7 @@ import type { NoteTemplate } from "@/lib/note-templates";
 import type { WorkspaceRecord } from "@/lib/workspaces";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { QueuedChatRuntime } from "./queued-chat-runtime";
 
 const currentMonthFormatter = new Intl.DateTimeFormat(undefined, {
 	month: "long",
@@ -2184,6 +2185,9 @@ export function AuthenticatedAppShell({
 
 	return (
 		<ActiveWorkspaceProvider workspaceId={controller.activeWorkspaceId}>
+			{workspaces.map((workspace) => (
+				<QueuedChatRuntime key={workspace._id} workspaceId={workspace._id} />
+			))}
 			<SidebarProvider className="h-svh overflow-hidden">
 				<AppSidebar
 					workspaces={controller.workspaces}

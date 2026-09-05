@@ -31,8 +31,6 @@ type QueuedFollowUpProjection = {
 const queuedFollowUpsCache = new Map<string, QueuedFollowUpProjection>();
 const queuedFollowUpsCacheListeners = new Map<string, Set<() => void>>();
 
-export const QUEUED_FOLLOW_UP_DRAIN_RETRY_MS = 400;
-
 const haveSameQueuedFollowUpOrder = (
 	left: Array<QueuedFollowUpMessage["_id"]>,
 	right: Array<QueuedFollowUpMessage["_id"]>,

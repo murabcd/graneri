@@ -55,10 +55,11 @@ type QueueSnapshot = {
 	steerMessageIds: ReadonlySet<string>;
 };
 
-// One instance belongs to one mounted chat scope. Requests retain this owner,
+// One instance coordinates all mounted consumers of a chat scope. Requests retain this owner,
 // so a late receipt cannot mutate the next chat's lifecycle.
 export const createQueuedChatSession = (scopeKey: string) => {
 	let connected = true;
+	let connections = 0;
 	let lastObservedRunId: string | null = null;
 	let replayVersion = 0;
 	let pendingSend: SendOperation | null = null;
@@ -94,8 +95,11 @@ export const createQueuedChatSession = (scopeKey: string) => {
 			};
 		},
 		connect: () => {
+			connections += 1;
 			connected = true;
 			return () => {
+				connections -= 1;
+				if (connections > 0) return;
 				connected = false;
 				operations.clear();
 				pendingSend = null;

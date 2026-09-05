@@ -7,8 +7,8 @@ import {
 	type FollowUpBehavior,
 } from "@/lib/follow-up-behavior";
 import { logError } from "@/lib/logger";
-import { useQueuedChatDrain } from "./use-queued-chat-drain";
 import { useQueuedFollowUpControls } from "./use-queued-follow-up-controls";
+import { useQueuedFollowUpProjection } from "./use-queued-follow-up-projection";
 import { useUserPreferences } from "./use-user-preferences";
 
 type FollowUpInput = Pick<
@@ -23,18 +23,14 @@ type FollowUpInput = Pick<
 	| "steerMessageIds"
 	| "workspaceId"
 > & {
-	activeRun: AttachableAssistantRunQueryResult;
 	queueActiveRun: AttachableAssistantRunQueryResult;
 	isChatRequestPending: boolean;
-	isExternallyBlocked: boolean;
 	error: Error | undefined;
 };
 
 export const useQueuedFollowUps = ({
-	activeRun,
 	queueActiveRun,
 	isChatRequestPending,
-	isExternallyBlocked,
 	error,
 	...input
 }: FollowUpInput) => {
@@ -70,16 +66,8 @@ export const useQueuedFollowUps = ({
 		},
 		[updateUserPreferences],
 	);
-	const { queuedMessages, changeQueuedMessages } = useQueuedChatDrain({
-		...input,
-		// Stopping runs still fence drain, even when row actions cannot attach.
-		activeRun,
-		isBlocked:
-			isChatRequestPending ||
-			isQueueHandoffPending ||
-			Boolean(error) ||
-			isExternallyBlocked,
-	});
+	const { queuedMessages, changeQueuedMessages } =
+		useQueuedFollowUpProjection(input);
 	const controls = useQueuedFollowUpControls({
 		...input,
 		activeRun: queueActiveRun,
