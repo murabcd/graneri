@@ -598,9 +598,12 @@ increments a durable `claimVersion`; release, scheduled recovery,
 replay acceptance, and steer acceptance must present that exact version so a
 slow request cannot act on a later re-claim of the same row. The queue is capped
 at twenty rows per chat, which also bounds terminal pause and release work.
-`userPreferences.followUpBehavior` is the single required Queue-or-Steer
-preference shared by chat and note composers. Queue is the default. While an
-assistant run is active, both modes first admit the follow-up as a durable row;
+`userPreferences.followUpBehavior` is the single Queue-or-Steer preference
+shared by chat and note composers. The stored field is optional so deployments
+accept preference records created before it existed. The API always returns a
+concrete value, defaulting a missing field to Queue; every preference update
+persists that default unless an explicit value is already stored or supplied.
+While an assistant run is active, both modes first admit the follow-up as a durable row;
 Steer then immediately sends that exact row through the fenced steer path using
 the run ID returned on the admitted row. This remains valid during the brief
 request-to-subscription handoff where the renderer has not attached the active

@@ -82,9 +82,7 @@ const toUserPreferencesResponse = async (
 	translucentSidebar: preferences
 		? preferences.translucentSidebar
 		: DEFAULT_TRANSLUCENT_SIDEBAR,
-	followUpBehavior: preferences
-		? preferences.followUpBehavior
-		: DEFAULT_FOLLOW_UP_BEHAVIOR,
+	followUpBehavior: preferences?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR,
 	sendShortcut: preferences ? preferences.sendShortcut : DEFAULT_SEND_SHORTCUT,
 	avatarStorageId: preferences?.avatarStorageId ?? null,
 	avatarUrl: preferences?.avatarStorageId
@@ -185,9 +183,7 @@ export const update = mutation({
 			followUpBehavior:
 				args.followUpBehavior !== undefined
 					? args.followUpBehavior
-					: existing
-						? existing.followUpBehavior
-						: DEFAULT_FOLLOW_UP_BEHAVIOR,
+					: (existing?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR),
 			sendShortcut:
 				args.sendShortcut !== undefined
 					? args.sendShortcut
