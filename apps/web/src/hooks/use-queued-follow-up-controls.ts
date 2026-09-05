@@ -1,3 +1,4 @@
+import { captureQueuedMessagePosition } from "@workspace/ai/queued-message-position";
 import { useMutation } from "convex/react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -234,7 +235,10 @@ export const useQueuedFollowUpControls = ({
 
 			const queuedMessage = queuedMessages[queuedMessageIndex];
 			const snapshot: QueuedFollowUpSnapshot = {
-				index: queuedMessageIndex,
+				position: captureQueuedMessagePosition(
+					queuedMessages.map((message) => message._id),
+					queuedMessage._id,
+				),
 				message: queuedMessage,
 			};
 			changeQueuedMessages({

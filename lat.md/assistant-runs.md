@@ -591,7 +591,15 @@ or expiry and require a row-level Retry, and `claimed` rows are a server-owned
 pre-acceptance lease. `editing` rows are durable drafts excluded from dispatch and
 visible queue queries. [[convex/assistantQueuedMessageEditing.ts]] atomically
 checks a visible row out for editing; save and cancel require its incremented
-`claimVersion` and restore its original position and queued or paused state.
+`claimVersion` and restore its queued or paused state. The draft stores its
+original index and adjacent queue IDs. [[convex/assistantQueuedMessageOrder.ts]]
+restores it before the surviving next neighbor, otherwise after the previous
+neighbor. If both are gone, cancel uses the bounded original index and save
+appends, matching the reference. Switching edits restores the previous draft
+before capturing the next draft's neighbors, within the same mutation.
+Restoration and manual reorder share one bounded rank writer; admission assigns
+an order value after the current tail even when several mutations share a clock
+tick. Neighbor hints exist only on editing rows and are removed on restoration.
 There is one draft per chat; switching edits restores the previous draft in
 the same transaction. Stop and failure pause its return state without making
 it executable. [[apps/web/src/hooks/use-queued-message-edit.ts]] restores the

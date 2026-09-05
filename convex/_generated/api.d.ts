@@ -22,6 +22,7 @@ import type * as assistantQueuedMessageAttachments from "../assistantQueuedMessa
 import type * as assistantQueuedMessageDispatch from "../assistantQueuedMessageDispatch.js";
 import type * as assistantQueuedMessageEditing from "../assistantQueuedMessageEditing.js";
 import type * as assistantQueuedMessageModel from "../assistantQueuedMessageModel.js";
+import type * as assistantQueuedMessageOrder from "../assistantQueuedMessageOrder.js";
 import type * as assistantQueuedMessageStateMachine from "../assistantQueuedMessageStateMachine.js";
 import type * as assistantQueuedMessages from "../assistantQueuedMessages.js";
 import type * as assistantRunActions from "../assistantRunActions.js";
@@ -184,6 +185,7 @@ declare const fullApi: ApiFromModules<{
   assistantQueuedMessageDispatch: typeof assistantQueuedMessageDispatch;
   assistantQueuedMessageEditing: typeof assistantQueuedMessageEditing;
   assistantQueuedMessageModel: typeof assistantQueuedMessageModel;
+  assistantQueuedMessageOrder: typeof assistantQueuedMessageOrder;
   assistantQueuedMessageStateMachine: typeof assistantQueuedMessageStateMachine;
   assistantQueuedMessages: typeof assistantQueuedMessages;
   assistantRunActions: typeof assistantRunActions;

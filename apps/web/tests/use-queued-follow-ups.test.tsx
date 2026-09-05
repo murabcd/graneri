@@ -471,6 +471,33 @@ describe("renderer follow-up composition", () => {
 			"q2",
 		]);
 	});
+	it("restores a failed deletion beside its surviving neighbor after a newer reorder", async () => {
+		backend.rows = [row("a"), row("b"), row("c"), row("d")];
+		const deletion = deferred<null>();
+		backend.discard.mockReturnValue(deletion.promise);
+		const h = mount();
+		act(() => {
+			void h.result.current.queuedFollowUps[1].onDelete();
+		});
+		await act(async () => {
+			await h.result.current.onQueuedFollowUpsReorder(["d", "c", "a"]);
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"d",
+			"c",
+			"a",
+		]);
+		await act(async () => {
+			deletion.reject(new Error("delete failed"));
+		});
+		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
+			"d",
+			"b",
+			"c",
+			"a",
+		]);
+	});
+
 	it("keeps a pending reorder through insertion and rolls back only its survivors", async () => {
 		backend.rows = [row("q1"), row("q2"), row("q3")];
 		const reorder = deferred<null>();

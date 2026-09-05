@@ -104,6 +104,11 @@ composer intent and server admission callback; it never changes preferences or
 becomes replay context. Idle chat, queue editing, IME, Alt and newline handling
 retain normal send behavior. Button submission follows the saved preference;
 Queue remains the default.
+Failed optimistic queue deletions restore through the shared
+[queued-message-position policy](../packages/ai/src/queued-message-position.mjs):
+next neighbor first, then previous neighbor, then the bounded original slot.
+The snapshot captures neighbor IDs before hiding the row, so rollback respects
+later reorder and removal operations without restoring an old whole-queue order.
 Queue admission captures ready uploaded files through [[apps/web/src/lib/chat-queue.ts]];
 editing restores those same files into the existing attachment chips in both
 chat and note composers. Local previews and upload-in-progress state never enter

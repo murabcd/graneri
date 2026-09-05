@@ -1,9 +1,14 @@
+import { captureQueuedMessagePosition } from "@workspace/ai/queued-message-position";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
-	restoreEditingMessage,
+	projectQueuedMessageEdit,
 	visibleAssistantQueuedMessageValidator,
 } from "./assistantQueuedMessageModel";
+import {
+	cancelQueuedMessageEdit,
+	listOrderedQueuedMessages,
+} from "./assistantQueuedMessageOrder";
 import {
 	getScopedQueuedMessageForChat,
 	queuedMessageDocumentBase,
@@ -35,7 +40,7 @@ export const get = query({
 				q.eq("chatId", chat._id).eq("status", "editing"),
 			)
 			.unique();
-		return draft?.status === "editing" ? restoreEditingMessage(draft) : null;
+		return draft?.status === "editing" ? projectQueuedMessageEdit(draft) : null;
 	},
 });
 
@@ -65,17 +70,27 @@ export const begin = mutation({
 			)
 			.unique();
 		if (previous?.status === "editing") {
-			await ctx.db.replace(previous._id, {
-				...queuedMessageDocumentBase(previous),
-				...previous.editOrigin,
-				updatedAt: Date.now(),
-			});
+			await cancelQueuedMessageEdit(ctx, previous);
 		}
+		const ordered = await listOrderedQueuedMessages(ctx, chat._id);
+		const current = ordered.find(
+			(message) => message._id === queuedMessage._id,
+		);
+		if (
+			!current ||
+			(current.status !== "queued" && current.status !== "paused")
+		)
+			throw new Error("Queued edit target is missing.");
+		const editPosition = captureQueuedMessagePosition(
+			ordered.map((message) => message._id),
+			current._id,
+		);
 		const updatedAt = Date.now();
 		const claimVersion = queuedMessage.claimVersion + 1;
 		await ctx.db.replace(queuedMessage._id, {
-			...queuedMessageDocumentBase(queuedMessage),
+			...queuedMessageDocumentBase(current),
 			status: "editing",
+			editPosition,
 			editOrigin:
 				queuedMessage.status === "queued"
 					? { status: "queued" }
@@ -83,7 +98,7 @@ export const begin = mutation({
 			claimVersion,
 			updatedAt,
 		});
-		return { ...queuedMessage, claimVersion, updatedAt };
+		return { ...current, claimVersion, updatedAt };
 	},
 });
 
@@ -109,11 +124,7 @@ export const cancel = mutation({
 				message: "Queued message cannot be edited.",
 			});
 		}
-		await ctx.db.replace(queuedMessage._id, {
-			...queuedMessageDocumentBase(queuedMessage),
-			...queuedMessage.editOrigin,
-			updatedAt: Date.now(),
-		});
+		await cancelQueuedMessageEdit(ctx, queuedMessage);
 		return null;
 	},
 });

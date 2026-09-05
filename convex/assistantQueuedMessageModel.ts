@@ -52,6 +52,11 @@ const claimedAssistantMessageFields = {
 const editingAssistantMessageFields = {
 	status: v.literal("editing"),
 	editOrigin: visibleAssistantMessageStateValidator,
+	editPosition: v.object({
+		index: v.number(),
+		previousMessageId: v.union(v.id("assistantQueuedMessages"), v.null()),
+		nextMessageId: v.union(v.id("assistantQueuedMessages"), v.null()),
+	}),
 };
 
 export const assistantQueuedMessageTableValidator = v.union(
@@ -77,10 +82,10 @@ export const editingAssistantQueuedMessageValidator =
 	assistantQueuedMessageDocumentBaseValidator.extend(
 		editingAssistantMessageFields,
 	);
-export const restoreEditingMessage = (
+export const projectQueuedMessageEdit = (
 	message: Infer<typeof editingAssistantQueuedMessageValidator>,
 ) => {
-	const { status, editOrigin, ...base } = message;
+	const { status, editOrigin, editPosition, ...base } = message;
 	return { ...base, ...editOrigin };
 };
 export const assistantQueuedMessageReplayClaimAttemptValidator = v.union(

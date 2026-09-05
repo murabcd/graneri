@@ -247,6 +247,10 @@
     "./queued-chat-files": {
       "types": "./src/queued-chat-files.d.mts",
       "import": "./src/queued-chat-files.mjs"
+    },
+    "./queued-message-position": {
+      "types": "./src/queued-message-position.d.mts",
+      "import": "./src/queued-message-position.mjs"
     }
   }
 }

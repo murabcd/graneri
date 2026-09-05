@@ -1,3 +1,7 @@
+import {
+	type QueuedMessagePosition,
+	resolveQueuedMessagePosition,
+} from "@workspace/ai/queued-message-position";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -6,7 +10,7 @@ export type QueuedFollowUpMessage = NonNullable<
 	FunctionReturnType<typeof api.assistantQueuedMessages.listQueuedForChat>
 >[number];
 export type QueuedFollowUpSnapshot = {
-	index: number;
+	position: QueuedMessagePosition;
 	message: QueuedFollowUpMessage;
 };
 export type QueuedFollowUpOrderSnapshot = {
@@ -78,7 +82,14 @@ export const restoreQueuedFollowUp = (
 	}
 
 	const nextMessages = [...messages];
-	nextMessages.splice(snapshot.index, 0, snapshot.message);
+	nextMessages.splice(
+		resolveQueuedMessagePosition(
+			messages.map((message) => message._id),
+			snapshot.position,
+		),
+		0,
+		snapshot.message,
+	);
 	return nextMessages;
 };
 

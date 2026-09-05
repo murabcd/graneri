@@ -16,13 +16,17 @@ import {
 	assistantQueuedMessageReplayClaimAttemptValidator,
 	type ClaimedAssistantQueuedMessage,
 	claimedAssistantQueuedMessageValidator,
+	projectQueuedMessageEdit,
 	type QueuedMessageInput,
 	queuedAssistantQueuedMessageValidator,
 	queuedMessageInputValidator,
-	restoreEditingMessage,
 	type VisibleAssistantQueuedMessage,
 	visibleAssistantQueuedMessageValidator,
 } from "./assistantQueuedMessageModel";
+import {
+	restoreQueuedMessagePosition,
+	writeQueuedMessageOrder,
+} from "./assistantQueuedMessageOrder";
 import {
 	CLAIMED_QUEUE_MESSAGE_STALE_MS,
 	claimQueuedMessageForChat,
@@ -145,7 +149,10 @@ const insertQueuedMessage = async (
 		filesJson: message.filesJson,
 		requestBodyJson: message.requestBodyJson,
 		status: "queued",
-		createdAt: now,
+		createdAt: Math.max(
+			now,
+			(existingMessages.at(-1)?.createdAt ?? now - 1) + 1,
+		),
 		updatedAt: now,
 		claimVersion: 0,
 	} as const;
@@ -538,7 +545,8 @@ export const updateQueued = mutation({
 
 		const now = Date.now();
 		const updatedQueuedMessage = {
-			...restoreEditingMessage(queuedMessage),
+			...projectQueuedMessageEdit(queuedMessage),
+			createdAt: await restoreQueuedMessagePosition(ctx, queuedMessage, "save"),
 			messageId: args.message.messageId,
 			metadataJson: args.message.metadataJson,
 			text: args.message.text,
@@ -628,17 +636,17 @@ export const reorderQueuedForChat = mutation({
 			});
 		}
 
-		const now = Date.now();
-		const firstCreatedAt = Math.min(
-			...existingQueuedMessages.map((queuedMessage) => queuedMessage.createdAt),
+		const messagesById = new Map(
+			existingQueuedMessages.map((message) => [message._id, message]),
 		);
-		await Promise.all(
-			uniqueQueuedMessageIds.map((queuedMessageId, index) =>
-				ctx.db.patch(queuedMessageId, {
-					createdAt: firstCreatedAt + index,
-					updatedAt: now,
-				}),
-			),
+		await writeQueuedMessageOrder(
+			ctx,
+			uniqueQueuedMessageIds.map((id) => {
+				const message = messagesById.get(id);
+				if (!message)
+					throw new Error("Validated queue order is missing a message.");
+				return message;
+			}),
 		);
 
 		return null;
