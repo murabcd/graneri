@@ -210,9 +210,7 @@ describe("chat message thinking status", () => {
 				.getByRole("button", { name: /^Worked/ })
 				.getAttribute("aria-expanded"),
 		).toBe("false");
-		expect(
-			screen.getByRole("button", { name: "Worked", exact: true }),
-		).not.toBeNull();
+		expect(screen.getByRole("button", { name: /^Worked for / })).not.toBeNull();
 		expect(screen.queryByRole("button", { name: "Thought" })).toBeNull();
 		await user.click(screen.getByRole("button", { name: /^Worked/ }));
 		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
@@ -698,6 +696,57 @@ describe("chat message thinking status", () => {
 		expect(screen.getByText("4s")).not.toBeNull();
 	});
 
+	it.each([
+		true,
+		false,
+	])("retains the measured duration until saved timing arrives (streaming: %s)", (isLoading) => {
+		vi.useFakeTimers();
+		vi.setSystemTime(1_000);
+		const assistant: UIMessage = {
+			id: "assistant-duration-handoff",
+			role: "assistant",
+			parts: [
+				{
+					type: "text",
+					text: "Checking the result.",
+					providerMetadata: { openai: { phase: "commentary" } },
+				},
+			],
+		};
+		const { rerender } = render(
+			renderMessageList({ isLoading: true, messages: [assistant] }),
+		);
+		act(() => vi.advanceTimersByTime(3_200));
+		expect(
+			screen.getByRole("button", { name: "Working for 3s" }),
+		).not.toBeNull();
+
+		const answering: UIMessage = {
+			...assistant,
+			parts: [
+				...assistant.parts,
+				{
+					type: "text",
+					text: "The answer",
+					state: isLoading ? "streaming" : "done",
+					providerMetadata: { openai: { phase: "final_answer" } },
+				},
+			],
+		};
+		rerender(renderMessageList({ isLoading, messages: [answering] }));
+		const worked = screen.getByRole("button", { name: "Worked for 3s" });
+		expect(worked.getAttribute("aria-expanded")).toBe("false");
+		act(() => vi.advanceTimersByTime(2_000));
+		expect(screen.getByRole("button", { name: "Worked for 3s" })).toBe(worked);
+
+		rerender(
+			renderMessageList({
+				messages: [{ ...answering, metadata: { workDurationMs: 5200 } }],
+			}),
+		);
+		expect(screen.getByRole("button", { name: "Worked for 5s" })).toBe(worked);
+	});
+
 	it("renders Working when no stream part has arrived", () => {
 		render(
 			<TooltipProvider>
@@ -722,6 +771,13 @@ describe("chat message thinking status", () => {
 
 		expect(screen.getAllByText("Working")).toHaveLength(1);
 		expect(screen.queryByText("Thinking")).toBeNull();
+	});
+
+	it("does not infer a duration for completed history without recorded timing", () => {
+		render(renderMessageList({ messages: [completedReasoningMessage] }));
+		expect(
+			screen.getByRole("button", { name: "Worked", exact: true }),
+		).not.toBeNull();
 	});
 
 	it("shows the completed turn duration without an empty disclosure", () => {

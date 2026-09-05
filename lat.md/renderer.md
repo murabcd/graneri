@@ -130,7 +130,8 @@ message arrives, across the request-to-persisted-run handoff, and when
 `Working` becomes `Worked`; those transitions update the existing row without
 removing, reparenting, or remounting it. A temporary idle transport status does
 not end the visual run before meaningful assistant output arrives, including
-when an empty persisted assistant shell lands during the handoff.
+when an empty persisted assistant shell or reasoning placeholder lands during
+the handoff.
 Empty assistant messages create no scroll row, the work group reserves no
 answer spacing, and its automatic `Working` to `Worked` transition closes
 details without a height animation. The ordinary turn gap appears only when a
@@ -142,8 +143,12 @@ only an explicit New chat action allocates the next draft identifier.
 uses the OpenAI Responses text-part `providerMetadata.openai.phase` contract to
 keep commentary, reasoning, and tool calls in their original source order while
 separating `final_answer` text from agent activity. Commentary, reasoning, and
-tool calls append inside that single open group without replacing earlier
-activity; when the first final-answer part arrives, the same group becomes
+tool calls append inside that single open group. Each incoming message snapshot
+replaces that message’s activity once it covers at least the previously observed
+parts, so inserted parts cannot leave duplicate rows at their old positions.
+Shorter hydration snapshots and temporarily absent continuation messages retain
+the previously visible activity. When the first final-answer part arrives,
+the same group becomes
 `Worked`, freezes its timer, and collapses ahead of the still-streaming final
 answer. Consecutive
 reasoning and tool parts may share an activity subgroup, but an intervening

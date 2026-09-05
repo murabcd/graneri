@@ -1,13 +1,12 @@
 import type { UIMessage } from "ai";
 import * as React from "react";
+import { isRenderableAssistantWorkPart } from "@/components/ai-elements/tools/tool-part-like";
 import {
 	type AssistantActivityUnit,
 	getAssistantTurnSequence,
 } from "@/lib/assistant-turn-sequence";
 import {
 	extractFileParts,
-	extractReasoningParts,
-	extractToolParts,
 	getChatMessageMetadata,
 	getChatText,
 } from "@/lib/chat-message";
@@ -40,48 +39,47 @@ type ActiveTurnVisualEvent = {
 	turnId: string | null;
 };
 
-const getActivityUnitIdentity = (unit: AssistantActivityUnit) =>
-	`${unit.messageId}:${unit.kind}:${unit.sourceIndex}`;
+const groupActivityByMessage = (units: AssistantActivityUnit[]) => {
+	const byMessage = new Map<string, AssistantActivityUnit[]>();
+	for (const unit of units) {
+		const messageUnits = byMessage.get(unit.messageId);
+		if (messageUnits) messageUnits.push(unit);
+		else byMessage.set(unit.messageId, [unit]);
+	}
+	return byMessage;
+};
+
+const getActivitySnapshotExtent = (units: AssistantActivityUnit[]) => {
+	const last = units.at(-1);
+	return last
+		? last.sourceIndex + (last.kind === "activity" ? last.parts.length : 1)
+		: 0;
+};
 
 const mergeActivityUnits = (
 	previousUnits: AssistantActivityUnit[],
 	currentUnits: AssistantActivityUnit[],
 ) => {
-	if (previousUnits.length === 0) {
-		return currentUnits;
-	}
-	if (currentUnits.length === 0 || previousUnits === currentUnits) {
+	if (previousUnits.length === 0) return currentUnits;
+	if (currentUnits.length === 0 || previousUnits === currentUnits)
 		return previousUnits;
-	}
 
-	const currentByIdentity = new Map(
-		currentUnits.map((unit) => [getActivityUnitIdentity(unit), unit]),
-	);
-	const previousIdentities = new Set(
-		previousUnits.map(getActivityUnitIdentity),
-	);
-	let changed = false;
-	const mergedUnits = previousUnits.map((previousUnit) => {
-		const currentUnit = currentByIdentity.get(
-			getActivityUnitIdentity(previousUnit),
-		);
-		if (!currentUnit || currentUnit === previousUnit) {
-			return previousUnit;
+	const mergedByMessage = groupActivityByMessage(previousUnits);
+	for (const [messageId, units] of groupActivityByMessage(currentUnits)) {
+		const previous = mergedByMessage.get(messageId);
+		// Activity snapshots grow within a message; hydration can briefly lag the stream.
+		if (
+			!previous ||
+			getActivitySnapshotExtent(units) >= getActivitySnapshotExtent(previous)
+		) {
+			mergedByMessage.set(messageId, units);
 		}
-
-		changed = true;
-		return currentUnit;
-	});
-
-	for (const currentUnit of currentUnits) {
-		if (previousIdentities.has(getActivityUnitIdentity(currentUnit))) {
-			continue;
-		}
-		changed = true;
-		mergedUnits.push(currentUnit);
 	}
-
-	return changed ? mergedUnits : previousUnits;
+	const mergedUnits = [...mergedByMessage.values()].flat();
+	return mergedUnits.length === previousUnits.length &&
+		mergedUnits.every((unit, index) => unit === previousUnits[index])
+		? previousUnits
+		: mergedUnits;
 };
 
 const getAssistantTurnActivitySnapshot = (messages: UIMessage[]) => {
@@ -110,8 +108,7 @@ const getAssistantTurnActivitySnapshot = (messages: UIMessage[]) => {
 const hasRenderableAssistantOutput = (message: UIMessage) =>
 	getChatText(message).length > 0 ||
 	extractFileParts(message).length > 0 ||
-	extractReasoningParts(message).length > 0 ||
-	extractToolParts(message).length > 0;
+	message.parts.some((part) => isRenderableAssistantWorkPart(part, false));
 
 const EMPTY_ASSISTANT_TURN_ACTIVITY_SNAPSHOT =
 	getAssistantTurnActivitySnapshot(EMPTY_TURN);

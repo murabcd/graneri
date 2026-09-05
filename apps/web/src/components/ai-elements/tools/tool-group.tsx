@@ -78,11 +78,13 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 			: isWorkedExpanded
 		: false;
 	const now = useWorkTimer(isWorking);
-	const measuredDurationMs = Math.max(
-		1,
-		now - (startedAt ?? fallbackStartedAt),
-	);
-	const durationMs = isWorking ? measuredDurationMs : totalDurationMs;
+	const measuredDurationMs =
+		now === null
+			? undefined
+			: Math.max(1, now - (startedAt ?? fallbackStartedAt));
+	const durationMs = isWorking
+		? measuredDurationMs
+		: (totalDurationMs ?? measuredDurationMs);
 	const durationLabel =
 		durationMs === undefined ? null : formatElapsedTime(durationMs);
 
@@ -121,7 +123,7 @@ export const AssistantWorkGroup = memo(function AssistantWorkGroup({
 });
 
 const useWorkTimer = (isPending: boolean) => {
-	const [now, setNow] = useState(() => Date.now());
+	const [now, setNow] = useState(() => (isPending ? Date.now() : null));
 
 	useEffect(() => {
 		if (!isPending) return;
