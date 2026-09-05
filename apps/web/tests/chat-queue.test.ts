@@ -419,7 +419,6 @@ describe("queued follow-up lifecycle", () => {
 		applyQueuedFollowUpChange(cacheKey, {
 			type: "hide",
 			messageId: "queued-1",
-			restore: null,
 		});
 		unsubscribe();
 		reconcileQueuedFollowUpsCache(cacheKey, []);

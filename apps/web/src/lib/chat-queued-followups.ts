@@ -17,8 +17,8 @@ export type QueuedFollowUpOrderSnapshot = {
 export type QueuedFollowUpCacheKey = string | null;
 
 export type QueuedFollowUpChange =
-	| { type: "hide"; messageId: string; restore: QueuedFollowUpSnapshot | null }
-	| { type: "restore" | "save"; snapshot: QueuedFollowUpSnapshot }
+	| { type: "hide"; messageId: string }
+	| { type: "restore"; snapshot: QueuedFollowUpSnapshot }
 	| { type: "reorder"; messageIds: string[] }
 	| { type: "restore_order"; snapshot: QueuedFollowUpOrderSnapshot }
 	| { type: "resume" };
@@ -165,7 +165,7 @@ export const reconcileQueuedFollowUpsCache = (
 			serverIds.push(message._id);
 			if (!visibleIdSet.has(message._id)) hiddenIds.add(message._id);
 		}
-		// Rebase local Delete/Edit and reorder onto the new server rows. A changed
+		// Rebase local Delete and reorder onto the new server rows. A changed
 		// server order supersedes local order; unrelated inserts do not erase it.
 		visibleMessages = restoreQueuedFollowUpOrder(
 			serverMessages.filter((message) => !hiddenIds.has(message._id)),
@@ -188,7 +188,8 @@ export const applyQueuedFollowUpChange = (
 	if (!cacheKey) return;
 	const projection = queuedFollowUpsCache.get(cacheKey);
 	if (!projection) return;
-	let { serverMessages, visibleMessages } = projection;
+	const { serverMessages } = projection;
+	let { visibleMessages } = projection;
 	const restore = (snapshot: QueuedFollowUpSnapshot) => {
 		const message = serverMessages.find(
 			(row) => row._id === snapshot.message._id,
@@ -200,7 +201,6 @@ export const applyQueuedFollowUpChange = (
 	};
 	switch (change.type) {
 		case "hide":
-			if (change.restore) visibleMessages = restore(change.restore);
 			visibleMessages = visibleMessages.filter(
 				(message) => message._id !== change.messageId,
 			);
@@ -208,18 +208,6 @@ export const applyQueuedFollowUpChange = (
 		case "restore":
 			visibleMessages = restore(change.snapshot);
 			break;
-		case "save": {
-			const { message, index } = change.snapshot;
-			if (!serverMessages.some((row) => row._id === message._id)) return;
-			serverMessages = serverMessages.map((row) =>
-				row._id === message._id ? message : row,
-			);
-			visibleMessages = visibleMessages.filter(
-				(row) => row._id !== message._id,
-			);
-			visibleMessages.splice(index, 0, message);
-			break;
-		}
 		case "reorder":
 			visibleMessages = reorderQueuedFollowUps(
 				visibleMessages,
@@ -264,7 +252,7 @@ export const subscribeQueuedFollowUpsCache = (
 			queuedFollowUpsCacheListeners.delete(cacheKey);
 			const projection = queuedFollowUpsCache.get(cacheKey);
 			if (projection) {
-				// Navigation must not leave an editor draft hidden in the shared cache.
+				// Projection changes belong to the mounted presentation.
 				queuedFollowUpsCache.set(cacheKey, {
 					...projection,
 					visibleMessages: projection.serverMessages,

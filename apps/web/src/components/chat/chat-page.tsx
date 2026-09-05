@@ -573,7 +573,7 @@ const useChatPageController = ({
 		}
 
 		try {
-			const queuedMessageEditId = queuedMessageEditDraft?.message._id ?? null;
+			const queuedMessageEditId = queuedMessageEditDraft?._id ?? null;
 			const result = await commitChatComposerTurnIntent({
 				attachedFiles: submittedAttachedFiles,
 				claimIntent: () =>
@@ -739,8 +739,8 @@ const useChatPageController = ({
 		[canStop, handleStop, setAttachedFiles, setDraft, setDraftMetadata],
 	);
 
-	const handleCancelEdit = React.useCallback(() => {
-		restoreEditedQueuedMessage();
+	const handleCancelEdit = React.useCallback(async () => {
+		if (!(await restoreEditedQueuedMessage())) return;
 		setEditingMessageId(null);
 		clearDraft();
 		setAttachedFiles([]);

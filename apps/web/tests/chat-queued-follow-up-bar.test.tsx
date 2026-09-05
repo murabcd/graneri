@@ -14,7 +14,6 @@ const createQueuedFollowUp = (
 	id: "queued-1",
 	helpText: undefined,
 	isActionDisabled: false,
-	isEditing: false,
 	isSendingNow: false,
 	isUpdatingFollowUpBehavior: false,
 	followUpBehavior: "queue",

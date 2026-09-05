@@ -13,6 +13,7 @@ import {
 	type ClaimedAssistantQueuedMessage,
 	claimedAssistantQueuedMessageValidator,
 	queuedAssistantQueuedMessageValidator,
+	restoreEditingMessage,
 	type VisibleAssistantQueuedMessage,
 	visibleAssistantQueuedMessageValidator,
 } from "./assistantQueuedMessageModel";
@@ -21,6 +22,7 @@ import {
 	claimQueuedMessageForChat,
 	claimQueuedMessageForRun,
 	discardQueuedForRunInternal,
+	getExecutableQueueHead,
 	getScopedQueuedMessageForChat,
 	isCurrentNonTerminalRunForChat,
 	MAX_ASSISTANT_QUEUE_MESSAGES,
@@ -176,10 +178,7 @@ const getContinuationReservationRunId = async (
 		workspaceId: Id<"workspaces">;
 	},
 ) => {
-	const reservation = await ctx.db
-		.query("assistantQueuedMessages")
-		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
-		.first();
+	const reservation = await getExecutableQueueHead(ctx, chatId);
 	if (!reservation) {
 		return null;
 	}
@@ -481,7 +480,10 @@ export const discardQueued = mutation({
 			workspaceId: args.workspaceId,
 		});
 
-		if (queuedMessage.status === "claimed") {
+		if (
+			queuedMessage.status !== "queued" &&
+			queuedMessage.status !== "paused"
+		) {
 			throw new ConvexError({
 				code: "QUEUED_MESSAGE_NOT_EDITABLE",
 				message: "Queued message cannot be edited.",
@@ -500,6 +502,7 @@ export const updateQueued = mutation({
 		chatId: v.string(),
 		queuedMessageId: v.id("assistantQueuedMessages"),
 		message: queuedMessageInputValidator,
+		claimVersion: v.number(),
 	},
 	returns: visibleAssistantQueuedMessageValidator,
 	handler: async (ctx, args) => {
@@ -520,7 +523,8 @@ export const updateQueued = mutation({
 			queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
 			queuedMessage.workspaceId !== args.workspaceId ||
 			queuedMessage.chatId !== chat._id ||
-			queuedMessage.status === "claimed"
+			queuedMessage.status !== "editing" ||
+			queuedMessage.claimVersion !== args.claimVersion
 		) {
 			throw new ConvexError({
 				code: "QUEUED_MESSAGE_NOT_EDITABLE",
@@ -533,7 +537,7 @@ export const updateQueued = mutation({
 
 		const now = Date.now();
 		const updatedQueuedMessage = {
-			...queuedMessage,
+			...restoreEditingMessage(queuedMessage),
 			messageId: args.message.messageId,
 			metadataJson: args.message.metadataJson,
 			text: args.message.text,
@@ -592,7 +596,8 @@ export const reorderQueuedForChat = mutation({
 					queuedMessage.ownerTokenIdentifier !== ownerTokenIdentifier ||
 					queuedMessage.workspaceId !== args.workspaceId ||
 					queuedMessage.chatId !== chat._id ||
-					queuedMessage.status === "claimed",
+					(queuedMessage.status !== "queued" &&
+						queuedMessage.status !== "paused"),
 			)
 		) {
 			throw new ConvexError({

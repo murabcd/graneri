@@ -528,9 +528,10 @@ export const useRendererChatSession = ({
 				const updatedQueuedMessage = await updateQueuedMessage({
 					workspaceId,
 					chatId,
-					queuedMessageId: editDraft.message._id,
+					queuedMessageId: editDraft._id,
+					claimVersion: editDraft.claimVersion,
 					message: toQueuedUserMessageInput({
-						messageId: editDraft.message.messageId,
+						messageId: editDraft.messageId,
 						metadata: input.metadata,
 						requestBody,
 						text: input.text,

@@ -22,6 +22,8 @@ import type {
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
+import { useQueuedMessageEdit } from "./use-queued-message-edit";
+
 type QueuedMessageSendIntent = Exclude<
 	QueuedChatSendIntent,
 	{ type: "replay"; origin: "automatic" }
@@ -78,54 +80,14 @@ export const useQueuedFollowUpControls = ({
 	);
 	const sendingNowId = sending?.type === "row_action" ? sending.id : null;
 	const [isResuming, setIsResuming] = React.useState(false);
-	const [editingId, setEditingId] = React.useState<string | null>(null);
-	const [editDraft, setEditDraft] =
-		React.useState<QueuedFollowUpSnapshot | null>(null);
-	const editingIdRef = React.useRef<string | null>(null);
 	const latestReorderOperationRef = React.useRef(0);
-	const restoreEditedQueuedMessage = React.useCallback(() => {
-		if (!editDraft) {
-			return;
-		}
-
-		editingIdRef.current = null;
-		changeQueuedMessages({ type: "restore", snapshot: editDraft });
-		setEditDraft(null);
-		setEditingId(null);
-	}, [editDraft, changeQueuedMessages]);
-
-	const finishQueuedMessageEdit = React.useCallback(
-		(updatedQueuedMessage: QueuedFollowUpMessage) => {
-			if (!editDraft) {
-				return false;
-			}
-
-			changeQueuedMessages({
-				type: "save",
-				snapshot: { index: editDraft.index, message: updatedQueuedMessage },
-			});
-
-			if (editingIdRef.current !== updatedQueuedMessage._id) {
-				return false;
-			}
-
-			editingIdRef.current = null;
-			setEditDraft((currentDraft) =>
-				currentDraft?.message._id === updatedQueuedMessage._id
-					? null
-					: currentDraft,
-			);
-			setEditingId((currentEditingId) =>
-				currentEditingId === updatedQueuedMessage._id ? null : currentEditingId,
-			);
-			return true;
-		},
-		[editDraft, changeQueuedMessages],
-	);
-	const isQueuedMessageEditCurrent = React.useCallback(
-		(queuedMessageId: string) => editingIdRef.current === queuedMessageId,
-		[],
-	);
+	const {
+		editDraft,
+		handleEdit,
+		finishQueuedMessageEdit,
+		restoreEditedQueuedMessage,
+		isQueuedMessageEditCurrent,
+	} = useQueuedMessageEdit({ chatId, workspaceId, onEditMessage });
 
 	const sendQueuedMessage = React.useCallback(
 		async (intent: QueuedMessageSendIntent) => {
@@ -262,32 +224,6 @@ export const useQueuedFollowUpControls = ({
 		workspaceId,
 	]);
 
-	const handleEdit = React.useCallback(
-		(queuedMessageId: string) => {
-			const queuedMessageIndex = queuedMessages.findIndex(
-				(message) => message._id === queuedMessageId,
-			);
-			if (queuedMessageIndex < 0) {
-				return;
-			}
-
-			const queuedMessage = queuedMessages[queuedMessageIndex];
-			editingIdRef.current = queuedMessage._id;
-			setEditingId(queuedMessage._id);
-			setEditDraft({
-				index: queuedMessageIndex,
-				message: queuedMessage,
-			});
-			changeQueuedMessages({
-				type: "hide",
-				messageId: queuedMessage._id,
-				restore: editDraft,
-			});
-			onEditMessage(queuedMessage);
-		},
-		[editDraft, onEditMessage, queuedMessages, changeQueuedMessages],
-	);
-
 	const handleDelete = React.useCallback(
 		async (queuedMessageId: string) => {
 			const queuedMessageIndex = queuedMessages.findIndex(
@@ -309,7 +245,6 @@ export const useQueuedFollowUpControls = ({
 			changeQueuedMessages({
 				type: "hide",
 				messageId: queuedMessage._id,
-				restore: null,
 			});
 			try {
 				await discardQueuedMessage({
@@ -427,14 +362,15 @@ export const useQueuedFollowUpControls = ({
 						isInterrupted ||
 						isHandoffBlocked ||
 						Boolean(activeRun && (!isSteer || activeRun.status !== "running")),
-					isEditing: editingId === queuedMessage._id,
 					isSendingNow: sendingNowId === queuedMessage._id,
 					isUpdatingFollowUpBehavior,
 					followUpBehavior,
 					onDelete: () => {
 						void handleDelete(queuedMessage._id);
 					},
-					onEdit: () => handleEdit(queuedMessage._id),
+					onEdit: () => {
+						void handleEdit(queuedMessage._id);
+					},
 					onFollowUpBehaviorChange,
 					onSendNow: () => {
 						void handleSendNow(queuedMessage._id);
@@ -449,7 +385,6 @@ export const useQueuedFollowUpControls = ({
 			}),
 		[
 			activeRun,
-			editingId,
 			followUpBehavior,
 			handleDelete,
 			handleEdit,

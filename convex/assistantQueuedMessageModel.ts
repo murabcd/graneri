@@ -35,22 +35,25 @@ const pausedAssistantMessageFields = {
 	pauseReason: assistantQueuedMessagePauseReasonValidator,
 };
 
+const visibleAssistantMessageStateValidator = v.union(
+	v.object(queuedAssistantMessageFields),
+	v.object(pausedAssistantMessageFields),
+);
 const claimedAssistantMessageFields = {
 	status: v.literal("claimed"),
 	claimedAt: v.number(),
-	claimOrigin: v.union(
-		v.object({ status: v.literal("queued") }),
-		v.object({
-			status: v.literal("paused"),
-			pauseReason: assistantQueuedMessagePauseReasonValidator,
-		}),
-	),
+	claimOrigin: visibleAssistantMessageStateValidator,
+};
+const editingAssistantMessageFields = {
+	status: v.literal("editing"),
+	editOrigin: visibleAssistantMessageStateValidator,
 };
 
 export const assistantQueuedMessageTableValidator = v.union(
 	assistantQueuedMessageBaseValidator.extend(queuedAssistantMessageFields),
 	assistantQueuedMessageBaseValidator.extend(pausedAssistantMessageFields),
 	assistantQueuedMessageBaseValidator.extend(claimedAssistantMessageFields),
+	assistantQueuedMessageBaseValidator.extend(editingAssistantMessageFields),
 );
 
 export const queuedAssistantQueuedMessageValidator =
@@ -65,6 +68,16 @@ export const claimedAssistantQueuedMessageValidator =
 	assistantQueuedMessageDocumentBaseValidator.extend(
 		claimedAssistantMessageFields,
 	);
+export const editingAssistantQueuedMessageValidator =
+	assistantQueuedMessageDocumentBaseValidator.extend(
+		editingAssistantMessageFields,
+	);
+export const restoreEditingMessage = (
+	message: Infer<typeof editingAssistantQueuedMessageValidator>,
+) => {
+	const { status, editOrigin, ...base } = message;
+	return { ...base, ...editOrigin };
+};
 export const assistantQueuedMessageReplayClaimAttemptValidator = v.union(
 	v.object({
 		status: v.literal("claimed"),
@@ -81,6 +94,7 @@ export const assistantQueuedMessageValidator = v.union(
 	queuedAssistantQueuedMessageValidator,
 	pausedAssistantQueuedMessageValidator,
 	claimedAssistantQueuedMessageValidator,
+	editingAssistantQueuedMessageValidator,
 );
 
 export type ClaimedAssistantQueuedMessage = Infer<

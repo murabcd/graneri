@@ -1,24 +1,18 @@
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
-import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import {
+	createChat,
 	createQueuedRequestBody,
-	createQueuedRequestBodyJson,
+	createWorkspace,
+	insertDuplicateActiveRun,
+	type QueuedMessageInput,
+	queuedMessageInput,
+	startRun,
 } from "./assistantQueuedMessage.fixtures";
 import type { AssistantQueuedMessageReplayClaimAttempt } from "./assistantQueuedMessageModel";
 import { MAX_CONVEX_DOCUMENT_BYTES } from "./documentSize";
-import schema from "./schema";
-import { modules } from "./test.setup";
-
-const ownerIdentity = {
-	issuer: "https://graneri.test",
-	subject: "owner-subject",
-	tokenIdentifier: "test|owner",
-	name: "Owner",
-	email: "owner@example.com",
-};
 
 const expectUnclaimedQueueRow = (
 	row: Doc<"assistantQueuedMessages"> | null | undefined,
@@ -40,31 +34,6 @@ const requireClaimedReplay = (
 	}
 	return attempt.claimedMessage;
 };
-const createWorkspace = async () => {
-	const t = convexTest(schema, modules);
-	const asOwner = t.withIdentity(ownerIdentity);
-
-	const workspaceId = await t.run(async (ctx) =>
-		ctx.db.insert("workspaces", {
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			name: "Workspace",
-			normalizedName: "workspace",
-			createdAt: 1_000,
-			updatedAt: 1_000,
-		}),
-	);
-
-	return {
-		asOwner,
-		t,
-		workspaceId,
-	};
-};
-
-type WorkspaceFixture = Awaited<ReturnType<typeof createWorkspace>>;
-type AsOwner = WorkspaceFixture["asOwner"];
-type WorkspaceId = WorkspaceFixture["workspaceId"];
-
 const userQuestionDecision = (
 	assistantMessageId: string,
 	question: string,
@@ -83,85 +52,6 @@ const userQuestionDecision = (
 		},
 	],
 });
-
-const createChat = async ({
-	asOwner,
-	chatId,
-	workspaceId,
-}: {
-	asOwner: AsOwner;
-	chatId: string;
-	workspaceId: WorkspaceId;
-}) => {
-	await asOwner.mutation(api.chats.saveMessage, {
-		projectId: null,
-		settings: DEFAULT_CHAT_SETTINGS,
-		workspaceId,
-		chatId,
-		preview: "Prompt",
-		message: {
-			id: `${chatId}-user-1`,
-			role: "user",
-			partsJson: JSON.stringify([{ type: "text", text: "Prompt" }]),
-			text: "Prompt",
-			createdAt: 2_000,
-		},
-	});
-};
-
-const startRun = async ({
-	asOwner,
-	chatId,
-	workspaceId,
-}: {
-	asOwner: AsOwner;
-	chatId: string;
-	workspaceId: WorkspaceId;
-}) =>
-	await asOwner.mutation(api.assistantRuns.startAssistantRun, {
-		workspaceId,
-		chatId,
-		assistantMessageId: `${chatId}-assistant-1`,
-		localCapabilitySession: null,
-		model: "gpt-5",
-		serviceTier: "auto",
-		policy: "reject",
-	});
-
-const insertDuplicateActiveRun = async ({
-	run,
-	t,
-	workspaceId,
-}: {
-	run: Awaited<ReturnType<typeof startRun>>;
-	t: Awaited<ReturnType<typeof createWorkspace>>["t"];
-	workspaceId: WorkspaceId;
-}) => {
-	await t.run(async (ctx) => {
-		await ctx.db.insert("assistantRuns", {
-			localCapabilitySession: null,
-			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-			workspaceId,
-			chatId: run.chatId,
-			assistantMessageId: `${run.assistantMessageId}-duplicate`,
-			producer: "web",
-			status: "running",
-			model: "gpt-5",
-			serviceTier: "auto",
-			startedAt: 3_000,
-			updatedAt: 3_000,
-		});
-	});
-};
-
-const queuedMessageInput = (messageId: string, text: string) => ({
-	messageId,
-	text,
-	requestBodyJson: createQueuedRequestBodyJson(),
-});
-type QueuedMessageInput = ReturnType<typeof queuedMessageInput> & {
-	metadataJson?: string;
-};
 
 test("queued follow-ups attach to the active assistant run", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
@@ -1190,158 +1080,6 @@ test("reorderQueuedForChat rejects missing chat scope", async () => {
 	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
 	expect(persistedMessage?.createdAt).toBe(queuedMessage.createdAt);
 	expect(persistedMessage?.status).toBe("queued");
-});
-
-test("queued follow-ups can be edited without changing queue position", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-edit-queued", workspaceId });
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-edit-queued",
-		workspaceId,
-	});
-
-	const firstMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-		{
-			workspaceId,
-			chatId: "chat-edit-queued",
-			runId: run._id,
-			message: queuedMessageInput("queued-1", "First"),
-		},
-	);
-	const secondMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-		{
-			workspaceId,
-			chatId: "chat-edit-queued",
-			runId: run._id,
-			message: queuedMessageInput("queued-2", "Second"),
-		},
-	);
-
-	const updatedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.updateQueued,
-		{
-			workspaceId,
-			chatId: "chat-edit-queued",
-			queuedMessageId: firstMessage._id,
-			message: queuedMessageInput("queued-1", "Edited first"),
-		},
-	);
-	const queuedMessages = await asOwner.query(
-		api.assistantQueuedMessages.listQueuedForChat,
-		{
-			workspaceId,
-			chatId: "chat-edit-queued",
-		},
-	);
-
-	expect(updatedMessage._id).toBe(firstMessage._id);
-	expect(updatedMessage.createdAt).toBe(firstMessage.createdAt);
-	expect(updatedMessage.text).toBe("Edited first");
-	expect(queuedMessages.map((message) => message._id)).toEqual([
-		firstMessage._id,
-		secondMessage._id,
-	]);
-	expect(queuedMessages.map((message) => message.text)).toEqual([
-		"Edited first",
-		"Second",
-	]);
-});
-
-test("queued follow-ups cannot be edited to empty text", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-edit-empty-queued", workspaceId });
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-edit-empty-queued",
-		workspaceId,
-	});
-
-	const queuedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-		{
-			workspaceId,
-			chatId: "chat-edit-empty-queued",
-			runId: run._id,
-			message: queuedMessageInput("queued-1", "First"),
-		},
-	);
-
-	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.updateQueued, {
-			workspaceId,
-			chatId: "chat-edit-empty-queued",
-			queuedMessageId: queuedMessage._id,
-			message: queuedMessageInput("queued-1", "   "),
-		}),
-	).rejects.toThrow("Queued message cannot be empty.");
-});
-
-test("queued follow-ups cannot be edited from another chat scope", async () => {
-	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-edit-owner", workspaceId });
-	await createChat({ asOwner, chatId: "chat-edit-other", workspaceId });
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-edit-owner",
-		workspaceId,
-	});
-
-	const queuedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-		{
-			workspaceId,
-			chatId: "chat-edit-owner",
-			runId: run._id,
-			message: queuedMessageInput("queued-1", "Original"),
-		},
-	);
-
-	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.updateQueued, {
-			workspaceId,
-			chatId: "chat-edit-other",
-			queuedMessageId: queuedMessage._id,
-			message: queuedMessageInput("queued-1", "Cross-chat edit"),
-		}),
-	).rejects.toThrow("Queued message cannot be edited.");
-
-	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
-	expect(persistedMessage?.text).toBe("Original");
-});
-
-test("updateQueued fails closed when multiple active runs exist", async () => {
-	const { asOwner, t, workspaceId } = await createWorkspace();
-	await createChat({ asOwner, chatId: "chat-duplicate-edit", workspaceId });
-	const run = await startRun({
-		asOwner,
-		chatId: "chat-duplicate-edit",
-		workspaceId,
-	});
-	const queuedMessage = await asOwner.mutation(
-		api.assistantQueuedMessages.enqueueForActiveRun,
-		{
-			workspaceId,
-			chatId: "chat-duplicate-edit",
-			runId: run._id,
-			message: queuedMessageInput("queued-1", "Original"),
-		},
-	);
-	await insertDuplicateActiveRun({ run, t, workspaceId });
-
-	await expect(
-		asOwner.mutation(api.assistantQueuedMessages.updateQueued, {
-			workspaceId,
-			chatId: "chat-duplicate-edit",
-			queuedMessageId: queuedMessage._id,
-			message: queuedMessageInput("queued-1", "Blocked edit"),
-		}),
-	).rejects.toThrow("ASSISTANT_RUN_INVARIANT_VIOLATION");
-
-	const persistedMessage = await t.run((ctx) => ctx.db.get(queuedMessage._id));
-	expect(persistedMessage?.text).toBe("Original");
 });
 
 test("claimForSteer can steer a specific queued follow-up", async () => {

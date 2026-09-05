@@ -18,6 +18,9 @@ import { resolveRendererQueueActiveRun } from "../src/lib/renderer-chat-session"
 
 const backend = vi.hoisted(() => ({
 	rows: [] as QueuedFollowUpMessage[],
+	draft: null as QueuedFollowUpMessage | null,
+	beginEdit: vi.fn(),
+	cancelEdit: vi.fn(),
 	token: vi.fn<() => Promise<string | null>>(),
 	resume: vi.fn(),
 	discard: vi.fn(),
@@ -29,13 +32,19 @@ vi.mock("convex/react", () => ({
 	useQuery: (reference: Parameters<typeof getFunctionName>[0]) =>
 		getFunctionName(reference) === "userPreferences:get"
 			? { followUpBehavior: backend.preference }
-			: backend.rows,
+			: getFunctionName(reference) === "assistantQueuedMessageEditing:get"
+				? backend.draft
+				: backend.rows,
 	useMutation: (reference: Parameters<typeof getFunctionName>[0]) => {
 		const name = getFunctionName(reference);
 		if (name === "userPreferences:update")
 			return Object.assign(backend.updatePreference, {
 				withOptimisticUpdate: () => backend.updatePreference,
 			});
+		if (name === "assistantQueuedMessageEditing:begin")
+			return backend.beginEdit;
+		if (name === "assistantQueuedMessageEditing:cancel")
+			return backend.cancelEdit;
 		if (name.endsWith(":resumeInterruptedForChat")) return backend.resume;
 		if (name.endsWith(":discardQueued")) return backend.discard;
 		if (name.endsWith(":reorderQueuedForChat")) return backend.reorder;
@@ -61,7 +70,8 @@ const row = (
 ): QueuedFollowUpMessage => ({
 	_id: id as Id<"assistantQueuedMessages">,
 	_creationTime: 1,
-	chatId: "chat-1",
+	claimVersion: 0,
+	chatId: "chat-1" as Id<"chats">,
 	createdAt: 1,
 	messageId: `message-${id}`,
 	ownerTokenIdentifier: "owner",
@@ -184,6 +194,23 @@ const mount = (
 
 beforeEach(() => {
 	backend.rows = [];
+	backend.draft = null;
+	onEditMessage.mockClear();
+	backend.beginEdit
+		.mockReset()
+		.mockImplementation(
+			async ({ queuedMessageId }: { queuedMessageId: string }) => {
+				const message = backend.rows.find((row) => row._id === queuedMessageId);
+				if (!message) throw new Error("Unavailable");
+				if (backend.draft) backend.rows = [...backend.rows, backend.draft];
+				backend.rows = backend.rows.filter(
+					(row) => row._id !== queuedMessageId,
+				);
+				backend.draft = { ...message, claimVersion: message.claimVersion + 1 };
+				return backend.draft;
+			},
+		);
+	backend.cancelEdit.mockReset().mockResolvedValue(null);
 	backend.token.mockReset().mockResolvedValue("token");
 	backend.resume.mockReset().mockResolvedValue(null);
 	backend.discard.mockReset().mockResolvedValue(null);
@@ -555,35 +582,33 @@ describe("renderer follow-up composition", () => {
 		expect(h.result.current.queuedFollowUps[0].text).toBe("Changed elsewhere");
 	});
 
-	it("does not let an older edit completion clear a newer edit", () => {
+	it("does not let an older edit completion clear a newer edit", async () => {
 		backend.rows = [row("q1"), row("q2")];
 		const h = mount();
-		act(() => h.result.current.queuedFollowUps[0].onEdit());
-		const finishFirst = h.result.current.finishQueuedMessageEdit;
-		act(() => h.result.current.queuedFollowUps[0].onEdit());
-		let finished = true;
-		act(() => {
-			finished = finishFirst({ ...row("q1"), text: "Saved edit" });
-		});
-		expect(finished).toBe(false);
-		expect(h.result.current.editDraft?.message._id).toBe("q2");
-		expect(h.result.current.queuedFollowUps.map((item) => item.text)).toEqual([
-			"Saved edit",
-		]);
+		await act(async () => h.result.current.queuedFollowUps[0].onEdit());
+		h.rerender();
+		const firstDraft = h.result.current.editDraft;
+		await act(async () => h.result.current.queuedFollowUps[0].onEdit());
+		h.rerender();
+		if (!firstDraft) throw new Error("Expected an edit draft");
+		expect(h.result.current.finishQueuedMessageEdit(firstDraft)).toBe(false);
+		expect(h.result.current.editDraft?._id).toBe("q2");
 	});
 
-	it("does not leave a queued editor draft hidden after navigation", () => {
-		backend.rows = [row("q1"), row("q2")];
+	it("restores the durable editor after navigation and never dispatches its original row", async () => {
+		backend.rows = [row("q1")];
 		const h = mount();
-		act(() => h.result.current.queuedFollowUps[0].onEdit());
-		expect(h.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
-			"q2",
-		]);
+		await act(async () => h.result.current.queuedFollowUps[0].onEdit());
+		h.rerender();
+		h.state.activeRun = null;
+		h.rerender();
+		expect(h.fetchImpl).not.toHaveBeenCalled();
 		h.unmount();
-		const next = mount();
-		expect(next.result.current.queuedFollowUps.map((item) => item.id)).toEqual([
-			"q1",
-			"q2",
-		]);
+		onEditMessage.mockClear();
+		const next = mount(null);
+		expect(next.result.current.queuedFollowUps).toEqual([]);
+		expect(next.result.current.editDraft?._id).toBe("q1");
+		expect(onEditMessage).toHaveBeenCalledWith(backend.draft);
+		expect(next.fetchImpl).not.toHaveBeenCalled();
 	});
 });

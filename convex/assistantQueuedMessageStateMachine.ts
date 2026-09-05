@@ -199,7 +199,7 @@ export const requireClaimedAssistantQueuedMessage = (
 	return message;
 };
 
-const queuedMessageDocumentBase = (
+export const queuedMessageDocumentBase = (
 	message: Doc<"assistantQueuedMessages">,
 ) => ({
 	ownerTokenIdentifier: message.ownerTokenIdentifier,
@@ -214,6 +214,17 @@ const queuedMessageDocumentBase = (
 	updatedAt: message.updatedAt,
 	claimVersion: message.claimVersion,
 });
+
+export const getExecutableQueueHead = async (
+	ctx: QueryCtx | MutationCtx,
+	chatId: Id<"chats">,
+) => {
+	const messages = await ctx.db
+		.query("assistantQueuedMessages")
+		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
+		.take(MAX_ASSISTANT_QUEUE_MESSAGES);
+	return messages.find((message) => message.status !== "editing") ?? null;
+};
 
 const replaceClaimedMessageWithVisibleStatus = async (
 	ctx: MutationCtx,
@@ -443,10 +454,7 @@ export const claimQueuedMessageForChat = async (
 			status: "unavailable",
 		} satisfies AssistantQueuedMessageReplayClaimAttempt;
 	}
-	const message = await ctx.db
-		.query("assistantQueuedMessages")
-		.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chat._id))
-		.first();
+	const message = await getExecutableQueueHead(ctx, chat._id);
 	if (
 		!message ||
 		message._id !== queuedMessageId ||
@@ -596,7 +604,7 @@ export const acceptClaimedFollowUp = async <Result>(
 const discardMessagesForRunByStatus = async (
 	ctx: MutationCtx,
 	runId: Id<"assistantRuns">,
-	statuses: ReadonlyArray<"queued" | "paused" | "claimed">,
+	statuses: ReadonlyArray<Doc<"assistantQueuedMessages">["status"]>,
 ) => {
 	const ids: Array<Id<"assistantQueuedMessages">> = [];
 	for (const status of statuses) {
@@ -619,6 +627,7 @@ export const discardQueuedForRunInternal = async (
 		"queued",
 		"paused",
 		"claimed",
+		"editing",
 	]);
 
 export const releaseClaimedForRunInternal = async (
@@ -647,11 +656,20 @@ export const pauseQueuedForChatInternal = async (
 	pauseReason: AssistantQueuedMessagePauseReason,
 ) => {
 	const now = Date.now();
+	const editing = await ctx.db
+		.query("assistantQueuedMessages")
+		.withIndex("by_chatId_and_status", (q) =>
+			q.eq("chatId", chatId).eq("status", "editing"),
+		)
+		.unique();
+	if (editing) {
+		await ctx.db.patch(editing._id, {
+			editOrigin: { status: "paused", pauseReason },
+			updatedAt: now,
+		});
+	}
 	if (pauseReason === "failed") {
-		const head = await ctx.db
-			.query("assistantQueuedMessages")
-			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chatId))
-			.first();
+		const head = await getExecutableQueueHead(ctx, chatId);
 		for await (const message of ctx.db
 			.query("assistantQueuedMessages")
 			.withIndex("by_chatId_and_status", (q) =>

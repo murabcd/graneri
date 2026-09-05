@@ -37,7 +37,6 @@ export type QueuedFollowUpBarItem = {
 	actionLabel: "Retry" | "Steer" | null;
 	helpText?: string;
 	id: string;
-	isEditing: boolean;
 	isActionDisabled: boolean;
 	isSendingNow: boolean;
 	isUpdatingFollowUpBehavior: boolean;
@@ -357,10 +356,7 @@ function QueuedFollowUpMenu({
 				className="w-36"
 				onPointerDown={(event) => event.stopPropagation()}
 			>
-				<DropdownMenuItem
-					disabled={queuedFollowUp.isEditing}
-					onClick={queuedFollowUp.onEdit}
-				>
+				<DropdownMenuItem onClick={queuedFollowUp.onEdit}>
 					<Pencil className="size-4" aria-hidden="true" />
 					Edit
 				</DropdownMenuItem>

@@ -585,10 +585,17 @@ context scoped to the active run. It may persist the strict opaque local
 capability descriptor, but never an Electron path or renderer-owned folder
 record. Follow-ups retain that descriptor so queued replay and steer use the
 same authorized scope; Electron still revalidates the id before every local
-execution. Queue rows have three explicit states: `queued` rows auto-drain after
+execution. Queue rows have four explicit states: `queued` rows auto-drain after
 normal completion, `paused` rows remain visible after stop, supersede, failure,
 or expiry and require a row-level Retry, and `claimed` rows are a server-owned
-pre-acceptance lease. The renderer never claims or deletes a row as part of
+pre-acceptance lease. `editing` rows are durable drafts excluded from dispatch and
+visible queue queries. [[convex/assistantQueuedMessageEditing.ts]] atomically
+checks a visible row out for editing; save and cancel require its incremented
+`claimVersion` and restore its original position and queued or paused state.
+There is one draft per chat; switching edits restores the previous draft in
+the same transaction. Stop and failure pause its return state without making
+it executable. [[apps/web/src/hooks/use-queued-message-edit.ts]] restores the
+composer from that draft after navigation. The renderer never claims or deletes a row as part of
 submission. After no non-terminal run remains, it sends the first `queued` row
 id with the observed `queued` status, and the hosted route claims that exact row
 only if its durable status still matches. Row-level Retry sends the observed
@@ -610,14 +617,14 @@ row menu's Turn on or Turn off action and the Preferences select update only
 this preference: neither action deletes, sends, resumes, or reorders an existing
 row.
 [[apps/web/src/lib/chat-queued-followups.ts]] owns the server and visible queue
-snapshots. Its named changes apply Delete, Edit, and reorder locally; reconciliation
+snapshots. Its named changes apply Delete and reorder locally; reconciliation
 preserves hidden rows and local order across unrelated server updates. Server
-removals and changed server order remain authoritative. A rejected Delete or
-canceled Edit restores only a surviving row, using its current server content at
-the prior position. A rejected reorder restores the prior relative order only
-when no newer reorder or external order change has superseded it. Releasing the
-last subscriber clears local projection changes so navigation cannot leave an
-editor draft hidden. Automatic drain reads the durable query rather than this
+removals and changed server order remain authoritative. A rejected Delete
+restores only a surviving row using its current server content. A rejected
+reorder restores the prior relative order only when no newer reorder or
+external order change supersedes it. The last subscriber clears presentation
+changes. Editing belongs entirely to the durable state machine.
+Automatic drain reads the durable query rather than this
 visible projection. Steer and Retry remain visible until the hosted route confirms
 durable acceptance; their completion is not optimistic.
 When the renderer owns a just-submitted turn but its active-run subscription has
