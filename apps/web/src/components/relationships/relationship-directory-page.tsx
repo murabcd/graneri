@@ -8,20 +8,15 @@ import {
 } from "@workspace/ui/components/empty";
 import { Input } from "@workspace/ui/components/input";
 import { cn } from "@workspace/ui/lib/utils";
-import { useQuery } from "convex/react";
 import { Building2, Search, UsersRound } from "lucide-react";
 import * as React from "react";
 import { PageTitle } from "@/components/layout/page-title";
-import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-
-type DirectoryEntity = {
-	key: string;
-	label: string;
-	subtitle: string;
-};
-
-type DirectoryKind = "companies" | "people";
+import type {
+	DirectoryEntry,
+	DirectoryKind,
+} from "../../../../../convex/relationshipDirectoryModel";
+import { useRelationshipDirectory } from "./use-relationship-directory";
 
 type RelationshipDirectoryPageProps = {
 	isDesktopMac: boolean;
@@ -30,19 +25,12 @@ type RelationshipDirectoryPageProps = {
 
 export function PeopleDirectoryPage(props: RelationshipDirectoryPageProps) {
 	const [searchQuery, setSearchQuery] = React.useState("");
-	const deferredSearchQuery = React.useDeferredValue(searchQuery);
-	const result = useQuery(
-		api.people.listDirectory,
-		props.workspaceId
-			? { query: deferredSearchQuery, workspaceId: props.workspaceId }
-			: "skip",
+	const currentResult = useRelationshipDirectory(
+		"people",
+		props.workspaceId,
+		searchQuery,
 	);
-	const currentResult = useRetainedDirectoryResult(result, props.workspaceId);
-	const entities = currentResult?.people.map((person) => ({
-		key: person.email,
-		label: person.displayName?.trim() || person.email,
-		subtitle: person.email,
-	}));
+	const entities = currentResult?.entities;
 
 	return (
 		<RelationshipDirectoryPage
@@ -63,19 +51,12 @@ export function PeopleDirectoryPage(props: RelationshipDirectoryPageProps) {
 
 export function CompaniesDirectoryPage(props: RelationshipDirectoryPageProps) {
 	const [searchQuery, setSearchQuery] = React.useState("");
-	const deferredSearchQuery = React.useDeferredValue(searchQuery);
-	const result = useQuery(
-		api.companies.listDirectory,
-		props.workspaceId
-			? { query: deferredSearchQuery, workspaceId: props.workspaceId }
-			: "skip",
+	const currentResult = useRelationshipDirectory(
+		"companies",
+		props.workspaceId,
+		searchQuery,
 	);
-	const currentResult = useRetainedDirectoryResult(result, props.workspaceId);
-	const entities = currentResult?.companies.map((company) => ({
-		key: company.domain,
-		label: company.displayName,
-		subtitle: company.domain,
-	}));
+	const entities = currentResult?.entities;
 
 	return (
 		<RelationshipDirectoryPage
@@ -109,7 +90,7 @@ function RelationshipDirectoryPage({
 }: RelationshipDirectoryPageProps & {
 	emptyDescription: string;
 	emptySearchDescription: string;
-	entities: DirectoryEntity[] | undefined;
+	entities: DirectoryEntry[] | undefined;
 	hasMore: boolean;
 	heading: string;
 	icon: DirectoryKind;
@@ -175,28 +156,6 @@ function RelationshipDirectoryPage({
 	);
 }
 
-function useRetainedDirectoryResult<Result>(
-	result: Result | undefined,
-	workspaceId: Id<"workspaces"> | null,
-) {
-	const resolvedSnapshotRef = React.useRef<{
-		result: Result;
-		workspaceId: Id<"workspaces">;
-	} | null>(null);
-
-	React.useLayoutEffect(() => {
-		if (workspaceId && result !== undefined) {
-			resolvedSnapshotRef.current = { result, workspaceId };
-		}
-	}, [result, workspaceId]);
-
-	return result !== undefined
-		? result
-		: resolvedSnapshotRef.current?.workspaceId === workspaceId
-			? resolvedSnapshotRef.current.result
-			: undefined;
-}
-
 function DirectoryBody({
 	emptyDescription,
 	emptySearchDescription,
@@ -207,7 +166,7 @@ function DirectoryBody({
 }: {
 	emptyDescription: string;
 	emptySearchDescription: string;
-	entities: DirectoryEntity[] | undefined;
+	entities: DirectoryEntry[] | undefined;
 	icon: DirectoryKind;
 	isSearching: boolean;
 	title: string;
@@ -262,7 +221,7 @@ function DirectoryEmptyState({
 	);
 }
 
-function DirectoryRow({ entity }: { entity: DirectoryEntity }) {
+function DirectoryRow({ entity }: { entity: DirectoryEntry }) {
 	return (
 		<div className="flex min-h-14 items-center gap-3 px-4 py-2.5">
 			<Avatar>

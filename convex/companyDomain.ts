@@ -1,7 +1,7 @@
 import { getDomainWithoutSuffix } from "tldts";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { normalizeRelationshipSearchText } from "./relationshipDirectory";
+import { normalizeRelationshipSearchText } from "./relationshipDirectoryModel";
 
 export const getCompanyFallbackDisplayName = (domain: string) => {
 	const domainLabel =
