@@ -144,9 +144,7 @@ export default defineSchema({
 			v.literal("off"),
 		),
 		translucentSidebar: v.boolean(),
-		followUpBehavior: v.optional(
-			v.union(v.literal("queue"), v.literal("steer")),
-		),
+		followUpBehavior: v.union(v.literal("queue"), v.literal("steer")),
 		sendShortcut: v.union(v.literal("enter"), v.literal("command-enter")),
 		avatarStorageId: v.optional(v.id("_storage")),
 		createdAt: v.number(),

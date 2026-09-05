@@ -53,40 +53,24 @@ test("user preferences persist follow-up behavior", async () => {
 	).toBe("steer");
 });
 
-test("older preferences default to queue and persist it on an otherwise unchanged save", async () => {
+test("new preferences persist the default follow-up behavior", async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
-	const originalPreferences = {
-		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
-		transcriptionLanguage: "ru",
-		jobTitle: "CPO",
-		companyName: "Flomni",
-		fontSmoothing: true,
-		reduceMotion: "system" as const,
-		translucentSidebar: false,
-		sendShortcut: "enter" as const,
-		createdAt: 1,
-		updatedAt: 2,
-	};
-	const id = await t.run(async (ctx) =>
-		ctx.db.insert("userPreferences", originalPreferences),
-	);
-
-	expect(await asOwner.query(api.userPreferences.get, {})).toMatchObject({
-		followUpBehavior: "queue",
-		transcriptionLanguage: "ru",
-		companyName: "Flomni",
-	});
 	expect(
 		(await asOwner.mutation(api.userPreferences.update, {})).followUpBehavior,
 	).toBe("queue");
-	const stored = await t.run(async (ctx) => ctx.db.get(id));
+	const stored = await t.run(async (ctx) =>
+		ctx.db
+			.query("userPreferences")
+			.withIndex("by_ownerTokenIdentifier", (q) =>
+				q.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier),
+			)
+			.unique(),
+	);
 	expect(stored).toMatchObject({
-		...originalPreferences,
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
 		followUpBehavior: "queue",
-		updatedAt: expect.any(Number),
 	});
-	expect(stored?.updatedAt).toBeGreaterThan(originalPreferences.updatedAt);
 });
 
 test("unrelated preference updates preserve an explicit steer preference", async () => {
