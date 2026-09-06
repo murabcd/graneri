@@ -12,6 +12,51 @@ const localCapabilitySession = {
 };
 
 describe("desktop local tool calls", () => {
+	it("requires chat ownership before sending a file download to Electron", async () => {
+		const addToolOutput = vi.fn();
+		const fetchMock = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({ output: { path: "report.pdf", sizeBytes: 10 } }),
+				),
+		);
+		const getOwnedUrl = vi.fn(
+			async () =>
+				"https://example.convex.cloud/api/storage/owned" as string | null,
+		);
+		const handler = createDesktopLocalToolCallHandler({
+			addToolOutputRef: { current: addToolOutput },
+			fetchImpl: fetchMock,
+			fileStorage: { generateUploadUrl: vi.fn(), getUrl: vi.fn(), getOwnedUrl },
+			resolveRequestBody: async () => ({ localCapabilitySession }),
+		});
+		const call = {
+			toolCall: {
+				dynamic: false as const,
+				input: { storageId: "owned", relativePath: "report.pdf", rootIndex: 0 },
+				toolCallId: "save",
+				toolName: "save_local_file",
+				type: "tool-call" as const,
+			},
+		};
+		await handler(call);
+		expect(getOwnedUrl).toHaveBeenCalledWith("owned");
+		expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+			fileDownload: {
+				storageId: "owned",
+				url: "https://example.convex.cloud/api/storage/owned",
+			},
+		});
+		getOwnedUrl.mockResolvedValue(null);
+		await handler(call);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(addToolOutput).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				state: "output-error",
+				errorText: expect.stringContaining("does not belong to this chat"),
+			}),
+		);
+	});
 	it("uploads local image bytes through Convex and submits a resolved file output", async () => {
 		const fetchMock = vi.fn(
 			async () =>
@@ -41,7 +86,11 @@ describe("desktop local tool calls", () => {
 		const handler = createDesktopLocalToolCallHandler({
 			addToolOutputRef: { current: addToolOutput },
 			fetchImpl: fetchMock,
-			fileStorage: { generateUploadUrl, getUrl },
+			fileStorage: {
+				generateUploadUrl,
+				getUrl,
+				getOwnedUrl: vi.fn(async () => null),
+			},
 			resolveRequestBody: async () => ({ localCapabilitySession }),
 		});
 
@@ -100,6 +149,7 @@ describe("desktop local tool calls", () => {
 					}),
 			),
 			fileStorage: {
+				getOwnedUrl: vi.fn(async () => null),
 				generateUploadUrl: vi.fn(
 					async () => "https://example.convex.cloud/api/storage/upload",
 				),

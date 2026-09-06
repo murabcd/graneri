@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLocalFileStore } from "../src/local-file-storage.mjs";
+import {
+	createLocalFileDownload,
+	createLocalFileStore,
+} from "../src/local-file-storage.mjs";
 
 test("uploads local file bytes only to the configured Convex origin", async () => {
 	const originalConvexUrl = process.env.CONVEX_URL;
@@ -48,7 +51,7 @@ test("rejects upload targets outside the configured Convex origin", () => {
 				createLocalFileStore({
 					uploadUrls: ["https://attacker.example/upload"],
 				}),
-			/Local file upload target is invalid/u,
+			/Local file transfer target is invalid/u,
 		);
 	} finally {
 		if (originalConvexUrl === undefined) {
@@ -56,5 +59,64 @@ test("rejects upload targets outside the configured Convex origin", () => {
 		} else {
 			process.env.CONVEX_URL = originalConvexUrl;
 		}
+	}
+});
+
+test("downloads only the authorized file and enforces streaming byte limits", async () => {
+	const originalConvexUrl = process.env.CONVEX_URL;
+	process.env.CONVEX_URL = "https://example.convex.cloud";
+	try {
+		const download = {
+			storageId: "owned",
+			url: "https://example.convex.cloud/api/storage/owned",
+		};
+		const reader = createLocalFileDownload({
+			download,
+			fetchImpl: async (_url, options) => {
+				assert.equal(options.redirect, "error");
+				return new Response("file bytes");
+			},
+		});
+		assert.equal((await reader("owned")).toString(), "file bytes");
+		await assert.rejects(reader("different"), /authorized download/);
+		await assert.rejects(
+			createLocalFileDownload({
+				download: { ...download, url: "https://other.example/file" },
+			})("owned"),
+			/target is invalid/,
+		);
+		let cancelled = false;
+		const oversized = createLocalFileDownload({
+			download,
+			fetchImpl: async () =>
+				new Response(
+					new ReadableStream({
+						pull(controller) {
+							controller.enqueue(new Uint8Array(10_000_001));
+						},
+						cancel() {
+							cancelled = true;
+						},
+					}),
+				),
+		});
+		await assert.rejects(oversized("owned"), /50 MB/);
+		assert.equal(cancelled, true);
+		const interrupted = createLocalFileDownload({
+			download,
+			fetchImpl: async () =>
+				new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.enqueue(new Uint8Array([1]));
+							controller.error(new Error("connection lost"));
+						},
+					}),
+				),
+		});
+		await assert.rejects(interrupted("owned"), /connection lost/);
+	} finally {
+		if (originalConvexUrl === undefined) delete process.env.CONVEX_URL;
+		else process.env.CONVEX_URL = originalConvexUrl;
 	}
 });

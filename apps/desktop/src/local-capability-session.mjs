@@ -13,7 +13,10 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { buildLocalFolderTools } from "@workspace/ai/local-folder-tools";
 import { z } from "zod";
 import { runLocalCommand } from "./local-command-runner.mjs";
-import { createLocalFileStore } from "./local-file-storage.mjs";
+import {
+	createLocalFileDownload,
+	createLocalFileStore,
+} from "./local-file-storage.mjs";
 
 const LOCAL_CAPABILITY_STORAGE_VERSION = 1;
 const maxLocalFolderPathLength = 4096;
@@ -227,6 +230,7 @@ export const createLocalCapabilitySession = ({
 	};
 
 	const executeUncached = async ({
+		fileDownload,
 		fileUploadUrls,
 		input,
 		inputHash,
@@ -261,6 +265,7 @@ export const createLocalCapabilitySession = ({
 			updatedAt: Date.now(),
 		});
 		const tool = buildLocalFolderTools({
+			downloadLocalFile: createLocalFileDownload({ download: fileDownload }),
 			executeLocalCommand: runLocalCommand,
 			roots: [
 				{

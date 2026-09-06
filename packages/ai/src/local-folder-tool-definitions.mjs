@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
 	MAX_LOCAL_FILE_UPLOADS,
 	readLocalFileOutputForModel,
+	saveLocalFileSourceSchema,
 	searchLocalFilesOutputForModel,
 } from "./local-folder-file-contract.mjs";
 
@@ -135,6 +136,20 @@ const localFolderToolCatalog = Object.freeze({
 			subtitleKeys: ["query"],
 		},
 	},
+	save_local_file: {
+		buildConfig: ({ rootSchema }) => ({
+			description:
+				"Save a file from this chat to the shared local folder. Use the storageId in an attachment or generated artifact's providerMetadata.graneri. Creates a new file up to 50 MB without overwriting existing content; create its parent directory first with run_local_command if needed.",
+			inputSchema: saveLocalFileSourceSchema.extend({ rootIndex: rootSchema }),
+		}),
+		ui: {
+			groupKey: "local-folder",
+			icon: "file-text",
+			running: "Saving local file",
+			complete: "Saved local file",
+			subtitleKeys: ["relativePath"],
+		},
+	},
 	run_local_command: {
 		buildConfig: ({ rootSchema }) => ({
 			description:
@@ -185,6 +200,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"Use run_local_command to explore the folder, save scripts, and create or edit outputs. It runs cross-platform virtual Bash with the selected shared folder as its working directory. File changes persist between calls and app restarts; shell variables and processes do not. Inspect existing files before editing them, preserve unrelated user content, and report saved outputs using their relative paths. Reads outside the folder, symlink traversal, and native host executables are blocked. Network access is unavailable. Sandboxed JavaScript, sandboxed Python, and SQLite are available.",
 				"Use structured local tools for direct folder listing, automatic supported-file reading, and file search. Continue list/search with nextCursor until null when complete coverage is needed. Hidden/generated entries are excluded and counted; skippedFiles identifies contents that were not searched. Open supported documents separately with read_local_file. read_local_file detects UTF-8 text, images, PDF, DOCX, XLSX, and PPTX from file bytes. Use byte ranges when a text file is larger than one response.",
 				"For a specific local image or document, use read_local_file directly. Use search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
+				"To save an attached or generated file into the shared folder, use save_local_file with its owned storageId and a new relative path. Existing files are not overwritten. Hosted artifact tools remain available for creating Office and PDF files; save their outputs locally when requested.",
 				"Shared local folders:",
 				...roots.map((root, index) => `${index}: ${root.name}`),
 			].join("\n");

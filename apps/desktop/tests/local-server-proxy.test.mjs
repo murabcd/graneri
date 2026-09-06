@@ -338,6 +338,7 @@ test("local folder tool requests delegate to the capability executor", async () 
 					origin: server.origin,
 				},
 				body: JSON.stringify({
+					fileDownload: null,
 					input: {
 						rootIndex: 0,
 						relativePath: ".",
@@ -351,6 +352,7 @@ test("local folder tool requests delegate to the capability executor", async () 
 
 		assert.equal(response.status, 200);
 		assert.deepEqual(requestedToolCall, {
+			fileDownload: null,
 			fileUploadUrls: [],
 			input: {
 				rootIndex: 0,

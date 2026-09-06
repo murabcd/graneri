@@ -1,7 +1,19 @@
+import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { open, realpath } from "node:fs/promises";
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
-import { MAX_LOCAL_FILE_UPLOADS } from "./local-folder-file-contract.mjs";
+import { link, open, realpath, unlink } from "node:fs/promises";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	join,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
+import {
+	MAX_LOCAL_FILE_SAVE_BYTES,
+	MAX_LOCAL_FILE_UPLOADS,
+} from "./local-folder-file-contract.mjs";
 import {
 	assertLocalFolderRootLimit,
 	MAX_LOCAL_FILE_READ_BYTES,
@@ -174,6 +186,36 @@ export const createLocalWorkspaceSession = (roots) => {
 			});
 		}
 		return { entries, path: relativePath, ...traversal.page() };
+	};
+
+	const saveFile = async ({ bytes, relativePath, rootIndex }) => {
+		if (bytes.byteLength > MAX_LOCAL_FILE_SAVE_BYTES)
+			throw new Error("File exceeds the 50 MB local save limit.");
+		if (isAbsolute(relativePath))
+			throw new Error("A relative output path is required.");
+		const { path: parent, root } = await resolveExistingPath({
+			relativePath: dirname(relativePath),
+			rootIndex,
+		});
+		if (parent !== resolve(root.path, dirname(relativePath)))
+			throw new Error("Output paths cannot traverse symlinks.");
+		const destination = resolve(parent, basename(relativePath));
+		assertInsideRoot({ candidatePath: destination, rootPath: root.path });
+		const temporaryPath = join(parent, `.graneri-save-${randomUUID()}`);
+		const file = await open(temporaryPath, "wx", 0o600);
+		try {
+			await file.writeFile(bytes);
+			await file.sync();
+			// Linking publishes complete bytes atomically and refuses every existing entry.
+			await link(temporaryPath, destination);
+		} finally {
+			await file.close();
+			await unlink(temporaryPath);
+		}
+		return {
+			path: relative(root.path, destination),
+			sizeBytes: bytes.byteLength,
+		};
 	};
 
 	const readTextFile = async ({
@@ -426,6 +468,7 @@ export const createLocalWorkspaceSession = (roots) => {
 		getRoot,
 		listDirectory,
 		readFile,
+		saveFile,
 		roots: Object.freeze(canonicalRoots),
 		searchFiles,
 		searchImages,

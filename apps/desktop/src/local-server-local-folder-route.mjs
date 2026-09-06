@@ -4,6 +4,9 @@ import { z } from "zod";
 import { readJsonBody, sendJson } from "./local-server-http.mjs";
 
 const localFolderToolRequestSchema = z.object({
+	fileDownload: z
+		.object({ storageId: z.string().min(1).max(200), url: z.url() })
+		.nullable(),
 	fileUploadUrls: z.array(z.url()).max(MAX_LOCAL_FILE_UPLOADS).default([]),
 	input: z.unknown(),
 	sessionId: z.string().min(1).max(128),

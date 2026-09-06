@@ -4,6 +4,7 @@ import {
 } from "@workspace/ai/local-capability-session";
 import {
 	getLocalFileUploadCount,
+	resolveLocalFileDownload,
 	resolveLocalFileToolOutput,
 } from "@workspace/ai/local-folder-file-contract";
 import { isLocalFolderToolName } from "@workspace/ai/local-folder-tool-contract";
@@ -49,6 +50,7 @@ const localToolSuccessResponseSchema = z.object({
 export type LocalFileStorage = {
 	generateUploadUrl: () => Promise<string>;
 	getUrl: (storageId: Id<"_storage">) => Promise<string | null>;
+	getOwnedUrl: (storageId: Id<"_storage">) => Promise<string | null>;
 };
 
 const getRequestLocalCapabilitySession = (
@@ -104,11 +106,17 @@ export const executeDesktopLocalToolCall = async ({
 			fileStorage.generateUploadUrl(),
 		),
 	);
+	const fileDownload = await resolveLocalFileDownload({
+		input: toolCall.input,
+		toolName: toolCall.toolName,
+		resolveStorageUrl: fileStorage.getOwnedUrl,
+	});
 
 	const response = await fetchImpl(apiUrl, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
+			fileDownload,
 			fileUploadUrls,
 			sessionId: localCapabilitySession.id,
 			toolCallId: toolCall.toolCallId,

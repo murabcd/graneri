@@ -27,6 +27,7 @@ export type StoreLocalFile = (input: {
 }) => Promise<{ storageId: string }>;
 
 export declare const buildLocalFolderTools: (input: {
+	downloadLocalFile: (storageId: string) => Promise<Uint8Array>;
 	executeLocalCommand: ExecuteLocalCommand;
 	roots: LocalFolderRoot[];
 	storeLocalFile: StoreLocalFile;

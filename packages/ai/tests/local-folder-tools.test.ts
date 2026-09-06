@@ -1,4 +1,12 @@
-import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import {
+	mkdtemp,
+	readdir,
+	readFile,
+	realpath,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -24,6 +32,7 @@ const buildToolsForDirectory = async (
 ) => {
 	const rootPath = await realpath(directory);
 	return buildLocalFolderTools({
+		downloadLocalFile: async () => Buffer.from("downloaded file"),
 		executeLocalCommand,
 		roots: [{ name: basename(rootPath), path: rootPath }],
 		storeLocalFile,
@@ -31,6 +40,46 @@ const buildToolsForDirectory = async (
 };
 
 describe("local folder tools", () => {
+	it("saves complete files and preserves existing or outside destinations", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-local-save-"));
+		const outside = await mkdtemp(
+			join(tmpdir(), "graneri-local-save-outside-"),
+		);
+		try {
+			const tools = await buildToolsForDirectory(directory);
+			const save = (relativePath: string) =>
+				tools.save_local_file.execute?.(
+					{ rootIndex: 0, relativePath, storageId: "storage_test" },
+					{ messages: [], toolCallId: relativePath },
+				);
+			await expect(save("report.pdf")).resolves.toMatchObject({
+				path: "report.pdf",
+				sizeBytes: 15,
+			});
+			await expect(save("report.pdf")).rejects.toThrow(/EEXIST/);
+			expect(await readFile(join(directory, "report.pdf"), "utf8")).toBe(
+				"downloaded file",
+			);
+			await symlink(outside, join(directory, "escape"));
+			await expect(save("escape/report.pdf")).rejects.toThrow(
+				/outside|symlink/,
+			);
+			await expect(save("../report.pdf")).rejects.toThrow(/outside/);
+			await symlink(join(outside, "absent.pdf"), join(directory, "linked.pdf"));
+			await expect(save("linked.pdf")).rejects.toThrow(/EEXIST/);
+			expect(await readdir(outside)).toEqual([]);
+			expect(
+				(await readdir(directory)).filter((name) =>
+					name.startsWith(".graneri-save"),
+				),
+			).toEqual([]);
+		} finally {
+			await Promise.all([
+				rm(directory, { recursive: true, force: true }),
+				rm(outside, { recursive: true, force: true }),
+			]);
+		}
+	});
 	it("instructs the model to use tools for shared local path questions", () => {
 		const context = buildLocalFolderSystemContext([
 			{
@@ -387,6 +436,7 @@ describe("local folder tools", () => {
 
 	it("rejects stale path references instead of silently dropping them", async () => {
 		const tools = buildLocalFolderTools({
+			downloadLocalFile: async () => Buffer.from("downloaded file"),
 			executeLocalCommand: executeSuccessfulLocalCommand,
 			roots: [
 				{

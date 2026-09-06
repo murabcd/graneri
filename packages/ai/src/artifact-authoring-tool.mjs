@@ -73,7 +73,7 @@ const artifactOutputForModel = ({ output }) => {
 		type: "text",
 		value: [
 			"Artifact authoring succeeded.",
-			"The chat UI already presents every artifact as a file card. Respond with a brief plain-text confirmation only; do not write a URL, Markdown link, or download label.",
+			"The chat UI already presents every artifact as a file card. If the user requested saving it in their shared local folder, call save_local_file with the storageId below. Then respond with a brief confirmation; do not write a download URL or link.",
 			`Artifact metadata for later edits: ${JSON.stringify(artifactMetadata)}`,
 		].join("\n"),
 	};

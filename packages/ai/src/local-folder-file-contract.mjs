@@ -2,6 +2,35 @@ import { z } from "zod";
 import { isModelFilePartMediaType } from "./model-file-input.mjs";
 
 export const MAX_LOCAL_FILE_UPLOADS = 10;
+export const MAX_LOCAL_FILE_SAVE_BYTES = 50_000_000;
+
+export const saveLocalFileSourceSchema = z.object({
+	storageId: z
+		.string()
+		.min(1)
+		.max(200)
+		.describe("Owned file storageId from the conversation's file metadata."),
+	relativePath: z
+		.string()
+		.min(1)
+		.max(4096)
+		.describe(
+			"New file path relative to the shared folder. Its parent directory must exist; existing files are never overwritten.",
+		),
+});
+
+export const resolveLocalFileDownload = async ({
+	input,
+	toolName,
+	resolveStorageUrl,
+}) => {
+	if (toolName !== "save_local_file") return null;
+	const { storageId } = saveLocalFileSourceSchema.parse(input);
+	const url = await resolveStorageUrl(storageId);
+	if (!url)
+		throw new Error("The file is unavailable or does not belong to this chat.");
+	return { storageId, url };
+};
 
 const storageIdSchema = z.string().min(1);
 const localToolDurationFields = {

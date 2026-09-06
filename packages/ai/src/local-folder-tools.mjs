@@ -107,6 +107,7 @@ const searchLocalImages = async ({
 };
 
 export const buildLocalFolderTools = ({
+	downloadLocalFile,
 	executeLocalCommand,
 	roots,
 	storeLocalFile,
@@ -120,6 +121,8 @@ export const buildLocalFolderTools = ({
 	if (typeof storeLocalFile !== "function") {
 		throw new Error("A local file storage adapter is required.");
 	}
+	if (typeof downloadLocalFile !== "function")
+		throw new Error("A local file download adapter is required.");
 
 	const workspace = createLocalWorkspaceSession(roots);
 	const configs = buildLocalFolderToolConfigs(workspace.roots, {
@@ -165,6 +168,14 @@ export const buildLocalFolderTools = ({
 							workspace,
 						})
 					: workspace.searchFiles({ cursor, query, relativePath, rootIndex }),
+			),
+		save_local_file: async ({ rootIndex, relativePath, storageId }) =>
+			withDuration(async () =>
+				workspace.saveFile({
+					bytes: await downloadLocalFile(storageId),
+					relativePath,
+					rootIndex,
+				}),
 			),
 		run_local_command: async ({ rootIndex, command }) =>
 			withDuration(async () =>

@@ -249,6 +249,12 @@ the capability boundary, virtual filesystem, worker runtimes, and explicit
 limits are the isolation layers. There is no native OS command runner or
 unsandboxed fallback.
 
+## Saving local outputs
+
+Chat files and generated artifacts can be saved into the shared folder without replacing existing files.
+
+`save_local_file` resolves a storage id through the existing chat-owned attachment URL lookup before requesting a desktop download. Electron accepts only the configured HTTPS Convex origin, rejects redirects, and caps streaming downloads at 50 MB with a 30-second deadline. The workspace publishes complete bytes atomically to a new relative path; the parent must exist and symlink traversal or an existing destination fails without replacing user content. Generated artifacts retain their existing Docker worker and Convex lifecycle; saving consumes file egress but introduces no additional hosted executor or service. The same durable capability receipt prevents duplicate saves during reconnects.
+
 ## Desktop-local availability
 
 Desktop-only capabilities require the real bridge and one scope-aware local capability session; unavailable, revoked, or stale state fails visibly.
