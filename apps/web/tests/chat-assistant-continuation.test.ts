@@ -32,7 +32,13 @@ describe("chat assistant continuation", () => {
 						type: "tool-list_local_directory",
 						toolCallId: "local-call",
 						input: { rootIndex: 99, relativePath: "tampered" },
-						output: { entries: [{ name: "meeting.txt" }] },
+						output: {
+							entries: [{ name: "meeting.txt", type: "file" }],
+							path: ".",
+							nextCursor: null,
+							visitedEntries: 1,
+							excludedEntries: 0,
+						},
 						state: "output-available",
 					},
 					{
@@ -74,7 +80,13 @@ describe("chat assistant continuation", () => {
 				type: "tool-list_local_directory",
 				toolCallId: "local-call",
 				input: { rootIndex: 0, relativePath: "." },
-				output: { entries: [{ name: "meeting.txt" }] },
+				output: {
+					entries: [{ name: "meeting.txt", type: "file" }],
+					path: ".",
+					nextCursor: null,
+					visitedEntries: 1,
+					excludedEntries: 0,
+				},
 				state: "output-available",
 			},
 			{

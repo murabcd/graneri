@@ -130,8 +130,8 @@ Local-folder chat uses a hosted-model, desktop-tool bridge:
 1. Electron authorizes one canonical root for a renderer scope and persists its
    path behind a random capability id.
 2. The renderer, hosted web route, durable queue, and Convex run store only the
-   strict `{ id, label }` descriptor; local paths never cross IPC responses or
-   enter hosted/Convex state.
+   strict `{ id, label }` descriptor; authorization does not expose the root
+   path. User file contents and native process output can contain local paths.
 3. The hosted web AI route owns the OpenAI key and declares local tools without
    server-side executors.
 4. The desktop renderer receives client-side calls and sends the capability id,
@@ -246,8 +246,18 @@ execution, traversal, file reads, file copies, and captured output are
 bounded. The optional `just-bash` host-global defense monkey patches must
 remain disabled because Electron main owns unrelated timers and process state;
 the capability boundary, virtual filesystem, worker runtimes, and explicit
-limits are the isolation layers. There is no native OS command runner or
-unsandboxed fallback.
+limits are the isolation layers. Native scripts use the separate managed
+execution interface described below.
+
+## Native scripts and process control
+
+Managed Python and Node scripts run locally in the authorized folder, with bounded jobs, piped input, paged output, and macOS filesystem/network isolation.
+
+`run_local_script` resolves a saved script through the workspace adapter, then [local-native-process.mjs](../apps/desktop/src/local-native-process.mjs) launches the bundled interpreter under pinned `@anthropic-ai/sandbox-runtime` macOS isolation. Scripts can read system libraries and managed runtimes, read/write the shared folder and private scratch space, and cannot access the network or other user folders. Only a clean environment is passed; no shell profile, host credentials, user Python site packages, or system Node installation is used. Sandbox policy paths containing wildcard characters fail explicitly. Native writes are ordinary filesystem writes and are not transactions.
+
+[local-process-worker.mjs](../apps/desktop/src/local-process-worker.mjs) is a separate managed-Node supervisor: it owns the sandboxed process group, deadline, and aggregate 10 MB output limit. IPC disconnect on app exit kills that group, including descendants. Workers are unpacked beside the native runtimes. At most four jobs run simultaneously, each for at most ten minutes; no background daemon or hosted executor is created.
+
+[local-process-jobs.mjs](../apps/desktop/src/local-process-jobs.mjs) owns process ids, stdin, cancellation, a 1 MB/512-event output tail, 20 KB response pages, and completed records beneath the capability's receipt directory. `interact_local_process` reads from a cursor, writes/closes stdin, or terminates the process. Stdin uses pipes; terminal emulation is not provided. App restart marks unfinished records interrupted without replaying their scripts. Completed results remain readable until capability revocation. Revoking or replacing the folder waits for admitted tool calls, stops its jobs, and removes their records. Output schemas and model instructions live in the shared local tool catalog; hosted workers never execute these scripts.
 
 ## Saving local outputs
 

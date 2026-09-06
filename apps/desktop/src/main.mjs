@@ -67,6 +67,7 @@ import { loadRootEnv } from "./env.mjs";
 import { createGlobalDictation } from "./global-dictation.mjs";
 import { getDictationPreferencePatchForHotkeyMode } from "./global-dictation-policy.mjs";
 import { createLocalCapabilitySession } from "./local-capability-session.mjs";
+import { createLocalProcessLauncher } from "./local-native-process.mjs";
 import { startLocalServer } from "./local-server.mjs";
 import {
 	emitWideEvent,
@@ -248,6 +249,21 @@ const desktopStorage = createDesktopStorage({
 });
 const localCapabilitySession = createLocalCapabilitySession({
 	executionsDirPath: localCapabilityExecutionsPath,
+	launchLocalProcess: createLocalProcessLauncher({
+		runtimeDirectory: app.isPackaged
+			? join(
+					process.resourcesPath,
+					"app.asar.unpacked/dist-electron/main/local-runtime",
+				)
+			: resolve(runtimeDir, "../.generated/local-runtime"),
+		workerPath: app.isPackaged
+			? join(
+					process.resourcesPath,
+					"app.asar.unpacked/dist-electron/main/local-process-worker.mjs",
+				)
+			: join(runtimeDir, "local-process-worker.mjs"),
+		temporaryDirectory: app.getPath("temp"),
+	}),
 	sessionsFilePath: localCapabilitySessionsPath,
 });
 const desktopRecordingPowerSaveBlocker = createDesktopRecordingPowerSaveBlocker(

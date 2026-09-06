@@ -33,7 +33,7 @@ export const resolveLocalFileDownload = async ({
 };
 
 const storageIdSchema = z.string().min(1);
-const localToolDurationFields = {
+export const localToolDurationFields = {
 	totalDurationMs: z.number().int().nonnegative().optional(),
 };
 const supportedFileMediaTypeSchema = z
@@ -145,7 +145,7 @@ const pendingReadOutputSchema = z.discriminatedUnion("kind", [
 	textReadOutputSchema,
 	pendingFileReadOutputSchema,
 ]);
-const resolvedReadOutputSchema = z.discriminatedUnion("kind", [
+export const resolvedReadOutputSchema = z.discriminatedUnion("kind", [
 	textReadOutputSchema,
 	resolvedFileReadOutputSchema,
 ]);
@@ -153,7 +153,7 @@ const pendingSearchOutputSchema = z.discriminatedUnion("kind", [
 	textSearchOutputSchema,
 	pendingImageSearchOutputSchema,
 ]);
-const resolvedSearchOutputSchema = z.discriminatedUnion("kind", [
+export const resolvedSearchOutputSchema = z.discriminatedUnion("kind", [
 	textSearchOutputSchema,
 	resolvedImageSearchOutputSchema,
 ]);

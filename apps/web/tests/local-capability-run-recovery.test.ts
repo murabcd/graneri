@@ -32,7 +32,13 @@ const run = {
 describe("local capability run recovery", () => {
 	it("executes a pending call with its run-bound session and continues that run", async () => {
 		const claimedRecoveryKeys = new Set<string>();
-		const executeToolCall = vi.fn().mockResolvedValue({ entries: [] });
+		const executeToolCall = vi.fn().mockResolvedValue({
+			entries: [],
+			path: ".",
+			nextCursor: null,
+			visitedEntries: 0,
+			excludedEntries: 0,
+		});
 		const submitToolOutput = vi.fn().mockResolvedValue(undefined);
 		const setLatestRequestBody = vi.fn();
 
@@ -60,7 +66,13 @@ describe("local capability run recovery", () => {
 		});
 		expect(submitToolOutput).toHaveBeenCalledWith({
 			options: { body: { ...requestBody, continueRunId: "run-1" } },
-			output: { entries: [] },
+			output: {
+				entries: [],
+				path: ".",
+				nextCursor: null,
+				visitedEntries: 0,
+				excludedEntries: 0,
+			},
 			tool: "list_local_directory",
 			toolCallId: "tool-call-1",
 		});
@@ -68,7 +80,13 @@ describe("local capability run recovery", () => {
 
 	it("deduplicates completed recovery and releases a failed continuation for retry", async () => {
 		const claimedRecoveryKeys = new Set<string>();
-		const executeToolCall = vi.fn().mockResolvedValue({ entries: [] });
+		const executeToolCall = vi.fn().mockResolvedValue({
+			entries: [],
+			path: ".",
+			nextCursor: null,
+			visitedEntries: 0,
+			excludedEntries: 0,
+		});
 		const submitToolOutput = vi
 			.fn()
 			.mockRejectedValueOnce(new Error("offline"))

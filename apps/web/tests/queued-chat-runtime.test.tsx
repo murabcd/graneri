@@ -193,9 +193,20 @@ describe("app-owned queue execution", () => {
 		);
 		state.fetch.mockImplementationOnce(
 			async () =>
-				new Response(JSON.stringify({ output: { entries: [] } }), {
-					headers: { "Content-Type": "application/json" },
-				}),
+				new Response(
+					JSON.stringify({
+						output: {
+							entries: [],
+							path: ".",
+							nextCursor: null,
+							visitedEntries: 0,
+							excludedEntries: 0,
+						},
+					}),
+					{
+						headers: { "Content-Type": "application/json" },
+					},
+				),
 		);
 		const view = render(<App view="chat-a" />);
 		await waitFor(() => expect(state.fetch).toHaveBeenCalledOnce());

@@ -5,6 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
+	localNodeArchiveHashes,
+	localNodeVersion,
 	localPythonArchives,
 	localPythonModules,
 	localPythonRelease,
@@ -19,7 +21,7 @@ export const generatedLocalRuntimePath = join(
 	".generated/local-runtime",
 );
 
-export const verifyLocalPython = async (directory) => {
+const verifyLocalPython = async (directory) => {
 	const python = join(directory, "python/bin/python3");
 	const { stdout } = await execFileAsync(
 		python,
@@ -37,6 +39,42 @@ export const verifyLocalPython = async (directory) => {
 		);
 };
 
+export const verifyLocalRuntime = async (directory) => {
+	const [, { stdout }] = await Promise.all([
+		verifyLocalPython(directory),
+		execFileAsync(join(directory, "node/bin/node"), ["--version"], {
+			timeout: 10_000,
+			env: {},
+		}),
+	]);
+	if (stdout.trim() !== `v${localNodeVersion}`)
+		throw new Error(
+			"Managed Node version does not match the runtime contract.",
+		);
+};
+
+const extractRuntimeArchive = async ({
+	url,
+	sha256,
+	directory,
+	members = [],
+}) => {
+	const response = await fetch(url, { signal: AbortSignal.timeout(300_000) });
+	if (!response.ok || !response.body)
+		throw new Error(`Runtime download failed: ${response.status}.`);
+	const bytes = Buffer.from(await response.arrayBuffer());
+	if (createHash("sha256").update(bytes).digest("hex") !== sha256)
+		throw new Error("Runtime archive checksum is invalid.");
+	const archivePath = join(directory, `${randomUUID()}.tar.gz`);
+	await writeFile(archivePath, bytes);
+	await execFileAsync(
+		"/usr/bin/tar",
+		["-xzf", archivePath, "-C", directory, ...members],
+		{ timeout: 60_000 },
+	);
+	await rm(archivePath);
+};
+
 export const prepareLocalRuntime = async () => {
 	if (process.platform !== "darwin")
 		throw new Error("The managed local runtime currently requires macOS.");
@@ -46,6 +84,7 @@ export const prepareLocalRuntime = async () => {
 	const requirements = await readFile(requirementsPath);
 	const fingerprint = createHash("sha256")
 		.update(archive.sha256)
+		.update(localNodeArchiveHashes[process.arch])
 		.update(requirements)
 		.digest("hex");
 	let currentFingerprint;
@@ -58,7 +97,7 @@ export const prepareLocalRuntime = async () => {
 		if (error.code !== "ENOENT") throw error;
 	}
 	if (currentFingerprint === fingerprint) {
-		await verifyLocalPython(generatedLocalRuntimePath);
+		await verifyLocalRuntime(generatedLocalRuntimePath);
 		return generatedLocalRuntimePath;
 	}
 	const staging = `${generatedLocalRuntimePath}-${randomUUID()}`;
@@ -66,18 +105,23 @@ export const prepareLocalRuntime = async () => {
 	try {
 		const filename = `cpython-${localPythonVersion}+${localPythonRelease}-${archive.target}-install_only_stripped.tar.gz`;
 		const url = `https://github.com/astral-sh/python-build-standalone/releases/download/${localPythonRelease}/${encodeURIComponent(filename)}`;
-		const response = await fetch(url, { signal: AbortSignal.timeout(300_000) });
-		if (!response.ok || !response.body)
-			throw new Error(`Python runtime download failed: ${response.status}.`);
-		const bytes = Buffer.from(await response.arrayBuffer());
-		if (createHash("sha256").update(bytes).digest("hex") !== archive.sha256)
-			throw new Error("Python runtime archive checksum is invalid.");
-		const archivePath = join(staging, "python.tar.gz");
-		await writeFile(archivePath, bytes);
-		await execFileAsync("/usr/bin/tar", ["-xzf", archivePath, "-C", staging], {
-			timeout: 60_000,
-		});
-		await rm(archivePath);
+		const nodeDirectory = `node-v${localNodeVersion}-darwin-${process.arch}`;
+		const downloads = await Promise.allSettled([
+			extractRuntimeArchive({
+				url,
+				sha256: archive.sha256,
+				directory: staging,
+			}),
+			extractRuntimeArchive({
+				url: `https://nodejs.org/dist/v${localNodeVersion}/${nodeDirectory}.tar.gz`,
+				sha256: localNodeArchiveHashes[process.arch],
+				directory: staging,
+				members: [`${nodeDirectory}/bin/node`, `${nodeDirectory}/LICENSE`],
+			}),
+		]);
+		for (const result of downloads)
+			if (result.status === "rejected") throw result.reason;
+		await rename(join(staging, nodeDirectory), join(staging, "node"));
 		await execFileAsync(
 			join(staging, "python/bin/python3"),
 			[
@@ -95,7 +139,7 @@ export const prepareLocalRuntime = async () => {
 			],
 			{ timeout: 300_000, maxBuffer: 2_000_000 },
 		);
-		await verifyLocalPython(staging);
+		await verifyLocalRuntime(staging);
 		await writeFile(join(staging, "fingerprint"), fingerprint);
 		await rm(generatedLocalRuntimePath, { recursive: true, force: true });
 		await rename(staging, generatedLocalRuntimePath);

@@ -7,6 +7,10 @@ const packagedNodeModules = Object.freeze([
 const runtimeDirectory = "dist-electron/main";
 const runtimeTraceEntrypoints = Object.freeze([
 	Object.freeze({
+		packageName: "@anthropic-ai/sandbox-runtime",
+		files: Object.freeze(["dist/index.js", "package.json"]),
+	}),
+	Object.freeze({
 		packageName: "just-bash",
 		files: Object.freeze([
 			"dist/bundle/chunks/js-exec-worker.js",
@@ -55,8 +59,15 @@ const ignoredRuntimePackages = Object.freeze([
 ]);
 const runtimeTrace = Object.freeze({
 	entrypoints: runtimeTraceEntrypoints,
+	// Native local execution is macOS-only; these are Linux/Windows and Java helpers.
+	excludedFiles: Object.freeze([
+		"node_modules/.bun/@anthropic-ai+sandbox-runtime@*/node_modules/@anthropic-ai/sandbox-runtime/vendor/**",
+	]),
 	explicitAssets: explicitRuntimeAssets,
-	externalPackages: Object.freeze(["just-bash"]),
+	externalPackages: Object.freeze([
+		"just-bash",
+		"@anthropic-ai/sandbox-runtime",
+	]),
 	ignoredPackages: ignoredRuntimePackages,
 	requiredFiles: requiredRuntimeFiles,
 });
@@ -68,11 +79,14 @@ const mainBundleExternals = Object.freeze([
 
 export const desktopPackageContract = {
 	localRuntimeFiles: [
+		`${runtimeDirectory}/local-process-worker.mjs`,
+		`${runtimeDirectory}/local-runtime/node/bin/node`,
 		`${runtimeDirectory}/local-runtime/python/bin/python3`,
 		`${runtimeDirectory}/local-runtime/fingerprint`,
 	],
 	appDirectory: ".package-app",
 	asarUnpack: [
+		`${runtimeDirectory}/local-process-worker.mjs`,
 		`${runtimeDirectory}/local-runtime/**`,
 		`${runtimeDirectory}/bin/**`,
 		`${runtimeDirectory}/node_modules/**`,

@@ -26,6 +26,8 @@ test("opens a single-directory picker and authorizes a capability session", asyn
 		{
 			options: {
 				buttonLabel: "Choose",
+				message:
+					"Graneri can read, create, and modify files in the folder you share.",
 				properties: ["openDirectory", "createDirectory"],
 				title: "Choose local folder",
 			},

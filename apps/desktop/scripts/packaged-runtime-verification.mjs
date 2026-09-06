@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { z } from "zod";
 import { desktopPackageContract } from "./desktop-package-contract.mjs";
 import { nativeRuntimeToolNames } from "./native-runtime-tools.mjs";
-import { verifyLocalPython } from "./prepare-local-runtime.mjs";
+import { verifyLocalRuntime } from "./prepare-local-runtime.mjs";
 
 const execFileAsync = promisify(execFile);
 const runtimeProcessTimeoutMs = 60_000;
@@ -158,7 +158,7 @@ export const verifyPackagedRuntimeExecutables = async ({
 	const [nativeAudioSelfTestResult, runtimeSmokeTests] = await Promise.all([
 		verifyNativeRuntimeTools(runtimeRoot),
 		verifyAssetBackedRuntime(runtimeRoot),
-		verifyLocalPython(join(runtimeRoot, "local-runtime")),
+		verifyLocalRuntime(join(runtimeRoot, "local-runtime")),
 	]);
 
 	return { nativeAudioSelfTestResult, runtimeSmokeTests };

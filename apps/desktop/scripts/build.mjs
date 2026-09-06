@@ -243,6 +243,17 @@ await mkdir(distDir, { recursive: true });
 await copyRuntimeSources();
 await bundleDesktopPreload();
 await bundleDesktopMain();
+await execFileAsync(
+	"bun",
+	[
+		"build",
+		resolve(sourceDir, "local-process-worker.mjs"),
+		"--target=node",
+		"--format=esm",
+		`--outfile=${resolve(distDir, "local-process-worker.mjs")}`,
+	],
+	{ cwd: repoRoot },
+);
 await stageNftRuntimeFiles({ distDir, packageRoot, repoRoot });
 await copyNativeRuntimeTools();
 await cp(await prepareLocalRuntime(), resolve(distDir, "local-runtime"), {

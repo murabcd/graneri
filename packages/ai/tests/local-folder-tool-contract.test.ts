@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { localCommandExecutionResultSchema } from "../src/local-execution-contract.mjs";
 import {
 	createCanonicalLocalFolderToolContinuation,
 	isLocalFolderToolContinuationMessage,
 	isLocalFolderToolName,
 	LOCAL_FOLDER_TOOL_NAMES,
-	parseLocalCommandExecutionResult,
 } from "../src/local-folder-tool-contract.mjs";
 import {
 	buildLocalFolderToolConfigs,
@@ -20,7 +20,13 @@ const completedMessage = {
 			type: "tool-list_local_directory",
 			toolCallId: "call-1",
 			input: { rootIndex: 0, relativePath: "." },
-			output: { entries: [{ name: "meeting.txt" }] },
+			output: {
+				entries: [{ name: "meeting.txt", type: "file" }],
+				path: ".",
+				nextCursor: null,
+				visitedEntries: 1,
+				excludedEntries: 0,
+			},
 			state: "output-available",
 		},
 	],
@@ -90,7 +96,7 @@ describe("local folder tool contract", () => {
 
 	it("accepts only the semantic local command output contract", () => {
 		expect(
-			parseLocalCommandExecutionResult({
+			localCommandExecutionResultSchema.parse({
 				exitCode: 0,
 				stderr: "",
 				stdout: "/workspace\n",
@@ -103,7 +109,7 @@ describe("local folder tool contract", () => {
 			truncated: false,
 		});
 		expect(() =>
-			parseLocalCommandExecutionResult({
+			localCommandExecutionResultSchema.parse({
 				exitCode: 0,
 				sandbox: "just-bash-overlay",
 				stderr: "",
@@ -165,7 +171,13 @@ describe("local folder tool contract", () => {
 					type: "tool-list_local_directory",
 					toolCallId: "call-1",
 					input: { rootIndex: 0, relativePath: "." },
-					output: { entries: [{ name: "meeting.txt" }] },
+					output: {
+						entries: [{ name: "meeting.txt", type: "file" }],
+						path: ".",
+						nextCursor: null,
+						visitedEntries: 1,
+						excludedEntries: 0,
+					},
 					state: "output-available",
 				},
 			],

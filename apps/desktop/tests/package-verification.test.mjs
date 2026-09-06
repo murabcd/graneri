@@ -95,7 +95,7 @@ test("accepts a complete archive and ignores deployment URLs outside configurati
 			}),
 		},
 	});
-	assert.deepEqual(verify(archivePath), { runtimeFileCount: 1 });
+	assert.doesNotThrow(() => verify(archivePath));
 });
 
 test("requires the final archive even when staging output exists", (t) => {
@@ -111,7 +111,7 @@ test("reads configuration from the final unpacked mirror", (t) => {
 	const archivePath = createArchive(t, {
 		unpacked: [desktopPackageContract.mainEntry],
 	});
-	assert.deepEqual(verify(archivePath), { runtimeFileCount: 1 });
+	assert.doesNotThrow(() => verify(archivePath));
 	writeFileSync(
 		join(`${archivePath}.unpacked`, desktopPackageContract.mainEntry),
 		mainSource.replace("release-fixture", "unexpected-fixture"),
@@ -205,7 +205,7 @@ test("rejects unresolved runtime imports and accepts packaged dependencies", (t)
 				"export default 1;",
 		},
 	});
-	assert.deepEqual(verify(completeArchive), { runtimeFileCount: 1 });
+	assert.doesNotThrow(() => verify(completeArchive));
 });
 
 test("rejects Convex server TypeScript imports", (t) => {

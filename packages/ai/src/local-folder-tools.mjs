@@ -1,6 +1,9 @@
 import { tool } from "ai";
+import {
+	localCommandExecutionResultSchema,
+	localProcessOutputSchema,
+} from "./local-execution-contract.mjs";
 import { MAX_LOCAL_FILE_UPLOADS } from "./local-folder-file-contract.mjs";
-import { parseLocalCommandExecutionResult } from "./local-folder-tool-contract.mjs";
 import {
 	assertLocalFolderRootLimit,
 	buildLocalFolderToolConfigs,
@@ -109,6 +112,8 @@ const searchLocalImages = async ({
 export const buildLocalFolderTools = ({
 	downloadLocalFile,
 	executeLocalCommand,
+	executeLocalScript,
+	interactLocalProcess,
 	roots,
 	storeLocalFile,
 }) => {
@@ -124,12 +129,38 @@ export const buildLocalFolderTools = ({
 	if (typeof downloadLocalFile !== "function")
 		throw new Error("A local file download adapter is required.");
 
+	if (
+		typeof executeLocalScript !== "function" ||
+		typeof interactLocalProcess !== "function"
+	)
+		throw new Error(
+			"Local process execution and interaction adapters are required.",
+		);
+
 	const workspace = createLocalWorkspaceSession(roots);
 	const configs = buildLocalFolderToolConfigs(workspace.roots, {
 		maxImageSearchResults: MAX_LOCAL_FILE_UPLOADS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
 	const executors = {
+		run_local_script: async ({ rootIndex, relativePath, ...input }) =>
+			withDuration(async () => {
+				const { path, root } = await workspace.resolveExistingPath({
+					rootIndex,
+					relativePath,
+				});
+				return localProcessOutputSchema.parse(
+					await executeLocalScript({
+						...input,
+						scriptPath: path,
+						rootPath: root.path,
+					}),
+				);
+			}),
+		interact_local_process: async (input) =>
+			withDuration(async () =>
+				localProcessOutputSchema.parse(await interactLocalProcess(input)),
+			),
 		list_local_directory: async (input) =>
 			withDuration(() => workspace.listDirectory(input)),
 		read_local_file: async ({
@@ -179,7 +210,7 @@ export const buildLocalFolderTools = ({
 			),
 		run_local_command: async ({ rootIndex, command }) =>
 			withDuration(async () =>
-				parseLocalCommandExecutionResult(
+				localCommandExecutionResultSchema.parse(
 					await executeLocalCommand({
 						command,
 						rootPath: workspace.getRoot(rootIndex).path,

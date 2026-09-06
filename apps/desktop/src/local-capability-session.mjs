@@ -1,22 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
-import {
-	mkdir,
-	readdir,
-	readFile,
-	realpath,
-	rename,
-	rm,
-	stat,
-	writeFile,
-} from "node:fs/promises";
+import { readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { buildLocalFolderTools } from "@workspace/ai/local-folder-tools";
 import { z } from "zod";
+import { writeJsonAtomically } from "./atomic-json-file.mjs";
 import { runLocalCommand } from "./local-command-runner.mjs";
 import {
 	createLocalFileDownload,
 	createLocalFileStore,
 } from "./local-file-storage.mjs";
+import { createLocalProcessJobs } from "./local-process-jobs.mjs";
 
 const LOCAL_CAPABILITY_STORAGE_VERSION = 1;
 const maxLocalFolderPathLength = 4096;
@@ -73,17 +66,6 @@ const executionReceiptSchema = z.discriminatedUnion("state", [
 ]);
 
 const toSessionDescriptor = ({ id, label }) => ({ id, label });
-
-const writeJsonAtomically = async (filePath, value) => {
-	await mkdir(dirname(filePath), { recursive: true });
-	const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
-	try {
-		await writeFile(temporaryPath, JSON.stringify(value, null, 2), "utf8");
-		await rename(temporaryPath, filePath);
-	} finally {
-		await rm(temporaryPath, { force: true }).catch(() => {});
-	}
-};
 
 const readStoredSessions = async (filePath) => {
 	try {
@@ -154,8 +136,13 @@ const loadExecutionReceipt = async (receiptPath) => {
 
 export const createLocalCapabilitySession = ({
 	executionsDirPath,
+	launchLocalProcess,
 	sessionsFilePath,
 }) => {
+	const processes = createLocalProcessJobs({
+		executionsDirPath,
+		launchProcess: launchLocalProcess,
+	});
 	const sessionsById = new Map();
 	const sessionIdByScope = new Map();
 	const activeExecutions = new Map();
@@ -265,6 +252,10 @@ export const createLocalCapabilitySession = ({
 			updatedAt: Date.now(),
 		});
 		const tool = buildLocalFolderTools({
+			executeLocalScript: (input) =>
+				processes.start({ ...input, sessionId: session.id }),
+			interactLocalProcess: (input) =>
+				processes.interact({ ...input, sessionId: session.id }),
 			downloadLocalFile: createLocalFileDownload({ download: fileDownload }),
 			executeLocalCommand: runLocalCommand,
 			roots: [
@@ -334,6 +325,7 @@ export const createLocalCapabilitySession = ({
 				}
 				if (currentSession) {
 					await waitForSessionExecutions(currentSession.id);
+					await processes.stopSession(currentSession.id);
 					await rm(join(executionsDirPath, currentSession.id), {
 						force: true,
 						recursive: true,
@@ -404,6 +396,7 @@ export const createLocalCapabilitySession = ({
 					throw error;
 				}
 				await waitForSessionExecutions(sessionId);
+				await processes.stopSession(sessionId);
 				await rm(join(executionsDirPath, sessionId), {
 					force: true,
 					recursive: true,

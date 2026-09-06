@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@ai-sdk/mcp": "^2.0.15",
+    "@anthropic-ai/sandbox-runtime": "0.0.75",
     "@workspace/ai": "workspace:*",
     "archiver": "7.0.1",
     "convex": "^1.42.3",

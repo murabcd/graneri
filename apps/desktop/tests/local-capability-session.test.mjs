@@ -13,10 +13,15 @@ import { join } from "node:path";
 import test from "node:test";
 import { createLocalCapabilitySession } from "../src/local-capability-session.mjs";
 
+const unexpectedNativeLaunch = async () => {
+	throw new Error("Unexpected native launch.");
+};
+
 const createTestSession = async () => {
 	const rootDir = await mkdtemp(join(tmpdir(), "graneri-local-capability-"));
 	const paths = {
 		executionsDirPath: join(rootDir, "executions"),
+		launchLocalProcess: unexpectedNativeLaunch,
 		sessionsFilePath: join(rootDir, "sessions.json"),
 	};
 	return {
@@ -185,6 +190,7 @@ test("removes orphaned execution receipts during initialization", async () => {
 	const rootDir = await mkdtemp(join(tmpdir(), "graneri-local-capability-"));
 	const paths = {
 		executionsDirPath: join(rootDir, "executions"),
+		launchLocalProcess: unexpectedNativeLaunch,
 		sessionsFilePath: join(rootDir, "sessions.json"),
 	};
 	const orphanedReceiptPath = join(
@@ -232,6 +238,7 @@ test("fails closed when persisted capability scopes are ambiguous", async () => 
 	);
 	const session = createLocalCapabilitySession({
 		executionsDirPath: join(rootDir, "executions"),
+		launchLocalProcess: unexpectedNativeLaunch,
 		sessionsFilePath,
 	});
 

@@ -195,7 +195,7 @@ describe("chat message thinking status", () => {
 				.getByRole("button", { name: /^Working/ })
 				.getAttribute("aria-expanded"),
 		).toBe("true");
-		expect(screen.getByText("Explored local folder")).not.toBeNull();
+		expect(screen.getByText("Ran local command")).not.toBeNull();
 		expect(screen.queryByText("Thinking")).toBeNull();
 		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
 
@@ -277,7 +277,7 @@ describe("chat message thinking status", () => {
 		const orderedNodes = [
 			worked,
 			screen.getByText("I’ll inspect the renderer."),
-			screen.getByText("Explored local folder"),
+			screen.getByText("Ran local command"),
 			screen.getByText("The renderer flattens the event stream."),
 			screen.getByText("Searched local files"),
 			screen.getByText("The ordered stream is now preserved."),
@@ -338,7 +338,7 @@ describe("chat message thinking status", () => {
 
 		rerender(renderActivity(activityParts));
 		expect(screen.getByText("I’ll inspect the first source.")).not.toBeNull();
-		expect(screen.getByText("Explored local folder")).not.toBeNull();
+		expect(screen.getByText("Ran local command")).not.toBeNull();
 		expect(
 			getRenderedParagraph(
 				"The first source is clear; I’ll inspect the second.",
@@ -370,12 +370,12 @@ describe("chat message thinking status", () => {
 		const worked = screen.getByRole("button", { name: /^Worked/ });
 		expect(worked.getAttribute("aria-expanded")).toBe("false");
 		expect(screen.queryByText("I’ll inspect the first source.")).toBeNull();
-		expect(screen.queryByText("Explored local folder")).toBeNull();
+		expect(screen.queryByText("Ran local command")).toBeNull();
 		expect(getRenderedParagraph("Here is the final answer.")).not.toBeNull();
 
 		await user.click(worked);
 		expect(screen.getByText("I’ll inspect the first source.")).not.toBeNull();
-		expect(screen.getByText("Explored local folder")).not.toBeNull();
+		expect(screen.getByText("Ran local command")).not.toBeNull();
 		expect(
 			getRenderedParagraph(
 				"The first source is clear; I’ll inspect the second.",
@@ -416,7 +416,7 @@ describe("chat message thinking status", () => {
 		);
 
 		expect(screen.getByText("Working")).not.toBeNull();
-		expect(screen.getByText("Exploring local folder")).not.toBeNull();
+		expect(screen.getByText("Running local command")).not.toBeNull();
 
 		rerender(
 			renderMessageList({
@@ -924,7 +924,7 @@ describe("chat message thinking status", () => {
 		expect(screen.queryByRole("button", { name: "Thought" })).toBeNull();
 		await user.click(screen.getByRole("button", { name: /^Worked/ }));
 		expect(screen.getByRole("button", { name: "Thought" })).not.toBeNull();
-		expect(screen.getByText("Explored local folder")).not.toBeNull();
+		expect(screen.getByText("Ran local command")).not.toBeNull();
 	});
 
 	it("does not render an inline sources disclosure in the chat message", () => {

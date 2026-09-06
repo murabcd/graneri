@@ -1,7 +1,16 @@
 import { z } from "zod";
 import {
+	localCommandExecutionResultSchema,
+	localProcessInteractionSchema,
+	localProcessOutputSchema,
+	localScriptInputFields,
+} from "./local-execution-contract.mjs";
+import {
+	localToolDurationFields,
 	MAX_LOCAL_FILE_UPLOADS,
 	readLocalFileOutputForModel,
+	resolvedReadOutputSchema,
+	resolvedSearchOutputSchema,
 	saveLocalFileSourceSchema,
 	searchLocalFilesOutputForModel,
 } from "./local-folder-file-contract.mjs";
@@ -27,6 +36,19 @@ export const assertLocalFolderRootLimit = (roots) => {
 
 const localFolderToolCatalog = Object.freeze({
 	list_local_directory: {
+		outputSchema: z.object({
+			entries: z.array(
+				z.object({
+					name: z.string(),
+					type: z.enum(["directory", "file", "other"]),
+				}),
+			),
+			path: z.string(),
+			nextCursor: z.string().nullable(),
+			visitedEntries: z.number().int().nonnegative(),
+			excludedEntries: z.number().int().nonnegative(),
+			...localToolDurationFields,
+		}),
 		buildConfig: ({ rootSchema }) => ({
 			description:
 				"List files and folders inside a local folder explicitly shared by the desktop user.",
@@ -50,6 +72,7 @@ const localFolderToolCatalog = Object.freeze({
 		},
 	},
 	read_local_file: {
+		outputSchema: resolvedReadOutputSchema,
 		buildConfig: ({ rootSchema }) => ({
 			description:
 				"Read a supported file inside a local folder explicitly shared by the desktop user. The file format is detected from its bytes. UTF-8 text returns a bounded byte range; images, PDF, DOCX, XLSX, and PPTX return model-readable file content.",
@@ -96,6 +119,7 @@ const localFolderToolCatalog = Object.freeze({
 		},
 	},
 	search_local_files: {
+		outputSchema: resolvedSearchOutputSchema,
 		buildConfig: ({ maxImageSearchResults, rootSchema }) => ({
 			description:
 				"Search files inside a local folder explicitly shared by the desktop user. Follow nextCursor until null for complete traversal. Text search matches filenames and UTF-8 contents; skippedFiles reports unsearched document, binary, or oversized contents. Image search returns consecutive pages of images for you to inspect against the query; it does not index OCR or visual meaning. Review skippedFiles and excludedEntries before claiming completeness.",
@@ -137,6 +161,11 @@ const localFolderToolCatalog = Object.freeze({
 		},
 	},
 	save_local_file: {
+		outputSchema: z.object({
+			path: z.string(),
+			sizeBytes: z.number().int().nonnegative(),
+			...localToolDurationFields,
+		}),
 		buildConfig: ({ rootSchema }) => ({
 			description:
 				"Save a file from this chat to the shared local folder. Use the storageId in an attachment or generated artifact's providerMetadata.graneri. Creates a new file up to 50 MB without overwriting existing content; create its parent directory first with run_local_command if needed.",
@@ -151,6 +180,9 @@ const localFolderToolCatalog = Object.freeze({
 		},
 	},
 	run_local_command: {
+		outputSchema: localCommandExecutionResultSchema.extend({
+			totalDurationMs: z.number().int().nonnegative(),
+		}),
 		buildConfig: ({ rootSchema }) => ({
 			description:
 				"Run a cross-platform virtual Bash command in one local folder explicitly shared by the desktop user. Use built-in tools such as find, rg, grep, stat, cat, head, tail, wc, sort, uniq, sed, awk, jq, js-exec, python3, and sqlite3. Commands read and modify real files in the shared folder. Files persist between calls and app restarts; shell variables and processes do not. Inspect existing files before changing them and preserve unrelated user content. Reads outside the shared folder, symlink traversal, network access, and native host executables are unavailable.",
@@ -175,7 +207,43 @@ const localFolderToolCatalog = Object.freeze({
 			subtitleKeys: ["command"],
 		},
 	},
+	run_local_script: {
+		outputSchema: localProcessOutputSchema.extend(localToolDurationFields),
+		buildConfig: ({ rootSchema }) => ({
+			description:
+				"Run a saved Python or JavaScript script in the shared folder using Graneri's managed native runtimes. Python includes pandas, NumPy, matplotlib, openpyxl, python-docx, python-pptx, Pillow, pypdf and reportlab. JavaScript runs in Node. Create the script with run_local_command first. Files persist in the folder. System libraries are readable; other user files and network access are blocked. Returns a processId while work continues; use interact_local_process for output, stdin or termination. At most four processes run at once, each for up to ten minutes.",
+			inputSchema: z.object({
+				rootIndex: rootSchema,
+				...localScriptInputFields,
+			}),
+		}),
+		ui: {
+			groupKey: "local-folder",
+			icon: "terminal",
+			running: "Running local script",
+			complete: "Started local script",
+			subtitleKeys: ["relativePath"],
+		},
+	},
+	interact_local_process: {
+		outputSchema: localProcessOutputSchema.extend(localToolDurationFields),
+		buildConfig: () => ({
+			description:
+				"Read output, send stdin, close stdin, or terminate a local process. Pass nextCursor from the last response to avoid repeated output. Read while hasMore is true to drain retained output; running means the process may produce more. Output retention is bounded and truncated reports discarded output. App exit interrupts running jobs; completed results remain available for the shared-folder session. Input uses pipes, not a terminal.",
+			inputSchema: localProcessInteractionSchema,
+		}),
+		ui: {
+			groupKey: "local-folder",
+			icon: "terminal",
+			running: "Checking local process",
+			complete: "Checked local process",
+			subtitleKeys: ["operation"],
+		},
+	},
 });
+
+export const parseLocalFolderToolOutput = (toolName, output) =>
+	localFolderToolCatalog[toolName].outputSchema.safeParse(output);
 
 export const LOCAL_FOLDER_TOOL_NAMES = Object.freeze(
 	Object.keys(localFolderToolCatalog),
@@ -201,6 +269,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"Use structured local tools for direct folder listing, automatic supported-file reading, and file search. Continue list/search with nextCursor until null when complete coverage is needed. Hidden/generated entries are excluded and counted; skippedFiles identifies contents that were not searched. Open supported documents separately with read_local_file. read_local_file detects UTF-8 text, images, PDF, DOCX, XLSX, and PPTX from file bytes. Use byte ranges when a text file is larger than one response.",
 				"For a specific local image or document, use read_local_file directly. Use search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"To save an attached or generated file into the shared folder, use save_local_file with its owned storageId and a new relative path. Existing files are not overwritten. Hosted artifact tools remain available for creating Office and PDF files; save their outputs locally when requested.",
+				"For data pipelines, native Python libraries, or Node scripts, save a script with run_local_command and execute it with run_local_script. Use interact_local_process to supply input, read subsequent output, or stop it. Keep working files and outputs relative to the shared folder. Native scripts have no network access and cannot access other user folders. Use read_local_file to inspect the files they generate.",
 				"Shared local folders:",
 				...roots.map((root, index) => `${index}: ${root.name}`),
 			].join("\n");

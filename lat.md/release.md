@@ -7,13 +7,13 @@ Release modules keep hosted configuration aligned across runtimes, package only 
 - [package contract](../apps/desktop/scripts/desktop-package-contract.mjs)
 - [package verifier](../apps/desktop/scripts/verify-package.mjs)
 
-## Managed local Python
+## Managed local runtimes
 
-The macOS package includes a pinned Python interpreter and libraries for local data, document, spreadsheet, PDF, and image work.
+The macOS package includes pinned Python and Node interpreters and libraries for local data, document, spreadsheet, PDF, and image work.
 
-[prepare-local-runtime.mjs](../apps/desktop/scripts/prepare-local-runtime.mjs) downloads the architecture-specific Python standalone archive declared in [local-runtime-contract.mjs](../apps/desktop/src/local-runtime-contract.mjs), verifies its SHA-256, and installs only hash-locked wheels. It uses the downloaded interpreter's isolated pip, so end users need no Python, package manager, or network setup. The generated build cache is reused only when its archive/requirements fingerprint and import verification pass. Failed preparation does not publish a partial runtime.
+[prepare-local-runtime.mjs](../apps/desktop/scripts/prepare-local-runtime.mjs) downloads the architecture-specific Python standalone and official Node archives declared in [local-runtime-contract.mjs](../apps/desktop/src/local-runtime-contract.mjs), verifies their SHA-256 digests, and installs only hash-locked wheels. It uses the downloaded interpreter's isolated pip, so end users need no Python, package manager, or network setup. The generated build cache is reused only when its archives/requirements fingerprint and import verification pass. Failed preparation does not publish a partial runtime.
 
-Desktop development and packaging prepare this runtime; hosted Vercel web builds and the Docker artifact worker do not. Packaging dereferences the standalone distribution's links and places it under `dist-electron/main/local-runtime` outside ASAR. Package verification requires the runtime files and executes its Python to check the version and every declared library. Lock regeneration uses the command recorded in `apps/desktop/local-runtime/requirements.in`; upgrades change the archive digest and/or requirements lock deliberately.
+Desktop development and packaging prepare this runtime; hosted Vercel web builds and the Docker artifact worker do not. Packaging dereferences the standalone distribution's links and places it under `dist-electron/main/local-runtime` outside ASAR. Package verification requires the runtime files and executes Node and Python to check their versions and every declared Python library. Lock regeneration uses the command recorded in `apps/desktop/local-runtime/requirements.in`; upgrades change the archive digest and/or requirements lock deliberately.
 
 ## Hosted runtime configuration
 

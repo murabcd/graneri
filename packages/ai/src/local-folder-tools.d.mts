@@ -1,5 +1,10 @@
 import type { ToolSet } from "ai";
-import type { LocalCommandExecutionResult } from "./local-folder-tool-contract.mjs";
+import type {
+	LocalCommandExecutionResult,
+	LocalProcessInteraction,
+	LocalProcessOutput,
+	LocalScriptInput,
+} from "./local-execution-contract.mjs";
 
 export type LocalFolderRoot = {
 	name: string;
@@ -29,6 +34,15 @@ export type StoreLocalFile = (input: {
 export declare const buildLocalFolderTools: (input: {
 	downloadLocalFile: (storageId: string) => Promise<Uint8Array>;
 	executeLocalCommand: ExecuteLocalCommand;
+	executeLocalScript: (
+		input: Omit<LocalScriptInput, "relativePath"> & {
+			rootPath: string;
+			scriptPath: string;
+		},
+	) => Promise<LocalProcessOutput>;
+	interactLocalProcess: (
+		input: LocalProcessInteraction,
+	) => Promise<LocalProcessOutput>;
 	roots: LocalFolderRoot[];
 	storeLocalFile: StoreLocalFile;
 }) => ToolSet;

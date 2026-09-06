@@ -140,6 +140,10 @@
       "types": "./src/local-folder-tools.d.mts",
       "import": "./src/local-folder-tools.mjs"
     },
+    "./local-execution-contract": {
+      "types": "./src/local-execution-contract.d.mts",
+      "import": "./src/local-execution-contract.mjs"
+    },
     "./local-capability-session": {
       "types": "./src/local-capability-session.d.mts",
       "import": "./src/local-capability-session.mjs"

@@ -76,6 +76,7 @@ const createTraceOptions = ({ packageRoot, repoRoot }) => {
 		conditions: ["node", "production"],
 		exportsOnly: true,
 		ignore: [
+			...desktopPackageContract.runtimeTrace.excludedFiles,
 			`${packageRelativePath}/.package-app/**`,
 			`${packageRelativePath}/dist/assets/**`,
 			`${packageRelativePath}/dist/bin/**`,

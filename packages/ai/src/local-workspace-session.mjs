@@ -468,6 +468,7 @@ export const createLocalWorkspaceSession = (roots) => {
 		getRoot,
 		listDirectory,
 		readFile,
+		resolveExistingPath,
 		saveFile,
 		roots: Object.freeze(canonicalRoots),
 		searchFiles,
