@@ -23,6 +23,7 @@
     "convex": "^1.42.3",
     "pino": "^10.1.0",
     "rrule": "2.8.1",
+    "yaml": "2.9.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

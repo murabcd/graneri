@@ -265,6 +265,12 @@ Chat files and generated artifacts can be saved into the shared folder without r
 
 `save_local_file` resolves a storage id through the existing chat-owned attachment URL lookup before requesting a desktop download. Electron accepts only the configured HTTPS Convex origin, rejects redirects, and caps streaming downloads at 50 MB with a 30-second deadline. The workspace publishes complete bytes atomically to a new relative path; the parent must exist and symlink traversal or an existing destination fails without replacing user content. Generated artifacts retain their existing Docker worker and Convex lifecycle; saving consumes file egress but introduces no additional hosted executor or service. The same durable capability receipt prevents duplicate saves during reconnects.
 
+## Local skills
+
+Local skill discovery reads paged SKILL.md metadata inside the shared folder, then the model loads relevant instructions through the existing file tools.
+
+[local-skills.mjs](../packages/ai/src/local-skills.mjs) scans `.agents/skills/<folder>/SKILL.md` through the workspace adapter. `list_local_skills` examines at most twenty visible entries per page and preserves the directory cursor and coverage counts. YAML frontmatter must fit in the first 8 KB and contain a name and description; invalid or inaccessible manifests appear in `skippedFiles` without hiding valid neighbors. Missing skill directories return an empty inventory, while stale roots and invalid cursors fail. Discovery does not execute scripts or widen folder authorization. Model instructions require reading the selected SKILL.md and resolving its supporting files relative to its directory before use.
+
 ## Desktop-local availability
 
 Desktop-only capabilities require the real bridge and one scope-aware local capability session; unavailable, revoked, or stale state fails visibly.

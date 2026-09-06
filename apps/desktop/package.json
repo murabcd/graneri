@@ -38,6 +38,7 @@
     "just-bash": "3.4.1",
     "pino": "^10.3.1",
     "ws": "^8.18.0",
+    "yaml": "2.9.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

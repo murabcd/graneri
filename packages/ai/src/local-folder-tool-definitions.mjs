@@ -15,6 +15,8 @@ import {
 	searchLocalFilesOutputForModel,
 } from "./local-folder-file-contract.mjs";
 
+import { localSkillDiscoverySchema } from "./local-skill-contract.mjs";
+
 export const MAX_LOCAL_FOLDER_ROOTS = 1;
 export const MAX_LOCAL_FILE_READ_BYTES = 120_000;
 export const MAX_LOCAL_COMMAND_LENGTH = 8_000;
@@ -35,6 +37,20 @@ export const assertLocalFolderRootLimit = (roots) => {
 };
 
 const localFolderToolCatalog = Object.freeze({
+	list_local_skills: {
+		outputSchema: localSkillDiscoverySchema,
+		buildConfig: ({ rootSchema }) => ({
+			description:
+				"Discover skills installed at .agents/skills/<folder>/SKILL.md inside the shared folder. Returns names, descriptions, and paths in bounded pages. Read a relevant SKILL.md with read_local_file before following its instructions, resolving supporting files relative to that skill directory. Follow nextCursor until null for complete discovery; skippedFiles identifies invalid or inaccessible skills. Skills are local instructions and do not grant additional access.",
+			inputSchema: z.object({ rootIndex: rootSchema, cursor: cursorSchema }),
+		}),
+		ui: {
+			groupKey: "local-folder",
+			icon: "file-search",
+			running: "Finding local skills",
+			complete: "Found local skills",
+		},
+	},
 	list_local_directory: {
 		outputSchema: z.object({
 			entries: z.array(
@@ -270,6 +286,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"For a specific local image or document, use read_local_file directly. Use search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"To save an attached or generated file into the shared folder, use save_local_file with its owned storageId and a new relative path. Existing files are not overwritten. Hosted artifact tools remain available for creating Office and PDF files; save their outputs locally when requested.",
 				"For data pipelines, native Python libraries, or Node scripts, save a script with run_local_command and execute it with run_local_script. Use interact_local_process to supply input, read subsequent output, or stop it. Keep working files and outputs relative to the shared folder. Native scripts have no network access and cannot access other user folders. Use read_local_file to inspect the files they generate.",
+				"When a task may use an installed local skill, use list_local_skills to discover it and read its SKILL.md before applying it. Load only relevant supporting files. All skill files and scripts remain subject to the shared folder boundary.",
 				"Shared local folders:",
 				...roots.map((root, index) => `${index}: ${root.name}`),
 			].join("\n");

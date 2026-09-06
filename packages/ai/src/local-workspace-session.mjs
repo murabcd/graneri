@@ -165,7 +165,12 @@ export const createLocalWorkspaceSession = (roots) => {
 				(await resolveExistingPath({ relativePath: path, rootIndex })).path,
 		});
 
-	const listDirectory = async ({ cursor, relativePath = ".", rootIndex }) => {
+	const listDirectory = async ({
+		cursor,
+		relativePath = ".",
+		rootIndex,
+		maxEntries = MAX_DIRECTORY_ENTRIES,
+	}) => {
 		const traversal = await createTraversal({
 			cursor,
 			relativePath,
@@ -173,7 +178,7 @@ export const createLocalWorkspaceSession = (roots) => {
 			operation: "list",
 		});
 		const entries = [];
-		while (entries.length < MAX_DIRECTORY_ENTRIES) {
+		while (entries.length < maxEntries) {
 			const item = await traversal.next();
 			if (!item) break;
 			entries.push({
@@ -468,6 +473,7 @@ export const createLocalWorkspaceSession = (roots) => {
 		getRoot,
 		listDirectory,
 		readFile,
+		readTextFile,
 		resolveExistingPath,
 		saveFile,
 		roots: Object.freeze(canonicalRoots),

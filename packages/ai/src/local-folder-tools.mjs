@@ -9,6 +9,7 @@ import {
 	buildLocalFolderToolConfigs,
 	MAX_LOCAL_FILE_READ_BYTES,
 } from "./local-folder-tool-definitions.mjs";
+import { listLocalSkills } from "./local-skills.mjs";
 import { createLocalWorkspaceSession } from "./local-workspace-session.mjs";
 
 export { buildLocalFolderSystemContext } from "./local-folder-tool-definitions.mjs";
@@ -143,6 +144,8 @@ export const buildLocalFolderTools = ({
 		providerOptions: deferredOpenAIToolOptions,
 	});
 	const executors = {
+		list_local_skills: (input) =>
+			withDuration(() => listLocalSkills({ ...input, workspace })),
 		run_local_script: async ({ rootIndex, relativePath, ...input }) =>
 			withDuration(async () => {
 				const { path, root } = await workspace.resolveExistingPath({
