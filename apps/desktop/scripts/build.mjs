@@ -16,6 +16,7 @@ import {
 	desktopPackageContract,
 } from "./desktop-package-contract.mjs";
 import { nativeRuntimeToolNames } from "./native-runtime-tools.mjs";
+import { prepareLocalRuntime } from "./prepare-local-runtime.mjs";
 import { stageNftRuntimeFiles } from "./runtime-file-trace.mjs";
 
 const require = createRequire(import.meta.url);
@@ -244,5 +245,9 @@ await bundleDesktopPreload();
 await bundleDesktopMain();
 await stageNftRuntimeFiles({ distDir, packageRoot, repoRoot });
 await copyNativeRuntimeTools();
+await cp(await prepareLocalRuntime(), resolve(distDir, "local-runtime"), {
+	recursive: true,
+	dereference: true,
+});
 await copyMacOSRuntimeNodeModules();
 await stagePackageApp();

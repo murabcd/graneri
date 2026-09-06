@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import "./build-system-audio-helper.mjs";
 import { logInfo } from "../src/logger.mjs";
 import { forwardElectronOutput } from "./forward-electron-output.mjs";
+import { prepareLocalRuntime } from "./prepare-local-runtime.mjs";
 
 const require = createRequire(import.meta.url);
 const electronBinary = require("electron");
@@ -32,7 +33,7 @@ const waitForUrl = async (targetUrl) => {
 	throw new Error(`Renderer did not become available at ${targetUrl}.`);
 };
 
-await waitForUrl(rendererUrl);
+await Promise.all([waitForUrl(rendererUrl), prepareLocalRuntime()]);
 
 if (process.platform === "darwin") {
 	logInfo({

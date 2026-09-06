@@ -269,7 +269,10 @@ export const verifyPackagedResources = ({
 	if (!packagedFilePaths.has("dist-app/theme-init.js")) {
 		throw new Error("Packaged app is missing the external theme initializer.");
 	}
-	for (const runtimeFile of desktopPackageContract.runtimeTrace.requiredFiles) {
+	for (const runtimeFile of [
+		...desktopPackageContract.runtimeTrace.requiredFiles,
+		...desktopPackageContract.localRuntimeFiles,
+	]) {
 		if (!packagedFilePaths.has(runtimeFile)) {
 			throw new Error(
 				`Packaged asset-backed runtime file is missing: ${runtimeFile}`,

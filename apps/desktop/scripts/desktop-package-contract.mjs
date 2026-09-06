@@ -67,8 +67,13 @@ const mainBundleExternals = Object.freeze([
 ]);
 
 export const desktopPackageContract = {
+	localRuntimeFiles: [
+		`${runtimeDirectory}/local-runtime/python/bin/python3`,
+		`${runtimeDirectory}/local-runtime/fingerprint`,
+	],
 	appDirectory: ".package-app",
 	asarUnpack: [
+		`${runtimeDirectory}/local-runtime/**`,
 		`${runtimeDirectory}/bin/**`,
 		`${runtimeDirectory}/node_modules/**`,
 		"node_modules/objc-js/prebuilds/**",

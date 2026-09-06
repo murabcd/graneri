@@ -1,0 +1,10 @@
+# Regenerate with: uv pip compile --python-version 3.13 --generate-hashes --only-binary :all: apps/desktop/local-runtime/requirements.in -o apps/desktop/local-runtime/requirements.txt
+numpy
+pandas
+matplotlib
+openpyxl==3.1.5
+python-docx==1.2.0
+python-pptx==1.0.2
+Pillow==12.3.0
+pypdf==6.16.2
+reportlab

@@ -35,10 +35,10 @@ function createArchive(
 			]),
 		),
 		...Object.fromEntries(
-			desktopPackageContract.runtimeTrace.requiredFiles.map((path) => [
-				path,
-				"",
-			]),
+			[
+				...desktopPackageContract.runtimeTrace.requiredFiles,
+				...desktopPackageContract.localRuntimeFiles,
+			].map((path) => [path, ""]),
 		),
 		"dist-app/theme-init.js": "// theme initializer",
 		[desktopPackageContract.mainEntry]: mainSource + extraSource,
