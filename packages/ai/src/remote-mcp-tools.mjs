@@ -5,6 +5,7 @@ import {
 	classifyRemoteMcpToolPolicy,
 	createAiToolMetadata,
 } from "./ai-tool-authority.mjs";
+import { mcpToolOutputForModel } from "./mcp-tool-output.mjs";
 
 const REMOTE_MCP_DISCOVERY_TIMEOUT_MS = 5_000;
 const REMOTE_MCP_DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -130,34 +131,6 @@ const getRemoteMcpToolUiMetadata = (connection) => ({
 	complete: `Used ${connection.displayName}`,
 	subtitleKeys: REMOTE_MCP_SUBTITLE_KEYS,
 });
-
-const remoteMcpToolOutputForModel = ({ output }) => {
-	if (!Array.isArray(output?.content)) {
-		return { type: "json", value: output };
-	}
-
-	return {
-		type: "content",
-		value: output.content.map((part) => {
-			if (part?.type === "text" && typeof part.text === "string") {
-				return { type: "text", text: part.text };
-			}
-			if (
-				part?.type === "image" &&
-				typeof part.data === "string" &&
-				typeof part.mimeType === "string"
-			) {
-				return {
-					type: "file",
-					mediaType: part.mimeType,
-					data: { type: "data", data: part.data },
-				};
-			}
-
-			return { type: "text", text: JSON.stringify(part) };
-		}),
-	};
-};
 
 const executeRemoteMcpTool = async (connection, definition, args, options) =>
 	await withRemoteMcpClient(
@@ -402,7 +375,7 @@ const buildRemoteMcpToolsFromDefinitions = (
 			},
 			execute: async (args, options) =>
 				await executeTool(definition, args, options),
-			toModelOutput: remoteMcpToolOutputForModel,
+			toModelOutput: mcpToolOutputForModel,
 		});
 	}
 

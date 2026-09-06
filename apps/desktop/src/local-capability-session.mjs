@@ -9,6 +9,7 @@ import {
 	createLocalFileDownload,
 	createLocalFileStore,
 } from "./local-file-storage.mjs";
+import { createLocalMcpClient } from "./local-mcp-client.mjs";
 import { createLocalProcessJobs } from "./local-process-jobs.mjs";
 
 const LOCAL_CAPABILITY_STORAGE_VERSION = 1;
@@ -139,6 +140,7 @@ export const createLocalCapabilitySession = ({
 	launchLocalProcess,
 	sessionsFilePath,
 }) => {
+	const localMcp = createLocalMcpClient({ launchProcess: launchLocalProcess });
 	const processes = createLocalProcessJobs({
 		executionsDirPath,
 		launchProcess: launchLocalProcess,
@@ -252,6 +254,7 @@ export const createLocalCapabilitySession = ({
 			updatedAt: Date.now(),
 		});
 		const tool = buildLocalFolderTools({
+			localMcp,
 			executeLocalScript: (input) =>
 				processes.start({ ...input, sessionId: session.id }),
 			interactLocalProcess: (input) =>

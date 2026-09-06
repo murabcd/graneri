@@ -42,16 +42,14 @@ export declare const localScriptInputFields: {
 export type LocalScriptInput = z.infer<
 	z.ZodObject<typeof localScriptInputFields>
 >;
-export declare const localProcessInteractionSchema: z.ZodType<
-	{
-		processId: string;
-		cursor: number;
-		yieldTimeMs: number;
-	} & (
+export declare const localProcessInteractionSchema: z.ZodType<{
+	processId: string;
+	cursor: number;
+	yieldTimeMs: number;
+	action:
 		| { operation: "read" | "terminate" }
-		| { operation: "write"; input: string; closeInput: boolean }
-	)
->;
+		| { operation: "write"; input: string; closeInput: boolean };
+}>;
 export type LocalProcessInteraction = z.infer<
 	typeof localProcessInteractionSchema
 >;

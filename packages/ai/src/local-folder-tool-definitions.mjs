@@ -15,7 +15,14 @@ import {
 	searchLocalFilesOutputForModel,
 } from "./local-folder-file-contract.mjs";
 
+import {
+	localMcpCallInputFields,
+	localMcpCallOutputSchema,
+	localMcpDiscoverySchema,
+	localMcpServerNameSchema,
+} from "./local-mcp-contract.mjs";
 import { localSkillDiscoverySchema } from "./local-skill-contract.mjs";
+import { mcpToolOutputForModel } from "./mcp-tool-output.mjs";
 
 export const MAX_LOCAL_FOLDER_ROOTS = 1;
 export const MAX_LOCAL_FILE_READ_BYTES = 120_000;
@@ -37,6 +44,49 @@ export const assertLocalFolderRootLimit = (roots) => {
 };
 
 const localFolderToolCatalog = Object.freeze({
+	list_local_mcp_tools: {
+		outputSchema: localMcpDiscoverySchema,
+		buildConfig: ({ rootSchema }) => ({
+			description:
+				"Discover local MCP servers in the shared folder's .mcp.json. Omit serverName to list configured names; provide one to list its tools and input schemas. Follow nextCursor until null. Local servers must use command node or python3 with their script as the first args item, inside the shared folder. Each discovery/call uses a new isolated server process with a 30-second deadline, no network, and no host environment. File-backed server state persists; in-memory state does not.",
+			inputSchema: z.object({
+				rootIndex: rootSchema,
+				serverName: localMcpServerNameSchema.optional(),
+				cursor: z.string().min(1).max(16_384).optional(),
+			}),
+		}),
+		ui: {
+			groupKey: "local-folder",
+			icon: "terminal",
+			running: "Finding local MCP tools",
+			complete: "Found local MCP tools",
+			subtitleKeys: ["serverName"],
+		},
+	},
+	call_local_mcp_tool: {
+		outputSchema: localMcpCallOutputSchema,
+		buildConfig: ({ rootSchema }) => ({
+			// MCP argument keys come from the discovered server, not a closed schema.
+			strict: false,
+			description:
+				"Call a discovered local MCP tool using its server name, configuration hash, tool name, and arguments. Execution stays inside the shared folder under the managed runtime. Calls are not retried automatically. Keep responses below 120 KB; larger results should be saved by the server to files in the shared folder and inspected with read_local_file.",
+			inputSchema: z.object({
+				rootIndex: rootSchema,
+				...localMcpCallInputFields,
+			}),
+			toModelOutput: ({ output }) =>
+				mcpToolOutputForModel({
+					output: localMcpCallOutputSchema.parse(output).result,
+				}),
+		}),
+		ui: {
+			groupKey: "local-folder",
+			icon: "terminal",
+			running: "Using local MCP tool",
+			complete: "Used local MCP tool",
+			subtitleKeys: ["serverName", "toolName"],
+		},
+	},
 	list_local_skills: {
 		outputSchema: localSkillDiscoverySchema,
 		buildConfig: ({ rootSchema }) => ({
@@ -253,7 +303,7 @@ const localFolderToolCatalog = Object.freeze({
 			icon: "terminal",
 			running: "Checking local process",
 			complete: "Checked local process",
-			subtitleKeys: ["operation"],
+			subtitleKeys: ["processId"],
 		},
 	},
 });
@@ -287,6 +337,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"To save an attached or generated file into the shared folder, use save_local_file with its owned storageId and a new relative path. Existing files are not overwritten. Hosted artifact tools remain available for creating Office and PDF files; save their outputs locally when requested.",
 				"For data pipelines, native Python libraries, or Node scripts, save a script with run_local_command and execute it with run_local_script. Use interact_local_process to supply input, read subsequent output, or stop it. Keep working files and outputs relative to the shared folder. Native scripts have no network access and cannot access other user folders. Use read_local_file to inspect the files they generate.",
 				"When a task may use an installed local skill, use list_local_skills to discover it and read its SKILL.md before applying it. Load only relevant supporting files. All skill files and scripts remain subject to the shared folder boundary.",
+				"Use list_local_mcp_tools to discover servers configured in the shared folder before attempting a local MCP workflow. Discover a server's actual input schemas before calling call_local_mcp_tool. Its processes obey the same local permissions and cannot install packages or access the network.",
 				"Shared local folders:",
 				...roots.map((root, index) => `${index}: ${root.name}`),
 			].join("\n");

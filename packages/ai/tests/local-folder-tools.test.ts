@@ -32,6 +32,14 @@ const buildToolsForDirectory = async (
 ) => {
 	const rootPath = await realpath(directory);
 	return buildLocalFolderTools({
+		localMcp: {
+			listTools: async () => {
+				throw new Error("Unexpected MCP discovery");
+			},
+			callTool: async () => {
+				throw new Error("Unexpected MCP call");
+			},
+		},
 		executeLocalScript: async () => {
 			throw new Error("No native test process was requested.");
 		},
@@ -442,6 +450,14 @@ describe("local folder tools", () => {
 
 	it("rejects stale path references instead of silently dropping them", async () => {
 		const tools = buildLocalFolderTools({
+			localMcp: {
+				listTools: async () => {
+					throw new Error("Unexpected MCP discovery");
+				},
+				callTool: async () => {
+					throw new Error("Unexpected MCP call");
+				},
+			},
 			executeLocalScript: async () => {
 				throw new Error("No native test process was requested.");
 			},

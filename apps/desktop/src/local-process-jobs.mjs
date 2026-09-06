@@ -135,10 +135,6 @@ export const createLocalProcessJobs = ({
 
 	return {
 		start: async ({ sessionId, yieldTimeMs, ...input }) => {
-			if (active.size >= 4)
-				throw new Error(
-					"Four local processes are already running. Finish or stop one before starting another.",
-				);
 			const record = {
 				processId: randomUUID(),
 				startedAt: Date.now(),
@@ -198,18 +194,10 @@ export const createLocalProcessJobs = ({
 			await waitForProcess(entry.finished, yieldTimeMs);
 			return processOutput(record, 0);
 		},
-		interact: async ({
-			sessionId,
-			processId,
-			operation,
-			cursor,
-			yieldTimeMs,
-			input,
-			closeInput,
-		}) => {
+		interact: async ({ sessionId, processId, action, cursor, yieldTimeMs }) => {
 			const record = await load(sessionId, processId);
 			const entry = active.get(processId);
-			if (operation === "write") {
+			if (action.operation === "write") {
 				if (
 					entry?.sessionId !== sessionId ||
 					!entry.process ||
@@ -217,14 +205,14 @@ export const createLocalProcessJobs = ({
 				)
 					throw new Error("The process is not accepting input.");
 				await new Promise((resolve, reject) =>
-					entry.process.stdin.write(input, (error) =>
+					entry.process.stdin.write(action.input, (error) =>
 						error ? reject(error) : resolve(),
 					),
 				);
-				if (closeInput) entry.process.stdin.end();
+				if (action.closeInput) entry.process.stdin.end();
 			}
 			if (entry?.sessionId === sessionId) {
-				if (operation === "terminate") entry.controller.abort();
+				if (action.operation === "terminate") entry.controller.abort();
 				await waitForProcess(entry.finished, yieldTimeMs);
 			}
 			return processOutput(record, cursor);

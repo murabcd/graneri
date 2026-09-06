@@ -1,4 +1,5 @@
-import { tool } from "ai";
+import { jsonSchema, tool } from "ai";
+import { z } from "zod";
 import {
 	localCommandExecutionResultSchema,
 	localProcessOutputSchema,
@@ -9,6 +10,10 @@ import {
 	buildLocalFolderToolConfigs,
 	MAX_LOCAL_FILE_READ_BYTES,
 } from "./local-folder-tool-definitions.mjs";
+import {
+	callLocalMcpTool,
+	listLocalMcpTools,
+} from "./local-mcp-operations.mjs";
 import { listLocalSkills } from "./local-skills.mjs";
 import { createLocalWorkspaceSession } from "./local-workspace-session.mjs";
 
@@ -115,6 +120,7 @@ export const buildLocalFolderTools = ({
 	executeLocalCommand,
 	executeLocalScript,
 	interactLocalProcess,
+	localMcp,
 	roots,
 	storeLocalFile,
 }) => {
@@ -138,12 +144,22 @@ export const buildLocalFolderTools = ({
 			"Local process execution and interaction adapters are required.",
 		);
 
+	if (
+		!localMcp ||
+		typeof localMcp.listTools !== "function" ||
+		typeof localMcp.callTool !== "function"
+	)
+		throw new Error("A local MCP adapter is required.");
 	const workspace = createLocalWorkspaceSession(roots);
 	const configs = buildLocalFolderToolConfigs(workspace.roots, {
 		maxImageSearchResults: MAX_LOCAL_FILE_UPLOADS,
 		providerOptions: deferredOpenAIToolOptions,
 	});
 	const executors = {
+		list_local_mcp_tools: (input) =>
+			withDuration(() => listLocalMcpTools({ ...input, workspace, localMcp })),
+		call_local_mcp_tool: (input) =>
+			withDuration(() => callLocalMcpTool({ ...input, workspace, localMcp })),
 		list_local_skills: (input) =>
 			withDuration(() => listLocalSkills({ ...input, workspace })),
 		run_local_script: async ({ rootIndex, relativePath, ...input }) =>
@@ -245,6 +261,26 @@ export const buildClientLocalFolderTools = (roots) => {
 	});
 
 	return Object.fromEntries(
-		Object.entries(configs).map(([name, config]) => [name, tool(config)]),
+		Object.entries(configs).map(([name, config]) => {
+			if (config.strict !== false) return [name, tool(config)];
+			// The SDK's automatic Zod conversion closes every object, including
+			// MCP argument dictionaries. Preserve the source schema for open tools.
+			const inputSchema = jsonSchema(
+				() =>
+					z.toJSONSchema(config.inputSchema, {
+						target: "draft-7",
+						io: "input",
+					}),
+				{
+					validate: async (value) => {
+						const result = await config.inputSchema.safeParseAsync(value);
+						return result.success
+							? { success: true, value: result.data }
+							: { success: false, error: result.error };
+					},
+				},
+			);
+			return [name, tool({ ...config, inputSchema })];
+		}),
 	);
 };

@@ -83,7 +83,7 @@ const readToCompletion = async (jobs, first) => {
 		output = await jobs.interact({
 			sessionId: "test",
 			processId: output.processId,
-			operation: "read",
+			action: { operation: "read" },
 			cursor: output.nextCursor,
 			yieldTimeMs: 1000,
 		});
@@ -105,9 +105,7 @@ nativeTest(
 		const written = await f.jobs.interact({
 			sessionId: "test",
 			processId: started.processId,
-			operation: "write",
-			input: "hello\n",
-			closeInput: true,
+			action: { operation: "write", input: "hello\n", closeInput: true },
 			cursor: started.nextCursor,
 			yieldTimeMs: 1000,
 		});
@@ -118,7 +116,7 @@ nativeTest(
 		const replay = await restarted.interact({
 			sessionId: "test",
 			processId: started.processId,
-			operation: "read",
+			action: { operation: "read" },
 			cursor: 0,
 			yieldTimeMs: 0,
 		});
@@ -127,7 +125,7 @@ nativeTest(
 			restarted.interact({
 				sessionId: "other",
 				processId: started.processId,
-				operation: "read",
+				action: { operation: "read" },
 				cursor: 0,
 				yieldTimeMs: 0,
 			}),
@@ -137,7 +135,7 @@ nativeTest(
 			restarted.interact({
 				sessionId: "test",
 				processId: started.processId,
-				operation: "read",
+				action: { operation: "read" },
 				cursor: replay.nextCursor + 1,
 				yieldTimeMs: 0,
 			}),
@@ -202,7 +200,7 @@ nativeTest(
 		const stopped = await f.jobs.interact({
 			sessionId: "test",
 			processId: started.processId,
-			operation: "terminate",
+			action: { operation: "terminate" },
 			cursor: 0,
 			yieldTimeMs: 1000,
 		});
@@ -330,7 +328,7 @@ nativeTest(
 		const output = await restarted.interact({
 			sessionId: "test",
 			processId: first.processId,
-			operation: "read",
+			action: { operation: "read" },
 			cursor: 0,
 			yieldTimeMs: 0,
 		});

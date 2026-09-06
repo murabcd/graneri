@@ -52,13 +52,15 @@ const processInputFields = {
 		),
 	yieldTimeMs: z.number().int().min(0).max(10_000).default(1000),
 };
-export const localProcessInteractionSchema = z.discriminatedUnion("operation", [
-	z.object({ ...processInputFields, operation: z.literal("read") }),
-	z.object({
-		...processInputFields,
-		operation: z.literal("write"),
-		input: z.string().max(16_000),
-		closeInput: z.boolean().default(false),
-	}),
-	z.object({ ...processInputFields, operation: z.literal("terminate") }),
-]);
+export const localProcessInteractionSchema = z.object({
+	...processInputFields,
+	action: z.union([
+		z.object({ operation: z.literal("read") }),
+		z.object({
+			operation: z.literal("write"),
+			input: z.string().max(16_000),
+			closeInput: z.boolean().default(false),
+		}),
+		z.object({ operation: z.literal("terminate") }),
+	]),
+});

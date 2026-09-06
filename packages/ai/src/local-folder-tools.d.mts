@@ -1,3 +1,4 @@
+import type { MCPClient } from "@ai-sdk/mcp";
 import type { ToolSet } from "ai";
 import type {
 	LocalCommandExecutionResult,
@@ -26,6 +27,11 @@ export type ExecuteLocalCommand = (input: {
 	rootPath: string;
 }) => Promise<LocalCommandExecutionResult>;
 
+type LocalMcpServer = Pick<LocalScriptInput, "language" | "args"> & {
+	rootPath: string;
+	scriptPath: string;
+};
+
 export type StoreLocalFile = (input: {
 	bytes: Uint8Array;
 	mediaType: string;
@@ -43,6 +49,17 @@ export declare const buildLocalFolderTools: (input: {
 	interactLocalProcess: (
 		input: LocalProcessInteraction,
 	) => Promise<LocalProcessOutput>;
+	localMcp: {
+		listTools: (
+			server: LocalMcpServer,
+			cursor?: string,
+		) => ReturnType<MCPClient["listTools"]>;
+		callTool: (
+			server: LocalMcpServer,
+			name: string,
+			args: NonNullable<Parameters<MCPClient["callTool"]>[0]["arguments"]>,
+		) => ReturnType<MCPClient["callTool"]>;
+	};
 	roots: LocalFolderRoot[];
 	storeLocalFile: StoreLocalFile;
 }) => ToolSet;

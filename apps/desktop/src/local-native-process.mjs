@@ -123,7 +123,7 @@ export const createLocalProcessLauncher = ({
 		}
 	};
 
-	return async (input) => {
+	const launch = async (input) => {
 		input.signal.throwIfAborted();
 		const { setup, temporaryPath } = await prepare(input);
 		if (input.signal.aborted) {
@@ -180,5 +180,25 @@ export const createLocalProcessLauncher = ({
 			stdout: worker.stdout,
 			stderr: worker.stderr,
 		};
+	};
+	let activeCount = 0;
+	return async (input) => {
+		if (activeCount >= 4)
+			throw new Error(
+				"Four local processes are already running. Finish or stop one before starting another.",
+			);
+		activeCount++;
+		try {
+			const child = await launch(input);
+			return {
+				...child,
+				completed: child.completed.finally(() => {
+					activeCount--;
+				}),
+			};
+		} catch (error) {
+			activeCount--;
+			throw error;
+		}
 	};
 };

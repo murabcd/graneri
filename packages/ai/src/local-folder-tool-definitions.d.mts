@@ -41,6 +41,7 @@ export declare const buildLocalFolderSystemContext: (
 type LocalFolderToolConfig = {
 	description: string;
 	inputSchema: z.ZodType;
+	strict?: boolean;
 	providerOptions?: unknown;
 	toModelOutput?: ToModelOutput;
 };
