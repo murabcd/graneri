@@ -7,7 +7,7 @@ import {
 } from "@workspace/ui/components/tooltip";
 import * as React from "react";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
-import { useNoteTitleEditor } from "@/components/note/use-note-title-editor";
+import type { NoteTitleEditorController } from "@/components/note/use-note-title-editor";
 import {
 	type ProjectAppearance,
 	ProjectIdentityInput,
@@ -23,6 +23,7 @@ function BreadcrumbTitlePopover({
 	isDesktopMac,
 	itemLabel,
 	onOpen,
+	onCancel,
 	onOpenAutoFocus,
 	onOpenChange,
 	open,
@@ -32,6 +33,7 @@ function BreadcrumbTitlePopover({
 	isDesktopMac: boolean;
 	itemLabel: "chat" | "note" | "project";
 	onOpen: () => void;
+	onCancel: () => void;
 	onOpenAutoFocus?: React.ComponentProps<
 		typeof RenamePopoverContent
 	>["onOpenAutoFocus"];
@@ -59,7 +61,10 @@ function BreadcrumbTitlePopover({
 				</TooltipTrigger>
 				<TooltipContent>{`Rename ${itemLabel}`}</TooltipContent>
 			</Tooltip>
-			<RenamePopoverContent onOpenAutoFocus={onOpenAutoFocus}>
+			<RenamePopoverContent
+				onCancel={onCancel}
+				onOpenAutoFocus={onOpenAutoFocus}
+			>
 				{children}
 			</RenamePopoverContent>
 		</Popover>
@@ -80,6 +85,7 @@ export function ChatBreadcrumbTitleEditor({
 			detailLabel={detailLabel}
 			isDesktopMac={isDesktopMac}
 			itemLabel="chat"
+			onCancel={editor.cancel}
 			onOpen={editor.start}
 			onOpenChange={editor.onOpenChange}
 			open={editor.open}
@@ -102,30 +108,18 @@ export function ChatBreadcrumbTitleEditor({
 export function NoteBreadcrumbTitleEditor({
 	detailLabel,
 	isDesktopMac,
-	noteId,
-	onPreviewChange,
-	title,
-	workspaceId,
+	editor,
 }: {
 	detailLabel: string;
 	isDesktopMac: boolean;
-	noteId: Id<"notes">;
-	onPreviewChange: (title: string) => void;
-	title: string;
-	workspaceId: Id<"workspaces"> | null;
+	editor: NoteTitleEditorController;
 }) {
-	const editor = useNoteTitleEditor({
-		noteId,
-		onPreviewChange,
-		title,
-		workspaceId,
-	});
-
 	return (
 		<BreadcrumbTitlePopover
 			detailLabel={detailLabel}
 			isDesktopMac={isDesktopMac}
 			itemLabel="note"
+			onCancel={editor.cancel}
 			onOpen={editor.start}
 			onOpenChange={editor.onOpenChange}
 			open={editor.open}
@@ -206,6 +200,7 @@ export function ProjectBreadcrumbTitleEditor({
 			detailLabel={detailLabel}
 			isDesktopMac={isDesktopMac}
 			itemLabel="project"
+			onCancel={cancel}
 			onOpen={start}
 			onOpenAutoFocus={handleOpenAutoFocus}
 			onOpenChange={handleOpenChange}

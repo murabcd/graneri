@@ -222,6 +222,7 @@ type NoteActionsMenuProps = {
 	children: React.ReactNode;
 	triggerTooltip?: React.ReactNode;
 	renameAnchor?: React.ReactNode;
+	onRename?: () => void;
 	onRenamePreviewChange?: (title: string) => void;
 	align?: "start" | "center" | "end";
 	side?: "top" | "right" | "bottom" | "left";
@@ -235,9 +236,10 @@ function useNoteActionsMenu({
 	noteId,
 	onMoveToTrash,
 	onRenamePreviewChange,
+	onRename,
 }: Pick<
 	NoteActionsMenuProps,
-	"noteId" | "onMoveToTrash" | "onRenamePreviewChange"
+	"noteId" | "onMoveToTrash" | "onRenamePreviewChange" | "onRename"
 >) {
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -259,7 +261,7 @@ function useNoteActionsMenu({
 		completePopoverOpen: handleMenuCloseAutoFocus,
 		preparePopoverOpen,
 		preventCloseAutoFocusRef: preventMenuCloseAutoFocusRef,
-	} = useDropdownPopoverHandoff(titleEditor.start);
+	} = useDropdownPopoverHandoff(onRename ?? titleEditor.start);
 	const projects = useQuery(
 		api.projects.list,
 		activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip",
@@ -533,6 +535,7 @@ export function NoteActionsMenu({
 	itemsBeforeDefaults,
 	itemsAfterDefaults,
 	onRenamePreviewChange,
+	onRename,
 }: NoteActionsMenuProps) {
 	const {
 		confirmOpen,
@@ -569,6 +572,7 @@ export function NoteActionsMenu({
 		noteId,
 		onMoveToTrash,
 		onRenamePreviewChange,
+		onRename,
 	});
 	const trigger = triggerTooltip ? (
 		<Tooltip>
@@ -609,21 +613,22 @@ export function NoteActionsMenu({
 			/>
 		</DropdownMenu>
 	);
-	const renameEditor = showRename ? (
-		<NoteRenameEditor
-			usePopover={Boolean(renameAnchor)}
-			renameOpen={renameOpen}
-			onRenameOpenChange={handleRenameOpenChange}
-			renameInputRef={renameInputRef}
-			renameValue={renameValue}
-			onRenameValueChange={handleRenameValueChange}
-			onRename={() => {
-				void handleRename();
-			}}
-			onRenameCancel={handleRenameCancel}
-			isRenaming={isRenaming}
-		/>
-	) : null;
+	const renameEditor =
+		showRename && !onRename ? (
+			<NoteRenameEditor
+				usePopover={Boolean(renameAnchor)}
+				renameOpen={renameOpen}
+				onRenameOpenChange={handleRenameOpenChange}
+				renameInputRef={renameInputRef}
+				renameValue={renameValue}
+				onRenameValueChange={handleRenameValueChange}
+				onRename={() => {
+					void handleRename();
+				}}
+				onRenameCancel={handleRenameCancel}
+				isRenaming={isRenaming}
+			/>
+		) : null;
 
 	return (
 		<>
@@ -710,6 +715,7 @@ function NoteRenameEditor({
 	if (usePopover) {
 		return (
 			<RenamePopoverContent
+				onCancel={onRenameCancel}
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					requestAnimationFrame(() => {
@@ -740,7 +746,12 @@ function NoteRenameEditor({
 
 	return (
 		<Dialog open={renameOpen} onOpenChange={onRenameOpenChange}>
-			<DialogContent>
+			<DialogContent
+				onEscapeKeyDown={(event) => {
+					event.preventDefault();
+					onRenameCancel();
+				}}
+			>
 				<DialogHeader>
 					<DialogTitle>Rename note</DialogTitle>
 					<DialogDescription>

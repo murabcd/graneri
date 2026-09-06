@@ -1039,6 +1039,7 @@ function ProjectSidebarRow({
 				</div>
 			</PopoverAnchor>
 			<RenamePopoverContent
+				onCancel={identityEditor.cancel}
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					requestAnimationFrame(() => {

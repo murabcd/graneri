@@ -4,8 +4,10 @@ import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { NoteBreadcrumbTitleEditor } from "../src/components/navigation/breadcrumb-title-editor";
 import type { NoteEditorActions } from "../src/components/note/note-editor-actions-store";
 import { NoteHeaderActionsMenu } from "../src/components/note/note-header-actions-menu";
+import { useNoteTitleEditor } from "../src/components/note/use-note-title-editor";
 import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
 
 const { mutationMock, useMutationMock, useQueryMock } = vi.hoisted(() => {
@@ -53,16 +55,35 @@ const createNoteEditorActions = (
 	...overrides,
 });
 
+function NoteHeaderHarness({
+	noteEditorActions,
+}: {
+	noteEditorActions: NoteEditorActions;
+}) {
+	const editor = useNoteTitleEditor({ noteId, title: note.title, workspaceId });
+	return (
+		<>
+			<NoteBreadcrumbTitleEditor
+				detailLabel={note.title}
+				isDesktopMac={false}
+				editor={editor}
+			/>
+			<NoteHeaderActionsMenu
+				noteId={noteId}
+				noteTitle={note.title}
+				noteEditorActions={noteEditorActions}
+				onNoteTrashed={vi.fn()}
+				onRename={editor.start}
+			/>
+		</>
+	);
+}
+
 const renderMenu = (noteEditorActions: NoteEditorActions) => {
 	render(
 		<TooltipProvider>
 			<ActiveWorkspaceProvider workspaceId={workspaceId}>
-				<NoteHeaderActionsMenu
-					noteId={noteId}
-					noteTitle={note.title}
-					noteEditorActions={noteEditorActions}
-					onNoteTrashed={vi.fn()}
-				/>
+				<NoteHeaderHarness noteEditorActions={noteEditorActions} />
 			</ActiveWorkspaceProvider>
 		</TooltipProvider>,
 	);
@@ -70,6 +91,7 @@ const renderMenu = (noteEditorActions: NoteEditorActions) => {
 
 describe("NoteHeaderActionsMenu", () => {
 	beforeEach(() => {
+		mutationMock.mockResolvedValue(note);
 		useQueryMock.mockImplementation((reference: never) =>
 			getFunctionName(reference) === "notes:get" ? note : [],
 		);
@@ -79,6 +101,40 @@ describe("NoteHeaderActionsMenu", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
+	});
+
+	it("hands focus to rename and saves the new title with Enter", async () => {
+		const user = userEvent.setup();
+		renderMenu(createNoteEditorActions());
+		await user.click(
+			screen.getByRole("button", { name: "Open actions for Research note" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Rename" }));
+		const input = await screen.findByRole("textbox");
+		await waitFor(() => expect(document.activeElement).toBe(input));
+		expect(screen.queryByRole("menu")).toBeNull();
+		await user.clear(input);
+		await user.type(input, "Renamed research{Enter}");
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(mutationMock).toHaveBeenCalledExactlyOnceWith({
+			workspaceId,
+			id: noteId,
+			title: "Renamed research",
+		});
+	});
+
+	it("discards a rename when Escape is pressed", async () => {
+		const user = userEvent.setup();
+		renderMenu(createNoteEditorActions());
+		await user.click(
+			screen.getByRole("button", { name: "Open actions for Research note" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Rename" }));
+		const input = await screen.findByRole("textbox");
+		await user.clear(input);
+		await user.type(input, "Discard this{Escape}");
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(mutationMock).not.toHaveBeenCalled();
 	});
 
 	it("closes the menu after copying note content", async () => {

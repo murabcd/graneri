@@ -3,6 +3,7 @@ import type * as React from "react";
 
 type RenamePopoverContentProps = {
 	children: React.ReactNode;
+	onCancel: () => void;
 	onOpenAutoFocus?: React.ComponentProps<
 		typeof PopoverContent
 	>["onOpenAutoFocus"];
@@ -10,6 +11,7 @@ type RenamePopoverContentProps = {
 
 export function RenamePopoverContent({
 	children,
+	onCancel,
 	onOpenAutoFocus,
 }: RenamePopoverContentProps) {
 	return (
@@ -19,6 +21,10 @@ export function RenamePopoverContent({
 			sideOffset={6}
 			className="w-[340px] rounded-lg border-sidebar-border/70 bg-sidebar p-1.5 shadow-2xl ring-1 ring-border/60"
 			onOpenAutoFocus={onOpenAutoFocus}
+			onEscapeKeyDown={(event) => {
+				event.preventDefault();
+				onCancel();
+			}}
 		>
 			{children}
 		</PopoverContent>

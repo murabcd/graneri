@@ -10,7 +10,9 @@ export function NoteHeaderActionsMenu({
 	noteTitle,
 	noteEditorActions,
 	onNoteTrashed,
+	onRename,
 }: {
+	onRename: () => void;
 	noteId: Id<"notes">;
 	noteTitle: string;
 	noteEditorActions: NoteEditorActions | null;
@@ -67,11 +69,11 @@ export function NoteHeaderActionsMenu({
 
 	return (
 		<NoteActionsMenu
+			onRename={onRename}
 			noteId={noteId}
 			onMoveToTrash={onNoteTrashed}
 			align="end"
 			triggerTooltip="More actions"
-			showRename={false}
 			itemsBeforeDefaults={itemsBeforeDefaults}
 			itemsAfterDefaults={itemsAfterDefaults}
 		>

@@ -45,6 +45,20 @@ workspace-scoped resource-route resolution. The authenticated shell invokes
 typed navigation methods and renders the resolved snapshot; it must not mutate
 parallel route state cells or write browser history directly.
 
+## Title editing
+
+Header menus and breadcrumbs share one title-editing session per resource.
+
+The authenticated shell owns the chat and note title editors and passes each
+controller to its breadcrumb. Header Rename actions use
+[[apps/web/src/hooks/use-dropdown-popover-handoff.ts]] to open the editor only
+after the menu closes, suppressing the menu's focus restoration. The shared
+[[apps/web/src/components/navigation/rename-popover.tsx]] handles Escape as
+cancellation at the dismissable-layer boundary; Enter and outside dismissal
+commit through the resource's title mutation. Note list menus retain their
+anchored editor or dialog through
+[[apps/web/src/components/note/note-actions-menu.tsx]].
+
 ## Desktop permission session
 
 The renderer owns permission presentation and transitions, while Electron owns native probing and failure classification.

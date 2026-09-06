@@ -5,14 +5,18 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import {
+	ChatBreadcrumbTitleEditor,
 	NoteBreadcrumbTitleEditor,
 	ProjectBreadcrumbTitleEditor,
 } from "../src/components/navigation/breadcrumb-title-editor";
+import { useBreadcrumbChatTitleEditor } from "../src/components/navigation/use-breadcrumb-chat-title-editor";
+import { useNoteTitleEditor } from "../src/components/note/use-note-title-editor";
 import { ProjectIcon } from "../src/components/projects/project-appearance-picker";
 import {
 	applyProjectAppearancePreview,
 	type ProjectAppearancePreview,
 } from "../src/components/projects/project-appearance-preview";
+import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
 
 const { mutationMock, useMutationMock } = vi.hoisted(() => ({
 	mutationMock: vi.fn(),
@@ -70,6 +74,40 @@ function ProjectAppearancePreviewHarness() {
 	);
 }
 
+function NoteTitleHarness({
+	detailLabel,
+	isDesktopMac,
+	...options
+}: Parameters<typeof useNoteTitleEditor>[0] & {
+	detailLabel: string;
+	isDesktopMac: boolean;
+}) {
+	const editor = useNoteTitleEditor(options);
+	return (
+		<NoteBreadcrumbTitleEditor
+			detailLabel={detailLabel}
+			isDesktopMac={isDesktopMac}
+			editor={editor}
+		/>
+	);
+}
+
+function ChatTitleHarness() {
+	const { editor } = useBreadcrumbChatTitleEditor({
+		chatId: "chat-1",
+		noteId: null,
+		title: "Research chat",
+	});
+	if (!editor) throw new Error("Expected a chat editor");
+	return (
+		<ChatBreadcrumbTitleEditor
+			detailLabel="Research chat"
+			editor={editor}
+			isDesktopMac={false}
+		/>
+	);
+}
+
 beforeEach(() => {
 	vi.clearAllMocks();
 	mutationMock.mockResolvedValue(project);
@@ -85,6 +123,47 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+describe("breadcrumb rename cancellation", () => {
+	it.each([
+		"chat",
+		"note",
+		"project",
+	] as const)("discards %s changes on Escape without saving", async (kind) => {
+		const user = userEvent.setup();
+		const onPreviewChange = vi.fn();
+		render(
+			<TooltipProvider>
+				<ActiveWorkspaceProvider workspaceId={workspaceId}>
+					{kind === "chat" ? (
+						<ChatTitleHarness />
+					) : kind === "note" ? (
+						<NoteTitleHarness
+							detailLabel="Research note"
+							isDesktopMac={false}
+							noteId={noteId}
+							onPreviewChange={onPreviewChange}
+							title="Research note"
+							workspaceId={workspaceId}
+						/>
+					) : (
+						<ProjectAppearancePreviewHarness />
+					)}
+				</ActiveWorkspaceProvider>
+			</TooltipProvider>,
+		);
+		await user.click(screen.getByRole("button", { name: /Research/ }));
+		const input = screen.getByRole("textbox");
+		await user.clear(input);
+		await user.type(input, "Discard this{Escape}");
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(mutationMock).not.toHaveBeenCalled();
+		await user.click(screen.getByRole("button", { name: /Research/ }));
+		expect(screen.getByRole("textbox").getAttribute("value")).toBe(
+			kind === "project" ? project.name : `Research ${kind}`,
+		);
+	});
+});
+
 describe("NoteBreadcrumbTitleEditor", () => {
 	it("renames through the canonical note title mutation", async () => {
 		const user = userEvent.setup();
@@ -92,7 +171,7 @@ describe("NoteBreadcrumbTitleEditor", () => {
 
 		render(
 			<TooltipProvider>
-				<NoteBreadcrumbTitleEditor
+				<NoteTitleHarness
 					detailLabel="Research note"
 					isDesktopMac={false}
 					noteId={noteId}

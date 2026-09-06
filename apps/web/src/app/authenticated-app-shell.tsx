@@ -103,6 +103,7 @@ import {
 	NoteEditorActionsStore,
 } from "@/components/note/note-editor-actions-store";
 import { NoteHeaderActionsMenu } from "@/components/note/note-header-actions-menu";
+import { useNoteTitleEditor } from "@/components/note/use-note-title-editor";
 import type { ProjectAppearancePreview } from "@/components/projects/project-appearance-preview";
 import type { SettingsPage } from "@/components/settings/settings-types";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
@@ -111,6 +112,7 @@ import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { ActiveWorkspaceProvider } from "@/hooks/active-workspace-provider";
 import { useAutomationActions } from "@/hooks/use-automation-actions";
 import { useAutomationNotifications } from "@/hooks/use-automation-notifications";
+import { useDropdownPopoverHandoff } from "@/hooks/use-dropdown-popover-handoff";
 import { useMarkAssistantCompletionRead } from "@/hooks/use-mark-assistant-completion-read";
 import { useNoteNavigationPreparation } from "@/hooks/use-note-navigation-preparation";
 import { usePaginatedNotes } from "@/hooks/use-paginated-notes";
@@ -1262,23 +1264,21 @@ function AppShellBreadcrumbTitleEditor({
 	activeWorkspaceId,
 	chatTitleEditor,
 	currentNoteId,
-	currentNoteTitle,
+	noteTitleEditor,
 	currentProject,
 	currentView,
 	detailLabel,
 	isDesktopMac,
-	onNoteTitleChange,
 	onProjectAppearancePreviewChange,
 }: {
 	activeWorkspaceId: Id<"workspaces"> | null;
 	chatTitleEditor: ReturnType<typeof useBreadcrumbChatTitleEditor>["editor"];
 	currentNoteId: Id<"notes"> | null;
-	currentNoteTitle: string;
+	noteTitleEditor: ReturnType<typeof useNoteTitleEditor>;
 	currentProject: Doc<"projects"> | null;
 	currentView: AppView;
 	detailLabel: string | null;
 	isDesktopMac: boolean;
-	onNoteTitleChange: (title: string) => void;
 	onProjectAppearancePreviewChange: (
 		preview: ProjectAppearancePreview | null,
 	) => void;
@@ -1301,10 +1301,7 @@ function AppShellBreadcrumbTitleEditor({
 				<NoteBreadcrumbTitleEditor
 					detailLabel={detailLabel}
 					isDesktopMac={isDesktopMac}
-					noteId={currentNoteId}
-					onPreviewChange={onNoteTitleChange}
-					title={currentNoteTitle}
-					workspaceId={activeWorkspaceId}
+					editor={noteTitleEditor}
 				/>
 			) : null;
 		case "chat":
@@ -1472,17 +1469,22 @@ function AppShellHeader({
 		noteId: currentChatNoteId,
 		title: currentChatTitle,
 	});
+	const noteTitleEditor = useNoteTitleEditor({
+		noteId: currentView === "note" ? currentNoteId : null,
+		title: currentNoteTitle,
+		workspaceId: activeWorkspaceId,
+		onPreviewChange: onNoteTitleChange,
+	});
 	const breadcrumbTitleEditor = (
 		<AppShellBreadcrumbTitleEditor
 			activeWorkspaceId={activeWorkspaceId}
 			chatTitleEditor={breadcrumbChatTitleEditor}
 			currentNoteId={currentNoteId}
-			currentNoteTitle={currentNoteTitle}
+			noteTitleEditor={noteTitleEditor}
 			currentProject={currentProject}
 			currentView={currentView}
 			detailLabel={breadcrumbDetailLabel}
 			isDesktopMac={isDesktopMac}
-			onNoteTitleChange={onNoteTitleChange}
 			onProjectAppearancePreviewChange={onProjectAppearancePreviewChange}
 		/>
 	);
@@ -1531,6 +1533,7 @@ function AppShellHeader({
 					currentChat={currentChat}
 					currentChatHasAutomation={currentChatHasAutomation}
 					onOpenChatTitleEditor={openBreadcrumbTitleEditor}
+					onOpenNoteTitleEditor={noteTitleEditor.start}
 					onCreateNote={onCreateNote}
 					onNoteTrashed={onNoteTrashed}
 					onChatTrashed={onChatTrashed}
@@ -1634,6 +1637,7 @@ function AppShellHeaderActions({
 	currentChat,
 	currentChatHasAutomation,
 	onOpenChatTitleEditor,
+	onOpenNoteTitleEditor,
 	onCreateNote,
 	onNoteTrashed,
 	onChatTrashed,
@@ -1660,6 +1664,7 @@ function AppShellHeaderActions({
 	| "onNewChatAutomation"
 > & {
 	onOpenChatTitleEditor: () => void;
+	onOpenNoteTitleEditor: () => void;
 	noteTemplates: NoteTemplate[] | undefined;
 }) {
 	if (currentView === "home") {
@@ -1747,6 +1752,7 @@ function AppShellHeaderActions({
 				onOpen={currentNoteCommentsOpener}
 			/>
 			<NoteHeaderActionsMenu
+				onRename={onOpenNoteTitleEditor}
 				noteId={currentNoteId}
 				noteTitle={currentNoteTitle}
 				noteEditorActions={currentNoteEditorActions}
@@ -1777,6 +1783,8 @@ function ChatHeaderActions({
 }) {
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const [confirmTrashOpen, setConfirmTrashOpen] = React.useState(false);
+	const { completePopoverOpen, preparePopoverOpen, preventCloseAutoFocusRef } =
+		useDropdownPopoverHandoff(onRenameChat);
 	const [isUpdatingStar, setIsUpdatingStar] = React.useState(false);
 	const [isMovingToTrash, setIsMovingToTrash] = React.useState(false);
 	const isStarred = chat?.isStarred ?? false;
@@ -1922,11 +1930,18 @@ function ChatHeaderActions({
 				<DropdownMenuContent
 					align="end"
 					className="w-44 overflow-hidden rounded-lg p-1"
+					onCloseAutoFocus={(event) => {
+						if (preventCloseAutoFocusRef.current) {
+							event.preventDefault();
+							preventCloseAutoFocusRef.current = false;
+						}
+						completePopoverOpen();
+					}}
 				>
 					<DropdownMenuItem
 						className="cursor-pointer"
 						disabled={!chatId}
-						onSelect={onRenameChat}
+						onSelect={() => preparePopoverOpen()}
 					>
 						<Pencil />
 						Rename
