@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-	access,
+	link,
 	mkdtemp,
 	readFile,
 	realpath,
@@ -25,6 +25,7 @@ test("runs isolated cross-platform commands over a shared folder", async () => {
 		await writeFile(join(directory, "notes.txt"), "alpha\nbeta\n");
 		await writeFile(outsideFile, "outside secret");
 		await symlink(outsideFile, join(directory, "escape"));
+		await link(outsideFile, join(directory, "linked.txt"));
 
 		const readResult = await runLocalCommand({
 			command: "grep beta notes.txt",
@@ -42,16 +43,42 @@ test("runs isolated cross-platform commands over a shared folder", async () => {
 			rootPath,
 		});
 		assert.equal(outsideResult.stdout.includes("outside secret"), false);
-		assert.match(outsideResult.stderr, /No such file or directory/u);
+		assert.notEqual(outsideResult.exitCode, 0);
 
 		const writeResult = await runLocalCommand({
 			command:
-				"printf changed > notes.txt; printf temporary > virtual.txt; cat notes.txt virtual.txt",
+				"printf changed > notes.txt; printf saved > output.txt; cat notes.txt output.txt",
 			rootPath,
 		});
 		assert.equal(writeResult.exitCode, 0);
-		assert.equal(writeResult.stdout, "changedtemporary");
-		await assert.rejects(access(join(directory, "virtual.txt")));
+		assert.equal(writeResult.stdout, "changedsaved");
+		assert.equal(
+			await readFile(join(directory, "output.txt"), "utf8"),
+			"saved",
+		);
+		const resumed = await runLocalCommand({
+			command: "cat output.txt",
+			rootPath,
+		});
+		assert.equal(resumed.stdout, "saved");
+
+		await assert.rejects(
+			runLocalCommand({
+				command: "printf changed > escape",
+				rootPath,
+			}),
+			/outside sandbox/u,
+		);
+		const linkedWrite = await runLocalCommand({
+			command: "printf changed >> linked.txt",
+			rootPath,
+		});
+		assert.equal(linkedWrite.exitCode, 0);
+		assert.equal(await readFile(outsideFile, "utf8"), "outside secret");
+		assert.equal(
+			await readFile(join(directory, "linked.txt"), "utf8"),
+			"outside secretchanged",
+		);
 
 		const languageResult = await runLocalCommand({
 			command:
@@ -85,7 +112,7 @@ test("runs isolated cross-platform commands over a shared folder", async () => {
 		assert.equal(utf8Result.truncated, true);
 		assert.equal(
 			await readFile(join(directory, "notes.txt"), "utf8"),
-			"alpha\nbeta\n",
+			"changed",
 		);
 	} finally {
 		await rm(directory, { force: true, recursive: true });

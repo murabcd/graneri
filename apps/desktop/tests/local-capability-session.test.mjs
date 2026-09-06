@@ -140,6 +140,47 @@ test("never repeats an interrupted execution after restart", async () => {
 	);
 });
 
+test("applies a saved-file command once across concurrent calls and restarts", async () => {
+	const { paths, rootDir, session } = await createTestSession();
+	try {
+		const sharedDir = join(rootDir, "Project");
+		await mkdir(sharedDir);
+		const { session: descriptor } = await session.authorizeFolder({
+			path: sharedDir,
+			scope: "chat:write",
+		});
+		const request = {
+			fileUploadUrls: [],
+			input: {
+				command: "printf once >> output.txt; cat output.txt",
+				rootIndex: 0,
+			},
+			sessionId: descriptor.id,
+			toolCallId: "write-once",
+			toolName: "run_local_command",
+		};
+		const [first, duplicate] = await Promise.all([
+			session.executeLocalFolderTool(request),
+			session.executeLocalFolderTool(request),
+			assert.rejects(
+				session.executeLocalFolderTool({
+					...request,
+					input: { command: "printf wrong >> output.txt", rootIndex: 0 },
+				}),
+				/identity was reused with different input/u,
+			),
+		]);
+		assert.deepEqual(duplicate, first);
+		const restarted = createLocalCapabilitySession(paths);
+		assert.deepEqual(await restarted.executeLocalFolderTool(request), first);
+		assert.equal(await readFile(join(sharedDir, "output.txt"), "utf8"), "once");
+		await restarted.revokeSession("chat:write");
+		assert.equal(await readFile(join(sharedDir, "output.txt"), "utf8"), "once");
+	} finally {
+		await rm(rootDir, { recursive: true, force: true });
+	}
+});
+
 test("removes orphaned execution receipts during initialization", async () => {
 	const rootDir = await mkdtemp(join(tmpdir(), "graneri-local-capability-"));
 	const paths = {

@@ -1,12 +1,11 @@
 import { realpath } from "node:fs/promises";
 import { StringDecoder } from "node:string_decoder";
 import { MAX_LOCAL_COMMAND_LENGTH } from "@workspace/ai/local-folder-tool-definitions";
-import { Bash, OverlayFs } from "just-bash";
+import { Bash, ReadWriteFs } from "just-bash";
 
 const COMMAND_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT_BYTES = 20_000;
 const MAX_FILE_READ_BYTES = 20_000_000;
-const MAX_VIRTUAL_WRITE_BYTES = 20_000_000;
 const MAX_SANDBOX_OUTPUT_BYTES = 250_000;
 
 const truncateUtf8 = (value) => {
@@ -22,15 +21,15 @@ const truncateUtf8 = (value) => {
 };
 
 const createCommandEnvironment = (rootPath) => {
-	const filesystem = new OverlayFs({
+	const filesystem = new ReadWriteFs({
 		allowSymlinks: false,
+		maxCopyOnWriteSize: MAX_FILE_READ_BYTES,
+		maxCopySize: MAX_FILE_READ_BYTES,
 		maxFileReadSize: MAX_FILE_READ_BYTES,
-		maxMemoryBytes: MAX_VIRTUAL_WRITE_BYTES,
 		root: rootPath,
 	});
-	const mountPoint = filesystem.getMountPoint();
 	return new Bash({
-		cwd: mountPoint,
+		cwd: "/",
 		// Host-global monkey patches are unsafe in Electron's shared main process.
 		defenseInDepth: false,
 		executionLimitProfile: "hardened",

@@ -138,7 +138,7 @@ const localFolderToolCatalog = Object.freeze({
 	run_local_command: {
 		buildConfig: ({ rootSchema }) => ({
 			description:
-				"Run a cross-platform virtual Bash command in one local folder explicitly shared by the desktop user. Use built-in tools such as find, rg, grep, stat, cat, head, tail, wc, sort, uniq, sed, awk, jq, js-exec, python3, and sqlite3. Commands can read the live shared folder; writes are temporary copy-on-write changes discarded after the call. Reads outside the shared folder, symlink traversal, network access, and native host executables are unavailable.",
+				"Run a cross-platform virtual Bash command in one local folder explicitly shared by the desktop user. Use built-in tools such as find, rg, grep, stat, cat, head, tail, wc, sort, uniq, sed, awk, jq, js-exec, python3, and sqlite3. Commands read and modify real files in the shared folder. Files persist between calls and app restarts; shell variables and processes do not. Inspect existing files before changing them and preserve unrelated user content. Reads outside the shared folder, symlink traversal, network access, and native host executables are unavailable.",
 			inputSchema: z.object({
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
@@ -155,8 +155,8 @@ const localFolderToolCatalog = Object.freeze({
 		ui: {
 			groupKey: "local-folder",
 			icon: "terminal",
-			running: "Exploring local folder",
-			complete: "Explored local folder",
+			running: "Running local command",
+			complete: "Ran local command",
 			subtitleKeys: ["command"],
 		},
 	},
@@ -182,7 +182,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"The user shared local folders from the desktop app. You can inspect only these shared folders through the local folder tools. Do not claim access to other local paths.",
 				"When the user asks about a shared local path, folder contents, local file, screenshot, image, or text transcript file inside a shared folder, use the local folder tools before answering. Do not use connected app tools such as Notion for local filesystem questions unless the user explicitly asks about those connected apps.",
 				"Do not say you cannot access the folder, and do not ask the user to run terminal commands, unless a local folder tool fails or the needed path is outside the shared folders.",
-				"For broad exploration, use run_local_command. It runs cross-platform virtual Bash with the selected shared folder as its working directory. Reads reflect the live shared folder; writes are temporary copy-on-write changes discarded after the call. Reads outside the folder, symlink traversal, and native host executables are blocked. Network access is unavailable. Sandboxed JavaScript, sandboxed Python, and in-memory SQLite are available.",
+				"Use run_local_command to explore the folder, save scripts, and create or edit outputs. It runs cross-platform virtual Bash with the selected shared folder as its working directory. File changes persist between calls and app restarts; shell variables and processes do not. Inspect existing files before editing them, preserve unrelated user content, and report saved outputs using their relative paths. Reads outside the folder, symlink traversal, and native host executables are blocked. Network access is unavailable. Sandboxed JavaScript, sandboxed Python, and SQLite are available.",
 				"Use structured local tools for direct folder listing, automatic supported-file reading, and file search. Continue list/search with nextCursor until null when complete coverage is needed. Hidden/generated entries are excluded and counted; skippedFiles identifies contents that were not searched. Open supported documents separately with read_local_file. read_local_file detects UTF-8 text, images, PDF, DOCX, XLSX, and PPTX from file bytes. Use byte ranges when a text file is larger than one response.",
 				"For a specific local image or document, use read_local_file directly. Use search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"Shared local folders:",

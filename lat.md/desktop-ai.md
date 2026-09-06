@@ -223,20 +223,26 @@ generic ZIP archives fail before upload. Both direct attachments and local-file
 tool results reach the hosted OpenAI Responses model as URL-backed AI SDK file
 parts; no renderer or Electron process parses document contents itself.
 `run_local_command` executes one cross-platform virtual Bash environment from a
-selected root. The Electron main process creates a fresh `just-bash` `OverlayFs`
+selected root. The Electron main process creates a fresh `just-bash` `ReadWriteFs`
 environment for every call and executes the command directly; the shared AI
 package is the only owner of the model-facing AI SDK tool and receives desktop
 execution only through an explicit adapter. The adapter returns only exit code,
 standard output, standard error, and truncation state; the shared local-folder
 contract validates that semantic
 result and keeps the command input, canonical root, and sandbox implementation
-private to Electron. Reads reflect the live selected root, while writes exist
-only in the call's bounded copy-on-write layer and are discarded afterward.
-The overlay blocks reads outside the root and rejects symlink traversal. The
+private to Electron. Reads and writes use the live selected root. Files persist
+between calls and application restarts; shell variables and processes do not.
+The folder picker discloses read/create/modify access. Existing files can be
+edited, and saved scripts can be executed in subsequent calls. Execution
+receipts prevent a repeated tool call from applying a write twice.
+`ReadWriteFs` rejects symlink traversal and replaces file directory entries to
+isolate writes through hard links. File reads and copies are limited to 20 MB.
+Filesystem operations for overlapping roots serialize inside the adapter;
+whole commands are not transactions and partial writes survive failure. The
 shell exposes
 the bounded `just-bash` tool catalog, sandboxed QuickJS and WASM CPython. It
 exposes neither network access nor native host executables. Command length,
-execution, traversal, file reads, virtual writes, and captured output are
+execution, traversal, file reads, file copies, and captured output are
 bounded. The optional `just-bash` host-global defense monkey patches must
 remain disabled because Electron main owns unrelated timers and process state;
 the capability boundary, virtual filesystem, worker runtimes, and explicit

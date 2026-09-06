@@ -5,6 +5,8 @@ export const pickDesktopLocalFolder = async ({
 }) => {
 	const result = await showOpenDialog({
 		buttonLabel: "Choose",
+		message:
+			"Graneri can read, create, and modify files in the folder you share.",
 		properties: ["openDirectory", "createDirectory"],
 		title: "Choose local folder",
 	});

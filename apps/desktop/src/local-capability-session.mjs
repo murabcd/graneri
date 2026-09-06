@@ -155,7 +155,7 @@ export const createLocalCapabilitySession = ({
 }) => {
 	const sessionsById = new Map();
 	const sessionIdByScope = new Map();
-	const executionPromises = new Map();
+	const activeExecutions = new Map();
 	const pendingRevocationCountByScope = new Map();
 	let mutationChain = Promise.resolve();
 	const cleanupOrphanedExecutionDirectories = async () => {
@@ -220,24 +220,20 @@ export const createLocalCapabilitySession = ({
 
 	const waitForSessionExecutions = async (sessionId) => {
 		const keyPrefix = `${sessionId}:`;
-		const pendingExecutions = [...executionPromises.entries()]
+		const pendingExecutions = [...activeExecutions.entries()]
 			.filter(([executionKey]) => executionKey.startsWith(keyPrefix))
-			.map(([, execution]) => execution);
+			.map(([, execution]) => execution.promise);
 		await Promise.allSettled(pendingExecutions);
 	};
 
 	const executeUncached = async ({
 		fileUploadUrls,
 		input,
+		inputHash,
 		session,
 		toolCallId,
 		toolName,
 	}) => {
-		const inputHash = createInputHash({
-			input,
-			sessionId: session.id,
-			toolName,
-		});
 		const receiptPath = getReceiptPath({
 			executionsDirPath,
 			sessionId: session.id,
@@ -349,18 +345,28 @@ export const createLocalCapabilitySession = ({
 				throw new Error("Local capability session is unavailable or revoked.");
 			}
 			const executionKey = `${session.id}:${request.toolCallId}`;
-			const existingExecution = executionPromises.get(executionKey);
+			const inputHash = createInputHash(request);
+			const existingExecution = activeExecutions.get(executionKey);
 			if (existingExecution) {
-				return await existingExecution;
+				if (existingExecution.inputHash !== inputHash) {
+					throw new Error(
+						"Local tool call identity was reused with different input.",
+					);
+				}
+				return await existingExecution.promise;
 			}
 
-			const execution = executeUncached({ ...request, session }).finally(() => {
-				if (executionPromises.get(executionKey) === execution) {
-					executionPromises.delete(executionKey);
+			const promise = executeUncached({
+				...request,
+				inputHash,
+				session,
+			}).finally(() => {
+				if (activeExecutions.get(executionKey)?.promise === promise) {
+					activeExecutions.delete(executionKey);
 				}
 			});
-			executionPromises.set(executionKey, execution);
-			return await execution;
+			activeExecutions.set(executionKey, { inputHash, promise });
+			return await promise;
 		},
 		getSession: async (scope) => {
 			await initialized;

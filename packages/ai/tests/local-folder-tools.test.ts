@@ -45,7 +45,6 @@ describe("local folder tools", () => {
 		expect(context).toContain("screenshot");
 		expect(context).toContain("PDF, DOCX, XLSX, and PPTX");
 		expect(context).toContain("run_local_command");
-		expect(context).toContain("temporary copy-on-write changes");
 		expect(context).toContain("Network access is unavailable");
 		expect(context).not.toContain("Public HTTP(S) requests");
 	});
