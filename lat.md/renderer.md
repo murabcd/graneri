@@ -237,6 +237,8 @@ discussion identity, settings ownership, or query orchestration.
 [[apps/web/src/components/note/note-composer-footer-ui.tsx]] owns the shared
 footer layout tokens and the inline composer's focused attachment, editor, and
 action rows, keeping those render branches out of the note session adapter.
+[[apps/web/src/components/note/use-note-panel-height.ts]] owns height restoration
+and persistence for inline and floating panels, scoped by note and viewport.
 Workspace chat navigation commits the destination route immediately and lets the
 destination's cursor-paginated subscription load its first bounded page. The workspace composer derives its
 placeholder from the stored chat identity before hydrated messages arrive, so a

@@ -101,16 +101,18 @@ export const executeDesktopLocalToolCall = async ({
 		input: toolCall.input,
 		toolName: toolCall.toolName,
 	});
-	const fileUploadUrls = await Promise.all(
-		Array.from({ length: fileUploadCount }, () =>
-			fileStorage.generateUploadUrl(),
+	const [fileUploadUrls, fileDownload] = await Promise.all([
+		Promise.all(
+			Array.from({ length: fileUploadCount }, () =>
+				fileStorage.generateUploadUrl(),
+			),
 		),
-	);
-	const fileDownload = await resolveLocalFileDownload({
-		input: toolCall.input,
-		toolName: toolCall.toolName,
-		resolveStorageUrl: fileStorage.getOwnedUrl,
-	});
+		resolveLocalFileDownload({
+			input: toolCall.input,
+			toolName: toolCall.toolName,
+			resolveStorageUrl: fileStorage.getOwnedUrl,
+		}),
+	]);
 
 	const response = await fetchImpl(apiUrl, {
 		method: "POST",

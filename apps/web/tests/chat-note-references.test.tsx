@@ -71,7 +71,7 @@ const message: UIMessage = {
 };
 
 it("restores one reference per successfully read note from saved tool results", () => {
-	const restored: UIMessage = JSON.parse(JSON.stringify(message));
+	const restored = structuredClone(message);
 	expect(extractReadNoteReferences(restored)).toEqual([{ ...note, project }]);
 	expect(collectChatSummaryContent([restored]).sources).toEqual([
 		{ kind: "note", sourceId: note.noteId, title: note.title },

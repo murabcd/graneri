@@ -183,18 +183,23 @@ export const useChatTurnPresentation = ({
 			turnId: null,
 		});
 	React.useLayoutEffect(() => {
-		setActiveTurnState((state) =>
-			advanceActiveTurnVisualState(state, {
-				activityUnits: latestAssistantSequence.activityUnits,
-				now: Date.now(),
-				sourceIsLoading: isLoading,
-				startsNewTurn: turnSnapshots
-					.slice(0, -1)
-					.some(({ messages }) => messages[0]?.id === state.turnId),
-				turnId: latestTurnId,
-			}),
-		);
-	}, [isLoading, latestAssistantSequence, latestTurnId, turnSnapshots]);
+		const nextState = advanceActiveTurnVisualState(activeTurnState, {
+			activityUnits: latestAssistantSequence.activityUnits,
+			now: Date.now(),
+			sourceIsLoading: isLoading,
+			startsNewTurn: turnSnapshots
+				.slice(0, -1)
+				.some(({ messages }) => messages[0]?.id === activeTurnState.turnId),
+			turnId: latestTurnId,
+		});
+		if (nextState !== activeTurnState) setActiveTurnState(nextState);
+	}, [
+		activeTurnState,
+		isLoading,
+		latestAssistantSequence,
+		latestTurnId,
+		turnSnapshots,
+	]);
 
 	const turns = turnSnapshots.map(
 		(
