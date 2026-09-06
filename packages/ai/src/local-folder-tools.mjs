@@ -61,6 +61,7 @@ const storeWorkspaceFile = async ({
 };
 
 const searchLocalImages = async ({
+	cursor,
 	maxResults = 5,
 	query,
 	relativePath = ".",
@@ -69,6 +70,7 @@ const searchLocalImages = async ({
 	workspace,
 }) => {
 	const searchResult = await workspace.searchImages({
+		cursor,
 		maxResults,
 		query,
 		relativePath,
@@ -97,8 +99,10 @@ const searchLocalImages = async ({
 		kind: "image-search",
 		path: searchResult.path,
 		results,
-		totalImageCount: searchResult.totalImageCount,
-		truncated: searchResult.truncated,
+		nextCursor: searchResult.nextCursor,
+		visitedEntries: searchResult.visitedEntries,
+		excludedEntries: searchResult.excludedEntries,
+		skippedFiles: searchResult.skippedFiles,
 	};
 };
 
@@ -123,8 +127,8 @@ export const buildLocalFolderTools = ({
 		providerOptions: deferredOpenAIToolOptions,
 	});
 	const executors = {
-		list_local_directory: async ({ rootIndex, relativePath }) =>
-			withDuration(() => workspace.listDirectory({ relativePath, rootIndex })),
+		list_local_directory: async (input) =>
+			withDuration(() => workspace.listDirectory(input)),
 		read_local_file: async ({
 			lengthBytes = MAX_LOCAL_FILE_READ_BYTES,
 			offsetBytes = 0,
@@ -142,6 +146,7 @@ export const buildLocalFolderTools = ({
 				}),
 			),
 		search_local_files: async ({
+			cursor,
 			contentType,
 			maxResults,
 			query,
@@ -151,6 +156,7 @@ export const buildLocalFolderTools = ({
 			withDuration(() =>
 				contentType === "image"
 					? searchLocalImages({
+							cursor,
 							maxResults,
 							query,
 							relativePath,
@@ -158,7 +164,7 @@ export const buildLocalFolderTools = ({
 							storeLocalFile,
 							workspace,
 						})
-					: workspace.searchFiles({ query, relativePath, rootIndex }),
+					: workspace.searchFiles({ cursor, query, relativePath, rootIndex }),
 			),
 		run_local_command: async ({ rootIndex, command }) =>
 			withDuration(async () =>

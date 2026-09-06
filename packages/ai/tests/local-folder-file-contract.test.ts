@@ -49,6 +49,11 @@ describe("local folder file contract", () => {
 			truncated: false,
 		};
 		const searchOutput = {
+			nextCursor: null,
+			visitedEntries: 1,
+			excludedEntries: 0,
+			skippedFiles: [],
+			contentBytesRead: 13,
 			kind: "text-search",
 			matches: [
 				{
@@ -58,7 +63,6 @@ describe("local folder file contract", () => {
 					sizeBytes: 13,
 				},
 			],
-			truncated: false,
 		};
 
 		expect(
@@ -166,8 +170,10 @@ describe("local folder file contract", () => {
 						sizeBytes: 128,
 					},
 				],
-				totalImageCount: 4,
-				truncated: true,
+				nextCursor: "next-images",
+				visitedEntries: 1,
+				excludedEntries: 0,
+				skippedFiles: [],
 			},
 			resolveStorageUrl: async () => "https://files.example.test/screen",
 			toolName: "search_local_files",
@@ -184,7 +190,7 @@ describe("local folder file contract", () => {
 		expect(modelOutput).toMatchObject({
 			type: "content",
 			value: [
-				{ text: expect.stringContaining("billing dialog"), type: "text" },
+				{ text: expect.stringContaining("next-images"), type: "text" },
 				{
 					text: expect.stringContaining("screens/screen.png"),
 					type: "text",

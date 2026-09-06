@@ -203,6 +203,14 @@ step. Electron neither constructs an OpenAI model nor consumes an OpenAI key.
 Chat attachment reference tracking owns those temporary file bytes until the
 last referencing chat message is removed.
 
+## Resumable local discovery
+
+Local directory listing and text/image discovery return bounded pages with explicit coverage and a continuation cursor rather than implying that a bounded sample covers the folder.
+
+[local-workspace-traversal.mjs](../packages/ai/src/local-workspace-traversal.mjs) owns deterministic traversal, visibility policy, per-page entry budgets, cursor validation, and directory-change detection. Cursors bind the root, relative path, operation, and query; they contain only relative traversal positions and a context hash. Changed directories reject resumption visibly. Listing returns at most 200 entries; recursive pages visit at most 1,000 entries, resume inside the current subtree, and never reread earlier file contents. Each directory is bounded to 50,000 entries and depth to 64; larger workloads fail explicitly so callers can narrow the path. Hidden/generated entries and symlinks are excluded and counted.
+
+`nextCursor: null` means traversal ended under that visibility policy. `skippedFiles` separately records non-text or oversized contents; it must be considered before claiming a complete content search. Text search inspects files up to 20 MB, with a 20 MB soft page budget (one admitted file can take the total below 40 MB), and returns up to 40 matching files. Supported Office/PDF files are read separately through `read_local_file`. Image discovery returns consecutive pages for model inspection with at most ten uploaded images per call; it does not claim a visual/OCR index or a total image count before traversal finishes. Its model output preserves the continuation and skipped-file metadata alongside image parts.
+
 ## Attachments and local commands
 
 Signature-based files and a bounded virtual Bash environment reach the model without native command execution or network access.

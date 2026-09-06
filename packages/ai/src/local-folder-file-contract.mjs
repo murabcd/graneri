@@ -50,6 +50,17 @@ const resolvedFileReadOutputSchema = z.object({
 	sizeBytes: z.number().int().nonnegative(),
 	...localToolDurationFields,
 });
+const discoveryPageFields = {
+	nextCursor: z.string().nullable(),
+	visitedEntries: z.number().int().nonnegative(),
+	excludedEntries: z.number().int().nonnegative(),
+	skippedFiles: z.array(
+		z.object({
+			path: z.string(),
+			reason: z.enum(["non_text", "size_limit"]),
+		}),
+	),
+};
 const pendingImageSearchOutputSchema = z.object({
 	candidateImageCount: z.number().int().nonnegative(),
 	kind: z.literal("image-search"),
@@ -61,8 +72,7 @@ const pendingImageSearchOutputSchema = z.object({
 			sizeBytes: z.number().int().nonnegative(),
 		}),
 	),
-	totalImageCount: z.number().int().nonnegative(),
-	truncated: z.boolean(),
+	...discoveryPageFields,
 	...localToolDurationFields,
 });
 const resolvedImageSearchOutputSchema = z.object({
@@ -76,8 +86,7 @@ const resolvedImageSearchOutputSchema = z.object({
 			sizeBytes: z.number().int().nonnegative(),
 		}),
 	),
-	totalImageCount: z.number().int().nonnegative(),
-	truncated: z.boolean(),
+	...discoveryPageFields,
 	...localToolDurationFields,
 });
 const textSearchOutputSchema = z.object({
@@ -95,7 +104,8 @@ const textSearchOutputSchema = z.object({
 			sizeBytes: z.number().int().nonnegative(),
 		}),
 	),
-	truncated: z.boolean(),
+	contentBytesRead: z.number().int().nonnegative(),
+	...discoveryPageFields,
 	...localToolDurationFields,
 });
 const searchInputSchema = z.object({
@@ -224,7 +234,7 @@ export const searchLocalFilesOutputForModel = ({ input, output }) => {
 	const query = typeof input?.query === "string" ? input.query.trim() : "";
 	const value = [
 		{
-			text: `Inspect these candidate images from ${parsed.path} and rank the ones that best match: ${query}`,
+			text: `Inspect this page of candidate images from ${parsed.path} for: ${query}. This is not an OCR or visual index. Discovery coverage: ${JSON.stringify({ nextCursor: parsed.nextCursor, visitedEntries: parsed.visitedEntries, excludedEntries: parsed.excludedEntries, skippedFiles: parsed.skippedFiles })}. Continue with nextCursor when more images need inspection.`,
 			type: "text",
 		},
 	];

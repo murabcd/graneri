@@ -4,6 +4,7 @@ import {
 	realpath,
 	rm,
 	symlink,
+	truncate,
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -79,7 +80,7 @@ describe("local workspace session", () => {
 		}
 	});
 
-	it("caps image search inside the workspace boundary", async () => {
+	it("continues image inspection beyond the per-call upload limit", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "graneri-workspace-"));
 		try {
 			const image = Buffer.from([
@@ -98,10 +99,131 @@ describe("local workspace session", () => {
 				rootIndex: 0,
 			});
 			expect(result.results).toHaveLength(10);
-			expect(result).toMatchObject({
-				totalImageCount: 11,
-				truncated: true,
+			expect(result.nextCursor).toEqual(expect.any(String));
+			const next = await session.searchImages({
+				cursor: result.nextCursor,
+				maxResults: 10,
+				query: "screenshot",
+				rootIndex: 0,
 			});
+			expect(next.results).toHaveLength(1);
+			expect(next.nextCursor).toBeNull();
+			expect(
+				new Set([...result.results, ...next.results].map((image) => image.path))
+					.size,
+			).toBe(11);
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("pages directory entries without duplicates and rejects stale or mismatched cursors", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "graneri-workspace-pages-"));
+		try {
+			await Promise.all(
+				Array.from({ length: 215 }, (_, index) =>
+					writeFile(join(directory, `entry-${index}.txt`), "entry"),
+				),
+			);
+			const session = await createSession(directory);
+			const first = await session.listDirectory({ rootIndex: 0 });
+			const second = await session.listDirectory({
+				rootIndex: 0,
+				cursor: first.nextCursor,
+			});
+			expect(first.entries).toHaveLength(200);
+			expect(second.entries).toHaveLength(15);
+			expect(second.nextCursor).toBeNull();
+			expect(
+				new Set(
+					[...first.entries, ...second.entries].map((entry) => entry.name),
+				).size,
+			).toBe(215);
+			await expect(
+				session.searchFiles({
+					rootIndex: 0,
+					query: "entry",
+					cursor: first.nextCursor,
+				}),
+			).rejects.toThrow("does not match");
+			await writeFile(join(directory, "new.txt"), "changed");
+			await expect(
+				session.listDirectory({ rootIndex: 0, cursor: first.nextCursor }),
+			).rejects.toThrow("changed while paging");
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("resumes recursive search beyond the traversal budget without rereading earlier subtrees", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "graneri-workspace-recursive-"),
+		);
+		try {
+			await mkdir(join(directory, "nested"));
+			await Promise.all(
+				Array.from({ length: 1_005 }, (_, index) =>
+					writeFile(
+						join(directory, "nested", `${String(index).padStart(4, "0")}.txt`),
+						index === 1_004 ? "last needle" : "ordinary",
+					),
+				),
+			);
+			const session = await createSession(directory);
+			const first = await session.searchFiles({
+				rootIndex: 0,
+				query: "needle",
+			});
+			expect(first.matches).toHaveLength(0);
+			expect(first.nextCursor).toEqual(expect.any(String));
+			const second = await session.searchFiles({
+				rootIndex: 0,
+				query: "needle",
+				cursor: first.nextCursor,
+			});
+			expect(second.matches.map((match) => match.path)).toEqual([
+				"nested/1004.txt",
+			]);
+			expect(second.nextCursor).toBeNull();
+			expect(second.contentBytesRead).toBeLessThan(100);
+			await expect(
+				session.searchFiles({
+					rootIndex: 0,
+					query: "other",
+					cursor: first.nextCursor,
+				}),
+			).rejects.toThrow("does not match");
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
+	});
+
+	it("finds text beyond 250 KB and reports every unsearched file instead of false completeness", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "graneri-workspace-coverage-"),
+		);
+		try {
+			await writeFile(
+				join(directory, "large.txt"),
+				`${"x".repeat(250_001)}\nneedle\n`,
+			);
+			await writeFile(join(directory, "oversized.txt"), "text".repeat(2_048));
+			await truncate(join(directory, "oversized.txt"), 20_000_001);
+			await writeFile(join(directory, "document.pdf"), "%PDF-1.7\n");
+			await writeFile(join(directory, ".private"), "needle");
+			const result = await (await createSession(directory)).searchFiles({
+				rootIndex: 0,
+				query: "needle",
+			});
+			expect(result.matches).toMatchObject([
+				{ path: "large.txt", matches: [{ line: 2, text: "needle" }] },
+			]);
+			expect(result.skippedFiles).toEqual([
+				{ path: "document.pdf", reason: "non_text" },
+				{ path: "oversized.txt", reason: "size_limit" },
+			]);
+			expect(result.excludedEntries).toBe(1);
+			expect(result.nextCursor).toBeNull();
 		} finally {
 			await rm(directory, { force: true, recursive: true });
 		}

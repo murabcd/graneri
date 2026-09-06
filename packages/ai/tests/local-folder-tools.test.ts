@@ -215,8 +215,8 @@ describe("local folder tools", () => {
 						path: "screenshot.png",
 					},
 				],
-				totalImageCount: 1,
-				truncated: false,
+				nextCursor: null,
+				skippedFiles: [],
 			});
 		} finally {
 			await rm(directory, { force: true, recursive: true });

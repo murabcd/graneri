@@ -9,6 +9,15 @@ export const MAX_LOCAL_FOLDER_ROOTS = 1;
 export const MAX_LOCAL_FILE_READ_BYTES = 120_000;
 export const MAX_LOCAL_COMMAND_LENGTH = 8_000;
 
+const cursorSchema = z
+	.string()
+	.min(1)
+	.max(65_536)
+	.optional()
+	.describe(
+		"Continuation cursor returned by the previous page. Keep the folder, query, and content type unchanged. Omit to restart if the folder changed.",
+	);
+
 export const assertLocalFolderRootLimit = (roots) => {
 	if (roots.length > MAX_LOCAL_FOLDER_ROOTS) {
 		throw new Error("Only one local folder can be shared.");
@@ -21,6 +30,7 @@ const localFolderToolCatalog = Object.freeze({
 			description:
 				"List files and folders inside a local folder explicitly shared by the desktop user.",
 			inputSchema: z.object({
+				cursor: cursorSchema,
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
 				),
@@ -87,8 +97,9 @@ const localFolderToolCatalog = Object.freeze({
 	search_local_files: {
 		buildConfig: ({ maxImageSearchResults, rootSchema }) => ({
 			description:
-				"Search files inside a local folder explicitly shared by the desktop user. Text search matches file names and text-like contents. Image search finds and inspects candidate screenshots, photos, charts, diagrams, visible text, or visual descriptions.",
+				"Search files inside a local folder explicitly shared by the desktop user. Follow nextCursor until null for complete traversal. Text search matches filenames and UTF-8 contents; skippedFiles reports unsearched document, binary, or oversized contents. Image search returns consecutive pages of images for you to inspect against the query; it does not index OCR or visual meaning. Review skippedFiles and excludedEntries before claiming completeness.",
 			inputSchema: z.object({
+				cursor: cursorSchema,
 				rootIndex: rootSchema.describe(
 					"Shared folder index from the system context.",
 				),
@@ -172,7 +183,7 @@ export const buildLocalFolderSystemContext = (roots) =>
 				"When the user asks about a shared local path, folder contents, local file, screenshot, image, or text transcript file inside a shared folder, use the local folder tools before answering. Do not use connected app tools such as Notion for local filesystem questions unless the user explicitly asks about those connected apps.",
 				"Do not say you cannot access the folder, and do not ask the user to run terminal commands, unless a local folder tool fails or the needed path is outside the shared folders.",
 				"For broad exploration, use run_local_command. It runs cross-platform virtual Bash with the selected shared folder as its working directory. Reads reflect the live shared folder; writes are temporary copy-on-write changes discarded after the call. Reads outside the folder, symlink traversal, and native host executables are blocked. Network access is unavailable. Sandboxed JavaScript, sandboxed Python, and in-memory SQLite are available.",
-				"Use structured local tools for direct folder listing, automatic supported-file reading, and file search. read_local_file detects UTF-8 text, images, PDF, DOCX, XLSX, and PPTX from file bytes. Use byte ranges when a text file is larger than one response.",
+				"Use structured local tools for direct folder listing, automatic supported-file reading, and file search. Continue list/search with nextCursor until null when complete coverage is needed. Hidden/generated entries are excluded and counted; skippedFiles identifies contents that were not searched. Open supported documents separately with read_local_file. read_local_file detects UTF-8 text, images, PDF, DOCX, XLSX, and PPTX from file bytes. Use byte ranges when a text file is larger than one response.",
 				"For a specific local image or document, use read_local_file directly. Use search_local_files with contentType image when the user asks to find images by visual meaning, OCR text, screenshots, diagrams, or image contents.",
 				"Shared local folders:",
 				...roots.map((root, index) => `${index}: ${root.name}`),

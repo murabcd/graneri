@@ -1,11 +1,12 @@
 import { constants } from "node:fs";
-import { open, readdir, realpath, stat } from "node:fs/promises";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { open, realpath } from "node:fs/promises";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { MAX_LOCAL_FILE_UPLOADS } from "./local-folder-file-contract.mjs";
 import {
 	assertLocalFolderRootLimit,
 	MAX_LOCAL_FILE_READ_BYTES,
 } from "./local-folder-tool-definitions.mjs";
+import { createLocalWorkspaceTraversal } from "./local-workspace-traversal.mjs";
 import {
 	assertModelFileMedia,
 	decodeModelUtf8Range,
@@ -14,23 +15,10 @@ import {
 } from "./model-file-input.mjs";
 
 const MAX_DIRECTORY_ENTRIES = 200;
-const MAX_WALK_FILES = 1000;
 const MAX_SEARCH_MATCHES = 40;
-const MAX_SEARCH_FILE_BYTES = 250_000;
+const MAX_SEARCH_FILE_BYTES = 20_000_000;
+const MAX_SEARCH_PAGE_BYTES = 20_000_000;
 const MAX_IMAGE_BYTES = 20_000_000;
-const IGNORED_DIRECTORY_NAMES = new Set([
-	".cache",
-	".git",
-	".next",
-	".turbo",
-	"build",
-	"coverage",
-	"dist",
-	"node_modules",
-	"out",
-	"target",
-]);
-
 const assertInsideRoot = ({ candidatePath, rootPath }) => {
 	const rootRelativePath = relative(rootPath, candidatePath);
 	if (
@@ -122,79 +110,6 @@ const readEntireFile = async (filePath, { maxBytes, tooLargeMessage }) => {
 	}
 };
 
-const isVisibleEntry = (entry) =>
-	(!entry.name.startsWith(".") || entry.name === ".env.example") &&
-	!(entry.isDirectory() && IGNORED_DIRECTORY_NAMES.has(entry.name));
-
-const walkFiles = async ({ directoryPath, root }) => {
-	const files = [];
-
-	const visitDirectory = async (currentDirectoryPath) => {
-		if (files.length >= MAX_WALK_FILES) {
-			return;
-		}
-
-		const canonicalDirectoryPath = await resolveExistingLocalPath({
-			relativePath: relative(root.path, currentDirectoryPath),
-			root,
-		});
-		const entries = await readdir(canonicalDirectoryPath, {
-			withFileTypes: true,
-		});
-
-		for (const entry of entries) {
-			if (files.length >= MAX_WALK_FILES) {
-				return;
-			}
-			if (!isVisibleEntry(entry)) {
-				continue;
-			}
-
-			const entryPath = join(canonicalDirectoryPath, entry.name);
-			if (entry.isDirectory()) {
-				await visitDirectory(entryPath);
-			} else if (entry.isFile()) {
-				files.push(relative(root.path, entryPath));
-			}
-		}
-	};
-
-	await visitDirectory(directoryPath);
-	return {
-		files,
-		truncated: files.length >= MAX_WALK_FILES,
-	};
-};
-
-const tokenizeSearchQuery = (query) =>
-	query
-		.toLowerCase()
-		.split(/[^\p{L}\p{N}]+/u)
-		.map((token) => token.trim())
-		.filter((token) => token.length >= 3);
-
-const scoreImagePathCandidate = ({
-	imagePath,
-	queryTokens,
-	rootRelativePath,
-}) => {
-	const normalizedPath = imagePath.toLowerCase();
-	const normalizedName = basename(imagePath).toLowerCase();
-	const depth = imagePath.split(sep).length - 1;
-	const tokenHits = queryTokens.filter((token) =>
-		normalizedPath.includes(token),
-	).length;
-	const screenshotBoost =
-		normalizedName.includes("screenshot") ||
-		normalizedName.includes("screen shot")
-			? 4
-			: 0;
-	const rootFolderBoost = rootRelativePath === "." && depth === 0 ? 3 : 0;
-	const shallowBoost = Math.max(0, 3 - depth);
-
-	return tokenHits * 5 + screenshotBoost + rootFolderBoost + shallowBoost;
-};
-
 export const createLocalWorkspaceSession = (roots) => {
 	const canonicalRoots = validateRoots(roots);
 
@@ -217,32 +132,48 @@ export const createLocalWorkspaceSession = (roots) => {
 		};
 	};
 
-	const listDirectory = async ({ relativePath = ".", rootIndex }) => {
-		const { path: directoryPath, root } = await resolveExistingPath({
+	const createTraversal = ({
+		cursor,
+		query = "",
+		relativePath,
+		rootIndex,
+		operation,
+	}) =>
+		createLocalWorkspaceTraversal({
+			cursor,
+			context: {
+				root: getRoot(rootIndex).path,
+				relativePath,
+				query,
+				operation,
+			},
+			relativePath,
+			recursive: operation !== "list",
+			resolveDirectory: async (path) =>
+				(await resolveExistingPath({ relativePath: path, rootIndex })).path,
+		});
+
+	const listDirectory = async ({ cursor, relativePath = ".", rootIndex }) => {
+		const traversal = await createTraversal({
+			cursor,
 			relativePath,
 			rootIndex,
+			operation: "list",
 		});
-		const directoryStat = await stat(directoryPath);
-		if (!directoryStat.isDirectory()) {
-			throw new Error("Path is not a directory.");
-		}
-
-		const entries = await readdir(directoryPath, { withFileTypes: true });
-		const displayableEntries = entries.filter(isVisibleEntry);
-		const visibleEntries = displayableEntries.slice(0, MAX_DIRECTORY_ENTRIES);
-
-		return {
-			entries: visibleEntries.map((entry) => ({
-				name: entry.name,
-				type: entry.isDirectory()
+		const entries = [];
+		while (entries.length < MAX_DIRECTORY_ENTRIES) {
+			const item = await traversal.next();
+			if (!item) break;
+			entries.push({
+				name: item.entry.name,
+				type: item.entry.isDirectory()
 					? "directory"
-					: entry.isFile()
+					: item.entry.isFile()
 						? "file"
 						: "other",
-			})),
-			path: relative(root.path, directoryPath) || ".",
-			truncated: displayableEntries.length > visibleEntries.length,
-		};
+			});
+		}
+		return { entries, path: relativePath, ...traversal.page() };
 	};
 
 	const readTextFile = async ({
@@ -361,159 +292,133 @@ export const createLocalWorkspaceSession = (roots) => {
 	};
 
 	const searchImages = async ({
+		cursor,
 		maxResults,
 		query,
 		relativePath = ".",
 		rootIndex,
 	}) => {
-		const needle = query.trim();
-		if (!needle) {
-			throw new Error("Search query is required.");
-		}
-
-		const { path: directoryPath, root } = await resolveExistingPath({
+		if (!query.trim()) throw new Error("Search query is required.");
+		const traversal = await createTraversal({
+			cursor,
+			query,
 			relativePath,
 			rootIndex,
+			operation: "image",
 		});
-		const directoryStat = await stat(directoryPath);
-		if (!directoryStat.isDirectory()) {
-			throw new Error("Search path is not a directory.");
-		}
-
-		const walk = await walkFiles({ directoryPath, root });
-		const rootRelativePath = relative(root.path, directoryPath) || ".";
-		const queryTokens = tokenizeSearchQuery(needle);
-		const imageCandidates = [];
-		for (const imagePath of walk.files) {
-			const { path: absolutePath } = await resolveExistingPath({
-				relativePath: imagePath,
+		const candidates = [];
+		const skippedFiles = [];
+		while (candidates.length < Math.min(maxResults, MAX_LOCAL_FILE_UPLOADS)) {
+			const item = await traversal.next();
+			if (!item) break;
+			if (!item.entry.isFile()) continue;
+			const { path } = await resolveExistingPath({
+				relativePath: item.path,
 				rootIndex,
 			});
-			const fileHeader = await readFileHeader(absolutePath);
-			const media = detectModelFileMedia(fileHeader.buffer);
-			if (
-				media.kind !== "image" ||
-				fileHeader.fileStat.size > MAX_IMAGE_BYTES
-			) {
+			const header = await readFileHeader(path);
+			const media = detectModelFileMedia(header.buffer);
+			if (media.kind !== "image") continue;
+			if (header.fileStat.size > MAX_IMAGE_BYTES) {
+				skippedFiles.push({ path: item.path, reason: "size_limit" });
 				continue;
 			}
-			imageCandidates.push({
+			candidates.push({
+				path: item.path,
+				absolutePath: path,
 				mediaType: media.mediaType,
-				path: imagePath,
-				pathScore: scoreImagePathCandidate({
-					imagePath,
-					queryTokens,
-					rootRelativePath,
-				}),
 			});
 		}
-		imageCandidates.sort(
-			(left, right) =>
-				right.pathScore - left.pathScore ||
-				left.path.split(sep).length - right.path.split(sep).length ||
-				left.path.localeCompare(right.path),
-		);
-		const totalImageCount = imageCandidates.length;
-		const candidates = imageCandidates.slice(
-			0,
-			Math.min(maxResults, MAX_LOCAL_FILE_UPLOADS),
-		);
 		const results = await Promise.all(
 			candidates.map(async (candidate) => {
-				const { path: absolutePath } = await resolveExistingPath({
-					relativePath: candidate.path,
-					rootIndex,
-				});
-				const fileData = await readEntireFile(absolutePath, {
+				const file = await readEntireFile(candidate.absolutePath, {
 					maxBytes: MAX_IMAGE_BYTES,
 				});
-
 				return {
-					bytes: fileData.buffer,
+					bytes: file.buffer,
 					filename: basename(candidate.path),
 					mediaType: candidate.mediaType,
 					path: candidate.path,
-					sizeBytes: fileData.sizeBytes,
+					sizeBytes: file.sizeBytes,
 				};
 			}),
 		);
-
-		return {
-			path: rootRelativePath,
-			results,
-			totalImageCount,
-			truncated: walk.truncated || candidates.length < totalImageCount,
-		};
+		return { path: relativePath, results, skippedFiles, ...traversal.page() };
 	};
 
-	const searchFiles = async ({ query, relativePath = ".", rootIndex }) => {
+	const searchFiles = async ({
+		cursor,
+		query,
+		relativePath = ".",
+		rootIndex,
+	}) => {
 		const needle = query.trim().toLowerCase();
-		if (!needle) {
-			throw new Error("Search query is required.");
-		}
-
-		const root = getRoot(rootIndex);
-		const { path: directoryPath } = await resolveExistingPath({
+		if (!needle) throw new Error("Search query is required.");
+		const traversal = await createTraversal({
+			cursor,
+			query,
 			relativePath,
 			rootIndex,
+			operation: "text",
 		});
-		const directoryStat = await stat(directoryPath);
-		if (!directoryStat.isDirectory()) {
-			throw new Error("Search path is not a directory.");
-		}
-		const walk = await walkFiles({ directoryPath, root });
 		const matches = [];
-
-		for (const relativePath of walk.files) {
-			if (matches.length >= MAX_SEARCH_MATCHES) {
-				break;
-			}
-
-			const pathMatches = relativePath.toLowerCase().includes(needle);
-			const { path: absolutePath } = await resolveExistingPath({
-				relativePath,
+		const skippedFiles = [];
+		let contentBytesRead = 0;
+		while (
+			matches.length < MAX_SEARCH_MATCHES &&
+			contentBytesRead < MAX_SEARCH_PAGE_BYTES
+		) {
+			const item = await traversal.next();
+			if (!item) break;
+			if (!item.entry.isFile()) continue;
+			const { path } = await resolveExistingPath({
+				relativePath: item.path,
 				rootIndex,
 			});
-			const headerData = await readFileHeader(absolutePath);
-
+			const header = await readFileHeader(path);
+			const media = detectModelFileMedia(header.buffer);
 			const lineMatches = [];
-			if (headerData.fileStat.size <= MAX_SEARCH_FILE_BYTES) {
-				const fileData = await readEntireFile(absolutePath, {
+			if (
+				media.kind !== "text" ||
+				header.fileStat.size > MAX_SEARCH_FILE_BYTES
+			) {
+				skippedFiles.push({
+					path: item.path,
+					reason: media.kind !== "text" ? "non_text" : "size_limit",
+				});
+			} else {
+				const file = await readEntireFile(path, {
 					maxBytes: MAX_SEARCH_FILE_BYTES,
 				});
-				const media = detectModelFileMedia(fileData.buffer.subarray(0, 8_192));
-				const lines =
-					media.kind === "text"
-						? fileData.buffer.toString("utf8").split(/\r?\n/u)
-						: [];
-
-				for (let index = 0; index < lines.length; index += 1) {
-					if (lines[index].toLowerCase().includes(needle)) {
-						lineMatches.push({
-							line: index + 1,
-							text: lines[index].slice(0, 500),
-						});
-					}
-					if (lineMatches.length >= 5) {
-						break;
-					}
+				contentBytesRead += file.sizeBytes;
+				const text = file.buffer.toString("utf8");
+				let start = 0;
+				let line = 1;
+				while (start < text.length && lineMatches.length < 5) {
+					const newline = text.indexOf("\n", start);
+					const end = newline < 0 ? text.length : newline;
+					const value = text.slice(start, end).replace(/\r$/u, "");
+					if (value.toLowerCase().includes(needle))
+						lineMatches.push({ line, text: value.slice(0, 500) });
+					start = end + 1;
+					line += 1;
 				}
 			}
-
-			if (pathMatches || lineMatches.length > 0) {
+			const matchedPath = item.path.toLowerCase().includes(needle);
+			if (matchedPath || lineMatches.length > 0)
 				matches.push({
-					matchedPath: pathMatches,
+					matchedPath,
 					matches: lineMatches,
-					path: relativePath,
-					sizeBytes: headerData.fileStat.size,
+					path: item.path,
+					sizeBytes: header.fileStat.size,
 				});
-			}
 		}
-
 		return {
 			kind: "text-search",
 			matches,
-			truncated: walk.truncated || matches.length >= MAX_SEARCH_MATCHES,
+			skippedFiles,
+			contentBytesRead,
+			...traversal.page(),
 		};
 	};
 
