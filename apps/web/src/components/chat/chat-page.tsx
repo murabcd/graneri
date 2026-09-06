@@ -433,7 +433,6 @@ const useChatPageController = ({
 	const {
 		canStop,
 		deleteMessage,
-		activeRun,
 		displayMessages,
 		error,
 		handleStop,
@@ -556,8 +555,7 @@ const useChatPageController = ({
 				isModelResolving ||
 				(!draftText.trim() && submittedAttachedFiles.length === 0) ||
 				hasUploadingAttachments(submittedAttachedFiles) ||
-				isAutomationRunning ||
-				(activeRun && submittedAttachedFiles.length > 0)
+				isAutomationRunning
 			) {
 				return;
 			}
@@ -653,7 +651,6 @@ const useChatPageController = ({
 			chatId,
 			claimAttachedFilesSnapshot,
 			claimDraftSnapshot,
-			activeRun,
 			editingMessageId,
 			getAttachedFilesSnapshot,
 			getDraftSnapshot,

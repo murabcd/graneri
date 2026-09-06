@@ -902,6 +902,11 @@ queued message id, and claim version, so a stale cleanup cannot delete a newer
 receipt. Chat retirement also deletes remaining receipts.
 
 Queued files use the strict [queued-chat-files contract](../packages/ai/src/queued-chat-files.mjs).
+[[apps/web/src/components/chat/chat-composer.tsx]] keeps file selection, drop,
+and paste available during active runs. Uploaded files, with or without text,
+can be submitted as follow-ups; pending uploads block submission without
+disabling Stop. [[apps/web/src/components/chat/chat-page.tsx]] forwards those
+attachments through the same Queue-or-Steer admission as text.
 [[convex/assistantQueuedMessageAttachments.ts]] validates each storage URL and
 size against the uploaded file and owns indexed queue storage references.
 Admission, edits, and reference changes are atomic. Replay and steer construct

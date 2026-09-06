@@ -282,7 +282,6 @@ export function ChatComposer({
 		[onAttachedFilesChange],
 	);
 	const attachmentDropzone = useFileAttachmentDropzone({
-		disabled: canStop,
 		onFileUploadFailed: handleAttachmentUploadFailed,
 		onFileUploaded: handleAttachmentUploaded,
 		onFilesAdded: handleAttachmentsAdded,
@@ -351,7 +350,6 @@ export function ChatComposer({
 						<ChatComposerFooter
 							draft={draft}
 							attachedFiles={attachedFiles}
-							attachmentsDisabled={canStop}
 							canStop={canStop}
 							disabled={isSettingsLoading}
 							hasInterruptedQueue={hasInterruptedQueue}
@@ -1371,7 +1369,6 @@ function ChatComposerTopAddon({
 function ChatComposerFooter({
 	draft,
 	attachedFiles,
-	attachmentsDisabled,
 	canStop,
 	disabled,
 	hasInterruptedQueue,
@@ -1387,7 +1384,6 @@ function ChatComposerFooter({
 }: {
 	draft: string;
 	attachedFiles: ChatAttachment[];
-	attachmentsDisabled: boolean;
 	canStop: boolean;
 	disabled: boolean;
 	hasInterruptedQueue: boolean;
@@ -1403,8 +1399,7 @@ function ChatComposerFooter({
 }) {
 	const hasDraftText = draft.trim().length > 0;
 	const hasSendableInput =
-		(!canStop || attachedFiles.length === 0) &&
-		(canStop ? hasDraftText : hasDraftText || attachedFiles.length > 0) &&
+		(hasDraftText || attachedFiles.length > 0) &&
 		!hasUploadingAttachments(attachedFiles);
 	const primaryAction = resolveChatComposerPrimaryAction({
 		canStop,
@@ -1422,7 +1417,6 @@ function ChatComposerFooter({
 			className="min-w-0 flex-wrap gap-1 px-2 pt-1 pb-2"
 		>
 			<FileAttachmentButton
-				disabled={attachmentsDisabled}
 				onFileUploadFailed={onAttachmentUploadFailed}
 				onFileUploaded={onAttachmentUploaded}
 				onFilesAdded={onAttachmentsAdded}

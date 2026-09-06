@@ -9,7 +9,10 @@ import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ComposerProjectOption } from "@/components/ai-elements/composer-project-picker";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
-import { ChatComposer } from "@/components/chat/chat-composer";
+import {
+	ChatComposer,
+	type ChatComposerActivity,
+} from "@/components/chat/chat-composer";
 import type { QueuedFollowUpBarItem } from "@/components/chat/chat-queued-follow-up-bar";
 
 const convexClient = new ConvexReactClient("https://test.convex.cloud");
@@ -22,6 +25,8 @@ afterEach(() => {
 
 function ActiveOptionComposer({
 	draft = "",
+	initialAttachedFiles = [],
+	turn = "idle",
 	humanDecision,
 	isSettingsLoading = false,
 	onQueuedFollowUpsResume = vi.fn(),
@@ -29,15 +34,16 @@ function ActiveOptionComposer({
 	queuedFollowUps = [],
 }: {
 	draft?: string;
+	initialAttachedFiles?: ChatAttachment[];
+	turn?: ChatComposerActivity["turn"];
 	humanDecision?: HostedHumanDecisionRequest;
 	isSettingsLoading?: boolean;
 	onQueuedFollowUpsResume?: () => void;
 	onSubmit?: () => void;
 	queuedFollowUps?: Array<QueuedFollowUpBarItem>;
 }) {
-	const [attachedFiles, setAttachedFiles] = React.useState<ChatAttachment[]>(
-		[],
-	);
+	const [attachedFiles, setAttachedFiles] =
+		React.useState<ChatAttachment[]>(initialAttachedFiles);
 	const [chatMode, setChatMode] = React.useState<ChatMode>(CHAT_MODE.DEFAULT);
 	const [sourcesOpen, setSourcesOpen] = React.useState(false);
 	const [webSearchEnabled, setWebSearchEnabled] = React.useState(false);
@@ -68,7 +74,7 @@ function ActiveOptionComposer({
 						humanDecision: "idle",
 						queuedFollowUps: "idle",
 						settings: isSettingsLoading ? "loading" : "ready",
-						turn: "idle",
+						turn,
 					}}
 					useCompactLayout={false}
 					draft={draft}
@@ -126,6 +132,58 @@ function ActiveOptionComposer({
 }
 
 describe("chat composer active options", () => {
+	const uploadedFile: ChatAttachment = {
+		id: "uploaded-notes",
+		type: "file",
+		filename: "notes.txt",
+		mediaType: "text/plain",
+		url: "https://storage.test/notes.txt",
+		uploadStatus: "ready",
+	};
+
+	it("keeps the file picker available during an active turn", () => {
+		render(<ActiveOptionComposer turn="active" />);
+		expect(
+			screen
+				.getByRole("button", { name: "Attach files" })
+				.hasAttribute("disabled"),
+		).toBe(false);
+		expect(screen.getByRole("button", { name: "Stop streaming" })).toBeTruthy();
+	});
+
+	it.each([
+		"",
+		"Use these notes",
+	])("submits uploaded files during an active turn with draft %j", async (draft) => {
+		const onSubmit = vi.fn();
+		render(
+			<ActiveOptionComposer
+				turn="active"
+				draft={draft}
+				initialAttachedFiles={[uploadedFile]}
+				onSubmit={onSubmit}
+			/>,
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Send" }));
+		expect(onSubmit).toHaveBeenCalledOnce();
+	});
+
+	it("keeps Stop available until an attachment finishes uploading", () => {
+		render(
+			<ActiveOptionComposer
+				turn="active"
+				draft="Use these notes"
+				initialAttachedFiles={[{ ...uploadedFile, uploadStatus: "uploading" }]}
+			/>,
+		);
+		expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+		expect(
+			screen
+				.getByRole("button", { name: "Stop streaming" })
+				.hasAttribute("disabled"),
+		).toBe(false);
+	});
+
 	it("uses the primary action to resume an interrupted queue until a new draft is entered", async () => {
 		const user = userEvent.setup();
 		const onQueuedFollowUpsResume = vi.fn();
