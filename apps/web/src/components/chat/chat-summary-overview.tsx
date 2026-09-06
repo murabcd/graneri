@@ -1,3 +1,4 @@
+import type { NoteReference } from "@workspace/ai/note-tools";
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -21,8 +22,10 @@ const SUMMARY_ROW_CLASS_NAME =
 
 export function ChatSummaryOverview({
 	content,
+	onOpenNote,
 }: {
 	content: ChatSummaryContent;
+	onOpenNote: (note: NoteReference) => void;
 }) {
 	return (
 		<ScrollArea
@@ -54,6 +57,7 @@ export function ChatSummaryOverview({
 								<SummarySourceRow
 									key={getChatSummarySourceKey(source)}
 									source={source}
+									onOpenNote={onOpenNote}
 								/>
 							))}
 						</div>
@@ -82,7 +86,13 @@ function SummaryArtifactRow({ artifact }: { artifact: ChatSummaryArtifact }) {
 	);
 }
 
-function SummarySourceRow({ source }: { source: ChatSummarySource }) {
+function SummarySourceRow({
+	source,
+	onOpenNote,
+}: {
+	source: ChatSummarySource;
+	onOpenNote: (note: NoteReference) => void;
+}) {
 	if (source.kind === "app") {
 		return (
 			<div className={SUMMARY_ROW_CLASS_NAME} title={source.title}>
@@ -116,10 +126,20 @@ function SummarySourceRow({ source }: { source: ChatSummarySource }) {
 	}
 
 	return (
-		<div className={SUMMARY_ROW_CLASS_NAME} title={source.title}>
-			<FileText className="size-4 shrink-0" />
+		<button
+			type="button"
+			className={cn(
+				SUMMARY_ROW_CLASS_NAME,
+				"cursor-pointer hover:bg-accent focus-visible:outline-ring",
+			)}
+			title={source.title}
+			onClick={() =>
+				onOpenNote({ noteId: source.sourceId, title: source.title })
+			}
+		>
+			<FileText aria-hidden="true" className="size-4 shrink-0 text-blue-400" />
 			<span className="min-w-0 flex-1 basis-0 truncate">{source.title}</span>
-		</div>
+		</button>
 	);
 }
 export function ChatSummarySection({

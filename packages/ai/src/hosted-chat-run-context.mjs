@@ -30,6 +30,7 @@ export const buildHostedChatRunContext = async ({
 	defaultTimezone,
 	getActiveStreamSession,
 	getNotesContext,
+	getProjectContext,
 	getAppConnections,
 	getSelectedRecipe,
 	getStoredNoteContext,
@@ -45,7 +46,10 @@ export const buildHostedChatRunContext = async ({
 	webSearchEnabled = false,
 	workspaceId,
 }) => {
-	const notesContext = await getNotesContext();
+	const [notesContext, projectContext] = await Promise.all([
+		getNotesContext(),
+		getProjectContext(),
+	]);
 	const attachedNoteContext = noteId
 		? await getStoredNoteContext({ noteId, workspaceId })
 		: getInlineHostedNoteContext({
@@ -132,6 +136,7 @@ export const buildHostedChatRunContext = async ({
 		automationContext,
 		context: {
 			notesContext,
+			projectContext,
 			attachedNoteContext,
 			compactionSummary,
 			recipeContext,

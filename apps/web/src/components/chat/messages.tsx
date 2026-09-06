@@ -1,3 +1,4 @@
+import type { NoteReference } from "@workspace/ai/note-tools";
 import type { UIMessage } from "ai";
 import { cn } from "cn";
 import { Plus } from "lucide-react";
@@ -40,7 +41,7 @@ export type ChatMessagesProps = {
 		message: UIMessage,
 	) => Promise<"created" | undefined> | "created" | undefined;
 	onRegenerateMessage?: (messageId: string) => void;
-	onOpenMention?: (noteId: string) => void;
+	onOpenNote?: (note: NoteReference) => void;
 	onLoadEarlierMessages?: () => void;
 	streamingMessageIds?: ReadonlySet<string>;
 };
@@ -58,7 +59,7 @@ export default function ChatMessages({
 	onForkMessage,
 	onPlusAction,
 	onRegenerateMessage,
-	onOpenMention,
+	onOpenNote,
 	onLoadEarlierMessages,
 	streamingMessageIds,
 }: ChatMessagesProps) {
@@ -155,7 +156,7 @@ export default function ChatMessages({
 			turnClassName={getTurnClassName}
 			renderAssistantActions={renderAssistantActions}
 			renderUserActions={renderUserActions}
-			onOpenMention={onOpenMention}
+			onOpenNote={onOpenNote}
 			streamingMessageIds={streamingMessageIds}
 		/>
 	);

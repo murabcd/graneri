@@ -8,27 +8,16 @@ import {
 	lastAssistantMessageIsCompleteWithApprovalResponses,
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
+import type { AttachableAssistantRun } from "@/lib/attachable-assistant-run";
 import {
 	hasRenderableChatMessageText,
 	mergePersistedChatMessagesWithController,
 } from "./chat-message-state";
 
-type RendererChatActiveRun = {
-	assistantMessageId: string;
-	interruptedAssistantMessageIds?: string[];
-};
-
-export const resolveRendererQueueActiveRun = <
-	ActiveRun extends RendererChatActiveRun,
->({
-	activeRun,
-	displayActiveRun,
-	isAiRequestPending,
-}: {
-	activeRun: ActiveRun | null;
-	displayActiveRun: ActiveRun | null;
-	isAiRequestPending: boolean;
-}) => displayActiveRun ?? (isAiRequestPending ? activeRun : null);
+type RendererChatActiveRun = Pick<
+	AttachableAssistantRun,
+	"assistantMessageId" | "interruptedAssistantMessageIds"
+>;
 
 const hasHostedUserQuestionOutput = (messages: UIMessage[]) =>
 	messages
@@ -89,42 +78,16 @@ export const shouldAutomaticallyContinueRendererChat = (args: {
 	(!hasHostedUserQuestionOutput(args.messages) &&
 		lastAssistantMessageIsCompleteWithToolCalls(args));
 
-export const resolveRendererChatRunState = <
-	ActiveRun extends RendererChatActiveRun,
->({
+export const resolveActiveAssistantMessageId = ({
 	activeRun,
 	controllerMessages,
-	isAiRequestPending,
 	persistedMessages,
 }: {
-	activeRun: ActiveRun | null;
+	activeRun: RendererChatActiveRun | null;
 	controllerMessages: UIMessage[];
-	isAiRequestPending: boolean;
 	persistedMessages: UIMessage[];
 }) => {
-	const hasLocallyCompletedAssistantMessage =
-		!isAiRequestPending &&
-		Boolean(
-			activeRun &&
-				hasRenderableChatMessageText(
-					controllerMessages.find(
-						(message) =>
-							message.id === activeRun.assistantMessageId &&
-							message.role === "assistant",
-					),
-				),
-		);
-	const displayActiveRun = hasLocallyCompletedAssistantMessage
-		? null
-		: activeRun;
-
-	if (!displayActiveRun) {
-		return {
-			activeAssistantMessageId: null,
-			displayActiveRun,
-			hasLocallyCompletedAssistantMessage,
-		};
-	}
+	if (!activeRun) return null;
 
 	const controllerMessagesAfterLatestUser = controllerMessages.slice(
 		controllerMessages.findLastIndex((message) => message.role === "user") + 1,
@@ -141,28 +104,25 @@ export const resolveRendererChatRunState = <
 		.reverse()
 		.find((message) => message.role === "assistant");
 
-	return {
-		activeAssistantMessageId:
-			activeControllerAssistantMessage?.id ??
-			activePersistedAssistantMessage?.id ??
-			displayActiveRun.assistantMessageId,
-		displayActiveRun,
-		hasLocallyCompletedAssistantMessage,
-	};
+	return (
+		activeControllerAssistantMessage?.id ??
+		activePersistedAssistantMessage?.id ??
+		activeRun.assistantMessageId
+	);
 };
 
 export const mergeRendererChatSessionMessages = ({
 	activeAssistantMessageId,
 	controllerMessages,
-	displayActiveRun,
+	activeRun,
 	persistedMessages,
 }: {
 	activeAssistantMessageId: string | null;
 	controllerMessages: UIMessage[];
-	displayActiveRun: RendererChatActiveRun | null;
+	activeRun: RendererChatActiveRun | null;
 	persistedMessages: UIMessage[];
 }) => {
-	if (!activeAssistantMessageId || !displayActiveRun) {
+	if (!activeAssistantMessageId || !activeRun) {
 		const controllerMessageById = new Map(
 			controllerMessages.map((message) => [message.id, message]),
 		);
@@ -190,7 +150,7 @@ export const mergeRendererChatSessionMessages = ({
 			? activeControllerMessage
 			: activePersistedMessage;
 	const interruptedAssistantMessageIds =
-		displayActiveRun.interruptedAssistantMessageIds ?? [];
+		activeRun.interruptedAssistantMessageIds ?? [];
 
 	return mergePersistedChatMessagesWithController({
 		activeAssistantMessage,

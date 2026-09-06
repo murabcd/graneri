@@ -2,11 +2,13 @@ import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { ToolLoopAgent, ToolSet } from "ai";
 import type { ChatMode } from "./chat-mode.mjs";
 import type { HostedActiveStreamSession } from "./hosted-chat-active-stream.mjs";
+import type { ProjectContext } from "./note-tools.mjs";
 
 export type HostedChatRunPlanContext = {
 	attachedNoteContext: string;
 	compactionSummary: string | null;
 	notesContext: string;
+	projectContext: ProjectContext | null;
 	recipeContext: string;
 	userProfileContext?: unknown;
 };

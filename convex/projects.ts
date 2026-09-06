@@ -35,6 +35,55 @@ const projectFields = {
 	updatedAt: v.number(),
 };
 
+export const projectContextValidator = v.object({
+	projectId: v.id("projects"),
+	name: projectFields.name,
+	description: projectFields.description,
+});
+
+const toProjectContext = (project: Doc<"projects">) => ({
+	projectId: project._id,
+	name: project.name,
+	description: project.description,
+});
+
+export const getNoteProjectContext = async (
+	ctx: QueryCtx,
+	note: Doc<"notes">,
+) => {
+	const project = note.projectId
+		? await getOwnedProjectForOwner(
+				ctx,
+				note.projectId,
+				note.ownerTokenIdentifier,
+				note.workspaceId,
+			)
+		: null;
+	return project ? toProjectContext(project) : null;
+};
+
+export const getChatContext = query({
+	args: {
+		workspaceId: v.id("workspaces"),
+		projectId: v.union(v.id("projects"), v.null()),
+	},
+	returns: v.union(projectContextValidator, v.null()),
+	handler: async (ctx, { workspaceId, projectId }) => {
+		const identity = await requireIdentity(ctx);
+		await requireOwnedWorkspace(ctx, identity.tokenIdentifier, workspaceId);
+		return projectId === null
+			? null
+			: toProjectContext(
+					await requireOwnedProjectForOwner(
+						ctx,
+						projectId,
+						identity.tokenIdentifier,
+						workspaceId,
+					),
+				);
+	},
+});
+
 const projectValidator = v.object(projectFields);
 
 const REMOVE_ALL_PROJECTS_BATCH_SIZE = 100;

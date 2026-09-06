@@ -295,7 +295,7 @@ describe("chat message thinking status", () => {
 		}
 	});
 
-	it("only appends activity while Working and collapses once when final_answer starts", async () => {
+	it("keeps Working through final-answer streaming and collapses on completion", async () => {
 		const user = userEvent.setup();
 		const activityParts: UIMessage["parts"] = [
 			{
@@ -354,6 +354,18 @@ describe("chat message thinking status", () => {
 			},
 		};
 		rerender(renderActivity([...activityParts, finalPart]));
+		expect(screen.getByRole("button", { name: /^Working/ })).not.toBeNull();
+		rerender(
+			renderMessageList({
+				messages: [
+					{
+						id: "assistant-append",
+						role: "assistant",
+						parts: [...activityParts, { ...finalPart, state: "done" }],
+					},
+				],
+			}),
+		);
 
 		const worked = screen.getByRole("button", { name: /^Worked/ });
 		expect(worked.getAttribute("aria-expanded")).toBe("false");
@@ -484,7 +496,7 @@ describe("chat message thinking status", () => {
 		expect(workingGroup).not.toBeNull();
 		expect(screen.getByText("2s")).not.toBeNull();
 
-		rerender(renderMessageList({ messages: [userMessage] }));
+		rerender(renderMessageList({ isLoading: true, messages: [userMessage] }));
 		expect(
 			screen.getByText("Working").closest("[data-assistant-work-group]"),
 		).toBe(workingGroup);
@@ -497,6 +509,7 @@ describe("chat message thinking status", () => {
 		};
 		rerender(
 			renderMessageList({
+				isLoading: true,
 				messages: [userMessage, persistedAssistantMessage],
 			}),
 		);
@@ -734,6 +747,12 @@ describe("chat message thinking status", () => {
 			],
 		};
 		rerender(renderMessageList({ isLoading, messages: [answering] }));
+		if (isLoading) {
+			expect(
+				screen.getByRole("button", { name: "Working for 3s" }),
+			).not.toBeNull();
+			rerender(renderMessageList({ messages: [answering] }));
+		}
 		const worked = screen.getByRole("button", { name: "Worked for 3s" });
 		expect(worked.getAttribute("aria-expanded")).toBe("false");
 		act(() => vi.advanceTimersByTime(2_000));

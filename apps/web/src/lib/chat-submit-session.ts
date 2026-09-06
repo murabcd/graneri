@@ -4,6 +4,7 @@ import type { FileUIPart, UIMessage } from "ai";
 import { z } from "zod";
 import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
 import { getReadyFileParts } from "@/components/ai-elements/file-attachment-utils";
+import type { AttachableAssistantRun } from "@/lib/attachable-assistant-run";
 import { createChatUserMessage } from "@/lib/chat-message-state";
 import {
 	createQueuedUserMessageId,
@@ -16,13 +17,6 @@ import type {
 } from "@/lib/chat-request-preparation";
 import type { FollowUpBehavior } from "@/lib/follow-up-behavior";
 import type { Id } from "../../../../convex/_generated/dataModel";
-
-export type ActiveRun =
-	| {
-			_id: Id<"assistantRuns">;
-	  }
-	| null
-	| undefined;
 
 type SubmitChatTurnMessage = {
 	files?: FileUIPart[];
@@ -100,7 +94,7 @@ export const submitChatTurn = async ({
 	chatId,
 	continueRunId,
 	currentRunAdmission,
-	displayActiveRun,
+	activeRun,
 	editingMessageId,
 	enqueueQueuedMessage,
 	followUpBehaviorOverride,
@@ -108,7 +102,6 @@ export const submitChatTurn = async ({
 	onOptimisticMessage,
 	onRequestPrepared,
 	onQueuedMessageSaved,
-	queueActiveRun,
 	sendMessage,
 	text,
 	workspaceId,
@@ -118,7 +111,7 @@ export const submitChatTurn = async ({
 	chatId: string;
 	continueRunId?: Id<"assistantRuns">;
 	currentRunAdmission: CurrentRunAdmission;
-	displayActiveRun: ActiveRun;
+	activeRun: Pick<AttachableAssistantRun, "_id"> | null;
 	editingMessageId: string | null;
 	enqueueQueuedMessage: EnqueueQueuedChatTurn;
 	followUpBehaviorOverride?: FollowUpBehavior;
@@ -132,7 +125,6 @@ export const submitChatTurn = async ({
 		followUpBehaviorOverride?: FollowUpBehavior;
 		queuedMessage: QueuedFollowUpMessage;
 	}) => Promise<void> | void;
-	queueActiveRun?: ActiveRun;
 	sendMessage: SendChatTurn;
 	text: string;
 	workspaceId: Id<"workspaces"> | null;
@@ -140,9 +132,7 @@ export const submitChatTurn = async ({
 	if (currentRunAdmission.status === "canceled") {
 		return { status: "canceled" };
 	}
-	const queuedActiveRun = continueRunId
-		? null
-		: (queueActiveRun ?? displayActiveRun ?? null);
+	const queuedActiveRun = continueRunId ? null : activeRun;
 	const shouldAdmitCurrentRun =
 		!continueRunId && currentRunAdmission.status === "current_run";
 	const readyFiles = getReadyFileParts(attachedFiles);

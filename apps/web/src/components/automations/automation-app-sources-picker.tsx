@@ -114,6 +114,7 @@ export function AppSourcesPicker({
 			) : null}
 			{projectSelectionEnabled && selectedProject ? (
 				<ActiveComposerProjectOption
+					removeLabel={`Remove ${selectedProject.name}`}
 					project={selectedProject}
 					onRemove={() => onSelectedProjectChange(null)}
 				/>

@@ -1,4 +1,10 @@
 import { Button } from "@workspace/ui/components/button";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@workspace/ui/components/tooltip";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
 import { Slot } from "radix-ui";
@@ -39,6 +45,36 @@ function Attachment({
 			data-size={size}
 			data-orientation={orientation}
 			className={cn(attachmentVariants({ size, orientation }), className)}
+			{...props}
+		/>
+	);
+}
+
+function AttachmentCard({
+	className,
+	...props
+}: React.ComponentProps<typeof Attachment>) {
+	return (
+		<Attachment
+			className={cn(
+				"w-[17rem] max-w-full min-w-0 cursor-pointer flex-nowrap gap-2.5 overflow-hidden rounded-lg border-0 bg-muted/50 p-3 shadow-[0_0_0_0.5px_var(--border)] focus-within:ring-0 has-data-[slot=attachment-content]:p-3 [&_button]:cursor-pointer",
+				className,
+			)}
+			{...props}
+		/>
+	);
+}
+
+function AttachmentCardIcon({
+	className,
+	...props
+}: React.ComponentProps<"span">) {
+	return (
+		<span
+			className={cn(
+				"flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted/90 text-muted-foreground",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -144,9 +180,10 @@ function AttachmentAction({
 	className,
 	variant,
 	size = "icon-xs",
+	tooltip,
 	...props
-}: React.ComponentProps<typeof Button>) {
-	return (
+}: React.ComponentProps<typeof Button> & { tooltip?: string }) {
+	const button = (
 		<Button
 			data-slot="attachment-action"
 			variant={variant ?? "ghost"}
@@ -154,6 +191,16 @@ function AttachmentAction({
 			className={cn(className)}
 			{...props}
 		/>
+	);
+	return tooltip ? (
+		<TooltipProvider>
+			<Tooltip>
+				<TooltipTrigger asChild>{button}</TooltipTrigger>
+				<TooltipContent>{tooltip}</TooltipContent>
+			</Tooltip>
+		</TooltipProvider>
+	) : (
+		button
 	);
 }
 
@@ -194,6 +241,8 @@ export {
 	Attachment,
 	AttachmentAction,
 	AttachmentActions,
+	AttachmentCard,
+	AttachmentCardIcon,
 	AttachmentContent,
 	AttachmentDescription,
 	AttachmentGroup,

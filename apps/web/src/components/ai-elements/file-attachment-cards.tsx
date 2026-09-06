@@ -2,6 +2,8 @@ import {
 	Attachment,
 	AttachmentAction,
 	AttachmentActions,
+	AttachmentCard,
+	AttachmentCardIcon,
 	AttachmentContent,
 	AttachmentDescription,
 	AttachmentGroup,
@@ -11,7 +13,7 @@ import {
 } from "@workspace/ui/components/attachment";
 import type { FileUIPart } from "ai";
 import { cn } from "cn";
-import { Download, LoaderCircle } from "lucide-react";
+import { ArrowDownToLine, LoaderCircle } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { AttachmentImagePreviewDialog } from "@/components/ai-elements/attachment-image-preview-dialog";
@@ -20,6 +22,7 @@ import {
 	formatFileSize,
 	getChatFileIdentity,
 	getChatFileSizeBytes,
+	getFilenameExtension,
 } from "@/lib/chat-file-attachment";
 import { downloadUrlAsFile, isDownloadableUrl } from "@/lib/download-file";
 import { logError } from "@/lib/logger";
@@ -55,11 +58,14 @@ function FileDownloadAction({
 				aria-label={
 					isDownloading ? `Downloading ${filename}` : `Download ${filename}`
 				}
-				className="rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-100"
+				className={cn(
+					"text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-100",
+					variant === "pill" ? "rounded-full" : "rounded-md",
+				)}
 				disabled={isDownloading}
 				onClick={isDownloading ? undefined : () => onDownload?.(file)}
-				size="icon"
-				title={isDownloading ? undefined : `Download ${filename}`}
+				size={variant === "pill" ? "icon" : "icon-sm"}
+				tooltip={isDownloading ? undefined : "Download"}
 				type="button"
 			>
 				{isDownloading ? (
@@ -68,7 +74,7 @@ function FileDownloadAction({
 						className="animate-spin motion-reduce:animate-none"
 					/>
 				) : (
-					<Download aria-hidden="true" />
+					<ArrowDownToLine aria-hidden="true" />
 				)}
 			</AttachmentAction>
 		</AttachmentActions>
@@ -143,6 +149,7 @@ export function FileAttachmentCard({
 	}
 	const sizeBytes = getChatFileSizeBytes(file);
 	const fileDetails = [
+		getFilenameExtension(file.filename).toUpperCase(),
 		isDownloading ? "Downloading" : null,
 		sizeBytes === null ? null : formatFileSize(sizeBytes),
 	]
@@ -150,20 +157,25 @@ export function FileAttachmentCard({
 		.join(" · ");
 
 	return (
-		<Attachment className="h-16 w-[17rem] max-w-full min-w-0 flex-nowrap gap-3 rounded-2xl border-border/60 bg-muted/50 px-3 focus-within:ring-0 has-data-[slot=attachment-content]:p-0">
-			<FileAttachmentGlyph className="size-8 shrink-0" file={file} />
+		<AttachmentCard>
+			<AttachmentCardIcon>
+				<FileAttachmentGlyph className="size-6 shrink-0" file={file} />
+			</AttachmentCardIcon>
 			<AttachmentContent className="leading-5">
 				<AttachmentTitle className="text-foreground text-sm" title={filename}>
 					{filename}
 				</AttachmentTitle>
 				{fileDetails ? (
-					<AttachmentDescription aria-live="polite">
+					<AttachmentDescription
+						aria-live="polite"
+						className="mt-0 text-[13px]"
+					>
 						{fileDetails}
 					</AttachmentDescription>
 				) : null}
 			</AttachmentContent>
 			{downloadAction}
-		</Attachment>
+		</AttachmentCard>
 	);
 }
 

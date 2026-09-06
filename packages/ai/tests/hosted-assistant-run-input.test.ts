@@ -66,6 +66,7 @@ const createCompletionInput = (): CompletionInput => ({
 	defaultServiceTier: "auto",
 	defaultTimezone: "UTC",
 	getActiveStreamSession: () => null,
+	getProjectContext: async () => null,
 	getNotesContext: async () => "",
 	getAppConnections: async () => [],
 	getSelectedRecipe: async () => null,

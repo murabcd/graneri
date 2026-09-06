@@ -65,14 +65,14 @@ describe("chat file attachments", () => {
 			}),
 		);
 
-		expect(screen.getByText("2.4 MB")).toBeTruthy();
+		expect(screen.getByText("PDF · 2.4 MB")).toBeTruthy();
 		const messageFile =
 			screen.getByText("report.pdf").parentElement?.parentElement;
 		expect(messageFile?.querySelector('[data-file-kind="pdf"]')).toBeTruthy();
 		const downloadButton = screen.getByRole("button", {
 			name: "Download report.pdf",
 		});
-		expect(downloadButton.getAttribute("title")).toBe("Download report.pdf");
+		expect(downloadButton).toBeTruthy();
 	});
 
 	it("renders the compact pill as a downloadable attachment", () => {
@@ -152,7 +152,7 @@ describe("chat file attachments", () => {
 			screen.getByRole("button", { name: "Download report.pdf" }),
 		);
 
-		expect(screen.getByText("Downloading · 2.4 MB")).toBeTruthy();
+		expect(screen.getByText("PDF · Downloading · 2.4 MB")).toBeTruthy();
 		expect(
 			screen
 				.getByRole("button", { name: "Downloading report.pdf" })

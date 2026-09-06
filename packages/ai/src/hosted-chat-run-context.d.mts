@@ -9,6 +9,7 @@ import type { HostedRunPlan } from "./hosted-run-activity.mjs";
 import type { ChatAttachmentsApi } from "./image-generation-tool.mjs";
 import type { LocalCapabilitySession } from "./local-capability-session.mjs";
 import type { ReasoningEffort, ServiceTier } from "./models.mjs";
+import type { ProjectContext } from "./note-tools.mjs";
 
 type LogLatencyDetails = Record<
 	string,
@@ -37,6 +38,7 @@ export declare const buildHostedChatRunContext: (args: {
 	defaultTimezone: string;
 	getActiveStreamSession: () => HostedActiveStreamSession | null;
 	getNotesContext: () => Promise<string>;
+	getProjectContext: () => Promise<ProjectContext | null>;
 	getAppConnections: (args: {
 		workspaceId: string;
 	}) => Promise<WorkspaceToolConnection[]>;

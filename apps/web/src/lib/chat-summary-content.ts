@@ -10,6 +10,7 @@ import {
 	extractMessageFileParts,
 	getChatMessageMetadata,
 } from "@/lib/chat-message";
+import { extractReadNoteReferences } from "@/lib/chat-note-references";
 
 export type ChatSummaryArtifact = {
 	filename?: string;
@@ -93,7 +94,14 @@ const collectMessageSummarySources = (
 			: [];
 	});
 	if (message.role !== "user") {
-		return toolSources;
+		return [
+			...toolSources,
+			...extractReadNoteReferences(message).map((note) => ({
+				kind: "note" as const,
+				sourceId: note.noteId,
+				title: note.title,
+			})),
+		];
 	}
 
 	const files = extractFileParts(message).map(

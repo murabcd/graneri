@@ -47,11 +47,11 @@ describe("ChatSummarySheet", () => {
 						open
 						messages={[]}
 						chatTitle="Test chat"
-						workspaceSources={[
-							{ id: noteId, title: "Lazy note", updatedAt: 1 },
-						]}
+						workspaceSources={[]}
 						openSourceRequest={
-							requestId ? { sourceId: noteId, requestId } : null
+							requestId
+								? { note: { noteId, title: "Lazy note" }, requestId }
+								: null
 						}
 						onOpenChange={vi.fn()}
 					/>
@@ -67,6 +67,63 @@ describe("ChatSummarySheet", () => {
 				workspaceId,
 				id: noteId,
 			});
+		});
+	});
+
+	it("opens restored discovered notes, reuses the tab, and handles unavailable content", async () => {
+		const workspaceId = "workspace-1" as Id<"workspaces">;
+		const note = { noteId: "discovered-note", title: "Discovered note" };
+		const messages: UIMessage[] = [
+			{
+				id: "assistant-1",
+				role: "assistant",
+				parts: [
+					{
+						type: "tool-get_note",
+						toolCallId: "read-1",
+						state: "output-available",
+						input: { noteId: note.noteId },
+						output: {
+							...note,
+							project: null,
+							text: "Read content",
+							nextOffset: null,
+							updatedAt: 1,
+						},
+					},
+				],
+			},
+		];
+		useQueryMock.mockReturnValue(null);
+		const sheet = (requestId?: number) => (
+			<ActiveWorkspaceProvider workspaceId={workspaceId}>
+				<TooltipProvider>
+					<ChatSummarySheet
+						open
+						messages={messages}
+						chatTitle="Restored chat"
+						workspaceSources={[]}
+						openSourceRequest={requestId ? { note, requestId } : null}
+						onOpenChange={vi.fn()}
+					/>
+				</TooltipProvider>
+			</ActiveWorkspaceProvider>
+		);
+		const { rerender } = render(sheet());
+		fireEvent.click(
+			screen.getByRole("button", { name: note.title, exact: true }),
+		);
+		expect(
+			await screen.findByText("This note is no longer available."),
+		).toBeTruthy();
+		rerender(sheet(1));
+		rerender(sheet(2));
+		expect(
+			screen.getAllByRole("button", { name: note.title, exact: true }),
+		).toHaveLength(1);
+		expect(useQueryMock).toHaveBeenCalledWith(expect.anything(), {
+			workspaceId,
+			id: note.noteId,
 		});
 	});
 

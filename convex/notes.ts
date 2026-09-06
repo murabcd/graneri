@@ -40,7 +40,11 @@ import {
 } from "./noteImageReferences";
 import { insertNote, setNoteArchived, setNoteProject } from "./noteRecords";
 import { MAX_RETAINED_NOTE_REVISIONS } from "./noteVersionPolicy";
-import { requireOwnedProject } from "./projects";
+import {
+	getNoteProjectContext,
+	projectContextValidator,
+	requireOwnedProject,
+} from "./projects";
 
 const noteVisibilityValidator = v.union(
 	v.literal("private"),
@@ -84,6 +88,7 @@ const sharedNoteValidator = v.object({
 });
 
 const noteChatContextValidator = v.object({
+	project: v.union(projectContextValidator, v.null()),
 	id: v.id("notes"),
 	title: v.string(),
 	searchableText: v.string(),
@@ -471,14 +476,15 @@ export const listArchived = query({
 
 export const get = query({
 	args: {
-		id: v.id("notes"),
+		id: v.string(),
 		workspaceId: v.id("workspaces"),
 	},
 	returns: v.union(noteValidator, v.null()),
 	handler: async (ctx, args) => {
 		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
 		await requireOwnedWorkspace(ctx, ownerTokenIdentifier, args.workspaceId);
-		const note = await ctx.db.get(args.id);
+		const noteId = ctx.db.normalizeId("notes", args.id);
+		const note = noteId ? await ctx.db.get(noteId) : null;
 
 		if (
 			!note ||
@@ -615,10 +621,14 @@ export const getChatContext = query({
 					) {
 						return null;
 					}
-					const document = await requirePersistedNoteDocument(ctx, note._id);
+					const [document, project] = await Promise.all([
+						requirePersistedNoteDocument(ctx, note._id),
+						getNoteProjectContext(ctx, note),
+					]);
 
 					return {
 						id: note._id,
+						project,
 						title: note.title.trim() || "New note",
 						searchableText: document.searchableText.trim(),
 					};
@@ -649,9 +659,13 @@ export const getWorkspaceChatContext = query({
 
 		return await Promise.all(
 			notes.map(async (note) => {
-				const document = await requirePersistedNoteDocument(ctx, note._id);
+				const [document, project] = await Promise.all([
+					requirePersistedNoteDocument(ctx, note._id),
+					getNoteProjectContext(ctx, note),
+				]);
 				return {
 					id: note._id,
+					project,
 					title: note.title,
 					searchableText: document.searchableText,
 				};

@@ -93,7 +93,7 @@ it("retains missing continuation messages while replacing snapshots for present 
 	]);
 });
 
-it("keeps the turn clock through an idle handoff containing only an empty reasoning placeholder", () => {
+it("ends Working when a run stops with only an empty reasoning placeholder", () => {
 	vi.useFakeTimers();
 	vi.setSystemTime(1000);
 	const { result, rerender } = renderHook(
@@ -107,8 +107,7 @@ it("keeps the turn clock through an idle handoff containing only an empty reason
 		assistant([{ type: "reasoning", text: "", state: "streaming" }]),
 	];
 	rerender({ messages, isLoading: false });
-	expect(result.current.turns[0].assistantTurnWorkStatus).toBe("streaming");
-	rerender({ messages, isLoading: true });
+	expect(result.current.turns[0].assistantTurnWorkStatus).toBe("ready");
 	expect(result.current.turns[0].assistantTurnStartedAt).toBe(1000);
 });
 
@@ -134,4 +133,52 @@ it("retains complete activity while a shorter hydration snapshot catches up", ()
 		assistant([...message.parts, { ...commentary, text: "Search complete." }]),
 	]);
 	expect(result.current.turns[0].assistantTurnActivityUnits).toHaveLength(4);
+});
+
+it("starts fresh activity for an appended follow-up while preserving the pending request clock handoff", () => {
+	vi.useFakeTimers();
+	vi.setSystemTime(1000);
+	const previous = [user, assistant([commentary, tool])];
+	const { result, rerender } = renderHook(usePresentation, {
+		initialProps: previous,
+	});
+	act(() => vi.advanceTimersByTime(3000));
+	const followUp: UIMessage = { ...user, id: "follow-up" };
+	rerender([...previous, followUp]);
+	expect(result.current.turns.at(-1)?.assistantTurnActivityUnits).toEqual([]);
+	expect(result.current.turns.at(-1)?.assistantTurnStartedAt).toBe(4000);
+	const current: UIMessage = {
+		...assistant([commentary]),
+		id: "follow-up-assistant",
+	};
+	rerender([...previous, followUp, current]);
+	expect(
+		result.current.turns
+			.at(-1)
+			?.assistantTurnActivityUnits.map((unit) => unit.messageId),
+	).toEqual([current.id]);
+	expect(result.current.turns.at(-1)?.assistantTurnStartedAt).toBe(4000);
+});
+
+it("does not carry deleted turn activity into the remaining completed turn", () => {
+	const first = [user, assistant([commentary])];
+	const second: UIMessage[] = [
+		{ ...user, id: "second-user" },
+		{ ...assistant([tool]), id: "second-assistant" },
+	];
+	const { result, rerender } = renderHook(
+		(messages: UIMessage[]) =>
+			useChatTurnPresentation({
+				messages,
+				isLoading: false,
+				scrollAnchorUserMessages: false,
+			}),
+		{ initialProps: [...first, ...second] },
+	);
+	rerender(first);
+	expect(
+		result.current.turns[0].assistantTurnActivityUnits.map(
+			(unit) => unit.messageId,
+		),
+	).toEqual(["assistant"]);
 });

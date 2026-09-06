@@ -3,6 +3,8 @@ export const withToolTiming = async (operation) => {
 	const result = await operation();
 	const durationMs = Date.now() - startedAt;
 
+	if (result === null) return null;
+
 	return {
 		...result,
 		durationMs,

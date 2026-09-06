@@ -110,6 +110,7 @@ export function ChatComposerOptions({
 			) : null}
 			{selectedProject ? (
 				<ActiveComposerProjectOption
+					removeLabel="Remove project from this chat"
 					project={selectedProject}
 					onRemove={() => onSelectedProjectChange(null)}
 				/>

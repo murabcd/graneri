@@ -87,6 +87,7 @@ import {
 	useDockedPanelOverlayWidth,
 } from "@/components/layout/use-docked-panel-widths";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
+import { navigateToAppLocation } from "@/lib/app-navigation";
 import { getAvatarSrc } from "@/lib/avatar";
 import { DESKTOP_MAIN_HEADER_CONTENT_CLASS } from "@/lib/desktop-chrome";
 import { getErrorMessage } from "@/lib/error-message";
@@ -666,8 +667,7 @@ function InboxPane({
 			await handleMarkItemRead(item);
 
 			if (item.provider === "notes" && item.kind === "note-comment") {
-				window.history.pushState(null, "", item.url);
-				window.dispatchEvent(new PopStateEvent("popstate"));
+				navigateToAppLocation(item.url);
 				return;
 			}
 

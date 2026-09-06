@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	mergeRendererChatSessionMessages,
 	prepareRendererUserQuestionMessages,
-	resolveRendererChatRunState,
+	resolveActiveAssistantMessageId,
 	shouldAutomaticallyContinueRendererChat,
 } from "../src/lib/renderer-chat-session";
 
@@ -18,24 +18,18 @@ const message = (
 });
 
 describe("renderer chat session", () => {
-	it("hides a stale durable run after its assistant message completes locally", () => {
+	it("keeps a durable run active while local text exists between requests", () => {
 		const assistantMessage = message("assistant-1", "assistant", "Complete");
 
-		const state = resolveRendererChatRunState({
+		const state = resolveActiveAssistantMessageId({
 			activeRun: {
 				assistantMessageId: "assistant-1",
-				status: "running",
 			},
 			controllerMessages: [assistantMessage],
-			isAiRequestPending: false,
 			persistedMessages: [],
 		});
 
-		expect(state).toEqual({
-			activeAssistantMessageId: null,
-			displayActiveRun: null,
-			hasLocallyCompletedAssistantMessage: true,
-		});
+		expect(state).toBe("assistant-1");
 	});
 
 	it("shows server-drained follow-ups after the local controller generation completes", () => {
@@ -80,7 +74,7 @@ describe("renderer chat session", () => {
 		const mergedMessages = mergeRendererChatSessionMessages({
 			activeAssistantMessageId: null,
 			controllerMessages,
-			displayActiveRun: null,
+			activeRun: null,
 			persistedMessages,
 		});
 
@@ -94,22 +88,19 @@ describe("renderer chat session", () => {
 	});
 
 	it("uses the latest assistant after the latest user for active-run identity", () => {
-		const state = resolveRendererChatRunState({
+		const state = resolveActiveAssistantMessageId({
 			activeRun: {
 				assistantMessageId: "run-assistant",
-				status: "running",
 			},
 			controllerMessages: [
 				message("old-assistant", "assistant", "Old"),
 				message("latest-user", "user", "Continue"),
 				message("streaming-assistant", "assistant", "Partial"),
 			],
-			isAiRequestPending: true,
 			persistedMessages: [],
 		});
 
-		expect(state.activeAssistantMessageId).toBe("streaming-assistant");
-		expect(state.displayActiveRun).not.toBeNull();
+		expect(state).toBe("streaming-assistant");
 	});
 
 	it("places queued persisted input before the replacement assistant after steer", () => {
@@ -123,7 +114,7 @@ describe("renderer chat session", () => {
 		const mergedMessages = mergeRendererChatSessionMessages({
 			activeAssistantMessageId: activeAssistant.id,
 			controllerMessages: [activeAssistant],
-			displayActiveRun: {
+			activeRun: {
 				assistantMessageId: "run-assistant",
 				interruptedAssistantMessageIds: ["interrupted-assistant"],
 			},
@@ -252,7 +243,7 @@ describe("renderer chat session", () => {
 		const mergedMessages = mergeRendererChatSessionMessages({
 			activeAssistantMessageId: pendingQuestion.id,
 			controllerMessages: [resolvedQuestion],
-			displayActiveRun: { assistantMessageId: pendingQuestion.id },
+			activeRun: { assistantMessageId: pendingQuestion.id },
 			persistedMessages: [pendingQuestion],
 		});
 

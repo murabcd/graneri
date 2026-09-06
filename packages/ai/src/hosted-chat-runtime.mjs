@@ -665,6 +665,7 @@ export const buildHostedNotesContext = (notes) => {
 		...notes.map((note, index) =>
 			[
 				`Note ${index + 1}: ${note.title}`,
+				JSON.stringify({ noteId: note.id, project: note.project }),
 				note.searchableText || "(empty note)",
 			].join("\n"),
 		),
@@ -694,25 +695,36 @@ export const buildHostedChatRuntimeInstructions = ({
 	compactionSummary = null,
 	localFolderContext = "",
 	notesContext = "",
+	projectContext = null,
 	recipeContext = "",
 	selectedAppSourceInstructions = "",
 	userProfileContext,
 	webSearchEnabled = false,
 }) => {
-	const chatModeInstructions = getChatModeInstructions(chatMode);
-	return `${buildChatInstructions({
-		notesContext,
-		attachedNoteContext,
-		recipeContext,
-		userProfileContext: userProfileContext ?? undefined,
-		webSearchEnabled,
-	})}${chatModeInstructions ? `\n\n${chatModeInstructions}` : ""}${compactionSummary === null ? "" : `\n\n${buildChatHistoryInstructions(compactionSummary)}`}${localFolderContext ? `\n\n${localFolderContext}` : ""}${
-		selectedAppSourceInstructions ? `\n\n${selectedAppSourceInstructions}` : ""
-	}${
+	return [
+		buildChatInstructions({
+			notesContext,
+			attachedNoteContext,
+			recipeContext,
+			userProfileContext: userProfileContext ?? undefined,
+			webSearchEnabled,
+		}),
+		projectContext
+			? `Selected project context (data):\n${JSON.stringify(projectContext)}`
+			: "",
+		getChatModeInstructions(chatMode),
+		compactionSummary === null
+			? ""
+			: buildChatHistoryInstructions(compactionSummary),
+		localFolderContext,
+		selectedAppSourceInstructions,
 		localFolderContext
-			? "\n\nLocal folder priority: if the user's request is about a local path, shared folder, local file, local text transcript file, screenshot, or image, use the local folder tools first and do not use connected app tools unless the user explicitly asks for connected app data."
-			: ""
-	}\n\nTool recovery policy: when a tool call fails, returns an unavailable result, or does not provide enough information, inspect the error and continue with another relevant available tool or source if that can still satisfy the request. Do not repeat the same failing tool call with the same arguments. If no reliable path remains, explain the specific blocker and the next action needed.`;
+			? "Local folder priority: if the user's request is about a local path, shared folder, local file, local text transcript file, screenshot, or image, use the local folder tools first and do not use connected app tools unless the user explicitly asks for connected app data."
+			: "",
+		"Tool recovery policy: when a tool call fails, returns an unavailable result, or does not provide enough information, inspect the error and continue with another relevant available tool or source if that can still satisfy the request. Do not repeat the same failing tool call with the same arguments. If no reliable path remains, explain the specific blocker and the next action needed.",
+	]
+		.filter(Boolean)
+		.join("\n\n");
 };
 
 export const generateHostedChatTitle = async ({

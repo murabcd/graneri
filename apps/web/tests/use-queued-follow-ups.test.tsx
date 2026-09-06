@@ -14,7 +14,6 @@ import {
 } from "../src/lib/chat-queued-followups";
 import type { ChatRequestContext } from "../src/lib/chat-request-preparation";
 import type { QueuedChatSendMessage } from "../src/lib/queued-chat-intent";
-import { resolveRendererQueueActiveRun } from "../src/lib/renderer-chat-session";
 
 const backend = vi.hoisted(() => ({
 	rows: [] as QueuedFollowUpMessage[],
@@ -161,20 +160,12 @@ const mount = (
 				await afterResponse();
 			};
 		}, [session]);
-		const queueActiveRun = resolveRendererQueueActiveRun({
+		const controls = useQueuedFollowUps({
+			session,
 			activeRun:
 				state.activeRun?.status === "stopping"
 					? null
 					: (state.activeRun ?? null),
-			displayActiveRun:
-				state.activeRun?.status === "stopping"
-					? null
-					: (state.activeRun ?? null),
-			isAiRequestPending: state.isChatRequestPending,
-		});
-		const controls = useQueuedFollowUps({
-			session,
-			queueActiveRun,
 			chatId: state.chatId,
 			contextLabel: "chat",
 			error: state.error,

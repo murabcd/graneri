@@ -385,6 +385,8 @@ export const executeHostedChatTurn = async ({
 			defaultServiceTier: settings.serviceTier,
 			defaultTimezone: model.defaultTimezone,
 			getActiveStreamSession: () => activeStreamSession,
+			getProjectContext: () =>
+				client.query(api.projects.getChatContext, { workspaceId, projectId }),
 			getNotesContext: () =>
 				loadNotesContext({ client, mentions, workspaceId }),
 			getAppConnections: () => loadAppConnections({ client, workspaceId }),

@@ -6,8 +6,7 @@ import type { AttachableAssistantRun } from "@/lib/attachable-assistant-run";
 import { appendLocalOptimisticChatMessages } from "@/lib/chat-message-state";
 import {
 	mergeRendererChatSessionMessages,
-	resolveRendererChatRunState,
-	resolveRendererQueueActiveRun,
+	resolveActiveAssistantMessageId,
 } from "@/lib/renderer-chat-session";
 import { api } from "../../../../convex/_generated/api";
 import type { ScopedLocalOptimisticMessages } from "./use-chat-interaction-session";
@@ -18,7 +17,6 @@ export const useRendererChatPresentation = ({
 	activeRun,
 	chatId,
 	controllerMessages,
-	isAiRequestPending,
 	isChatRequestPending,
 	localOptimisticMessages,
 	persistedMessages,
@@ -27,7 +25,6 @@ export const useRendererChatPresentation = ({
 	activeRun: AttachableAssistantRun | null;
 	chatId: string;
 	controllerMessages: UIMessage[];
-	isAiRequestPending: boolean;
 	isChatRequestPending: boolean;
 	localOptimisticMessages: ScopedLocalOptimisticMessages | null;
 	persistedMessages: UIMessage[];
@@ -37,38 +34,32 @@ export const useRendererChatPresentation = ({
 		api.assistantRunActivity.getActivePlan,
 		activeRun ? { runId: activeRun._id } : "skip",
 	);
-	const runState = React.useMemo(
+	const activeAssistantMessageId = React.useMemo(
 		() =>
-			resolveRendererChatRunState({
+			resolveActiveAssistantMessageId({
 				activeRun,
 				controllerMessages,
-				isAiRequestPending,
 				persistedMessages,
 			}),
-		[activeRun, controllerMessages, isAiRequestPending, persistedMessages],
+		[activeRun, controllerMessages, persistedMessages],
 	);
 	const activeSteerMessageIds =
-		runState.displayActiveRun || isChatRequestPending
+		activeRun || isChatRequestPending
 			? steerHandoffStreamingMessageIds
 			: EMPTY_STREAMING_MESSAGE_IDS;
-	const queueActiveRun = resolveRendererQueueActiveRun({
-		activeRun,
-		displayActiveRun: runState.displayActiveRun,
-		isAiRequestPending,
-	});
 	const mergedMessages = React.useMemo(
 		() =>
 			mergeRendererChatSessionMessages({
-				activeAssistantMessageId: runState.activeAssistantMessageId,
+				activeAssistantMessageId,
 				controllerMessages,
-				displayActiveRun: runState.displayActiveRun,
+				activeRun,
 				persistedMessages,
 			}),
 		[
 			controllerMessages,
 			persistedMessages,
-			runState.activeAssistantMessageId,
-			runState.displayActiveRun,
+			activeAssistantMessageId,
+			activeRun,
 		],
 	);
 	const displayMessages = React.useMemo(
@@ -87,9 +78,9 @@ export const useRendererChatPresentation = ({
 		() =>
 			getMatchingPendingHostedHumanDecision({
 				messages: displayMessages,
-				pendingDecision: runState.displayActiveRun?.pendingDecision,
+				pendingDecision: activeRun?.pendingDecision,
 			}),
-		[displayMessages, runState.displayActiveRun?.pendingDecision],
+		[displayMessages, activeRun?.pendingDecision],
 	);
 	const localMessageIds = React.useMemo(
 		() =>
@@ -105,21 +96,17 @@ export const useRendererChatPresentation = ({
 		() =>
 			new Set([
 				...activeSteerMessageIds,
-				...(runState.displayActiveRun?.interruptedAssistantMessageIds ?? []),
+				...(activeRun?.interruptedAssistantMessageIds ?? []),
 			]),
-		[
-			activeSteerMessageIds,
-			runState.displayActiveRun?.interruptedAssistantMessageIds,
-		],
+		[activeSteerMessageIds, activeRun?.interruptedAssistantMessageIds],
 	);
 
 	return {
-		...runState,
+		activeAssistantMessageId,
 		displayMessages,
 		localMessageIds,
 		pendingHumanDecision,
-		queueActiveRun,
-		runPlan: runPlan ?? null,
+		runPlan: activeRun ? (runPlan ?? null) : null,
 		streamingMessageIds,
 	};
 };

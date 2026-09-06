@@ -117,6 +117,7 @@ import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import { useLinkedAccounts } from "@/hooks/use-linked-accounts";
 import { useSettingsImageUpload } from "@/hooks/use-settings-image-upload";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { navigateToAppLocation } from "@/lib/app-navigation";
 import { authClient } from "@/lib/auth-client";
 import { getAvatarSrc } from "@/lib/avatar";
 import type { ChatAppSourceProvider } from "@/lib/chat-source-display";
@@ -222,11 +223,6 @@ const initialDataControlsState: DataControlsState = {
 	isDeletingAllNotes: false,
 	showDeleteAllChatsDialog: false,
 	isDeletingAllChats: false,
-};
-
-const navigateTo = (pathname: string) => {
-	window.history.pushState(null, "", pathname);
-	window.dispatchEvent(new PopStateEvent("popstate"));
 };
 
 function SettingsPageContent({
@@ -1772,7 +1768,7 @@ function DataControlsSettings({
 			await removeWorkspace({ workspaceId: activeWorkspaceId });
 			setShowDeleteWorkspaceDialog(false);
 			onClose();
-			navigateTo("/home");
+			navigateToAppLocation("/home");
 			toast.success("Workspace deleted");
 		} catch (error) {
 			logError({
@@ -1804,7 +1800,7 @@ function DataControlsSettings({
 				showDeleteAllNotesDialog: false,
 			}));
 			onClose();
-			navigateTo("/home");
+			navigateToAppLocation("/home");
 			toast.success(
 				result.hasMore ? "Note deletion started" : "All notes deleted",
 			);
@@ -1844,7 +1840,7 @@ function DataControlsSettings({
 				showDeleteAllChatsDialog: false,
 			}));
 			onClose();
-			navigateTo("/home");
+			navigateToAppLocation("/home");
 			toast.success(
 				result.hasMore ? "Chat deletion started" : "All chats deleted",
 			);

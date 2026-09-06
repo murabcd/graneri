@@ -288,6 +288,11 @@ test("project note tools search and read only the persisted chat project", async
 	expect(result.hasMore).toBe(true);
 	expect(result.notes).toHaveLength(1);
 	expect([firstNoteId, secondNoteId]).toContain(result.notes[0]?.noteId);
+	expect(result.notes[0]?.project).toEqual({
+		projectId,
+		name: "Research",
+		description: "",
+	});
 	expect(result.notes[0]?.preview.length).toBeLessThanOrEqual(500);
 
 	await expect(
@@ -299,6 +304,7 @@ test("project note tools search and read only the persisted chat project", async
 	).resolves.toMatchObject({
 		noteId: firstNoteId,
 		title: "Roadmap alpha",
+		project: { projectId, name: "Research", description: "" },
 		text: "The project roadmap launches in September.",
 	});
 	await expect(
@@ -376,6 +382,12 @@ test("workspace chats search and read unmentioned notes without crossing ownersh
 			[rootNoteId, projectNoteId].sort(),
 		);
 		expect(result.hasMore).toBe(false);
+		expect(
+			result.notes.find((note) => note.noteId === rootNoteId)?.project,
+		).toBeNull();
+		expect(
+			result.notes.find((note) => note.noteId === projectNoteId)?.project,
+		).toEqual({ projectId, name: "Research", description: "" });
 		await expect(
 			t.query(internal.chatNotes.searchForOwner, {
 				...scope,
@@ -388,6 +400,7 @@ test("workspace chats search and read unmentioned notes without crossing ownersh
 		asOwner.query(api.chatNotes.get, { ...scope, noteId: rootNoteId }),
 	).resolves.toMatchObject({
 		noteId: rootNoteId,
+		project: null,
 		text: "Design critique and shared engineering practices.",
 	});
 	for (const noteId of excludedNoteIds) {
@@ -550,4 +563,36 @@ test("removing a project clears it from active and archived chats", async () => 
 	);
 	expect(chats).toHaveLength(27);
 	expect(chats.every((chat) => chat.projectId === null)).toBe(true);
+});
+
+test("project context is database-derived and cannot cross workspace ownership", async () => {
+	const { asOwner, asOther, ownerWorkspaceId, projectId } =
+		await createFixture();
+	await asOwner.mutation(api.projects.updateDescription, {
+		workspaceId: ownerWorkspaceId,
+		id: projectId,
+		description: "Исследование интерфейсов",
+	});
+	await expect(
+		asOwner.query(api.projects.getChatContext, {
+			workspaceId: ownerWorkspaceId,
+			projectId,
+		}),
+	).resolves.toEqual({
+		projectId,
+		name: "Research",
+		description: "Исследование интерфейсов",
+	});
+	await expect(
+		asOwner.query(api.projects.getChatContext, {
+			workspaceId: ownerWorkspaceId,
+			projectId: null,
+		}),
+	).resolves.toBeNull();
+	await expect(
+		asOther.query(api.projects.getChatContext, {
+			workspaceId: ownerWorkspaceId,
+			projectId,
+		}),
+	).rejects.toThrow();
 });

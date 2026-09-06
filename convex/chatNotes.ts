@@ -10,6 +10,7 @@ import { internalQuery, query } from "./_generated/server";
 import { getOwnedActiveChatById } from "./assistantRunLifecycle";
 import { clampWhitespace, createResourceAccess } from "./domain";
 import { requirePersistedNoteDocument } from "./noteDocument";
+import { getNoteProjectContext, projectContextValidator } from "./projects";
 
 const MAX_NOTE_TITLE_LENGTH = 120;
 const MAX_NOTE_PREVIEW_LENGTH = 500;
@@ -19,6 +20,7 @@ const noteSummaryValidator = v.object({
 	title: v.string(),
 	preview: v.string(),
 	updatedAt: v.number(),
+	project: v.union(projectContextValidator, v.null()),
 });
 
 const noteSearchResultValidator = v.object({
@@ -32,6 +34,7 @@ const noteContentValidator = v.object({
 	text: v.string(),
 	nextOffset: v.union(v.number(), v.null()),
 	updatedAt: v.number(),
+	project: v.union(projectContextValidator, v.null()),
 });
 
 const { requireTokenIdentifier } = createResourceAccess("chat notes");
@@ -46,17 +49,20 @@ const clip = (value: string, maxLength: number) => {
 const toNoteSummary = (
 	note: Doc<"notes">,
 	document: Doc<"noteDocuments">,
+	project: Infer<typeof projectContextValidator> | null,
 ): Infer<typeof noteSummaryValidator> => ({
 	noteId: note._id,
 	title: clip(note.title, MAX_NOTE_TITLE_LENGTH) || "New note",
 	preview: clip(document.searchableText, MAX_NOTE_PREVIEW_LENGTH),
 	updatedAt: note.updatedAt,
+	project,
 });
 
 const toNoteContent = (
 	note: Doc<"notes">,
 	document: Doc<"noteDocuments">,
 	offset: number,
+	project: Infer<typeof projectContextValidator> | null,
 ): Infer<typeof noteContentValidator> => {
 	const text = document.searchableText.trim();
 	const chunkEnd = Math.min(offset + NOTE_READ_CHUNK_LENGTH, text.length);
@@ -66,6 +72,7 @@ const toNoteContent = (
 		text: text.slice(offset, chunkEnd),
 		nextOffset: chunkEnd < text.length ? chunkEnd : null,
 		updatedAt: note.updatedAt,
+		project,
 	};
 };
 
@@ -172,9 +179,13 @@ const searchNotesForOwner = async (
 
 	return {
 		hasMore: records.length > limit,
-		notes: records
-			.slice(0, limit)
-			.map(({ document, note }) => toNoteSummary(note, document)),
+		notes: await Promise.all(
+			records
+				.slice(0, limit)
+				.map(async ({ document, note }) =>
+					toNoteSummary(note, document, await getNoteProjectContext(ctx, note)),
+				),
+		),
 	};
 };
 
@@ -208,11 +219,11 @@ const getNoteForOwner = async (
 		return null;
 	}
 
-	return toNoteContent(
-		note,
-		await requirePersistedNoteDocument(ctx, note._id),
-		resolveNoteOffset(args.offset),
-	);
+	const [document, project] = await Promise.all([
+		requirePersistedNoteDocument(ctx, note._id),
+		getNoteProjectContext(ctx, note),
+	]);
+	return toNoteContent(note, document, resolveNoteOffset(args.offset), project);
 };
 
 export const search = query({

@@ -72,6 +72,11 @@ describe("hosted chat run context", () => {
 			defaultReasoningEffort: "medium",
 			defaultTimezone: "UTC",
 			getActiveStreamSession: () => null,
+			getProjectContext: async () => ({
+				projectId: "project-42",
+				name: "Research",
+				description: "Design engineering",
+			}),
 			getNotesContext: async () => "notes",
 			getAppConnections: async () => {
 				throw new Error(
@@ -120,6 +125,13 @@ describe("hosted chat run context", () => {
 				"update_automation",
 			]),
 		);
+		expect(context.instructions).toContain(
+			JSON.stringify({
+				projectId: "project-42",
+				name: "Research",
+				description: "Design engineering",
+			}),
+		);
 		expect(context.instructions).toContain("stored note");
 		expect(context.instructions).toContain("Earlier context.");
 		expect(context.instructions).toContain("Project");
@@ -143,6 +155,7 @@ describe("hosted chat run context", () => {
 			defaultReasoningEffort: "medium",
 			defaultTimezone: "UTC",
 			getActiveStreamSession: () => null,
+			getProjectContext: async () => null,
 			getNotesContext: async () => "",
 			getAppConnections: async () => [],
 			getSelectedRecipe: async () => null,
@@ -191,6 +204,7 @@ describe("hosted chat run context", () => {
 					preview: "Google account",
 				},
 			],
+			getProjectContext: async () => null,
 			getNotesContext: async () => "",
 			getSelectedRecipe: async () => null,
 			getStoredNoteContext: async () => "",

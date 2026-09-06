@@ -8,6 +8,13 @@ import {
 import { toolUiMetadata } from "../src/tool-ui-metadata.mjs";
 
 describe("note tools", () => {
+	it("preserves an unavailable note result through tool execution", async () => {
+		const tools = buildNoteTools({
+			getNote: async () => null,
+			searchNotes: vi.fn(),
+		});
+		expect(await tools.get_note.execute?.({ noteId: "missing" })).toBeNull();
+	});
 	it("enforces bounded search and read input at the tool boundary", () => {
 		const definitions = buildNoteToolDefinitions({
 			searchNotes: vi.fn(),
@@ -54,6 +61,7 @@ describe("note tools", () => {
 			notes: [
 				{
 					noteId: "note-1",
+					project: null,
 					preview: "Release checklist",
 					title: "Launch",
 					updatedAt: 1,
@@ -79,6 +87,7 @@ describe("note tools", () => {
 			notes: [
 				{
 					noteId: "note-1",
+					project: null,
 					preview: "Release checklist",
 					title: "Launch",
 					updatedAt: 1,
@@ -94,6 +103,7 @@ describe("note tools", () => {
 	it("reads notes through the scoped adapter", async () => {
 		const getNote = vi.fn(async () => ({
 			noteId: "note-1",
+			project: null,
 			nextOffset: null,
 			text: "Full launch notes",
 			title: "Launch",
@@ -115,6 +125,7 @@ describe("note tools", () => {
 		});
 		expect(result).toMatchObject({
 			noteId: "note-1",
+			project: null,
 			nextOffset: null,
 			text: "Full launch notes",
 			title: "Launch",

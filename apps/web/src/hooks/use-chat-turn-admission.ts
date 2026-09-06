@@ -39,11 +39,11 @@ const createLocalSubmissionBoundary = (): LocalSubmissionBoundary => {
 
 export const useChatTurnAdmission = ({
 	isAiRequestPending,
-	queueActiveRun,
+	activeRun,
 	scopeKey,
 }: {
 	isAiRequestPending: boolean;
-	queueActiveRun: AttachableAssistantRun | null;
+	activeRun: AttachableAssistantRun | null;
 	scopeKey: string;
 }) => {
 	const scopeKeyRef = React.useRef(scopeKey);
@@ -105,10 +105,10 @@ export const useChatTurnAdmission = ({
 
 	React.useEffect(() => {
 		const boundary = unobservedDirectSubmissionRef.current;
-		if (queueActiveRun && boundary) {
+		if (activeRun && boundary) {
 			discardAdmissionBoundary(boundary, "active_run");
 		}
-	}, [discardAdmissionBoundary, queueActiveRun]);
+	}, [discardAdmissionBoundary, activeRun]);
 
 	React.useEffect(
 		() => () => {
@@ -129,7 +129,7 @@ export const useChatTurnAdmission = ({
 			const unobservedDirectSubmission = unobservedDirectSubmissionRef.current;
 			const pendingAdmissionBoundary = pendingAdmissionBoundaryRef.current;
 			if (
-				queueActiveRun ||
+				activeRun ||
 				isAiRequestPending ||
 				unobservedDirectSubmission ||
 				pendingAdmissionBoundary
@@ -147,7 +147,7 @@ export const useChatTurnAdmission = ({
 						return operation({ status: "canceled" });
 					}
 					if (
-						!queueActiveRun &&
+						!activeRun &&
 						predecessorOutcome === "no_active" &&
 						(predecessorOwnsPendingRequest || !isAiRequestPending)
 					) {
@@ -194,7 +194,7 @@ export const useChatTurnAdmission = ({
 			completeAdmissionBoundary,
 			discardAdmissionBoundary,
 			isAiRequestPending,
-			queueActiveRun,
+			activeRun,
 		],
 	);
 

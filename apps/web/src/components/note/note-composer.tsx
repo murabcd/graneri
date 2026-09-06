@@ -326,13 +326,13 @@ const isPointerInsideNoteChatSurface = ({
 
 const shouldBlockNoteChatSubmit = ({
 	attachedFiles,
-	displayActiveRun,
+	hasActiveRun,
 	isSettingsLoading,
 	message,
 	selectedRecipe,
 }: {
 	attachedFiles: ChatAttachment[];
-	displayActiveRun: boolean;
+	hasActiveRun: boolean;
 	isSettingsLoading: boolean;
 	message: string;
 	selectedRecipe: RecipePrompt | null;
@@ -340,7 +340,7 @@ const shouldBlockNoteChatSubmit = ({
 	isSettingsLoading ||
 	(!message && !selectedRecipe && attachedFiles.length === 0) ||
 	hasUploadingAttachments(attachedFiles) ||
-	(displayActiveRun && attachedFiles.length > 0);
+	(hasActiveRun && attachedFiles.length > 0);
 
 const getNoteDraftStorageScope = (noteId: Id<"notes"> | null) =>
 	noteId ? getNoteComposerDraftScope(noteId) : null;
@@ -556,7 +556,7 @@ const useNoteComposerController = ({
 	const activeWorkspaceId = useActiveWorkspaceId();
 	const userPreferences = useQuery(api.userPreferences.get, {});
 	const {
-		activeRun,
+		activeRun: persistedActiveRun,
 		chatSettings,
 		chatTitle,
 		compactionActivity,
@@ -700,7 +700,7 @@ const useNoteComposerController = ({
 	const {
 		canStop,
 		deleteMessage,
-		displayActiveRun,
+		activeRun,
 		displayMessages: displayChatMessages,
 		error: chatError,
 		handleStop,
@@ -721,7 +721,7 @@ const useNoteComposerController = ({
 		updateQueuedTurn,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
-		activeRun,
+		activeRun: persistedActiveRun,
 		buildContinuationRequestBody,
 		chatId: currentChatId,
 		contextLabel: "note chat",
@@ -1241,7 +1241,7 @@ const useNoteComposerController = ({
 			if (
 				shouldBlockNoteChatSubmit({
 					attachedFiles: submittedAttachedFiles,
-					displayActiveRun: Boolean(displayActiveRun),
+					hasActiveRun: Boolean(activeRun),
 					isSettingsLoading,
 					message: nextMessage,
 					selectedRecipe,
@@ -1346,7 +1346,7 @@ const useNoteComposerController = ({
 		[
 			claimAttachedFilesSnapshot,
 			claimDraftSnapshot,
-			displayActiveRun,
+			activeRun,
 			isQueuedMessageEditCurrent,
 			isSettingsLoading,
 			getDraftSnapshot,

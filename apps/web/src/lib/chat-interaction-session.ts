@@ -3,7 +3,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 export const stopChatInteraction = async ({
 	chatId,
 	contextLabel,
-	hasDisplayActiveRun,
+	hasActiveRun,
 	interruptActiveRun,
 	stopActiveRun,
 	stopExternalRun,
@@ -12,7 +12,7 @@ export const stopChatInteraction = async ({
 }: {
 	chatId: string;
 	contextLabel: string;
-	hasDisplayActiveRun: boolean;
+	hasActiveRun: boolean;
 	interruptActiveRun: boolean;
 	stopActiveRun: (args: {
 		chatId: string;
@@ -29,7 +29,7 @@ export const stopChatInteraction = async ({
 		return;
 	}
 
-	if (!hasDisplayActiveRun) {
+	if (!hasActiveRun) {
 		return;
 	}
 

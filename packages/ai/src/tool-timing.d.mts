@@ -1,3 +1,5 @@
-export declare const withToolTiming: <T extends object>(
+export declare const withToolTiming: <T extends object | null>(
 	operation: () => Promise<T>,
-) => Promise<T & { durationMs: number; totalDurationMs: number }>;
+) => Promise<
+	T extends null ? null : T & { durationMs: number; totalDurationMs: number }
+>;

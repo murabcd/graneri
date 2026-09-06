@@ -33,15 +33,17 @@ type ComposerProjectPickerProps = {
 };
 
 export function ActiveComposerProjectOption({
+	removeLabel,
 	onRemove,
 	project,
 }: {
+	removeLabel: string;
 	onRemove: () => void;
 	project: ComposerProjectOption;
 }) {
 	return (
 		<ActiveComposerOption
-			disableLabel={`Remove ${project.name}`}
+			disableLabel={removeLabel}
 			icon={
 				<ProjectIcon
 					icon={project.icon}
@@ -54,7 +56,7 @@ export function ActiveComposerProjectOption({
 					{project.name}
 				</HoverScrollTitle>
 			}
-			labelClassName="min-w-0"
+			labelClassName="min-w-0 font-normal"
 			onDisable={onRemove}
 		/>
 	);

@@ -573,7 +573,24 @@ into every prompt. The assistant receives bounded `search_notes`
 and `get_note` tools from
 [note-tools.mjs](../packages/ai/src/note-tools.mjs); the Convex
 executors in [[convex/chatNotes.ts]] derive scope from the persisted chat,
-enforce workspace ownership again, and return only requested note content.
+enforce workspace ownership again, and return requested note content with its
+containing project's ID, name, and description (or `null` when unassigned).
+[[convex/projects.ts]] provides the same database-derived project context for the
+selected chat project; mentioned-note context includes each note's identity and
+project too. Project metadata is context data, not a request to preload all notes.
+
+[[apps/web/src/lib/chat-note-references.ts]] derives read-note references from
+successful persisted `get_note` results, retaining project context for the card's
+project-name subtitle (or "No project" when unassigned). Search matches stay in activity details;
+read notes appear beside the answer and in the summary's sources, deduplicated by
+note ID. [[apps/web/src/components/chat/chat-note-reference.tsx]] gives mentions
+and discovered notes the same preview action; the card's redirect control uses
+[[apps/web/src/lib/app-navigation.ts]] to open the full note page through the app's
+history navigation. The summary sheet opens a note tab
+from its ID and title without requiring picker membership, reuses existing tabs,
+and loads the current authorized note lazily. Deleted or archived notes show an
+unavailable state. Images retain their dialog, and other artifact viewers remain
+outside this note-preview contract.
 Search uses the title and body keyword indexes; the tool directs the model to
 retry shorter queries, synonyms, or language variants when an exact query misses.
 The same canonical tools and result contracts serve hosted and desktop runs.
@@ -993,3 +1010,7 @@ Completed assistant message metadata carries `workDurationMs`, computed from the
 The Working/Worked row is expandable only when its details contain visible commentary, reasoning or tools. The row and details renderer share the same work-part visibility predicate; empty completed reasoning and hidden transport tools do not create a disclosure or chevron. The duration label remains visible without an interactive trigger.
 
 Both producers and generation-boundary saves use the shared [metadata encoder](../packages/ai/src/chat-message-metadata.mjs). Message `createdAt` remains an ordering timestamp and must not be used as a completion clock. When a live Working row becomes Worked, the renderer retains its last measured duration until recorded elapsed time arrives, then uses that authoritative value. A row mounted from completed history without recorded timing shows “Worked” without an inferred duration.
+
+The durable attachable run and pending local request own execution visibility together. Text, final-answer phase markers, and completed plan steps do not end execution: Working and Stop remain active until the run/request finishes. The floating plan belongs to that same active run and disappears when it ends. This also keeps sidebar activity and queue admission consistent across tool continuations and reconnects.
+
+The renderer exposes one `activeRun` for presentation, Stop, continuation, and queue admission; it does not synthesize separate display and queue runs. Retained work details are scoped to their turn and reset when the inactive history target changes, so removing a completed turn cannot attach its activity to another turn.

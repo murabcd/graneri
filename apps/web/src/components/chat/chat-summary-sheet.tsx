@@ -1,6 +1,7 @@
 "use client";
 
 import { Tiptap, useEditor } from "@tiptap/react";
+import type { NoteReference } from "@workspace/ai/note-tools";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Command,
@@ -106,12 +107,7 @@ export type SummaryWorkspaceSource = {
 
 type SummaryTab =
 	| { id: "summary"; kind: "summary"; title: "Summary" }
-	| {
-			id: string;
-			kind: "file";
-			sourceId: Id<"notes">;
-			title: string;
-	  }
+	| ({ id: string; kind: "note" } & NoteReference)
 	| { id: "automation"; kind: "automation"; title: "Automation" };
 
 const SUMMARY_TAB: SummaryTab = {
@@ -283,15 +279,15 @@ function ChatSummaryPanel({
 	onTogglePinned: () => void;
 }) {
 	const activeWorkspaceId = useActiveWorkspaceId();
-	const [fileTabs, setFileTabs] = React.useState<
-		Extract<SummaryTab, { kind: "file" }>[]
+	const [noteTabs, setNoteTabs] = React.useState<
+		Extract<SummaryTab, { kind: "note" }>[]
 	>([]);
 	const tabs = React.useMemo(
-		() => [SUMMARY_TAB, ...(automation ? [AUTOMATION_TAB] : []), ...fileTabs],
-		[automation, fileTabs],
+		() => [SUMMARY_TAB, ...(automation ? [AUTOMATION_TAB] : []), ...noteTabs],
+		[automation, noteTabs],
 	);
 	const [activeTabId, setActiveTabId] = React.useState(SUMMARY_TAB.id);
-	const [fileSearchOpen, setFileSearchOpen] = React.useState(false);
+	const [noteSearchOpen, setNoteSearchOpen] = React.useState(false);
 	const handledOpenSourceRequestIdRef = React.useRef<number | null>(null);
 	const effectiveActiveTabId =
 		activeTabId === AUTOMATION_TAB.id && !automation
@@ -299,7 +295,7 @@ function ChatSummaryPanel({
 			: activeTabId;
 	const activeTab =
 		tabs.find((tab) => tab.id === effectiveActiveTabId) ?? SUMMARY_TAB;
-	const fileSearchItems = React.useMemo<SearchCommandItem[]>(
+	const noteSearchItems = React.useMemo<SearchCommandItem[]>(
 		() =>
 			workspaceSources.map((source) => ({
 				id: source.id,
@@ -310,36 +306,19 @@ function ChatSummaryPanel({
 			})),
 		[workspaceSources],
 	);
-	const addTab = React.useCallback(
-		(tab: Extract<SummaryTab, { kind: "file" }>) => {
-			setFileTabs((current) =>
-				current.some((item) => item.id === tab.id)
-					? current
-					: [...current, tab],
-			);
-			setActiveTabId(tab.id);
-		},
-		[],
-	);
-	const openWorkspaceSource = React.useCallback(
-		(sourceId: string) => {
-			const source = workspaceSources.find((item) => item.id === sourceId);
-
-			if (!source) {
-				return;
-			}
-
-			addTab({
-				id: `file:${source.id}`,
-				kind: "file",
-				sourceId: source.id,
-				title: source.title,
-			});
-		},
-		[addTab, workspaceSources],
-	);
-	const openFileSearch = React.useCallback(() => {
-		setFileSearchOpen(true);
+	const openNote = React.useCallback((note: NoteReference) => {
+		const tab = { ...note, id: `note:${note.noteId}`, kind: "note" as const };
+		setNoteTabs((current) =>
+			current.some((item) => item.id === tab.id) ? current : [...current, tab],
+		);
+		setActiveTabId(tab.id);
+	}, []);
+	const openWorkspaceSource = (sourceId: string) => {
+		const source = workspaceSources.find((item) => item.id === sourceId);
+		if (source) openNote({ noteId: source.id, title: source.title });
+	};
+	const openNoteSearch = React.useCallback(() => {
+		setNoteSearchOpen(true);
 	}, []);
 	const openAutomationTab = React.useCallback(() => {
 		if (automation) {
@@ -350,8 +329,8 @@ function ChatSummaryPanel({
 		onOpenSummary();
 		openAutomationTab();
 	});
-	const handleOpenFileSearchShortcut = React.useEffectEvent(() => {
-		openFileSearch();
+	const handleOpenNoteSearchShortcut = React.useEffectEvent(() => {
+		openNoteSearch();
 	});
 
 	React.useEffect(() => {
@@ -373,7 +352,7 @@ function ChatSummaryPanel({
 
 			event.preventDefault();
 			if (key === "p") {
-				handleOpenFileSearchShortcut();
+				handleOpenNoteSearchShortcut();
 				return;
 			}
 
@@ -389,7 +368,7 @@ function ChatSummaryPanel({
 				setActiveTabId(SUMMARY_TAB.id);
 			}
 
-			setFileTabs((current) => current.filter((tab) => tab.id !== tabId));
+			setNoteTabs((current) => current.filter((tab) => tab.id !== tabId));
 		},
 		[activeTabId],
 	);
@@ -403,8 +382,8 @@ function ChatSummaryPanel({
 		}
 
 		handledOpenSourceRequestIdRef.current = openSourceRequest.requestId;
-		openWorkspaceSource(openSourceRequest.sourceId);
-	}, [openSourceRequest, openWorkspaceSource]);
+		openNote(openSourceRequest.note);
+	}, [openSourceRequest, openNote]);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div
@@ -430,7 +409,7 @@ function ChatSummaryPanel({
 						isMobile && desktopSafeTop && "mt-1",
 					)}
 				>
-					<SummaryAddPopover onOpenFileSearch={openFileSearch} />
+					<SummaryAddPopover onOpenNoteSearch={openNoteSearch} />
 					{isMobile ? null : (
 						<DockedPanelPinButton
 							isPinned={isPinned}
@@ -441,11 +420,11 @@ function ChatSummaryPanel({
 					<DockedPanelHideButton label="Hide summary" onHide={onClose} />
 				</div>
 			</div>
-			{fileSearchOpen ? (
+			{noteSearchOpen ? (
 				<SearchCommand
-					open={fileSearchOpen}
-					onOpenChange={setFileSearchOpen}
-					items={fileSearchItems}
+					open={noteSearchOpen}
+					onOpenChange={setNoteSearchOpen}
+					items={noteSearchItems}
 					searchPlaceholder="Search notes..."
 					searchDescription="Search notes..."
 					filtersEnabled={false}
@@ -460,6 +439,7 @@ function ChatSummaryPanel({
 				automation={automation}
 				chatTitle={chatTitle}
 				content={content}
+				onOpenNote={openNote}
 			/>
 		</div>
 	);
@@ -501,6 +481,23 @@ function SummaryTabRail({
 							)}
 							title={tab.title}
 						>
+							{tab.kind === "note" ? (
+								<button
+									type="button"
+									aria-label={`Close ${tab.title}`}
+									className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm"
+									onClick={() => onCloseTab(tab.id)}
+								>
+									<FileText
+										aria-hidden="true"
+										className="size-4 text-blue-400 group-hover/tab:hidden group-focus-within/tab:hidden"
+									/>
+									<X
+										aria-hidden="true"
+										className="hidden size-3 group-hover/tab:block group-focus-within/tab:block"
+									/>
+								</button>
+							) : null}
 							<button
 								type="button"
 								className="min-w-0 flex-1 cursor-pointer truncate text-left"
@@ -508,18 +505,6 @@ function SummaryTabRail({
 							>
 								{tab.title}
 							</button>
-							{tab.kind === "file" ? (
-								<button
-									type="button"
-									aria-label={`Close ${tab.title}`}
-									className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm opacity-0 transition-opacity group-hover/tab:opacity-100"
-									onClick={() => {
-										onCloseTab(tab.id);
-									}}
-								>
-									<X className="size-3" />
-								</button>
-							) : null}
 						</div>
 					);
 				})}
@@ -529,9 +514,9 @@ function SummaryTabRail({
 }
 
 function SummaryAddPopover({
-	onOpenFileSearch,
+	onOpenNoteSearch,
 }: {
-	onOpenFileSearch: () => void;
+	onOpenNoteSearch: () => void;
 }) {
 	const [open, setOpen] = React.useState(false);
 	const handleOpenChange = React.useCallback((nextOpen: boolean) => {
@@ -561,11 +546,11 @@ function SummaryAddPopover({
 					<CommandList>
 						<CommandGroup>
 							<CommandItem
-								value="open-file"
+								value="open-note"
 								className="group/summary-add-item cursor-pointer"
 								onSelect={() => {
 									handleOpenChange(false);
-									onOpenFileSearch();
+									onOpenNoteSearch();
 								}}
 							>
 								<FileText className="size-4" />
@@ -609,12 +594,14 @@ function isEditableShortcutTarget(target: EventTarget | null) {
 }
 
 function SummaryTabContent({
+	onOpenNote,
 	activeTab,
 	activeWorkspaceId,
 	automation,
 	chatTitle,
 	content,
 }: {
+	onOpenNote: (note: NoteReference) => void;
 	activeTab: SummaryTab;
 	activeWorkspaceId: Id<"workspaces"> | null;
 	automation?: AutomationListItem | null;
@@ -639,17 +626,17 @@ function SummaryTabContent({
 		);
 	}
 
-	if (activeTab.kind === "file") {
+	if (activeTab.kind === "note") {
 		return (
 			<SummaryNoteContent
 				activeWorkspaceId={activeWorkspaceId}
-				noteId={activeTab.sourceId}
+				noteId={activeTab.noteId}
 				title={activeTab.title}
 			/>
 		);
 	}
 
-	return <ChatSummaryOverview content={content} />;
+	return <ChatSummaryOverview content={content} onOpenNote={onOpenNote} />;
 }
 
 function SummaryNoteContent({
@@ -658,7 +645,7 @@ function SummaryNoteContent({
 	title,
 }: {
 	activeWorkspaceId: Id<"workspaces"> | null;
-	noteId: Id<"notes">;
+	noteId: string;
 	title: string;
 }) {
 	const note = useQuery(
@@ -674,9 +661,15 @@ function SummaryNoteContent({
 		>
 			<div className="summary-note-preview-content flex flex-col gap-4 px-5 py-4">
 				<div className="flex items-center gap-2 text-lg font-medium leading-tight tracking-tight">
-					<span className="min-w-0 truncate">{title}</span>
+					<span className="min-w-0 truncate">{note?.title ?? title}</span>
 				</div>
-				{note === undefined ? null : note?.searchableText ? (
+				{note === undefined ? (
+					<p className="text-xs text-muted-foreground">Loading note…</p>
+				) : note === null ? (
+					<p className="text-xs text-muted-foreground">
+						This note is no longer available.
+					</p>
+				) : note.searchableText ? (
 					<ReadOnlyNoteContent
 						content={note.content}
 						fallbackText={note.searchableText}

@@ -7,7 +7,7 @@ const workspaceId = "workspace-1" as Id<"workspaces">;
 const createStopArgs = () => ({
 	chatId: "chat-1",
 	contextLabel: "note chat",
-	hasDisplayActiveRun: true,
+	hasActiveRun: true,
 	interruptActiveRun: false,
 	stopActiveRun: vi.fn(async () => undefined),
 	stopLocalStream: vi.fn(),

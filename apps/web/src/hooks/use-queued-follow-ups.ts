@@ -23,13 +23,13 @@ type FollowUpInput = Pick<
 	| "steerMessageIds"
 	| "workspaceId"
 > & {
-	queueActiveRun: AttachableAssistantRunQueryResult;
+	activeRun: AttachableAssistantRunQueryResult;
 	isChatRequestPending: boolean;
 	error: Error | undefined;
 };
 
 export const useQueuedFollowUps = ({
-	queueActiveRun,
+	activeRun,
 	isChatRequestPending,
 	error,
 	...input
@@ -44,7 +44,7 @@ export const useQueuedFollowUps = ({
 		if (error) session.invalidateReplay();
 	}, [error, session]);
 	const isQueueHandoffPending =
-		(!error && isReplayPending) || (isChatRequestPending && !queueActiveRun);
+		(!error && isReplayPending) || (isChatRequestPending && !activeRun);
 	const { userPreferences, updateUserPreferences } = useUserPreferences();
 	const followUpBehavior =
 		userPreferences?.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR;
@@ -70,7 +70,7 @@ export const useQueuedFollowUps = ({
 		useQueuedFollowUpProjection(input);
 	const controls = useQueuedFollowUpControls({
 		...input,
-		activeRun: queueActiveRun,
+		activeRun,
 		followUpBehavior,
 		isQueueHandoffPending,
 		isUpdatingFollowUpBehavior,
@@ -84,7 +84,7 @@ export const useQueuedFollowUps = ({
 		async ({ queuedMessage, followUpBehaviorOverride }) => {
 			if (
 				(followUpBehaviorOverride ?? followUpBehavior) === "steer" &&
-				(isChatRequestPending || queueActiveRun?.status === "running")
+				(isChatRequestPending || activeRun?.status === "running")
 			) {
 				await controls.steerQueuedFollowUp(queuedMessage);
 			}
@@ -93,7 +93,7 @@ export const useQueuedFollowUps = ({
 			controls.steerQueuedFollowUp,
 			followUpBehavior,
 			isChatRequestPending,
-			queueActiveRun?.status,
+			activeRun?.status,
 		],
 	);
 	return { ...controls, onQueuedMessageSaved };

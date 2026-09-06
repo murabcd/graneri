@@ -9,7 +9,7 @@ import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import { submitChatTurn } from "@/lib/chat-submit-session";
 import type { Id } from "../../../convex/_generated/dataModel";
 
-const activeRun = {
+const attachedRunFixture = {
 	_id: "run-1" as Id<"assistantRuns">,
 	assistantMessageId: "assistant-1",
 	chatId: "chat-1" as Id<"chats">,
@@ -34,20 +34,20 @@ const queuedMessage = {
 	ownerTokenIdentifier: "owner",
 	filesJson: "[]",
 	requestBodyJson: "{}",
-	runId: activeRun._id,
+	runId: attachedRunFixture._id,
 	status: "queued",
 	text: "C",
 	updatedAt: 1,
-	workspaceId: activeRun.workspaceId,
+	workspaceId: attachedRunFixture.workspaceId,
 } satisfies QueuedFollowUpMessage;
 
 describe("useChatTurnAdmission", () => {
 	it("keeps a successful direct handoff queue-aware until the durable run attaches", async () => {
-		let queueActiveRun: AttachableAssistantRun | null = null;
+		let activeRun: AttachableAssistantRun | null = null;
 		const { result, rerender } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending: false,
-				queueActiveRun,
+				activeRun,
 				scopeKey: "chat-1",
 			}),
 		);
@@ -60,10 +60,10 @@ describe("useChatTurnAdmission", () => {
 			result.current.runTurnAdmission(async (admission) => admission.status),
 		).resolves.toBe("current_run");
 
-		queueActiveRun = activeRun;
+		activeRun = attachedRunFixture;
 		rerender();
 		await act(() => Promise.resolve());
-		queueActiveRun = null;
+		activeRun = null;
 		rerender();
 		await act(() => Promise.resolve());
 
@@ -76,7 +76,7 @@ describe("useChatTurnAdmission", () => {
 		const { result } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending: false,
-				queueActiveRun: null,
+				activeRun: null,
 				scopeKey: "chat-1",
 			}),
 		);
@@ -95,11 +95,11 @@ describe("useChatTurnAdmission", () => {
 	});
 
 	it("holds concurrent B and C behind A until A owns a durable run", async () => {
-		let queueActiveRun: AttachableAssistantRun | null = null;
+		let activeRun: AttachableAssistantRun | null = null;
 		const { result, rerender } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending: false,
-				queueActiveRun,
+				activeRun,
 				scopeKey: "chat-1",
 			}),
 		);
@@ -134,7 +134,7 @@ describe("useChatTurnAdmission", () => {
 		await Promise.resolve();
 		expect(admitted).toEqual(["A:direct"]);
 
-		queueActiveRun = activeRun;
+		activeRun = attachedRunFixture;
 		rerender();
 		await act(() => Promise.resolve());
 		expect(admitted).toEqual(["A:direct", "B:current_run"]);
@@ -152,11 +152,11 @@ describe("useChatTurnAdmission", () => {
 	});
 
 	it("releases B and C in FIFO order when A setup fails", async () => {
-		let queueActiveRun: AttachableAssistantRun | null = null;
+		let activeRun: AttachableAssistantRun | null = null;
 		const { result, rerender } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending: false,
-				queueActiveRun,
+				activeRun,
 				scopeKey: "chat-1",
 			}),
 		);
@@ -186,7 +186,7 @@ describe("useChatTurnAdmission", () => {
 			expect(admitted).toEqual(["A:direct", "B:direct"]);
 		});
 
-		queueActiveRun = activeRun;
+		activeRun = attachedRunFixture;
 		rerender();
 
 		await expect(thirdTurn).resolves.toBe("C");
@@ -199,12 +199,12 @@ describe("useChatTurnAdmission", () => {
 	});
 
 	it("lets C queue after B starts a replacement run without waiting for B to finish", async () => {
-		let queueActiveRun: AttachableAssistantRun | null = null;
+		let activeRun: AttachableAssistantRun | null = null;
 		let isAiRequestPending = true;
 		const { result, rerender } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending,
-				queueActiveRun,
+				activeRun,
 				scopeKey: "chat-1",
 			}),
 		);
@@ -230,7 +230,6 @@ describe("useChatTurnAdmission", () => {
 					admission.status === "current_run"
 						? { ...admission, admitQueuedMessage }
 						: admission,
-				displayActiveRun: null,
 				editingMessageId: null,
 				enqueueQueuedMessage,
 				onOptimisticMessage: vi.fn(),
@@ -238,13 +237,13 @@ describe("useChatTurnAdmission", () => {
 					preparedTexts.push(text);
 				},
 				onQueuedMessageSaved: vi.fn(),
-				queueActiveRun,
+				activeRun,
 				sendMessage: ({ text: sentText }) => {
 					sentTexts.push(sentText);
 					return bStream;
 				},
 				text,
-				workspaceId: activeRun.workspaceId,
+				workspaceId: attachedRunFixture.workspaceId,
 			});
 
 		const secondTurn = result.current.runTurnAdmission((admission) =>
@@ -260,7 +259,7 @@ describe("useChatTurnAdmission", () => {
 		});
 		expect(preparedTexts).toEqual(["B"]);
 
-		queueActiveRun = activeRun;
+		activeRun = attachedRunFixture;
 		isAiRequestPending = true;
 		rerender();
 
@@ -285,7 +284,6 @@ describe("useChatTurnAdmission", () => {
 		const { result, rerender } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending,
-				queueActiveRun: null,
 				scopeKey: "chat-1",
 			}),
 		);
@@ -324,14 +322,13 @@ describe("useChatTurnAdmission", () => {
 								admitQueuedMessage: vi.fn(),
 							}
 						: admission,
-				displayActiveRun: null,
 				editingMessageId: null,
 				enqueueQueuedMessage: vi.fn(),
 				onOptimisticMessage: vi.fn(),
 				onRequestPrepared: vi.fn(),
 				sendMessage,
 				text: "B",
-				workspaceId: activeRun.workspaceId,
+				workspaceId: attachedRunFixture.workspaceId,
 			}),
 		);
 
@@ -352,7 +349,6 @@ describe("useChatTurnAdmission", () => {
 		const { result, rerender } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending: false,
-				queueActiveRun: null,
 				scopeKey,
 			}),
 		);
@@ -388,7 +384,6 @@ describe("useChatTurnAdmission", () => {
 		const { result, unmount } = renderHook(() =>
 			useChatTurnAdmission({
 				isAiRequestPending: false,
-				queueActiveRun: null,
 				scopeKey: "chat-1",
 			}),
 		);

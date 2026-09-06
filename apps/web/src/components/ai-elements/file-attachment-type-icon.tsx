@@ -13,10 +13,7 @@ import {
 import type { FileUIPart } from "ai";
 import { cn } from "cn";
 
-const getFilenameExtension = (filename?: string) => {
-	const extension = filename?.split(".").at(-1)?.trim();
-	return extension && extension !== filename ? extension.toLowerCase() : "";
-};
+import { getFilenameExtension } from "@/lib/chat-file-attachment";
 
 type FileKind =
 	| "archive"

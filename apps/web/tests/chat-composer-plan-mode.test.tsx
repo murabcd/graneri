@@ -275,13 +275,13 @@ describe("chat composer active options", () => {
 		);
 
 		const projectChip = screen.getByRole("button", {
-			name: "Remove Research activities",
+			name: "Remove project from this chat",
 		});
 		expect(projectChip.textContent).toContain("Research activities");
 
 		await user.click(projectChip);
 		expect(
-			screen.queryByRole("button", { name: "Remove Research activities" }),
+			screen.queryByRole("button", { name: "Remove project from this chat" }),
 		).toBeNull();
 	});
 

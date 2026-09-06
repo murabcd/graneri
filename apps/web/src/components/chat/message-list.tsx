@@ -1,3 +1,4 @@
+import type { NoteReference } from "@workspace/ai/note-tools";
 import { Bubble, BubbleContent } from "@workspace/ui/components/bubble";
 import {
 	Marker,
@@ -14,7 +15,6 @@ import type { UIMessage } from "ai";
 import { cn } from "cn";
 import {
 	CornerDownRight,
-	FileText,
 	GitBranch,
 	LoaderCircle,
 	Scissors,
@@ -29,6 +29,10 @@ import {
 import { isRenderableAssistantWorkPart } from "@/components/ai-elements/tools/tool-part-like";
 import { AppSourceIcon } from "@/components/app-source-icon";
 import { ChatChartArtifacts } from "@/components/chat/chat-chart-artifacts";
+import {
+	ChatNoteCard,
+	ChatNoteReference,
+} from "@/components/chat/chat-note-reference";
 import { CollapsibleMessageContent } from "@/components/chat/collapsible-message-content";
 import {
 	ASSISTANT_CHAT_CONTENT_CLASS,
@@ -48,6 +52,7 @@ import {
 	getChatMessageMetadata,
 	getChatText,
 } from "@/lib/chat-message";
+import { extractReadNoteReferences } from "@/lib/chat-note-references";
 import {
 	formatChatMessageTimestamp,
 	getChatMessageTimestamp,
@@ -127,7 +132,7 @@ export function ChatMessageListContent({
 	scrollAnchorUserMessages = true,
 	renderAssistantActions,
 	renderUserActions,
-	onOpenMention,
+	onOpenNote,
 	streamingMessageIds,
 }: {
 	messages: UIMessage[];
@@ -147,7 +152,7 @@ export function ChatMessageListContent({
 		context: ChatMessageActionContext,
 	) => React.ReactNode;
 	renderUserActions?: (context: ChatMessageActionContext) => React.ReactNode;
-	onOpenMention?: (noteId: string) => void;
+	onOpenNote?: (note: NoteReference) => void;
 	streamingMessageIds?: ReadonlySet<string>;
 }) {
 	const {
@@ -156,7 +161,6 @@ export function ChatMessageListContent({
 		showAssistantBreathingSpace,
 		turns,
 	} = useChatTurnPresentation({
-		hasError: Boolean(error),
 		isLoading,
 		messages,
 		scrollAnchorUserMessages,
@@ -207,7 +211,7 @@ export function ChatMessageListContent({
 							lastMessageId={lastMessageId}
 							renderAssistantActions={renderAssistantActions}
 							renderUserActions={renderUserActions}
-							onOpenMention={onOpenMention}
+							onOpenNote={onOpenNote}
 							scrollAnchor={scrollAnchorUserMessages && message.role === "user"}
 							streamingMessageIds={forcedStreamingMessageIds}
 							textContainerClassName={textContainerClassName}
@@ -304,6 +308,7 @@ const getChatMessagePresentation = ({
 	streamingMessageIds: ReadonlySet<string>;
 }) => {
 	const fileParts = extractMessageFileParts(message);
+	const readNotes = extractReadNoteReferences(message);
 	const chartArtifacts =
 		message.role === "assistant"
 			? extractChatChartArtifacts(message)
@@ -329,6 +334,7 @@ const getChatMessagePresentation = ({
 		chartArtifacts,
 		displayText,
 		fileParts,
+		readNotes,
 		isEmpty: displayText.length === 0,
 		isInterruptedAssistantMessage,
 		isStreamingAssistantMessage,
@@ -419,7 +425,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 	lastMessageId,
 	renderAssistantActions,
 	renderUserActions,
-	onOpenMention,
+	onOpenNote,
 	scrollAnchor,
 	streamingMessageIds,
 	textContainerClassName,
@@ -431,7 +437,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 		context: ChatMessageActionContext,
 	) => React.ReactNode;
 	renderUserActions?: (context: ChatMessageActionContext) => React.ReactNode;
-	onOpenMention?: (noteId: string) => void;
+	onOpenNote?: (note: NoteReference) => void;
 	scrollAnchor: boolean;
 	streamingMessageIds: ReadonlySet<string>;
 	textContainerClassName?: string;
@@ -447,6 +453,7 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 		presentation.isEmpty &&
 		presentation.fileParts.length === 0 &&
 		presentation.chartArtifacts.length === 0 &&
+		presentation.readNotes.length === 0 &&
 		!presentation.selectedRecipe
 	) {
 		return null;
@@ -493,12 +500,25 @@ const ChatMessageListItem = React.memo(function ChatMessageListItem({
 							presentation.isStreamingAssistantMessage
 						}
 						mentionPositions={presentation.metadata?.mentionPositions}
-						onOpenMention={onOpenMention}
+						onOpenNote={onOpenNote}
 						role={message.role}
 						textContainerClassName={textContainerClassName}
 					/>
 					{message.role === "assistant" ? (
-						<FileAttachmentCards files={presentation.fileParts} />
+						<>
+							<FileAttachmentCards files={presentation.fileParts} />
+							{presentation.readNotes.length > 0 ? (
+								<div className="flex w-full max-w-full flex-col gap-3">
+									{presentation.readNotes.map((note) => (
+										<ChatNoteCard
+											key={note.noteId}
+											note={note}
+											onOpenNote={onOpenNote}
+										/>
+									))}
+								</div>
+							) : null}
+						</>
 					) : null}
 					{presentation.isInterruptedAssistantMessage ? (
 						<InterruptedMessageStatus />
@@ -601,7 +621,7 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	isInterruptedAssistantMessage,
 	isStreamingAssistantMessage,
 	mentionPositions,
-	onOpenMention,
+	onOpenNote,
 	role,
 	textContainerClassName,
 }: {
@@ -609,7 +629,7 @@ const ChatMessageText = React.memo(function ChatMessageText({
 	isInterruptedAssistantMessage: boolean;
 	isStreamingAssistantMessage: boolean;
 	mentionPositions?: ChatMessageMention[];
-	onOpenMention?: (noteId: string) => void;
+	onOpenNote?: (note: NoteReference) => void;
 	role: UIMessage["role"];
 	textContainerClassName?: string;
 }) {
@@ -644,7 +664,7 @@ const ChatMessageText = React.memo(function ChatMessageText({
 						<UserMessageWithMentions
 							text={displayText}
 							mentionPositions={mentionPositions}
-							onOpenMention={onOpenMention}
+							onOpenNote={onOpenNote}
 						/>
 					) : (
 						<CollapsibleMessageContent
@@ -682,11 +702,11 @@ const InterruptedMessageStatus = React.memo(
 function UserMessageWithMentions({
 	text,
 	mentionPositions,
-	onOpenMention,
+	onOpenNote,
 }: {
 	text: string;
 	mentionPositions: ChatMessageMention[];
-	onOpenMention?: (noteId: string) => void;
+	onOpenNote?: (note: NoteReference) => void;
 }) {
 	const parts: React.ReactNode[] = [];
 	let cursor = 0;
@@ -732,28 +752,11 @@ function UserMessageWithMentions({
 					<span className="inline-tool-mention-label">{mention.label}</span>
 				</span>
 			) : (
-				<span
+				<ChatNoteReference
 					key={`${mention.id}:${mention.from}`}
-					className="inline cursor-pointer align-baseline whitespace-nowrap text-inherit"
-				>
-					<FileText
-						aria-hidden="true"
-						className="mr-1 inline size-4 align-[-0.125em] text-blue-400"
-					/>
-					{onOpenMention ? (
-						<button
-							type="button"
-							className="inline cursor-pointer bg-transparent p-0 text-left align-baseline font-medium text-blue-400 decoration-blue-300/80 decoration-dotted underline-offset-4 hover:underline"
-							onClick={() => onOpenMention(mention.id)}
-						>
-							{mention.label}
-						</button>
-					) : (
-						<span className="cursor-pointer font-medium text-blue-400 decoration-blue-300/80 decoration-dotted underline-offset-4 hover:underline">
-							{mention.label}
-						</span>
-					)}
-				</span>
+					note={{ noteId: mention.id, title: mention.label }}
+					onOpenNote={onOpenNote}
+				/>
 			),
 		);
 		cursor = Math.min(mention.to, text.length);

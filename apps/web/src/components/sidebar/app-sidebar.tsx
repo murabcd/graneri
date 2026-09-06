@@ -731,7 +731,7 @@ const AppSidebarHeaderSection = React.memo(function AppSidebarHeaderSection({
 	return (
 		<SidebarHeader
 			data-app-region={desktopSafeTop ? "drag" : undefined}
-			className={desktopSafeTop ? "relative gap-1 pb-1 pt-8" : "gap-1 pb-1"}
+			className={desktopSafeTop ? "relative gap-1 pt-8" : "gap-1"}
 		>
 			{desktopSafeTop ? <SidebarHistoryControls /> : null}
 			<div

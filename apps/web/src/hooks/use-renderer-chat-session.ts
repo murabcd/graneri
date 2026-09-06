@@ -41,11 +41,10 @@ type SubmitRendererChatTurnInput = Omit<
 	Parameters<typeof submitChatTurn>[0],
 	| "chatId"
 	| "currentRunAdmission"
-	| "displayActiveRun"
+	| "activeRun"
 	| "enqueueQueuedMessage"
 	| "onOptimisticMessage"
 	| "onQueuedMessageSaved"
-	| "queueActiveRun"
 	| "sendMessage"
 	| "workspaceId"
 >;
@@ -91,7 +90,7 @@ const isAiChatRequestPending = (status: string) =>
 	status === "submitted" || status === "streaming";
 
 export const useRendererChatSession = ({
-	activeRun,
+	activeRun: persistedActiveRun,
 	buildContinuationRequestBody,
 	chatId,
 	contextLabel,
@@ -121,7 +120,7 @@ export const useRendererChatSession = ({
 		() => buildContinuationRequestBody(localCapabilitySession),
 		[buildContinuationRequestBody, localCapabilitySession],
 	);
-	const attachableActiveRun = getAttachableActiveRun(activeRun);
+	const activeRun = getAttachableActiveRun(persistedActiveRun);
 	const branchFromMessage = useMutation(api.chatBranches.branchFromMessage);
 	const enqueueQueuedMessage = useMutation(
 		api.assistantQueuedMessages.enqueueForActiveRun,
@@ -149,7 +148,7 @@ export const useRendererChatSession = ({
 	);
 	const { session: queueSession, snapshot: queueSnapshot } =
 		useQueuedChatSession({
-			activeRunId: activeRun?._id ?? null,
+			activeRunId: persistedActiveRun?._id ?? null,
 			scopeKey: `${workspaceId}:${chatId}`,
 		});
 	const {
@@ -200,27 +199,23 @@ export const useRendererChatSession = ({
 	const isChatRequestPending = isAiRequestPending || isPreparingRequest;
 	const {
 		activeAssistantMessageId,
-		displayActiveRun,
 		displayMessages,
-		hasLocallyCompletedAssistantMessage,
 		localMessageIds,
 		pendingHumanDecision,
-		queueActiveRun,
 		runPlan,
 		streamingMessageIds,
 	} = useRendererChatPresentation({
-		activeRun: attachableActiveRun,
+		activeRun,
 		chatId,
 		controllerMessages,
-		isAiRequestPending,
 		isChatRequestPending,
 		localOptimisticMessages,
 		persistedMessages: sessionPersistedMessages,
 		steerHandoffStreamingMessageIds: queueSnapshot.steerMessageIds,
 	});
 	const { runTurnAdmission } = useChatTurnAdmission({
+		activeRun,
 		isAiRequestPending,
-		queueActiveRun,
 		scopeKey: chatId,
 	});
 	React.useEffect(() => {
@@ -240,7 +235,7 @@ export const useRendererChatSession = ({
 			pendingUserQuestionRollbackRef.current = null;
 			return;
 		}
-		const pendingDecision = attachableActiveRun?.pendingDecision;
+		const pendingDecision = activeRun?.pendingDecision;
 		if (
 			pendingDecision?.type === "user_question" &&
 			pendingDecision.assistantMessageId === rollback.assistantMessageId &&
@@ -249,9 +244,9 @@ export const useRendererChatSession = ({
 			return;
 		}
 		pendingUserQuestionRollbackRef.current = null;
-	}, [attachableActiveRun?.pendingDecision, chatId]);
+	}, [activeRun?.pendingDecision, chatId]);
 	useResumeActiveChatRun({
-		activeRun: displayActiveRun,
+		activeRun,
 		chatId,
 		enabled: resumeEnabled && !isChatRequestPending,
 		resumeStream,
@@ -313,15 +308,13 @@ export const useRendererChatSession = ({
 	const steerMessageIds = React.useMemo(
 		() => [
 			...(activeAssistantMessageId ? [activeAssistantMessageId] : []),
-			...(displayActiveRun?.assistantMessageId
-				? [displayActiveRun.assistantMessageId]
-				: []),
+			...(activeRun?.assistantMessageId ? [activeRun.assistantMessageId] : []),
 		],
-		[activeAssistantMessageId, displayActiveRun?.assistantMessageId],
+		[activeAssistantMessageId, activeRun?.assistantMessageId],
 	);
 	const queuedFollowUpControls = useQueuedFollowUps({
+		activeRun,
 		session: queueSession,
-		queueActiveRun,
 		chatId,
 		contextLabel,
 		error,
@@ -333,7 +326,7 @@ export const useRendererChatSession = ({
 		steerMessageIds,
 		workspaceId,
 	});
-	const isPersistedChatStreaming = Boolean(displayActiveRun);
+	const isPersistedChatStreaming = Boolean(activeRun);
 	const isChatUiPending =
 		isChatRequestPending || isPersistedChatStreaming || isExternallyBlocked;
 	const stopCurrentStream = React.useCallback(
@@ -341,7 +334,7 @@ export const useRendererChatSession = ({
 			await stopChatInteraction({
 				chatId,
 				contextLabel,
-				hasDisplayActiveRun: Boolean(displayActiveRun),
+				hasActiveRun: Boolean(activeRun),
 				interruptActiveRun,
 				stopActiveRun: stopActiveChatStream,
 				stopExternalRun,
@@ -349,14 +342,7 @@ export const useRendererChatSession = ({
 				workspaceId,
 			});
 		},
-		[
-			chatId,
-			contextLabel,
-			displayActiveRun,
-			stop,
-			stopExternalRun,
-			workspaceId,
-		],
+		[chatId, contextLabel, activeRun, stop, stopExternalRun, workspaceId],
 	);
 	const handleStop = React.useCallback(() => {
 		void stopCurrentStream().catch((error) => {
@@ -391,14 +377,13 @@ export const useRendererChatSession = ({
 											status: "current_run",
 										}
 									: admission,
-							displayActiveRun,
+							activeRun,
 							enqueueQueuedMessage,
 							onOptimisticMessage: (message) => {
 								optimisticMessageId = message.id;
 								commitOptimisticMessage({ message });
 							},
 							onQueuedMessageSaved: queuedFollowUpControls.onQueuedMessageSaved,
-							queueActiveRun,
 							sendMessage,
 							workspaceId,
 						});
@@ -414,9 +399,8 @@ export const useRendererChatSession = ({
 			admitQueuedMessage,
 			chatId,
 			commitOptimisticMessage,
-			displayActiveRun,
+			activeRun,
 			enqueueQueuedMessage,
-			queueActiveRun,
 			queuedFollowUpControls.onQueuedMessageSaved,
 			rollbackOptimisticMessage,
 			runPreparedRequest,
@@ -433,7 +417,7 @@ export const useRendererChatSession = ({
 			) {
 				return Promise.resolve(false);
 			}
-			if (!displayActiveRun) {
+			if (!activeRun) {
 				return Promise.reject(
 					new Error("Answering a question requires an active assistant run."),
 				);
@@ -464,7 +448,7 @@ export const useRendererChatSession = ({
 					await sendMessage(undefined, {
 						body: {
 							...requestBody,
-							continueRunId: displayActiveRun._id,
+							continueRunId: activeRun._id,
 						},
 					});
 					return true;
@@ -480,7 +464,7 @@ export const useRendererChatSession = ({
 			buildCurrentRequestBody,
 			clearError,
 			chatId,
-			displayActiveRun,
+			activeRun,
 			displayMessages,
 			isPreparingRequest,
 			pendingHumanDecision,
@@ -549,7 +533,7 @@ export const useRendererChatSession = ({
 			) {
 				return Promise.resolve(false);
 			}
-			if (!displayActiveRun) {
+			if (!activeRun) {
 				return Promise.reject(
 					new Error("Tool approval requires an active assistant run."),
 				);
@@ -566,7 +550,7 @@ export const useRendererChatSession = ({
 					options: {
 						body: {
 							...requestBody,
-							continueRunId: displayActiveRun._id,
+							continueRunId: activeRun._id,
 						},
 					},
 				});
@@ -576,7 +560,7 @@ export const useRendererChatSession = ({
 		[
 			addToolApprovalResponse,
 			buildCurrentRequestBody,
-			displayActiveRun,
+			activeRun,
 			isPreparingRequest,
 			pendingHumanDecision,
 			runPreparedRequest,
@@ -671,7 +655,7 @@ export const useRendererChatSession = ({
 							message: "Failed to recover a local capability tool call",
 						});
 					},
-					run: attachableActiveRun,
+					run: activeRun,
 					setLatestRequestBody: (requestBody) => {
 						latestRequestBodyRef.current = requestBody;
 					},
@@ -689,21 +673,20 @@ export const useRendererChatSession = ({
 		void recoverPendingLocalCapabilityCalls();
 	}, [
 		addToolOutput,
-		attachableActiveRun,
+		activeRun,
 		buildContinuationRequestBody,
 		localFileStorage,
 		latestRequestBodyRef,
 	]);
 
 	return {
+		activeRun,
 		canStop: isChatUiPending,
 		deleteMessage,
-		displayActiveRun,
 		displayMessages,
 		editDraft: queuedFollowUpControls.editDraft,
 		error,
 		handleStop,
-		hasLocallyCompletedAssistantMessage,
 		isChatRequestPending,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent:

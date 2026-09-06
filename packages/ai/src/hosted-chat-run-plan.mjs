@@ -20,6 +20,7 @@ export const buildHostedChatRunPlan = ({
 }) => {
 	const instructions = buildHostedChatRuntimeInstructions({
 		notesContext: context.notesContext,
+		projectContext: context.projectContext,
 		attachedNoteContext: context.attachedNoteContext,
 		compactionSummary: context.compactionSummary,
 		recipeContext: context.recipeContext,

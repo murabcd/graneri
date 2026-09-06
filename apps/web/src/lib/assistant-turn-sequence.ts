@@ -32,7 +32,6 @@ const isAssistantActivityPart = (part: AssistantMessagePart) =>
 export const getAssistantTurnSequence = (message: UIMessage) => {
 	const activityUnits: AssistantActivityUnit[] = [];
 	const finalTextParts: TextUIPart[] = [];
-	let hasFinalAnswerStarted = false;
 	let pendingActivityParts: AssistantMessagePart[] = [];
 	let pendingActivitySourceIndex = 0;
 
@@ -66,10 +65,6 @@ export const getAssistantTurnSequence = (message: UIMessage) => {
 				continue;
 			}
 
-			hasFinalAnswerStarted =
-				hasFinalAnswerStarted ||
-				phase === "final_answer" ||
-				part.text.trim().length > 0;
 			if (part.text.trim().length > 0) {
 				finalTextParts.push(part);
 			}
@@ -88,7 +83,7 @@ export const getAssistantTurnSequence = (message: UIMessage) => {
 
 	flushActivityParts();
 
-	return { activityUnits, finalTextParts, hasFinalAnswerStarted };
+	return { activityUnits, finalTextParts };
 };
 
 export const getAssistantFinalText = (message: UIMessage) =>

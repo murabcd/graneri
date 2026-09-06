@@ -1,6 +1,7 @@
 import type { ChatMessageMetadata } from "@workspace/ai/chat-message-metadata";
 import type { ChatMode } from "@workspace/ai/chat-mode";
 import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-decision";
+import type { NoteReference } from "@workspace/ai/note-tools";
 import {
 	MessageScroller,
 	MessageScrollerButton,
@@ -192,24 +193,6 @@ const getDraftStorageScope = ({
 		? getChatComposerDraftScope({ chatId, workspaceId: activeWorkspaceId })
 		: null;
 
-const getVisibleActiveStreamingChatIds = ({
-	activeStreamingChatIds,
-	chatId,
-	hasLocallyCompletedAssistantMessage,
-}: {
-	activeStreamingChatIds: ReadonlySet<string>;
-	chatId: string;
-	hasLocallyCompletedAssistantMessage: boolean;
-}) => {
-	if (!hasLocallyCompletedAssistantMessage) {
-		return activeStreamingChatIds;
-	}
-
-	const visibleActiveStreamingChatIds = new Set(activeStreamingChatIds);
-	visibleActiveStreamingChatIds.delete(chatId);
-	return visibleActiveStreamingChatIds;
-};
-
 const getInitialChatPluginDraft = (
 	chatId: string,
 	pluginPrefill: ChatPluginPrefill | null | undefined,
@@ -381,7 +364,7 @@ const useChatPageController = ({
 		chatId,
 		workspaceId: activeWorkspaceId,
 	});
-	const activeRun = useQuery(
+	const persistedActiveRun = useQuery(
 		api.assistantRuns.getAttachableRun,
 		getWorkspaceChatQueryArgs(activeWorkspaceId, chatId),
 	);
@@ -450,10 +433,9 @@ const useChatPageController = ({
 	const {
 		canStop,
 		deleteMessage,
-		displayActiveRun,
+		activeRun,
 		displayMessages,
 		error,
-		hasLocallyCompletedAssistantMessage,
 		handleStop,
 		isPreparingRequest,
 		isQueuedMessageEditCurrent,
@@ -471,7 +453,7 @@ const useChatPageController = ({
 		updateQueuedTurn,
 		editDraft: queuedMessageEditDraft,
 	} = useRendererChatSession({
-		activeRun,
+		activeRun: persistedActiveRun,
 		buildContinuationRequestBody,
 		chatId,
 		contextLabel: "chat",
@@ -575,7 +557,7 @@ const useChatPageController = ({
 				(!draftText.trim() && submittedAttachedFiles.length === 0) ||
 				hasUploadingAttachments(submittedAttachedFiles) ||
 				isAutomationRunning ||
-				(displayActiveRun && submittedAttachedFiles.length > 0)
+				(activeRun && submittedAttachedFiles.length > 0)
 			) {
 				return;
 			}
@@ -671,7 +653,7 @@ const useChatPageController = ({
 			chatId,
 			claimAttachedFilesSnapshot,
 			claimDraftSnapshot,
-			displayActiveRun,
+			activeRun,
 			editingMessageId,
 			getAttachedFilesSnapshot,
 			getDraftSnapshot,
@@ -824,21 +806,13 @@ const useChatPageController = ({
 		chatId,
 		onForked: handleForkedChat,
 	});
-	const handleOpenMention = React.useCallback((sourceId: string) => {
+	const handleOpenNote = React.useCallback((note: NoteReference) => {
 		setSummaryOpen(true);
 		setSummaryOpenSourceRequest((current) => ({
-			sourceId,
+			note,
 			requestId: (current?.requestId ?? 0) + 1,
 		}));
 	}, []);
-	const visibleActiveStreamingChatIds = getVisibleActiveStreamingChatIds({
-		// Streaming visibility is render derivation from the parent stream registry.
-		activeStreamingChatIds,
-		// Streaming visibility is render derivation from the current route.
-		chatId,
-		// Local completion state hides finished assistant stream ids from the UI.
-		hasLocallyCompletedAssistantMessage,
-	});
 	const noteMentionCatalog: ChatComposerMentionCatalog<
 		(typeof contextPages)[number]
 	> = {
@@ -865,7 +839,7 @@ const useChatPageController = ({
 		handleWebSearchEnabledChange,
 		handleChatModeChange,
 		hasMessages,
-		activeStreamingChatIds: visibleActiveStreamingChatIds,
+		activeStreamingChatIds,
 		canStop,
 		compactionActivity,
 		isLoading: canStop,
@@ -916,7 +890,7 @@ const useChatPageController = ({
 		isResumingQueuedFollowUps,
 		onDeleteMessage: handleDeleteMessage,
 		onForkMessage: handleForkMessage,
-		onOpenMention: handleOpenMention,
+		onOpenNote: handleOpenNote,
 		onEditMessage: handleEditMessage,
 		onRegenerateMessage: handleRegenerateMessage,
 	};
@@ -1121,7 +1095,7 @@ export function ChatPage({
 								onDeleteMessage={controller.onDeleteMessage}
 								onEditMessage={controller.onEditMessage}
 								onForkMessage={controller.onForkMessage}
-								onOpenMention={controller.onOpenMention}
+								onOpenNote={controller.onOpenNote}
 								onPlusAction={handleCreateNoteFromResponse}
 								onRegenerateMessage={controller.onRegenerateMessage}
 								onLoadEarlierMessages={controller.loadEarlierMessages}

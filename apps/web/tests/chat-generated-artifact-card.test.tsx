@@ -97,7 +97,7 @@ describe("generated artifact cards", () => {
 			responseText.compareDocumentPosition(filename) &
 				Node.DOCUMENT_POSITION_FOLLOWING,
 		).toBeTruthy();
-		expect(screen.getByText("2.4 MB")).toBeTruthy();
+		expect(screen.getByText("DOCX · 2.4 MB")).toBeTruthy();
 		expect(
 			screen.getAllByRole("button", {
 				name: "Download generated-report.docx",

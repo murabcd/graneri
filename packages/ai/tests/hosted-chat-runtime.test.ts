@@ -518,15 +518,37 @@ describe("hosted chat route contract", () => {
 
 	it("formats attached hosted note context consistently", () => {
 		const context = buildHostedNotesContext([
-			{ title: "Decision log", searchableText: "Ship desktop first." },
-			{ title: "Empty note", searchableText: "" },
+			{
+				id: "note-1",
+				project: {
+					projectId: "project-1",
+					name: "Release",
+					description: "Desktop launch",
+				},
+				title: "Decision log",
+				searchableText: "Ship desktop first.",
+			},
+			{ id: "note-2", project: null, title: "Empty note", searchableText: "" },
 		]);
 
 		expect(context).toContain(
 			"Attached notes are available below. Use them when they are relevant to the user's request.",
 		);
-		expect(context).toContain("Note 1: Decision log\nShip desktop first.");
-		expect(context).toContain("Note 2: Empty note\n(empty note)");
+		expect(context).toContain(
+			JSON.stringify({
+				noteId: "note-1",
+				project: {
+					projectId: "project-1",
+					name: "Release",
+					description: "Desktop launch",
+				},
+			}),
+		);
+		expect(context).toContain("Ship desktop first.");
+		expect(context).toContain(
+			JSON.stringify({ noteId: "note-2", project: null }),
+		);
+		expect(context).toContain("(empty note)");
 	});
 
 	it("omits attached hosted note context when no notes are selected", () => {

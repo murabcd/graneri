@@ -6,6 +6,33 @@ export const NOTE_SEARCH_QUERY_MAX_LENGTH = 320;
 export const NOTE_SEARCH_RESULT_LIMIT = 8;
 export const NOTE_READ_CHUNK_LENGTH = 16_000;
 
+export const projectContextSchema = z.object({
+	projectId: z.string().min(1),
+	name: z.string(),
+	description: z.string(),
+});
+
+export const noteReferenceSchema = z.object({
+	noteId: z.string().min(1),
+	title: z.string(),
+});
+
+export const noteSummarySchema = noteReferenceSchema.extend({
+	project: projectContextSchema.nullable(),
+	preview: z.string(),
+	updatedAt: z.number(),
+});
+
+export const noteReadSchema = noteSummarySchema.omit({ preview: true }).extend({
+	text: z.string(),
+	nextOffset: z.number().nullable(),
+});
+
+export const noteSearchSchema = z.object({
+	hasMore: z.boolean(),
+	notes: z.array(noteSummarySchema),
+});
+
 export const buildNoteToolDefinitions = ({ getNote, searchNotes }) => [
 	defineAiTool({
 		name: "search_notes",

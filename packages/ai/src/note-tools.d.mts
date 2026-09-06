@@ -1,4 +1,5 @@
 import type { ToolSet } from "ai";
+import type { z } from "zod";
 import type { AiToolDefinition } from "./ai-tool-definition.mjs";
 
 export declare const NOTE_SEARCH_QUERY_MAX_LENGTH: 320;
@@ -10,23 +11,36 @@ export type NoteSearchInput = {
 	limit?: number;
 };
 
-export type NoteSearchResult = {
-	hasMore: boolean;
-	notes: Array<{
-		noteId: string;
-		preview: string;
-		title: string;
-		updatedAt: number;
-	}>;
-};
-
-export type NoteReadResult = {
+export declare const projectContextSchema: z.ZodType<{
+	projectId: string;
+	name: string;
+	description: string;
+}>;
+export type ProjectContext = z.infer<typeof projectContextSchema>;
+export declare const noteReferenceSchema: z.ZodType<{
 	noteId: string;
-	nextOffset: number | null;
-	text: string;
 	title: string;
-	updatedAt: number;
-} | null;
+}>;
+export type NoteReference = z.infer<typeof noteReferenceSchema>;
+export declare const noteSummarySchema: z.ZodType<
+	NoteReference & {
+		project: ProjectContext | null;
+		preview: string;
+		updatedAt: number;
+	}
+>;
+export declare const noteReadSchema: z.ZodType<
+	Omit<z.infer<typeof noteSummarySchema>, "preview"> & {
+		text: string;
+		nextOffset: number | null;
+	}
+>;
+export declare const noteSearchSchema: z.ZodType<{
+	hasMore: boolean;
+	notes: z.infer<typeof noteSummarySchema>[];
+}>;
+export type NoteSearchResult = z.infer<typeof noteSearchSchema>;
+export type NoteReadResult = z.infer<typeof noteReadSchema> | null;
 
 type NoteToolAdapters = {
 	getNote: (input: {

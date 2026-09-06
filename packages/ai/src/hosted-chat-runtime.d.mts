@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import type { ChatMode } from "./chat-mode.mjs";
+import type { ProjectContext } from "./note-tools.mjs";
 import type { StoredUiMessageRole } from "./ui-message-codec.mjs";
 
 export declare const hostedChatSteerAcceptedHeader: "X-Graneri-Steer-Accepted";
@@ -176,6 +177,8 @@ export declare const getStoredHostedNoteContext: (
 ) => string;
 export declare const buildHostedNotesContext: (
 	notes: Array<{
+		id: string;
+		project: ProjectContext | null;
 		title: string;
 		searchableText?: string | null;
 	}>,
@@ -195,6 +198,7 @@ export declare const buildHostedChatRuntimeInstructions: (args: {
 	compactionSummary?: string | null;
 	localFolderContext?: string;
 	notesContext?: string;
+	projectContext?: ProjectContext | null;
 	recipeContext?: string;
 	selectedAppSourceInstructions?: string;
 	userProfileContext?: unknown;

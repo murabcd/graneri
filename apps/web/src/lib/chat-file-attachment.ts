@@ -1,6 +1,11 @@
 import type { FileUIPart } from "ai";
 import { z } from "zod";
 
+export const getFilenameExtension = (filename?: string) => {
+	const extension = filename?.split(".").at(-1)?.trim();
+	return extension && extension !== filename ? extension.toLowerCase() : "";
+};
+
 const graneriFileSizeMetadataSchema = z.object({
 	sizeBytes: z.number().int().nonnegative(),
 });
