@@ -16,7 +16,10 @@ import {
 } from "@workspace/ai/queued-chat-request";
 import { parseUiMessageMetadataJson } from "@workspace/ai/ui-message-codec";
 import type { FileUIPart } from "ai";
-import type { ChatAttachment } from "@/components/ai-elements/file-attachment-utils";
+import {
+	type ChatAttachment,
+	restoreChatAttachments,
+} from "@/components/ai-elements/file-attachment-utils";
 import { createChatComposerEditDraft } from "@/lib/chat-composer-mentions";
 import type { QueuedFollowUpMessage } from "@/lib/chat-queued-followups";
 import type { QueueableChatRequestBody } from "@/lib/chat-request-preparation";
@@ -175,8 +178,4 @@ export const fromQueuedUserMessage = async ({
 export const getQueuedChatAttachments = (
 	queuedMessage: Pick<QueuedFollowUpMessage, "filesJson">,
 ): ChatAttachment[] =>
-	parseQueuedChatFilesJson(queuedMessage.filesJson).map((file) => ({
-		...file,
-		id: crypto.randomUUID(),
-		uploadStatus: "ready",
-	}));
+	restoreChatAttachments(parseQueuedChatFilesJson(queuedMessage.filesJson));

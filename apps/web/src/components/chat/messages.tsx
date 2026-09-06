@@ -15,10 +15,6 @@ import {
 	type ChatMessageActionContext,
 	ChatMessageListContent,
 } from "@/components/chat/message-list";
-import type {
-	ChatMessageMention,
-	ChatRecipeReceipt,
-} from "@/lib/chat-composer-mentions";
 import { getChatMessageMetadata } from "@/lib/chat-message";
 
 export type ChatMessagesProps = {
@@ -29,12 +25,7 @@ export type ChatMessagesProps = {
 	historyMarkerState?: ChatHistoryMarkerState;
 	isLoading?: boolean;
 	isLoadingEarlierMessages?: boolean;
-	onEditMessage?: (
-		messageId: string,
-		text: string,
-		mentions: ChatMessageMention[],
-		recipe: ChatRecipeReceipt | null,
-	) => void;
+	onEditMessage?: (message: UIMessage) => void;
 	onDeleteMessage?: (messageId: string) => void;
 	onForkMessage?: (messageId: string) => void;
 	onPlusAction?: (
@@ -123,15 +114,7 @@ export default function ChatMessages({
 						}
 					}}
 					onEditMessage={
-						onEditMessage && (text || metadata?.recipe)
-							? () =>
-									onEditMessage(
-										message.id,
-										text,
-										metadata?.mentionPositions ?? [],
-										metadata?.recipe ?? null,
-									)
-							: undefined
+						onEditMessage ? () => onEditMessage(message) : undefined
 					}
 					timestamp={timestamp}
 				/>

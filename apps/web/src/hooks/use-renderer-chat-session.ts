@@ -3,7 +3,7 @@ import type { HostedHumanDecisionResponse } from "@workspace/ai/hosted-human-dec
 import { HOSTED_REQUEST_USER_INPUT_TOOL_NAME } from "@workspace/ai/hosted-user-question";
 import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { UIMessage } from "ai";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import * as React from "react";
 import { toast } from "sonner";
 import { getReadyFileParts } from "@/components/ai-elements/file-attachment-utils";
@@ -68,7 +68,6 @@ type SubmitHumanDecisionInput = {
 
 type RegenerateRendererChatTurnInput = {
 	assistantMessageId: string;
-	onRequestPrepared: (requestBody: ChatRequestBody) => void;
 };
 
 const getAttachableActiveRun = (
@@ -197,6 +196,25 @@ export const useRendererChatSession = ({
 	);
 	const isAiRequestPending = isAiChatRequestPending(status);
 	const isChatRequestPending = isAiRequestPending || isPreparingRequest;
+	const persistedRunError = useQuery(
+		api.assistantRuns.getLatestRunError,
+		workspaceId ? { workspaceId, chatId } : "skip",
+	);
+	const runError = React.useMemo(
+		() =>
+			persistedRunError &&
+			!activeRun &&
+			!isChatRequestPending &&
+			!activePendingBranchMessageId
+				? new Error(persistedRunError)
+				: undefined,
+		[
+			persistedRunError,
+			activeRun,
+			isChatRequestPending,
+			activePendingBranchMessageId,
+		],
+	);
 	const {
 		activeAssistantMessageId,
 		displayMessages,
@@ -617,7 +635,6 @@ export const useRendererChatSession = ({
 			await runPreparedRequest(async () => {
 				const requestBody = await buildCurrentRequestBody();
 				latestRequestBodyRef.current = requestBody;
-				input.onRequestPrepared(requestBody);
 				await Promise.resolve(
 					regenerate({
 						body: requestBody,
@@ -685,7 +702,7 @@ export const useRendererChatSession = ({
 		deleteMessage,
 		displayMessages,
 		editDraft: queuedFollowUpControls.editDraft,
-		error,
+		error: error ?? runError,
 		handleStop,
 		isChatRequestPending,
 		isPreparingRequest,

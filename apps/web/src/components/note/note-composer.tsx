@@ -45,7 +45,7 @@ import {
 	APP_SIDEBAR_COLLAPSED_WIDTH,
 	APP_SIDEBAR_EXPANDED_WIDTH,
 } from "@workspace/ui/lib/panel-dimensions";
-import type { FileUIPart } from "ai";
+import type { FileUIPart, UIMessage } from "ai";
 import { cn } from "cn";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -122,6 +122,10 @@ import {
 	claimChatComposerTurnIntent,
 	commitChatComposerTurnIntent,
 } from "@/lib/chat-composer-turn-intent";
+import {
+	getActiveEditingMessageId,
+	getChatMessageEditDraft,
+} from "@/lib/chat-message-edit";
 import { getQueuedChatAttachments } from "@/lib/chat-queue";
 import { buildNoteChatRequestBody } from "@/lib/chat-request-preparation";
 import { toStoredChatMessages } from "@/lib/chat-snapshot";
@@ -471,9 +475,9 @@ const useNoteComposerController = ({
 	const [recipePopoverOpen, setRecipePopoverOpen] = React.useState(false);
 	const [modelPopoverOpen, setModelPopoverOpen] = React.useState(false);
 	const selectedRecipeSlug = draftMetadata?.selectedRecipeSlug ?? null;
-	const [editingMessageId, setEditingMessageId] = React.useState<string | null>(
-		null,
-	);
+	const [requestedEditingMessageId, setEditingMessageId] = React.useState<
+		string | null
+	>(null);
 	const {
 		claimSnapshot: claimAttachedFilesSnapshot,
 		getSnapshot: getAttachedFilesSnapshot,
@@ -737,6 +741,11 @@ const useNoteComposerController = ({
 		resumeEnabled: hasStoredCurrentChat,
 		workspaceId: activeWorkspaceId,
 	});
+	const editingMessageId = getActiveEditingMessageId(
+		displayChatMessages,
+		requestedEditingMessageId,
+		queuedMessageEditDraft?._id ?? null,
+	);
 
 	React.useEffect(() => {
 		if (!activeWorkspaceId) {
@@ -1394,14 +1403,18 @@ const useNoteComposerController = ({
 	};
 
 	const handleEditMessage = React.useCallback(
-		(messageId: string, text: string) => {
+		(message: UIMessage) => {
 			if (canStop) {
 				handleStop();
 			}
 
-			setEditingMessageId(() => messageId);
-			setMessage(text);
-			setAttachedFiles([]);
+			const editDraft = getChatMessageEditDraft(message);
+			setEditingMessageId(() => message.id);
+			setMessage(editDraft.text);
+			setDraftMetadata(
+				editDraft.recipe ? { selectedRecipeSlug: editDraft.recipe.slug } : null,
+			);
+			setAttachedFiles(editDraft.attachments);
 			resizeTextarea();
 			requestComposerFocus();
 		},
@@ -1413,6 +1426,7 @@ const useNoteComposerController = ({
 			resizeTextarea,
 			setAttachedFiles,
 			setMessage,
+			setDraftMetadata,
 		],
 	);
 
@@ -1472,11 +1486,6 @@ const useNoteComposerController = ({
 
 	const handleDeleteMessage = React.useCallback(
 		(messageId: string) => {
-			setEditingMessageId(null);
-			clearDraft();
-			setAttachedFiles([]);
-			resetTextareaHeight();
-
 			void deleteMessage(messageId).catch((error) => {
 				logError({
 					event: "client.error",
@@ -1486,7 +1495,7 @@ const useNoteComposerController = ({
 				toast.error("Failed to delete message");
 			});
 		},
-		[clearDraft, deleteMessage, resetTextareaHeight, setAttachedFiles],
+		[deleteMessage],
 	);
 
 	const handleRegenerateMessage = React.useCallback(
@@ -1498,14 +1507,7 @@ const useNoteComposerController = ({
 			}
 
 			try {
-				await regenerateTurn({
-					assistantMessageId,
-					onRequestPrepared: () => {
-						setEditingMessageId(null);
-						clearDraft();
-						resetTextareaHeight();
-					},
-				});
+				await regenerateTurn({ assistantMessageId });
 			} catch (error) {
 				logError({
 					event: "client.error",
@@ -1519,14 +1521,7 @@ const useNoteComposerController = ({
 				);
 			}
 		},
-		[
-			clearDraft,
-			openRightSidebar,
-			presentationMode,
-			regenerateTurn,
-			resetTextareaHeight,
-			setPanelMode,
-		],
+		[openRightSidebar, presentationMode, regenerateTurn, setPanelMode],
 	);
 	const handleForkMessage = useAssistantMessageFork({
 		workspaceId: activeWorkspaceId,

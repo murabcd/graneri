@@ -363,7 +363,9 @@ function ChatMessageActions({
 			: renderAssistantActions?.(actionContext);
 	}
 
-	return !presentation.isEmpty || presentation.selectedRecipe
+	return !presentation.isEmpty ||
+		presentation.selectedRecipe ||
+		presentation.fileParts.length > 0
 		? renderUserActions?.(actionContext)
 		: null;
 }

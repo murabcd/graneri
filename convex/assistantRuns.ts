@@ -495,6 +495,34 @@ export const getActiveRunStatus = query({
 	},
 });
 
+export const getLatestRunError = query({
+	args: { workspaceId: v.id("workspaces"), chatId: v.string() },
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args) => {
+		const ownerTokenIdentifier = await requireTokenIdentifier(ctx);
+		const chat = await getOwnedActiveChatById(
+			ctx,
+			ownerTokenIdentifier,
+			args.workspaceId,
+			args.chatId,
+		);
+		if (!chat) return null;
+		const run = await ctx.db
+			.query("assistantRuns")
+			.withIndex("by_chatId", (q) => q.eq("chatId", chat._id))
+			.order("desc")
+			.first();
+		if (!run || run.status !== "failed") return null;
+		const branch = await ctx.db
+			.query("chatBranches")
+			.withIndex("by_chatId_and_createdAt", (q) => q.eq("chatId", chat._id))
+			.order("desc")
+			.first();
+		if (branch && branch._creationTime > run._creationTime) return null;
+		return "The response failed to finish. Please try again.";
+	},
+});
+
 export const listActiveChatIds = query({
 	args: {
 		workspaceId: v.id("workspaces"),

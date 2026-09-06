@@ -57,7 +57,6 @@ import { waitForBrowserPaint } from "@/lib/browser-paint";
 import { getChatId } from "@/lib/chat";
 import {
 	type ChatComposerMention,
-	type ChatMessageMention,
 	type ChatRecipeReceipt,
 	createChatComposerEditDraft,
 	getWorkspaceChatMentionContext,
@@ -68,6 +67,10 @@ import {
 	commitChatComposerTurnIntent,
 } from "@/lib/chat-composer-turn-intent";
 import { getChatText } from "@/lib/chat-message";
+import {
+	getActiveEditingMessageId,
+	getChatMessageEditDraft,
+} from "@/lib/chat-message-edit";
 import {
 	type ChatPluginPrefill,
 	createChatPluginDraft,
@@ -328,9 +331,9 @@ const useChatPageController = ({
 	const [summaryOpenSourceRequest, setSummaryOpenSourceRequest] =
 		React.useState<ChatSummaryOpenSourceRequest | null>(null);
 	// Edit mode is composer state controlled by message edit/cancel handlers.
-	const [editingMessageId, setEditingMessageId] = React.useState<string | null>(
-		null,
-	);
+	const [requestedEditingMessageId, setEditingMessageId] = React.useState<
+		string | null
+	>(null);
 	// Preparing state tracks async request construction started by submit handlers.
 	const localCapabilityScope = `chat:${chatId}`;
 	const {
@@ -471,6 +474,11 @@ const useChatPageController = ({
 		stopExternalRun: stopRunningAutomation,
 		workspaceId: activeWorkspaceId,
 	});
+	const editingMessageId = getActiveEditingMessageId(
+		displayMessages,
+		requestedEditingMessageId,
+		queuedMessageEditDraft?._id ?? null,
+	);
 	const hasMessages = displayMessages.length > 0 || isAutomationRunning;
 	const isNotesLoading = notes === undefined;
 	const isRecipesLoading = recipeData === undefined;
@@ -697,27 +705,19 @@ const useChatPageController = ({
 	);
 
 	const handleEditMessage = React.useCallback(
-		(
-			messageId: string,
-			text: string,
-			messageMentions: ChatMessageMention[],
-			recipe: ChatRecipeReceipt | null,
-		) => {
+		(message: UIMessage) => {
 			if (canStop) {
 				handleStop();
 			}
 
-			const editDraft = createChatComposerEditDraft({
-				mentionPositions: messageMentions,
-				recipe,
-				text,
-			});
-			setEditingMessageId(() => messageId);
+			const messageDraft = getChatMessageEditDraft(message);
+			const editDraft = createChatComposerEditDraft(messageDraft);
+			setEditingMessageId(() => message.id);
 			setDraft(editDraft.text);
 			setDraftMetadata(
 				editDraft.mentions.length > 0 ? { mentions: editDraft.mentions } : null,
 			);
-			setAttachedFiles([]);
+			setAttachedFiles(messageDraft.attachments);
 		},
 		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[canStop, handleStop, setAttachedFiles, setDraft, setDraftMetadata],
@@ -752,8 +752,6 @@ const useChatPageController = ({
 
 	const handleDeleteMessage = React.useCallback(
 		(messageId: string) => {
-			setEditingMessageId(null);
-			clearDraft();
 			void deleteMessage(messageId).catch((error) => {
 				logError({
 					event: "client.error",
@@ -763,19 +761,13 @@ const useChatPageController = ({
 				toast.error("Failed to delete message");
 			});
 		},
-		[clearDraft, deleteMessage],
+		[deleteMessage],
 	);
 
 	const handleRegenerateMessage = React.useCallback(
 		async (assistantMessageId: string) => {
 			try {
-				await regenerateTurn({
-					assistantMessageId,
-					onRequestPrepared: () => {
-						setEditingMessageId(null);
-						clearDraft();
-					},
-				});
+				await regenerateTurn({ assistantMessageId });
 			} catch (error) {
 				logError({
 					event: "client.error",
@@ -789,7 +781,7 @@ const useChatPageController = ({
 				);
 			}
 		},
-		[clearDraft, regenerateTurn],
+		[regenerateTurn],
 	);
 	const handleForkedChat = React.useCallback(
 		(forkChatId: string) => {

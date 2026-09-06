@@ -113,6 +113,12 @@ Queue admission captures ready uploaded files through [[apps/web/src/lib/chat-qu
 editing restores those same files into the existing attachment chips in both
 chat and note composers. Local previews and upload-in-progress state never enter
 the durable queue.
+Sent-message editing uses [[apps/web/src/lib/chat-message-edit.ts]] to restore
+the complete message draft, including ready uploaded file parts. Deleting history
+or regenerating a response preserves the independent composer text and attachments;
+edit validity is derived from the current transcript or queued edit, so a removed
+target detaches without clearing its draft and a failed branch restores editability.
+Recipe identity stays separate from each composer's mention presentation.
 Workspace and note composers retain their distinct recipe, mention, note
 context, panel, and focus adapters; they must not reconstruct this commit and
 rollback ordering. Both surfaces retain the initiating user message as the

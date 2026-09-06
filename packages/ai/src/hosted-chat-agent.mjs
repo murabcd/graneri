@@ -54,6 +54,7 @@ export const createHostedChatAgent = ({
 	getActiveStreamSession,
 	model,
 	prepareStep,
+	provider = openai,
 	providerOptions,
 	stopWhen,
 	instructions,
@@ -69,8 +70,14 @@ export const createHostedChatAgent = ({
 		tools,
 	});
 	const agent = new ToolLoopAgent({
-		model: openai(model),
-		providerOptions,
+		model: provider(model),
+		providerOptions: {
+			...providerOptions,
+			openai: {
+				...providerOptions?.openai,
+				passThroughUnsupportedFiles: true,
+			},
+		},
 		instructions,
 		tools: agentTools ?? (emptyToolsWhenNone ? {} : undefined),
 		...(toolApproval && { toolApproval }),

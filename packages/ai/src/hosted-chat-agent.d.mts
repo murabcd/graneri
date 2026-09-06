@@ -1,3 +1,4 @@
+import type { OpenAIProvider } from "@ai-sdk/openai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type {
 	PrepareStepFunction,
@@ -61,6 +62,7 @@ export declare const createHostedChatAgent: ({
 	model: string;
 	prepareStep?: PrepareStepFunction<ToolSet> | undefined;
 	providerOptions?: ProviderOptions | undefined;
+	provider?: OpenAIProvider;
 	stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>;
 	instructions: string;
 }) => {

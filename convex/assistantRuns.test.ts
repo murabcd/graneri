@@ -207,6 +207,59 @@ const queuedMessageInput = (messageId: string, text: string) => ({
 	requestBodyJson: createQueuedRequestBodyJson(),
 });
 
+test.each([
+	"retry",
+	"delete",
+])("failed runs expose a safe error until %s", async (action) => {
+	const { t, asOwner, workspaceId } = await createWorkspace();
+	const chatId = "chat-visible-failure";
+	await createChat({ asOwner, workspaceId, chatId });
+	const run = await startRunWithSnapshots({ asOwner, workspaceId, chatId });
+	await asOwner.mutation(api.assistantRuns.failAssistantRun, {
+		runId: run._id,
+		assistantMessageId: run.assistantMessageId,
+		errorText: "Private provider diagnostics",
+	});
+	expect(
+		await asOwner.query(api.assistantRuns.getLatestRunError, {
+			workspaceId,
+			chatId,
+		}),
+	).toBe("The response failed to finish. Please try again.");
+	await expect(
+		t
+			.withIdentity({
+				...ownerIdentity,
+				tokenIdentifier: "test|other",
+				subject: "other",
+			})
+			.query(api.assistantRuns.getLatestRunError, { workspaceId, chatId }),
+	).rejects.toThrow();
+	if (action === "delete") {
+		await asOwner.mutation(api.chatBranches.branchFromMessage, {
+			workspaceId,
+			chatId,
+			messageId: `${chatId}-user-1`,
+		});
+	} else {
+		await asOwner.mutation(api.assistantRuns.startAssistantRun, {
+			workspaceId,
+			chatId,
+			assistantMessageId: "retry",
+			localCapabilitySession: null,
+			model: "gpt-5",
+			serviceTier: "auto",
+			policy: "reject",
+		});
+	}
+	expect(
+		await asOwner.query(api.assistantRuns.getLatestRunError, {
+			workspaceId,
+			chatId,
+		}),
+	).toBeNull();
+});
+
 const backgroundJob = {
 	messagesJson: JSON.stringify([
 		{

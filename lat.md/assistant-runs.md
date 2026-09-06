@@ -67,6 +67,13 @@ classification. Convex imports this runtime-neutral module through
 hosted-turn interface because that graph includes web and desktop-local tool
 implementations. Stored UI Message validation belongs to the UI message codec.
 
+Agent construction enables the Responses adapter's `passThroughUnsupportedFiles`
+option for the document media types accepted by Graneri's file-input contract.
+This preserves DOCX and other non-PDF document inputs when the SDK downloads
+storage URLs into inline bytes. [[convex/assistantRuns.ts]] exposes a safe latest-run
+failure message to both renderer chat surfaces; retry and history branching retire
+that failure instead of leaving the UI silently idle.
+
 ## Stored message context
 
 One projection defines consequential stored message content for interactive runs, automations, and compaction.

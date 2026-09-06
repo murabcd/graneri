@@ -94,7 +94,7 @@ function PillFileAttachment({
 }) {
 	return (
 		<Attachment
-			className="inline-flex max-w-80 min-w-0 flex-nowrap gap-1 rounded-full border-border/60 bg-muted/50 px-2 py-1.5 text-sm text-foreground focus-within:ring-0 has-data-[slot=attachment-content]:p-0"
+			className="inline-flex max-w-80 min-w-0 flex-nowrap gap-1 rounded-lg border-border/60 bg-muted/50 text-sm text-foreground focus-within:ring-0 has-data-[slot=attachment-content]:px-2 has-data-[slot=attachment-content]:py-1.5"
 			size="xs"
 		>
 			<FileAttachmentGlyph file={file} />

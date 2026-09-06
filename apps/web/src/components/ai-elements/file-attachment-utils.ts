@@ -6,6 +6,15 @@ export type ChatAttachment = FileUIPart & {
 	uploadStatus: "uploading" | "ready";
 };
 
+export const restoreChatAttachments = (
+	files: readonly FileUIPart[],
+): ChatAttachment[] =>
+	files.map((file) => ({
+		...file,
+		id: crypto.randomUUID(),
+		uploadStatus: "ready",
+	}));
+
 export const completeAttachmentUpload = (
 	attachment: ChatAttachment,
 	uploadedFile: FileUIPart,

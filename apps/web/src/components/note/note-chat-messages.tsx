@@ -44,7 +44,7 @@ export type NoteChatMessagesProps = {
 	isChatLoading: boolean;
 	onAddMessageToNote?: (text: string) => Promise<void> | void;
 	onDeleteMessage?: (messageId: string) => void;
-	onEditMessage?: (messageId: string, text: string) => void;
+	onEditMessage?: (message: UIMessage) => void;
 	onForkMessage?: (messageId: string) => void;
 	onRegenerateMessage?: (messageId: string) => void;
 	streamingMessageIds?: ReadonlySet<string>;
@@ -105,11 +105,7 @@ export default function NoteChatMessages({
 				onDeleteMessage={
 					onDeleteMessage ? () => onDeleteMessage(message.id) : undefined
 				}
-				onEditMessage={
-					onEditMessage && text
-						? () => onEditMessage(message.id, text)
-						: undefined
-				}
+				onEditMessage={onEditMessage ? () => onEditMessage(message) : undefined}
 				timestamp={timestamp}
 			/>
 		),

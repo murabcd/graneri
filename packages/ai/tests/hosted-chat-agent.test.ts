@@ -1,3 +1,4 @@
+import { createOpenAI } from "@ai-sdk/openai";
 import type { ModelMessage } from "@ai-sdk/provider-utils";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -5,6 +6,7 @@ import { defineAiTool } from "../src/ai-tool-definition.mjs";
 import { CHAT_MODE } from "../src/chat-mode.mjs";
 import {
 	buildHostedChatAgentToolSet,
+	createHostedChatAgent,
 	createHostedChatPrepareStep,
 } from "../src/hosted-chat-agent.mjs";
 import { buildHostedChatRunPlan } from "../src/hosted-chat-run-plan.mjs";
@@ -18,6 +20,71 @@ const deferredTool = {
 		},
 	},
 };
+
+describe("hosted document input", () => {
+	it("sends inline DOCX through the installed Responses adapter", async () => {
+		const captured = new Error("Request captured before networking");
+		const requestSchema = z.object({
+			input: z.array(
+				z.object({
+					role: z.string(),
+					content: z.union([
+						z.string(),
+						z.array(
+							z.object({
+								type: z.string(),
+								filename: z.string().optional(),
+								file_data: z.string().optional(),
+							}),
+						),
+					]),
+				}),
+			),
+		});
+		const requests: z.infer<typeof requestSchema>[] = [];
+		const provider = createOpenAI({
+			apiKey: "test-no-network",
+			fetch: async (_url, init) => {
+				if (typeof init?.body !== "string")
+					throw new Error("Expected request JSON");
+				requests.push(requestSchema.parse(JSON.parse(init.body)));
+				throw captured;
+			},
+		});
+		const { agent } = createHostedChatAgent({
+			provider,
+			enabledTools: {},
+			model: "gpt-5.6-luna",
+			instructions: "Summarize documents.",
+		});
+		await expect(
+			agent.generate({
+				messages: [
+					{
+						role: "user",
+						content: [
+							{
+								type: "file",
+								filename: "brief.docx",
+								mediaType:
+									"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+								data: new Uint8Array([80, 75, 3, 4]),
+							},
+						],
+					},
+				],
+			}),
+		).rejects.toThrow(captured.message);
+		expect(
+			requests[0]?.input.find((message) => message.role === "user")?.content,
+		).toContainEqual({
+			type: "input_file",
+			filename: "brief.docx",
+			file_data:
+				"data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBA==",
+		});
+	});
+});
 
 const immediateTool = {
 	description: "Run immediately.",

@@ -30,6 +30,44 @@ function TestMessageScroller({ children }: { children: React.ReactNode }) {
 describe("chat message actions", () => {
 	afterEach(cleanup);
 
+	it.each([
+		"chat",
+		"note",
+	])("passes the whole file-only message to the %s editor", async (surface) => {
+		const message: UIMessage = {
+			id: "file-message",
+			role: "user",
+			parts: [
+				{
+					type: "file",
+					mediaType: "application/pdf",
+					filename: "brief.pdf",
+					url: "https://example.com/brief.pdf",
+				},
+			],
+		};
+		const onEditMessage = vi.fn();
+		render(
+			<TooltipProvider>
+				<TestMessageScroller>
+					{surface === "chat" ? (
+						<ChatMessages messages={[message]} onEditMessage={onEditMessage} />
+					) : (
+						<NoteChatMessages
+							chatMessages={[message]}
+							onEditMessage={onEditMessage}
+							disableAddToNote={false}
+							disablePadding={false}
+							isChatLoading={false}
+						/>
+					)}
+				</TestMessageScroller>
+			</TooltipProvider>,
+		);
+		await userEvent.setup().click(screen.getByRole("button", { name: "Edit" }));
+		expect(onEditMessage).toHaveBeenCalledWith(message);
+	});
+
 	it("uses the shared fenced-code renderer in Notes", async () => {
 		const user = userEvent.setup();
 		const writeText = vi.fn().mockResolvedValue(undefined);
