@@ -100,7 +100,7 @@ describe("chat model picker", () => {
 		).not.toBeNull();
 	});
 
-	it("stays open after changing speed", async () => {
+	it("stays open after changing speed and exposes Fast on the trigger", async () => {
 		render(<ModelPickerHarness />);
 		const user = await openPicker();
 		await openSubmenu("Standard");
@@ -110,5 +110,12 @@ describe("chat model picker", () => {
 		expect(
 			screen.getByRole("menuitemcheckbox", { name: "GPT-5.6 Sol" }),
 		).not.toBeNull();
+
+		fireEvent.pointerDown(document.body);
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Model: 5.6 Sol, Fast" }),
+			).not.toBeNull(),
+		);
 	});
 });

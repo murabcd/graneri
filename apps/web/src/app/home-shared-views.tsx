@@ -288,7 +288,7 @@ export function HomeView({
 					<PageTitle isDesktopMac={isDesktopMac}>Coming up</PageTitle>
 					<Card className="max-w-full overflow-hidden rounded-lg border-border py-0 shadow-sm">
 						<CardContent className="p-0">
-							<div className="grid min-h-[152px] md:grid-cols-[184px_minmax(0,1fr)]">
+							<div className="grid min-h-[152px] md:grid-cols-[208px_minmax(0,1fr)]">
 								<div className="flex items-start border-b border-border/60 px-5 py-4 md:border-b-0 md:border-r">
 									<div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1">
 										<div className="row-span-2 text-5xl leading-none tracking-tight tabular-nums">

@@ -20,6 +20,7 @@ import {
 	TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { cn } from "cn";
+import { Zap } from "lucide-react";
 import {
 	chatModels,
 	type ReasoningEffort,
@@ -75,7 +76,8 @@ export function ChatModelPicker({
 	const selectedServiceTier = serviceTiers.find(
 		(tier) => tier.id === serviceTier,
 	);
-	const showFastServiceTier = selectedServiceTier?.id === "priority";
+	const triggerServiceTierName =
+		selectedServiceTier?.id === "priority" ? selectedServiceTier.name : null;
 	const selectedModelDisplayName = getSelectedModelDisplayName(
 		selectedModel.name,
 	);
@@ -92,7 +94,7 @@ export function ChatModelPicker({
 								"group rounded-full gap-2 font-normal",
 								triggerClassName,
 							)}
-							aria-label={`Model: ${selectedModelDisplayName}`}
+							aria-label={`Model: ${selectedModelDisplayName}${triggerServiceTierName ? `, ${triggerServiceTierName}` : ""}`}
 						>
 							<OpenAILogo
 								className={cn(
@@ -108,8 +110,11 @@ export function ChatModelPicker({
 									{selectedReasoningEffort?.name}
 								</span>
 							) : null}
-							{showFastServiceTier ? (
-								<span className="text-muted-foreground">Fast</span>
+							{triggerServiceTierName ? (
+								<Zap
+									className="size-3.5 text-muted-foreground"
+									aria-hidden="true"
+								/>
 							) : null}
 						</InputGroupButton>
 					</DropdownMenuTrigger>
