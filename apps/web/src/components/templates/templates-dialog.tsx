@@ -16,18 +16,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@workspace/ui/components/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@workspace/ui/components/dialog";
 import { Field, FieldGroup } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { cn } from "cn";
 import { useMutation, useQuery } from "convex/react";
@@ -42,10 +34,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { toast } from "sonner";
-import {
-	ManageDialogHeader,
-	ManageDialogSidebarNav,
-} from "@/components/ui/manage-dialog-navigation";
+import { ManageDialogShell } from "@/components/ui/manage-dialog-shell";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import {
 	createUniqueDraftName,
@@ -692,64 +681,42 @@ export function TemplatesDialog({ open, onOpenChange }: TemplatesDialogProps) {
 			})),
 		[templates],
 	);
+	const createTemplateAction = {
+		label: "New template",
+		icon: Plus,
+		onClick: editor.createTemplate,
+		disabled: !editor.canCreateTemplate,
+	};
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]">
-				<DialogHeader className="sr-only">
-					<DialogTitle>Manage templates</DialogTitle>
-					<DialogDescription>
-						Browse and manage your note templates.
-					</DialogDescription>
-				</DialogHeader>
-				<DialogDescription className="sr-only">
-					Browse and manage your note templates.
-				</DialogDescription>
-				<SidebarProvider className="h-[480px] min-h-0 items-start">
-					<ManageDialogSidebarNav
-						activeItemId={activeTemplate}
-						footerAction={{
-							label: "New template",
-							icon: Plus,
-							onClick: editor.createTemplate,
-							disabled: !editor.canCreateTemplate,
-						}}
-						items={navigationItems}
-						onSelect={(slug) => selectTemplate(slug as TemplateSlug)}
-					/>
-					<main className="flex h-[480px] flex-1 flex-col overflow-hidden">
-						<ManageDialogHeader
-							activeItemId={activeTemplate}
-							items={navigationItems}
-							mobileAction={{
-								label: "New template",
-								icon: Plus,
-								onClick: editor.createTemplate,
-								disabled: !editor.canCreateTemplate,
-							}}
-							onSelect={(slug) => selectTemplate(slug as TemplateSlug)}
-							title="Templates"
-						/>
-						<TemplatesEditor
-							hasChanges={editor.hasChanges}
-							isSaving={editor.isSaving}
-							onAddSection={editor.addSection}
-							onCancel={editor.handleCancel}
-							onNameChange={editor.updateName}
-							onMeetingContextChange={editor.updateMeetingContext}
-							onPromptChange={editor.updateSectionPrompt}
-							onRemoveSection={editor.removeSection}
-							onSave={editor.handleSave}
-							onSectionDragEnd={editor.handleSectionDragEnd}
-							onTitleChange={editor.updateSectionTitle}
-							selectedTemplate={editor.selectedTemplate}
-							sensors={sensors}
-							templatesCount={templates.length}
-						/>
-					</main>
-				</SidebarProvider>
-			</DialogContent>
-		</Dialog>
+		<ManageDialogShell
+			activeItemId={activeTemplate}
+			description="Browse and manage your note templates."
+			footerAction={createTemplateAction}
+			items={navigationItems}
+			navigationTitle="Templates"
+			onOpenChange={onOpenChange}
+			onSelect={selectTemplate}
+			open={open}
+			title="Manage templates"
+		>
+			<TemplatesEditor
+				hasChanges={editor.hasChanges}
+				isSaving={editor.isSaving}
+				onAddSection={editor.addSection}
+				onCancel={editor.handleCancel}
+				onNameChange={editor.updateName}
+				onMeetingContextChange={editor.updateMeetingContext}
+				onPromptChange={editor.updateSectionPrompt}
+				onRemoveSection={editor.removeSection}
+				onSave={editor.handleSave}
+				onSectionDragEnd={editor.handleSectionDragEnd}
+				onTitleChange={editor.updateSectionTitle}
+				selectedTemplate={editor.selectedTemplate}
+				sensors={sensors}
+				templatesCount={templates.length}
+			/>
+		</ManageDialogShell>
 	);
 }
 

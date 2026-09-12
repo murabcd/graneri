@@ -1,25 +1,14 @@
 import { Button } from "@workspace/ui/components/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@workspace/ui/components/dialog";
 import { Field, FieldGroup } from "@workspace/ui/components/field";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { SidebarProvider } from "@workspace/ui/components/sidebar";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useMutation, useQuery } from "convex/react";
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { toast } from "sonner";
-import {
-	ManageDialogHeader,
-	ManageDialogSidebarNav,
-} from "@/components/ui/manage-dialog-navigation";
+import { ManageDialogShell } from "@/components/ui/manage-dialog-shell";
 import { useActiveWorkspaceId } from "@/hooks/active-workspace-context";
 import {
 	createUniqueDraftName,
@@ -449,56 +438,34 @@ export function RecipesDialog({ open, onOpenChange }: RecipesDialogProps) {
 			})),
 		[recipes],
 	);
+	const createRecipeAction = {
+		label: "New recipe",
+		icon: Plus,
+		onClick: editor.createRecipe,
+		disabled: !editor.canCreateRecipe,
+	};
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]">
-				<DialogHeader className="sr-only">
-					<DialogTitle>Manage recipes</DialogTitle>
-					<DialogDescription>
-						Browse and manage your recipe prompts.
-					</DialogDescription>
-				</DialogHeader>
-				<DialogDescription className="sr-only">
-					Browse and manage your recipe prompts.
-				</DialogDescription>
-				<SidebarProvider className="h-[480px] min-h-0 items-start">
-					<ManageDialogSidebarNav
-						activeItemId={activeRecipe}
-						footerAction={{
-							label: "New recipe",
-							icon: Plus,
-							onClick: editor.createRecipe,
-							disabled: !editor.canCreateRecipe,
-						}}
-						items={navigationItems}
-						onSelect={(slug) => selectRecipe(slug as RecipeSlug)}
-					/>
-					<main className="flex h-[480px] flex-1 flex-col overflow-hidden">
-						<ManageDialogHeader
-							activeItemId={activeRecipe}
-							items={navigationItems}
-							mobileAction={{
-								label: "New recipe",
-								icon: Plus,
-								onClick: editor.createRecipe,
-								disabled: !editor.canCreateRecipe,
-							}}
-							onSelect={(slug) => selectRecipe(slug as RecipeSlug)}
-							title="Recipes"
-						/>
-						<RecipesEditor
-							hasChanges={editor.hasChanges}
-							isSaving={editor.isSaving}
-							onCancel={editor.handleCancel}
-							onNameChange={editor.updateName}
-							onPromptChange={editor.updatePrompt}
-							onSave={editor.handleSave}
-							selectedRecipe={editor.selectedRecipe}
-						/>
-					</main>
-				</SidebarProvider>
-			</DialogContent>
-		</Dialog>
+		<ManageDialogShell
+			activeItemId={activeRecipe}
+			description="Browse and manage your recipe prompts."
+			footerAction={createRecipeAction}
+			items={navigationItems}
+			navigationTitle="Recipes"
+			onOpenChange={onOpenChange}
+			onSelect={selectRecipe}
+			open={open}
+			title="Manage recipes"
+		>
+			<RecipesEditor
+				hasChanges={editor.hasChanges}
+				isSaving={editor.isSaving}
+				onCancel={editor.handleCancel}
+				onNameChange={editor.updateName}
+				onPromptChange={editor.updatePrompt}
+				onSave={editor.handleSave}
+				selectedRecipe={editor.selectedRecipe}
+			/>
+		</ManageDialogShell>
 	);
 }

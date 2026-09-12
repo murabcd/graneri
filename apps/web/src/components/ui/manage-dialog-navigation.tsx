@@ -20,13 +20,13 @@ import {
 } from "@workspace/ui/components/sidebar";
 import type { LucideIcon } from "lucide-react";
 
-type ManageDialogNavigationItem = {
+export type ManageDialogNavigationItem = {
 	id: string;
 	icon: LucideIcon;
 	label: string;
 };
 
-type ManageDialogNavigationAction = {
+export type ManageDialogNavigationAction = {
 	disabled?: boolean;
 	icon: LucideIcon;
 	label: string;
