@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsDialog } from "../src/components/settings/settings-dialog";
 
+const defaultMatchMedia = window.matchMedia;
+
 const { updateUserMock, useActionMock, useMutationMock, useQueryMock } =
 	vi.hoisted(() => ({
 		updateUserMock: vi.fn(),
@@ -53,6 +55,7 @@ describe("settings dialog cancel actions", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
+		window.matchMedia = defaultMatchMedia;
 	});
 
 	it("shows Preferences in web settings navigation", () => {
@@ -70,9 +73,45 @@ describe("settings dialog cancel actions", () => {
 			/>,
 		);
 
-		expect(screen.getAllByRole("button", { name: "Preferences" })).toHaveLength(
-			2,
+		expect(screen.getByRole("button", { name: "Preferences" })).toBeTruthy();
+	});
+
+	it("uses a compact settings drawer on mobile", () => {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: (query: string) =>
+				({
+					matches: query === "(max-width: 767px)",
+					media: query,
+					onchange: null,
+					addEventListener: () => {},
+					removeEventListener: () => {},
+					addListener: () => {},
+					removeListener: () => {},
+					dispatchEvent: () => false,
+				}) as MediaQueryList,
+		});
+
+		render(
+			<SettingsDialog
+				onTryPlugin={() => {}}
+				open
+				onOpenChange={() => {}}
+				user={{
+					name: "Jane Doe",
+					email: "jane@example.com",
+					avatar: "",
+				}}
+				workspace={null}
+			/>,
 		);
+
+		expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
+		expect(
+			screen.getByRole("combobox", { name: "Settings section" }).textContent,
+		).toContain("Profile");
+		expect(document.querySelector('[data-slot="drawer-content"]')).toBeTruthy();
+		expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
 	});
 
 	it("resets profile edits and closes settings", () => {

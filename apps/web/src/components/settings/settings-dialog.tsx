@@ -15,14 +15,6 @@ import {
 	AvatarFallback,
 	AvatarImage,
 } from "@workspace/ui/components/avatar";
-import {
-	Breadcrumb,
-	BreadcrumbItem,
-	BreadcrumbLink,
-	BreadcrumbList,
-	BreadcrumbPage,
-	BreadcrumbSeparator,
-} from "@workspace/ui/components/breadcrumb";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Collapsible,
@@ -50,41 +42,15 @@ import {
 	InputGroupInput,
 } from "@workspace/ui/components/input-group";
 import { Label } from "@workspace/ui/components/label";
-import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 } from "@workspace/ui/components/select";
-import {
-	Sidebar,
-	SidebarContent,
-	SidebarGroup,
-	SidebarGroupContent,
-	SidebarMenu,
-	SidebarMenuButton,
-	SidebarMenuItem,
-	SidebarProvider,
-} from "@workspace/ui/components/sidebar";
 import { Switch } from "@workspace/ui/components/switch";
 import { useMutation, useQuery } from "convex/react";
-import {
-	Bell,
-	CalendarDays,
-	Check,
-	ChevronDown,
-	Copy,
-	Database,
-	FolderKanban,
-	ImageUp,
-	LayoutGrid,
-	LoaderCircle,
-	Mic2,
-	Paintbrush,
-	SlidersHorizontal,
-	UserRound,
-} from "lucide-react";
+import { Check, ChevronDown, Copy, ImageUp, LoaderCircle } from "lucide-react";
 import {
 	useCallback,
 	useEffect,
@@ -110,6 +76,7 @@ import type { ToolConnection } from "@/components/settings/plugin-connections";
 import { PluginConnectionsSection } from "@/components/settings/plugin-connections-section";
 import { PreferencesSettings } from "@/components/settings/preferences-settings";
 import { RemoteMcpDialog } from "@/components/settings/remote-mcp-dialog";
+import { SettingsDialogShell } from "@/components/settings/settings-dialog-shell";
 import { SettingsSwitchRow } from "@/components/settings/settings-switch-row";
 import { useConnectedAppSettingsSession } from "@/components/settings/use-connected-app-settings-session";
 import { VoiceSettings } from "@/components/settings/voice-settings";
@@ -148,18 +115,6 @@ function useResetStateWhenValueChanges<T>(
 		resetState(value);
 	}, [resetState, value]);
 }
-
-const settingsNav = [
-	{ name: "Profile", icon: UserRound },
-	{ name: "Appearance", icon: Paintbrush },
-	{ name: "Voice", icon: Mic2 },
-	{ name: "Preferences", icon: SlidersHorizontal },
-	{ name: "Notifications", icon: Bell },
-	{ name: "Workspace", icon: FolderKanban },
-	{ name: "Calendar", icon: CalendarDays },
-	{ name: "Plugins", icon: LayoutGrid },
-	{ name: "Data controls", icon: Database },
-] as const;
 
 const SETTINGS_LABEL_CLASSNAME = "text-xs text-muted-foreground";
 const SETTINGS_COLLAPSIBLE_TRIGGER_CLASSNAME =
@@ -289,110 +244,32 @@ export function SettingsDialog({
 	);
 	const { data: session } = authClient.useSession();
 	const activePage = selectedPage ?? initialPage;
-	const handleClose = () => onOpenChange(false);
+	const handleOpenChange = (nextOpen: boolean) => {
+		setSelectedPage(null);
+		onOpenChange(nextOpen);
+	};
+	const handleClose = () => handleOpenChange(false);
 
 	const handlePageSelect = (page: SettingsPage) => {
 		setSelectedPage(page);
 		onPageChange?.(page);
 	};
-
 	return (
-		<Dialog
+		<SettingsDialogShell
+			activePage={activePage}
+			onOpenChange={handleOpenChange}
+			onPageSelect={handlePageSelect}
 			open={open}
-			onOpenChange={(nextOpen) => {
-				setSelectedPage(null);
-				onOpenChange(nextOpen);
-			}}
 		>
-			<DialogContent className="overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]">
-				<DialogHeader className="sr-only">
-					<DialogTitle>Settings</DialogTitle>
-					<DialogDescription>Manage your Graneri settings.</DialogDescription>
-				</DialogHeader>
-				<DialogDescription className="sr-only">
-					Manage your Graneri settings.
-				</DialogDescription>
-				<SidebarProvider className="items-start">
-					<Sidebar collapsible="none" className="hidden md:flex">
-						<SidebarContent>
-							<SidebarGroup>
-								<SidebarGroupContent>
-									<SidebarMenu>
-										{settingsNav.map((item) => (
-											<SidebarMenuItem key={item.name}>
-												<SidebarMenuButton
-													asChild
-													isActive={activePage === item.name}
-												>
-													<button
-														type="button"
-														onClick={() => handlePageSelect(item.name)}
-													>
-														<item.icon />
-														<span>{item.name}</span>
-													</button>
-												</SidebarMenuButton>
-											</SidebarMenuItem>
-										))}
-									</SidebarMenu>
-								</SidebarGroupContent>
-							</SidebarGroup>
-						</SidebarContent>
-					</Sidebar>
-					<main className="flex h-[480px] flex-1 flex-col overflow-hidden">
-						<header className="flex min-h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-							<div className="flex items-center gap-2 px-4">
-								<Breadcrumb className="hidden md:block">
-									<BreadcrumbList>
-										<BreadcrumbItem className="hidden md:block">
-											<BreadcrumbLink href="#">Settings</BreadcrumbLink>
-										</BreadcrumbItem>
-										<BreadcrumbSeparator className="hidden md:block" />
-										<BreadcrumbItem>
-											<BreadcrumbPage>{activePage}</BreadcrumbPage>
-										</BreadcrumbItem>
-									</BreadcrumbList>
-								</Breadcrumb>
-								<ScrollArea
-									className="md:hidden"
-									scrollbarOrientation="horizontal"
-									viewportClassName="w-full"
-								>
-									<div className="flex w-max gap-2 py-2">
-										{settingsNav.map((item) => (
-											<Button
-												key={item.name}
-												variant={
-													activePage === item.name ? "secondary" : "ghost"
-												}
-												size="sm"
-												onClick={() => handlePageSelect(item.name)}
-											>
-												<item.icon />
-												{item.name}
-											</Button>
-										))}
-									</div>
-								</ScrollArea>
-							</div>
-						</header>
-						<ScrollArea
-							className="flex flex-1"
-							viewportClassName="flex flex-col gap-4 p-4 pt-0"
-						>
-							<SettingsPageContent
-								activePage={activePage}
-								canDeleteData={Boolean(session?.user)}
-								onClose={handleClose}
-								onTryPlugin={onTryPlugin}
-								user={user}
-								workspace={workspace}
-							/>
-						</ScrollArea>
-					</main>
-				</SidebarProvider>
-			</DialogContent>
-		</Dialog>
+			<SettingsPageContent
+				activePage={activePage}
+				canDeleteData={Boolean(session?.user)}
+				onClose={handleClose}
+				onTryPlugin={onTryPlugin}
+				user={user}
+				workspace={workspace}
+			/>
+		</SettingsDialogShell>
 	);
 }
 
