@@ -686,6 +686,19 @@ function SidebarProvider(
 	return useSidebarProviderElement(props);
 }
 
+type SidebarCollapsible = "offcanvas" | "icon";
+
+const getSidebarPresentation = (
+	open: boolean,
+	collapsible: SidebarCollapsible,
+): {
+	state: SidebarShellContextProps["state"];
+	collapsible: SidebarCollapsible | "";
+} =>
+	open
+		? { state: "expanded", collapsible: "" }
+		: { state: "collapsed", collapsible };
+
 function Sidebar({
 	side = "left",
 	variant = "sidebar",
@@ -698,7 +711,7 @@ function Sidebar({
 }: React.ComponentProps<"div"> & {
 	side?: "left" | "right";
 	variant?: "sidebar" | "floating" | "inset";
-	collapsible?: "offcanvas" | "icon" | "none";
+	collapsible?: SidebarCollapsible | "none";
 }) {
 	const { isMobile, state, openMobile, setOpenMobile } = useSidebarShell();
 	const {
@@ -762,18 +775,8 @@ function Sidebar({
 		);
 	}
 
-	const currentState = isRightSide
-		? currentOpen
-			? "expanded"
-			: "collapsed"
-		: state;
-	const currentCollapsible = isRightSide
-		? currentOpen
-			? ""
-			: collapsible
-		: state === "collapsed"
-			? collapsible
-			: "";
+	const { state: currentState, collapsible: currentCollapsible } =
+		getSidebarPresentation(currentOpen, collapsible);
 	const desktopWidth = isRightSide
 		? (rightSidebarWidthOverride ?? rightSidebarWidth)
 		: SIDEBAR_WIDTH;
@@ -785,6 +788,7 @@ function Sidebar({
 		...styleProp,
 		"--sidebar-width": effectiveDesktopWidth,
 	} as React.CSSProperties;
+	const hasOuterPadding = variant !== "sidebar";
 
 	return (
 		<div
@@ -803,7 +807,7 @@ function Sidebar({
 					"group-data-[collapsible=offcanvas]:w-0",
 					"group-data-[side=right]:group-data-[state=expanded]:w-0",
 					"group-data-[side=right]:rotate-180",
-					variant === "floating" || variant === "inset"
+					hasOuterPadding
 						? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
 						: "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
 				)}
@@ -820,7 +824,7 @@ function Sidebar({
 					side === "left"
 						? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
 						: "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
-					variant === "floating" || variant === "inset"
+					hasOuterPadding
 						? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
 						: "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
 					className,
@@ -894,16 +898,27 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
 			onClick={toggleNearestSidebar}
 			title="Toggle Sidebar"
 			className={cn(
-				"absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
+				"group/rail absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
 				"in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
 				"[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
-				"group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
+				"group-data-[collapsible=offcanvas]:translate-x-0",
 				"[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
 				"[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
 				className,
 			)}
 			{...props}
-		/>
+		>
+			<span
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-y-3 start-1/2 w-px rounded-full opacity-0 transition-opacity duration-250 group-hover/rail:opacity-100 group-data-[collapsible=offcanvas]:start-full"
+				style={{
+					background:
+						"radial-gradient(ellipse 100% 50% at 50% 50%, color-mix(in oklab, var(--sidebar-foreground) 25%, transparent) 0%, color-mix(in oklab, var(--sidebar-foreground) 8%, transparent) 100%)",
+					maskImage:
+						"linear-gradient(to bottom, transparent 0, black 20px, black calc(100% - 20px), transparent 100%)",
+				}}
+			/>
+		</button>
 	);
 }
 

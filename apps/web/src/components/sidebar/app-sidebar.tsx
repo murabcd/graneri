@@ -6,6 +6,7 @@ import {
 	SidebarContent,
 	SidebarFooter,
 	SidebarHeader,
+	SidebarRail,
 	useSidebarShell,
 } from "@workspace/ui/components/sidebar";
 import { cn } from "cn";
@@ -637,6 +638,7 @@ export function AppSidebar({
 					trashOpen={model.uiState.trashOpen}
 					user={user}
 				/>
+				<SidebarRail />
 			</Sidebar>
 			<AppSidebarDialogs
 				activeWorkspaceId={activeWorkspaceId}
