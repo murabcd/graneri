@@ -5,7 +5,7 @@
   "private": true,
   "dependencies": {
     "@workspace/ai": "workspace:*",
-    "zod": "^4.1.12"
+    "zod": "^4.6.4"
   },
   "scripts": {
     "lint": "biome lint src",

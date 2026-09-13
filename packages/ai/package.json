@@ -24,7 +24,7 @@
     "pino": "^10.1.0",
     "rrule": "2.8.1",
     "yaml": "2.9.0",
-    "zod": "^4.1.12"
+    "zod": "^4.6.4"
   },
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
