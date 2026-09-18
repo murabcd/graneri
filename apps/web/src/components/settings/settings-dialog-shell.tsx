@@ -138,7 +138,7 @@ export function SettingsDialogShell({
 					</DrawerHeader>
 					<ScrollArea
 						className="flex min-h-0 flex-1"
-						viewportClassName="flex flex-col gap-4 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
+						viewportClassName="scroll-fade-b flex flex-col gap-4 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] [--scroll-fade-reveal:2rem]"
 					>
 						{children}
 					</ScrollArea>
@@ -202,7 +202,7 @@ export function SettingsDialogShell({
 						</header>
 						<ScrollArea
 							className="flex flex-1"
-							viewportClassName="flex flex-col gap-4 p-4 pt-0"
+							viewportClassName="scroll-fade-b flex flex-col gap-4 p-4 pt-0 [--scroll-fade-reveal:2rem]"
 						>
 							{children}
 						</ScrollArea>
