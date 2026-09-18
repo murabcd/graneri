@@ -50,15 +50,11 @@ export function createComponentEntry<Props extends object, Module>(
 	});
 
 	const ComponentEntry: PreloadableComponentEntry<Props> = (props) => {
-		const LoadedComponent = loadedComponent;
+		const [Component] = React.useState(() => loadedComponent ?? LazyComponent);
 		return (
 			<ComponentEntryBoundary>
 				<React.Suspense>
-					{LoadedComponent ? (
-						<LoadedComponent {...props} />
-					) : (
-						<LazyComponent {...props} />
-					)}
+					<Component {...props} />
 				</React.Suspense>
 			</ComponentEntryBoundary>
 		);

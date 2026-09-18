@@ -35,6 +35,24 @@ describe("open component entry", () => {
 		expect(loadModule).toHaveBeenCalledTimes(1);
 	});
 
+	it("keeps the mounted component when its props change after loading", async () => {
+		const Entry = createOpenComponentEntry(
+			async () => ({
+				Dialog: ({ page }: { open: boolean; page: string }) => (
+					<div data-testid="loaded-dialog">{page}</div>
+				),
+			}),
+			(module) => module.Dialog,
+		);
+		const { rerender } = render(<Entry open page="Profile" />);
+		const dialog = await screen.findByTestId("loaded-dialog");
+
+		rerender(<Entry open page="Voice" />);
+
+		expect(screen.getByTestId("loaded-dialog")).toBe(dialog);
+		expect(dialog.textContent).toBe("Voice");
+	});
+
 	it("renders a preloaded component synchronously when it opens", async () => {
 		const loadModule = vi.fn(async () => ({
 			Dialog: ({ open }: { open: boolean }) =>
