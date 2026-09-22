@@ -5,6 +5,7 @@ import {
 	getQueuedTranscriptAutoStartKey,
 	getScopedTranscriptionSnapshot,
 	type ScopedTranscriptState,
+	syncActiveTranscriptSessionId,
 	type UseNoteTranscriptSessionArgs,
 } from "@/hooks/note-transcript-session-state";
 import { useNoteTranscriptScope } from "@/hooks/use-note-transcript-scope";
@@ -369,10 +370,10 @@ export const useNoteTranscriptSession = ({
 				terminalizeIfStopWonStartRace:
 					transcriptSessionStopController.terminalizeIfStopWonStartRace,
 			});
-			updateScopedTranscriptState((currentState) => ({
-				...currentState,
-				activeTranscriptSessionId: captureSession.activeTranscriptSessionId,
-			}));
+			const activeSessionId = captureSession.activeTranscriptSessionId;
+			updateScopedTranscriptState((currentState) =>
+				syncActiveTranscriptSessionId(currentState, activeSessionId),
+			);
 			return sessionId;
 		} catch (error) {
 			logError({

@@ -60,6 +60,14 @@ export const createScopedTranscriptState = ({
 	transcriptUtterances: [],
 });
 
+export const syncActiveTranscriptSessionId = (
+	state: ScopedTranscriptState,
+	activeTranscriptSessionId: Id<"transcriptSessions"> | null,
+): ScopedTranscriptState =>
+	state.activeTranscriptSessionId === activeTranscriptSessionId
+		? state
+		: { ...state, activeTranscriptSessionId };
+
 export const getScopedTranscriptionSnapshot = ({
 	isScoped,
 	transcriptionSession,
