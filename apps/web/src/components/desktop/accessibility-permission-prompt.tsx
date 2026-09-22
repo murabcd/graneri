@@ -3,6 +3,7 @@ import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
+	DialogHeader,
 	DialogTitle,
 } from "@workspace/ui/components/dialog";
 import * as React from "react";
@@ -78,10 +79,10 @@ export function AccessibilityPermissionPrompt({
 				<Button
 					type="button"
 					variant="secondary"
-					className="absolute z-60"
+					className="absolute"
 					style={{
-						top: "calc(50% - 50vh + 1rem)",
-						right: "calc(50% - 50vw + 1rem)",
+						top: "calc(50% - 50vh + var(--spacing) * 4)",
+						right: "calc(50% - 50vw + var(--spacing) * 4)",
 					}}
 					onClick={dismiss}
 				>
@@ -90,14 +91,14 @@ export function AccessibilityPermissionPrompt({
 				<img
 					src="/accessibility-speakers.png"
 					alt=""
-					className="aspect-352/203 w-full rounded-md object-cover"
+					className="aspect-video w-full rounded-md object-cover"
 				/>
 				<div className="flex flex-col gap-3 p-2 pt-5">
-					<div className="space-y-2">
-						<DialogTitle className="text-2xl leading-7 font-normal">
+					<DialogHeader>
+						<DialogTitle className="text-2xl leading-7">
 							See who's speaking
 						</DialogTitle>
-						<DialogDescription className="text-pretty text-[14px] leading-[18px] tracking-[0.01em]">
+						<DialogDescription className="text-pretty">
 							Graneri needs Accessibility permission to identify speakers by
 							name. Until you enable it, your transcripts won’t clearly show who
 							said what.
@@ -107,7 +108,7 @@ export function AccessibilityPermissionPrompt({
 								{permission.error}
 							</p>
 						) : null}
-					</div>
+					</DialogHeader>
 					<div className="flex justify-end pt-2">
 						<Button
 							type="button"
