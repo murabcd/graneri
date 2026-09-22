@@ -1,3 +1,4 @@
+import { Button } from "@workspace/ui/components/button";
 import {
 	Dialog,
 	DialogContent,
@@ -72,12 +73,12 @@ export function AccessibilityPermissionPrompt({
 			<DialogContent
 				showCloseButton={false}
 				onPointerDownOutside={(event) => event.preventDefault()}
-				overlayClassName="bg-black/75 backdrop-blur-[3px]"
-				className="gap-0 rounded-[18px] bg-[#292929] p-2 font-[system-ui] text-white ring-1 ring-white/10 sm:max-w-sm"
+				className="gap-0 bg-card p-2 text-card-foreground"
 			>
-				<button
+				<Button
 					type="button"
-					className="absolute z-60 rounded-full bg-[#383838] px-4 py-2 text-sm text-white hover:bg-[#484848] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-300"
+					variant="secondary"
+					className="absolute z-60"
 					style={{
 						top: "calc(50% - 50vh + 1rem)",
 						right: "calc(50% - 50vw + 1rem)",
@@ -85,37 +86,36 @@ export function AccessibilityPermissionPrompt({
 					onClick={dismiss}
 				>
 					Remind me later
-				</button>
+				</Button>
 				<img
 					src="/accessibility-speakers.png"
 					alt=""
-					className="aspect-352/203 w-full rounded-xl object-cover"
+					className="aspect-352/203 w-full rounded-md object-cover"
 				/>
 				<div className="flex flex-col gap-3 p-2 pt-5">
 					<div className="space-y-2">
-						<DialogTitle className="font-serif text-[24px] leading-7 font-normal">
+						<DialogTitle className="text-2xl leading-7 font-normal">
 							See who's speaking
 						</DialogTitle>
-						<DialogDescription className="text-pretty text-[14px] leading-[18px] tracking-[0.01em] text-neutral-400">
+						<DialogDescription className="text-pretty text-[14px] leading-[18px] tracking-[0.01em]">
 							Graneri needs Accessibility permission to identify speakers by
 							name. Until you enable it, your transcripts won’t clearly show who
 							said what.
 						</DialogDescription>
 						{permission.error ? (
-							<p role="alert" className="text-sm text-red-300">
+							<p role="alert" className="text-sm text-destructive">
 								{permission.error}
 							</p>
 						) : null}
 					</div>
 					<div className="flex justify-end pt-2">
-						<button
+						<Button
 							type="button"
 							disabled={permission.isRequesting}
 							onClick={() => void permission.request()}
-							className="rounded-full bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-300 disabled:opacity-60"
 						>
 							{permission.isRequesting ? "Opening…" : "Enable"}
-						</button>
+						</Button>
 					</div>
 				</div>
 			</DialogContent>
