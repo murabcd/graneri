@@ -42,6 +42,53 @@ test("attributes a short observed speech burst within an audio commit", () => {
 	);
 });
 
+test("attributes one consistently visible named remote when Meet exposes no speaking marker", () => {
+	const timeline = createMeetSpeakerTimeline();
+	for (const at of [1_000, 1_500, 2_000, 2_500, 3_000]) {
+		timeline.recordRoster(roster({ at, active: false }));
+	}
+	assert.equal(
+		timeline.resolveName({ startedAt: 1_000, endedAt: 3_000 }),
+		"Alex Morgan",
+	);
+});
+
+test("abstains from sole-remote inference when the roster is not stable", () => {
+	for (const interruption of [
+		{
+			type: "roster-changed",
+			timestamp: 1_500,
+			participants: [],
+		},
+		{
+			type: "roster-changed",
+			timestamp: 1_500,
+			participants: [
+				{ name: "Alex Morgan", active: false, isSelf: false },
+				{ name: "Sam Lee", active: false, isSelf: false },
+			],
+		},
+	]) {
+		const timeline = createMeetSpeakerTimeline();
+		timeline.recordRoster(roster({ at: 1_000, active: false }));
+		timeline.recordRoster(interruption);
+		timeline.recordRoster(roster({ at: 2_000, active: false }));
+		assert.equal(
+			timeline.resolveName({ startedAt: 1_000, endedAt: 2_000 }),
+			null,
+		);
+	}
+
+	const changedSpeakerTimeline = createMeetSpeakerTimeline();
+	changedSpeakerTimeline.recordRoster(roster({ at: 1_000, active: false }));
+	changedSpeakerTimeline.recordRoster(roster({ at: 1_500, name: "Sam Lee" }));
+	changedSpeakerTimeline.recordRoster(roster({ at: 2_000, name: "Sam Lee" }));
+	assert.equal(
+		changedSpeakerTimeline.resolveName({ startedAt: 1_000, endedAt: 2_000 }),
+		null,
+	);
+});
+
 test("abstains when Meet is blind, self is speaking, or a remote tile lacks a name", () => {
 	for (const event of [
 		roster({ at: 1_500, blindReason: "meet-not-focused" }),

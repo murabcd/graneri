@@ -29,6 +29,9 @@ export const createMeetSpeakerTimeline = () => {
 
 	const recordRoster = (rawEvent) => {
 		const event = nativeRosterEventSchema.parse(rawEvent);
+		const remoteParticipants = event.participants.filter(
+			(participant) => !participant.isSelf,
+		);
 		const activeParticipants = event.participants.filter(
 			(participant) => participant.active,
 		);
@@ -47,6 +50,12 @@ export const createMeetSpeakerTimeline = () => {
 		} else if (activeRemote.length === 1) {
 			status = "named";
 			name = activeRemote[0].name.trim();
+		} else if (
+			remoteParticipants.length === 1 &&
+			remoteParticipants[0].name?.trim()
+		) {
+			status = "candidate";
+			name = remoteParticipants[0].name.trim();
 		}
 		samples.push({ at: event.timestamp, name, status });
 		const earliestRetainedAt = event.timestamp - sampleRetentionMs;
@@ -83,13 +92,25 @@ export const createMeetSpeakerTimeline = () => {
 			return null;
 		}
 		const namedSamples = relevant.filter((sample) => sample.status === "named");
+		const attributedSamples = relevant.filter(
+			(sample) => sample.status === "named" || sample.status === "candidate",
+		);
+		if (new Set(attributedSamples.map((sample) => sample.name)).size !== 1) {
+			return null;
+		}
+		if (namedSamples.length >= 2) {
+			return namedSamples[0].name;
+		}
+		const candidateSamples = relevant.filter(
+			(sample) => sample.status === "candidate",
+		);
 		if (
-			namedSamples.length < 2 ||
-			new Set(namedSamples.map((sample) => sample.name)).size !== 1
+			candidateSamples.length < 2 ||
+			candidateSamples.length !== relevant.length
 		) {
 			return null;
 		}
-		return namedSamples[0].name;
+		return candidateSamples[0].name;
 	};
 
 	return {

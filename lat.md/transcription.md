@@ -121,7 +121,7 @@ second set of speaker turn maps or interpret realtime transport events itself.
 
 ## Chrome Meet named speakers
 
-Accessibility observations can label a timed remote audio turn only when one named Chrome Meet tile is unambiguously observed speaking and no contradictory speaker observation occurs during the audio interval.
+Meet speaker attribution uses active-tile evidence or one structurally unique named remote that remains present for the complete timed audio turn; contradictory roster evidence always forces abstention.
 
 The [native Chrome Meet speaker helper](../apps/desktop/native/MeetChromeSpeakerCLI.swift)
 reads the selected Meet window through macOS Accessibility every 500 ms. Its
@@ -132,8 +132,11 @@ the helper retains a unique observed self name if the preview disappears, but
 abstains when the self name is shared by another tile. The
 [desktop attribution timeline](../apps/desktop/src/meet-chrome-speaker-attribution.mjs)
 parses that process boundary once, retains only recent samples, and abstains on
-missing names, self speech, overlapping speakers, stale samples, gaps, or a
-speaker change. The [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
+missing names, self speech, overlapping speakers, stale samples, gaps, roster
+instability, or a speaker change. The single-remote path covers Meet layouts
+that omit the active-speaker marker; it is valid only when the native helper
+structurally identifies exactly one non-self tile throughout the full turn.
+The [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
 queries it only for `them` turns with real start and end timestamps; `you` and
 untimed salvage remain unnamed. A recording stop or reconnect clears the
 timeline and stops the helper, so a later scope cannot inherit a prior name.
