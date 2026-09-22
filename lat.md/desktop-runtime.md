@@ -28,9 +28,11 @@ Privacy & Security > Accessibility pane and follows its foreground window using
 The guide is a transparent, non-focusable 558 × 124 desktop window attached to
 the bottom of the Settings content pane. Its dedicated renderer signals that
 fonts and the app icon are ready before Electron shows it, and reads the native
-macOS accent color for the drag hint. Only that renderer may ask Electron to
-drag the current packaged `.app` bundle into Settings; a development Electron
-host must never be dragged as Graneri. Trust is polled from a fresh Electron
+macOS accent color for the drag hint. It follows the system appearance with
+shared semantic color tokens rather than inheriting the main app's saved theme.
+Only that renderer may ask Electron to drag the current packaged `.app` bundle
+into Settings; a development Electron host must never be dragged as Graneri.
+Trust is polled from a fresh Electron
 utility process through
 [macos-accessibility-permission.mjs](../apps/desktop/src/macos-accessibility-permission.mjs),
 so `AXIsProcessTrusted()` runs under Graneri's responsible app identity without

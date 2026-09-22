@@ -703,10 +703,17 @@ type AutomationPromptEditorProps = {
 	placeholder: string;
 };
 
-function useAutomationMentionPicker({
+function useAutomationPromptEditor({
+	id,
+	prompt,
+	mentions,
 	noteSources,
 	appSources,
-}: Pick<AutomationPromptEditorProps, "noteSources" | "appSources">) {
+	isNotesLoading,
+	onMentionPickerOpen,
+	onPromptChange,
+	placeholder,
+}: AutomationPromptEditorProps) {
 	const editorRef = React.useRef<Editor | null>(null);
 	const mentionRangeRef = React.useRef<NoteMentionRange | null>(null);
 	const mentionTriggerRectRef = React.useRef<MentionPickerAnchorRect | null>(
@@ -835,69 +842,6 @@ function useAutomationMentionPicker({
 			}),
 		);
 	}, [popoverOpen, visibleItems.length]);
-
-	return {
-		allAppSourcesRef,
-		allNoteSourcesRef,
-		closePicker,
-		editorRef,
-		handleKeyDown,
-		insertMention,
-		mentionRangeRef,
-		mentionTriggerRectRef,
-		popoverOpen,
-		popoverOpenRef,
-		position,
-		selectIndex,
-		selectedIndex,
-		setPopoverOpen,
-		setPosition,
-		setSearchTerm,
-		shouldSearchNotes,
-		visibleItems,
-		visibleItemsRef,
-		visibleNoteSources,
-		visibleToolSources,
-	};
-}
-
-function AutomationPromptEditor({
-	id,
-	prompt,
-	mentions,
-	noteSources,
-	appSources,
-	isNotesLoading,
-	onMentionPickerOpen,
-	onPromptChange,
-	placeholder,
-}: AutomationPromptEditorProps) {
-	const {
-		allAppSourcesRef,
-		allNoteSourcesRef,
-		closePicker,
-		editorRef,
-		handleKeyDown,
-		insertMention,
-		mentionRangeRef,
-		mentionTriggerRectRef,
-		popoverOpen,
-		popoverOpenRef,
-		position,
-		selectIndex,
-		selectedIndex,
-		setPopoverOpen,
-		setPosition,
-		setSearchTerm,
-		shouldSearchNotes,
-		visibleItems,
-		visibleItemsRef,
-		visibleNoteSources,
-		visibleToolSources,
-	} = useAutomationMentionPicker({
-		appSources,
-		noteSources,
-	});
 
 	const editor = useEditor({
 		extensions: [
@@ -1053,6 +997,25 @@ function AutomationPromptEditor({
 			emitUpdate: false,
 		});
 	}, [editor, prompt, mentions]);
+	return {
+		editor,
+		pickerProps: {
+			open: popoverOpen,
+			position,
+			appSources: visibleToolSources,
+			noteSources: visibleNoteSources,
+			items: visibleItems,
+			selectedIndex,
+			onSelectedIndexChange: selectIndex,
+			isNotesLoading,
+			shouldSearchNotes,
+			onSelectItem: insertMention,
+		},
+	};
+}
+
+function AutomationPromptEditor(props: AutomationPromptEditorProps) {
+	const { editor, pickerProps } = useAutomationPromptEditor(props);
 
 	return (
 		<>
@@ -1063,18 +1026,7 @@ function AutomationPromptEditor({
 					</Tiptap>
 				) : null}
 			</div>
-			<AutomationMentionPicker
-				open={popoverOpen}
-				position={position}
-				appSources={visibleToolSources}
-				noteSources={visibleNoteSources}
-				items={visibleItems}
-				selectedIndex={selectedIndex}
-				onSelectedIndexChange={selectIndex}
-				isNotesLoading={isNotesLoading}
-				shouldSearchNotes={shouldSearchNotes}
-				onSelectItem={insertMention}
-			/>
+			<AutomationMentionPicker {...pickerProps} />
 		</>
 	);
 }

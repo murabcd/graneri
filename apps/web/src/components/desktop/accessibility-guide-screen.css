@@ -1,11 +1,8 @@
 .graneri-accessibility-arrow {
-	filter: drop-shadow(0 4px 7px #0000003b);
 	transform: translateY(-8px);
-}
-
-.graneri-accessibility-arrow-animated {
 	will-change: transform;
 	animation: graneri-accessibility-arrow-bounce 2.5s linear infinite;
+	animation-delay: 500ms;
 }
 
 @keyframes graneri-accessibility-arrow-bounce {
@@ -32,7 +29,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.graneri-accessibility-arrow-animated {
+	.graneri-accessibility-arrow {
 		animation: none;
 	}
 }

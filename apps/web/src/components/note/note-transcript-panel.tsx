@@ -150,7 +150,7 @@ export function NoteTranscriptPanel({
 											isUserTranscript ? "items-end" : "items-start",
 										)}
 									>
-										<p className="px-1 text-[11px] font-medium text-muted-foreground/75">
+										<p className="px-1 text-xs font-medium text-muted-foreground">
 											{speakerLabel}
 										</p>
 										<div

@@ -78,7 +78,7 @@ export function AccessibilityPermissionPrompt({
 			>
 				<Button
 					type="button"
-					variant="secondary"
+					variant="ghost"
 					className="absolute"
 					style={{
 						top: "calc(50% - 50vh + var(--spacing) * 4)",

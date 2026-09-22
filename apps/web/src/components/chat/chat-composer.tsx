@@ -416,24 +416,19 @@ type ChatComposerTextEditorProps = {
 	appSources: AppSource[];
 };
 
-function useChatComposerMentionPicker({
+function useChatComposerTextEditor({
+	draft,
 	editingMessageId,
 	placeholder,
 	onCancelEdit,
+	onDraftChange,
+	onDraftKeyDown,
 	mentions,
 	noteMentions,
 	recipeMentions,
+	onMentionsChange,
 	appSources,
-}: Pick<
-	ChatComposerTextEditorProps,
-	| "editingMessageId"
-	| "placeholder"
-	| "onCancelEdit"
-	| "mentions"
-	| "noteMentions"
-	| "recipeMentions"
-	| "appSources"
->) {
+}: ChatComposerTextEditorProps) {
 	const mentionableDocuments = noteMentions.items;
 	const isNotesLoading = noteMentions.status === "loading";
 	const recipes = recipeMentions.items;
@@ -646,98 +641,6 @@ function useChatComposerMentionPicker({
 		onCancelEdit,
 	});
 
-	return {
-		allAppSourcesRef,
-		allMentionDocumentsRef,
-		allRecipesRef,
-		closeMentionPicker,
-		composerEditorRef,
-		handleAddMention,
-		handleAddRecipe,
-		handleAddTool,
-		handleSelectMentionPickerItem,
-		isNotesLoading,
-		isRecipesLoading,
-		mentionPopoverOpen,
-		mentionPopoverOpenRef,
-		mentionPickerPosition,
-		mentionRangeRef,
-		mentionsRef,
-		placeholderRef,
-		promptRef,
-		selectMentionIndex,
-		selectedMentionIndex,
-		selectedMentionIndexRef,
-		setDocumentSearchTerm,
-		setMentionPickerPosition,
-		setMentionPopoverOpen,
-		shouldSearchReferences,
-		visibleMentionDocuments,
-		visibleMentionDocumentsRef,
-		visibleMentionItems,
-		visibleMentionItemsRef,
-		visibleMentionRecipes,
-		visibleMentionRecipesRef,
-		visibleMentionTools,
-	};
-}
-
-function ChatComposerTextEditor({
-	draft,
-	editingMessageId,
-	placeholder,
-	onCancelEdit,
-	onDraftChange,
-	onDraftKeyDown,
-	mentions,
-	noteMentions,
-	recipeMentions,
-	onMentionsChange,
-	appSources,
-}: ChatComposerTextEditorProps) {
-	const {
-		allAppSourcesRef,
-		allMentionDocumentsRef,
-		allRecipesRef,
-		closeMentionPicker,
-		composerEditorRef,
-		handleAddMention,
-		handleAddRecipe,
-		handleAddTool,
-		handleSelectMentionPickerItem,
-		isNotesLoading,
-		isRecipesLoading,
-		mentionPopoverOpen,
-		mentionPopoverOpenRef,
-		mentionPickerPosition,
-		mentionRangeRef,
-		mentionsRef,
-		placeholderRef,
-		promptRef,
-		selectMentionIndex,
-		selectedMentionIndex,
-		selectedMentionIndexRef,
-		setDocumentSearchTerm,
-		setMentionPickerPosition,
-		setMentionPopoverOpen,
-		shouldSearchReferences,
-		visibleMentionDocuments,
-		visibleMentionDocumentsRef,
-		visibleMentionItems,
-		visibleMentionItemsRef,
-		visibleMentionRecipes,
-		visibleMentionRecipesRef,
-		visibleMentionTools,
-	} = useChatComposerMentionPicker({
-		appSources,
-		editingMessageId,
-		mentions,
-		noteMentions,
-		onCancelEdit,
-		placeholder,
-		recipeMentions,
-	});
-
 	const composerEditor = useEditor({
 		extensions: [
 			...createPlainTextEditorExtensions(),
@@ -918,6 +821,31 @@ function ChatComposerTextEditor({
 		mentions,
 		placeholder,
 	});
+	return {
+		composerEditor,
+		promptRef,
+		pickerProps: {
+			open: mentionPopoverOpen,
+			position: mentionPickerPosition,
+			mentionableDocuments: visibleMentionDocuments,
+			appSources: visibleMentionTools,
+			recipes: visibleMentionRecipes,
+			items: visibleMentionItems,
+			selectedIndex: selectedMentionIndex,
+			onSelectedIndexChange: selectMentionIndex,
+			isNotesLoading,
+			isRecipesLoading,
+			shouldSearchReferences,
+			onAddMention: handleAddMention,
+			onAddRecipe: handleAddRecipe,
+			onAddTool: handleAddTool,
+		},
+	};
+}
+
+function ChatComposerTextEditor(props: ChatComposerTextEditorProps) {
+	const { composerEditor, pickerProps, promptRef } =
+		useChatComposerTextEditor(props);
 
 	return (
 		<>
@@ -932,22 +860,7 @@ function ChatComposerTextEditor({
 					</Tiptap>
 				) : null}
 			</div>
-			<MentionPicker
-				open={mentionPopoverOpen}
-				position={mentionPickerPosition}
-				mentionableDocuments={visibleMentionDocuments}
-				appSources={visibleMentionTools}
-				recipes={visibleMentionRecipes}
-				items={visibleMentionItems}
-				selectedIndex={selectedMentionIndex}
-				onSelectedIndexChange={selectMentionIndex}
-				isNotesLoading={isNotesLoading}
-				isRecipesLoading={isRecipesLoading}
-				shouldSearchReferences={shouldSearchReferences}
-				onAddMention={handleAddMention}
-				onAddRecipe={handleAddRecipe}
-				onAddTool={handleAddTool}
-			/>
+			<MentionPicker {...pickerProps} />
 		</>
 	);
 }

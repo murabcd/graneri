@@ -4,6 +4,7 @@ import {
 	notifyDesktopAccessibilityGuideReady,
 	startDesktopAccessibilityGuideDrag,
 } from "@workspace/platform/desktop";
+import { Button } from "@workspace/ui/components/button";
 import { ChevronLeft } from "lucide-react";
 import * as React from "react";
 import "./accessibility-guide-screen.css";
@@ -32,7 +33,6 @@ function useGuideWindowAppearance(
 	iconRef: React.RefObject<HTMLImageElement | null>,
 ) {
 	const [accentColor, setAccentColor] = React.useState<string>();
-	const [isHintAnimated, setIsHintAnimated] = React.useState(false);
 
 	React.useEffect(() => {
 		const root = document.documentElement;
@@ -84,20 +84,13 @@ function useGuideWindowAppearance(
 		};
 	}, [iconRef]);
 
-	React.useEffect(() => {
-		const timer = window.setTimeout(() => setIsHintAnimated(true), 500);
-		return () => {
-			window.clearTimeout(timer);
-		};
-	}, []);
-
-	return { accentColor, isHintAnimated };
+	return accentColor;
 }
 
 export function AccessibilityGuideScreen() {
 	const iconRef = React.useRef<HTMLImageElement>(null);
 	const labelRef = React.useRef<HTMLSpanElement>(null);
-	const { accentColor, isHintAnimated } = useGuideWindowAppearance(iconRef);
+	const accentColor = useGuideWindowAppearance(iconRef);
 	const startDrag = (event: React.DragEvent) => {
 		event.preventDefault();
 		const icon = iconRef.current;
@@ -109,7 +102,7 @@ export function AccessibilityGuideScreen() {
 
 	return (
 		<div className="flex h-screen w-screen items-center justify-center p-3.5">
-			<div className="flex w-full select-none flex-col gap-1 rounded-2xl border border-neutral-950/15 bg-neutral-100/95 p-2 shadow-md shadow-neutral-950/20 dark:border-white/15 dark:bg-neutral-800/95 dark:shadow-black/40">
+			<div className="flex w-full select-none flex-col gap-1 rounded-xl border border-border bg-card/95 p-2 text-card-foreground shadow-md">
 				<div className="flex items-center gap-2">
 					<div className="size-7 shrink-0" aria-hidden="true" />
 					<button
@@ -121,7 +114,7 @@ export function AccessibilityGuideScreen() {
 					>
 						<svg
 							aria-hidden="true"
-							className={`graneri-accessibility-arrow ml-[5px] h-7 w-6 shrink-0 text-blue-500 ${isHintAnimated ? "graneri-accessibility-arrow-animated" : ""}`}
+							className="graneri-accessibility-arrow ml-1 h-7 w-6 shrink-0 text-ring"
 							style={accentColor ? { color: accentColor } : undefined}
 							viewBox="0 0 29 33"
 							fill="none"
@@ -129,35 +122,31 @@ export function AccessibilityGuideScreen() {
 							<path
 								d="M14.5 2.1c-.48 0-.94.2-1.28.55L2.03 14.18c-1.14 1.17-.31 3.14 1.32 3.14h5.13v11.29c0 1.55 1.26 2.81 2.81 2.81h6.42c1.55 0 2.81-1.26 2.81-2.81V17.32h5.13c1.63 0 2.46-1.97 1.32-3.14L15.78 2.65a1.78 1.78 0 0 0-1.28-.55Z"
 								fill="currentColor"
-								stroke="white"
+								stroke="var(--card)"
 								strokeLinejoin="round"
 								strokeWidth="2.6"
 							/>
 						</svg>
-						<span className="text-left text-sm leading-5 text-neutral-500 dark:text-neutral-400">
-							Drag{" "}
-							<span className="text-neutral-950 dark:text-neutral-50">
-								Graneri
-							</span>{" "}
-							to the list above to allow{" "}
-							<span className="text-neutral-950 dark:text-neutral-50">
-								Accessibility
-							</span>
+						<span className="text-left text-sm leading-5 text-muted-foreground">
+							Drag <span className="text-card-foreground">Graneri</span> to the
+							list above to allow{" "}
+							<span className="text-card-foreground">Accessibility</span>
 						</span>
 					</button>
 				</div>
 				<div className="flex items-center gap-2">
-					<button
+					<Button
 						type="button"
+						variant="secondary"
+						size="icon-sm"
 						aria-label="Back to Graneri"
 						onClick={() => void dismissDesktopAccessibilityGuide()}
-						className="flex size-7 shrink-0 items-center justify-center rounded-full bg-neutral-200/70 text-neutral-600 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-neutral-700/95 dark:text-neutral-300 dark:hover:bg-neutral-600"
 					>
-						<ChevronLeft aria-hidden="true" size={14} strokeWidth={1.5} />
-					</button>
+						<ChevronLeft aria-hidden="true" />
+					</Button>
 					<button
 						type="button"
-						className="flex flex-1 cursor-grab items-center gap-1.5 rounded-xl border border-neutral-950/20 bg-white/60 px-1.5 py-1 active:cursor-grabbing dark:border-white/10 dark:bg-white/10"
+						className="flex flex-1 cursor-grab items-center gap-1.5 rounded-md border border-border bg-background/60 px-1.5 py-1 active:cursor-grabbing"
 						draggable
 						onDragStart={startDrag}
 						aria-label="Drag Graneri into the Accessibility list. To use a keyboard, add Graneri with the plus button in System Settings."
@@ -171,7 +160,7 @@ export function AccessibilityGuideScreen() {
 						/>
 						<span
 							ref={labelRef}
-							className="text-sm font-normal text-neutral-800 dark:text-neutral-100"
+							className="text-sm font-normal text-foreground"
 						>
 							Graneri
 						</span>

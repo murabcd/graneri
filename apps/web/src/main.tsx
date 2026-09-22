@@ -69,10 +69,7 @@ async function bootstrap() {
 	if (window.location.pathname === rendererAccessibilityGuidePathname) {
 		root.render(
 			<StrictMode>
-				<ThemeProvider>
-					<DesktopNativeThemeSync />
-					<AccessibilityGuideScreen />
-				</ThemeProvider>
+				<AccessibilityGuideScreen />
 			</StrictMode>,
 		);
 		return;
