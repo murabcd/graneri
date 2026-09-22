@@ -65,6 +65,23 @@ class MockPeerConnection {
 	}
 }
 
+const connectWithMockPeer = () =>
+	connectRealtimeTranscriptionTransport({
+		createPeerConnection: () => new MockPeerConnection(),
+		lang: "en",
+		logger: {
+			debug: vi.fn(),
+			error: vi.fn(),
+			info: vi.fn(),
+			warn: vi.fn(),
+		},
+		onEvent: vi.fn(),
+		onInterrupted: vi.fn(),
+		source: "systemAudio",
+		speaker: "them",
+		stream: createMockStream(),
+	});
+
 describe("connectRealtimeTranscriptionTransport", () => {
 	afterEach(() => {
 		globalThis.fetch = originalFetch;
@@ -92,21 +109,7 @@ describe("connectRealtimeTranscriptionTransport", () => {
 		globalThis.fetch = fetchMock as typeof fetch;
 		globalThis.window = globalThis as typeof globalThis & Window;
 
-		const transport = await connectRealtimeTranscriptionTransport({
-			createPeerConnection: () => new MockPeerConnection(),
-			lang: "en",
-			logger: {
-				debug: vi.fn(),
-				error: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-			},
-			onEvent: vi.fn(),
-			onInterrupted: vi.fn(),
-			source: "systemAudio",
-			speaker: "them",
-			stream: createMockStream(),
-		});
+		const transport = await connectWithMockPeer();
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		expect(fetchMock).toHaveBeenNthCalledWith(
@@ -129,5 +132,62 @@ describe("connectRealtimeTranscriptionTransport", () => {
 		});
 
 		await transport.close();
+	});
+
+	it("recovers from a transient session-service outage on the first click", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ error: "Service unavailable." }), {
+					status: 503,
+				}),
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ clientSecret: "secret" }), {
+					status: 200,
+				}),
+			)
+			.mockResolvedValueOnce(new Response("answer-sdp", { status: 200 }));
+		globalThis.fetch = fetchMock as typeof fetch;
+		globalThis.window = globalThis as typeof globalThis & Window;
+
+		const transport = await connectWithMockPeer();
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(fetchMock.mock.calls[0]?.[0]).toBe(
+			"/api/realtime-transcription-session",
+		);
+		expect(fetchMock.mock.calls[1]?.[0]).toBe(
+			"/api/realtime-transcription-session",
+		);
+		await transport.close();
+	});
+
+	it("does not retry an authentication failure", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify({ error: "Authentication is invalid." }), {
+				status: 401,
+			}),
+		);
+		globalThis.fetch = fetchMock as typeof fetch;
+		globalThis.window = globalThis as typeof globalThis & Window;
+
+		await expect(connectWithMockPeer()).rejects.toThrow(
+			"Authentication is invalid.",
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("stops after three unavailable session responses", async () => {
+		const fetchMock = vi.fn().mockImplementation(
+			async () =>
+				new Response(JSON.stringify({ error: "Service unavailable." }), {
+					status: 503,
+				}),
+		);
+		globalThis.fetch = fetchMock as typeof fetch;
+		globalThis.window = globalThis as typeof globalThis & Window;
+
+		await expect(connectWithMockPeer()).rejects.toThrow("Service unavailable.");
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 });

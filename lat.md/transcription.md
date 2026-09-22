@@ -83,7 +83,10 @@ from the authenticated hosted Vercel route through the desktop local server.
 The hosted route rate-limits the authenticated identity and sends OpenAI a
 SHA-256 hash of the stable Convex token identifier as
 `OpenAI-Safety-Identifier`; the raw identity never leaves Graneri's server
-boundary. Realtime sessions use `gpt-live-transcribe` with 24 kHz PCM input,
+boundary. The client retries a session-creation HTTP 503 twice with short
+bounded delays so a transient admission outage does not make the first Record
+press stop capture; authentication and rate-limit failures are not retried.
+Realtime sessions use `gpt-live-transcribe` with 24 kHz PCM input,
 `high` transcription delay, and plural language hints. Browser WebRTC sessions
 use OpenAI server VAD; native WebSocket sessions disable turn detection because
 Electron commits audio buffers explicitly. Because the model does not expose

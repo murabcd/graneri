@@ -117,44 +117,44 @@ const createRealtimeSession = async (
 		throw new Error("Authentication is required for transcription.");
 	}
 
-	const response = await fetch(
-		getHostedApiUrl("realtimeTranscriptionSession"),
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${convexToken}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				...(language && { lang: language }),
-				...(source && { source }),
-				...(speaker && { speaker }),
-				transport: "webrtc",
-			}),
+	const sessionUrl = getHostedApiUrl("realtimeTranscriptionSession");
+	const sessionRequest = {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${convexToken}`,
+			"Content-Type": "application/json",
 		},
-	);
+		body: JSON.stringify({
+			...(language && { lang: language }),
+			...(source && { source }),
+			...(speaker && { speaker }),
+			transport: "webrtc",
+		}),
+	};
+	let unavailableAttempts = 0;
+	while (true) {
+		const response = await fetch(sessionUrl, sessionRequest);
 
-	if (!response.ok) {
-		const errorPayload = (await response.json().catch(() => ({}))) as {
+		if (response.status === 503 && unavailableAttempts < 2) {
+			unavailableAttempts += 1;
+			await new Promise<void>((resolve) =>
+				setTimeout(resolve, unavailableAttempts * 300),
+			);
+			continue;
+		}
+
+		const payload = (await response.json().catch(() => ({}))) as {
+			clientSecret?: string;
 			error?: string;
 		};
-		throw new Error(
-			errorPayload.error || "Failed to create transcription session.",
-		);
+		if (!response.ok || !payload.clientSecret) {
+			throw new Error(
+				payload.error || "Failed to create transcription session.",
+			);
+		}
+
+		return { clientSecret: payload.clientSecret };
 	}
-
-	const payload = (await response.json().catch(() => ({}))) as {
-		clientSecret?: string;
-		error?: string;
-	};
-
-	if (!payload.clientSecret) {
-		throw new Error(payload.error || "Failed to create transcription session.");
-	}
-
-	return {
-		clientSecret: payload.clientSecret,
-	};
 };
 
 const waitForConnectedPeer = async (
