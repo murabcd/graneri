@@ -30,10 +30,14 @@ the bottom of the Settings content pane. Its dedicated renderer signals that
 fonts and the app icon are ready before Electron shows it, and reads the native
 macOS accent color for the drag hint. Only that renderer may ask Electron to
 drag the current packaged `.app` bundle into Settings; a development Electron
-host must never be dragged as Graneri. Trust is polled
-through `systemPreferences.isTrustedAccessibilityClient(false)` and closes the
-guide when granted. Onboarding reads that same native trust state; opening
-Settings or rendering the guide alone never counts as permission success.
+host must never be dragged as Graneri. Trust is polled from a fresh Electron
+utility process through
+[macos-accessibility-permission.mjs](../apps/desktop/src/macos-accessibility-permission.mjs),
+so `AXIsProcessTrusted()` runs under Graneri's responsible app identity without
+reusing Electron's stale bootstrap result. The guide closes as soon as that
+native state becomes granted, and permission IPC reads the same authority.
+Opening Settings, rendering the guide, or completing the drag alone never
+counts as permission success.
 
 ## Content security policy
 

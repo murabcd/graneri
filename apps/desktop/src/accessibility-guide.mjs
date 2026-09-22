@@ -18,7 +18,9 @@ const accessibilitySettingsUrl =
 
 export const createAccessibilityGuide = ({
 	app,
+	checkAccessibilityTrusted,
 	getNavigationUrl,
+	isAccessibilityTrusted,
 	preloadPath,
 	runtimeDir,
 	shell,
@@ -29,10 +31,12 @@ export const createAccessibilityGuide = ({
 	let openPromise = null;
 	let rendererReady = false;
 	let latestSettingsWindow = null;
+	let permissionPollErrorReported = false;
 
 	const stop = async () => {
 		rendererReady = false;
 		latestSettingsWindow = null;
+		permissionPollErrorReported = false;
 		if (permissionPoll) {
 			clearInterval(permissionPoll);
 			permissionPoll = null;
@@ -55,10 +59,7 @@ export const createAccessibilityGuide = ({
 			return;
 		}
 
-		if (
-			!event.active ||
-			systemPreferences.isTrustedAccessibilityClient(false)
-		) {
+		if (!event.active || isAccessibilityTrusted()) {
 			latestSettingsWindow = null;
 			window.hide();
 			return;
@@ -137,7 +138,8 @@ export const createAccessibilityGuide = ({
 		if (process.platform !== "darwin") {
 			throw new Error("Accessibility settings are available on macOS only.");
 		}
-		if (systemPreferences.isTrustedAccessibilityClient(false)) {
+		if (await checkAccessibilityTrusted()) {
+			await shell.openExternal(accessibilitySettingsUrl);
 			return;
 		}
 		if (openPromise) {
@@ -195,10 +197,23 @@ export const createAccessibilityGuide = ({
 				}
 
 				permissionPoll ??= setInterval(() => {
-					if (systemPreferences.isTrustedAccessibilityClient(false)) {
-						void stop();
-					}
-				}, 250);
+					void checkAccessibilityTrusted()
+						.then((trusted) => {
+							permissionPollErrorReported = false;
+							if (trusted) {
+								return stop();
+							}
+						})
+						.catch((error) => {
+							if (!permissionPollErrorReported) {
+								permissionPollErrorReported = true;
+								logError({
+									error,
+									message: "Could not refresh Accessibility permission",
+								});
+							}
+						});
+				}, 500);
 				await shell.openExternal(accessibilitySettingsUrl);
 			} catch (error) {
 				await stop();

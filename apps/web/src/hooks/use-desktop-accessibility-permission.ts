@@ -1,5 +1,6 @@
 import {
 	getDesktopPermissionsStatus,
+	openDesktopPermissionSettings,
 	requestDesktopPermission,
 } from "@workspace/platform/desktop";
 import type { DesktopPermissionState } from "@workspace/platform/desktop-bridge";
@@ -26,6 +27,31 @@ export function useDesktopAccessibilityPermission(enabled: boolean) {
 	const [isRequesting, setIsRequesting] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
 	const operationSequenceRef = React.useRef(0);
+	const runAction = React.useCallback(
+		async (
+			action: () => ReturnType<typeof getDesktopPermissionsStatus>,
+			fallbackError: string,
+		) => {
+			const sequence = ++operationSequenceRef.current;
+			setError(null);
+			setIsRequesting(true);
+			try {
+				const status = await action();
+				if (sequence === operationSequenceRef.current) {
+					setState(getAccessibilityState(status));
+				}
+			} catch (cause) {
+				if (sequence === operationSequenceRef.current) {
+					setError(getErrorMessage(cause, fallbackError));
+				}
+			} finally {
+				if (sequence === operationSequenceRef.current) {
+					setIsRequesting(false);
+				}
+			}
+		},
+		[],
+	);
 
 	const refresh = React.useCallback(() => {
 		const sequence = ++operationSequenceRef.current;
@@ -55,25 +81,23 @@ export function useDesktopAccessibilityPermission(enabled: boolean) {
 		};
 	}, [enabled, refresh]);
 
-	const request = React.useCallback(async () => {
-		const sequence = ++operationSequenceRef.current;
-		setError(null);
-		setIsRequesting(true);
-		try {
-			const status = await requestDesktopPermission("accessibility");
-			if (sequence === operationSequenceRef.current) {
-				setState(getAccessibilityState(status));
-			}
-		} catch (cause) {
-			if (sequence === operationSequenceRef.current) {
-				setError(
-					getErrorMessage(cause, "Could not open Accessibility settings."),
-				);
-			}
-		} finally {
-			setIsRequesting(false);
-		}
-	}, []);
+	const request = React.useCallback(
+		async () =>
+			await runAction(
+				() => requestDesktopPermission("accessibility"),
+				"Could not open Accessibility settings.",
+			),
+		[runAction],
+	);
 
-	return { error, isLoaded, isRequesting, request, state };
+	const openSettings = React.useCallback(
+		async () =>
+			await runAction(async () => {
+				await openDesktopPermissionSettings("accessibility");
+				return await getDesktopPermissionsStatus();
+			}, "Could not open Accessibility settings."),
+		[runAction],
+	);
+
+	return { error, isLoaded, isRequesting, openSettings, request, state };
 }

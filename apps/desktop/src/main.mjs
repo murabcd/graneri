@@ -19,6 +19,7 @@ import {
 	session,
 	shell,
 	systemPreferences,
+	utilityProcess,
 } from "electron";
 import electronUpdater from "electron-updater";
 import {
@@ -78,6 +79,7 @@ import {
 	serializeError,
 	stopDesktopFileLogging,
 } from "./logger.mjs";
+import { createMacOSAccessibilityPermission } from "./macos-accessibility-permission.mjs";
 import { createMeetChromeSpeakerAttribution } from "./meet-chrome-speaker-attribution.mjs";
 import { createMeetingDetection } from "./meeting-detection.mjs";
 import { createNativeAudioCapture } from "./native-audio-capture.mjs";
@@ -491,6 +493,12 @@ const globalDictation = createGlobalDictation({
 	transcribeDictationAudio,
 });
 let meetingDetection = null;
+const macOSAccessibilityPermission = createMacOSAccessibilityPermission({
+	forkUtilityProcess: (modulePath, args, options) =>
+		utilityProcess.fork(modulePath, args, options),
+	workerPath: join(runtimeDir, "macos-accessibility-permission-process.cjs"),
+});
+const isAccessibilityTrusted = () => macOSAccessibilityPermission.getCached();
 const getMeetingDetectionState = () =>
 	requireDesktopService(
 		meetingDetection,
@@ -1953,7 +1961,9 @@ meetingDetection = createMeetingDetection({
 
 const accessibilityGuide = createAccessibilityGuide({
 	app,
+	checkAccessibilityTrusted: macOSAccessibilityPermission.check,
 	getNavigationUrl,
+	isAccessibilityTrusted,
 	preloadPath: join(runtimeDir, "preload.cjs"),
 	runtimeDir,
 	shell,
@@ -2067,8 +2077,8 @@ const getSystemAudioPermission = () => {
 	};
 };
 
-const getAccessibilityPermission = () => {
-	const isGranted = systemPreferences.isTrustedAccessibilityClient(false);
+const getAccessibilityPermission = async () => {
+	const isGranted = await macOSAccessibilityPermission.check();
 	return {
 		id: "accessibility",
 		description: "Graneri uses meeting controls to identify speakers by name.",
@@ -2079,13 +2089,15 @@ const getAccessibilityPermission = () => {
 	};
 };
 
-const getPermissionsStatus = () => ({
+const getPermissionsStatus = async () => ({
 	isDesktop: true,
 	platform: process.platform,
 	permissions: [
 		getMicrophonePermission(),
 		getSystemAudioPermission(),
-		...(process.platform === "darwin" ? [getAccessibilityPermission()] : []),
+		...(process.platform === "darwin"
+			? [await getAccessibilityPermission()]
+			: []),
 	],
 });
 
@@ -2157,7 +2169,7 @@ const setDictationHotkeyMode = async (mode) => {
 const requestPermission = async (permissionId) => {
 	if (permissionId === "accessibility") {
 		await accessibilityGuide.open();
-		return getPermissionsStatus();
+		return await getPermissionsStatus();
 	}
 
 	if (permissionId === "systemAudio") {
@@ -2187,7 +2199,7 @@ const requestPermission = async (permissionId) => {
 		}
 
 		refreshTranscriptionPolicy();
-		return getPermissionsStatus();
+		return await getPermissionsStatus();
 	}
 
 	if (permissionId !== "microphone") {
@@ -2202,7 +2214,7 @@ const requestPermission = async (permissionId) => {
 	}
 
 	refreshTranscriptionPolicy();
-	return getPermissionsStatus();
+	return await getPermissionsStatus();
 };
 
 const openPermissionSettings = async (permissionId) => {
@@ -2367,8 +2379,9 @@ registerDesktopInvokeHandler("authFetch", async (_event, request) => {
 	});
 });
 
-registerDesktopInvokeHandler("getPermissionsStatus", () =>
-	getPermissionsStatus(),
+registerDesktopInvokeHandler(
+	"getPermissionsStatus",
+	async () => await getPermissionsStatus(),
 );
 
 registerDesktopInvokeHandler("getTranscriptionSessionState", async () => {
