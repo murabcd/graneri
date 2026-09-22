@@ -438,7 +438,6 @@ const useNoteComposerController = ({
 				typeof value === "function" ? value(selectedRecipeSlug) : value;
 			setDraftMetadata(nextValue ? { selectedRecipeSlug: nextValue } : null);
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[selectedRecipeSlug, setDraftMetadata],
 	);
 	const rootRef = React.useRef<HTMLDivElement>(null);
@@ -882,7 +881,6 @@ const useNoteComposerController = ({
 		}
 
 		setRightSidebarWidthOverride(activeSidebarWidthOverride);
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [activeSidebarWidthOverride, isMobile, setRightSidebarWidthOverride]);
 	React.useEffect(() => {
 		if (!isMobile) {
@@ -890,7 +888,6 @@ const useNoteComposerController = ({
 		}
 
 		setRightSidebarWidthMobileOverride(activeSidebarWidthOverride);
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		activeSidebarWidthOverride,
 		isMobile,
@@ -1001,7 +998,6 @@ const useNoteComposerController = ({
 		) {
 			setSelectedRecipeSlug(null);
 		}
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [recipes, selectedRecipeSlug, setSelectedRecipeSlug]);
 
 	React.useEffect(
@@ -1022,7 +1018,6 @@ const useNoteComposerController = ({
 		}
 
 		previousSpeechListeningRef.current = isCurrentNoteSpeechListening;
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [closeRightSidebar, isCurrentNoteSpeechListening, setPanelMode]);
 
 	React.useEffect(() => {
@@ -1033,7 +1028,6 @@ const useNoteComposerController = ({
 		if (!isRightSidebarOpen && panelMode === "chat") {
 			setPanelMode(null);
 		}
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [isRightSidebarOpen, panelMode, presentationMode, setPanelMode]);
 
 	React.useEffect(() => {
@@ -1061,7 +1055,6 @@ const useNoteComposerController = ({
 			window.clearTimeout(immediateTimeoutId);
 			window.clearTimeout(delayedTimeoutId);
 		};
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [panelMode, shouldShowInlinePanel]);
 
 	React.useEffect(() => {
@@ -1090,7 +1083,6 @@ const useNoteComposerController = ({
 		return () => {
 			document.removeEventListener("pointerdown", handlePointerDown);
 		};
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [panelMode, setPanelMode, shouldShowInlinePanel]);
 
 	React.useEffect(() => {
@@ -1099,7 +1091,6 @@ const useNoteComposerController = ({
 		}
 
 		closeComposerPopovers();
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [closeComposerPopovers, panelMode, presentationMode]);
 
 	const openDraftChat = React.useCallback(() => {
@@ -1118,7 +1109,6 @@ const useNoteComposerController = ({
 		}
 
 		openRightSidebar(presentationMode);
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		closeComposerPopovers,
 		handleStop,
@@ -1303,7 +1293,6 @@ const useNoteComposerController = ({
 						: "Failed to prepare note chat request",
 				);
 			}
-			// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		},
 		[
 			claimAttachedFilesSnapshot,
@@ -1371,7 +1360,6 @@ const useNoteComposerController = ({
 			resizeTextarea();
 			requestComposerFocus();
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			handleStop,
 			canStop,
@@ -1984,7 +1972,37 @@ const syncRecipePickerOpenRefs = ({
 	openRef.current = isOpen;
 };
 
-// react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap footer adapter owns recipe suggestions, editor focus, and submit controls for one popover.
+type ChatInlinePopoverFooterProps = {
+	composerEditorRef: React.RefObject<HTMLDivElement | null>;
+	composerPlaceholder: string;
+	handleComposerFocus: () => void;
+	handleComposerPointerDown: () => void;
+	handleComposerKeyDown: (event: ComposerKeyboardEvent) => void;
+	handleComposerValueChange: (nextValue: string) => void;
+	onResume: () => void;
+	onStop: () => void;
+	status: ChatInlinePopoverStatus;
+	editingMessageId: string | null;
+	message: string;
+	selectedRecipe: RecipePrompt | null;
+	attachedFiles: ChatAttachment[];
+	onAttachedFilesChange: React.Dispatch<React.SetStateAction<ChatAttachment[]>>;
+	onRecipePopoverOpenChange: (open: boolean) => void;
+	onRecipeSelect: (recipeSlug: RecipeSlug | null) => void;
+	onModelPopoverOpenChange: (open: boolean) => void;
+	onSelectedModelChange: (model: ChatModel) => void;
+	onReasoningEffortChange: (value: ReasoningEffort) => void;
+	onServiceTierChange: (value: ServiceTier) => void;
+	suppressRecipePickerUntilUserActionRef: React.MutableRefObject<boolean>;
+	recipePopoverOpen: boolean;
+	recipes: RecipePrompt[];
+	modelPopoverOpen: boolean;
+	selectedModel: ChatModel;
+	reasoningEffort: ReasoningEffort;
+	serviceTier: ServiceTier;
+	speechControls: React.ReactNode;
+};
+
 function ChatInlinePopoverFooter({
 	composerEditorRef,
 	composerPlaceholder,
@@ -2014,36 +2032,7 @@ function ChatInlinePopoverFooter({
 	reasoningEffort,
 	serviceTier,
 	speechControls,
-}: {
-	composerEditorRef: React.RefObject<HTMLDivElement | null>;
-	composerPlaceholder: string;
-	handleComposerFocus: () => void;
-	handleComposerPointerDown: () => void;
-	handleComposerKeyDown: (event: ComposerKeyboardEvent) => void;
-	handleComposerValueChange: (nextValue: string) => void;
-	onResume: () => void;
-	onStop: () => void;
-	status: ChatInlinePopoverStatus;
-	editingMessageId: string | null;
-	message: string;
-	selectedRecipe: RecipePrompt | null;
-	attachedFiles: ChatAttachment[];
-	onAttachedFilesChange: React.Dispatch<React.SetStateAction<ChatAttachment[]>>;
-	onRecipePopoverOpenChange: (open: boolean) => void;
-	onRecipeSelect: (recipeSlug: RecipeSlug | null) => void;
-	onModelPopoverOpenChange: (open: boolean) => void;
-	onSelectedModelChange: (model: ChatModel) => void;
-	onReasoningEffortChange: (value: ReasoningEffort) => void;
-	onServiceTierChange: (value: ServiceTier) => void;
-	suppressRecipePickerUntilUserActionRef: React.MutableRefObject<boolean>;
-	recipePopoverOpen: boolean;
-	recipes: RecipePrompt[];
-	modelPopoverOpen: boolean;
-	selectedModel: ChatModel;
-	reasoningEffort: ReasoningEffort;
-	serviceTier: ServiceTier;
-	speechControls: React.ReactNode;
-}) {
+}: ChatInlinePopoverFooterProps) {
 	const {
 		activateInlineOnFocus,
 		isRecipeLoading,
@@ -2062,6 +2051,194 @@ function ChatInlinePopoverFooter({
 		isChatLoading,
 		isResumingQueuedFollowUps,
 	});
+	const {
+		activeMentionQuery,
+		composerEditor,
+		filteredRecipes,
+		handleRecipeSelect,
+		recipePickerPosition,
+		selectedRecipeIndex,
+		selectRecipeIndex,
+	} = useChatInlineRecipeEditor({
+		activateInlineOnFocus,
+		composerPlaceholder,
+		handleComposerFocus,
+		handleComposerKeyDown,
+		handleComposerPointerDown,
+		handleComposerValueChange,
+		editingMessageId,
+		message,
+		onRecipePopoverOpenChange,
+		onRecipeSelect,
+		recipePopoverOpen,
+		recipes,
+		selectedRecipe,
+		suppressRecipePickerUntilUserActionRef,
+	});
+	const handleAttachmentUploadFailed = React.useCallback(
+		(id: string) => {
+			onAttachedFilesChange((files) => files.filter((file) => file.id !== id));
+		},
+		[onAttachedFilesChange],
+	);
+	const handleAttachmentUploaded = React.useCallback(
+		(id: string, uploadedFile: FileUIPart) => {
+			onAttachedFilesChange((files) =>
+				files.map((file) =>
+					completeMatchingAttachmentUpload(file, id, uploadedFile),
+				),
+			);
+		},
+		[onAttachedFilesChange],
+	);
+	const handleAttachmentsAdded = React.useCallback(
+		(files: ChatAttachment[]) => {
+			onAttachedFilesChange((currentFiles) => [...currentFiles, ...files]);
+		},
+		[onAttachedFilesChange],
+	);
+	const handleInputGroupPointerDown = React.useCallback(
+		(event: React.PointerEvent<HTMLDivElement>) => {
+			if (!activateInlineOnFocus) {
+				return;
+			}
+
+			const target = event.target;
+			if (
+				target instanceof HTMLElement &&
+				target.closest(
+					"button, a[href], input, select, textarea, [role='button'], [data-slot='dropdown-menu-content'], [data-slot='select-content']",
+				)
+			) {
+				return;
+			}
+
+			handleComposerPointerDown();
+		},
+		[activateInlineOnFocus, handleComposerPointerDown],
+	);
+	React.useEffect(() => {
+		if (!activateInlineOnFocus) {
+			return;
+		}
+
+		const composerEditorElement = composerEditorRef.current;
+		if (!composerEditorElement) {
+			return;
+		}
+
+		const handlePointerDown = (event: PointerEvent) => {
+			event.preventDefault();
+			event.stopPropagation();
+			handleComposerPointerDown();
+		};
+
+		composerEditorElement.addEventListener("pointerdown", handlePointerDown, {
+			capture: true,
+		});
+
+		return () => {
+			composerEditorElement.removeEventListener(
+				"pointerdown",
+				handlePointerDown,
+				{
+					capture: true,
+				},
+			);
+		};
+	}, [activateInlineOnFocus, composerEditorRef, handleComposerPointerDown]);
+	const attachmentDropzone = useFileAttachmentDropzone({
+		disabled: isChatLoading,
+		onFileUploadFailed: handleAttachmentUploadFailed,
+		onFileUploaded: handleAttachmentUploaded,
+		onFilesAdded: handleAttachmentsAdded,
+	});
+	return (
+		<>
+			<InputGroup
+				data-drag-over={attachmentDropzone.isDragOver ? "true" : undefined}
+				className={NOTE_COMPOSER_FOOTER_SURFACE_CLASS}
+				{...attachmentDropzone.dropzoneProps}
+				onPointerDown={handleInputGroupPointerDown}
+			>
+				<ChatInlineAttachmentRow
+					attachedFiles={attachedFiles}
+					isSidebarCompact={isSidebarCompact}
+					onAttachedFilesChange={onAttachedFilesChange}
+				/>
+				<ChatInlineEditorField
+					activateInlineOnFocus={activateInlineOnFocus}
+					composerEditor={composerEditor}
+					composerEditorRef={composerEditorRef}
+					handleComposerFocus={handleComposerFocus}
+					handleComposerPointerDown={handleComposerPointerDown}
+					isSidebarCompact={isSidebarCompact}
+				/>
+				<ChatInlineComposerControls
+					handleAttachmentUploadFailed={handleAttachmentUploadFailed}
+					handleAttachmentUploaded={handleAttachmentUploaded}
+					handleAttachmentsAdded={handleAttachmentsAdded}
+					modelPopoverOpen={modelPopoverOpen}
+					onModelPopoverOpenChange={onModelPopoverOpenChange}
+					onReasoningEffortChange={onReasoningEffortChange}
+					onResume={onResume}
+					onSelectedModelChange={onSelectedModelChange}
+					onServiceTierChange={onServiceTierChange}
+					onStop={onStop}
+					primaryAction={primaryAction}
+					reasoningEffort={reasoningEffort}
+					selectedModel={selectedModel}
+					serviceTier={serviceTier}
+					speechControls={speechControls}
+					status={status}
+					submitDisabled={submitDisabled}
+				/>
+			</InputGroup>
+			<NoteRecipeMentionPicker
+				open={recipePopoverOpen}
+				position={recipePickerPosition}
+				recipes={filteredRecipes}
+				selectedIndex={selectedRecipeIndex}
+				onSelectedIndexChange={selectRecipeIndex}
+				isRecipeLoading={isRecipeLoading}
+				emptyStateMessage={getRecipePickerEmptyStateMessage(activeMentionQuery)}
+				onSelectRecipe={handleRecipeSelect}
+			/>
+		</>
+	);
+}
+
+function useChatInlineRecipeEditor({
+	activateInlineOnFocus,
+	composerPlaceholder,
+	handleComposerFocus,
+	handleComposerKeyDown,
+	handleComposerPointerDown,
+	handleComposerValueChange,
+	editingMessageId,
+	message,
+	onRecipePopoverOpenChange,
+	onRecipeSelect,
+	recipePopoverOpen,
+	recipes,
+	selectedRecipe,
+	suppressRecipePickerUntilUserActionRef,
+}: Pick<
+	ChatInlinePopoverFooterProps,
+	| "composerPlaceholder"
+	| "handleComposerFocus"
+	| "handleComposerKeyDown"
+	| "handleComposerPointerDown"
+	| "handleComposerValueChange"
+	| "editingMessageId"
+	| "message"
+	| "onRecipePopoverOpenChange"
+	| "onRecipeSelect"
+	| "recipePopoverOpen"
+	| "recipes"
+	| "selectedRecipe"
+	| "suppressRecipePickerUntilUserActionRef"
+> & { activateInlineOnFocus: boolean }) {
 	const activeMentionRangeRef = React.useRef<Range | null>(null);
 	const filteredRecipesRef = React.useRef<RecipePrompt[]>(recipes);
 	const handleRecipeSelectRef = React.useRef<(recipeSlug: RecipeSlug) => void>(
@@ -2364,137 +2541,16 @@ function ChatInlinePopoverFooter({
 	React.useEffect(() => {
 		handleRecipeSelectRef.current = handleRecipeSelect;
 	}, [handleRecipeSelect]);
-	const handleAttachmentUploadFailed = React.useCallback(
-		(id: string) => {
-			onAttachedFilesChange((files) => files.filter((file) => file.id !== id));
-		},
-		[onAttachedFilesChange],
-	);
-	const handleAttachmentUploaded = React.useCallback(
-		(id: string, uploadedFile: FileUIPart) => {
-			onAttachedFilesChange((files) =>
-				files.map((file) =>
-					completeMatchingAttachmentUpload(file, id, uploadedFile),
-				),
-			);
-		},
-		[onAttachedFilesChange],
-	);
-	const handleAttachmentsAdded = React.useCallback(
-		(files: ChatAttachment[]) => {
-			onAttachedFilesChange((currentFiles) => [...currentFiles, ...files]);
-		},
-		[onAttachedFilesChange],
-	);
-	const handleInputGroupPointerDown = React.useCallback(
-		(event: React.PointerEvent<HTMLDivElement>) => {
-			if (!activateInlineOnFocus) {
-				return;
-			}
 
-			const target = event.target;
-			if (
-				target instanceof HTMLElement &&
-				target.closest(
-					"button, a[href], input, select, textarea, [role='button'], [data-slot='dropdown-menu-content'], [data-slot='select-content']",
-				)
-			) {
-				return;
-			}
-
-			handleComposerPointerDown();
-		},
-		[activateInlineOnFocus, handleComposerPointerDown],
-	);
-	React.useEffect(() => {
-		if (!activateInlineOnFocus) {
-			return;
-		}
-
-		const composerEditorElement = composerEditorRef.current;
-		if (!composerEditorElement) {
-			return;
-		}
-
-		const handlePointerDown = (event: PointerEvent) => {
-			event.preventDefault();
-			event.stopPropagation();
-			handleComposerPointerDown();
-		};
-
-		composerEditorElement.addEventListener("pointerdown", handlePointerDown, {
-			capture: true,
-		});
-
-		return () => {
-			composerEditorElement.removeEventListener(
-				"pointerdown",
-				handlePointerDown,
-				{
-					capture: true,
-				},
-			);
-		};
-	}, [activateInlineOnFocus, composerEditorRef, handleComposerPointerDown]);
-	const attachmentDropzone = useFileAttachmentDropzone({
-		disabled: isChatLoading,
-		onFileUploadFailed: handleAttachmentUploadFailed,
-		onFileUploaded: handleAttachmentUploaded,
-		onFilesAdded: handleAttachmentsAdded,
-	});
-	return (
-		<>
-			<InputGroup
-				data-drag-over={attachmentDropzone.isDragOver ? "true" : undefined}
-				className={NOTE_COMPOSER_FOOTER_SURFACE_CLASS}
-				{...attachmentDropzone.dropzoneProps}
-				onPointerDown={handleInputGroupPointerDown}
-			>
-				<ChatInlineAttachmentRow
-					attachedFiles={attachedFiles}
-					isSidebarCompact={isSidebarCompact}
-					onAttachedFilesChange={onAttachedFilesChange}
-				/>
-				<ChatInlineEditorField
-					activateInlineOnFocus={activateInlineOnFocus}
-					composerEditor={composerEditor}
-					composerEditorRef={composerEditorRef}
-					handleComposerFocus={handleComposerFocus}
-					handleComposerPointerDown={handleComposerPointerDown}
-					isSidebarCompact={isSidebarCompact}
-				/>
-				<ChatInlineComposerControls
-					handleAttachmentUploadFailed={handleAttachmentUploadFailed}
-					handleAttachmentUploaded={handleAttachmentUploaded}
-					handleAttachmentsAdded={handleAttachmentsAdded}
-					modelPopoverOpen={modelPopoverOpen}
-					onModelPopoverOpenChange={onModelPopoverOpenChange}
-					onReasoningEffortChange={onReasoningEffortChange}
-					onResume={onResume}
-					onSelectedModelChange={onSelectedModelChange}
-					onServiceTierChange={onServiceTierChange}
-					onStop={onStop}
-					primaryAction={primaryAction}
-					reasoningEffort={reasoningEffort}
-					selectedModel={selectedModel}
-					serviceTier={serviceTier}
-					speechControls={speechControls}
-					status={status}
-					submitDisabled={submitDisabled}
-				/>
-			</InputGroup>
-			<NoteRecipeMentionPicker
-				open={recipePopoverOpen}
-				position={recipePickerPosition}
-				recipes={filteredRecipes}
-				selectedIndex={selectedRecipeIndex}
-				onSelectedIndexChange={selectRecipeIndex}
-				isRecipeLoading={isRecipeLoading}
-				emptyStateMessage={getRecipePickerEmptyStateMessage(activeMentionQuery)}
-				onSelectRecipe={handleRecipeSelect}
-			/>
-		</>
-	);
+	return {
+		activeMentionQuery,
+		composerEditor,
+		filteredRecipes,
+		handleRecipeSelect,
+		recipePickerPosition,
+		selectedRecipeIndex,
+		selectRecipeIndex,
+	};
 }
 
 function handleRecipePickerKeyDown({

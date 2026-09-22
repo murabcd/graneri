@@ -1,0 +1,38 @@
+.graneri-accessibility-arrow {
+	filter: drop-shadow(0 4px 7px #0000003b);
+	transform: translateY(-8px);
+}
+
+.graneri-accessibility-arrow-animated {
+	will-change: transform;
+	animation: graneri-accessibility-arrow-bounce 2.5s linear infinite;
+}
+
+@keyframes graneri-accessibility-arrow-bounce {
+	0%,
+	24%,
+	40%,
+	100% {
+		transform: translateY(-8px);
+	}
+	8%,
+	16% {
+		transform: translateY(-18px);
+	}
+	12% {
+		transform: translateY(-20px);
+	}
+	26%,
+	38% {
+		transform: translateY(-9px);
+	}
+	33% {
+		transform: translateY(-13px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graneri-accessibility-arrow-animated {
+		animation: none;
+	}
+}

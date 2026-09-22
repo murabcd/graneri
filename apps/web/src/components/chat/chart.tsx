@@ -1,9 +1,8 @@
 import { cn } from "cn";
 import * as React from "react";
+import type * as RechartsPrimitive from "recharts";
 import type { TooltipValueType } from "recharts";
-// This package exports chart primitives; callers decide whether to lazy-load chart surfaces.
-// react-doctor-disable-next-line react-doctor/prefer-dynamic-import -- the only runtime consumer is GeneratedChart, which is already loaded through React.lazy and import.meta.glob.
-import * as RechartsPrimitive from "recharts";
+import { rechartsPromise } from "./recharts-loader";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -55,6 +54,7 @@ function ChartContainer({
 		height: number;
 	};
 }) {
+	const { ResponsiveContainer } = React.use(rechartsPromise);
 	const uniqueId = React.useId();
 	const chartId = `chart-${id ?? uniqueId.replace(/:/g, "")}`;
 	const contextValue = React.useMemo(() => ({ config }), [config]);
@@ -71,11 +71,9 @@ function ChartContainer({
 				{...props}
 			>
 				<ChartStyle id={chartId} config={config} />
-				<RechartsPrimitive.ResponsiveContainer
-					initialDimension={initialDimension}
-				>
+				<ResponsiveContainer initialDimension={initialDimension}>
 					{children}
-				</RechartsPrimitive.ResponsiveContainer>
+				</ResponsiveContainer>
 			</div>
 		</ChartContext.Provider>
 	);
@@ -109,8 +107,6 @@ ${colorConfig
 
 	return <style>{style}</style>;
 };
-
-const ChartTooltip = RechartsPrimitive.Tooltip;
 
 function ChartTooltipContent({
 	active,
@@ -261,8 +257,6 @@ function ChartTooltipContent({
 	);
 }
 
-const ChartLegend = RechartsPrimitive.Legend;
-
 function ChartLegendContent({
 	className,
 	hideIcon = false,
@@ -357,11 +351,4 @@ function getPayloadConfigFromPayload(
 	return configLabelKey in config ? config[configLabelKey] : config[key];
 }
 
-export {
-	ChartContainer,
-	ChartLegend,
-	ChartLegendContent,
-	ChartStyle,
-	ChartTooltip,
-	ChartTooltipContent,
-};
+export { ChartContainer, ChartLegendContent, ChartStyle, ChartTooltipContent };

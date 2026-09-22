@@ -691,18 +691,7 @@ export function CreateAutomationDialog(props: CreateAutomationDialogProps) {
 	return useCreateAutomationDialogElement(dialogProps);
 }
 
-// react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap adapter owns one editor instance, its suggestion refs, and imperative synchronization.
-function AutomationPromptEditor({
-	id,
-	prompt,
-	mentions,
-	noteSources,
-	appSources,
-	isNotesLoading,
-	onMentionPickerOpen,
-	onPromptChange,
-	placeholder,
-}: {
+type AutomationPromptEditorProps = {
 	id: string;
 	prompt: string;
 	mentions: AutomationPromptMention[];
@@ -712,7 +701,12 @@ function AutomationPromptEditor({
 	onMentionPickerOpen: () => void;
 	onPromptChange: (value: string, mentions: AutomationPromptMention[]) => void;
 	placeholder: string;
-}) {
+};
+
+function useAutomationMentionPicker({
+	noteSources,
+	appSources,
+}: Pick<AutomationPromptEditorProps, "noteSources" | "appSources">) {
 	const editorRef = React.useRef<Editor | null>(null);
 	const mentionRangeRef = React.useRef<NoteMentionRange | null>(null);
 	const mentionTriggerRectRef = React.useRef<MentionPickerAnchorRect | null>(
@@ -720,7 +714,6 @@ function AutomationPromptEditor({
 	);
 	const allNoteSourcesRef = React.useRef(noteSources);
 	const allAppSourcesRef = React.useRef(appSources);
-	const visibleNoteSourcesRef = React.useRef<AutomationNoteSource[]>([]);
 	const visibleItemsRef = React.useRef<AutomationMentionPickerItem[]>([]);
 	const selectedIndexRef = React.useRef(0);
 	const popoverOpenRef = React.useRef(false);
@@ -756,18 +749,10 @@ function AutomationPromptEditor({
 	React.useEffect(() => {
 		allNoteSourcesRef.current = noteSources;
 		allAppSourcesRef.current = appSources;
-		visibleNoteSourcesRef.current = visibleNoteSources;
 		visibleItemsRef.current = visibleItems;
 		selectedIndexRef.current = selectedIndex;
 		popoverOpenRef.current = popoverOpen;
-	}, [
-		appSources,
-		noteSources,
-		popoverOpen,
-		selectedIndex,
-		visibleItems,
-		visibleNoteSources,
-	]);
+	}, [appSources, noteSources, popoverOpen, selectedIndex, visibleItems]);
 
 	const selectIndex = React.useCallback((index: number) => {
 		selectedIndexRef.current = index;
@@ -851,6 +836,69 @@ function AutomationPromptEditor({
 		);
 	}, [popoverOpen, visibleItems.length]);
 
+	return {
+		allAppSourcesRef,
+		allNoteSourcesRef,
+		closePicker,
+		editorRef,
+		handleKeyDown,
+		insertMention,
+		mentionRangeRef,
+		mentionTriggerRectRef,
+		popoverOpen,
+		popoverOpenRef,
+		position,
+		selectIndex,
+		selectedIndex,
+		setPopoverOpen,
+		setPosition,
+		setSearchTerm,
+		shouldSearchNotes,
+		visibleItems,
+		visibleItemsRef,
+		visibleNoteSources,
+		visibleToolSources,
+	};
+}
+
+function AutomationPromptEditor({
+	id,
+	prompt,
+	mentions,
+	noteSources,
+	appSources,
+	isNotesLoading,
+	onMentionPickerOpen,
+	onPromptChange,
+	placeholder,
+}: AutomationPromptEditorProps) {
+	const {
+		allAppSourcesRef,
+		allNoteSourcesRef,
+		closePicker,
+		editorRef,
+		handleKeyDown,
+		insertMention,
+		mentionRangeRef,
+		mentionTriggerRectRef,
+		popoverOpen,
+		popoverOpenRef,
+		position,
+		selectIndex,
+		selectedIndex,
+		setPopoverOpen,
+		setPosition,
+		setSearchTerm,
+		shouldSearchNotes,
+		visibleItems,
+		visibleItemsRef,
+		visibleNoteSources,
+		visibleToolSources,
+	} = useAutomationMentionPicker({
+		appSources,
+		noteSources,
+	});
+
 	const editor = useEditor({
 		extensions: [
 			...createPlainTextEditorExtensions(),
@@ -920,7 +968,6 @@ function AutomationPromptEditor({
 								})),
 							];
 							mentionRangeRef.current = range;
-							visibleNoteSourcesRef.current = nextNotes;
 							visibleItemsRef.current = nextItems;
 							setSearchTerm(() => query);
 							selectIndex(0);

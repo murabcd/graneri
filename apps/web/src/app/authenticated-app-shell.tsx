@@ -88,6 +88,7 @@ import { CreateAutomationDialogEntry } from "@/components/automations/create-aut
 import { OPEN_NEW_CALENDAR_EVENT } from "@/components/calendar/calendar-page-events";
 import { OPEN_CHAT_SUMMARY_EVENT } from "@/components/chat/chat-summary-events";
 import { optimisticPatchChat } from "@/components/chat/optimistic-patch-chat";
+import { AccessibilityPermissionPrompt } from "@/components/desktop/accessibility-permission-prompt";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { AppShellInset } from "@/components/layout/app-shell-inset";
 import {
@@ -485,7 +486,6 @@ const useAppShellState = ({
 				title,
 			});
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[resolvedCurrentNoteId],
 	);
 	const {
@@ -961,7 +961,6 @@ const useAppShellState = ({
 			});
 			pendingDesktopCalendarEvent.release();
 		}
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		currentRouteNoteId,
 		handleCreateNote,
@@ -981,7 +980,6 @@ const useAppShellState = ({
 			shouldAutoStart: shouldAutoStartNoteCapture,
 			triggerScheduledAutoStart,
 		});
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		clearScheduledAutoStart,
 		resolvedCurrentNoteId,
@@ -1061,7 +1059,6 @@ const useAppShellState = ({
 			setCurrentNoteCommentsOpener(null);
 			handleViewChange("home");
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[handleViewChange, resolvedCurrentNoteId, setCurrentNoteEditorActions],
 	);
 	const handleOpenChat = React.useCallback(
@@ -2197,9 +2194,23 @@ export function AuthenticatedAppShell({
 		handleNoteCommentsOpenChange,
 		handleOpenConnectionsSettings,
 	});
+	const now = Date.now();
+	const hasImminentMeeting = controller.upcomingCalendar.events.some(
+		(event) => {
+			const startAt = new Date(event.startAt).getTime();
+			const endAt = new Date(event.endAt).getTime();
+			return endAt > now && startAt < now + 10 * 60 * 1000;
+		},
+	);
+	const canOfferAccessibility =
+		controller.isDesktopMac &&
+		controller.currentView === "home" &&
+		!controller.settingsOpen &&
+		!hasImminentMeeting;
 
 	return (
 		<ActiveWorkspaceProvider workspaceId={controller.activeWorkspaceId}>
+			<AccessibilityPermissionPrompt enabled={canOfferAccessibility} />
 			{workspaces.map((workspace) => (
 				<QueuedChatRuntime key={workspace._id} workspaceId={workspace._id} />
 			))}

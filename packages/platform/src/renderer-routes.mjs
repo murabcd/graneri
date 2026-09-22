@@ -1,9 +1,12 @@
 export const rendererMeetingWidgetPathname = "/desktop/meeting-widget";
+export const rendererAccessibilityGuidePathname =
+	"/desktop/accessibility-guide";
 
 export const rendererRoutePrefixes = [
 	"/automations",
 	"/calendar",
 	"/chat",
+	rendererAccessibilityGuidePathname,
 	rendererMeetingWidgetPathname,
 	"/home",
 	"/inbox",

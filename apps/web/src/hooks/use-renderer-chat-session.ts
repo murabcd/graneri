@@ -312,7 +312,6 @@ export const useRendererChatSession = ({
 
 			return normalizeChatMessages(currentMessages);
 		});
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		activeRun,
 		activeAssistantMessageId,

@@ -1,6 +1,6 @@
-import type { GeneratedChartSpec } from "@workspace/ui/components/generated-chart";
 import type { UIMessage } from "ai";
 import { z } from "zod";
+import type { GeneratedChartSpec } from "@/components/chat/generated-chart";
 
 const chartDataValueSchema = z.union([z.string(), z.number()]);
 const chartKeySchema = z

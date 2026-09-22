@@ -26,6 +26,7 @@ import {
 	desktopIpcContract,
 	resolveDesktopIpcChannel,
 } from "../../../packages/platform/src/desktop-ipc-contract.ts";
+import { createAccessibilityGuide } from "./accessibility-guide.mjs";
 import { getDesktopAuthClient } from "./auth-client.mjs";
 import { createDesktopAppMenu } from "./desktop-app-menu.mjs";
 import {
@@ -1943,6 +1944,14 @@ meetingDetection = createMeetingDetection({
 	showMainWindow,
 });
 
+const accessibilityGuide = createAccessibilityGuide({
+	app,
+	getNavigationUrl,
+	preloadPath: join(runtimeDir, "preload.cjs"),
+	runtimeDir,
+	shell,
+});
+
 const handleDesktopAuthCallback = async (callbackUrl) => {
 	const incomingUrl = new URL(callbackUrl);
 	const oneTimeToken = incomingUrl.searchParams.get("ott");
@@ -2051,10 +2060,26 @@ const getSystemAudioPermission = () => {
 	};
 };
 
+const getAccessibilityPermission = () => {
+	const isGranted = systemPreferences.isTrustedAccessibilityClient(false);
+	return {
+		id: "accessibility",
+		description: "Graneri uses meeting controls to identify speakers by name.",
+		required: false,
+		state: isGranted ? "granted" : "prompt",
+		canRequest: !isGranted,
+		canOpenSystemSettings: true,
+	};
+};
+
 const getPermissionsStatus = () => ({
 	isDesktop: true,
 	platform: process.platform,
-	permissions: [getMicrophonePermission(), getSystemAudioPermission()],
+	permissions: [
+		getMicrophonePermission(),
+		getSystemAudioPermission(),
+		...(process.platform === "darwin" ? [getAccessibilityPermission()] : []),
+	],
 });
 
 const getDesktopPreferences = () => {
@@ -2123,6 +2148,11 @@ const setDictationHotkeyMode = async (mode) => {
 };
 
 const requestPermission = async (permissionId) => {
+	if (permissionId === "accessibility") {
+		await accessibilityGuide.open();
+		return getPermissionsStatus();
+	}
+
 	if (permissionId === "systemAudio") {
 		if (process.platform !== "darwin") {
 			throw new Error("Unsupported desktop permission.");
@@ -2169,6 +2199,11 @@ const requestPermission = async (permissionId) => {
 };
 
 const openPermissionSettings = async (permissionId) => {
+	if (permissionId === "accessibility") {
+		await accessibilityGuide.open();
+		return { ok: true };
+	}
+
 	if (permissionId === "systemAudio") {
 		if (process.platform !== "darwin") {
 			throw new Error("Unsupported desktop permission.");
@@ -2386,6 +2421,33 @@ registerDesktopInvokeHandler("dismissDetectedMeetingWidget", async () => {
 	dismissDetectedMeetingWidget();
 	return { ok: true };
 });
+
+registerDesktopInvokeHandler("dismissAccessibilityGuide", async () => {
+	await accessibilityGuide.stop();
+	return { ok: true };
+});
+
+registerDesktopInvokeHandler("getAccessibilityGuideAccentColor", (event) =>
+	accessibilityGuide.getAccentColor(event.sender),
+);
+
+registerDesktopSendHandler("notifyAccessibilityGuideReady", (event) => {
+	accessibilityGuide.markReady(event.sender);
+});
+
+registerDesktopSendHandler(
+	"startAccessibilityGuideDrag",
+	(event, dragImageDataUrl) => {
+		void accessibilityGuide
+			.startDrag(event.sender, dragImageDataUrl)
+			.catch((error) => {
+				logError({
+					error,
+					message: "Could not start the Accessibility app-bundle drag",
+				});
+			});
+	},
+);
 
 registerDesktopSendHandler("reportMeetingWidgetSize", (event, size) => {
 	if (!isMeetingWidgetSender(event.sender)) {
@@ -3003,6 +3065,7 @@ createDesktopBootOrchestrator({
 	startMeetingDetectionMonitors,
 	stopDesktopTranscriptionSession,
 	stopDesktopDiagnostics: () => desktopDiagnostics.stop(),
+	stopAccessibilityGuide: () => accessibilityGuide.stop(),
 	stopDesktopLogging: stopDesktopFileLogging,
 	stopGlobalDictation: () => globalDictation.stop(),
 	stopMeetingDetectionMonitors,

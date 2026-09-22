@@ -35,6 +35,7 @@ import { AuthScreen } from "@/app/auth-screen";
 import { AuthenticatedAppShell } from "@/app/authenticated-app-shell";
 import { getSharedNoteShareId, getThemeFireworkColors } from "@/app/location";
 import {
+	type DesktopOnboardingPermissionId,
 	type DesktopPermissionRow,
 	useDesktopPermissionsSession,
 } from "@/app/use-desktop-permissions-session";
@@ -50,7 +51,10 @@ import {
 } from "@/lib/workspaces";
 import { api } from "../../../convex/_generated/api";
 
-const DESKTOP_PERMISSION_BUTTON_LABELS: Record<DesktopPermissionId, string> = {
+const DESKTOP_PERMISSION_BUTTON_LABELS: Record<
+	DesktopOnboardingPermissionId,
+	string
+> = {
 	microphone: "Enable",
 	systemAudio: "Enable",
 };
@@ -867,11 +871,20 @@ const getDesktopPermissionTone = (state: DesktopPermissionState) => {
 	return "border-border bg-muted/40 text-muted-foreground";
 };
 
-const getDesktopPermissionIcon = (permissionId: DesktopPermissionId) =>
-	permissionId === "microphone" ? Mic : Volume2;
+const getDesktopPermissionIcon = (
+	permissionId: DesktopOnboardingPermissionId,
+) => {
+	switch (permissionId) {
+		case "microphone":
+			return Mic;
+		case "systemAudio":
+			return Volume2;
+	}
+};
 
-const getDesktopPermissionActionLabel = (permissionId: DesktopPermissionId) =>
-	DESKTOP_PERMISSION_BUTTON_LABELS[permissionId];
+const getDesktopPermissionActionLabel = (
+	permissionId: DesktopOnboardingPermissionId,
+) => DESKTOP_PERMISSION_BUTTON_LABELS[permissionId];
 
 const getDesktopPermissionStateLabel = (permission: DesktopPermissionRow) => {
 	if (permission.state === "granted") {
@@ -957,6 +970,9 @@ function DesktopPermissionsOnboardingScreen({
 									<div className="min-w-0 flex-1">
 										<p className="font-medium whitespace-nowrap">
 											{permission.label}
+										</p>
+										<p className="text-xs text-muted-foreground">
+											{permission.description}
 										</p>
 									</div>
 									{permission.state === "granted" ? (

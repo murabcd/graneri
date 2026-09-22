@@ -201,7 +201,6 @@ function useResizableSidePanel({
 				effectiveDesktopLeadingOffset,
 				effectiveDesktopTrailingOffset,
 			),
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			desktopMaxWidth,
 			effectiveDesktopLeadingOffset,
@@ -237,7 +236,6 @@ function useResizableSidePanel({
 
 			window.localStorage.setItem(storageKey, String(Math.round(width)));
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[storageKey],
 	);
 	const commitPanelWidth = React.useCallback((nextWidth: number) => {
@@ -293,7 +291,6 @@ function useResizableSidePanel({
 				effectiveDesktopLeadingOffset,
 				effectiveDesktopTrailingOffset,
 			),
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			effectiveDesktopLeadingOffset,
 			effectiveDesktopTrailingOffset,
@@ -368,7 +365,6 @@ function useResizableSidePanel({
 
 		// Panel width restores from localStorage and viewport bounds, which are external browser state.
 		setPanelWidth(clampPanelWidth(nextWidth, nextBounds));
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 	}, [
 		defaultDesktopWidth,
 		desktopMaxWidth,

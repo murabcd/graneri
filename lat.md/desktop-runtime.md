@@ -18,6 +18,23 @@ persisted app theme, including macOS appearance when the app theme is System.
 The overlay does not inspect screen pixels, so global dictation does not require
 Screen Recording permission.
 
+## Accessibility permission guide
+
+Electron owns the macOS Accessibility trust probe, System Settings guide window, and app-file drag operation.
+
+[accessibility-guide.mjs](../apps/desktop/src/accessibility-guide.mjs) opens the
+Privacy & Security > Accessibility pane and follows its foreground window using
+[SystemSettingsWindowCLI.swift](../apps/desktop/native/SystemSettingsWindowCLI.swift).
+The guide is a transparent, non-focusable 558 × 124 desktop window attached to
+the bottom of the Settings content pane. Its dedicated renderer signals that
+fonts and the app icon are ready before Electron shows it, and reads the native
+macOS accent color for the drag hint. Only that renderer may ask Electron to
+drag the current packaged `.app` bundle into Settings; a development Electron
+host must never be dragged as Graneri. Trust is polled
+through `systemPreferences.isTrustedAccessibilityClient(false)` and closes the
+guide when granted. Onboarding reads that same native trust state; opening
+Settings or rendering the guide alone never counts as permission success.
+
 ## Content security policy
 
 Packaged renderer documents restrict scripts and network origins to the explicit capabilities required at runtime.

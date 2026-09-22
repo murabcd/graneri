@@ -14,7 +14,7 @@ const GeneratedChartEntry = createComponentEntry(
 			GeneratedChart: React.ComponentType<{
 				spec: ChatChartArtifact;
 			}>;
-		}>("../../../../../packages/ui/src/components/generated-chart.tsx"),
+		}>("./generated-chart.tsx"),
 	),
 	(module) => module.GeneratedChart,
 );

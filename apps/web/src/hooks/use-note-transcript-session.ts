@@ -132,7 +132,6 @@ export const useNoteTranscriptSession = ({
 	const orderedTranscriptUtterances = React.useMemo(
 		() =>
 			mergeTranscriptUtterances(transcriptUtterances, scopedSnapshotUtterances),
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[scopedSnapshotUtterances, transcriptUtterances],
 	);
 
@@ -194,7 +193,6 @@ export const useNoteTranscriptSession = ({
 				liveTranscript,
 				orderedTranscriptUtterances,
 			}),
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[
 			currentNoteLatestTranscriptSession,
 			captureSession.listeningStartedAt,

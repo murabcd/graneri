@@ -1,4 +1,5 @@
 import {
+	isDesktopPlatform,
 	isDesktopRuntime,
 	openDesktopSoundSettings,
 } from "@workspace/platform/desktop";
@@ -28,6 +29,7 @@ import {
 	parseTranscriptionLanguageSelectValue,
 	TRANSCRIPTION_LANGUAGE_OPTIONS,
 } from "@/lib/transcription-languages";
+import { AccessibilityVoiceSetting } from "./accessibility-voice-setting";
 import { SettingsSwitchRow } from "./settings-switch-row";
 import { useDesktopVoiceSettings } from "./use-desktop-voice-settings";
 
@@ -118,6 +120,7 @@ export function VoiceSettings() {
 								</SelectContent>
 							</Select>
 						</Field>
+						{isDesktopPlatform("darwin") ? <AccessibilityVoiceSetting /> : null}
 						<SettingsSwitchRow
 							id="settings-hold-to-dictate-hotkey"
 							label="Hold-to-dictate hotkey"

@@ -42,6 +42,7 @@ export const createDesktopBootOrchestrator = ({
 	startMeetingDetectionMonitors,
 	stopDesktopTranscriptionSession,
 	stopDesktopDiagnostics,
+	stopAccessibilityGuide,
 	stopDesktopLogging,
 	stopGlobalDictation = async () => {},
 	stopMeetingDetectionMonitors,
@@ -68,6 +69,7 @@ export const createDesktopBootOrchestrator = ({
 	const stopDesktopRuntime = () => {
 		desktopRuntimeStopPromise ??= (async () => {
 			await runShutdownOperation("diagnostics", stopDesktopDiagnostics);
+			await runShutdownOperation("accessibility_guide", stopAccessibilityGuide);
 			await runShutdownOperation("transcription", () =>
 				stopDesktopTranscriptionSession({ reason: "shutdown" }),
 			);

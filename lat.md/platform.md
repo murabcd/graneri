@@ -21,6 +21,10 @@ method parity with that catalog, preload methods are derived from it, and the
 main process fails startup when a required handler is missing, duplicated, or
 unexpected. Desktop builds bundle the preload so the shared catalog does not
 become a packaged runtime dependency.
+The Accessibility guide exposes dismiss, native accent color, renderer-ready,
+and drag-start actions through the catalog. Electron accepts accent/ready/drag
+requests only from the guide window's own webContents, so the main renderer
+cannot initiate an app-file drag.
 Local capability methods follow the same exact catalog: load by renderer scope,
 authorize a typed path reference, open the native folder picker, and revoke.
 Their renderer-safe result is always an opaque `{ id, label }` descriptor.
@@ -52,3 +56,5 @@ Renderer route ownership lives in `packages/platform/src/renderer-routes.mjs`.
 The packaged desktop protocol must use that manifest to decide whether an
 `app://ui` pathname is a renderer route. Desktop protocol code must not carry a
 private duplicate list of renderer route prefixes.
+The Accessibility guide is a dedicated packaged renderer route, not a normal
+application navigation destination.

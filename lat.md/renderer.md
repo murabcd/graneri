@@ -69,6 +69,18 @@ readiness, and onboarding completion. It consumes the narrow platform bridge
 and treats a missing bridge as a runtime error; it must not synthesize legacy
 permission rows. Native probing, prerequisite ordering, and permission error
 classification remain in Electron main behind IPC.
+On macOS, Accessibility is separate from the initial microphone/system-audio
+onboarding but required for named-speaker attribution. After onboarding,
+[[apps/web/src/components/desktop/accessibility-permission-prompt.tsx]] offers
+it on the home view when no recording or imminent meeting is active. A reminder
+dismissal is local, time-bounded, and never counts as permission. The native
+request opens System Settings, where
+[[apps/web/src/components/desktop/accessibility-guide-screen.tsx]] provides
+the draggable app bundle. The Voice settings entry at
+[[apps/web/src/components/settings/accessibility-voice-setting.tsx]] remains
+available after the home reminder stops appearing. The renderer does not inspect System Settings or
+infer trust from the guide's visibility; downstream speaker attribution must
+use the current native trust state.
 
 ## Chat interaction sessions
 

@@ -1,28 +1,12 @@
+import { cn } from "cn";
+import * as React from "react";
 import {
 	type ChartConfig,
 	ChartContainer,
-	ChartLegend,
 	ChartLegendContent,
-	ChartTooltip,
 	ChartTooltipContent,
-} from "@workspace/ui/components/chart";
-import { cn } from "cn";
-// Generated chart variants are UI primitives; route-level code owns lazy-loading policy.
-// react-doctor-disable-next-line react-doctor/prefer-dynamic-import -- ChatChartArtifacts loads this entire module through React.lazy and import.meta.glob.
-import {
-	Area,
-	AreaChart,
-	Bar,
-	BarChart,
-	CartesianGrid,
-	Cell,
-	Line,
-	LineChart,
-	Pie,
-	PieChart,
-	XAxis,
-	YAxis,
-} from "recharts";
+} from "./chart";
+import { rechartsPromise } from "./recharts-loader";
 
 const DEFAULT_COLORS = [
 	"var(--chart-1)",
@@ -96,6 +80,22 @@ export function GeneratedChart({
 }
 
 function GeneratedChartBody({ spec }: { spec: GeneratedChartSpec }) {
+	const {
+		Area,
+		AreaChart,
+		Bar,
+		BarChart,
+		CartesianGrid,
+		Cell,
+		Legend,
+		Line,
+		LineChart,
+		Pie,
+		PieChart,
+		Tooltip,
+		XAxis,
+		YAxis,
+	} = React.use(rechartsPromise);
 	switch (spec.chartType) {
 		case "area":
 			return (
@@ -103,8 +103,8 @@ function GeneratedChartBody({ spec }: { spec: GeneratedChartSpec }) {
 					<CartesianGrid vertical={false} />
 					<XAxis dataKey={spec.xKey} tickLine={false} axisLine={false} />
 					<YAxis tickLine={false} axisLine={false} width={36} />
-					<ChartTooltip content={<ChartTooltipContent />} />
-					<ChartLegend content={<ChartLegendContent />} />
+					<Tooltip content={<ChartTooltipContent />} />
+					<Legend content={<ChartLegendContent />} />
 					{spec.yKeys.map((key, index) => (
 						<Area
 							key={key}
@@ -125,8 +125,8 @@ function GeneratedChartBody({ spec }: { spec: GeneratedChartSpec }) {
 					<CartesianGrid vertical={false} />
 					<XAxis dataKey={spec.xKey} tickLine={false} axisLine={false} />
 					<YAxis tickLine={false} axisLine={false} width={36} />
-					<ChartTooltip content={<ChartTooltipContent />} />
-					<ChartLegend content={<ChartLegendContent />} />
+					<Tooltip content={<ChartTooltipContent />} />
+					<Legend content={<ChartLegendContent />} />
 					{spec.yKeys.map((key) => (
 						<Bar
 							key={key}
@@ -143,8 +143,8 @@ function GeneratedChartBody({ spec }: { spec: GeneratedChartSpec }) {
 					<CartesianGrid vertical={false} />
 					<XAxis dataKey={spec.xKey} tickLine={false} axisLine={false} />
 					<YAxis tickLine={false} axisLine={false} width={36} />
-					<ChartTooltip content={<ChartTooltipContent />} />
-					<ChartLegend content={<ChartLegendContent />} />
+					<Tooltip content={<ChartTooltipContent />} />
+					<Legend content={<ChartLegendContent />} />
 					{spec.yKeys.map((key) => (
 						<Line
 							key={key}
@@ -160,7 +160,7 @@ function GeneratedChartBody({ spec }: { spec: GeneratedChartSpec }) {
 		case "pie":
 			return (
 				<PieChart accessibilityLayer>
-					<ChartTooltip content={<ChartTooltipContent nameKey={spec.xKey} />} />
+					<Tooltip content={<ChartTooltipContent nameKey={spec.xKey} />} />
 					<Pie
 						data={spec.data}
 						dataKey={spec.yKeys[0]}
@@ -176,7 +176,7 @@ function GeneratedChartBody({ spec }: { spec: GeneratedChartSpec }) {
 							/>
 						))}
 					</Pie>
-					<ChartLegend content={<ChartLegendContent />} />
+					<Legend content={<ChartLegendContent />} />
 				</PieChart>
 			);
 	}

@@ -402,20 +402,7 @@ export function ChatComposer({
 	);
 }
 
-// react-doctor-disable-next-line react-doctor/no-giant-component -- cohesive Tiptap adapter owns one editor instance, its mention refs, and imperative draft synchronization.
-function ChatComposerTextEditor({
-	draft,
-	editingMessageId,
-	placeholder,
-	onCancelEdit,
-	onDraftChange,
-	onDraftKeyDown,
-	mentions,
-	noteMentions,
-	recipeMentions,
-	onMentionsChange,
-	appSources,
-}: {
+type ChatComposerTextEditorProps = {
 	draft: string;
 	editingMessageId?: string | null;
 	placeholder: string;
@@ -427,7 +414,26 @@ function ChatComposerTextEditor({
 	recipeMentions: ChatComposerMentionCatalog<ChatRecipeReceipt>;
 	onMentionsChange: (mentions: ChatComposerMention[]) => void;
 	appSources: AppSource[];
-}) {
+};
+
+function useChatComposerMentionPicker({
+	editingMessageId,
+	placeholder,
+	onCancelEdit,
+	mentions,
+	noteMentions,
+	recipeMentions,
+	appSources,
+}: Pick<
+	ChatComposerTextEditorProps,
+	| "editingMessageId"
+	| "placeholder"
+	| "onCancelEdit"
+	| "mentions"
+	| "noteMentions"
+	| "recipeMentions"
+	| "appSources"
+>) {
 	const mentionableDocuments = noteMentions.items;
 	const isNotesLoading = noteMentions.status === "loading";
 	const recipes = recipeMentions.items;
@@ -436,7 +442,6 @@ function ChatComposerTextEditor({
 	const mentionRangeRef = React.useRef<MentionRange | null>(null);
 	const composerEditorRef = React.useRef<Editor | null>(null);
 	const placeholderRef = React.useRef(placeholder);
-	const previousPlaceholderRef = React.useRef(placeholder);
 	const mentionPopoverOpenRef = React.useRef(false);
 	const allMentionDocumentsRef = React.useRef(mentionableDocuments);
 	const allAppSourcesRef = React.useRef(appSources);
@@ -641,6 +646,98 @@ function ChatComposerTextEditor({
 		onCancelEdit,
 	});
 
+	return {
+		allAppSourcesRef,
+		allMentionDocumentsRef,
+		allRecipesRef,
+		closeMentionPicker,
+		composerEditorRef,
+		handleAddMention,
+		handleAddRecipe,
+		handleAddTool,
+		handleSelectMentionPickerItem,
+		isNotesLoading,
+		isRecipesLoading,
+		mentionPopoverOpen,
+		mentionPopoverOpenRef,
+		mentionPickerPosition,
+		mentionRangeRef,
+		mentionsRef,
+		placeholderRef,
+		promptRef,
+		selectMentionIndex,
+		selectedMentionIndex,
+		selectedMentionIndexRef,
+		setDocumentSearchTerm,
+		setMentionPickerPosition,
+		setMentionPopoverOpen,
+		shouldSearchReferences,
+		visibleMentionDocuments,
+		visibleMentionDocumentsRef,
+		visibleMentionItems,
+		visibleMentionItemsRef,
+		visibleMentionRecipes,
+		visibleMentionRecipesRef,
+		visibleMentionTools,
+	};
+}
+
+function ChatComposerTextEditor({
+	draft,
+	editingMessageId,
+	placeholder,
+	onCancelEdit,
+	onDraftChange,
+	onDraftKeyDown,
+	mentions,
+	noteMentions,
+	recipeMentions,
+	onMentionsChange,
+	appSources,
+}: ChatComposerTextEditorProps) {
+	const {
+		allAppSourcesRef,
+		allMentionDocumentsRef,
+		allRecipesRef,
+		closeMentionPicker,
+		composerEditorRef,
+		handleAddMention,
+		handleAddRecipe,
+		handleAddTool,
+		handleSelectMentionPickerItem,
+		isNotesLoading,
+		isRecipesLoading,
+		mentionPopoverOpen,
+		mentionPopoverOpenRef,
+		mentionPickerPosition,
+		mentionRangeRef,
+		mentionsRef,
+		placeholderRef,
+		promptRef,
+		selectMentionIndex,
+		selectedMentionIndex,
+		selectedMentionIndexRef,
+		setDocumentSearchTerm,
+		setMentionPickerPosition,
+		setMentionPopoverOpen,
+		shouldSearchReferences,
+		visibleMentionDocuments,
+		visibleMentionDocumentsRef,
+		visibleMentionItems,
+		visibleMentionItemsRef,
+		visibleMentionRecipes,
+		visibleMentionRecipesRef,
+		visibleMentionTools,
+	} = useChatComposerMentionPicker({
+		appSources,
+		editingMessageId,
+		mentions,
+		noteMentions,
+		onCancelEdit,
+		placeholder,
+		recipeMentions,
+	});
+
 	const composerEditor = useEditor({
 		extensions: [
 			...createPlainTextEditorExtensions(),
@@ -814,71 +911,13 @@ function ChatComposerTextEditor({
 		},
 	});
 
-	React.useEffect(() => {
-		if (!composerEditor) {
-			return;
-		}
-
-		if (previousPlaceholderRef.current === placeholder) {
-			return;
-		}
-
-		previousPlaceholderRef.current = placeholder;
-		// Placeholder updates are ProseMirror transaction metadata, not React-derived state.
-		composerEditor.view.dispatch(
-			// Placeholder updates are ProseMirror transaction metadata, not React-derived state.
-			composerEditor.state.tr.setMeta("addToHistory", false),
-		);
-	}, [composerEditor, placeholder]);
-
-	React.useEffect(() => {
-		if (!composerEditor) {
-			return;
-		}
-
-		// Tiptap keeps draft text in ProseMirror state; React cannot derive this snapshot in render.
-		const currentText = composerEditor.getText({ blockSeparator: "\n" });
-		if (
-			currentText === draft &&
-			// Mention nodes are embedded in ProseMirror JSON, so this guard must read editor state.
-			getChatComposerMentions(composerEditor.getJSON()).length ===
-				mentions.length
-		) {
-			return;
-		}
-
-		if (composerEditor.isFocused && draft && !editingMessageId) {
-			return;
-		}
-
-		// External draft changes must be pushed through Tiptap's imperative content command.
-		composerEditor.commands.setContent(
-			createChatComposerDocument(draft, mentions),
-			{
-				emitUpdate: false,
-			},
-		);
-	}, [composerEditor, draft, editingMessageId, mentions]);
-	React.useEffect(() => {
-		if (!composerEditor) {
-			return;
-		}
-
-		const activeElement = document.activeElement;
-		const isEditableElement =
-			activeElement instanceof HTMLElement &&
-			(activeElement instanceof HTMLInputElement ||
-				activeElement instanceof HTMLTextAreaElement ||
-				activeElement instanceof HTMLSelectElement ||
-				activeElement.isContentEditable);
-
-		if (isEditableElement) {
-			return;
-		}
-
-		// Initial focus is an imperative editor command after mount, not derived React state.
-		composerEditor.commands.focus("end", { scrollIntoView: false });
-	}, [composerEditor]);
+	useChatComposerEditorSync({
+		composerEditor,
+		draft,
+		editingMessageId,
+		mentions,
+		placeholder,
+	});
 
 	return (
 		<>
@@ -911,6 +950,75 @@ function ChatComposerTextEditor({
 			/>
 		</>
 	);
+}
+
+function useChatComposerEditorSync({
+	composerEditor,
+	draft,
+	editingMessageId,
+	mentions,
+	placeholder,
+}: {
+	composerEditor: Editor | null;
+	draft: string;
+	editingMessageId: string | null | undefined;
+	mentions: ChatComposerMention[];
+	placeholder: string;
+}) {
+	const previousPlaceholderRef = React.useRef(placeholder);
+	React.useEffect(() => {
+		if (!composerEditor || previousPlaceholderRef.current === placeholder) {
+			return;
+		}
+
+		previousPlaceholderRef.current = placeholder;
+		// Placeholder updates are ProseMirror transaction metadata, not React-derived state.
+		composerEditor.view.dispatch(
+			composerEditor.state.tr.setMeta("addToHistory", false),
+		);
+	}, [composerEditor, placeholder]);
+
+	React.useEffect(() => {
+		if (!composerEditor) {
+			return;
+		}
+
+		// Tiptap keeps draft text and mention nodes in ProseMirror state.
+		const currentText = composerEditor.getText({ blockSeparator: "\n" });
+		if (
+			currentText === draft &&
+			getChatComposerMentions(composerEditor.getJSON()).length ===
+				mentions.length
+		) {
+			return;
+		}
+
+		if (composerEditor.isFocused && draft && !editingMessageId) {
+			return;
+		}
+
+		composerEditor.commands.setContent(
+			createChatComposerDocument(draft, mentions),
+			{ emitUpdate: false },
+		);
+	}, [composerEditor, draft, editingMessageId, mentions]);
+
+	React.useEffect(() => {
+		if (!composerEditor) {
+			return;
+		}
+
+		const activeElement = document.activeElement;
+		const isEditableElement =
+			activeElement instanceof HTMLElement &&
+			(activeElement instanceof HTMLInputElement ||
+				activeElement instanceof HTMLTextAreaElement ||
+				activeElement instanceof HTMLSelectElement ||
+				activeElement.isContentEditable);
+		if (!isEditableElement) {
+			composerEditor.commands.focus("end", { scrollIntoView: false });
+		}
+	}, [composerEditor]);
 }
 
 function handleMentionPickerKeyDown({

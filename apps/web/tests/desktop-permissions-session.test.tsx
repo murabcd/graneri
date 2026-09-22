@@ -7,9 +7,11 @@ import {
 } from "@/app/use-desktop-permissions-session";
 
 const createStatus = ({
+	accessibility = "prompt",
 	microphone = "granted",
 	systemAudio = "granted",
 }: {
+	accessibility?: "granted" | "prompt";
 	microphone?: "blocked" | "granted" | "prompt";
 	systemAudio?: "blocked" | "granted" | "prompt" | "unsupported";
 } = {}): DesktopPermissionsStatus => ({
@@ -31,6 +33,14 @@ const createStatus = ({
 			state: systemAudio,
 			canRequest: systemAudio === "prompt",
 			canOpenSystemSettings: systemAudio === "blocked",
+		},
+		{
+			id: "accessibility",
+			description: "Named speaker access",
+			required: false,
+			state: accessibility,
+			canRequest: accessibility === "prompt",
+			canOpenSystemSettings: true,
 		},
 	],
 });
@@ -80,6 +90,8 @@ describe("useDesktopPermissionsSession", () => {
 		);
 
 		await waitFor(() => expect(result.current.isReady).toBe(true));
+		expect(result.current.permissionRows).toHaveLength(2);
+		expect(result.current.status?.permissions[2]?.state).toBe("prompt");
 	});
 
 	test("preserves the last status when a permission request fails", async () => {

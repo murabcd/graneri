@@ -7,7 +7,10 @@ import {
 	setDesktopNativeTheme,
 } from "@workspace/platform/desktop";
 import type { DesktopThemeSource } from "@workspace/platform/desktop-bridge";
-import { rendererMeetingWidgetPathname } from "@workspace/platform/renderer-routes";
+import {
+	rendererAccessibilityGuidePathname,
+	rendererMeetingWidgetPathname,
+} from "@workspace/platform/renderer-routes";
 import { Toaster } from "@workspace/ui/components/sonner";
 import {
 	ThemeProvider,
@@ -16,6 +19,7 @@ import {
 import { ScrollRailVisibilityProvider } from "@workspace/ui/lib/scroll-rail";
 import { logError } from "@/lib/logger";
 import App from "./App.tsx";
+import { AccessibilityGuideScreen } from "./components/desktop/accessibility-guide-screen";
 import { MeetingWidgetScreen } from "./components/desktop/meeting-widget-screen";
 import { initializeAuthClient } from "./lib/auth-client";
 import { initializeConvexClient } from "./lib/convex";
@@ -62,6 +66,18 @@ function DesktopNativeThemeSync() {
 }
 
 async function bootstrap() {
+	if (window.location.pathname === rendererAccessibilityGuidePathname) {
+		root.render(
+			<StrictMode>
+				<ThemeProvider>
+					<DesktopNativeThemeSync />
+					<AccessibilityGuideScreen />
+				</ThemeProvider>
+			</StrictMode>,
+		);
+		return;
+	}
+
 	if (isMeetingWidgetRoute()) {
 		root.render(
 			<StrictMode>

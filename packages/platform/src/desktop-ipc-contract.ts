@@ -13,6 +13,9 @@ export const desktopIpcContract = Object.freeze({
 		consumeTrayCalendarEvent: "app:consume-tray-calendar-event",
 		detachTranscriptionSystemAudio: "app:detach-transcription-system-audio",
 		dismissDetectedMeetingWidget: "app:dismiss-detected-meeting-widget",
+		dismissAccessibilityGuide: "app:dismiss-accessibility-guide",
+		getAccessibilityGuideAccentColor:
+			"app:get-accessibility-guide-accent-color",
 		authorizeLocalCapabilitySession: "app:authorize-local-capability-session",
 		getAuthCallbackUrl: "app:get-auth-callback-url",
 		getMeetingDetectionState: "app:get-meeting-detection-state",
@@ -57,6 +60,8 @@ export const desktopIpcContract = Object.freeze({
 	}),
 	send: freezeChannels({
 		reportMeetingWidgetSize: "app:report-meeting-widget-size",
+		notifyAccessibilityGuideReady: "app:accessibility-guide-ready",
+		startAccessibilityGuideDrag: "app:start-accessibility-guide-drag",
 	}),
 	subscribe: freezeChannels({
 		onAppCommand: "app:app-command",

@@ -719,7 +719,6 @@ const useChatPageController = ({
 			);
 			setAttachedFiles(messageDraft.attachments);
 		},
-		// react-doctor-disable-next-line react-doctor/exhaustive-deps -- canonical derived dependency is listed; its source values drive the same render.
 		[canStop, handleStop, setAttachedFiles, setDraft, setDraftMetadata],
 	);
 
@@ -964,7 +963,6 @@ function ChatPageComposer({
 	);
 }
 
-// react-doctor-disable-next-line react-doctor/no-giant-component -- page-level orchestrator coordinates chat search, history, composer, and summary surfaces around one controller.
 export function ChatPage({
 	chatId,
 	pluginPrefill,

@@ -10,8 +10,15 @@ import type {
 } from "@workspace/platform/desktop-bridge";
 import * as React from "react";
 
+const onboardingPermissionIds = [
+	"microphone",
+	"systemAudio",
+] as const satisfies readonly DesktopPermissionId[];
+export type DesktopOnboardingPermissionId =
+	(typeof onboardingPermissionIds)[number];
+
 export type DesktopPermissionRow = {
-	id: DesktopPermissionId;
+	id: DesktopOnboardingPermissionId;
 	description: string;
 	label: string;
 	state: DesktopPermissionState;
@@ -71,10 +78,21 @@ const DEFAULT_DEPENDENCIES: DesktopPermissionsSessionDependencies = {
 	request: requestDesktopPermission,
 };
 
-const DESKTOP_PERMISSION_LABELS: Record<DesktopPermissionId, string> = {
-	microphone: "Transcribe me",
-	systemAudio: "Transcribe others",
-};
+const DESKTOP_PERMISSION_LABELS: Record<DesktopOnboardingPermissionId, string> =
+	{
+		microphone: "Transcribe me",
+		systemAudio: "Transcribe others",
+	};
+
+type DesktopOnboardingPermissionStatus =
+	DesktopPermissionsStatus["permissions"][number] & {
+		id: DesktopOnboardingPermissionId;
+	};
+
+const isOnboardingPermission = (
+	permission: DesktopPermissionsStatus["permissions"][number],
+): permission is DesktopOnboardingPermissionStatus =>
+	onboardingPermissionIds.some((id) => id === permission.id);
 
 const desktopPermissionsSessionReducer = (
 	state: DesktopPermissionsSessionState,
@@ -280,10 +298,12 @@ export const useDesktopPermissionsSession = ({
 
 	const permissionRows: DesktopPermissionRow[] = (
 		state.status?.permissions ?? []
-	).map((permission) => ({
-		...permission,
-		label: DESKTOP_PERMISSION_LABELS[permission.id],
-	}));
+	)
+		.filter(isOnboardingPermission)
+		.map((permission) => ({
+			...permission,
+			label: DESKTOP_PERMISSION_LABELS[permission.id],
+		}));
 	const requiredPermissionRows = permissionRows.filter(
 		(permission) => permission.required,
 	);

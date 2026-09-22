@@ -69,6 +69,13 @@ const helpers = [
 		],
 	},
 	{
+		outputFile: resolve(outDir, "graneri-system-settings-window-helper"),
+		sourceFiles: [
+			resolve(packageRoot, "native", "LineEventIO.swift"),
+			resolve(packageRoot, "native", "SystemSettingsWindowCLI.swift"),
+		],
+	},
+	{
 		outputFile: resolve(outDir, "graneri-global-dictation-hotkey-helper"),
 		sourceFiles: [
 			resolve(packageRoot, "native", "LineEventIO.swift"),

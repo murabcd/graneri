@@ -1,7 +1,10 @@
 import type { LocalCapabilitySession } from "@workspace/ai/local-capability-session";
 import type { CalendarEventPayload } from "./calendar-event-navigation.mjs";
 
-export type DesktopPermissionId = "microphone" | "systemAudio";
+export type DesktopPermissionId =
+	| "microphone"
+	| "systemAudio"
+	| "accessibility";
 export type DesktopPermissionState =
 	| "granted"
 	| "prompt"
@@ -281,6 +284,10 @@ export interface GraneriDesktopBridge {
 	openPermissionSettings: (
 		permissionId: DesktopPermissionId,
 	) => Promise<{ ok: boolean }>;
+	dismissAccessibilityGuide: () => Promise<{ ok: boolean }>;
+	getAccessibilityGuideAccentColor: () => Promise<string>;
+	notifyAccessibilityGuideReady: () => void;
+	startAccessibilityGuideDrag: (dragImageDataUrl: string) => void;
 	openSoundSettings: () => Promise<{ ok: boolean }>;
 	setLaunchAtLogin: (enabled: boolean) => Promise<DesktopPreferences>;
 	setKeepDictationBarVisible: (enabled: boolean) => Promise<DesktopPreferences>;

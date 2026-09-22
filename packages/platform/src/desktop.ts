@@ -272,6 +272,23 @@ export const dismissDesktopDetectedMeetingWidget = async () => {
 	return true;
 };
 
+export const dismissDesktopAccessibilityGuide = async () => {
+	await getRequiredDesktopBridge().dismissAccessibilityGuide();
+};
+
+export const getDesktopAccessibilityGuideAccentColor = async () =>
+	await getRequiredDesktopBridge().getAccessibilityGuideAccentColor();
+
+export const notifyDesktopAccessibilityGuideReady = () => {
+	getRequiredDesktopBridge().notifyAccessibilityGuideReady();
+};
+
+export const startDesktopAccessibilityGuideDrag = (
+	dragImageDataUrl: string,
+) => {
+	getRequiredDesktopBridge().startAccessibilityGuideDrag(dragImageDataUrl);
+};
+
 export const startDesktopDetectedMeetingNote = async () => {
 	const bridge = getDesktopBridge();
 
