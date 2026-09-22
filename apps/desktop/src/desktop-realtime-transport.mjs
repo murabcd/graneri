@@ -11,7 +11,9 @@ import { logError, logInfo } from "./logger.mjs";
 
 const desktopRealtimeConnectTimeoutMs = 10_000;
 const desktopRealtimePendingAudioChunkLimit = 50;
-const desktopRealtimeManualCommitIntervalMs = 2_500;
+const desktopRealtimeSpeechRmsThreshold = 0.001;
+const desktopRealtimeSpeechPauseMs = 800;
+const desktopRealtimeMaxTurnMs = 30_000;
 const desktopRealtimeStopFlushTimeoutMs = 1_500;
 const desktopRealtimeStopFlushSettleTimeoutMs = 750;
 
@@ -85,13 +87,11 @@ export const createDesktopRealtimeTransport = ({
 		}, desktopRealtimeStopFlushSettleTimeoutMs);
 	};
 
-	const clearManualCommitTimer = (session) => {
-		if (!session.manualCommitTimeoutId) {
-			return;
-		}
-
-		clearTimeout(session.manualCommitTimeoutId);
-		session.manualCommitTimeoutId = null;
+	const clearTurnCommitTimers = (session) => {
+		clearTimeout(session.speechPauseTimeoutId);
+		clearTimeout(session.maxTurnTimeoutId);
+		session.speechPauseTimeoutId = null;
+		session.maxTurnTimeoutId = null;
 	};
 
 	const commitAudioBuffer = (session) => {
@@ -120,15 +120,14 @@ export const createDesktopRealtimeTransport = ({
 			session.audioBatcher.takePendingCommitInterval(),
 		);
 		session.hasPendingAudioCommit = false;
-		clearManualCommitTimer(session);
+		clearTurnCommitTimers(session);
 
 		return true;
 	};
 
-	const scheduleManualCommit = (session) => {
+	const scheduleTurnCommit = (session, rms) => {
 		if (
 			session.isClosing ||
-			session.manualCommitTimeoutId ||
 			session.socket.readyState !== WebSocketImpl.OPEN ||
 			(!session.hasPendingAudioCommit &&
 				!session.audioBatcher.hasBufferedAudio())
@@ -136,10 +135,18 @@ export const createDesktopRealtimeTransport = ({
 			return;
 		}
 
-		session.manualCommitTimeoutId = setTimeout(() => {
-			session.manualCommitTimeoutId = null;
+		session.maxTurnTimeoutId ??= setTimeout(() => {
 			commitAudioBuffer(session);
-		}, desktopRealtimeManualCommitIntervalMs);
+		}, desktopRealtimeMaxTurnMs);
+
+		if (rms < desktopRealtimeSpeechRmsThreshold) {
+			return;
+		}
+
+		clearTimeout(session.speechPauseTimeoutId);
+		session.speechPauseTimeoutId = setTimeout(() => {
+			commitAudioBuffer(session);
+		}, desktopRealtimeSpeechPauseMs);
 	};
 
 	const notifyStopFlushEvent = (session, transportEvent) => {
@@ -208,7 +215,7 @@ export const createDesktopRealtimeTransport = ({
 					session.audioBatcher.takePendingCommitInterval(),
 				);
 				session.hasPendingAudioCommit = false;
-				clearManualCommitTimer(session);
+				clearTurnCommitTimers(session);
 				settleStopFlush(session);
 			} catch (error) {
 				logError({
@@ -232,7 +239,7 @@ export const createDesktopRealtimeTransport = ({
 		}
 
 		sessions.delete(speaker);
-		clearManualCommitTimer(session);
+		clearTurnCommitTimers(session);
 		clearTimeout(session.openTimeout);
 		await flushOnStop(session, getLiveItemId);
 		session.unsubscribeCapture?.();
@@ -344,7 +351,8 @@ export const createDesktopRealtimeTransport = ({
 				hasPendingAudioCommit: false,
 				inFlightCommitIntervals: [],
 				isClosing: false,
-				manualCommitTimeoutId: null,
+				maxTurnTimeoutId: null,
+				speechPauseTimeoutId: null,
 				openTimeout: setTimeout(() => {
 					if (didResolve) {
 						return;
@@ -388,9 +396,9 @@ export const createDesktopRealtimeTransport = ({
 
 				for (const pendingAudio of session.pendingAudio) {
 					appendAudioToBatch(session, pendingAudio);
+					scheduleTurnCommit(session, pendingAudio.rms);
 				}
 				session.pendingAudio = [];
-				scheduleManualCommit(session);
 			};
 
 			const finalizeStartError = (error) => {
@@ -441,7 +449,7 @@ export const createDesktopRealtimeTransport = ({
 					}
 
 					if (socket.readyState !== WebSocketImpl.OPEN) {
-						session.pendingAudio.push({ audio, capturedAt });
+						session.pendingAudio.push({ audio, capturedAt, rms });
 						session.audioDiagnostics.queuedChunks += 1;
 						if (
 							session.pendingAudio.length >
@@ -464,7 +472,7 @@ export const createDesktopRealtimeTransport = ({
 							speaker,
 						});
 					}
-					scheduleManualCommit(session);
+					scheduleTurnCommit(session, rms);
 					return;
 				}
 
@@ -564,7 +572,7 @@ export const createDesktopRealtimeTransport = ({
 				clearTimeout(session.openTimeout);
 				session.unsubscribeCapture?.();
 				session.unsubscribeCapture = null;
-				clearManualCommitTimer(session);
+				clearTurnCommitTimers(session);
 
 				const reason = Buffer.isBuffer(reasonBuffer)
 					? reasonBuffer.toString("utf8")

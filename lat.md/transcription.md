@@ -100,14 +100,17 @@ disabled, even if its persisted visibility preference remains enabled.
 
 ## Session rollover and audio commit
 
-Long-lived capture schedules rollover and explicitly commits only non-empty native audio buffers.
+Long-lived capture schedules rollover and commits native audio at speech pauses, with a bounded maximum turn length.
 
 Desktop realtime transcription is a long-lived native capture session. Starting
 the microphone transport must schedule the realtime session rollover, and
 the native transport must explicitly commit non-empty OpenAI input audio
-buffers during live capture. Empty-buffer commits are not a valid path; they
-create recoverable-looking OpenAI errors that can collapse into start/stop
-loops.
+buffers during live capture. It streams 100 ms audio batches continuously,
+commits after a sustained pause in microphone or system audio, and caps a
+continuous turn at 30 seconds. This avoids the former 2.5-second fixed commit
+cutting through speech while still bounding buffered audio and ensuring a final
+commit on stop. Empty-buffer commits are not a valid path; they create
+recoverable-looking OpenAI errors that can collapse into start/stop loops.
 
 ## Per-speaker runtime
 

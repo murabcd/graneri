@@ -162,37 +162,97 @@ test("desktop realtime transport skips stop flush without a live item", async ()
 	});
 });
 
-test("desktop realtime transport manually commits live audio", async () => {
+for (const { source, speaker } of [
+	{ source: "microphone", speaker: "you" },
+	{ source: "systemAudio", speaker: "them" },
+]) {
+	test(`desktop realtime transport commits ${source} after a pause, not during speech`, async (context) => {
+		await withDarwinPlatform(async () => {
+			context.mock.timers.enable({ apis: ["setTimeout"] });
+			try {
+				let captureListener = null;
+				const transport = createTransport({
+					subscribeToCaptureEvents: (_source, listener) => {
+						captureListener = listener;
+						return () => {};
+					},
+					WebSocketImpl: MockWebSocket,
+				});
+				await transport.start({ lang: "en", source, speaker });
+
+				const speech = createPcm16Base64(
+					Array.from({ length: 4_800 }, () => 12_000),
+				);
+				for (let index = 0; index < 30; index += 1) {
+					captureListener({ type: "chunk", pcm16: speech });
+					context.mock.timers.tick(100);
+				}
+				assert.equal(
+					MockWebSocket.instances[0].sent.some(
+						(value) => JSON.parse(value).type === "input_audio_buffer.commit",
+					),
+					false,
+				);
+
+				const silence = createPcm16Base64(
+					Array.from({ length: 4_800 }, () => 0),
+				);
+				for (let index = 0; index < 10; index += 1) {
+					captureListener({ type: "chunk", pcm16: silence });
+					context.mock.timers.tick(100);
+				}
+				assert.equal(
+					MockWebSocket.instances[0].sent.some(
+						(value) => JSON.parse(value).type === "input_audio_buffer.append",
+					),
+					true,
+				);
+				assert.equal(
+					MockWebSocket.instances[0].sent.filter(
+						(value) => JSON.parse(value).type === "input_audio_buffer.commit",
+					).length,
+					1,
+				);
+			} finally {
+				context.mock.timers.reset();
+			}
+		});
+	});
+}
+
+test("desktop realtime transport bounds an uninterrupted speech turn", async (context) => {
 	await withDarwinPlatform(async () => {
-		let captureListener = null;
-		const transport = createTransport({
-			subscribeToCaptureEvents: (_source, listener) => {
-				captureListener = listener;
-				return () => {};
-			},
-			WebSocketImpl: MockWebSocket,
-		});
-
-		await transport.start({
-			lang: "en",
-			source: "microphone",
-			speaker: "you",
-		});
-
-		captureListener({
-			type: "chunk",
-			pcm16: createPcm16Base64([12_000, 12_000, 12_000, 12_000]),
-		});
-		await sleep(2_600);
-		await transport.stop("you", {
-			getLiveItemId: () => null,
-		});
-
-		assert.equal(MockWebSocket.instances.length, 1);
-		assert.deepEqual(
-			MockWebSocket.instances[0].sent.map((value) => JSON.parse(value).type),
-			["input_audio_buffer.append", "input_audio_buffer.commit"],
-		);
+		context.mock.timers.enable({ apis: ["setTimeout"] });
+		try {
+			let captureListener = null;
+			const transport = createTransport({
+				subscribeToCaptureEvents: (_source, listener) => {
+					captureListener = listener;
+					return () => {};
+				},
+				WebSocketImpl: MockWebSocket,
+			});
+			await transport.start({
+				lang: "en",
+				source: "systemAudio",
+				speaker: "them",
+			});
+			const speech = createPcm16Base64(
+				Array.from({ length: 4_800 }, () => 12_000),
+			);
+			for (let index = 0; index < 310; index += 1) {
+				captureListener({ type: "chunk", pcm16: speech });
+				context.mock.timers.tick(100);
+			}
+			assert.equal(
+				MockWebSocket.instances[0].sent.filter(
+					(value) => JSON.parse(value).type === "input_audio_buffer.commit",
+				).length,
+				1,
+			);
+		} finally {
+			context.mock.timers.reset();
+		}
 	});
 });
 
