@@ -47,6 +47,7 @@ export function createDesktopTranscriptionRuntime({
 	onLiveTranscriptChanged,
 	onTransportInterrupted,
 	onUtterance,
+	resolveSpeakerName,
 }) {
 	const speakers = {
 		them: createSpeakerRuntime("them"),
@@ -94,10 +95,20 @@ export function createDesktopTranscriptionRuntime({
 			const shouldEmit = !nextTurn.failed && text && !isPlaceholder;
 
 			if (shouldEmit) {
+				const speakerName =
+					speaker === "them" &&
+					nextTurn.startedAt != null &&
+					nextTurn.endedAt != null
+						? resolveSpeakerName({
+								startedAt: nextTurn.startedAt,
+								endedAt: nextTurn.endedAt,
+							})
+						: null;
 				onUtterance({
 					endedAt: nextTurn.endedAt ?? Date.now(),
 					id: `${runtime.sessionId ?? "session"}:${speaker}:${nextTurn.itemId}`,
 					speaker,
+					...(speakerName && { speakerName }),
 					startedAt: nextTurn.startedAt ?? Date.now(),
 					text,
 				});

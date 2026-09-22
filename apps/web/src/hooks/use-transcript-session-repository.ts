@@ -50,6 +50,7 @@ const toTranscriptUtteranceInput = (
 ) => ({
 	utteranceId: utterance.id,
 	speaker: utterance.speaker,
+	...(utterance.speakerName && { speakerName: utterance.speakerName }),
 	source,
 	text: utterance.text,
 	startedAt: utterance.startedAt,
@@ -170,6 +171,7 @@ export const useTranscriptSessionRepository = (
 			utterances: transcriptUtterancePagination.results.map((utterance) => ({
 				id: utterance.utteranceId,
 				speaker: utterance.speaker,
+				...(utterance.speakerName && { speakerName: utterance.speakerName }),
 				text: utterance.text,
 				startedAt: utterance.startedAt,
 				endedAt: utterance.endedAt,

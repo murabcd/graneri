@@ -171,6 +171,68 @@ test("completeSession stores utterance transcript sections when no final text is
 	);
 });
 
+test("named Meet speakers survive storage and canonical transcript generation", async () => {
+	const { asOwner, noteId, t } = await createNoteFixture();
+	const sessionId = await asOwner.mutation(
+		api.transcriptSessions.startSession,
+		{
+			noteId,
+			transcriptionLanguage: null,
+		},
+	);
+	for (const [index, speakerName] of ["Alex Morgan", " Sam Lee "].entries()) {
+		await asOwner.mutation(api.transcriptSessions.appendUtterance, {
+			sessionId,
+			utterance: {
+				utteranceId: `named-${index}`,
+				speaker: "them",
+				speakerName,
+				source: "live",
+				text: `Line ${index + 1}`,
+				startedAt: 1_000 + index * 1_000,
+				endedAt: 1_500 + index * 1_000,
+			},
+		});
+	}
+	await asOwner.mutation(api.transcriptSessions.completeSession, { sessionId });
+	const document = await getSessionDocument(t, sessionId);
+	const utterances = await asOwner.query(
+		api.transcriptSessions.listUtterances,
+		{
+			sessionId,
+			paginationOpts: { cursor: null, numItems: 10 },
+		},
+	);
+	expect(utterances.page.map((utterance) => utterance.speakerName)).toEqual([
+		"Alex Morgan",
+		"Sam Lee",
+	]);
+	expect(document?.text).toBe("Alex Morgan: Line 1\n\nSam Lee: Line 2");
+});
+
+test("rejects a named local speaker at the persistence boundary", async () => {
+	const { asOwner, noteId } = await createNoteFixture();
+	const sessionId = await asOwner.mutation(
+		api.transcriptSessions.startSession,
+		{ noteId, transcriptionLanguage: null },
+	);
+
+	await expect(
+		asOwner.mutation(api.transcriptSessions.appendUtterance, {
+			sessionId,
+			utterance: {
+				utteranceId: "invalid-self-name",
+				speaker: "you",
+				speakerName: "Alex Morgan",
+				source: "live",
+				text: "Local speech",
+				startedAt: 1_000,
+				endedAt: 1_500,
+			},
+		}),
+	).rejects.toThrow("Invalid named speaker.");
+});
+
 test("completeSession stores readable dynamic transcript sections", async () => {
 	const { asOwner, noteId, t } = await createNoteFixture();
 	const sessionId = await asOwner.mutation(

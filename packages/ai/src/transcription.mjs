@@ -87,6 +87,9 @@ export const shouldAppendTranscriptUtteranceToSection = ({
 	if (section.speaker !== utterance.speaker) {
 		return false;
 	}
+	if (section.speakerName !== utterance.speakerName) {
+		return false;
+	}
 
 	const sectionEmbeddedSpeaker = getTranscriptEmbeddedSpeaker(section.text);
 	const utteranceEmbeddedSpeaker = getTranscriptEmbeddedSpeaker(utterance.text);
@@ -133,6 +136,9 @@ export const createTranscriptTextSections = (utterances = []) => {
 			endedAt: Number(rawUtterance.endedAt),
 			id: utteranceId,
 			speaker: String(rawUtterance.speaker),
+			...(rawUtterance.speakerName && {
+				speakerName: rawUtterance.speakerName,
+			}),
 			startedAt: Number(rawUtterance.startedAt),
 			text,
 		};
@@ -164,6 +170,7 @@ export const createTranscriptTextSections = (utterances = []) => {
 			endedAt: utterance.endedAt,
 			id: utterance.id,
 			speaker: utterance.speaker,
+			...(utterance.speakerName && { speakerName: utterance.speakerName }),
 			startedAt: utterance.startedAt,
 			text: utterance.text,
 			utteranceIds: [utterance.id],
@@ -186,7 +193,7 @@ export const createTranscriptBlocksText = (
 			}
 
 			return [
-				`${getTranscriptSpeakerLabel(section.speaker, speakerLabels)}: ${text}`,
+				`${section.speakerName?.trim() || getTranscriptSpeakerLabel(section.speaker, speakerLabels)}: ${text}`,
 			];
 		})
 		.join("\n\n")

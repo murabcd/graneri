@@ -31,6 +31,7 @@ export type TranscriptRecoveryStatus = {
 export type TranscriptUtterance = {
 	id: string;
 	speaker: TranscriptSpeaker;
+	speakerName?: string;
 	text: string;
 	startedAt: number;
 	endedAt: number;
@@ -43,6 +44,7 @@ type TranscriptDisplayEntry = {
 	isProvisional: boolean;
 	liveText?: string;
 	speaker: TranscriptSpeaker;
+	speakerName?: string;
 	startedAt: number;
 	endedAt: number;
 	text: string;
@@ -149,7 +151,9 @@ export const formatTranscriptElapsed = (elapsedMs: number) => {
 };
 
 export const createTranscriptBlocksText = (
-	entries: Array<Pick<TranscriptDisplayEntry, "speaker" | "text">>,
+	entries: Array<
+		Pick<TranscriptDisplayEntry, "speaker" | "speakerName" | "text">
+	>,
 ) =>
 	createSharedTranscriptBlocksText(entries, {
 		speakerLabels: STATIC_TRANSCRIPT_SPEAKER_LABELS,
@@ -159,7 +163,9 @@ export const createTranscriptExportText = ({
 	entries,
 	startedAt,
 }: {
-	entries: Array<Pick<TranscriptDisplayEntry, "speaker" | "text">>;
+	entries: Array<
+		Pick<TranscriptDisplayEntry, "speaker" | "speakerName" | "text">
+	>;
 	startedAt?: number | null;
 }) => {
 	const body = createTranscriptBlocksText(entries);
@@ -219,6 +225,7 @@ export const createTranscriptDisplayEntries = ({
 			isLive: false,
 			isProvisional: false,
 			speaker: section.speaker as TranscriptSpeaker,
+			...(section.speakerName && { speakerName: section.speakerName }),
 			startedAt: section.startedAt,
 			text: section.text,
 			utteranceIds: section.utteranceIds,
@@ -239,6 +246,9 @@ export const createTranscriptDisplayEntries = ({
 					endedAt: previousEntry.endedAt,
 					id: previousEntry.id,
 					speaker: previousEntry.speaker,
+					...(previousEntry.speakerName && {
+						speakerName: previousEntry.speakerName,
+					}),
 					startedAt: previousEntry.startedAt,
 					text: previousEntry.text,
 					utteranceIds: previousEntry.utteranceIds,

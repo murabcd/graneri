@@ -2,9 +2,43 @@ import { describe, expect, it } from "vitest";
 import {
 	createEmptyLiveTranscriptState,
 	createTranscriptDisplayEntries,
+	createTranscriptExportText,
 } from "../src/lib/transcript";
 
 describe("transcript display entries", () => {
+	it("keeps different named speakers separate in the view and export", () => {
+		const entries = createTranscriptDisplayEntries({
+			liveTranscript: createEmptyLiveTranscriptState(),
+			utterances: [
+				{
+					id: "alex",
+					speaker: "them",
+					speakerName: "Alex Morgan",
+					text: "First thought",
+					startedAt: 1_000,
+					endedAt: 2_000,
+				},
+				{
+					id: "sam",
+					speaker: "them",
+					speakerName: "Sam Lee",
+					text: "Second thought",
+					startedAt: 3_000,
+					endedAt: 4_000,
+				},
+			],
+		});
+		expect(
+			entries.map(({ speakerName, text }) => ({ speakerName, text })),
+		).toEqual([
+			{ speakerName: "Alex Morgan", text: "First thought" },
+			{ speakerName: "Sam Lee", text: "Second thought" },
+		]);
+		expect(createTranscriptExportText({ entries })).toBe(
+			"Alex Morgan: First thought\n\nSam Lee: Second thought",
+		);
+	});
+
 	it("starts a new same-speaker block after a period-ending chunk", () => {
 		expect(
 			createTranscriptDisplayEntries({

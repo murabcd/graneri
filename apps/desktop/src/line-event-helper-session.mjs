@@ -30,6 +30,7 @@ export const stopLineEventHelperSession = async (session) => {
 	}
 
 	session.isStopping = true;
+	session.cancelStart?.();
 
 	if (session.cleanupTimeout) {
 		clearTimeout(session.cleanupTimeout);
@@ -43,20 +44,35 @@ export const stopLineEventHelperSession = async (session) => {
 
 	await new Promise((resolvePromise) => {
 		let didFinalize = false;
+		let killTimeout;
 		const finalize = () => {
 			if (didFinalize) {
 				return;
 			}
 
 			didFinalize = true;
+			clearTimeout(killTimeout);
 			resolvePromise();
 		};
 
 		session.process.once("exit", finalize);
+		if (
+			session.process.exitCode !== null ||
+			session.process.signalCode !== null
+		) {
+			finalize();
+			return;
+		}
 		session.process.kill("SIGTERM");
+		if (didFinalize) {
+			return;
+		}
 
-		setTimeout(() => {
-			if (!session.process.killed) {
+		killTimeout = setTimeout(() => {
+			if (
+				session.process.exitCode === null &&
+				session.process.signalCode === null
+			) {
 				session.process.kill("SIGKILL");
 			}
 			finalize();
@@ -102,6 +118,11 @@ export const startLineEventHelperSession = async ({
 			child.kill("SIGKILL");
 		}, 5_000);
 		session = {
+			cancelStart: () => {
+				if (!didResolve) {
+					failStart(new Error(`${label} startup was cancelled.`));
+				}
+			},
 			cleanupTimeout: startupTimeout,
 			isStopping: false,
 			lineReader,

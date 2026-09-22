@@ -3,7 +3,7 @@ import {
 	paginationOptsValidator,
 	paginationResultValidator,
 } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -50,11 +50,26 @@ const transcriptSpeakerValidator = v.union(v.literal("you"), v.literal("them"));
 const transcriptUtteranceInputValidator = v.object({
 	utteranceId: v.string(),
 	speaker: transcriptSpeakerValidator,
+	speakerName: v.optional(v.string()),
 	source: v.union(v.literal("live"), v.literal("refined")),
 	text: v.string(),
 	startedAt: v.number(),
 	endedAt: v.number(),
 });
+
+const normalizeSpeakerName = (
+	utterance: Infer<typeof transcriptUtteranceInputValidator>,
+) => {
+	if (utterance.speakerName === undefined) {
+		return undefined;
+	}
+
+	const name = utterance.speakerName.trim();
+	if (utterance.speaker !== "them" || name.length === 0 || name.length > 120) {
+		throw new ConvexError("Invalid named speaker.");
+	}
+	return name;
+};
 
 const transcriptSessionHotFields = {
 	status: transcriptSessionStatusValidator,
@@ -88,6 +103,7 @@ const transcriptUtteranceFields = {
 	noteId: v.id("notes"),
 	utteranceId: v.string(),
 	speaker: transcriptSpeakerValidator,
+	speakerName: v.optional(v.string()),
 	source: v.union(v.literal("live"), v.literal("refined")),
 	text: v.string(),
 	startedAt: v.number(),
@@ -259,6 +275,7 @@ const createTranscriptText = (utterances: Doc<"transcriptUtterances">[]) =>
 			endedAt: utterance.endedAt,
 			id: utterance.utteranceId,
 			speaker: utterance.speaker,
+			...(utterance.speakerName && { speakerName: utterance.speakerName }),
 			startedAt: utterance.startedAt,
 			text: utterance.text,
 		})),
@@ -501,6 +518,7 @@ export const appendUtterance = mutation({
 			args.sessionId,
 		);
 		const text = args.utterance.text.trim();
+		const speakerName = normalizeSpeakerName(args.utterance);
 
 		if (!text) {
 			return null;
@@ -520,6 +538,7 @@ export const appendUtterance = mutation({
 		if (existing) {
 			await ctx.db.patch(existing._id, {
 				speaker: args.utterance.speaker,
+				speakerName,
 				source: args.utterance.source,
 				text,
 				startedAt: args.utterance.startedAt,
@@ -533,6 +552,7 @@ export const appendUtterance = mutation({
 				noteId: session.noteId,
 				utteranceId: args.utterance.utteranceId,
 				speaker: args.utterance.speaker,
+				...(speakerName && { speakerName }),
 				source: args.utterance.source,
 				text,
 				startedAt: args.utterance.startedAt,
@@ -744,6 +764,7 @@ export const replaceSpeakerUtterances = mutation({
 		const replacementUtterances = args.utterances
 			.map((utterance) => ({
 				...utterance,
+				speakerName: normalizeSpeakerName(utterance),
 				text: utterance.text.trim(),
 			}))
 			.filter((utterance) => utterance.text.length > 0);
@@ -760,6 +781,7 @@ export const replaceSpeakerUtterances = mutation({
 				noteId: session.noteId,
 				utteranceId: utterance.utteranceId,
 				speaker: utterance.speaker,
+				...(utterance.speakerName && { speakerName: utterance.speakerName }),
 				source: utterance.source,
 				text: utterance.text,
 				startedAt: utterance.startedAt,

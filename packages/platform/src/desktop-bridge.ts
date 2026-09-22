@@ -166,6 +166,7 @@ export type DesktopTranscriptionControllerState = {
 		endedAt: number;
 		id: string;
 		speaker: "you" | "them";
+		speakerName?: string;
 		startedAt: number;
 		text: string;
 	}>;
@@ -200,6 +201,7 @@ export type DesktopTranscriptDraft = {
 	utterances: Array<{
 		id: string;
 		speaker: "you" | "them";
+		speakerName?: string;
 		text: string;
 		startedAt: number;
 		endedAt: number;

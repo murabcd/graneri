@@ -89,6 +89,28 @@ describe("useTranscriptSessionRepository", () => {
 		expect(loadMoreMock).toHaveBeenCalledWith(50);
 	});
 
+	it("keeps a stored remote speaker name in the transcript snapshot", () => {
+		usePaginatedQueryMock.mockReturnValue({
+			results: [
+				{
+					...firstUtterance,
+					speaker: "them",
+					speakerName: "Alex Morgan",
+				},
+			],
+			status: "Exhausted",
+			loadMore: loadMoreMock,
+		});
+		const { result } = renderHook(() => useTranscriptSessionRepository(noteId));
+
+		expect(result.current.latestTranscriptSession?.utterances[0]).toMatchObject(
+			{
+				speaker: "them",
+				speakerName: "Alex Morgan",
+			},
+		);
+	});
+
 	it("drains active recovery pages before publishing a partial snapshot", async () => {
 		useQueryMock.mockReturnValue({ ...summary, status: "capturing" });
 		const { result } = renderHook(() => useTranscriptSessionRepository(noteId));

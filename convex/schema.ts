@@ -1260,6 +1260,7 @@ export default defineSchema({
 		noteId: v.id("notes"),
 		utteranceId: v.string(),
 		speaker: v.union(v.literal("you"), v.literal("them")),
+		speakerName: v.optional(v.string()),
 		source: v.union(v.literal("live"), v.literal("refined")),
 		text: v.string(),
 		startedAt: v.number(),

@@ -7,6 +7,7 @@ Transcription modules own note capture, global dictation, realtime transports, n
 - [[apps/web/src/lib/note-transcript-capture-session.ts]]
 - [[apps/web/src/lib/transcription-auto-stop.ts]]
 - [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
+- [Chrome Meet speaker attribution](../apps/desktop/src/meet-chrome-speaker-attribution.mjs)
 - [meeting detection](../apps/desktop/src/meeting-detection.mjs)
 
 ## Note transcript session
@@ -117,6 +118,31 @@ transcript projection, ordered turn emission, interrupted-tail salvage, and
 initial renderer session shape. Electron `main.mjs` orchestrates permissions,
 native capture, reconnects, and IPC around that runtime; it must not maintain a
 second set of speaker turn maps or interpret realtime transport events itself.
+
+## Chrome Meet named speakers
+
+Accessibility observations can label a timed remote audio turn only when one named Chrome Meet tile is unambiguously observed speaking and no contradictory speaker observation occurs during the audio interval.
+
+The [native Chrome Meet speaker helper](../apps/desktop/native/MeetChromeSpeakerCLI.swift)
+reads the selected Meet window through macOS Accessibility every 500 ms. Its
+newline-delimited `ready` and `roster-changed` events contain timestamped tile
+names, active-speaking state, self-preview identity, and a blind reason when
+the page or permission is unavailable. Within the same selected Meet window,
+the helper retains a unique observed self name if the preview disappears, but
+abstains when the self name is shared by another tile. The
+[desktop attribution timeline](../apps/desktop/src/meet-chrome-speaker-attribution.mjs)
+parses that process boundary once, retains only recent samples, and abstains on
+missing names, self speech, overlapping speakers, stale samples, gaps, or a
+speaker change. The [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
+queries it only for `them` turns with real start and end timestamps; `you` and
+untimed salvage remain unnamed. A recording stop or reconnect clears the
+timeline and stops the helper, so a later scope cannot inherit a prior name.
+
+[[apps/web/src/lib/transcript.ts]] carries the optional `speakerName` through
+display sections and text export; adjacent `them` turns with different names
+must never merge. [[convex/transcriptSessions.ts]] stores the same field on
+utterances and uses it in canonical transcript text. An absent name is a
+deliberate uncertainty state, not a guess or a separate speaker identity.
 
 ## Native audio separation
 

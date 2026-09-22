@@ -111,7 +111,40 @@ test("routes interruptions only for active speakers", async () => {
 	]);
 });
 
-function createRuntimeHarness() {
+test("adds a name only to a timed remote turn with attribution evidence", async () => {
+	const harness = createRuntimeHarness(() => "Alex Morgan");
+	harness.runtime.connect("them", "desktop-native");
+	await harness.runtime.handleTransportEvent({
+		itemId: "timed",
+		previousItemId: null,
+		speaker: "them",
+		startedAt: 1_000,
+		endedAt: 2_000,
+		type: "committed",
+	});
+	await harness.runtime.handleTransportEvent({
+		itemId: "timed",
+		speaker: "them",
+		text: "A named line.",
+		type: "final",
+	});
+	assert.equal(harness.utterances[0].speakerName, "Alex Morgan");
+	await harness.runtime.handleTransportEvent({
+		itemId: "untimed",
+		previousItemId: "timed",
+		speaker: "them",
+		type: "committed",
+	});
+	await harness.runtime.handleTransportEvent({
+		itemId: "untimed",
+		speaker: "them",
+		text: "An uncertain line.",
+		type: "final",
+	});
+	assert.equal(harness.utterances[1].speakerName, undefined);
+});
+
+function createRuntimeHarness(resolveSpeakerName = () => null) {
 	const liveTranscript = createEmptyLiveTranscriptState();
 	const interruptions = [];
 	const utterances = [];
@@ -131,6 +164,7 @@ function createRuntimeHarness() {
 		onUtterance: (utterance) => {
 			utterances.push(utterance);
 		},
+		resolveSpeakerName,
 	});
 
 	return {

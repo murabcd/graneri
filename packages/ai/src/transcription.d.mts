@@ -15,6 +15,7 @@ export type TranscriptTextUtterance = {
 	endedAt: number;
 	id: string;
 	speaker: string;
+	speakerName?: string;
 	startedAt: number;
 	text: string;
 };
@@ -23,6 +24,7 @@ export type TranscriptTextSection = {
 	endedAt: number;
 	id: string;
 	speaker: string;
+	speakerName?: string;
 	startedAt: number;
 	text: string;
 	utteranceIds: string[];
@@ -45,6 +47,7 @@ export declare function shouldAppendTranscriptUtteranceToSection(args: {
 export declare function createTranscriptBlocksText(
 	sections?: Array<{
 		speaker?: string | null;
+		speakerName?: string | null;
 		text?: string | null;
 	}>,
 	options?: {

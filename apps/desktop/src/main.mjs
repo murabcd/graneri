@@ -78,6 +78,7 @@ import {
 	serializeError,
 	stopDesktopFileLogging,
 } from "./logger.mjs";
+import { createMeetChromeSpeakerAttribution } from "./meet-chrome-speaker-attribution.mjs";
 import { createMeetingDetection } from "./meeting-detection.mjs";
 import { createNativeAudioCapture } from "./native-audio-capture.mjs";
 import { getRuntimeConfig, hydrateRuntimeConfig } from "./runtime-config.mjs";
@@ -274,6 +275,9 @@ const desktopRecordingPowerSaveBlocker = createDesktopRecordingPowerSaveBlocker(
 		powerSaveBlocker,
 	},
 );
+const meetChromeSpeakerAttribution = createMeetChromeSpeakerAttribution({
+	runtimeDir,
+});
 let systemAudioPermissionState = "prompt";
 let latestTranscriptionSessionState = createInitialTranscriptionSessionState();
 const captureEventListeners = {
@@ -718,6 +722,7 @@ desktopTranscriptionRuntime = createDesktopTranscriptionRuntime({
 			speaker: event.speaker,
 		}),
 	onUtterance: appendTranscriptionUtterance,
+	resolveSpeakerName: meetChromeSpeakerAttribution.resolveName,
 });
 
 const createDesktopSystemAudioPolicy = () => {
@@ -1100,6 +1105,7 @@ const cleanupDesktopTranscriptionSession = async ({
 	]);
 	await stopTranscriptionSpeakerCapture("you");
 	await stopTranscriptionSpeakerCapture("them");
+	await meetChromeSpeakerAttribution.stop();
 	clearTranscriptionRolloverTimeout();
 
 	if (transcriptionLifecycleOperationId !== operationId) {
@@ -1439,6 +1445,7 @@ const runDesktopTranscriptionStart = async ({ preserveUtterances, reason }) => {
 			recoveryStatus: createTranscriptRecoveryStatus(),
 		});
 		scheduleTranscriptionRollover();
+		void meetChromeSpeakerAttribution.start();
 
 		if (
 			policy.systemAudioCapability.shouldAutoBootstrap &&

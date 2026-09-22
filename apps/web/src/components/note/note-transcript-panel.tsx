@@ -132,6 +132,8 @@ export function NoteTranscriptPanel({
 							) : null}
 							{renderedTranscriptEntries.map((utterance) => {
 								const isUserTranscript = utterance.speaker === "you";
+								const speakerLabel =
+									utterance.speakerName ?? (isUserTranscript ? "You" : "Them");
 								const elapsed =
 									transcriptStartedAt != null
 										? formatTranscriptElapsed(
@@ -148,6 +150,9 @@ export function NoteTranscriptPanel({
 											isUserTranscript ? "items-end" : "items-start",
 										)}
 									>
+										<p className="px-1 text-[11px] font-medium text-muted-foreground/75">
+											{speakerLabel}
+										</p>
 										<div
 											className={cn(
 												CHAT_MESSAGE_MAX_WIDTH_CLASS,

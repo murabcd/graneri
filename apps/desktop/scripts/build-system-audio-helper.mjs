@@ -69,6 +69,13 @@ const helpers = [
 		],
 	},
 	{
+		outputFile: resolve(outDir, "graneri-meet-chrome-speaker-helper"),
+		sourceFiles: [
+			resolve(packageRoot, "native", "LineEventIO.swift"),
+			resolve(packageRoot, "native", "MeetChromeSpeakerCLI.swift"),
+		],
+	},
+	{
 		outputFile: resolve(outDir, "graneri-system-settings-window-helper"),
 		sourceFiles: [
 			resolve(packageRoot, "native", "LineEventIO.swift"),
