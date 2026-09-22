@@ -4,7 +4,7 @@ export const nativeRuntimeToolNames = [
 	"graneri-combined-audio-helper",
 	"graneri-microphone-activity-helper",
 	"graneri-meeting-window-helper",
-	"graneri-meet-chrome-speaker-helper",
+	"graneri-chrome-meeting-speaker-helper",
 	"graneri-system-settings-window-helper",
 	"graneri-global-dictation-hotkey-helper",
 ];

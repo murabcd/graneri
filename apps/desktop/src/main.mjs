@@ -29,6 +29,7 @@ import {
 } from "../../../packages/platform/src/desktop-ipc-contract.ts";
 import { createAccessibilityGuide } from "./accessibility-guide.mjs";
 import { getDesktopAuthClient } from "./auth-client.mjs";
+import { createChromeMeetingSpeakerAttribution } from "./chrome-meeting-speaker-attribution.mjs";
 import { createDesktopAppMenu } from "./desktop-app-menu.mjs";
 import {
 	appRendererOrigin,
@@ -80,7 +81,6 @@ import {
 	stopDesktopFileLogging,
 } from "./logger.mjs";
 import { createMacOSAccessibilityPermission } from "./macos-accessibility-permission.mjs";
-import { createMeetChromeSpeakerAttribution } from "./meet-chrome-speaker-attribution.mjs";
 import { createMeetingDetection } from "./meeting-detection.mjs";
 import { createNativeAudioCapture } from "./native-audio-capture.mjs";
 import { getRuntimeConfig, hydrateRuntimeConfig } from "./runtime-config.mjs";
@@ -277,7 +277,7 @@ const desktopRecordingPowerSaveBlocker = createDesktopRecordingPowerSaveBlocker(
 		powerSaveBlocker,
 	},
 );
-const meetChromeSpeakerAttribution = createMeetChromeSpeakerAttribution({
+const chromeMeetingSpeakerAttribution = createChromeMeetingSpeakerAttribution({
 	runtimeDir,
 });
 let systemAudioPermissionState = "prompt";
@@ -730,7 +730,7 @@ desktopTranscriptionRuntime = createDesktopTranscriptionRuntime({
 			speaker: event.speaker,
 		}),
 	onUtterance: appendTranscriptionUtterance,
-	resolveSpeakerName: meetChromeSpeakerAttribution.resolveName,
+	resolveSpeakerName: chromeMeetingSpeakerAttribution.resolveName,
 });
 
 const createDesktopSystemAudioPolicy = () => {
@@ -1113,7 +1113,7 @@ const cleanupDesktopTranscriptionSession = async ({
 	]);
 	await stopTranscriptionSpeakerCapture("you");
 	await stopTranscriptionSpeakerCapture("them");
-	await meetChromeSpeakerAttribution.stop();
+	await chromeMeetingSpeakerAttribution.stop();
 	clearTranscriptionRolloverTimeout();
 
 	if (transcriptionLifecycleOperationId !== operationId) {
@@ -1453,7 +1453,7 @@ const runDesktopTranscriptionStart = async ({ preserveUtterances, reason }) => {
 			recoveryStatus: createTranscriptRecoveryStatus(),
 		});
 		scheduleTranscriptionRollover();
-		void meetChromeSpeakerAttribution.start();
+		void chromeMeetingSpeakerAttribution.start();
 
 		if (
 			policy.systemAudioCapability.shouldAutoBootstrap &&

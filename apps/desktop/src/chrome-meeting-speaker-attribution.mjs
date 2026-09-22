@@ -9,6 +9,7 @@ import { logError } from "./logger.mjs";
 const nativeRosterEventSchema = z.object({
 	type: z.enum(["ready", "roster-changed"]),
 	timestamp: z.number().int().nonnegative(),
+	scope: z.string().max(160).nullable(),
 	blindReason: z.string().max(64).optional(),
 	participants: z
 		.array(
@@ -24,7 +25,7 @@ const nativeRosterEventSchema = z.object({
 const sampleRetentionMs = 90_000;
 const maxSampleGapMs = 1_500;
 
-export const createMeetSpeakerTimeline = () => {
+export const createMeetingSpeakerTimeline = () => {
 	let samples = [];
 
 	const recordRoster = (rawEvent) => {
@@ -57,7 +58,7 @@ export const createMeetSpeakerTimeline = () => {
 			status = "candidate";
 			name = remoteParticipants[0].name.trim();
 		}
-		samples.push({ at: event.timestamp, name, status });
+		samples.push({ at: event.timestamp, name, scope: event.scope, status });
 		const earliestRetainedAt = event.timestamp - sampleRetentionMs;
 		while (samples.length > 0 && samples[0].at < earliestRetainedAt) {
 			samples.shift();
@@ -77,7 +78,9 @@ export const createMeetSpeakerTimeline = () => {
 		);
 		if (
 			relevant.length < 2 ||
-			relevant.some((sample) => sample.status === "blind")
+			relevant.some((sample) => sample.status === "blind") ||
+			new Set(relevant.map((sample) => sample.scope)).size !== 1 ||
+			relevant[0].scope === null
 		) {
 			return null;
 		}
@@ -122,8 +125,8 @@ export const createMeetSpeakerTimeline = () => {
 	};
 };
 
-export const createMeetChromeSpeakerAttribution = ({ runtimeDir }) => {
-	const timeline = createMeetSpeakerTimeline();
+export const createChromeMeetingSpeakerAttribution = ({ runtimeDir }) => {
+	const timeline = createMeetingSpeakerTimeline();
 	let session = null;
 	let generation = 0;
 
@@ -148,7 +151,7 @@ export const createMeetChromeSpeakerAttribution = ({ runtimeDir }) => {
 			return false;
 		}
 		const helperPath = resolveDesktopRuntimeExecutablePath({
-			executableName: "graneri-meet-chrome-speaker-helper",
+			executableName: "graneri-chrome-meeting-speaker-helper",
 			runtimeDir,
 		});
 		if (!helperPath) {
@@ -159,7 +162,7 @@ export const createMeetChromeSpeakerAttribution = ({ runtimeDir }) => {
 				helperPath,
 				isExpectedEvent: (event) =>
 					event?.type === "ready" || event?.type === "roster-changed",
-				label: "meet-chrome-speaker-helper",
+				label: "chrome-meeting-speaker-helper",
 				onEvent: ({ event, resolveReady, session: eventSession }) => {
 					if (generation !== currentGeneration || session !== eventSession) {
 						return;
@@ -185,11 +188,11 @@ export const createMeetChromeSpeakerAttribution = ({ runtimeDir }) => {
 					timeline.clear();
 					logError({
 						error: { code, signal },
-						message: "[transcription] Meet speaker helper exited",
+						message: "[transcription] Chrome meeting speaker helper exited",
 					});
 				},
 				startupTimeoutMessage:
-					"Timed out while starting the Meet speaker monitor.",
+					"Timed out while starting the Chrome meeting speaker monitor.",
 			});
 			if (generation !== currentGeneration) {
 				await stopLineEventHelperSession(startedSession);
@@ -203,7 +206,8 @@ export const createMeetChromeSpeakerAttribution = ({ runtimeDir }) => {
 			timeline.clear();
 			logError({
 				error,
-				message: "[transcription] Meet speaker monitor failed to start",
+				message:
+					"[transcription] Chrome meeting speaker monitor failed to start",
 			});
 			return false;
 		}

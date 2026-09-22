@@ -7,7 +7,7 @@ Transcription modules own note capture, global dictation, realtime transports, n
 - [[apps/web/src/lib/note-transcript-capture-session.ts]]
 - [[apps/web/src/lib/transcription-auto-stop.ts]]
 - [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
-- [Chrome Meet speaker attribution](../apps/desktop/src/meet-chrome-speaker-attribution.mjs)
+- [Chrome meeting speaker attribution](../apps/desktop/src/chrome-meeting-speaker-attribution.mjs)
 - [meeting detection](../apps/desktop/src/meeting-detection.mjs)
 
 ## Note transcript session
@@ -125,23 +125,29 @@ initial renderer session shape. Electron `main.mjs` orchestrates permissions,
 native capture, reconnects, and IPC around that runtime; it must not maintain a
 second set of speaker turn maps or interpret realtime transport events itself.
 
-## Chrome Meet named speakers
+## Chrome meeting named speakers
 
-Meet speaker attribution uses active-tile evidence or one structurally unique named remote that remains present for the complete timed audio turn; contradictory roster evidence always forces abstention.
+Chrome Meet and browser Telemost attribution use active-tile evidence or one structurally unique named remote that remains present for the complete timed audio turn; contradictory roster or meeting-scope evidence always forces abstention.
 
-The [native Chrome Meet speaker helper](../apps/desktop/native/MeetChromeSpeakerCLI.swift)
-reads the selected Meet window through macOS Accessibility every 500 ms. Its
+The [native Chrome meeting speaker helper](../apps/desktop/native/ChromeMeetingSpeakerCLI.swift)
+checks the eligible windows of running Chrome instances through macOS
+Accessibility every 500 ms. It reads Meet's call web area or Telemost's nested
+`private-join` call frame, requiring exactly one eligible meeting window.
+Telemost's self tile, participant name, and active-speaker outline are read from
+the call frame; the browser's participant list alone is not speaking evidence.
+This covers Telemost in Chrome, not the native Telemost app or other browsers. Its
 newline-delimited `ready` and `roster-changed` events contain timestamped tile
-names, active-speaking state, self-preview identity, and a blind reason when
-the page or permission is unavailable. Within the same selected Meet window,
+names, active-speaking state, self identity, meeting scope, and a blind reason
+when the page or permission is unavailable. Within the same selected Meet scope,
 the helper retains a unique observed self name if the preview disappears, but
 abstains when the self name is shared by another tile. The
-[desktop attribution timeline](../apps/desktop/src/meet-chrome-speaker-attribution.mjs)
+[desktop attribution timeline](../apps/desktop/src/chrome-meeting-speaker-attribution.mjs)
 parses that process boundary once, retains only recent samples, and abstains on
 missing names, self speech, overlapping speakers, stale samples, gaps, roster
-instability, or a speaker change. The single-remote path covers Meet layouts
-that omit the active-speaker marker; it is valid only when the native helper
-structurally identifies exactly one non-self tile throughout the full turn.
+instability, a speaker change, or a meeting-scope change. The single-remote path
+covers layouts that omit the active-speaker marker; it is valid only when the
+native helper structurally identifies exactly one non-self tile throughout the
+full turn.
 The [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
 queries it only for `them` turns with real start and end timestamps; `you` and
 untimed salvage remain unnamed. A recording stop or reconnect clears the

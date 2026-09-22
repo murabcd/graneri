@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createMeetSpeakerTimeline } from "../src/meet-chrome-speaker-attribution.mjs";
+import { createMeetingSpeakerTimeline } from "../src/chrome-meeting-speaker-attribution.mjs";
 
 const roster = ({
 	at,
@@ -8,15 +8,17 @@ const roster = ({
 	active = true,
 	isSelf = false,
 	blindReason,
+	scope = "google-meet:abc-defg-hij",
 }) => ({
 	type: "roster-changed",
 	timestamp: at,
+	scope,
 	...(blindReason && { blindReason }),
 	participants: [{ name, active, isSelf }],
 });
 
 test("attributes only a consistently active remote speaker over the audio interval", () => {
-	const timeline = createMeetSpeakerTimeline();
+	const timeline = createMeetingSpeakerTimeline();
 	for (const at of [1_000, 1_500, 2_000, 2_500, 3_000]) {
 		timeline.recordRoster(roster({ at }));
 	}
@@ -32,7 +34,7 @@ test("attributes only a consistently active remote speaker over the audio interv
 });
 
 test("attributes a short observed speech burst within an audio commit", () => {
-	const timeline = createMeetSpeakerTimeline();
+	const timeline = createMeetingSpeakerTimeline();
 	for (const at of [1_000, 1_500, 2_000, 2_500, 3_000, 3_500]) {
 		timeline.recordRoster(roster({ at, active: at === 2_000 || at === 2_500 }));
 	}
@@ -42,8 +44,8 @@ test("attributes a short observed speech burst within an audio commit", () => {
 	);
 });
 
-test("attributes one consistently visible named remote when Meet exposes no speaking marker", () => {
-	const timeline = createMeetSpeakerTimeline();
+test("attributes one consistently visible named remote without a speaking marker", () => {
+	const timeline = createMeetingSpeakerTimeline();
 	for (const at of [1_000, 1_500, 2_000, 2_500, 3_000]) {
 		timeline.recordRoster(roster({ at, active: false }));
 	}
@@ -58,18 +60,20 @@ test("abstains from sole-remote inference when the roster is not stable", () => 
 		{
 			type: "roster-changed",
 			timestamp: 1_500,
+			scope: "google-meet:abc-defg-hij",
 			participants: [],
 		},
 		{
 			type: "roster-changed",
 			timestamp: 1_500,
+			scope: "google-meet:abc-defg-hij",
 			participants: [
 				{ name: "Alex Morgan", active: false, isSelf: false },
 				{ name: "Sam Lee", active: false, isSelf: false },
 			],
 		},
 	]) {
-		const timeline = createMeetSpeakerTimeline();
+		const timeline = createMeetingSpeakerTimeline();
 		timeline.recordRoster(roster({ at: 1_000, active: false }));
 		timeline.recordRoster(interruption);
 		timeline.recordRoster(roster({ at: 2_000, active: false }));
@@ -79,7 +83,7 @@ test("abstains from sole-remote inference when the roster is not stable", () => 
 		);
 	}
 
-	const changedSpeakerTimeline = createMeetSpeakerTimeline();
+	const changedSpeakerTimeline = createMeetingSpeakerTimeline();
 	changedSpeakerTimeline.recordRoster(roster({ at: 1_000, active: false }));
 	changedSpeakerTimeline.recordRoster(roster({ at: 1_500, name: "Sam Lee" }));
 	changedSpeakerTimeline.recordRoster(roster({ at: 2_000, name: "Sam Lee" }));
@@ -89,13 +93,13 @@ test("abstains from sole-remote inference when the roster is not stable", () => 
 	);
 });
 
-test("abstains when Meet is blind, self is speaking, or a remote tile lacks a name", () => {
+test("abstains when the roster is blind, self is speaking, or a remote tile lacks a name", () => {
 	for (const event of [
 		roster({ at: 1_500, blindReason: "meet-not-focused" }),
 		roster({ at: 1_500, isSelf: true }),
 		roster({ at: 1_500, name: null }),
 	]) {
-		const timeline = createMeetSpeakerTimeline();
+		const timeline = createMeetingSpeakerTimeline();
 		timeline.recordRoster(roster({ at: 1_000 }));
 		timeline.recordRoster(event);
 		timeline.recordRoster(roster({ at: 2_000 }));
@@ -107,13 +111,14 @@ test("abstains when Meet is blind, self is speaking, or a remote tile lacks a na
 });
 
 test("abstains on simultaneous or changing speakers", () => {
-	const timeline = createMeetSpeakerTimeline();
+	const timeline = createMeetingSpeakerTimeline();
 	timeline.recordRoster(roster({ at: 1_000 }));
 	timeline.recordRoster(roster({ at: 1_500 }));
 	timeline.recordRoster({
-		type: "roster-changed",
-		timestamp: 2_000,
-		participants: [
+			type: "roster-changed",
+			timestamp: 2_000,
+			scope: "google-meet:abc-defg-hij",
+			participants: [
 			{ name: "Alex Morgan", active: true, isSelf: false },
 			{ name: "Sam Lee", active: true, isSelf: false },
 		],
@@ -134,7 +139,7 @@ test("abstains on simultaneous or changing speakers", () => {
 });
 
 test("abstains when evidence is sparse, stale, or outside the turn", () => {
-	const timeline = createMeetSpeakerTimeline();
+	const timeline = createMeetingSpeakerTimeline();
 	timeline.recordRoster(roster({ at: 1_000 }));
 	timeline.recordRoster(roster({ at: 1_500 }));
 	assert.equal(
@@ -154,12 +159,39 @@ test("abstains when evidence is sparse, stale, or outside the turn", () => {
 });
 
 test("rejects malformed native events at the process boundary", () => {
-	const timeline = createMeetSpeakerTimeline();
+	const timeline = createMeetingSpeakerTimeline();
 	assert.throws(() =>
 		timeline.recordRoster({
 			type: "roster-changed",
 			timestamp: 1_000,
+			scope: "google-meet:abc-defg-hij",
 			participants: [{ name: "Alex Morgan", active: "yes", isSelf: false }],
 		}),
 	);
+});
+
+test("attributes a Telemost remote when both devices use the same account name", () => {
+	const timeline = createMeetingSpeakerTimeline();
+	for (const at of [1_000, 1_500, 2_000, 2_500, 3_000]) {
+		timeline.recordRoster({
+			type: "roster-changed",
+			timestamp: at,
+			scope: "yandex-telemost:0267426107",
+			participants: [
+				{ name: "Murad", active: false, isSelf: true },
+				{ name: "Murad", active: at >= 1_500 && at <= 2_500, isSelf: false },
+			],
+		});
+	}
+	assert.equal(timeline.resolveName({ startedAt: 1_000, endedAt: 3_000 }), "Murad");
+});
+
+test("abstains when the browser switches meeting scope mid-turn", () => {
+	const timeline = createMeetingSpeakerTimeline();
+	timeline.recordRoster(roster({ at: 1_000 }));
+	timeline.recordRoster(roster({ at: 1_500 }));
+	timeline.recordRoster(
+		roster({ at: 2_000, scope: "yandex-telemost:0267426107" }),
+	);
+	assert.equal(timeline.resolveName({ startedAt: 1_000, endedAt: 2_000 }), null);
 });
