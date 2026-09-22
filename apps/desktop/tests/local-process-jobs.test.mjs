@@ -101,12 +101,21 @@ nativeTest(
 			'console.log("ready"); process.stdin.once("data", data => { process.stdout.write(data); process.exit(0); });',
 		);
 		assert.equal(started.status, "running");
-		assert.equal(started.stdout, "ready\n");
+		const ready = started.stdout
+			? started
+			: await f.jobs.interact({
+					sessionId: "test",
+					processId: started.processId,
+					action: { operation: "read" },
+					cursor: started.nextCursor,
+					yieldTimeMs: 5000,
+				});
+		assert.equal(ready.stdout, "ready\n");
 		const written = await f.jobs.interact({
 			sessionId: "test",
 			processId: started.processId,
 			action: { operation: "write", input: "hello\n", closeInput: true },
-			cursor: started.nextCursor,
+			cursor: ready.nextCursor,
 			yieldTimeMs: 1000,
 		});
 		assert.equal(written.status, "completed");
