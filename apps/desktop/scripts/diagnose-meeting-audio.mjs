@@ -214,8 +214,6 @@ const summarizeDiagnosticsEvent = (event) => ({
 		event.echoCancellationResidualEchoLikelihood,
 	echoCancellationResidualEchoLikelihoodRecentMax:
 		event.echoCancellationResidualEchoLikelihoodRecentMax,
-	echoCancellationResidualEchoSuppressedChunks:
-		event.echoCancellationResidualEchoSuppressedChunks,
 	echoCancellationSuppressedChunks: event.echoCancellationSuppressedChunks,
 	echoCancellationUnavailableChunks: event.echoCancellationUnavailableChunks,
 	microphoneChunks: event.microphoneChunks,
@@ -395,19 +393,23 @@ const runDiagnostic = async (options) => {
 				continue;
 			}
 
-			if (event.type === "chunk" && event.source === "microphone") {
-				result.chunks.microphone += 1;
-				result.firstChunks.microphonePcm16Length ??=
-					typeof event.pcm16 === "string" ? event.pcm16.length : 0;
-				observeLevel(result.audioLevels.microphone, event.pcm16);
+			if (event.type !== "chunk") {
 				continue;
 			}
+			const microphonePcm16 =
+				event.source === "microphone" ? event.pcm16 : event.microphonePcm16;
+			const systemAudioPcm16 =
+				event.source === "systemAudio" ? event.pcm16 : event.systemAudioPcm16;
+			if (typeof microphonePcm16 === "string") {
+				result.chunks.microphone += 1;
+				result.firstChunks.microphonePcm16Length ??= microphonePcm16.length;
+				observeLevel(result.audioLevels.microphone, microphonePcm16);
+			}
 
-			if (event.type === "chunk" && event.source === "systemAudio") {
+			if (typeof systemAudioPcm16 === "string") {
 				result.chunks.systemAudio += 1;
-				result.firstChunks.systemAudioPcm16Length ??=
-					typeof event.pcm16 === "string" ? event.pcm16.length : 0;
-				observeLevel(result.audioLevels.systemAudio, event.pcm16);
+				result.firstChunks.systemAudioPcm16Length ??= systemAudioPcm16.length;
+				observeLevel(result.audioLevels.systemAudio, systemAudioPcm16);
 			}
 		}
 	});

@@ -162,8 +162,8 @@ final class MicrophoneCapture: @unchecked Sendable {
 		}
 
 		inputNode.installTap(onBus: 0, bufferSize: 4096, format: tapFormat) {
-			[weak self] buffer, _ in
-			self?.encoder.append(buffer: buffer)
+			[weak self] buffer, time in
+			self?.encoder.append(buffer: buffer, hostTime: time.hostTime)
 		}
 		hasInstalledTap = true
 

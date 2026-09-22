@@ -136,12 +136,11 @@ test("combined audio helper routes paired chunks to source event buses", async (
 				echoCancellationDelayMs: 5,
 				echoCancellationLastPostRms: 0,
 				echoCancellationLastPreRms: 0.04,
-				echoCancellationLastReason: "residual_leak_gated",
+				echoCancellationLastReason: "aec3_active",
 				echoCancellationProcessedCaptureFrames: 10,
 				echoCancellationProcessedRenderFrames: 10,
 				echoCancellationResidualEchoLikelihood: 0.62,
 				echoCancellationResidualEchoLikelihoodRecentMax: 0.71,
-				echoCancellationResidualEchoSuppressedChunks: 1,
 				microphoneChunks: 10,
 				systemAudioChunks: 10,
 				type: "processing_diagnostics",
@@ -186,9 +185,8 @@ test("combined audio helper routes paired chunks to source event buses", async (
 			"webrtc_aec3",
 		);
 		assert.equal(
-			turnDebugEvents.at(-1)?.payload.audioProcessing
-				.echoCancellationResidualEchoSuppressedChunks,
-			1,
+			turnDebugEvents.at(-1)?.payload.audioProcessing.echoCancellationLastReason,
+			"aec3_active",
 		);
 
 		await capture.stopCombinedAudioCapture();
@@ -416,11 +414,10 @@ test("combined audio helper self-test reduces delayed render echo when built", a
 
 	assert.equal(result.ok, true);
 	assert.equal(result.type, "self_test");
-	assert.ok(result.activeRenderPassthroughErrorRms <= 0.16);
+	assert.ok(result.echoOnlyResidualRatio <= 0.45);
 	assert.ok(result.echoReductionRatio >= 0.35);
 	assert.ok(result.noRenderPassthroughErrorRms <= 0.000001);
 	assert.ok(result.processedErrorRms < result.rawErrorRms);
-	assert.ok(result.residualLeakGateSuppressedChunks > 0);
 	assert.ok(result.suppressedChunks > 0);
 	assert.ok(result.systemOutputErrorRms <= 0.000001);
 });

@@ -166,31 +166,34 @@ use system audio as the echo-cancellation render/reference for the microphone
 stream, emit cleaned microphone audio as `you`, and emit raw system audio as
 `them`. Apple voice processing is a route-scoped stopgap, not the long-term
 source-separation mechanism.
+The system-audio reference must use a global output tap excluding the helper
+process, not a process list frozen at capture start. Playback from apps launched
+mid-recording must reach both the `them` channel and AEC3's render reference.
+Both capture callbacks must carry their CoreAudio host timestamps into the
+combined pipeline. The pipeline pairs 10 ms microphone and render frames by
+capture time before feeding AEC3; callback arrival order is not a clock.
 The combined helper must disable Apple microphone voice processing and own echo
 reduction itself, because Apple processing can alter the user's local meeting
 volume and obscure which source caused attenuation.
 
 ## Native helper protocol
 
-A stable newline-delimited protocol carries source-tagged audio and bounded diagnostics around correlation-gated AEC3 processing.
+A stable newline-delimited protocol carries paired audio and bounded diagnostics around timestamp-aligned AEC3 processing.
 
 Native audio helpers communicate with Electron over newline-delimited JSON.
-`ready`, `chunk`, `error`, and `stopped` are the only helper event families.
+`ready`, `chunk`, `processing_diagnostics`, `error`, and `stopped` are the helper event families.
 Separate microphone and system-audio helpers infer source from the process that
-emitted the event. A combined helper must emit the same `chunk` shape plus a
-`source` field set to `microphone` or `systemAudio`, allowing Electron to keep
-the speaker contract stable while the native process owns synchronized capture
+emitted the event. The combined helper emits `chunk` events with independent
+`microphonePcm16` and `systemAudioPcm16` fields, allowing Electron to keep the
+speaker contract stable while the native process owns synchronized capture
 and echo-cancellation reference timing. The combined helper binary is the
 native integration point for echo reduction. Its microphone path must flow
 through the combined audio processing pipeline, and that pipeline must use
 system audio as the render/reference signal before microphone audio is emitted.
-Echo reduction must be correlation-gated: active system audio alone is not a
-reason to subtract from the microphone stream, because local-only speech during
-remote playback must pass through unchanged. After AEC3 runs, the microphone
-path applies one source-attribution gate: if system audio is active and the
-post-AEC microphone energy is below the local-speech floor, that residual is
-silenced before it can be emitted as `you`. Double-talk above that floor must
-remain in the microphone stream.
+The pipeline must not infer local speech from a fixed energy floor or bypass
+AEC3 for quiet frames: those rules can turn speaker echo into `you` or erase
+genuine double-talk. A bounded queue releases unmatched microphone frames so
+capture remains live when system audio is absent.
 The combined helper's ready event must report the audio processing stage so
 diagnostics can tell whether microphone output is waiting for render reference
 or actively reducing echo.

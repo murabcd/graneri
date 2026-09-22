@@ -98,39 +98,19 @@ final class SystemAudioCapture: @unchecked Sendable {
 		logOutputProcessSnapshot(debugInfo)
 		let tapUUID = UUID()
 		let currentProcessObjectID = Self.currentProcessObjectID()
-		let includedProcesses = Self.runningOutputProcesses()
-			.filter { snapshot in
-				!snapshot.isCurrentProcess &&
-					(snapshot.deviceIDs.isEmpty || snapshot.deviceIDs.contains(outputDeviceID))
-			}
-			.map(\.objectID)
 		let excludedProcesses = currentProcessObjectID.map { [$0] } ?? []
-		let tapDescription: CATapDescription
-		let tapMode: String
-
-		if includedProcesses.isEmpty {
-			tapDescription = CATapDescription(
-				monoGlobalTapButExcludeProcesses: excludedProcesses
-			)
-			tapMode = "mono-global-mixdown-excluding-self"
-		} else {
-			tapDescription = CATapDescription(
-				__processes: includedProcesses.map(NSNumber.init(value:)),
-				andDeviceUID: outputUID,
-				withStream: 0
-			)
-			tapMode = "device-stream-process-mixdown-explicit-output"
-		}
+		let tapDescription = CATapDescription(
+			monoGlobalTapButExcludeProcesses: excludedProcesses
+		)
 
 		tapDescription.name = "Graneri System Audio"
 		tapDescription.uuid = tapUUID
 		tapDescription.isPrivate = true
 		tapDescription.muteBehavior = .unmuted
-		debugInfo["includedProcessObjectIds"] = includedProcesses.map(Int.init)
 		debugInfo["excludedProcessObjectIds"] = excludedProcesses.map(Int.init)
-		debugInfo["tapMode"] = tapMode
+		debugInfo["tapMode"] = "mono-global-mixdown-excluding-self"
 		logger.log(
-			"[helper] configured system-audio tap mode=\(tapMode) includedProcesses=\(includedProcesses) excludedProcesses=\(excludedProcesses)"
+			"[helper] configured global system-audio tap excludingProcesses=\(excludedProcesses)"
 		)
 
 		var nextTapID = AudioObjectID(kAudioObjectUnknown)
@@ -209,8 +189,12 @@ final class SystemAudioCapture: @unchecked Sendable {
 			&nextIoProcID,
 			nextAggregateDeviceID,
 			callbackQueue
-		) { [weak self] _, inInputData, _, _, _ in
-			self?.handleInputData(inInputData, sourceFormat: format)
+		) { [weak self] _, inInputData, inInputTime, _, _ in
+			self?.handleInputData(
+				inInputData,
+				hostTime: inInputTime.pointee.mHostTime,
+				sourceFormat: format
+			)
 		}
 		logger.log("[helper] AudioDeviceCreateIOProcIDWithBlock status: \(status)")
 
@@ -298,6 +282,7 @@ final class SystemAudioCapture: @unchecked Sendable {
 
 	private func handleInputData(
 		_ inputData: UnsafePointer<AudioBufferList>,
+		hostTime: UInt64,
 		sourceFormat: AVAudioFormat
 	) {
 		let sourceBuffers = UnsafeMutableAudioBufferListPointer(
@@ -352,7 +337,7 @@ final class SystemAudioCapture: @unchecked Sendable {
 		}
 
 		guard let converter else {
-			encoder.append(buffer: pcmBuffer)
+			encoder.append(buffer: pcmBuffer, hostTime: hostTime)
 			return
 		}
 
@@ -391,7 +376,7 @@ final class SystemAudioCapture: @unchecked Sendable {
 		switch status {
 		case .haveData, .inputRanDry, .endOfStream:
 			if convertedBuffer.frameLength > 0 {
-				encoder.append(buffer: convertedBuffer)
+				encoder.append(buffer: convertedBuffer, hostTime: hostTime)
 			}
 		case .error:
 			logger.log("[helper] conversion failed without a recoverable error")

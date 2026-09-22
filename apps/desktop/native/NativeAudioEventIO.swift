@@ -3,7 +3,7 @@ import Dispatch
 import Foundation
 
 protocol NativeAudioPcmSink: AnyObject, Sendable {
-	func append(buffer: AVAudioPCMBuffer)
+	func append(buffer: AVAudioPCMBuffer, hostTime: UInt64)
 }
 
 private func encodeNativeAudioPcm16(_ samples: [Float]) -> Data {
@@ -170,7 +170,7 @@ final class NativeAudioPcmChunkEncoder: NativeAudioPcmSink, @unchecked Sendable 
 		}
 	}
 
-	func append(buffer: AVAudioPCMBuffer) {
+	func append(buffer: AVAudioPCMBuffer, hostTime _: UInt64) {
 		guard let samples = readNativeAudioSamples(from: buffer) else {
 			return
 		}
@@ -205,14 +205,14 @@ final class NativeAudioPcmChunkEncoder: NativeAudioPcmSink, @unchecked Sendable 
 
 final class NativeAudioPairedPcmChunkEncoder: @unchecked Sendable {
 	private final class SourceSink: NativeAudioPcmSink, @unchecked Sendable {
-		private let appendBuffer: @Sendable (AVAudioPCMBuffer) -> Void
+		private let appendBuffer: @Sendable (AVAudioPCMBuffer, UInt64) -> Void
 
-		init(appendBuffer: @escaping @Sendable (AVAudioPCMBuffer) -> Void) {
+		init(appendBuffer: @escaping @Sendable (AVAudioPCMBuffer, UInt64) -> Void) {
 			self.appendBuffer = appendBuffer
 		}
 
-		func append(buffer: AVAudioPCMBuffer) {
-			appendBuffer(buffer)
+		func append(buffer: AVAudioPCMBuffer, hostTime: UInt64) {
+			appendBuffer(buffer, hostTime)
 		}
 	}
 
@@ -224,11 +224,11 @@ final class NativeAudioPairedPcmChunkEncoder: @unchecked Sendable {
 	private var pendingCapturedAtMilliseconds: Int?
 
 	private(set) lazy var microphoneSink: NativeAudioPcmSink = SourceSink {
-		[weak self] buffer in
+		[weak self] buffer, _ in
 		self?.append(buffer: buffer, source: "microphone")
 	}
 	private(set) lazy var systemAudioSink: NativeAudioPcmSink = SourceSink {
-		[weak self] buffer in
+		[weak self] buffer, _ in
 		self?.append(buffer: buffer, source: "systemAudio")
 	}
 

@@ -4,38 +4,30 @@ import Foundation
 
 final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 	struct SelfTestResult {
-		let activeRenderPassthroughErrorRms: Double
+		let echoOnlyResidualRatio: Double
 		let echoReductionRatio: Double
 		let noRenderPassthroughErrorRms: Double
 		let processedErrorRms: Double
-		let quietDoubleTalkPassthroughErrorRms: Double
 		let rawErrorRms: Double
-		let quietDoubleTalkPassthroughChunks: Int
-		let residualLeakGateSuppressedChunks: Int
 		let suppressedChunks: Int
 		let systemOutputErrorRms: Double
 
 		var isPassing: Bool {
-			activeRenderPassthroughErrorRms <= 0.16 &&
+			echoOnlyResidualRatio <= 0.45 &&
 				echoReductionRatio >= 0.35 &&
 				noRenderPassthroughErrorRms <= 0.000001 &&
-				quietDoubleTalkPassthroughErrorRms <= 0.000001 &&
-				residualLeakGateSuppressedChunks > 0 &&
 				suppressedChunks > 0 &&
 				systemOutputErrorRms <= 0.000001
 		}
 
 		func asEvent() -> [String: Any] {
 			[
-				"activeRenderPassthroughErrorRms": activeRenderPassthroughErrorRms,
+				"echoOnlyResidualRatio": echoOnlyResidualRatio,
 				"echoReductionRatio": echoReductionRatio,
 				"noRenderPassthroughErrorRms": noRenderPassthroughErrorRms,
 				"ok": isPassing,
 				"processedErrorRms": processedErrorRms,
-				"quietDoubleTalkPassthroughChunks": quietDoubleTalkPassthroughChunks,
-				"quietDoubleTalkPassthroughErrorRms": quietDoubleTalkPassthroughErrorRms,
 				"rawErrorRms": rawErrorRms,
-				"residualLeakGateSuppressedChunks": residualLeakGateSuppressedChunks,
 				"suppressedChunks": suppressedChunks,
 				"systemOutputErrorRms": systemOutputErrorRms,
 				"type": "self_test",
@@ -44,14 +36,14 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 	}
 
 	private final class SourceSink: NativeAudioPcmSink, @unchecked Sendable {
-		private let appendBuffer: @Sendable (AVAudioPCMBuffer) -> Void
+		private let appendBuffer: @Sendable (AVAudioPCMBuffer, UInt64) -> Void
 
-		init(appendBuffer: @escaping @Sendable (AVAudioPCMBuffer) -> Void) {
+		init(appendBuffer: @escaping @Sendable (AVAudioPCMBuffer, UInt64) -> Void) {
 			self.appendBuffer = appendBuffer
 		}
 
-		func append(buffer: AVAudioPCMBuffer) {
-			appendBuffer(buffer)
+		func append(buffer: AVAudioPCMBuffer, hostTime: UInt64) {
+			appendBuffer(buffer, hostTime)
 		}
 	}
 
@@ -64,6 +56,53 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		var nonSilentChunks = 0
 	}
 
+	private struct TimedFrame {
+		let samples: [Float]
+		let startSeconds: Double
+		let format: AVAudioFormat
+	}
+
+	private struct FrameAssembler {
+		private var samples: [Float] = []
+		private var startSeconds: Double?
+
+		mutating func append(buffer: AVAudioPCMBuffer, hostTime: UInt64, frameSize: Int) -> [TimedFrame] {
+			guard let channel = buffer.floatChannelData?[0], frameSize > 0 else {
+				return []
+			}
+			let count = Int(buffer.frameLength)
+			guard count > 0 else {
+				return []
+			}
+			let observedSeconds = AVAudioTime.seconds(forHostTime: hostTime)
+			var pendingStartSeconds = startSeconds ?? observedSeconds
+			let expectedSeconds = pendingStartSeconds + Double(samples.count) / buffer.format.sampleRate
+			if abs(observedSeconds - expectedSeconds) > 0.02 {
+				samples.removeAll(keepingCapacity: true)
+				pendingStartSeconds = observedSeconds
+			}
+
+			samples.append(contentsOf: UnsafeBufferPointer(start: channel, count: count))
+			var frames: [TimedFrame] = []
+			var readIndex = 0
+			while readIndex + frameSize <= samples.count {
+				let frameStart = pendingStartSeconds +
+					Double(readIndex) / buffer.format.sampleRate
+				frames.append(TimedFrame(
+					samples: Array(samples[readIndex..<readIndex + frameSize]),
+					startSeconds: frameStart,
+					format: buffer.format
+				))
+				readIndex += frameSize
+			}
+			if readIndex > 0 {
+				samples.removeFirst(readIndex)
+			}
+			startSeconds = pendingStartSeconds + Double(readIndex) / buffer.format.sampleRate
+			return frames
+		}
+	}
+
 	private struct EchoReductionStats {
 		var delayMs: Int?
 		var lastEchoRms: Double = 0
@@ -74,8 +113,6 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		var processedChunks = 0
 		var processedCaptureFrames = 0
 		var processedRenderFrames = 0
-		var quietDoubleTalkPassthroughChunks = 0
-		var residualEchoSuppressedChunks = 0
 		var suppressedChunks = 0
 		var unavailableChunks = 0
 		var lastReason = "waiting_for_render_reference"
@@ -85,7 +122,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		private let queue = DispatchQueue(label: "com.graneri.combined-audio.collecting-sink")
 		private var samples: [Float] = []
 
-		func append(buffer: AVAudioPCMBuffer) {
+		func append(buffer: AVAudioPCMBuffer, hostTime _: UInt64) {
 			guard let channel = buffer.floatChannelData?[0] else {
 				return
 			}
@@ -109,26 +146,25 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 	}
 
 	private(set) lazy var microphoneSink: NativeAudioPcmSink = SourceSink {
-		[weak self] buffer in
-		self?.handleMicrophoneBuffer(buffer)
+		[weak self] buffer, hostTime in
+		self?.handleMicrophoneBuffer(buffer, hostTime: hostTime)
 	}
 	private(set) lazy var systemAudioSink: NativeAudioPcmSink = SourceSink {
-		[weak self] buffer in
-		self?.handleSystemAudioBuffer(buffer)
+		[weak self] buffer, hostTime in
+		self?.handleSystemAudioBuffer(buffer, hostTime: hostTime)
 	}
 	private let logger: NativeAudioStderrLogger
-	private static let residualLeakGateSystemAudioRmsThreshold = 0.003
-	private static let residualLeakGatePostAecRmsThreshold = 0.002
-	private static let residualLeakGateMaximumRenderAgeMilliseconds = 150.0
-	private static let residualLeakGateRawMicrophoneSilenceThreshold = 0.0001
-	private static let quietDoubleTalkRawRmsThreshold = 0.002
 	private let microphoneOutput: NativeAudioPcmSink
 	private let onDiagnostics: (@Sendable ([String: Any]) -> Void)?
 	private let systemAudioOutput: NativeAudioPcmSink
 	private let queue = DispatchQueue(label: "com.graneri.combined-audio.processing")
 	private var aecProcessor: WebRtcAec3Processor?
 	private var echoReductionStats = EchoReductionStats()
+	private var microphoneFrames: [TimedFrame] = []
+	private var microphoneFrameAssembler = FrameAssembler()
 	private var microphoneStats = SourceStats()
+	private var systemAudioFrames: [TimedFrame] = []
+	private var systemAudioFrameAssembler = FrameAssembler()
 	private var systemAudioStats = SourceStats()
 
 	init(
@@ -147,7 +183,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		let sampleRate = 48_000.0
 		let frameCount = 960
 		let delaySamples = 240
-		let totalFrames = frameCount * 8 + delaySamples
+		let totalFrames = frameCount * 50 + delaySamples
 		let microphoneOutput = CollectingSink()
 		let systemAudioOutput = CollectingSink()
 		let pipeline = CombinedAudioProcessingPipeline(
@@ -163,18 +199,26 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			Float(sin(Double(frameIndex) * 2.0 * .pi * 440.0 / sampleRate) * 0.4)
 		}
 		let localSpeechSamples = (0..<totalFrames).map { frameIndex in
-			Float(sin(Double(frameIndex) * 2.0 * .pi * 1_200.0 / sampleRate) * 0.08)
+			let active = frameIndex % Int(sampleRate / 5) < Int(sampleRate / 8)
+			let envelope = active ? 0.2 : 0.02
+			let time = Double(frameIndex) * 2.0 * .pi / sampleRate
+			return Float(
+				(sin(time * 1_200.0) * 0.7 + sin(time * 1_700.0) * 0.3) * envelope
+			)
 		}
 		var rawMicrophoneSamples: [Float] = []
 		var expectedSpeechSamples: [Float] = []
 
-		for chunkIndex in 0..<8 {
+		for chunkIndex in 0..<50 {
 			let renderStart = chunkIndex * frameCount
 			let renderBuffer = makeBuffer(
 				format: format,
 				samples: Array(renderSamples[renderStart..<renderStart + frameCount])
 			)
-			pipeline.systemAudioSink.append(buffer: renderBuffer)
+			let hostTime = AVAudioTime.hostTime(
+				forSeconds: 1 + Double(renderStart) / sampleRate
+			)
+			pipeline.systemAudioSink.append(buffer: renderBuffer, hostTime: hostTime)
 
 			let microphoneStart = renderStart + delaySamples
 			let microphoneSamples = (0..<frameCount).map { frameOffset in
@@ -188,7 +232,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 				contentsOf: Array(localSpeechSamples[microphoneStart..<microphoneStart + frameCount])
 			)
 			let microphoneBuffer = makeBuffer(format: format, samples: microphoneSamples)
-			pipeline.microphoneSink.append(buffer: microphoneBuffer)
+			pipeline.microphoneSink.append(buffer: microphoneBuffer, hostTime: hostTime)
 		}
 
 		let processedSamples = microphoneOutput.snapshot()
@@ -215,15 +259,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			format: format,
 			logger: logger
 		)
-		let activeRenderPassthroughErrorRms = runActiveRenderPassthroughSelfTest(
-			format: format,
-			logger: logger
-		)
-		let quietDoubleTalkPassthroughErrorRms = runQuietDoubleTalkPassthroughSelfTest(
-			format: format,
-			logger: logger
-		)
-		let residualLeakGateSuppressedChunks = runResidualLeakGateSelfTest(
+		let echoOnlyResidualRatio = runEchoOnlySelfTest(
 			format: format,
 			logger: logger
 		)
@@ -231,16 +267,11 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			rawErrorRms > 0 ? max(0, 1.0 - processedErrorRms / rawErrorRms) : 0
 
 		return SelfTestResult(
-			activeRenderPassthroughErrorRms: activeRenderPassthroughErrorRms,
+			echoOnlyResidualRatio: echoOnlyResidualRatio,
 			echoReductionRatio: echoReductionRatio,
 			noRenderPassthroughErrorRms: noRenderPassthroughErrorRms,
 			processedErrorRms: processedErrorRms,
-			quietDoubleTalkPassthroughErrorRms: quietDoubleTalkPassthroughErrorRms,
 			rawErrorRms: rawErrorRms,
-			quietDoubleTalkPassthroughChunks: pipeline.queue.sync {
-				pipeline.echoReductionStats.quietDoubleTalkPassthroughChunks
-			},
-			residualLeakGateSuppressedChunks: residualLeakGateSuppressedChunks,
 			suppressedChunks: pipeline.queue.sync {
 				pipeline.echoReductionStats.suppressedChunks
 			},
@@ -248,21 +279,9 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		)
 	}
 
-	private static func runActiveRenderPassthroughSelfTest(
+	private static func runEchoOnlySelfTest(
 		format: AVAudioFormat,
 		logger: NativeAudioStderrLogger
-	) -> Double {
-		runActiveRenderMicrophonePassthroughSelfTest(
-			format: format,
-			logger: logger,
-			microphoneAmplitude: 0.2
-		)
-	}
-
-	private static func runActiveRenderMicrophonePassthroughSelfTest(
-		format: AVAudioFormat,
-		logger: NativeAudioStderrLogger,
-		microphoneAmplitude: Double
 	) -> Double {
 		let microphoneOutput = CollectingSink()
 		let systemAudioOutput = CollectingSink()
@@ -272,69 +291,36 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			systemAudioOutput: systemAudioOutput
 		)
 		let frameCount = 960
-		let renderSamples = (0..<frameCount).map { frameIndex in
-			Float(sin(Double(frameIndex) * 2.0 * .pi * 440.0 / format.sampleRate) * 0.35)
+		let totalFrames = 50 * frameCount
+		let renderSamples = (0..<totalFrames).map { frameIndex in
+			Float(sin(Double(frameIndex) * 2.0 * .pi * 440.0 / format.sampleRate) * 0.4)
 		}
-		let microphoneSamples = (0..<frameCount).map { frameIndex in
-			Float(
-				sin(Double(frameIndex) * 2.0 * .pi * 1_370.0 / format.sampleRate) *
-					microphoneAmplitude
+		for chunkIndex in 0..<50 {
+			let start = chunkIndex * frameCount
+			let end = start + frameCount
+			let hostTime = AVAudioTime.hostTime(
+				forSeconds: 1 + Double(start) / format.sampleRate
+			)
+			let chunk = Array(renderSamples[start..<end])
+			pipeline.systemAudioSink.append(
+				buffer: makeBuffer(format: format, samples: chunk),
+				hostTime: hostTime
+			)
+			pipeline.microphoneSink.append(
+				buffer: makeBuffer(format: format, samples: chunk.map { $0 * 0.65 }),
+				hostTime: hostTime
 			)
 		}
-
-		pipeline.systemAudioSink.append(
-			buffer: makeBuffer(format: format, samples: renderSamples)
-		)
-		pipeline.microphoneSink.append(
-			buffer: makeBuffer(format: format, samples: microphoneSamples)
-		)
-
-		let processedSamples = microphoneOutput.snapshot()
-		let comparableCount = min(processedSamples.count, microphoneSamples.count)
-		return rmsError(
-			Array(processedSamples[0..<comparableCount]),
-			Array(microphoneSamples[0..<comparableCount])
-		)
-	}
-
-	private static func runResidualLeakGateSelfTest(
-		format: AVAudioFormat,
-		logger: NativeAudioStderrLogger
-	) -> Int {
-		let microphoneOutput = CollectingSink()
-		let systemAudioOutput = CollectingSink()
-		let pipeline = CombinedAudioProcessingPipeline(
-			logger: logger,
-			microphoneOutput: microphoneOutput,
-			systemAudioOutput: systemAudioOutput
-		)
-		let frameCount = 960
-		let renderSamples = (0..<frameCount).map { frameIndex in
-			Float(sin(Double(frameIndex) * 2.0 * .pi * 440.0 / format.sampleRate) * 0.35)
+		let output = microphoneOutput.snapshot()
+		let warmupFrames = 10 * frameCount
+		guard output.count > warmupFrames else {
+			return 1
 		}
-		let microphoneSamples = Array(repeating: Float(0), count: frameCount)
-
-		pipeline.systemAudioSink.append(
-			buffer: makeBuffer(format: format, samples: renderSamples)
-		)
-		pipeline.microphoneSink.append(
-			buffer: makeBuffer(format: format, samples: microphoneSamples)
-		)
-
-		return pipeline.queue.sync {
-			pipeline.echoReductionStats.residualEchoSuppressedChunks
-		}
-	}
-
-	private static func runQuietDoubleTalkPassthroughSelfTest(
-		format: AVAudioFormat,
-		logger: NativeAudioStderrLogger
-	) -> Double {
-		runActiveRenderMicrophonePassthroughSelfTest(
-			format: format,
-			logger: logger,
-			microphoneAmplitude: 0.0015
-		)
+		let raw = Array(renderSamples[warmupFrames..<min(output.count, totalFrames)])
+		let processed = Array(output[warmupFrames..<min(output.count, totalFrames)])
+		let rawRms = rmsError(raw.map { $0 * 0.65 }, Array(repeating: 0, count: raw.count))
+		let processedRms = rmsError(processed, Array(repeating: 0, count: processed.count))
+		return rawRms > 0 ? processedRms / rawRms : 1
 	}
 
 	private static func runNoRenderPassthroughSelfTest(
@@ -349,13 +335,26 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			systemAudioOutput: systemAudioOutput
 		)
 		let frameCount = 960
-		let microphoneSamples = (0..<frameCount).map { frameIndex in
+		let microphoneSamples = (0..<frameCount * 40).map { frameIndex in
 			Float(sin(Double(frameIndex) * 2.0 * .pi * 700.0 / format.sampleRate) * 0.2)
 		}
-		let microphoneBuffer = makeBuffer(format: format, samples: microphoneSamples)
-		pipeline.microphoneSink.append(buffer: microphoneBuffer)
+		for chunkIndex in 0..<40 {
+			let start = chunkIndex * frameCount
+			pipeline.microphoneSink.append(
+				buffer: makeBuffer(
+					format: format,
+					samples: Array(microphoneSamples[start..<start + frameCount])
+				),
+				hostTime: AVAudioTime.hostTime(
+					forSeconds: 1 + Double(start) / format.sampleRate
+				)
+			)
+		}
 
 		let processedSamples = microphoneOutput.snapshot()
+		guard !processedSamples.isEmpty else {
+			return 1
+		}
 		let comparableCount = min(processedSamples.count, microphoneSamples.count)
 		return rmsError(
 			Array(processedSamples[0..<comparableCount]),
@@ -413,21 +412,15 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		return sqrt(sumOfSquares / Double(frameCount))
 	}
 
-	private static func shouldGateResidualLeak(
-		postAecRms: Double,
-		preAecRms: Double,
-		renderAgeMilliseconds: Double?,
-		systemAudioRms: Double
-	) -> Bool {
-		guard let renderAgeMilliseconds,
-			renderAgeMilliseconds <= residualLeakGateMaximumRenderAgeMilliseconds,
-			systemAudioRms >= residualLeakGateSystemAudioRmsThreshold,
-			postAecRms < residualLeakGatePostAecRmsThreshold
-		else {
-			return false
+	private static func rms(_ samples: [Float]) -> Double {
+		guard !samples.isEmpty else {
+			return 0
 		}
-
-		return preAecRms < residualLeakGateRawMicrophoneSilenceThreshold
+		var sumOfSquares = 0.0
+		for sample in samples {
+			sumOfSquares += Double(sample * sample)
+		}
+		return sqrt(sumOfSquares / Double(samples.count))
 	}
 
 	func describe() -> [String: Any] {
@@ -480,45 +473,105 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		logStatsIfNeeded()
 	}
 
-	private func renderAgeMillisecondsLocked() -> Double? {
-		guard let renderObservedAt = systemAudioStats.lastObservedAt else {
-			return nil
-		}
-
-		return Double(DispatchTime.now().uptimeNanoseconds - renderObservedAt.uptimeNanoseconds) /
-			1_000_000
-	}
-
-	private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer) {
-		let processedBuffer = queue.sync {
+	private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
+		queue.sync {
 			observe(source: "microphone", buffer: buffer)
-			return reduceEchoLocked(buffer)
+			guard let processor = processorLocked(sampleRate: buffer.format.sampleRate) else {
+				microphoneOutput.append(buffer: buffer, hostTime: hostTime)
+				return
+			}
+			microphoneFrames.append(contentsOf: microphoneFrameAssembler.append(
+				buffer: buffer,
+				hostTime: hostTime,
+				frameSize: processor.frameSize
+			))
+			for processedBuffer in processAlignedFramesLocked() {
+				microphoneOutput.append(buffer: processedBuffer, hostTime: hostTime)
+			}
 		}
-		microphoneOutput.append(buffer: processedBuffer)
 	}
 
-	private func handleSystemAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+	private func handleSystemAudioBuffer(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
 		queue.sync {
 			observe(source: "systemAudio", buffer: buffer)
-			appendRenderReferenceLocked(buffer)
+			guard let processor = processorLocked(sampleRate: buffer.format.sampleRate) else {
+				systemAudioOutput.append(buffer: buffer, hostTime: hostTime)
+				return
+			}
+			systemAudioFrames.append(contentsOf: systemAudioFrameAssembler.append(
+				buffer: buffer,
+				hostTime: hostTime,
+				frameSize: processor.frameSize
+			))
+			for processedBuffer in processAlignedFramesLocked() {
+				microphoneOutput.append(buffer: processedBuffer, hostTime: hostTime)
+			}
+			systemAudioOutput.append(buffer: buffer, hostTime: hostTime)
 		}
-		systemAudioOutput.append(buffer: buffer)
 	}
 
-	private func appendRenderReferenceLocked(_ buffer: AVAudioPCMBuffer) {
-		guard let channel = buffer.floatChannelData?[0] else {
-			return
+	private func processAlignedFramesLocked() -> [AVAudioPCMBuffer] {
+		let toleranceSeconds = 0.015
+		let maximumBufferedFrames = 30
+		var microphoneOutputBuffers: [AVAudioPCMBuffer] = []
+		var consumedMicrophoneFrames = 0
+		var consumedSystemAudioFrames = 0
+
+		while consumedMicrophoneFrames < microphoneFrames.count &&
+			consumedSystemAudioFrames < systemAudioFrames.count
+		{
+			let microphoneFrame = microphoneFrames[consumedMicrophoneFrames]
+			let systemAudioFrame = systemAudioFrames[consumedSystemAudioFrames]
+			let offsetSeconds = systemAudioFrame.startSeconds - microphoneFrame.startSeconds
+			if offsetSeconds < -toleranceSeconds {
+				appendRenderReferenceLocked(systemAudioFrame)
+				consumedSystemAudioFrames += 1
+				continue
+			}
+			if offsetSeconds > toleranceSeconds {
+				microphoneOutputBuffers.append(Self.makeBuffer(
+					format: microphoneFrame.format,
+					samples: microphoneFrame.samples
+				))
+				consumedMicrophoneFrames += 1
+				continue
+			}
+			appendRenderReferenceLocked(systemAudioFrame)
+			microphoneOutputBuffers.append(reduceEchoLocked(microphoneFrame))
+			consumedMicrophoneFrames += 1
+			consumedSystemAudioFrames += 1
 		}
 
-		let frameCount = Int(buffer.frameLength)
-		guard frameCount > 0 else {
-			return
+		if consumedMicrophoneFrames > 0 {
+			microphoneFrames.removeFirst(consumedMicrophoneFrames)
 		}
+		if consumedSystemAudioFrames > 0 {
+			systemAudioFrames.removeFirst(consumedSystemAudioFrames)
+		}
+		if systemAudioFrames.count > maximumBufferedFrames {
+			let droppedFrames = systemAudioFrames.count - maximumBufferedFrames
+			for frame in systemAudioFrames.prefix(droppedFrames) {
+				appendRenderReferenceLocked(frame)
+			}
+			systemAudioFrames.removeFirst(droppedFrames)
+		}
+		if microphoneFrames.count > maximumBufferedFrames {
+			let passthroughFrames = microphoneFrames.count - maximumBufferedFrames
+			for frame in microphoneFrames.prefix(passthroughFrames) {
+				microphoneOutputBuffers.append(Self.makeBuffer(
+					format: frame.format,
+					samples: frame.samples
+				))
+			}
+			microphoneFrames.removeFirst(passthroughFrames)
+		}
+		return microphoneOutputBuffers
+	}
 
-		let samples = Array(UnsafeBufferPointer(start: channel, count: frameCount))
-		let processor = processorLocked(sampleRate: buffer.format.sampleRate)
+	private func appendRenderReferenceLocked(_ frame: TimedFrame) {
+		let processor = processorLocked(sampleRate: frame.format.sampleRate)
 		if let processor {
-			echoReductionStats.processedRenderFrames += processor.analyzeRender(samples: samples)
+			echoReductionStats.processedRenderFrames += processor.analyzeRender(samples: frame.samples)
 			echoReductionStats.lastReason = "render_reference_analyzed"
 		} else {
 			echoReductionStats.unavailableChunks += 1
@@ -526,81 +579,22 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		}
 	}
 
-	private func reduceEchoLocked(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-		guard let microphoneChannel = buffer.floatChannelData?[0] else {
-			echoReductionStats.unavailableChunks += 1
-			echoReductionStats.lastReason = "missing_microphone_channel"
-			return buffer
-		}
-
-		let frameCount = Int(buffer.frameLength)
-		guard frameCount > 0 else {
-			return buffer
-		}
-
-		guard let processor = processorLocked(sampleRate: buffer.format.sampleRate) else {
+	private func reduceEchoLocked(_ frame: TimedFrame) -> AVAudioPCMBuffer {
+		guard let processor = processorLocked(sampleRate: frame.format.sampleRate) else {
 			echoReductionStats.unavailableChunks += 1
 			echoReductionStats.lastReason = "aec3_unavailable"
-			return buffer
+			return Self.makeBuffer(format: frame.format, samples: frame.samples)
 		}
 
 		guard echoReductionStats.processedRenderFrames > 0 else {
-			echoReductionStats.lastPostRms = Self.rms(buffer)
+			echoReductionStats.lastPostRms = Self.rms(frame.samples)
 			echoReductionStats.lastPreRms = echoReductionStats.lastPostRms
 			echoReductionStats.lastReason = "waiting_for_render_reference"
-			return buffer
+			return Self.makeBuffer(format: frame.format, samples: frame.samples)
 		}
-
-		guard let processedBuffer = AVAudioPCMBuffer(
-			pcmFormat: buffer.format,
-			frameCapacity: buffer.frameCapacity
-		) else {
-			echoReductionStats.unavailableChunks += 1
-			echoReductionStats.lastReason = "buffer_allocation_failed"
-			return buffer
-		}
-
-		processedBuffer.frameLength = buffer.frameLength
-		guard let processedChannel = processedBuffer.floatChannelData?[0] else {
-			echoReductionStats.unavailableChunks += 1
-			echoReductionStats.lastReason = "missing_processed_channel"
-			return buffer
-		}
-
-		let inputSamples = Array(
-			UnsafeBufferPointer(start: microphoneChannel, count: frameCount),
-		)
-		let processed = processor.processCapture(samples: inputSamples)
-		for frameIndex in 0..<frameCount {
-			processedChannel[frameIndex] = processed.samples[frameIndex]
-		}
-
-		let preRms = Self.rms(buffer)
-		var postRms = Self.rms(processedBuffer)
-		let shouldPreserveQuietDoubleTalk =
-			preRms >= Self.residualLeakGateRawMicrophoneSilenceThreshold &&
-			preRms <= Self.quietDoubleTalkRawRmsThreshold &&
-			systemAudioStats.lastRms >= Self.residualLeakGateSystemAudioRmsThreshold
-		if shouldPreserveQuietDoubleTalk {
-			for frameIndex in 0..<frameCount {
-				processedChannel[frameIndex] = inputSamples[frameIndex]
-			}
-			postRms = preRms
-			echoReductionStats.quietDoubleTalkPassthroughChunks += 1
-		}
-		let shouldGateResidualLeak = Self.shouldGateResidualLeak(
-			postAecRms: postRms,
-			preAecRms: preRms,
-			renderAgeMilliseconds: renderAgeMillisecondsLocked(),
-			systemAudioRms: systemAudioStats.lastRms
-		)
-		if shouldGateResidualLeak {
-			for frameIndex in 0..<frameCount {
-				processedChannel[frameIndex] = 0
-			}
-			postRms = 0
-			echoReductionStats.residualEchoSuppressedChunks += 1
-		}
+		let processed = processor.processCapture(samples: frame.samples)
+		let preRms = Self.rms(frame.samples)
+		let postRms = Self.rms(processed.samples)
 		let processorStats = processor.stats()
 		let residualEchoLikelihood = processorStats.residualEchoLikelihood.isFinite
 			? processorStats.residualEchoLikelihood
@@ -623,16 +617,10 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		echoReductionStats.lastPreRms = preRms
 		echoReductionStats.residualEchoLikelihood = residualEchoLikelihood
 		echoReductionStats.residualEchoLikelihoodRecentMax = residualEchoLikelihoodRecentMax
-		if shouldGateResidualLeak {
-			echoReductionStats.lastReason = "residual_leak_gated"
-		} else if shouldPreserveQuietDoubleTalk {
-			echoReductionStats.lastReason = "quiet_double_talk_passthrough"
-		} else {
-			echoReductionStats.lastReason = processed.processedFrames > 0
-				? "aec3_active"
-				: "aec3_waiting_for_full_capture_frame"
-		}
-		return processedBuffer
+		echoReductionStats.lastReason = processed.processedFrames > 0
+			? "aec3_active"
+			: "aec3_waiting_for_full_capture_frame"
+		return Self.makeBuffer(format: frame.format, samples: processed.samples)
 	}
 
 	private func processorLocked(sampleRate: Double) -> WebRtcAec3Processor? {
@@ -680,12 +668,9 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			"echoCancellationProcessedCaptureFrames": echoReductionStats.processedCaptureFrames,
 			"echoCancellationProcessedChunks": echoReductionStats.processedChunks,
 			"echoCancellationProcessedRenderFrames": echoReductionStats.processedRenderFrames,
-			"echoCancellationQuietDoubleTalkPassthroughChunks": echoReductionStats
-				.quietDoubleTalkPassthroughChunks,
 			"echoCancellationResidualEchoLikelihood": echoReductionStats.residualEchoLikelihood ?? NSNull(),
 			"echoCancellationResidualEchoLikelihoodRecentMax": echoReductionStats
 				.residualEchoLikelihoodRecentMax ?? NSNull(),
-			"echoCancellationResidualEchoSuppressedChunks": echoReductionStats.residualEchoSuppressedChunks,
 			"echoCancellationSuppressedChunks": echoReductionStats.suppressedChunks,
 			"echoCancellationUnavailableChunks": echoReductionStats.unavailableChunks,
 			"microphoneOutput": "echo_reduced",
