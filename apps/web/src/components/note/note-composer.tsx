@@ -1635,7 +1635,7 @@ const useNoteComposerController = ({
 		isFloatingPanelResizing,
 		isFloatingPresentation,
 		isSidebarResizing,
-		displayTranscriptEntries: transcriptSession.displayTranscriptEntries,
+		liveTranscript: transcriptSession.liveTranscript,
 		hasMoreStoredTranscriptUtterances:
 			transcriptSession.hasMoreStoredTranscriptUtterances,
 		isGeneratingNotes: transcriptSession.isGeneratingNotes,
@@ -3158,9 +3158,10 @@ function NoteComposerTranscriptPanelContentBody({
 				}
 			>
 				<NoteTranscriptPanel
-					displayTranscriptEntries={controller.displayTranscriptEntries}
+					liveTranscript={controller.liveTranscript}
 					state={transcriptPanelState}
 					transcriptStartedAt={controller.transcriptStartedAt}
+					utterances={controller.orderedTranscriptUtterances}
 				/>
 			</CardContent>
 

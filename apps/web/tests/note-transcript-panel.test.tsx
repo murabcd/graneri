@@ -1,35 +1,82 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type * as desktopPlatform from "@workspace/platform/desktop";
+import type { DesktopPermissionsStatus } from "@workspace/platform/desktop-bridge";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteTranscriptPanel } from "../src/components/note/note-transcript-panel";
+import { createEmptyLiveTranscriptState } from "../src/lib/transcript";
+
+const desktop = vi.hoisted(() => ({
+	getPermissionsStatus: vi.fn(),
+	isDesktopPlatform: vi.fn(),
+}));
+
+vi.mock("@workspace/platform/desktop", async (importOriginal) => ({
+	...(await importOriginal<typeof desktopPlatform>()),
+	getDesktopPermissionsStatus: desktop.getPermissionsStatus,
+	isDesktopPlatform: desktop.isDesktopPlatform,
+}));
+
+const createPermissionStatus = (
+	state: "granted" | "prompt",
+): DesktopPermissionsStatus => ({
+	isDesktop: true,
+	platform: "darwin",
+	permissions: [
+		{
+			id: "accessibility",
+			description: "Named speaker access",
+			required: false,
+			state,
+			canRequest: state === "prompt",
+			canOpenSystemSettings: true,
+		},
+	],
+});
+
+beforeEach(() => {
+	vi.clearAllMocks();
+	desktop.isDesktopPlatform.mockReturnValue(true);
+	desktop.getPermissionsStatus.mockResolvedValue(
+		createPermissionStatus("prompt"),
+	);
+});
 
 afterEach(cleanup);
 
 describe("NoteTranscriptPanel", () => {
-	it("shows a verified remote name and leaves uncertain speech generic", () => {
+	const renderSpeakerTranscript = () =>
 		render(
 			<NoteTranscriptPanel
-				displayTranscriptEntries={[
+				liveTranscript={createEmptyLiveTranscriptState()}
+				utterances={[
+					{
+						id: "utterance-0",
+						speaker: "you",
+						startedAt: 1_000,
+						endedAt: 1_400,
+						text: "My speech",
+					},
 					{
 						id: "utterance-1",
-						isLive: false,
-						isProvisional: false,
 						speaker: "them",
 						speakerName: "Alex Morgan",
-						startedAt: 1_000,
-						endedAt: 1_500,
+						startedAt: 1_500,
+						endedAt: 1_900,
 						text: "Named speech",
-						utteranceIds: ["utterance-1"],
 					},
 					{
 						id: "utterance-2",
-						isLive: false,
-						isProvisional: false,
 						speaker: "them",
 						startedAt: 2_000,
 						endedAt: 2_500,
 						text: "Uncertain speech",
-						utteranceIds: ["utterance-2"],
 					},
 				]}
 				state={{
@@ -41,8 +88,63 @@ describe("NoteTranscriptPanel", () => {
 			/>,
 		);
 
-		expect(screen.getByText("Alex Morgan")).not.toBeNull();
+	it("hides all speaker headings when Accessibility is off", async () => {
+		renderSpeakerTranscript();
+		await waitFor(() =>
+			expect(desktop.getPermissionsStatus).toHaveBeenCalledOnce(),
+		);
+
+		expect(screen.getByText("My speech")).not.toBeNull();
+		expect(screen.getByText("Named speech Uncertain speech")).not.toBeNull();
+		expect(screen.queryByText("Named speech")).toBeNull();
+		expect(screen.queryByText("You")).toBeNull();
+		expect(screen.queryByText("Them")).toBeNull();
+		expect(screen.queryByText("Alex Morgan")).toBeNull();
+	});
+
+	it("shows speaker headings while Accessibility is on and hides them after revocation", async () => {
+		desktop.getPermissionsStatus.mockResolvedValue(
+			createPermissionStatus("granted"),
+		);
+		renderSpeakerTranscript();
+
+		await waitFor(() => expect(screen.getByText("Alex Morgan")).not.toBeNull());
+		expect(screen.getByText("You")).not.toBeNull();
 		expect(screen.getByText("Them")).not.toBeNull();
+		expect(screen.getByText("Named speech")).not.toBeNull();
+		expect(screen.getByText("Uncertain speech")).not.toBeNull();
+
+		desktop.getPermissionsStatus.mockResolvedValue(
+			createPermissionStatus("prompt"),
+		);
+		fireEvent.focus(window);
+
+		await waitFor(() => expect(screen.queryByText("Alex Morgan")).toBeNull());
+		expect(screen.queryByText("You")).toBeNull();
+		expect(screen.queryByText("Them")).toBeNull();
+		await waitFor(() =>
+			expect(screen.getByText("Named speech Uncertain speech")).not.toBeNull(),
+		);
+	});
+
+	it("hides speaker headings when a permission refresh fails", async () => {
+		desktop.getPermissionsStatus.mockResolvedValue(
+			createPermissionStatus("granted"),
+		);
+		renderSpeakerTranscript();
+		await waitFor(() => expect(screen.getByText("Alex Morgan")).not.toBeNull());
+
+		desktop.getPermissionsStatus.mockRejectedValue(
+			new Error("Permission status unavailable"),
+		);
+		fireEvent.focus(window);
+
+		await waitFor(() => expect(screen.queryByText("Alex Morgan")).toBeNull());
+		expect(screen.queryByText("You")).toBeNull();
+		expect(screen.queryByText("Them")).toBeNull();
+		await waitFor(() =>
+			expect(screen.getByText("Named speech Uncertain speech")).not.toBeNull(),
+		);
 	});
 
 	it("loads the next completed-transcript page on demand", async () => {
@@ -50,16 +152,14 @@ describe("NoteTranscriptPanel", () => {
 		const user = userEvent.setup();
 		render(
 			<NoteTranscriptPanel
-				displayTranscriptEntries={[
+				liveTranscript={createEmptyLiveTranscriptState()}
+				utterances={[
 					{
 						id: "utterance-1",
-						isLive: false,
-						isProvisional: false,
 						speaker: "you",
 						startedAt: 1_000,
 						endedAt: 1_500,
 						text: "First transcript page",
-						utteranceIds: ["utterance-1"],
 					},
 				]}
 				state={{

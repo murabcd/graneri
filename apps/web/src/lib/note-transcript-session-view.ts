@@ -130,7 +130,6 @@ export const createVisibleTranscriptView = ({
 		null;
 
 	return {
-		visibleDisplayTranscriptEntries,
 		visibleExportTranscript: createTranscriptExportText({
 			entries: visibleDisplayTranscriptEntries,
 			startedAt: visibleTranscriptStartedAt,

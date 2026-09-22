@@ -1,3 +1,4 @@
+import { isDesktopPlatform } from "@workspace/platform/desktop";
 import { Button } from "@workspace/ui/components/button";
 import {
 	MessageScroller,
@@ -14,27 +15,41 @@ import {
 	CHAT_MESSAGE_MAX_WIDTH_CLASS,
 	USER_CHAT_BUBBLE_CLASS,
 } from "@/components/chat/message-layout";
-import type { createTranscriptDisplayEntries } from "@/lib/transcript";
-import { formatTranscriptElapsed } from "@/lib/transcript";
+import { useDesktopAccessibilityPermission } from "@/hooks/use-desktop-accessibility-permission";
+import {
+	createTranscriptDisplayEntries,
+	formatTranscriptElapsed,
+	type LiveTranscriptState,
+	type TranscriptUtterance,
+} from "@/lib/transcript";
 import { NOTE_POPOVER_SCROLLER_BUTTON_CLASS } from "./note-popover-scroll";
 import type { NoteTranscriptPanelState } from "./note-transcript-panel-state";
 
 const TRANSCRIPT_PROGRESSIVE_RENDER_THRESHOLD = 32;
 const TRANSCRIPT_INITIAL_WINDOW_SIZE = 32;
 
-type TranscriptDisplayEntry = ReturnType<
-	typeof createTranscriptDisplayEntries
->[number];
-
 export function NoteTranscriptPanel({
-	displayTranscriptEntries,
+	liveTranscript,
 	state,
 	transcriptStartedAt,
+	utterances,
 }: {
-	displayTranscriptEntries: TranscriptDisplayEntry[];
+	liveTranscript: LiveTranscriptState;
 	state: NoteTranscriptPanelState;
 	transcriptStartedAt: number | null;
+	utterances: TranscriptUtterance[];
 }) {
+	const { state: accessibilityPermissionState } =
+		useDesktopAccessibilityPermission(isDesktopPlatform("darwin"));
+	const displayTranscriptEntries = React.useMemo(
+		() =>
+			createTranscriptDisplayEntries({
+				includeSpeakerNames: accessibilityPermissionState === "granted",
+				liveTranscript,
+				utterances,
+			}),
+		[accessibilityPermissionState, liveTranscript, utterances],
+	);
 	const deferredDisplayTranscriptEntries = React.useDeferredValue(
 		displayTranscriptEntries,
 	);
@@ -132,8 +147,6 @@ export function NoteTranscriptPanel({
 							) : null}
 							{renderedTranscriptEntries.map((utterance) => {
 								const isUserTranscript = utterance.speaker === "you";
-								const speakerLabel =
-									utterance.speakerName ?? (isUserTranscript ? "You" : "Them");
 								const elapsed =
 									transcriptStartedAt != null
 										? formatTranscriptElapsed(
@@ -150,9 +163,12 @@ export function NoteTranscriptPanel({
 											isUserTranscript ? "items-end" : "items-start",
 										)}
 									>
-										<p className="px-1 text-xs font-medium text-muted-foreground">
-											{speakerLabel}
-										</p>
+										{accessibilityPermissionState === "granted" ? (
+											<p className="px-1 text-xs font-medium text-muted-foreground">
+												{utterance.speakerName ??
+													(isUserTranscript ? "You" : "Them")}
+											</p>
+										) : null}
 										<div
 											className={cn(
 												CHAT_MESSAGE_MAX_WIDTH_CLASS,

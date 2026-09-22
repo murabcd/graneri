@@ -179,9 +179,9 @@ export const useNoteTranscriptSession = ({
 		? captureLatestTranscriptSessionSummary
 		: currentNoteLatestTranscriptSessionSummary;
 	const {
-		visibleDisplayTranscriptEntries,
 		visibleExportTranscript,
 		visibleFullTranscript,
+		visibleLiveTranscript,
 		visibleLiveTranscriptEntries,
 		visibleOrderedTranscriptUtterances,
 		visibleTranscriptStartedAt,
@@ -803,7 +803,7 @@ export const useNoteTranscriptSession = ({
 		isSpeechListening,
 		loadMoreStoredTranscriptUtterances:
 			visibleTranscriptSessionRepository.loadMoreLatestTranscriptUtterances,
-		displayTranscriptEntries: visibleDisplayTranscriptEntries,
+		liveTranscript: visibleLiveTranscript,
 		liveTranscriptEntries: visibleLiveTranscriptEntries,
 		orderedTranscriptUtterances: visibleOrderedTranscriptUtterances,
 		recoveryStatus: isViewingCaptureScope

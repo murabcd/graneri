@@ -64,6 +64,7 @@ export function useDesktopAccessibilityPermission(enabled: boolean) {
 			})
 			.catch((cause: unknown) => {
 				if (sequence !== operationSequenceRef.current) return;
+				setState(null);
 				setError(
 					getErrorMessage(cause, "Could not check Accessibility permission."),
 				);

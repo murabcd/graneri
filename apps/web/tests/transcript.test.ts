@@ -39,6 +39,40 @@ describe("transcript display entries", () => {
 		);
 	});
 
+	it("groups named remote turns like the original transcript when names are hidden", () => {
+		const utterances = [
+			{
+				id: "alex",
+				speaker: "them" as const,
+				speakerName: "Alex Morgan",
+				text: "First thought",
+				startedAt: 1_000,
+				endedAt: 2_000,
+			},
+			{
+				id: "sam",
+				speaker: "them" as const,
+				speakerName: "Sam Lee",
+				text: "Second thought",
+				startedAt: 3_000,
+				endedAt: 4_000,
+			},
+		];
+		const entries = createTranscriptDisplayEntries({
+			includeSpeakerNames: false,
+			liveTranscript: createEmptyLiveTranscriptState(),
+			utterances,
+		});
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			speaker: "them",
+			text: "First thought Second thought",
+			utteranceIds: ["alex", "sam"],
+		});
+		expect(entries[0]?.speakerName).toBeUndefined();
+	});
+
 	it("starts a new same-speaker block after a period-ending chunk", () => {
 		expect(
 			createTranscriptDisplayEntries({

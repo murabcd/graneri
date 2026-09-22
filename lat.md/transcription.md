@@ -158,6 +158,12 @@ display sections and text export; adjacent `them` turns with different names
 must never merge. [[convex/transcriptSessions.ts]] stores the same field on
 utterances and uses it in canonical transcript text. An absent name is a
 deliberate uncertainty state, not a guess or a separate speaker identity.
+The [[apps/web/src/components/note/note-transcript-panel.tsx]] displays speaker
+headings only while macOS Accessibility permission is granted. It shows `You`
+for microphone speech and a captured name or `Them` for remote speech. With
+permission off, the panel omits speaker headings and groups adjacent remote
+turns as the original name-free transcript did. Transcript export retains the
+recorded names independently of this display choice.
 
 ## Native audio separation
 

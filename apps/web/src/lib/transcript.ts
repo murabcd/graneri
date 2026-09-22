@@ -212,14 +212,19 @@ export const createLiveTranscriptEntries = (
 		});
 
 export const createTranscriptDisplayEntries = ({
+	includeSpeakerNames = true,
 	liveTranscript,
 	utterances,
 }: {
+	includeSpeakerNames?: boolean;
 	liveTranscript: LiveTranscriptState;
 	utterances: TranscriptUtterance[];
 }): TranscriptDisplayEntry[] => {
+	const displayUtterances = includeSpeakerNames
+		? utterances
+		: utterances.map((utterance) => ({ ...utterance, speakerName: undefined }));
 	const committedEntries: TranscriptDisplayEntry[] =
-		createTranscriptTextSections(utterances).map((section) => ({
+		createTranscriptTextSections(displayUtterances).map((section) => ({
 			endedAt: section.endedAt,
 			id: section.id,
 			isLive: false,
