@@ -76,11 +76,12 @@ it on the home view when no recording or imminent meeting is active. A reminder
 dismissal is local, time-bounded, and never counts as permission. The native
 request opens System Settings, where
 [[apps/web/src/components/desktop/accessibility-guide-screen.tsx]] provides
-the draggable app bundle. The Voice settings entry at
-[[apps/web/src/components/settings/accessibility-voice-setting.tsx]] remains
-available after the home reminder stops appearing. The renderer does not inspect System Settings or
-infer trust from the guide's visibility; downstream speaker attribution must
-use the current native trust state.
+the draggable app bundle. The Voice settings entry in
+[[apps/web/src/components/settings/voice-settings.tsx]] remains available after
+the home reminder stops appearing. It waits for native preferences and
+Accessibility status before rendering its switches. The renderer does not
+inspect System Settings or infer trust from the guide's visibility; downstream
+speaker attribution must use the current native trust state.
 
 ## Chat interaction sessions
 

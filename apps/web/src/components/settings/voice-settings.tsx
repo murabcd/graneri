@@ -20,6 +20,7 @@ import {
 } from "@workspace/ui/components/select";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useDesktopAccessibilityPermission } from "@/hooks/use-desktop-accessibility-permission";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { logError } from "@/lib/logger";
 import {
@@ -29,7 +30,6 @@ import {
 	parseTranscriptionLanguageSelectValue,
 	TRANSCRIPTION_LANGUAGE_OPTIONS,
 } from "@/lib/transcription-languages";
-import { AccessibilityVoiceSetting } from "./accessibility-voice-setting";
 import { SettingsSwitchRow } from "./settings-switch-row";
 import { useDesktopVoiceSettings } from "./use-desktop-voice-settings";
 
@@ -56,7 +56,10 @@ const handleMicrophoneAction = async (value: string) => {
 
 export function VoiceSettings() {
 	const isDesktopApp = isDesktopRuntime();
+	const isMacDesktopApp = isDesktopPlatform("darwin");
 	const desktopVoice = useDesktopVoiceSettings(isDesktopApp);
+	const accessibilityPermission =
+		useDesktopAccessibilityPermission(isMacDesktopApp);
 	const isSavingDesktopVoicePreference = desktopVoice.savingPreference !== null;
 	const isDictationHotkeyDisabled =
 		desktopVoice.preferences?.dictationHotkeyMode === "off";
@@ -65,6 +68,9 @@ export function VoiceSettings() {
 	const transcriptionLanguageValue = getTranscriptionLanguageSelectValue(
 		userPreferences?.transcriptionLanguage,
 	);
+	const isLoadingDesktopState =
+		desktopVoice.isLoading ||
+		(isMacDesktopApp && !accessibilityPermission.isLoaded);
 
 	const handleTranscriptionLanguageChange = async (value: string) => {
 		setIsSaving(true);
@@ -84,6 +90,10 @@ export function VoiceSettings() {
 			setIsSaving(false);
 		}
 	};
+
+	if (isLoadingDesktopState) {
+		return <div className="py-4" aria-hidden="true" />;
+	}
 
 	return (
 		<div className="py-4">
@@ -120,7 +130,26 @@ export function VoiceSettings() {
 								</SelectContent>
 							</Select>
 						</Field>
-						{isDesktopPlatform("darwin") ? <AccessibilityVoiceSetting /> : null}
+						{isMacDesktopApp ? (
+							<div className="space-y-2">
+								<SettingsSwitchRow
+									id="settings-accessibility-speaker-names"
+									label="See who's speaking"
+									checked={accessibilityPermission.state === "granted"}
+									disabled={accessibilityPermission.isRequesting}
+									onCheckedChange={(checked) => {
+										void (checked
+											? accessibilityPermission.request()
+											: accessibilityPermission.openSettings());
+									}}
+								/>
+								{accessibilityPermission.error ? (
+									<p role="alert" className="text-xs text-destructive">
+										{accessibilityPermission.error}
+									</p>
+								) : null}
+							</div>
+						) : null}
 						<SettingsSwitchRow
 							id="settings-hold-to-dictate-hotkey"
 							label="Hold-to-dictate hotkey"
