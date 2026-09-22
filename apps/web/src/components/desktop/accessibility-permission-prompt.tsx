@@ -73,7 +73,7 @@ export function AccessibilityPermissionPrompt({
 				showCloseButton={false}
 				onPointerDownOutside={(event) => event.preventDefault()}
 				overlayClassName="bg-black/75 backdrop-blur-[3px]"
-				className="gap-0 rounded-[18px] bg-[#2b2b2b] p-2 text-white ring-1 ring-white/10 sm:max-w-sm"
+				className="gap-0 rounded-[18px] bg-[#292929] p-2 font-[system-ui] text-white ring-1 ring-white/10 sm:max-w-sm"
 			>
 				<button
 					type="button"
@@ -87,16 +87,16 @@ export function AccessibilityPermissionPrompt({
 					Remind me later
 				</button>
 				<img
-					src="/accessibility-speakers.svg"
+					src="/accessibility-speakers.png"
 					alt=""
 					className="aspect-352/203 w-full rounded-xl object-cover"
 				/>
 				<div className="flex flex-col gap-3 p-2 pt-5">
 					<div className="space-y-2">
-						<DialogTitle className="font-serif text-[30px] leading-tight font-normal">
+						<DialogTitle className="font-serif text-[24px] leading-7 font-normal">
 							See who's speaking
 						</DialogTitle>
-						<DialogDescription className="text-base leading-snug text-neutral-400">
+						<DialogDescription className="text-pretty text-[14px] leading-[18px] tracking-[0.01em] text-neutral-400">
 							Graneri needs Accessibility permission to identify speakers by
 							name. Until you enable it, your transcripts won’t clearly show who
 							said what.
