@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { appendFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -54,10 +53,9 @@ import { createDesktopStorage } from "./desktop-storage.mjs";
 import { createDesktopSystemAudioPolicy as createSystemAudioPolicy } from "./desktop-transcription-policy.mjs";
 import {
 	createDesktopTranscriptionRuntime,
-	createEmptyLiveTranscriptState,
 	createInitialTranscriptionSessionState,
-	createTranscriptRecoveryStatus,
 } from "./desktop-transcription-runtime.mjs";
+import { createDesktopTranscriptionSession } from "./desktop-transcription-session.mjs";
 import { createDesktopTray } from "./desktop-tray.mjs";
 import {
 	createDesktopUpdater,
@@ -157,10 +155,6 @@ const meetingDetectionStateChannel =
 	desktopIpcContract.subscribe.onMeetingDetectionState;
 const desktopNavigationChannel = desktopIpcContract.subscribe.onNavigate;
 const desktopAppCommandChannel = desktopIpcContract.subscribe.onAppCommand;
-const maxRecoveryAttempts = 3;
-const recoveryBackoffMs = [750, 1_500, 3_000];
-const systemAudioAttachRetryBackoffMs = [750, 1_500, 3_000];
-const realtimeSessionRolloverMs = 29 * 60 * 1000;
 const shouldLogDesktopTurnDebug =
 	app.isPackaged !== true ||
 	process.env.GRANERI_ENABLE_TRANSCRIPTION_DEBUG === "1";
@@ -292,23 +286,7 @@ const preSubscriberCaptureChunks = {
 	systemAudio: [],
 };
 let desktopTranscriptionRuntime = null;
-let transcriptionConfig = {
-	autoStartKey: null,
-	lang: undefined,
-	scopeKey: null,
-};
-let transcriptionPolicy = null;
-let transcriptionRecoveryAttempt = 0;
-let transcriptionReconnectTimeoutId = null;
-let transcriptionRolloverTimeoutId = null;
-let systemAudioAttachRetryTimeoutId = null;
-let systemAudioAttachRetryAttempt = 0;
-let transcriptionLastHandledAutoStartKey = null;
-let transcriptionLifecycleOperationId = 0;
-let transcriptionPendingSystemAudioAttachPromise = null;
-let transcriptionPendingStartPromise = null;
-let transcriptionPendingStopPromise = null;
-let currentTranscriptionSessionCorrelationId = null;
+let desktopTranscriptionSession = null;
 let desktopNavigationState = null;
 const areDesktopTestHooksEnabled =
 	app.isPackaged !== true || process.env.GRANERI_ENABLE_TEST_HOOKS === "1";
@@ -711,7 +689,11 @@ const appendTranscriptionUtterance = (utterance) => {
 desktopTranscriptionRuntime = createDesktopTranscriptionRuntime({
 	getLiveTranscript: (speaker) =>
 		latestTranscriptionSessionState.liveTranscript[speaker],
-	getSessionId: () => currentTranscriptionSessionCorrelationId,
+	getSessionId: () =>
+		requireDesktopService(
+			desktopTranscriptionSession,
+			"desktopTranscriptionSession",
+		).getSessionId(),
 	logTurnDebug: logDesktopTurnDebug,
 	onLiveTranscriptChanged: (speaker, value) => {
 		patchTranscriptionSessionState({
@@ -725,7 +707,10 @@ desktopTranscriptionRuntime = createDesktopTranscriptionRuntime({
 		});
 	},
 	onTransportInterrupted: (event) =>
-		handleDesktopTransportInterrupted({
+		requireDesktopService(
+			desktopTranscriptionSession,
+			"desktopTranscriptionSession",
+		).handleTransportInterrupted({
 			message: event.message,
 			speaker: event.speaker,
 		}),
@@ -743,179 +728,10 @@ const createDesktopSystemAudioPolicy = () => {
 	});
 };
 
-const createSystemAudioStatusFromPolicy = (policy) => ({
-	state: !policy.systemAudioCapability.isSupported ? "unsupported" : "ready",
-	sourceMode: policy.systemAudioCapability.sourceMode,
-});
-
-const resolveCurrentSystemAudioStatus = (policy) => {
-	if (!policy.systemAudioCapability.isSupported) {
-		return createSystemAudioStatusFromPolicy(policy);
-	}
-
-	if (desktopTranscriptionRuntime.isActive("them")) {
-		return {
-			sourceMode: desktopTranscriptionRuntime.getSourceMode("them"),
-			state: "connected",
-		};
-	}
-
-	return createSystemAudioStatusFromPolicy(policy);
-};
-
 const getDesktopRealtimeAvailability = () =>
 	process.platform === "darwin" &&
 	Boolean(process.env.SITE_URL) &&
 	Boolean(resolveMicrophoneHelperPath());
-
-const isNonRecoverableStartError = (error) => {
-	if (!(error instanceof Error)) {
-		return false;
-	}
-
-	const message = error.message.toLowerCase();
-
-	return (
-		message.includes("microphone access") ||
-		message.includes("not configured") ||
-		message.includes("permission") ||
-		message.includes("system settings")
-	);
-};
-
-const normalizeTranscriptionError = (error) => {
-	if (!(error instanceof Error)) {
-		return {
-			code: "unknown",
-			message: "Failed to start live transcription.",
-		};
-	}
-
-	const message = error.message;
-	const normalizedMessage = message.toLowerCase();
-
-	if (
-		normalizedMessage.includes("blocked") ||
-		normalizedMessage.includes("permission denied") ||
-		normalizedMessage.includes("microphone access is required") ||
-		isNonRecoverableStartError(error)
-	) {
-		return {
-			code: "permission_denied",
-			message,
-		};
-	}
-
-	if (
-		normalizedMessage.includes("unavailable") ||
-		normalizedMessage.includes("missing")
-	) {
-		return {
-			code: "device_unavailable",
-			message,
-		};
-	}
-
-	if (normalizedMessage.includes("connect")) {
-		return {
-			code: "connection_failed",
-			message,
-		};
-	}
-
-	return {
-		code: "configuration_failed",
-		message,
-	};
-};
-
-const clearTranscriptionReconnectTimeout = () => {
-	if (transcriptionReconnectTimeoutId == null) {
-		return;
-	}
-
-	clearTimeout(transcriptionReconnectTimeoutId);
-	transcriptionReconnectTimeoutId = null;
-};
-
-const clearTranscriptionRolloverTimeout = () => {
-	if (transcriptionRolloverTimeoutId == null) {
-		return;
-	}
-
-	clearTimeout(transcriptionRolloverTimeoutId);
-	transcriptionRolloverTimeoutId = null;
-};
-
-const scheduleTranscriptionRollover = () => {
-	clearTranscriptionRolloverTimeout();
-
-	transcriptionRolloverTimeoutId = setTimeout(() => {
-		transcriptionRolloverTimeoutId = null;
-		void handleDesktopTransportInterrupted({
-			message: "Realtime transcription session reached the rollover window.",
-			planned: true,
-			speaker: "you",
-		});
-	}, realtimeSessionRolloverMs);
-};
-
-const isCurrentTranscriptionOperation = (operationId) =>
-	transcriptionLifecycleOperationId === operationId;
-
-const clearSystemAudioAttachRetryTimeout = ({ resetAttempt = false } = {}) => {
-	if (systemAudioAttachRetryTimeoutId != null) {
-		clearTimeout(systemAudioAttachRetryTimeoutId);
-		systemAudioAttachRetryTimeoutId = null;
-	}
-
-	if (resetAttempt) {
-		systemAudioAttachRetryAttempt = 0;
-	}
-};
-
-const refreshTranscriptionPolicy = () => {
-	transcriptionPolicy = createDesktopSystemAudioPolicy();
-
-	patchTranscriptionSessionState({
-		isAvailable: getDesktopRealtimeAvailability(),
-		systemAudioStatus: resolveCurrentSystemAudioStatus(transcriptionPolicy),
-	});
-
-	return transcriptionPolicy;
-};
-
-const ensureDesktopMicrophonePermissionGranted = async () => {
-	let microphonePermission = getMicrophonePermission();
-
-	if (microphonePermission.state === "granted") {
-		return;
-	}
-
-	if (
-		microphonePermission.state === "prompt" &&
-		microphonePermission.canRequest
-	) {
-		await requestPermission("microphone");
-		microphonePermission = getMicrophonePermission();
-	}
-
-	if (microphonePermission.state === "granted") {
-		return;
-	}
-
-	if (microphonePermission.state === "blocked") {
-		throw new Error(
-			"Microphone access is blocked. Enable it in system settings, then try again.",
-		);
-	}
-
-	if (microphonePermission.state === "unsupported") {
-		throw new Error("Microphone capture is not available on this platform.");
-	}
-
-	throw new Error("Microphone access is required to start live transcription.");
-};
 
 const wait = (durationMs) =>
 	new Promise((resolvePromise) => {
@@ -1029,798 +845,43 @@ const rememberRendererNavigation = async (urlString) => {
 	).remember(urlString);
 };
 
-const requestTranscriptionAutoStart = (autoStartKey) => {
-	if (
-		autoStartKey == null ||
-		transcriptionLastHandledAutoStartKey === autoStartKey ||
-		["starting", "listening", "reconnecting"].includes(
-			latestTranscriptionSessionState.phase,
-		)
-	) {
-		return;
-	}
-
-	void startDesktopTranscriptionSession().then((didStart) => {
-		if (didStart) {
-			transcriptionLastHandledAutoStartKey = autoStartKey;
-		}
-	});
-};
-
-const configureDesktopTranscriptionSession = ({
-	autoStartKey = null,
-	lang,
-	scopeKey = null,
-}) => {
-	const previousScopeKey = transcriptionConfig.scopeKey;
-	transcriptionConfig = {
-		autoStartKey,
-		lang,
-		scopeKey,
-	};
-
-	patchTranscriptionSessionState({
-		autoStartKey,
-		isAvailable: getDesktopRealtimeAvailability(),
-		scopeKey,
-	});
-	refreshTranscriptionPolicy();
-
-	if (previousScopeKey !== scopeKey) {
-		transcriptionLastHandledAutoStartKey = null;
-		void stopDesktopTranscriptionSession({
-			preserveUtterances: false,
-			reason: "configure-scope-changed",
-			resetError: true,
-			resetRecovery: true,
-		});
-	}
-
-	if (autoStartKey != null) {
-		requestTranscriptionAutoStart(autoStartKey);
-	}
-};
-
-const stopTranscriptionSpeakerTransport = async (speaker) => {
-	await desktopRealtimeTransport.stop(speaker, {
-		getLiveItemId: (currentSpeaker) =>
-			desktopTranscriptionRuntime.getLiveItemId(currentSpeaker),
-	});
-	desktopTranscriptionRuntime.appendTail(speaker);
-};
-
-const stopTranscriptionSpeakerCapture = async (speaker) => {
-	if (speaker === "you") {
-		await stopMicrophoneCapture();
-	} else {
-		await stopSystemAudioCapture();
-	}
-	desktopTranscriptionRuntime.reset(speaker);
-};
-
-const stopTranscriptionSpeaker = async (speaker) => {
-	await stopTranscriptionSpeakerTransport(speaker);
-	await stopTranscriptionSpeakerCapture(speaker);
-};
-
-const cleanupDesktopTranscriptionSession = async ({
-	operationId,
-	preserveUtterances,
-}) => {
-	await Promise.all([
-		stopTranscriptionSpeakerTransport("you"),
-		stopTranscriptionSpeakerTransport("them"),
-	]);
-	await stopTranscriptionSpeakerCapture("you");
-	await stopTranscriptionSpeakerCapture("them");
-	await chromeMeetingSpeakerAttribution.stop();
-	clearTranscriptionRolloverTimeout();
-
-	if (transcriptionLifecycleOperationId !== operationId) {
-		return;
-	}
-
-	patchTranscriptionSessionState({
-		isConnecting: false,
-		isListening: false,
-		liveTranscript: createEmptyLiveTranscriptState(),
-		phase: "idle",
-		systemAudioStatus: transcriptionPolicy
-			? resolveCurrentSystemAudioStatus(transcriptionPolicy)
-			: latestTranscriptionSessionState.systemAudioStatus,
-		utterances: preserveUtterances
-			? latestTranscriptionSessionState.utterances
-			: [],
-	});
-};
-
-const connectDesktopTranscriptionSpeaker = async ({
-	lang,
-	operationId,
-	source,
-	sourceMode,
-	speaker,
-}) => {
-	if (!nativeAudioCapture.getCaptureSampleRate(source)) {
-		if (speaker === "you") {
-			await startMicrophoneCapture();
-		} else {
-			await startSystemAudioCapture();
-		}
-	}
-
-	if (!isCurrentTranscriptionOperation(operationId)) {
-		if (speaker === "you") {
-			await stopMicrophoneCapture().catch(() => {});
-		} else {
-			await stopSystemAudioCapture().catch(() => {});
-		}
-		return false;
-	}
-
-	try {
-		await desktopRealtimeTransport.start({
-			lang,
-			source,
-			speaker,
-		});
-	} catch (error) {
-		if (speaker === "you") {
-			await stopMicrophoneCapture().catch(() => {});
-		} else {
-			await stopSystemAudioCapture().catch(() => {});
-		}
-		throw error;
-	}
-
-	if (!isCurrentTranscriptionOperation(operationId)) {
-		await desktopRealtimeTransport.stop(speaker).catch(() => {});
-		if (speaker === "you") {
-			await stopMicrophoneCapture().catch(() => {});
-		} else {
-			await stopSystemAudioCapture().catch(() => {});
-		}
-		return false;
-	}
-
-	desktopTranscriptionRuntime.connect(speaker, sourceMode);
-};
-
-const scheduleAutomaticSystemAudioAttachRetry = ({
-	attempt,
-	message,
-	operationId,
-}) => {
-	if (
-		attempt >= systemAudioAttachRetryBackoffMs.length ||
-		transcriptionLifecycleOperationId !== operationId ||
-		latestTranscriptionSessionState.phase !== "listening" ||
-		desktopTranscriptionRuntime.isActive("them")
-	) {
-		return false;
-	}
-
-	const policy = transcriptionPolicy ?? refreshTranscriptionPolicy();
-	if (
-		!policy.systemAudioCapability.shouldAutoBootstrap ||
-		policy.systemAudioCapability.sourceMode !== "desktop-native"
-	) {
-		return false;
-	}
-
-	clearSystemAudioAttachRetryTimeout();
-	systemAudioAttachRetryAttempt = attempt + 1;
-
-	const delay =
-		systemAudioAttachRetryBackoffMs[attempt] ??
-		systemAudioAttachRetryBackoffMs[systemAudioAttachRetryBackoffMs.length - 1];
-
-	logError({
-		error: {
-			attempt: systemAudioAttachRetryAttempt,
-			delay,
-			message,
+desktopTranscriptionSession = createDesktopTranscriptionSession({
+	attribution: chromeMeetingSpeakerAttribution,
+	capture: {
+		clearBufferedChunks: () => {
+			preSubscriberCaptureChunks.microphone = [];
+			preSubscriberCaptureChunks.systemAudio = [];
 		},
-		message: "[transcription] scheduling automatic system audio retry",
-	});
-
-	systemAudioAttachRetryTimeoutId = setTimeout(() => {
-		systemAudioAttachRetryTimeoutId = null;
-
-		if (
-			transcriptionLifecycleOperationId !== operationId ||
-			latestTranscriptionSessionState.phase !== "listening" ||
-			desktopTranscriptionRuntime.isActive("them")
-		) {
-			return;
-		}
-
-		void attachDesktopSystemAudio({
-			automatic: true,
-			attempt: systemAudioAttachRetryAttempt,
-			operationId,
-		});
-	}, delay);
-
-	return true;
-};
-
-const attachDesktopSystemAudio = async ({
-	automatic,
-	attempt = 0,
-	operationId,
-}) => {
-	if (transcriptionPendingSystemAudioAttachPromise) {
-		return await transcriptionPendingSystemAudioAttachPromise;
-	}
-
-	const attachPromise = (async () => {
-		const policy = transcriptionPolicy ?? refreshTranscriptionPolicy();
-
-		if (
-			!isCurrentTranscriptionOperation(operationId) ||
-			!policy.systemAudioCapability.isSupported ||
-			policy.systemAudioCapability.sourceMode !== "desktop-native" ||
-			desktopTranscriptionRuntime.isActive("them")
-		) {
-			logDesktopTurnDebug("system_audio.attach_skipped", {
-				automatic,
-				attempt,
-				isCurrentOperation: isCurrentTranscriptionOperation(operationId),
-				isSupported: policy.systemAudioCapability.isSupported,
-				operationId,
-				sourceMode: policy.systemAudioCapability.sourceMode,
-				themTransportActive: desktopTranscriptionRuntime.isActive("them"),
-			});
-			return false;
-		}
-
-		try {
-			logDesktopTurnDebug("system_audio.attach_started", {
-				automatic,
-				attempt,
-				operationId,
-				sourceMode: policy.systemAudioCapability.sourceMode,
-			});
-			const didConnect = await connectDesktopTranscriptionSpeaker({
-				lang: transcriptionConfig.lang,
-				operationId,
-				source: "systemAudio",
-				sourceMode: policy.systemAudioCapability.sourceMode,
-				speaker: "them",
-			});
-
-			if (!didConnect || !isCurrentTranscriptionOperation(operationId)) {
-				return false;
-			}
-
-			patchTranscriptionSessionState({
-				systemAudioStatus: resolveCurrentSystemAudioStatus(policy),
-			});
-
-			clearSystemAudioAttachRetryTimeout({
-				resetAttempt: true,
-			});
-			logDesktopTurnDebug("system_audio.attach_succeeded", {
-				automatic,
-				attempt,
-				operationId,
-				sourceMode: policy.systemAudioCapability.sourceMode,
-			});
-			return true;
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			logError({
-				error: {
-					automatic,
-					attempt,
-					message,
-				},
-				message: "[transcription] system audio attach failed",
-			});
-			patchTranscriptionSessionState({
-				systemAudioStatus: resolveCurrentSystemAudioStatus(policy),
-			});
-
-			if (automatic) {
-				scheduleAutomaticSystemAudioAttachRetry({
-					attempt,
-					message,
-					operationId,
-				});
-			}
-
-			return false;
-		}
-	})();
-
-	transcriptionPendingSystemAudioAttachPromise = attachPromise;
-
-	try {
-		return await attachPromise;
-	} finally {
-		if (transcriptionPendingSystemAudioAttachPromise === attachPromise) {
-			transcriptionPendingSystemAudioAttachPromise = null;
-		}
-	}
-};
-
-const scheduleDesktopTranscriptionReconnect = ({
-	message,
-	nextAttempt,
-	preserveUtterances,
-}) => {
-	transcriptionRecoveryAttempt = nextAttempt;
-	patchTranscriptionSessionState({
-		error: null,
-		isConnecting: true,
-		isListening: false,
-		phase: "reconnecting",
-		recoveryStatus: createTranscriptRecoveryStatus({
-			attempt: nextAttempt,
-			maxAttempts: maxRecoveryAttempts,
-			message,
-			state: "reconnecting",
-		}),
-	});
-
-	const delay =
-		recoveryBackoffMs[nextAttempt - 1] ??
-		recoveryBackoffMs[recoveryBackoffMs.length - 1];
-	transcriptionReconnectTimeoutId = setTimeout(() => {
-		transcriptionReconnectTimeoutId = null;
-		void runDesktopTranscriptionStart({
-			preserveUtterances,
-			reason: "reconnect",
-		});
-	}, delay);
-};
-
-const runDesktopTranscriptionStart = async ({ preserveUtterances, reason }) => {
-	const operationId = ++transcriptionLifecycleOperationId;
-	clearTranscriptionReconnectTimeout();
-	clearTranscriptionRolloverTimeout();
-	clearSystemAudioAttachRetryTimeout({
-		resetAttempt: true,
-	});
-	const policy = transcriptionPolicy ?? refreshTranscriptionPolicy();
-	transcriptionPolicy = policy;
-	currentTranscriptionSessionCorrelationId = randomUUID();
-	preSubscriberCaptureChunks.microphone = [];
-	preSubscriberCaptureChunks.systemAudio = [];
-	desktopRecordingPowerSaveBlocker.start({
-		reason,
-	});
-
-	patchTranscriptionSessionState({
-		error: null,
-		isConnecting: true,
-		isListening: false,
-		liveTranscript: createEmptyLiveTranscriptState(),
-		phase: reason === "reconnect" ? "reconnecting" : "starting",
-		recoveryStatus:
-			reason === "reconnect"
-				? latestTranscriptionSessionState.recoveryStatus
-				: createTranscriptRecoveryStatus(),
-		systemAudioStatus: resolveCurrentSystemAudioStatus(policy),
-		utterances: preserveUtterances
-			? latestTranscriptionSessionState.utterances
-			: [],
-	});
-
-	try {
-		await ensureDesktopMicrophonePermissionGranted();
-		if (
-			policy.systemAudioCapability.isSupported &&
-			policy.systemAudioCapability.sourceMode === "desktop-native"
-		) {
-			await startCombinedAudioCapture();
-		}
-		await connectDesktopTranscriptionSpeaker({
-			lang: transcriptionConfig.lang,
-			operationId,
-			source: "microphone",
-			sourceMode: "unsupported",
-			speaker: "you",
-		});
-
-		if (transcriptionLifecycleOperationId !== operationId) {
-			return false;
-		}
-
-		let didAutoAttachSystemAudio = false;
-		if (policy.systemAudioCapability.shouldAutoBootstrap) {
-			logDesktopTurnDebug("system_audio.auto_attach_before_listening", {
-				operationId,
-				sourceMode: policy.systemAudioCapability.sourceMode,
-			});
-			didAutoAttachSystemAudio = await attachDesktopSystemAudio({
-				automatic: true,
-				operationId,
-			});
-		}
-
-		if (transcriptionLifecycleOperationId !== operationId) {
-			return false;
-		}
-
-		transcriptionRecoveryAttempt = 0;
-		patchTranscriptionSessionState({
-			error: null,
-			isConnecting: false,
-			isListening: true,
-			phase: "listening",
-			recoveryStatus: createTranscriptRecoveryStatus(),
-		});
-		scheduleTranscriptionRollover();
-		void chromeMeetingSpeakerAttribution.start();
-
-		if (
-			policy.systemAudioCapability.shouldAutoBootstrap &&
-			!didAutoAttachSystemAudio
-		) {
-			scheduleAutomaticSystemAudioAttachRetry({
-				attempt: 0,
-				message: "Automatic system audio did not attach before listening.",
-				operationId,
-			});
-		}
-
-		return true;
-	} catch (error) {
-		if (transcriptionLifecycleOperationId !== operationId) {
-			return false;
-		}
-
-		const normalizedError = normalizeTranscriptionError(error);
-		await cleanupDesktopTranscriptionSession({
-			operationId,
-			preserveUtterances,
-		});
-
-		if (normalizedError.code === "connection_failed") {
-			const nextAttempt = transcriptionRecoveryAttempt + 1;
-			if (nextAttempt <= maxRecoveryAttempts) {
-				scheduleDesktopTranscriptionReconnect({
-					message: normalizedError.message,
-					nextAttempt,
-					preserveUtterances: true,
-				});
-				return false;
-			}
-		}
-
-		patchTranscriptionSessionState({
-			error: normalizedError,
-			isConnecting: false,
-			isListening: false,
-			liveTranscript: createEmptyLiveTranscriptState(),
-			phase: "failed",
-			recoveryStatus: createTranscriptRecoveryStatus({
-				attempt: transcriptionRecoveryAttempt,
-				maxAttempts: maxRecoveryAttempts,
-				message: normalizedError.message,
-				state: "failed",
-			}),
-			systemAudioStatus: resolveCurrentSystemAudioStatus(policy),
-			utterances: preserveUtterances
-				? latestTranscriptionSessionState.utterances
-				: [],
-		});
-		desktopRecordingPowerSaveBlocker.stop({
-			reason: "start_failed",
-		});
-
-		if (normalizedError.code === "permission_denied") {
-			emitTranscriptionSessionEvent({
-				type: "session.permission_failure",
-				error: normalizedError,
-			});
-		}
-
-		return false;
-	}
-};
-
-async function handleDesktopTransportInterrupted({
-	message,
-	planned = false,
-	speaker,
-}) {
-	logError({
-		error: {
-			message,
-			phase: latestTranscriptionSessionState.phase,
-			speaker,
-			themActive: desktopTranscriptionRuntime.isActive("them"),
-			youActive: desktopTranscriptionRuntime.isActive("you"),
-		},
-		message: "[transcription] transport interrupted",
-	});
-
-	if (latestTranscriptionSessionState.phase === "stopping") {
-		return;
-	}
-
-	if (speaker === "them") {
-		await stopTranscriptionSpeaker("them");
-		clearSystemAudioAttachRetryTimeout({
-			resetAttempt: true,
-		});
-		patchTranscriptionSessionState({
-			error: null,
-			isConnecting: false,
-			isListening: desktopTranscriptionRuntime.isActive("you"),
-			phase: desktopTranscriptionRuntime.isActive("you") ? "listening" : "idle",
-			systemAudioStatus: transcriptionPolicy
-				? resolveCurrentSystemAudioStatus(transcriptionPolicy)
-				: {
-						sourceMode: "unsupported",
-						state: "unsupported",
-					},
-		});
-
-		if (
-			transcriptionPolicy?.systemAudioCapability.shouldAutoBootstrap &&
-			desktopTranscriptionRuntime.isActive("you")
-		) {
-			scheduleAutomaticSystemAudioAttachRetry({
-				attempt: 0,
-				message,
-				operationId: transcriptionLifecycleOperationId,
-			});
-		}
-
-		return;
-	}
-
-	const operationId = ++transcriptionLifecycleOperationId;
-	await cleanupDesktopTranscriptionSession({
-		operationId,
-		preserveUtterances: true,
-	});
-
-	if (planned) {
-		transcriptionRecoveryAttempt = 0;
-		patchTranscriptionSessionState({
-			error: null,
-			isConnecting: true,
-			isListening: false,
-			phase: "reconnecting",
-			recoveryStatus: createTranscriptRecoveryStatus({
-				attempt: 0,
-				maxAttempts: maxRecoveryAttempts,
-				message,
-				state: "reconnecting",
-			}),
-		});
-
-		transcriptionReconnectTimeoutId = setTimeout(() => {
-			transcriptionReconnectTimeoutId = null;
-			void runDesktopTranscriptionStart({
-				preserveUtterances: true,
-				reason: "reconnect",
-			});
-		}, 0);
-		return;
-	}
-
-	const nextAttempt = transcriptionRecoveryAttempt + 1;
-	if (nextAttempt > maxRecoveryAttempts) {
-		patchTranscriptionSessionState({
-			error: {
-				code: "connection_failed",
-				message,
-			},
-			phase: "failed",
-			recoveryStatus: createTranscriptRecoveryStatus({
-				attempt: transcriptionRecoveryAttempt,
-				maxAttempts: maxRecoveryAttempts,
-				message,
-				state: "failed",
-			}),
-		});
-		desktopRecordingPowerSaveBlocker.stop({
-			reason: "reconnect_failed",
-		});
-		return;
-	}
-
-	scheduleDesktopTranscriptionReconnect({
-		message,
-		nextAttempt,
-		preserveUtterances: true,
-	});
-}
-
-const startDesktopTranscriptionSession = async () => {
-	await transcriptionPendingStopPromise;
-
-	if (transcriptionPendingStartPromise) {
-		return await transcriptionPendingStartPromise;
-	}
-
-	const startPromise = runDesktopTranscriptionStart({
-		preserveUtterances: false,
-		reason: "manual",
-	}).finally(() => {
-		if (transcriptionPendingStartPromise === startPromise) {
-			transcriptionPendingStartPromise = null;
-		}
-	});
-
-	transcriptionPendingStartPromise = startPromise;
-	return await startPromise;
-};
-
-const isDesktopTranscriptionSessionIdle = () =>
-	latestTranscriptionSessionState.phase === "idle" &&
-	!latestTranscriptionSessionState.isConnecting &&
-	!latestTranscriptionSessionState.isListening &&
-	!desktopTranscriptionRuntime.isActive("them") &&
-	!desktopTranscriptionRuntime.isActive("you");
-
-const resetIdleDesktopTranscriptionSession = ({
-	resetError,
-	resetRecovery,
-}) => {
-	transcriptionRecoveryAttempt = 0;
-	if (resetError || resetRecovery) {
-		patchTranscriptionSessionState({
-			error: resetError ? null : latestTranscriptionSessionState.error,
-			recoveryStatus: resetRecovery
-				? createTranscriptRecoveryStatus()
-				: latestTranscriptionSessionState.recoveryStatus,
-		});
-	}
-};
-
-const stopDesktopTranscriptionSession = async ({
-	preserveUtterances = true,
-	reason = "unspecified",
-	resetError = false,
-	resetRecovery = true,
-} = {}) => {
-	const startedAt = Date.now();
-	const stopEvent = {
-		event: "transcription.stop",
-		action: "stop",
-		correlation_id: currentTranscriptionSessionCorrelationId,
-		is_connecting_before_stop: latestTranscriptionSessionState.isConnecting,
-		is_listening_before_stop: latestTranscriptionSessionState.isListening,
-		phase_before_stop: latestTranscriptionSessionState.phase,
-		preserve_utterances: preserveUtterances,
-		reason,
-		reset_error: resetError,
-		reset_recovery: resetRecovery,
-		scope_key: latestTranscriptionSessionState.scopeKey,
-		speaker_them_active_before_stop:
-			desktopTranscriptionRuntime.isActive("them"),
-		speaker_you_active_before_stop: desktopTranscriptionRuntime.isActive("you"),
-		timestamp: new Date().toISOString(),
-		workspace_id: activeWorkspaceId,
-	};
-
-	try {
-		if (isDesktopTranscriptionSessionIdle()) {
-			resetIdleDesktopTranscriptionSession({
-				resetError,
-				resetRecovery,
-			});
-			desktopRecordingPowerSaveBlocker.stop({
-				reason: "idle_reset",
-			});
-			stopEvent.outcome = "idle_reset";
-			return;
-		}
-
-		if (transcriptionPendingStopPromise) {
-			stopEvent.outcome = "deduplicated";
-			return await transcriptionPendingStopPromise;
-		}
-
-		const operationId = ++transcriptionLifecycleOperationId;
-		stopEvent.operation_id = operationId;
-		clearTranscriptionReconnectTimeout();
-		clearTranscriptionRolloverTimeout();
-		clearSystemAudioAttachRetryTimeout({
-			resetAttempt: true,
-		});
-		patchTranscriptionSessionState({
-			isConnecting: false,
-			isListening: false,
-			phase: "stopping",
-		});
-
-		const stopPromise = cleanupDesktopTranscriptionSession({
-			operationId,
-			preserveUtterances,
-		})
-			.finally(() => {
-				if (transcriptionPendingStopPromise === stopPromise) {
-					transcriptionPendingStopPromise = null;
-				}
-			})
-			.then(() => {
-				transcriptionRecoveryAttempt = 0;
-				currentTranscriptionSessionCorrelationId = null;
-				desktopRecordingPowerSaveBlocker.stop({
-					reason,
-				});
-				patchTranscriptionSessionState({
-					error: resetError ? null : latestTranscriptionSessionState.error,
-					isConnecting: false,
-					isListening: false,
-					liveTranscript: createEmptyLiveTranscriptState(),
-					phase:
-						latestTranscriptionSessionState.phase === "failed"
-							? "failed"
-							: "idle",
-					recoveryStatus: resetRecovery
-						? createTranscriptRecoveryStatus()
-						: latestTranscriptionSessionState.recoveryStatus,
-					systemAudioStatus: transcriptionPolicy
-						? resolveCurrentSystemAudioStatus(transcriptionPolicy)
-						: latestTranscriptionSessionState.systemAudioStatus,
-					utterances: preserveUtterances
-						? latestTranscriptionSessionState.utterances
-						: [],
-				});
-			});
-
-		transcriptionPendingStopPromise = stopPromise;
-		await stopPromise;
-		stopEvent.outcome = "stopped";
-	} catch (error) {
-		stopEvent.outcome = "error";
-		stopEvent.error = serializeError(error);
-		throw error;
-	} finally {
-		stopEvent.phase_after_stop = latestTranscriptionSessionState.phase;
-		stopEvent.is_connecting_after_stop =
-			latestTranscriptionSessionState.isConnecting;
-		stopEvent.is_listening_after_stop =
-			latestTranscriptionSessionState.isListening;
-		stopEvent.speaker_them_active_after_stop =
-			desktopTranscriptionRuntime.isActive("them");
-		stopEvent.speaker_you_active_after_stop =
-			desktopTranscriptionRuntime.isActive("you");
-
-		appendTranscriptionDebugEvent("transcription.stop", stopEvent);
-		emitWideEvent({
-			event: stopEvent,
-			level: stopEvent.outcome === "error" ? "error" : "info",
-			startedAt,
-		});
-	}
-};
-
-const requestDesktopTranscriptionSystemAudio = async () => {
-	if (latestTranscriptionSessionState.phase !== "listening") {
-		return false;
-	}
-
-	clearSystemAudioAttachRetryTimeout({
-		resetAttempt: true,
-	});
-	return await attachDesktopSystemAudio({
-		automatic: false,
-		operationId: transcriptionLifecycleOperationId,
-	});
-};
-
-const detachDesktopTranscriptionSystemAudio = async () => {
-	clearSystemAudioAttachRetryTimeout({
-		resetAttempt: true,
-	});
-	await stopTranscriptionSpeaker("them");
-
-	patchTranscriptionSessionState({
-		systemAudioStatus: transcriptionPolicy
-			? resolveCurrentSystemAudioStatus(transcriptionPolicy)
-			: latestTranscriptionSessionState.systemAudioStatus,
-	});
-};
+		getSampleRate: nativeAudioCapture.getCaptureSampleRate,
+		startCombined: startCombinedAudioCapture,
+		startMicrophone: startMicrophoneCapture,
+		startSystemAudio: startSystemAudioCapture,
+		stopMicrophone: stopMicrophoneCapture,
+		stopSystemAudio: stopSystemAudioCapture,
+	},
+	diagnostics: {
+		appendDebugEvent: appendTranscriptionDebugEvent,
+		emitWideEvent,
+		logError,
+		logTurnDebug: logDesktopTurnDebug,
+		serializeError,
+	},
+	environment: {
+		createPolicy: createDesktopSystemAudioPolicy,
+		getMicrophonePermission: () => getMicrophonePermission(),
+		getWorkspaceId: () => activeWorkspaceId,
+		isAvailable: getDesktopRealtimeAvailability,
+		requestMicrophonePermission: () => requestPermission("microphone"),
+	},
+	powerSaveBlocker: desktopRecordingPowerSaveBlocker,
+	runtime: desktopTranscriptionRuntime,
+	state: {
+		emit: emitTranscriptionSessionEvent,
+		get: () => latestTranscriptionSessionState,
+		patch: patchTranscriptionSessionState,
+	},
+	transport: desktopRealtimeTransport,
+});
 
 const getNavigationUrl = async ({
 	pathname = "/home",
@@ -2198,7 +1259,7 @@ const requestPermission = async (permissionId) => {
 			throw error;
 		}
 
-		refreshTranscriptionPolicy();
+		desktopTranscriptionSession.refreshPolicy();
 		return await getPermissionsStatus();
 	}
 
@@ -2213,7 +1274,7 @@ const requestPermission = async (permissionId) => {
 		await systemPreferences.askForMediaAccess("microphone");
 	}
 
-	refreshTranscriptionPolicy();
+	desktopTranscriptionSession.refreshPolicy();
 	return await getPermissionsStatus();
 };
 
@@ -2399,19 +1460,19 @@ registerDesktopInvokeHandler(
 			throw new Error("Transcription session options are required.");
 		}
 
-		configureDesktopTranscriptionSession(options);
+		desktopTranscriptionSession.configure(options);
 		return { ok: true };
 	},
 );
 
 registerDesktopInvokeHandler("startTranscriptionSession", async () => {
-	return await startDesktopTranscriptionSession();
+	return await desktopTranscriptionSession.start();
 });
 
 registerDesktopInvokeHandler(
 	"stopTranscriptionSession",
 	async (_event, options = {}) => {
-		await stopDesktopTranscriptionSession({
+		await desktopTranscriptionSession.stop({
 			reason:
 				options &&
 				typeof options === "object" &&
@@ -2424,11 +1485,11 @@ registerDesktopInvokeHandler(
 );
 
 registerDesktopInvokeHandler("requestTranscriptionSystemAudio", async () => {
-	return await requestDesktopTranscriptionSystemAudio();
+	return await desktopTranscriptionSession.requestSystemAudio();
 });
 
 registerDesktopInvokeHandler("detachTranscriptionSystemAudio", async () => {
-	await detachDesktopTranscriptionSystemAudio();
+	await desktopTranscriptionSession.detachSystemAudio();
 	return { ok: true };
 });
 
@@ -3060,7 +2121,7 @@ createDesktopBootOrchestrator({
 	powerMonitor,
 	quitCompletely,
 	refreshApplicationMenu,
-	refreshTranscriptionPolicy,
+	refreshTranscriptionPolicy: desktopTranscriptionSession.refreshPolicy,
 	refreshTrayCalendar,
 	registerDesktopAppProtocols: ({ protocolRegistrars, rendererDistDir }) =>
 		registerDesktopAppProtocols({
@@ -3083,7 +2144,7 @@ createDesktopBootOrchestrator({
 	},
 	startGlobalDictation: () => globalDictation.start(),
 	startMeetingDetectionMonitors,
-	stopDesktopTranscriptionSession,
+	stopDesktopTranscriptionSession: desktopTranscriptionSession.stop,
 	stopDesktopDiagnostics: () => desktopDiagnostics.stop(),
 	stopAccessibilityGuide: () => accessibilityGuide.stop(),
 	stopDesktopLogging: stopDesktopFileLogging,

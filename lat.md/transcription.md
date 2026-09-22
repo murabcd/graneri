@@ -7,6 +7,7 @@ Transcription modules own note capture, global dictation, realtime transports, n
 - [[apps/web/src/lib/note-transcript-capture-session.ts]]
 - [[apps/web/src/lib/transcription-auto-stop.ts]]
 - [desktop transcription runtime](../apps/desktop/src/desktop-transcription-runtime.mjs)
+- [desktop transcription session](../apps/desktop/src/desktop-transcription-session.mjs)
 - [Chrome meeting speaker attribution](../apps/desktop/src/chrome-meeting-speaker-attribution.mjs)
 - [meeting detection](../apps/desktop/src/meeting-detection.mjs)
 
@@ -119,11 +120,14 @@ recoverable-looking OpenAI errors that can collapse into start/stop loops.
 
 One runtime owns speaker transport state, transcript projection, ordered turns, interrupted-tail salvage, and initial session shape.
 
-`desktop-transcription-runtime.mjs` owns the per-speaker transport state, live
-transcript projection, ordered turn emission, interrupted-tail salvage, and
-initial renderer session shape. Electron `main.mjs` orchestrates permissions,
-native capture, reconnects, and IPC around that runtime; it must not maintain a
-second set of speaker turn maps or interpret realtime transport events itself.
+`desktop-transcription-runtime.mjs` owns per-speaker transport state, live
+transcript projection, ordered turn emission, interrupted-tail salvage, and the
+initial renderer session shape. `desktop-transcription-session.mjs` owns the
+recording session's start, stop, system-audio attachment, rollover, and bounded
+reconnect ordering. Electron `main.mjs` supplies native capture, permissions,
+transport, diagnostics, and IPC state publishing to that session; it must not
+maintain a second lifecycle state machine or interpret realtime transport
+events itself.
 
 ## Chrome meeting named speakers
 
