@@ -43,6 +43,11 @@ The workspace assigns each runtime and shared concern to one primary module whil
 Repeated cross-file conventions belong in [konsistent.json](../konsistent.json), while Biome owns file-local syntax and tests own behavioral boundaries.
 
 The root `check` command runs all three enforcement layers so architecture prose does not become a duplicate executable contract.
+Every `packages/ai/src/*.d.mts` declaration has a matching `.mjs` runtime
+module. Shared `*-tools.mjs` collections also require matching declarations.
+Konsistent checks these file pairs and filename-derived builder exports for
+ordinary tool collections; automation and Convex workspace catalogs keep their
+distinct export contracts.
 
 ## Documentation contract
 

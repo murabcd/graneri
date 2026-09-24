@@ -177,27 +177,38 @@ Desktop meeting audio must preserve two distinct sources: microphone audio is
 the `you` source, and native system audio is the `them` source. Built-in speaker
 routes may need echo/leakage suppression so remote speech does not bleed into
 the microphone stream and get labeled as `you`, but that suppression must not
-duck or lower the user's meeting audio. Headphone routes should not enable
-microphone voice-processing or echo-cancellation paths because there is no
-speaker playback to suppress. The target architecture is a combined native
-capture pipeline: capture microphone and system audio with synchronized timing,
-use system audio as the echo-cancellation render/reference for the microphone
-stream, emit cleaned microphone audio as `you`, and emit raw system audio as
-`them`. Apple voice processing is a route-scoped stopgap, not the long-term
-source-separation mechanism.
+duck or lower the user's meeting audio. Supported desktop-native transcription
+starts a combined helper that captures microphone and system audio. For speaker
+routes it pairs capture frames by timestamp, uses system audio as AEC3's render
+reference, and emits the processed microphone stream as `you`. For headphone
+routes it emits the raw microphone stream as `you` without initializing AEC3.
+Both routes emit raw system audio as `them`.
+The combined helper disables Apple voice processing. The standalone microphone
+helper retains route-scoped Apple voice processing for capture paths outside
+that combined session.
+The microphone helper resolves the output route before installing its capture
+tap and configures the combined pipeline from that same route decision. Headphone
+routes bypass voice processing and AEC3 because there is no speaker playback to
+suppress. An output-route change restarts combined capture so the next helper
+uses the new route from its first audio frame. See
+[MicrophoneCaptureCLI.swift](../apps/desktop/native/MicrophoneCaptureCLI.swift),
+[CombinedAudioCaptureCLI.swift](../apps/desktop/native/CombinedAudioCaptureCLI.swift),
+and [CombinedAudioProcessingPipeline.swift](../apps/desktop/native/CombinedAudioProcessingPipeline.swift).
 The system-audio reference must use a global output tap excluding the helper
 process, not a process list frozen at capture start. Playback from apps launched
-mid-recording must reach both the `them` channel and AEC3's render reference.
+mid-recording must reach the `them` channel and, on speaker routes, AEC3's
+render reference.
 Both capture callbacks must carry their CoreAudio host timestamps into the
-combined pipeline. The pipeline pairs 10 ms microphone and render frames by
-capture time before feeding AEC3; callback arrival order is not a clock.
+combined pipeline. On speaker routes, the pipeline pairs 10 ms microphone and
+render frames by capture time before feeding AEC3; callback arrival order is
+not a clock.
 The combined helper must disable Apple microphone voice processing and own echo
 reduction itself, because Apple processing can alter the user's local meeting
 volume and obscure which source caused attenuation.
 
 ## Native helper protocol
 
-A stable newline-delimited protocol carries paired audio and bounded diagnostics around timestamp-aligned AEC3 processing.
+A stable newline-delimited protocol carries paired audio and bounded diagnostics for both headphone passthrough and speaker-route AEC3 processing.
 
 Native audio helpers communicate with Electron over newline-delimited JSON.
 `ready`, `chunk`, `processing_diagnostics`, `error`, and `stopped` are the helper event families.
@@ -207,15 +218,17 @@ emitted the event. The combined helper emits `chunk` events with independent
 speaker contract stable while the native process owns synchronized capture
 and echo-cancellation reference timing. The combined helper binary is the
 native integration point for echo reduction. Its microphone path must flow
-through the combined audio processing pipeline, and that pipeline must use
-system audio as the render/reference signal before microphone audio is emitted.
-The pipeline must not infer local speech from a fixed energy floor or bypass
-AEC3 for quiet frames: those rules can turn speaker echo into `you` or erase
-genuine double-talk. A bounded queue releases unmatched microphone frames so
-capture remains live when system audio is absent.
+through the combined audio processing pipeline. On speaker routes, that
+pipeline must use system audio as the render/reference signal for AEC3. On
+headphone routes, it must emit microphone and system audio unchanged without
+initializing AEC3 or buffering frames for alignment.
+On speaker routes, the pipeline must not infer local speech from a fixed energy
+floor or bypass AEC3 for quiet frames: those rules can turn speaker echo into
+`you` or erase genuine double-talk. A bounded queue releases unmatched
+microphone frames so capture remains live when system audio is absent.
 The combined helper's ready event must report the audio processing stage so
-diagnostics can tell whether microphone output is waiting for render reference
-or actively reducing echo.
+diagnostics can distinguish headphone passthrough, waiting for a speaker-route
+render reference, and active echo reduction.
 `bun --filter=desktop run diagnose:meeting-audio -- --play-system-sound` is the
 local smoke test for this boundary. It starts the combined helper, plays a short
 system sound, and reports only route metadata, source chunk counts, and bounded

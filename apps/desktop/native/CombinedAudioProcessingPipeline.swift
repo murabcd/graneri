@@ -6,6 +6,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 	struct SelfTestResult {
 		let echoOnlyResidualRatio: Double
 		let echoReductionRatio: Double
+		let headphonesPassthroughErrorRms: Double
 		let noRenderPassthroughErrorRms: Double
 		let processedErrorRms: Double
 		let rawErrorRms: Double
@@ -14,7 +15,8 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 
 		var isPassing: Bool {
 			echoOnlyResidualRatio <= 0.45 &&
-				echoReductionRatio >= 0.35 &&
+			echoReductionRatio >= 0.35 &&
+				headphonesPassthroughErrorRms <= 0.000001 &&
 				noRenderPassthroughErrorRms <= 0.000001 &&
 				suppressedChunks > 0 &&
 				systemOutputErrorRms <= 0.000001
@@ -24,6 +26,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			[
 				"echoOnlyResidualRatio": echoOnlyResidualRatio,
 				"echoReductionRatio": echoReductionRatio,
+				"headphonesPassthroughErrorRms": headphonesPassthroughErrorRms,
 				"noRenderPassthroughErrorRms": noRenderPassthroughErrorRms,
 				"ok": isPassing,
 				"processedErrorRms": processedErrorRms,
@@ -160,6 +163,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 	private let queue = DispatchQueue(label: "com.graneri.combined-audio.processing")
 	private var aecProcessor: WebRtcAec3Processor?
 	private var echoReductionStats = EchoReductionStats()
+	private var outputIsHeadphones = false
 	private var microphoneFrames: [TimedFrame] = []
 	private var microphoneFrameAssembler = FrameAssembler()
 	private var microphoneStats = SourceStats()
@@ -259,6 +263,10 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 			format: format,
 			logger: logger
 		)
+		let headphonesPassthroughErrorRms = runHeadphonesPassthroughSelfTest(
+			format: format,
+			logger: logger
+		)
 		let echoOnlyResidualRatio = runEchoOnlySelfTest(
 			format: format,
 			logger: logger
@@ -269,6 +277,7 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		return SelfTestResult(
 			echoOnlyResidualRatio: echoOnlyResidualRatio,
 			echoReductionRatio: echoReductionRatio,
+			headphonesPassthroughErrorRms: headphonesPassthroughErrorRms,
 			noRenderPassthroughErrorRms: noRenderPassthroughErrorRms,
 			processedErrorRms: processedErrorRms,
 			rawErrorRms: rawErrorRms,
@@ -362,6 +371,54 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		)
 	}
 
+	private static func runHeadphonesPassthroughSelfTest(
+		format: AVAudioFormat,
+		logger: NativeAudioStderrLogger
+	) -> Double {
+		let microphoneOutput = CollectingSink()
+		let systemAudioOutput = CollectingSink()
+		let pipeline = CombinedAudioProcessingPipeline(
+			logger: logger,
+			microphoneOutput: microphoneOutput,
+			systemAudioOutput: systemAudioOutput
+		)
+		pipeline.configureOutputRoute(isHeadphones: true)
+		let frameCount = 960
+		let microphoneSamples = (0..<frameCount).map { frameIndex in
+			Float(sin(Double(frameIndex) * 2.0 * .pi * 700.0 / format.sampleRate) * 0.2)
+		}
+		let systemAudioSamples = (0..<frameCount).map { frameIndex in
+			Float(sin(Double(frameIndex) * 2.0 * .pi * 440.0 / format.sampleRate) * 0.4)
+		}
+		let hostTime = AVAudioTime.hostTime(forSeconds: 1)
+		pipeline.systemAudioSink.append(
+			buffer: makeBuffer(format: format, samples: systemAudioSamples),
+			hostTime: hostTime
+		)
+		pipeline.microphoneSink.append(
+			buffer: makeBuffer(format: format, samples: microphoneSamples),
+			hostTime: hostTime
+		)
+
+		let capturedMicrophoneSamples = microphoneOutput.snapshot()
+		let capturedSystemAudioSamples = systemAudioOutput.snapshot()
+		let skippedAec3 = pipeline.queue.sync {
+			pipeline.aecProcessor == nil &&
+				pipeline.echoReductionStats.processedCaptureFrames == 0 &&
+				pipeline.echoReductionStats.processedRenderFrames == 0
+		}
+		guard skippedAec3,
+			capturedMicrophoneSamples.count == microphoneSamples.count,
+			capturedSystemAudioSamples.count == systemAudioSamples.count
+		else {
+			return 1
+		}
+		return max(
+			rmsError(capturedMicrophoneSamples, microphoneSamples),
+			rmsError(capturedSystemAudioSamples, systemAudioSamples)
+		)
+	}
+
 	private static func makeBuffer(
 		format: AVAudioFormat,
 		samples: [Float]
@@ -429,6 +486,15 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 		}
 	}
 
+	func configureOutputRoute(isHeadphones: Bool) {
+		queue.sync {
+			outputIsHeadphones = isHeadphones
+			if isHeadphones {
+				echoReductionStats.lastReason = "headphones_passthrough"
+			}
+		}
+	}
+
 	private func describeStatsLocked(renderAgeMilliseconds: Double?) -> [String: Any] {
 		var event = describeLocked()
 		event["microphoneChunks"] = microphoneStats.chunks
@@ -476,6 +542,10 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 	private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
 		queue.sync {
 			observe(source: "microphone", buffer: buffer)
+			if outputIsHeadphones {
+				microphoneOutput.append(buffer: buffer, hostTime: hostTime)
+				return
+			}
 			guard let processor = processorLocked(sampleRate: buffer.format.sampleRate) else {
 				microphoneOutput.append(buffer: buffer, hostTime: hostTime)
 				return
@@ -494,6 +564,10 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 	private func handleSystemAudioBuffer(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
 		queue.sync {
 			observe(source: "systemAudio", buffer: buffer)
+			if outputIsHeadphones {
+				systemAudioOutput.append(buffer: buffer, hostTime: hostTime)
+				return
+			}
 			guard let processor = processorLocked(sampleRate: buffer.format.sampleRate) else {
 				systemAudioOutput.append(buffer: buffer, hostTime: hostTime)
 				return
@@ -657,9 +731,11 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 
 	private func describeLocked() -> [String: Any] {
 		[
-			"echoCancellation": echoReductionStats.processedChunks > 0
-				? "webrtc_aec3"
-				: "pending_render_reference",
+			"echoCancellation": outputIsHeadphones
+				? "bypassed_headphones"
+				: (echoReductionStats.processedChunks > 0
+					? "webrtc_aec3"
+					: "pending_render_reference"),
 			"echoCancellationDelayMs": echoReductionStats.delayMs ?? NSNull(),
 			"echoCancellationLastEchoRms": echoReductionStats.lastEchoRms,
 			"echoCancellationLastPostRms": echoReductionStats.lastPostRms,
@@ -673,9 +749,11 @@ final class CombinedAudioProcessingPipeline: @unchecked Sendable {
 				.residualEchoLikelihoodRecentMax ?? NSNull(),
 			"echoCancellationSuppressedChunks": echoReductionStats.suppressedChunks,
 			"echoCancellationUnavailableChunks": echoReductionStats.unavailableChunks,
-			"microphoneOutput": "echo_reduced",
-			"renderReference": "systemAudio",
-			"stage": "combined-render-reference",
+			"microphoneOutput": outputIsHeadphones ? "raw" : "echo_reduced",
+			"renderReference": outputIsHeadphones ? "none" : "systemAudio",
+			"stage": outputIsHeadphones
+				? "combined-headphones-passthrough"
+				: "combined-render-reference",
 		]
 	}
 }

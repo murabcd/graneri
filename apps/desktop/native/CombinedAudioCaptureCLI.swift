@@ -72,6 +72,9 @@ enum CombinedAudioCaptureCLI {
 		let microphoneCapture = MicrophoneCapture(
 			encoder: audioProcessingPipeline.microphoneSink,
 			logger: logger,
+			onOutputRouteResolved: { isHeadphones in
+				audioProcessingPipeline.configureOutputRoute(isHeadphones: isHeadphones)
+			},
 			routeChangeHandler: routeChangeHandler,
 			voiceProcessingMode: .disabled
 		)

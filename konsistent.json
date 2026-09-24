@@ -27,10 +27,9 @@
     },
     {
       "name": "ui-component-export-contract",
-      "description": "Single-component UI modules expose a filename-derived component; chart and icons are component families, and sonner is a dependency-named Toaster adapter.",
+      "description": "Single-component UI modules expose a filename-derived component; icons is a component family, and sonner is a dependency-named Toaster adapter.",
       "paths": "packages/ui/src/components/{componentName}.tsx",
       "excludeFiles": [
-        "packages/ui/src/components/chart.tsx",
         "packages/ui/src/components/icons.tsx",
         "packages/ui/src/components/sonner.tsx"
       ],
@@ -105,6 +104,22 @@
       ],
       "must": {
         "exportValues": ["build${toolName.toPascalCase()}Tools"]
+      }
+    },
+    {
+      "name": "tool-module-runtime-declaration-pair",
+      "description": "Every shared tool-collection runtime module keeps a matching declaration module for typed consumers.",
+      "paths": "packages/ai/src/{toolName}-tools.mjs",
+      "must": {
+        "haveFiles": ["${toolName}-tools.d.mts"]
+      }
+    },
+    {
+      "name": "ai-declaration-runtime-pair",
+      "description": "Every shared AI declaration module keeps its matching runtime module.",
+      "paths": "packages/ai/src/{moduleName}.d.mts",
+      "must": {
+        "haveFiles": ["${moduleName}.mjs"]
       }
     }
   ],

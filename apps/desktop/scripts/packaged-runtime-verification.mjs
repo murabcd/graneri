@@ -16,13 +16,16 @@ const runtimeCommandResultSchema = z.object({
 });
 const runtimeCommandResultsSchema = z.array(runtimeCommandResultSchema);
 const combinedAudioSelfTestResultSchema = z.object({
-	activeRenderPassthroughErrorRms: z.number(),
+	echoOnlyResidualRatio: z.number(),
 	echoReductionRatio: z.number(),
+	headphonesPassthroughErrorRms: z.number(),
 	noRenderPassthroughErrorRms: z.number(),
 	ok: z.boolean(),
-	residualLeakGateSuppressedChunks: z.number(),
+	processedErrorRms: z.number(),
+	rawErrorRms: z.number(),
 	suppressedChunks: z.number(),
 	systemOutputErrorRms: z.number(),
+	type: z.literal("self_test"),
 });
 
 export const packagedRuntimeSmokeTests = Object.freeze([
@@ -133,10 +136,11 @@ const verifyNativeRuntimeTools = async (runtimeRoot) => {
 
 	if (
 		!selfTestResult.ok ||
-		selfTestResult.activeRenderPassthroughErrorRms > 0.16 ||
+		selfTestResult.echoOnlyResidualRatio > 0.45 ||
 		selfTestResult.echoReductionRatio < 0.35 ||
+		selfTestResult.headphonesPassthroughErrorRms > 0.000001 ||
 		selfTestResult.noRenderPassthroughErrorRms > 0.000001 ||
-		selfTestResult.residualLeakGateSuppressedChunks <= 0 ||
+		selfTestResult.processedErrorRms >= selfTestResult.rawErrorRms ||
 		selfTestResult.suppressedChunks <= 0 ||
 		selfTestResult.systemOutputErrorRms > 0.000001
 	) {

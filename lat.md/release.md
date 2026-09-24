@@ -203,8 +203,20 @@ The verifier must fail if:
 - The final packaged `just-bash` runtime cannot execute JavaScript, start its
   Python worker, or load SQLite and run a basic in-memory query.
 - Required native runtime helpers are missing, or the combined audio helper
-  fails its AEC3 self-test, including residual-leak gating for active system
-  audio.
+  fails its self-test, including echo-only residual reduction, microphone echo
+  reduction, headphone passthrough, no-render passthrough, and system-audio
+  passthrough.
+
+The [combined audio pipeline](../apps/desktop/native/CombinedAudioProcessingPipeline.swift)
+emits a `self_test` result. The
+[packaged runtime verifier](../apps/desktop/scripts/packaged-runtime-verification.mjs)
+requires an echo-only residual ratio at most `0.45`, microphone echo reduction
+at least `0.35`, processed microphone error below raw error, a positive
+suppressed-chunk count, and no-render and system-output passthrough errors at
+most `0.000001` RMS. Headphone passthrough must also have at most `0.000001`
+RMS error without creating an AEC3 processor. A successful helper exit alone
+does not satisfy this gate. This synthetic self-test does not verify physical
+headphone route detection or live macOS permission behavior.
 
 ## Enforcement
 

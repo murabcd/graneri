@@ -34,6 +34,7 @@ enum MicrophoneVoiceProcessingMode: String {
 final class MicrophoneCapture: @unchecked Sendable {
 	private let encoder: NativeAudioPcmSink
 	private let logger: NativeAudioStderrLogger
+	private let onOutputRouteResolved: (@Sendable (Bool) -> Void)?
 	private let routeChangeHandler: @Sendable () -> Void
 	private let voiceProcessingMode: MicrophoneVoiceProcessingMode
 	private var engine: AVAudioEngine?
@@ -52,11 +53,13 @@ final class MicrophoneCapture: @unchecked Sendable {
 	init(
 		encoder: NativeAudioPcmSink,
 		logger: NativeAudioStderrLogger,
+		onOutputRouteResolved: (@Sendable (Bool) -> Void)? = nil,
 		routeChangeHandler: @escaping @Sendable () -> Void,
 		voiceProcessingMode: MicrophoneVoiceProcessingMode = .routeScoped
 	) {
 		self.encoder = encoder
 		self.logger = logger
+		self.onOutputRouteResolved = onOutputRouteResolved
 		self.routeChangeHandler = routeChangeHandler
 		self.voiceProcessingMode = voiceProcessingMode
 	}
@@ -99,6 +102,7 @@ final class MicrophoneCapture: @unchecked Sendable {
 		let shouldEnableVoiceProcessing =
 			voiceProcessingMode == .routeScoped && routeAllowsVoiceProcessing
 		let outputDeviceIsHeadphones = Self.isHeadphoneOutputDevice(outputDevice)
+		onOutputRouteResolved?(outputDeviceIsHeadphones)
 		if shouldEnableVoiceProcessing, #available(macOS 10.15, *) {
 			do {
 				try inputNode.setVoiceProcessingEnabled(true)

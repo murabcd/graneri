@@ -416,6 +416,7 @@ test("combined audio helper self-test reduces delayed render echo when built", a
 	assert.equal(result.type, "self_test");
 	assert.ok(result.echoOnlyResidualRatio <= 0.45);
 	assert.ok(result.echoReductionRatio >= 0.35);
+	assert.ok(result.headphonesPassthroughErrorRms <= 0.000001);
 	assert.ok(result.noRenderPassthroughErrorRms <= 0.000001);
 	assert.ok(result.processedErrorRms < result.rawErrorRms);
 	assert.ok(result.suppressedChunks > 0);
