@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ThemeProvider } from "@workspace/ui/components/theme-provider";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
+import type * as EmojiPickerModule from "emoji-picker-react";
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
@@ -26,6 +27,19 @@ const { mutationMock, useMutationMock } = vi.hoisted(() => ({
 
 vi.mock("convex/react", () => ({
 	useMutation: useMutationMock,
+}));
+
+vi.mock("emoji-picker-react", async (importOriginal) => ({
+	...(await importOriginal<typeof EmojiPickerModule>()),
+	default: ({
+		onEmojiClick,
+	}: {
+		onEmojiClick: (emoji: { emoji: string }) => void;
+	}) => (
+		<button type="button" onClick={() => onEmojiClick({ emoji: "😀" })}>
+			grinning face
+		</button>
+	),
 }));
 
 const workspaceId = "workspace-1" as Id<"workspaces">;

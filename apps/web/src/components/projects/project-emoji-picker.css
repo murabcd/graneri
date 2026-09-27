@@ -71,7 +71,7 @@
 	--epr-category-label-bg-color: var(--popover);
 	--epr-category-label-text-color: var(--muted-foreground);
 	--epr-emoji-size: 18px;
-	--epr-emoji-padding: 9px;
+	--epr-emoji-padding: 14px;
 	--epr-emoji-hover-color: var(--accent);
 	--epr-horizontal-padding: 12px;
 	--epr-header-padding: 8px 12px;
