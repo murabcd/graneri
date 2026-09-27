@@ -10,7 +10,7 @@ import {
 } from "@/lib/project-name";
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
-import type { ProjectAppearance } from "./project-appearance-picker";
+import type { ProjectAppearance } from "./project-icon-options";
 
 type ProjectIdentityDraft = ProjectAppearance & {
 	name: string;

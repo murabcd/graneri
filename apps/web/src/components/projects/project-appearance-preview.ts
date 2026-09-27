@@ -1,5 +1,5 @@
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
-import type { ProjectAppearance } from "./project-appearance-picker";
+import type { ProjectAppearance } from "./project-icon-options";
 
 export type ProjectAppearancePreview = ProjectAppearance & {
 	projectId: Id<"projects">;

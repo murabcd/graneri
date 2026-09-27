@@ -211,6 +211,35 @@ test("projects.updateIdentity stores its name, icon, and color", async () => {
 	).rejects.toBeInstanceOf(Error);
 });
 
+test("projects.updateIdentity accepts one emoji and rejects arbitrary icon text", async () => {
+	const { asOwner, workspaceId } = await createWorkspace();
+	const project = await asOwner.mutation(api.projects.create, {
+		workspaceId,
+		name: "Research",
+	});
+
+	const updated = await asOwner.mutation(api.projects.updateIdentity, {
+		workspaceId,
+		id: project._id,
+		name: project.name,
+		icon: "emoji:👩🏽‍💻",
+		color: project.color,
+	});
+	expect(updated.icon).toBe("emoji:👩🏽‍💻");
+
+	await expect(
+		asOwner.mutation(api.projects.updateIdentity, {
+			workspaceId,
+			id: project._id,
+			name: project.name,
+			icon: "emoji:hello",
+			color: project.color,
+		}),
+	).rejects.toMatchObject({
+		data: { code: "INVALID_PROJECT_ICON" },
+	});
+});
+
 test("projects.updateDescription stores descriptions up to 255 characters", async () => {
 	const { asOwner, workspaceId } = await createWorkspace();
 

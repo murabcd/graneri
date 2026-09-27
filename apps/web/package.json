@@ -50,6 +50,7 @@
     "ai": "7.0.31",
     "canvas-confetti": "^1.9.4",
     "cn": "^0.2.5",
+    "emoji-picker-react": "4.22.2",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

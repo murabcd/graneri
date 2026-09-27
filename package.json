@@ -87,6 +87,7 @@
     ]
   },
   "patchedDependencies": {
-    "ai@7.0.31": "patches/ai@7.0.31.patch"
+    "ai@7.0.31": "patches/ai@7.0.31.patch",
+    "emoji-picker-react@4.22.2": "patches/emoji-picker-react@4.22.2.patch"
   }
 }

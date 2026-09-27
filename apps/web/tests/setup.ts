@@ -8,6 +8,42 @@ class ResizeObserverMock {
 
 globalThis.ResizeObserver = ResizeObserverMock;
 
+class IntersectionObserverMock implements IntersectionObserver {
+	readonly root = null;
+	readonly rootMargin = "0px";
+	readonly thresholds = [0];
+
+	constructor(private readonly callback: IntersectionObserverCallback) {}
+
+	observe(target: Element) {
+		const bounds = target.getBoundingClientRect();
+		this.callback(
+			[
+				{
+					boundingClientRect: bounds,
+					intersectionRect: bounds,
+					rootBounds: null,
+					time: 0,
+					target,
+					isIntersecting: true,
+					intersectionRatio: 1,
+				},
+			],
+			this,
+		);
+	}
+
+	unobserve() {}
+
+	disconnect() {}
+
+	takeRecords(): IntersectionObserverEntry[] {
+		return [];
+	}
+}
+
+globalThis.IntersectionObserver = IntersectionObserverMock;
+
 for (const method of [
 	"hasPointerCapture",
 	"releasePointerCapture",

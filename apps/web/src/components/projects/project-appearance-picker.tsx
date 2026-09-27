@@ -1,3 +1,4 @@
+import { Input } from "@workspace/ui/components/input";
 import {
 	InputGroup,
 	InputGroupAddon,
@@ -15,226 +16,80 @@ import {
 	ToggleGroupItem,
 } from "@workspace/ui/components/toggle-group";
 import { cn } from "cn";
-import {
-	Asterisk,
-	BookOpen,
-	Braces,
-	Brain,
-	BriefcaseBusiness,
-	ChartNoAxesColumnIncreasing,
-	CircleDollarSign,
-	Dumbbell,
-	FlaskConical,
-	Flower2,
-	FolderClosed,
-	FolderOpen,
-	Globe2,
-	GraduationCap,
-	Heart,
-	type LucideIcon,
-	Mic2,
-	Music2,
-	NotebookTabs,
-	Paintbrush,
-	Palette,
-	PawPrint,
-	Pencil,
-	PenTool,
-	Plane,
-	Popcorn,
-	Scale,
-	Sprout,
-	SquareTerminal,
-	Stethoscope,
-	Weight,
-	Wrench,
-} from "lucide-react";
+import { Search } from "lucide-react";
 import * as React from "react";
-import { APP_COLOR_PALETTE } from "@/lib/color-palette";
 import { MAX_PROJECT_NAME_LENGTH } from "@/lib/project-name";
-import type { Doc } from "../../../../../convex/_generated/dataModel";
-
-export type ProjectIconName = Doc<"projects">["icon"];
-export type ProjectColorName = Doc<"projects">["color"];
-
-export type ProjectAppearance = {
-	color: ProjectColorName;
-	icon: ProjectIconName;
-};
-
-const PROJECT_COLOR_NAMES = [
-	"default",
-	"red",
-	"orange",
-	"yellow",
-	"green",
-	"blue",
-	"purple",
-	"pink",
-] as const satisfies ReadonlyArray<ProjectColorName>;
-
-const PROJECT_COLOR_OPTIONS = {
-	default: {
-		label: "Default",
-		iconClassName: "text-foreground",
-		swatchColor: "var(--foreground)",
-	},
-	red: {
-		label: "Red",
-		iconClassName: APP_COLOR_PALETTE.rose.textClassName,
-		swatchColor: APP_COLOR_PALETTE.rose.cssValue,
-	},
-	orange: {
-		label: "Orange",
-		iconClassName: APP_COLOR_PALETTE.orange.textClassName,
-		swatchColor: APP_COLOR_PALETTE.orange.cssValue,
-	},
-	yellow: {
-		label: "Yellow",
-		iconClassName: APP_COLOR_PALETTE.amber.textClassName,
-		swatchColor: APP_COLOR_PALETTE.amber.cssValue,
-	},
-	green: {
-		label: "Green",
-		iconClassName: APP_COLOR_PALETTE.emerald.textClassName,
-		swatchColor: APP_COLOR_PALETTE.emerald.cssValue,
-	},
-	blue: {
-		label: "Blue",
-		iconClassName: APP_COLOR_PALETTE.blue.textClassName,
-		swatchColor: APP_COLOR_PALETTE.blue.cssValue,
-	},
-	purple: {
-		label: "Purple",
-		iconClassName: APP_COLOR_PALETTE.violet.textClassName,
-		swatchColor: APP_COLOR_PALETTE.violet.cssValue,
-	},
-	pink: {
-		label: "Pink",
-		iconClassName: APP_COLOR_PALETTE.pink.textClassName,
-		swatchColor: APP_COLOR_PALETTE.pink.cssValue,
-	},
-} satisfies Record<
-	ProjectColorName,
-	{
-		label: string;
-		iconClassName: string;
-		swatchColor: string;
-	}
->;
-
-const PROJECT_ICON_NAMES = [
-	"folder",
-	"dollar",
-	"book",
-	"graduation-cap",
-	"pencil",
-	"pen-tool",
-	"braces",
-	"terminal",
-	"music",
-	"popcorn",
-	"paintbrush",
-	"palette",
-	"stethoscope",
-	"asterisk",
-	"flower",
-	"briefcase",
-	"chart",
-	"weight",
-	"dumbbell",
-	"notebook",
-	"scale",
-	"microphone",
-	"plane",
-	"globe",
-	"wrench",
-	"paw",
-	"flask",
-	"brain",
-	"heart",
-	"plant",
-] as const satisfies ReadonlyArray<ProjectIconName>;
-
-const PROJECT_ICON_OPTIONS = {
-	folder: { label: "Folder", icon: FolderClosed },
-	dollar: { label: "Dollar", icon: CircleDollarSign },
-	book: { label: "Book", icon: BookOpen },
-	"graduation-cap": { label: "Graduation cap", icon: GraduationCap },
-	pencil: { label: "Pencil", icon: Pencil },
-	"pen-tool": { label: "Pen tool", icon: PenTool },
-	braces: { label: "Code brackets", icon: Braces },
-	terminal: { label: "Terminal", icon: SquareTerminal },
-	music: { label: "Music", icon: Music2 },
-	popcorn: { label: "Popcorn", icon: Popcorn },
-	paintbrush: { label: "Paintbrush", icon: Paintbrush },
-	palette: { label: "Palette", icon: Palette },
-	stethoscope: { label: "Stethoscope", icon: Stethoscope },
-	asterisk: { label: "Asterisk", icon: Asterisk },
-	flower: { label: "Flower", icon: Flower2 },
-	briefcase: { label: "Briefcase", icon: BriefcaseBusiness },
-	chart: { label: "Bar chart", icon: ChartNoAxesColumnIncreasing },
-	weight: { label: "Weight", icon: Weight },
-	dumbbell: { label: "Dumbbell", icon: Dumbbell },
-	notebook: { label: "Notebook", icon: NotebookTabs },
-	scale: { label: "Balancing scale", icon: Scale },
-	microphone: { label: "Microphone", icon: Mic2 },
-	plane: { label: "Plane", icon: Plane },
-	globe: { label: "Globe", icon: Globe2 },
-	wrench: { label: "Wrench", icon: Wrench },
-	paw: { label: "Paw", icon: PawPrint },
-	flask: { label: "Flask", icon: FlaskConical },
-	brain: { label: "Brain", icon: Brain },
-	heart: { label: "Heart", icon: Heart },
-	plant: { label: "Plant", icon: Sprout },
-} satisfies Record<
-	ProjectIconName,
-	{
-		label: string;
-		icon: LucideIcon;
-	}
->;
+import {
+	isProjectPresetIcon,
+	PROJECT_EMOJI_PREFIX,
+	PROJECT_PRESET_ICONS,
+	projectEmoji,
+} from "../../../../../convex/projectIcon";
+import {
+	type ProjectPresetAppearance,
+	readFrequentlyUsedProjectAppearances,
+	recordProjectAppearanceUse,
+} from "./project-appearance-usage";
+import { ProjectEmojiPickerEntry } from "./project-emoji-picker-entry";
+import { ProjectIcon } from "./project-icon";
+import {
+	PROJECT_COLOR_NAMES,
+	PROJECT_COLOR_OPTIONS,
+	PROJECT_ICON_OPTIONS,
+	type ProjectAppearance,
+	type ProjectColorName,
+} from "./project-icon-options";
 
 const isProjectColorName = (value: string): value is ProjectColorName =>
 	PROJECT_COLOR_NAMES.some((color) => color === value);
 
-const isProjectIconName = (value: string): value is ProjectIconName =>
-	PROJECT_ICON_NAMES.some((icon) => icon === value);
-
-export function ProjectIcon({
-	icon,
-	color,
-	open = false,
-	mutedDefault = false,
+function ProjectPresetIconGrid({
+	icons,
+	appearance,
+	onAppearanceChange,
+	label,
 	className,
-	style,
-	...props
-}: ProjectAppearance &
-	React.ComponentProps<LucideIcon> & {
-		open?: boolean;
-		mutedDefault?: boolean;
-	}) {
-	const Icon =
-		icon === "folder" && open ? FolderOpen : PROJECT_ICON_OPTIONS[icon].icon;
-	const isMutedDefault =
-		mutedDefault && icon === "folder" && color === "default";
-
+}: {
+	icons: readonly ProjectPresetAppearance[];
+	appearance: ProjectAppearance;
+	onAppearanceChange: (appearance: ProjectAppearance) => void;
+	label: string;
+	className?: string;
+}) {
 	return (
-		<Icon
+		<ToggleGroup
+			type="single"
+			spacing={1}
+			value={`${appearance.icon}:${appearance.color}`}
 			className={cn(
-				isMutedDefault
-					? "text-sidebar-foreground/60"
-					: PROJECT_COLOR_OPTIONS[color].iconClassName,
+				"grid w-full grid-cols-6 rounded-none px-3 pb-3",
 				className,
 			)}
-			style={{
-				...(!isMutedDefault && {
-					color: PROJECT_COLOR_OPTIONS[color].swatchColor,
-				}),
-				...style,
+			aria-label={label}
+			onValueChange={(value) => {
+				const selected = icons.find(
+					({ icon, color }) => `${icon}:${color}` === value,
+				);
+				if (selected) onAppearanceChange(selected);
 			}}
-			{...props}
-		/>
+		>
+			{icons.map(({ icon, color }) => {
+				const option = PROJECT_ICON_OPTIONS[icon];
+				const Icon = option.icon;
+				return (
+					<ToggleGroupItem
+						key={`${icon}:${color}`}
+						value={`${icon}:${color}`}
+						size="lg"
+						className="mx-auto size-9 cursor-pointer rounded-full p-0 transition-none"
+						aria-label={`Use ${PROJECT_COLOR_OPTIONS[color].label.toLowerCase()} ${option.label.toLowerCase()} icon`}
+						style={{ color: PROJECT_COLOR_OPTIONS[color].swatchColor }}
+					>
+						<Icon aria-hidden="true" />
+					</ToggleGroupItem>
+				);
+			})}
+		</ToggleGroup>
 	);
 }
 
@@ -250,15 +105,46 @@ function ProjectAppearancePicker({
 	className?: string;
 }) {
 	const [open, setOpen] = React.useState(false);
+	const [iconSearch, setIconSearch] = React.useState("");
+	const [frequentlyUsedAppearances, setFrequentlyUsedAppearances] =
+		React.useState<ProjectPresetAppearance[]>([]);
+	const [kind, setKind] = React.useState<"icons" | "emoji">(() =>
+		projectEmoji(appearance.icon) === null ? "icons" : "emoji",
+	);
+	const iconQuery = iconSearch.trim().toLowerCase();
+	const matchingIcons = PROJECT_PRESET_ICONS.filter((value) =>
+		PROJECT_ICON_OPTIONS[value].label.toLowerCase().includes(iconQuery),
+	);
+	const matchingAppearances = matchingIcons.map((icon) => ({
+		icon,
+		color: appearance.color,
+	}));
+	const iconResultsLabel = iconQuery === "" ? "All icons" : "Search results";
+	const handleAppearanceChange = (next: ProjectAppearance) => {
+		if (isProjectPresetIcon(next.icon)) {
+			recordProjectAppearanceUse({ icon: next.icon, color: next.color });
+		}
+		onAppearanceChange(next);
+	};
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover
+			open={open}
+			onOpenChange={(nextOpen) => {
+				setOpen(nextOpen);
+				if (nextOpen) {
+					setKind(projectEmoji(appearance.icon) === null ? "icons" : "emoji");
+					setIconSearch("");
+					setFrequentlyUsedAppearances(readFrequentlyUsedProjectAppearances());
+				}
+			}}
+		>
 			<PopoverTrigger asChild>
 				<InputGroupButton
 					type="button"
 					size="icon-xs"
 					className={className}
-					aria-label={`Change icon and color for ${projectName}`}
+					aria-label={`Change icon, emoji, and color for ${projectName}`}
 				>
 					<ProjectIcon {...appearance} aria-hidden="true" />
 				</InputGroupButton>
@@ -267,65 +153,128 @@ function ProjectAppearancePicker({
 				align="start"
 				side="bottom"
 				sideOffset={16}
-				className="w-[260px] gap-0 rounded-xl bg-popover p-0 shadow-xl ring-1 ring-foreground/10"
+				className="w-[300px] gap-0 overflow-hidden rounded-lg bg-popover p-0 shadow-xl ring-1 ring-foreground/10"
 			>
-				<div className="px-3 py-3">
-					<ToggleGroup
-						type="single"
-						aria-label="Project color"
-						spacing={1}
-						value={appearance.color}
-						onValueChange={(value) => {
-							if (isProjectColorName(value)) {
-								onAppearanceChange({ ...appearance, color: value });
-							}
-						}}
-					>
-						{PROJECT_COLOR_NAMES.map((value) => (
-							<ToggleGroupItem
-								key={value}
-								value={value}
-								aria-label={`Use ${PROJECT_COLOR_OPTIONS[value].label}`}
-								className="size-6 min-w-6 cursor-pointer rounded-full border-2 border-transparent p-0 data-[state=on]:border-ring"
-								style={{
-									backgroundColor: PROJECT_COLOR_OPTIONS[value].swatchColor,
-								}}
-							/>
-						))}
-					</ToggleGroup>
-				</div>
-				<Separator />
-				<ToggleGroup
-					type="single"
-					spacing={1}
-					value={appearance.icon}
-					className="grid w-full grid-cols-6 px-3 pt-2 pb-3"
-					aria-label="Project icon"
-					onValueChange={(value) => {
-						if (isProjectIconName(value)) {
-							onAppearanceChange({ ...appearance, icon: value });
-						}
-					}}
+				<fieldset
+					className="flex gap-1 px-3 pt-3 pb-2"
+					aria-label="Symbol type"
 				>
-					{PROJECT_ICON_NAMES.map((value) => {
-						const option = PROJECT_ICON_OPTIONS[value];
-						const Icon = option.icon;
-						return (
-							<ToggleGroupItem
-								key={value}
-								value={value}
-								size="lg"
-								className={cn(
-									"mx-auto size-9 cursor-pointer rounded-full p-0",
-									PROJECT_COLOR_OPTIONS[appearance.color].iconClassName,
-								)}
-								aria-label={`Use ${option.label}`}
-							>
-								<Icon aria-hidden="true" />
-							</ToggleGroupItem>
-						);
-					})}
-				</ToggleGroup>
+					<button
+						type="button"
+						aria-pressed={kind === "emoji"}
+						className={cn(
+							"cursor-pointer rounded-full px-3 py-1 text-sm",
+							kind === "emoji"
+								? "bg-accent text-accent-foreground"
+								: "hover:bg-accent",
+						)}
+						onClick={() => setKind("emoji")}
+					>
+						Emoji
+					</button>
+					<button
+						type="button"
+						aria-pressed={kind === "icons"}
+						className={cn(
+							"cursor-pointer rounded-full px-3 py-1 text-sm",
+							kind === "icons"
+								? "bg-accent text-accent-foreground"
+								: "hover:bg-accent",
+						)}
+						onClick={() => setKind("icons")}
+					>
+						Icons
+					</button>
+				</fieldset>
+				{kind === "icons" ? (
+					<div className="flex h-80 flex-col">
+						<div className="px-3 pt-2 pb-2">
+							<div className="relative">
+								<Search
+									aria-hidden="true"
+									className="pointer-events-none absolute top-[9px] left-[11px] size-4 text-muted-foreground"
+								/>
+								<Input
+									aria-label="Search icons"
+									value={iconSearch}
+									onChange={(event) => setIconSearch(event.target.value)}
+									className="h-8 bg-secondary px-8 py-0 focus-visible:border-input focus-visible:ring-0"
+									placeholder="Search icons"
+								/>
+							</div>
+						</div>
+						<ToggleGroup
+							type="single"
+							aria-label="Project color"
+							spacing={1}
+							value={appearance.color}
+							className="h-10 w-full justify-around rounded-none px-3 py-2"
+							onValueChange={(value) => {
+								if (isProjectColorName(value)) {
+									handleAppearanceChange({ ...appearance, color: value });
+								}
+							}}
+						>
+							{PROJECT_COLOR_NAMES.map((value) => (
+								<ToggleGroupItem
+									key={value}
+									value={value}
+									aria-label={`Use ${PROJECT_COLOR_OPTIONS[value].label}`}
+									className="size-6 min-w-6 cursor-pointer rounded-full border-2 border-transparent p-0 data-[state=on]:border-ring"
+									style={{
+										backgroundColor: PROJECT_COLOR_OPTIONS[value].swatchColor,
+									}}
+								/>
+							))}
+						</ToggleGroup>
+						<div className="min-h-0 flex-1 overflow-y-auto">
+							{iconQuery === "" && frequentlyUsedAppearances.length > 0 && (
+								<div>
+									<h2 className="sticky top-0 z-10 flex h-8 items-center bg-popover px-3 text-xs font-medium text-muted-foreground">
+										Frequently used
+									</h2>
+									<ProjectPresetIconGrid
+										icons={frequentlyUsedAppearances}
+										appearance={appearance}
+										onAppearanceChange={handleAppearanceChange}
+										label="Frequently used icons"
+										className="pb-0"
+									/>
+								</div>
+							)}
+							<h2 className="sticky top-0 z-10 flex h-8 items-center bg-popover px-3 text-xs font-medium text-muted-foreground">
+								{iconResultsLabel}
+							</h2>
+							{matchingAppearances.length > 0 ? (
+								<ProjectPresetIconGrid
+									icons={matchingAppearances}
+									appearance={appearance}
+									onAppearanceChange={handleAppearanceChange}
+									label={iconResultsLabel}
+								/>
+							) : (
+								<p
+									className="px-3 py-6 text-center text-sm text-muted-foreground"
+									role="status"
+								>
+									No icons found.
+								</p>
+							)}
+						</div>
+					</div>
+				) : (
+					<div className="h-80">
+						<ProjectEmojiPickerEntry
+							onSelect={(emoji) => {
+								handleAppearanceChange({
+									...appearance,
+									icon: `${PROJECT_EMOJI_PREFIX}${emoji}`,
+								});
+								setOpen(false);
+							}}
+						/>
+					</div>
+				)}
 			</PopoverContent>
 		</Popover>
 	);

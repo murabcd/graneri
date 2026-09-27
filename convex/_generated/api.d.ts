@@ -143,6 +143,7 @@ import type * as people from "../people.js";
 import type * as peopleDomain from "../peopleDomain.js";
 import type * as projectAppearance from "../projectAppearance.js";
 import type * as projectDescriptions from "../projectDescriptions.js";
+import type * as projectIcon from "../projectIcon.js";
 import type * as projects from "../projects.js";
 import type * as recipes from "../recipes.js";
 import type * as relationshipDirectory from "../relationshipDirectory.js";
@@ -314,6 +315,7 @@ declare const fullApi: ApiFromModules<{
   peopleDomain: typeof peopleDomain;
   projectAppearance: typeof projectAppearance;
   projectDescriptions: typeof projectDescriptions;
+  projectIcon: typeof projectIcon;
   projects: typeof projects;
   recipes: typeof recipes;
   relationshipDirectory: typeof relationshipDirectory;

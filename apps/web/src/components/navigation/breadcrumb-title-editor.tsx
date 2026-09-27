@@ -8,11 +8,9 @@ import {
 import * as React from "react";
 import { NoteTitleEditInput } from "@/components/note/note-title-edit-input";
 import type { NoteTitleEditorController } from "@/components/note/use-note-title-editor";
-import {
-	type ProjectAppearance,
-	ProjectIdentityInput,
-} from "@/components/projects/project-appearance-picker";
+import { ProjectIdentityInput } from "@/components/projects/project-appearance-picker";
 import type { ProjectAppearancePreview } from "@/components/projects/project-appearance-preview";
+import type { ProjectAppearance } from "@/components/projects/project-icon-options";
 import { useProjectIdentityEditor } from "@/components/projects/use-project-identity-editor";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import { RenamePopoverContent } from "./rename-popover";

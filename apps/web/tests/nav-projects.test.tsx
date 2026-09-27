@@ -182,17 +182,19 @@ describe("ProjectSidebarItem", () => {
 		await user.click(screen.getByRole("menuitem", { name: "Rename" }));
 		await user.click(
 			screen.getByRole("button", {
-				name: "Change icon and color for Research activities",
+				name: "Change icon, emoji, and color for Research activities",
 			}),
 		);
 		expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
 		expect(
 			screen
-				.getByRole("radio", { name: "Use Folder" })
+				.getByRole("radio", { name: "Use default folder icon" })
 				.querySelector(".lucide-folder-closed"),
 		).not.toBeNull();
 		await user.click(screen.getByRole("radio", { name: "Use Blue" }));
-		await user.click(screen.getByRole("radio", { name: "Use Terminal" }));
+		await user.click(
+			screen.getByRole("radio", { name: "Use blue terminal icon" }),
+		);
 		const projectButton = container.querySelector<HTMLButtonElement>(
 			'[data-sidebar="menu-button"]',
 		);

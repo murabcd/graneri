@@ -11,6 +11,7 @@ import {
 	projectColorValidator,
 	projectIconValidator,
 } from "./projectAppearance";
+import { isValidProjectIcon } from "./projectIcon";
 import {
 	assertSidebarReorderInputSize,
 	assertSidebarStoredReorderSize,
@@ -248,6 +249,12 @@ const updateProjectIdentityRecord = async (
 ) => {
 	const name = normalizeProjectName(identity.name);
 	validateProjectName(name);
+	if (!isValidProjectIcon(identity.icon)) {
+		throw new ConvexError({
+			code: "INVALID_PROJECT_ICON",
+			message: "Choose a valid project icon or emoji.",
+		});
+	}
 
 	const normalizedName = toNormalizedProjectKey(name);
 	if (

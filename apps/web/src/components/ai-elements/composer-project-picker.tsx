@@ -17,7 +17,7 @@ import { Check, FolderClosed, X } from "lucide-react";
 import * as React from "react";
 import { ActiveComposerOption } from "@/components/ai-elements/active-composer-option";
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
-import { ProjectIcon } from "@/components/projects/project-appearance-picker";
+import { ProjectIcon } from "@/components/projects/project-icon";
 import type { Doc } from "../../../../../convex/_generated/dataModel";
 
 export type ComposerProjectOption = Pick<

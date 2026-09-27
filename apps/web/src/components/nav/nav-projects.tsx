@@ -59,10 +59,8 @@ import { DestructiveConfirmationDialog } from "@/components/destructive-confirma
 import { HoverScrollTitle } from "@/components/hover-scroll-title";
 import { RenamePopoverContent } from "@/components/navigation/rename-popover";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
-import {
-	ProjectIcon,
-	ProjectIdentityInput,
-} from "@/components/projects/project-appearance-picker";
+import { ProjectIdentityInput } from "@/components/projects/project-appearance-picker";
+import { ProjectIcon } from "@/components/projects/project-icon";
 import {
 	type SidebarProjectIdentityEditorController,
 	useSidebarProjectIdentityEditor,

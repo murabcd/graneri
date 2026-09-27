@@ -272,3 +272,27 @@ chip renders the project's configured icon and color, while the generic picker
 entry uses a neutral closed-folder icon. Desktop-local folder selection remains
 a separate database-labelled option because it grants a process-local
 capability rather than cloud resource ownership.
+
+## Project appearance
+
+One persisted project icon value represents either a preset symbol or a Unicode emoji, and the project color is stored separately.
+
+[[convex/projectIcon.ts]] owns the preset names, the `emoji:` value contract, and
+single-grapheme validation. [[convex/projectAppearance.ts]] exposes the stored
+string validator, while [[convex/projects.ts]] validates every identity update
+before saving. [[apps/web/src/components/projects/project-icon-options.ts]]
+owns the preset icon and color choices, while
+[[apps/web/src/components/projects/project-icon.tsx]] renders icons and emoji
+in every project surface. The
+[[apps/web/src/components/projects/project-appearance-picker.tsx]] offers the
+symbol choice and searchable preset icons in the shared rename editor. The
+picker's frequently used icon and color pairs are counted in browser storage by
+[[apps/web/src/components/projects/project-appearance-usage.ts]]. The searchable
+emoji catalog in
+[[apps/web/src/components/projects/project-emoji-picker.tsx]] loads only after
+the Emoji tab is opened through
+[[apps/web/src/components/projects/project-emoji-picker-entry.tsx]]. The
+emoji picker keeps each frequently used skin-tone variant fixed while the
+active tone changes; [emoji-picker-react patch](../patches/emoji-picker-react@4.22.2.patch)
+enforces that rendering behavior. Appearance
+changes preview in the sidebar until the identity editor commits or cancels.

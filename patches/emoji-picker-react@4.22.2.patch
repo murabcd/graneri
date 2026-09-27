@@ -1,0 +1,121 @@
+diff --git a/dist/emoji-picker-react.cjs.development.js b/dist/emoji-picker-react.cjs.development.js
+index e7da31ec1acb6c5c33c7e26d0120360e3dcf8d60..9b7dd6c5dc52364d5507ed6f8ee0c0e809daff74 100644
+--- a/dist/emoji-picker-react.cjs.development.js
++++ b/dist/emoji-picker-react.cjs.development.js
+@@ -29649,7 +29649,8 @@ function useEmojiVirtualization(_ref) {
+     topOffset = _ref.topOffset,
+     onHeightReady = _ref.onHeightReady,
+     scrollTop = _ref.scrollTop,
+-    isCategoryVisible = _ref.isCategoryVisible;
++    isCategoryVisible = _ref.isCategoryVisible,
++    preserveStoredSkinTone = _ref.preserveStoredSkinTone;
+   var isEmojiHidden = useIsEmojiHidden();
+   var lazyLoadEmojis = useLazyLoadEmojisConfig();
+   var emojiStyle = useEmojiStyleConfig();
+@@ -29685,7 +29686,8 @@ function useEmojiVirtualization(_ref) {
+     });
+   };
+   var emojis = emojisToPush.reduce(function (accumulator, emoji, index) {
+-    var unified = emojiUnified(emoji, activeSkinTone);
++    // Suggested entries already carry the selected skin tone in their unified value.
++    var unified = emojiUnified(emoji, preserveStoredSkinTone ? undefined : activeSkinTone);
+     var style = getEmojiPositionStyle(dimensions, index);
+     if (isVirtualized(style)) {
+       var _BodyRef$current$clie2, _BodyRef$current2;
+@@ -29904,7 +29906,8 @@ function RenderCategory(_ref2) {
+       topOffset: topOffset,
+       onHeightReady: onHeightReady,
+       scrollTop: scrollTop,
+-      isCategoryVisible: isCategoryVisible
++      isCategoryVisible: isCategoryVisible,
++      preserveStoredSkinTone: categoryFromCategoryConfig(categoryConfig) === exports.Categories.SUGGESTED
+     }),
+     virtualizedCounter = _useEmojiVirtualizati.virtualizedCounter,
+     emojis = _useEmojiVirtualizati.emojis,
+diff --git a/dist/emoji-picker-react.esm.js b/dist/emoji-picker-react.esm.js
+index 5833706ad1e4edae99db66b91d09ab3a9319b383..bd46cf5fb5bc19c65895287fb9cf5f5df66ccbdb 100644
+--- a/dist/emoji-picker-react.esm.js
++++ b/dist/emoji-picker-react.esm.js
+@@ -29648,7 +29648,8 @@ function useEmojiVirtualization(_ref) {
+     topOffset = _ref.topOffset,
+     onHeightReady = _ref.onHeightReady,
+     scrollTop = _ref.scrollTop,
+-    isCategoryVisible = _ref.isCategoryVisible;
++    isCategoryVisible = _ref.isCategoryVisible,
++    preserveStoredSkinTone = _ref.preserveStoredSkinTone;
+   var isEmojiHidden = useIsEmojiHidden();
+   var lazyLoadEmojis = useLazyLoadEmojisConfig();
+   var emojiStyle = useEmojiStyleConfig();
+@@ -29684,7 +29685,8 @@ function useEmojiVirtualization(_ref) {
+     });
+   };
+   var emojis = emojisToPush.reduce(function (accumulator, emoji, index) {
+-    var unified = emojiUnified(emoji, activeSkinTone);
++    // Suggested entries already carry the selected skin tone in their unified value.
++    var unified = emojiUnified(emoji, preserveStoredSkinTone ? undefined : activeSkinTone);
+     var style = getEmojiPositionStyle(dimensions, index);
+     if (isVirtualized(style)) {
+       var _BodyRef$current$clie2, _BodyRef$current2;
+@@ -29903,7 +29905,8 @@ function RenderCategory(_ref2) {
+       topOffset: topOffset,
+       onHeightReady: onHeightReady,
+       scrollTop: scrollTop,
+-      isCategoryVisible: isCategoryVisible
++      isCategoryVisible: isCategoryVisible,
++      preserveStoredSkinTone: categoryFromCategoryConfig(categoryConfig) === Categories.SUGGESTED
+     }),
+     virtualizedCounter = _useEmojiVirtualizati.virtualizedCounter,
+     emojis = _useEmojiVirtualizati.emojis,
+diff --git a/src/components/body/EmojiList.tsx b/src/components/body/EmojiList.tsx
+index 1aef821eb9faf3f3a8df7e2dcfe0c45c1623a4e7..52c04f4328e10c3cd0c7cde87189b790c04e5820 100644
+--- a/src/components/body/EmojiList.tsx
++++ b/src/components/body/EmojiList.tsx
+@@ -5,6 +5,7 @@ import { ClassNames } from '../../DomUtils/classNames';
+ import { getLabelHeight } from '../../DomUtils/elementPositionInRow';
+ import { stylesheet } from '../../Stylesheet/stylesheet';
+ import {
++  Categories,
+   categoryFromCategoryConfig,
+   categoryIdFromCategoryConfig,
+   customGroupFromCategoryConfig,
+@@ -112,6 +113,8 @@ function RenderCategory({
+     onHeightReady,
+     scrollTop,
+     isCategoryVisible,
++    preserveStoredSkinTone:
++      categoryFromCategoryConfig(categoryConfig) === Categories.SUGGESTED,
+   });
+ 
+   return (
+diff --git a/src/hooks/useEmojiVirtualization.tsx b/src/hooks/useEmojiVirtualization.tsx
+index 88b1e4daf455d044cf342977c208889278943d14..d64df5efb69c3dc485e21fd01affcfb2eb3e69af 100644
+--- a/src/hooks/useEmojiVirtualization.tsx
++++ b/src/hooks/useEmojiVirtualization.tsx
+@@ -28,12 +28,14 @@ export function useEmojiVirtualization({
+   onHeightReady,
+   scrollTop,
+   isCategoryVisible,
++  preserveStoredSkinTone,
+ }: {
+   categoryEmojis: DataEmojis;
+   topOffset: number;
+   onHeightReady: (height: number) => void;
+   scrollTop: number;
+   isCategoryVisible: boolean;
++  preserveStoredSkinTone: boolean;
+ }) {
+   const isEmojiHidden = useIsEmojiHidden();
+   const lazyLoadEmojis = useLazyLoadEmojisConfig();
+@@ -73,7 +75,11 @@ export function useEmojiVirtualization({
+     });
+ 
+   const emojis = emojisToPush.reduce((accumulator, emoji, index) => {
+-    const unified = emojiUnified(emoji, activeSkinTone);
++    // Suggested entries already carry the selected skin tone in their unified value.
++    const unified = emojiUnified(
++      emoji,
++      preserveStoredSkinTone ? undefined : activeSkinTone,
++    );
+     const style = getEmojiPositionStyle(dimensions, index);
+ 
+     if (isVirtualized(style)) {

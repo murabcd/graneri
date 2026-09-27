@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ThemeProvider } from "@workspace/ui/components/theme-provider";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,11 +12,11 @@ import {
 } from "../src/components/navigation/breadcrumb-title-editor";
 import { useBreadcrumbChatTitleEditor } from "../src/components/navigation/use-breadcrumb-chat-title-editor";
 import { useNoteTitleEditor } from "../src/components/note/use-note-title-editor";
-import { ProjectIcon } from "../src/components/projects/project-appearance-picker";
 import {
 	applyProjectAppearancePreview,
 	type ProjectAppearancePreview,
 } from "../src/components/projects/project-appearance-preview";
+import { ProjectIcon } from "../src/components/projects/project-icon";
 import { ActiveWorkspaceProvider } from "../src/hooks/active-workspace-provider";
 
 const { mutationMock, useMutationMock } = vi.hoisted(() => ({
@@ -209,14 +210,23 @@ describe("ProjectBreadcrumbTitleEditor", () => {
 		await user.click(screen.getByRole("button", { name: project.name }));
 		await user.click(
 			screen.getByRole("button", {
-				name: `Change icon and color for ${project.name}`,
+				name: `Change icon, emoji, and color for ${project.name}`,
 			}),
 		);
 		await user.click(screen.getByRole("radio", { name: "Use Blue" }));
 		const sidebarAppearance = screen.getByTestId("sidebar-project-appearance");
 		expect(sidebarAppearance.classList).toContain("text-blue-500");
 		expect(mutationMock).not.toHaveBeenCalled();
-		await user.click(screen.getByRole("radio", { name: "Use Terminal" }));
+		await user.type(
+			screen.getByRole("textbox", { name: "Search icons" }),
+			"TERM",
+		);
+		expect(
+			screen.queryByRole("radio", { name: "Use blue folder icon" }),
+		).toBeNull();
+		await user.click(
+			screen.getByRole("radio", { name: "Use blue terminal icon" }),
+		);
 		expect(
 			screen.getByTestId("sidebar-project-appearance").classList,
 		).toContain("lucide-square-terminal");
@@ -234,6 +244,42 @@ describe("ProjectBreadcrumbTitleEditor", () => {
 		});
 	});
 
+	it("previews and saves a project emoji through the identity mutation", async () => {
+		const user = userEvent.setup();
+		render(
+			<ThemeProvider>
+				<TooltipProvider>
+					<ProjectAppearancePreviewHarness />
+				</TooltipProvider>
+			</ThemeProvider>,
+		);
+
+		await user.click(screen.getByRole("button", { name: project.name }));
+		await user.click(
+			screen.getByRole("button", {
+				name: `Change icon, emoji, and color for ${project.name}`,
+			}),
+		);
+		await user.click(screen.getByRole("button", { name: "Emoji" }));
+		await user.click(
+			await screen.findByRole("button", { name: "grinning face" }),
+		);
+
+		expect(screen.getByTestId("sidebar-project-appearance").textContent).toBe(
+			"😀",
+		);
+		expect(mutationMock).not.toHaveBeenCalled();
+		await user.click(screen.getByRole("textbox", { name: "Project name" }));
+		await user.keyboard("{Enter}");
+		expect(mutationMock).toHaveBeenCalledWith({
+			workspaceId,
+			id: projectId,
+			name: project.name,
+			icon: "emoji:😀",
+			color: "default",
+		});
+	}, 15_000);
+
 	it("keeps the shared appearance preview when saving fails", async () => {
 		const user = userEvent.setup();
 		mutationMock.mockRejectedValueOnce(new Error("Save failed"));
@@ -247,7 +293,7 @@ describe("ProjectBreadcrumbTitleEditor", () => {
 		await user.click(screen.getByRole("button", { name: project.name }));
 		await user.click(
 			screen.getByRole("button", {
-				name: `Change icon and color for ${project.name}`,
+				name: `Change icon, emoji, and color for ${project.name}`,
 			}),
 		);
 		await user.click(screen.getByRole("radio", { name: "Use Blue" }));
