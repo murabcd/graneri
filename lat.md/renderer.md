@@ -150,10 +150,12 @@ Workspace and note composers retain their distinct recipe, mention, note
 context, panel, and focus adapters; they must not reconstruct this commit and
 rollback ordering. Both surfaces retain the initiating user message as the
 turn's scroll anchor so a short exchange remains visible while longer streamed
-answers grow below it. The compact note chat restores its viewport from the
-latest turn anchor instead of opening at the transcript's bottom edge and keeps
+answers grow below it. Both chat surfaces restore their viewport from the
+latest turn anchor instead of opening at the transcript's bottom edge and keep
 that anchor stable while the answer grows; readers can scroll or jump to the
-latest content explicitly.
+latest content explicitly. Automatic bottom-following is disabled so opening
+the `Worked` group or a nested tool disclosure keeps its trigger in place and
+expands the details downward.
 The shared `use-chat-turn-presentation.ts` module projects normalized messages
 into turn-level render snapshots and materializes one expanded, continuously
 timed `Working for N` activity group as soon as an active assistant turn exists.

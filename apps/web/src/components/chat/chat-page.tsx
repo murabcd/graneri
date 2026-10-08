@@ -1146,7 +1146,7 @@ export function ChatPage({
 	return (
 		<>
 			{shouldShowActiveChatSurface ? (
-				<MessageScrollerProvider autoScroll>
+				<MessageScrollerProvider defaultScrollPosition="last-anchor">
 					<ChatMessageSearchNavigator
 						scrollerId={
 							messageSearch.state.open
