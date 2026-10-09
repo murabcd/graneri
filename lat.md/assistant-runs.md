@@ -161,7 +161,7 @@ Stream reconstruction, persistence, and delivery propagate consumer demand throu
 Hosted execution feeds rich-message observation from delivery reads through a
 bounded writer, and lifecycle forwarding waits for downstream demand. Consumed
 Convex snapshots also block reconstruction while persistence is pending. The
-pinned `ai@7.0.31` Bun patch makes the SDK's public `readUIMessageStream` wait for
+pinned `ai@7.0.137` Bun patch makes the SDK's public `readUIMessageStream` wait for
 snapshot demand before cloning state and propagates cancellation to its source.
 This preserves the SDK reducer and message contract; no private reducer is
 copied into Graneri. Regression tests exercise both blocked persistence and an
@@ -521,7 +521,20 @@ normal chat send endpoint.
 One required chat-owned settings snapshot controls every turn while account-scoped last-used settings seed new draft composers.
 
 The shared [chat-settings contract](../packages/ai/src/chat-settings.mjs) groups
-mode, web search, model, reasoning effort, and service tier. A new draft starts
+mode, web search, model, reasoning effort, and service tier.
+
+The shared [model catalog](../packages/ai/src/models.mjs) offers GPT-6 Astra,
+GPT-6 Sol, and GPT-6 Luna in that order, with Sol as the chat default. Saved GPT-5.6
+Sol, Terra, and Luna selections resolve to their GPT-6 successors at the
+settings read boundary; storage accepts these historical IDs while new
+settings writes accept only the current catalog. Chat forks use the same settings
+projection, and automation reads return the current model ID so edits can persist
+the successor without resubmitting a historical ID.
+The workspace pins `ai@7.0.137`, `@ai-sdk/react@4.0.140`, and
+`@ai-sdk/openai@4.0.91`; the provider supports GPT-6 reasoning and priority processing. Astra background requests use low
+reasoning because Astra does not support disabling reasoning.
+
+New drafts start
 from the account-scoped last-used settings in [[convex/chatPreferences.ts]],
 which returns `DEFAULT_CHAT_SETTINGS` before the account has selected anything.
 Every control change replaces those next-chat defaults.

@@ -25,7 +25,7 @@ const createPersistenceArgs = (overrides = {}) => ({
 	nextAssistantMessageId: "assistant-2",
 	settings: {
 		chatMode: "default",
-		model: "gpt-5.6-sol",
+		model: "gpt-6-sol",
 		reasoningEffort: "medium",
 		serviceTier: "auto",
 		webSearchEnabled: false,

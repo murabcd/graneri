@@ -1,32 +1,32 @@
-export const GPT_5_6_SOL_MODEL_ID = "gpt-5.6-sol";
-export const GPT_5_6_TERRA_MODEL_ID = "gpt-5.6-terra";
-export const GPT_5_6_LUNA_MODEL_ID = "gpt-5.6-luna";
+export const GPT_6_SOL_MODEL_ID = "gpt-6-sol";
+export const GPT_6_ASTRA_MODEL_ID = "gpt-6-astra";
+export const GPT_6_LUNA_MODEL_ID = "gpt-6-luna";
 
 export const CHAT_MODELS = Object.freeze([
 	{
-		id: GPT_5_6_SOL_MODEL_ID,
-		name: "GPT-5.6 Sol",
-		model: GPT_5_6_SOL_MODEL_ID,
+		id: GPT_6_ASTRA_MODEL_ID,
+		name: "GPT-6 Astra",
+		model: GPT_6_ASTRA_MODEL_ID,
 	},
 	{
-		id: GPT_5_6_TERRA_MODEL_ID,
-		name: "GPT-5.6 Terra",
-		model: GPT_5_6_TERRA_MODEL_ID,
+		id: GPT_6_SOL_MODEL_ID,
+		name: "GPT-6 Sol",
+		model: GPT_6_SOL_MODEL_ID,
 	},
 	{
-		id: GPT_5_6_LUNA_MODEL_ID,
-		name: "GPT-5.6 Luna",
-		model: GPT_5_6_LUNA_MODEL_ID,
+		id: GPT_6_LUNA_MODEL_ID,
+		name: "GPT-6 Luna",
+		model: GPT_6_LUNA_MODEL_ID,
 	},
 ]);
 
-export const DEFAULT_CHAT_MODEL_ID = GPT_5_6_SOL_MODEL_ID;
-export const NOTE_GENERATION_MODEL_ID = GPT_5_6_TERRA_MODEL_ID;
-export const MEETING_END_CLASSIFICATION_MODEL_ID = GPT_5_6_LUNA_MODEL_ID;
-export const PROJECT_DESCRIPTION_MODEL_ID = GPT_5_6_TERRA_MODEL_ID;
-export const CHAT_TITLE_MODEL_ID = GPT_5_6_LUNA_MODEL_ID;
-export const CONTEXT_COMPACTION_MODEL_ID = GPT_5_6_LUNA_MODEL_ID;
-export const AUTOMATION_DELIVERY_MODEL_ID = GPT_5_6_LUNA_MODEL_ID;
+export const DEFAULT_CHAT_MODEL_ID = GPT_6_SOL_MODEL_ID;
+export const NOTE_GENERATION_MODEL_ID = GPT_6_ASTRA_MODEL_ID;
+export const MEETING_END_CLASSIFICATION_MODEL_ID = GPT_6_LUNA_MODEL_ID;
+export const PROJECT_DESCRIPTION_MODEL_ID = GPT_6_ASTRA_MODEL_ID;
+export const CHAT_TITLE_MODEL_ID = GPT_6_LUNA_MODEL_ID;
+export const CONTEXT_COMPACTION_MODEL_ID = GPT_6_LUNA_MODEL_ID;
+export const AUTOMATION_DELIVERY_MODEL_ID = GPT_6_LUNA_MODEL_ID;
 
 export const defaultChatModel = CHAT_MODELS.find(
 	(model) => model.id === DEFAULT_CHAT_MODEL_ID,
@@ -38,8 +38,18 @@ if (!defaultChatModel) {
 	);
 }
 
-export const findChatModel = (value) =>
-	CHAT_MODELS.find((model) => model.id === value || model.model === value);
+export const LEGACY_CHAT_MODEL_IDS = Object.freeze({
+	"gpt-5.6-sol": GPT_6_SOL_MODEL_ID,
+	"gpt-5.6-terra": GPT_6_ASTRA_MODEL_ID,
+	"gpt-5.6-luna": GPT_6_LUNA_MODEL_ID,
+});
+
+export const findChatModel = (value) => {
+	const resolved = Object.hasOwn(LEGACY_CHAT_MODEL_IDS, value)
+		? LEGACY_CHAT_MODEL_IDS[value]
+		: value;
+	return CHAT_MODELS.find((model) => model.id === resolved);
+};
 
 export const getChatModel = (value) => {
 	const model = findChatModel(value);
@@ -51,7 +61,8 @@ export const getChatModel = (value) => {
 	return model;
 };
 
-export const isSupportedChatModel = (value) => Boolean(findChatModel(value));
+export const isSupportedChatModel = (value) =>
+	CHAT_MODELS.some((model) => model.id === value);
 
 export const REASONING_EFFORTS = Object.freeze([
 	{ id: "low", name: "Light" },
@@ -88,7 +99,8 @@ export const getOpenAiModelProviderOptions = (
 	model,
 	{ reasoningEffort, safetyIdentifier, serviceTier } = {},
 ) => {
-	const isReasoningModel = model?.startsWith("gpt-5");
+	const isReasoningModel =
+		model?.startsWith("gpt-5") || model?.startsWith("gpt-6");
 	const normalizedServiceTier = normalizeServiceTier(serviceTier);
 	if (
 		!isReasoningModel &&
@@ -98,7 +110,9 @@ export const getOpenAiModelProviderOptions = (
 		return undefined;
 	}
 	const normalizedReasoningEffort = isReasoningModel
-		? normalizeOpenAiReasoningEffort(reasoningEffort)
+		? model === GPT_6_ASTRA_MODEL_ID && reasoningEffort === "none"
+			? "low"
+			: normalizeOpenAiReasoningEffort(reasoningEffort)
 		: undefined;
 
 	return {

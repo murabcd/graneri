@@ -51,8 +51,6 @@ describe("chat message metadata", () => {
 				],
 			}),
 		).toBeNull();
-		expect(
-			parseChatMessageMetadata({ selectedModel: "gpt-5.6-sol" }),
-		).toBeNull();
+		expect(parseChatMessageMetadata({ selectedModel: "gpt-6-sol" })).toBeNull();
 	});
 });

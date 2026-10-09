@@ -23,7 +23,7 @@ const createAttachableRun = (
 	assistantMessageId: "assistant-existing",
 	producer: "web",
 	status: "running",
-	model: "gpt-5.6-sol",
+	model: "gpt-6-sol",
 	serviceTier: "auto",
 	startedAt: 1,
 	updatedAt: 1,
@@ -113,7 +113,7 @@ const createAcceptanceArgs = ({
 			selectedSourceIds: [],
 			settings: {
 				chatMode: "default",
-				model: "gpt-5.6-sol",
+				model: "gpt-6-sol",
 				reasoningEffort: "medium",
 				serviceTier: "auto",
 				webSearchEnabled: false,

@@ -2,7 +2,7 @@ import {
 	type AutomationSchedule,
 	normalizeAutomationSchedule,
 } from "@workspace/ai/automation-schedule";
-import { isSupportedChatModel } from "@workspace/ai/models";
+import { getChatModel, isSupportedChatModel } from "@workspace/ai/models";
 import { ConvexError, type Infer, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -413,7 +413,7 @@ const toListItem = (automation: Doc<"automations">) => ({
 	projectId: automation.projectId,
 	title: automation.title,
 	prompt: automation.prompt,
-	model: automation.model,
+	model: getChatModel(automation.model).id,
 	reasoningEffort: automation.reasoningEffort,
 	serviceTier: automation.serviceTier,
 	authorName: automation.authorName,

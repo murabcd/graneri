@@ -292,7 +292,7 @@ test("chat settings persist on creation and update as one record", async () => {
 	const updatedSettings = {
 		...initialSettings,
 		chatMode: CHAT_MODE.DEFAULT,
-		model: "gpt-5.6-luna" as const,
+		model: "gpt-6-luna" as const,
 		reasoningEffort: "low" as const,
 		serviceTier: "auto" as const,
 		webSearchEnabled: false,

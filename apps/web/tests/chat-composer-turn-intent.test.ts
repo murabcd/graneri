@@ -12,7 +12,7 @@ const requestBody = {
 	chatMode: "default" as const,
 	convexToken: "token",
 	localCapabilitySession: null,
-	model: "gpt-5.6-sol",
+	model: "gpt-6-sol",
 	projectId: null,
 	recipeSlug: null,
 	reasoningEffort: "medium" as const,

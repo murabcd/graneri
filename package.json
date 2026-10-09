@@ -61,15 +61,15 @@
   ],
   "dependencies": {
     "@ai-sdk/mcp": "^2.0.15",
-    "@ai-sdk/openai": "4.0.16",
-    "@ai-sdk/react": "4.0.34",
+    "@ai-sdk/openai": "4.0.91",
+    "@ai-sdk/react": "4.0.140",
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/rate-limiter": "^0.3.2",
     "@convex-dev/workflow": "0.4.4",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
     "@workspace/ai": "workspace:*",
-    "ai": "7.0.31",
+    "ai": "7.0.137",
     "better-auth": "~1.6.23",
     "canvas-confetti": "^1.9.4",
     "convex": "^1.42.3",
@@ -87,7 +87,7 @@
     ]
   },
   "patchedDependencies": {
-    "ai@7.0.31": "patches/ai@7.0.31.patch",
-    "emoji-picker-react@4.22.2": "patches/emoji-picker-react@4.22.2.patch"
+    "emoji-picker-react@4.22.2": "patches/emoji-picker-react@4.22.2.patch",
+    "ai@7.0.137": "patches/ai@7.0.137.patch"
   }
 }

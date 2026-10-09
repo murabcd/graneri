@@ -34,7 +34,7 @@ it("sends object-shaped local tool schemas and keeps dynamic MCP arguments open"
 	const tools = buildClientLocalFolderTools([{ id: "shared", name: "shared" }]);
 	await expect(
 		generateText({
-			model: provider("gpt-5.6-luna"),
+			model: provider("gpt-6-luna"),
 			tools,
 			prompt: "Discover local tools.",
 			maxRetries: 0,

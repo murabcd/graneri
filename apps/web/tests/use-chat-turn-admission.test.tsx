@@ -223,7 +223,7 @@ describe("useChatTurnAdmission", () => {
 				attachedFiles: [],
 				buildRequestBody: async () => ({
 					localCapabilitySession: null,
-					model: "gpt-5.6-luna",
+					model: "gpt-6-luna",
 				}),
 				chatId: "chat-1",
 				currentRunAdmission:
@@ -312,7 +312,7 @@ describe("useChatTurnAdmission", () => {
 				],
 				buildRequestBody: async () => ({
 					localCapabilitySession: null,
-					model: "gpt-5.6-luna",
+					model: "gpt-6-luna",
 				}),
 				chatId: "chat-1",
 				currentRunAdmission:

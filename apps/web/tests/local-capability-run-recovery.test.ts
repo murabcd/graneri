@@ -6,7 +6,7 @@ const requestBody = {
 	convexToken: "token",
 	localCapabilitySession: { id: "capability-1", label: "graneri" },
 	mentions: [],
-	model: "gpt-5.6-sol",
+	model: "gpt-6-sol",
 	projectId: null,
 	reasoningEffort: "medium" as const,
 	recipeSlug: null,

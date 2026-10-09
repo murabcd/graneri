@@ -110,7 +110,7 @@ describe("chat settings ownership", () => {
 	it("loads remembered settings after remount", () => {
 		const rememberedSettings: ChatSettings = {
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-luna",
+			model: "gpt-6-luna",
 			reasoningEffort: "high",
 			serviceTier: "priority",
 			webSearchEnabled: true,
@@ -141,7 +141,7 @@ describe("chat settings ownership", () => {
 		mocks.rememberedSettings = DEFAULT_CHAT_SETTINGS;
 		const storedSettings: ChatSettings = {
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-terra",
+			model: "gpt-6-astra",
 			reasoningEffort: "high",
 			serviceTier: "priority",
 			webSearchEnabled: true,
@@ -193,7 +193,7 @@ describe("chat settings ownership", () => {
 		mocks.rememberedSettings = DEFAULT_CHAT_SETTINGS;
 		const storedSettings: ChatSettings = {
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-luna",
+			model: "gpt-6-luna",
 			reasoningEffort: "low",
 			serviceTier: "priority",
 			webSearchEnabled: true,
@@ -233,7 +233,7 @@ describe("chat settings ownership", () => {
 	it("keeps hidden note capabilities disabled without forgetting Ask AI defaults", () => {
 		const rememberedSettings: ChatSettings = {
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-sol",
+			model: "gpt-6-sol",
 			reasoningEffort: "low",
 			serviceTier: "auto",
 			webSearchEnabled: true,
@@ -256,7 +256,7 @@ describe("chat settings ownership", () => {
 
 		act(() => {
 			hook.result.current.updateSettings({
-				model: "gpt-5.6-luna",
+				model: "gpt-6-luna",
 				reasoningEffort: "high",
 				serviceTier: "priority",
 			});
@@ -265,7 +265,7 @@ describe("chat settings ownership", () => {
 		expect(mocks.persistRememberedSettings).toHaveBeenCalledWith({
 			settings: {
 				...rememberedSettings,
-				model: "gpt-5.6-luna",
+				model: "gpt-6-luna",
 				reasoningEffort: "high",
 				serviceTier: "priority",
 			},
@@ -275,7 +275,7 @@ describe("chat settings ownership", () => {
 	it("persists a canonical note snapshot and separate next-chat defaults", () => {
 		const rememberedSettings: ChatSettings = {
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-sol",
+			model: "gpt-6-sol",
 			reasoningEffort: "low",
 			serviceTier: "auto",
 			webSearchEnabled: true,
@@ -283,7 +283,7 @@ describe("chat settings ownership", () => {
 		mocks.rememberedSettings = rememberedSettings;
 		const storedSettings: ChatSettings = {
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-terra",
+			model: "gpt-6-astra",
 			reasoningEffort: "medium",
 			serviceTier: "priority",
 			webSearchEnabled: true,
@@ -305,13 +305,13 @@ describe("chat settings ownership", () => {
 			chatId: "note-chat",
 			nextChatSettings: {
 				...rememberedSettings,
-				model: "gpt-5.6-terra",
+				model: "gpt-6-astra",
 				reasoningEffort: "xhigh",
 				serviceTier: "priority",
 			},
 			settings: {
 				chatMode: CHAT_MODE.DEFAULT,
-				model: "gpt-5.6-terra",
+				model: "gpt-6-astra",
 				reasoningEffort: "xhigh",
 				serviceTier: "priority",
 				webSearchEnabled: false,

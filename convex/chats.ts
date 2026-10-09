@@ -1,5 +1,8 @@
 import { encodeChatMessageWorkDuration } from "@workspace/ai/chat-message-metadata";
-import { isNoteChatSettings } from "@workspace/ai/chat-settings";
+import {
+	isNoteChatSettings,
+	selectChatSettings,
+} from "@workspace/ai/chat-settings";
 import { createCanonicalLocalFolderToolContinuation } from "@workspace/ai/local-folder-tool-contract";
 import {
 	normalizeStoredUiMessage,
@@ -60,8 +63,8 @@ import {
 } from "./chatProjectState";
 import {
 	type ChatSettings,
-	chatSettingsFields,
 	chatSettingsValidator,
+	storedChatSettingsFields,
 } from "./chatSettingsModel";
 import { clearUnreadAssistantCompletion } from "./chatUnreadState";
 import {
@@ -92,7 +95,7 @@ const chatFields = {
 	starredSortOrder: v.number(),
 	title: v.string(),
 	preview: v.string(),
-	...chatSettingsFields,
+	...storedChatSettingsFields,
 	unreadAssistantCompletedAt: v.optional(v.number()),
 	isArchived: v.boolean(),
 	archivedAt: v.optional(v.number()),
@@ -224,13 +227,7 @@ const resolveChatSettingsForSave = (
 		});
 	}
 
-	return {
-		chatMode: existingChat.chatMode,
-		model: existingChat.model,
-		reasoningEffort: existingChat.reasoningEffort,
-		serviceTier: existingChat.serviceTier,
-		webSearchEnabled: existingChat.webSearchEnabled,
-	};
+	return selectChatSettings(existingChat);
 };
 
 const requireValidNoteChatSettings = (

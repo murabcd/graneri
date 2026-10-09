@@ -33,7 +33,7 @@ import {
 	calendarEventSnapshotValidator,
 } from "./calendarValidators";
 import { chatPayloadReferenceValidator } from "./chatPayloadModel";
-import { chatSettingsFields } from "./chatSettingsModel";
+import { storedChatSettingsFields } from "./chatSettingsModel";
 import {
 	projectColorValidator,
 	projectIconValidator,
@@ -159,7 +159,7 @@ export default defineSchema({
 	}).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
 	chatPreferences: defineTable({
 		ownerTokenIdentifier: v.string(),
-		...chatSettingsFields,
+		...storedChatSettingsFields,
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
@@ -627,7 +627,7 @@ export default defineSchema({
 		starredSortOrder: v.number(),
 		title: v.string(),
 		preview: v.string(),
-		...chatSettingsFields,
+		...storedChatSettingsFields,
 		unreadAssistantCompletedAt: v.optional(v.number()),
 		isArchived: v.boolean(),
 		archivedAt: v.optional(v.number()),

@@ -122,6 +122,53 @@ const saveChatMessage = async ({
 		},
 	});
 
+test.each([
+	["gpt-5.6-sol", "gpt-6-sol"],
+	["gpt-5.6-terra", "gpt-6-astra"],
+	["gpt-5.6-luna", "gpt-6-luna"],
+])("historical automation model %s can be read and edited as %s", async (storedModel, currentModel) => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
+	const fields = {
+		title: "Daily review",
+		prompt: "Review the workspace.",
+		model: DEFAULT_CHAT_MODEL_ID,
+		reasoningEffort: "medium" as const,
+		serviceTier: "auto" as const,
+		webSearchEnabled: false,
+		appsEnabled: true,
+		appSources: [],
+		deliveryPolicy: "always" as const,
+		schedule: dailySchedule,
+		target: { kind: "workspace" as const },
+	};
+	const automation = await asOwner.mutation(api.automations.create, {
+		...fields,
+		projectId: null,
+		workspaceId,
+		destination: "standalone",
+	});
+	await t.run((ctx) => ctx.db.patch(automation.id, { model: storedModel }));
+	const fetched = await t.query(internal.automations.getForOwner, {
+		ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+		automationId: automation.id,
+	});
+	expect(fetched?.model).toBe(currentModel);
+	if (!fetched) throw new Error("Missing automation fixture");
+	const updated = await asOwner.mutation(api.automations.updateFromAssistant, {
+		...fields,
+		automationId: automation.id,
+		title: "Renamed review",
+		model: fetched.model,
+	});
+	expect(updated).toMatchObject({
+		title: "Renamed review",
+		model: currentModel,
+	});
+	expect(await t.run((ctx) => ctx.db.get(automation.id))).toMatchObject({
+		model: currentModel,
+	});
+});
+
 test("assistant automation adapters reuse the authenticated CRUD boundary", async () => {
 	const { asOwner, t, workspaceId } = await createWorkspace();
 	await saveChatMessage({

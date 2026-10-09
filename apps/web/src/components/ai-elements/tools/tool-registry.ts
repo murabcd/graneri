@@ -54,8 +54,13 @@ const getFirstString = (value: JSONValue | undefined, keys: string[]) => {
 		return "";
 	}
 
+	// Array.isArray does not narrow the SDK's readonly array union in TypeScript.
+	const fields = value as Exclude<
+		JSONValue,
+		readonly JSONValue[] | null | boolean | number | string
+	>;
 	for (const key of keys) {
-		const candidate = getTrimmedString(value[key]);
+		const candidate = getTrimmedString(fields[key]);
 		if (candidate) {
 			return candidate;
 		}

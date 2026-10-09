@@ -14,6 +14,7 @@ export function getToolStatus(
 		output !== null &&
 		typeof output === "object" &&
 		!Array.isArray(output) &&
+		"success" in output &&
 		output.success === false;
 	const isError =
 		part.state === "output-error" ||

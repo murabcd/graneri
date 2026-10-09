@@ -3,8 +3,8 @@ import { CHAT_MODE } from "@workspace/ai/chat-mode";
 import { DEFAULT_CHAT_SETTINGS } from "@workspace/ai/chat-settings";
 import {
 	DEFAULT_CHAT_MODEL_ID,
-	GPT_5_6_LUNA_MODEL_ID,
-	GPT_5_6_TERRA_MODEL_ID,
+	GPT_6_ASTRA_MODEL_ID,
+	GPT_6_LUNA_MODEL_ID,
 } from "@workspace/ai/models";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -718,7 +718,7 @@ test("standalone automation runs use definition settings in Default mode", async
 		workspaceId: fixture.workspaceId,
 		title: "Standalone settings",
 		prompt: "Review the workspace.",
-		model: GPT_5_6_LUNA_MODEL_ID,
+		model: GPT_6_LUNA_MODEL_ID,
 		reasoningEffort: "high",
 		serviceTier: "priority",
 		webSearchEnabled: true,
@@ -736,7 +736,7 @@ test("standalone automation runs use definition settings in Default mode", async
 	const runtime = await readAutomationRuntime(fixture, automation.id);
 	const expectedSettings = {
 		chatMode: CHAT_MODE.DEFAULT,
-		model: GPT_5_6_LUNA_MODEL_ID,
+		model: GPT_6_LUNA_MODEL_ID,
 		reasoningEffort: "high",
 		serviceTier: "priority",
 		webSearchEnabled: true,
@@ -765,7 +765,7 @@ test.each([
 	const chatId = `live-settings-${reason}`;
 	const liveSettings = {
 		chatMode: CHAT_MODE.PLAN,
-		model: GPT_5_6_TERRA_MODEL_ID,
+		model: GPT_6_ASTRA_MODEL_ID,
 		reasoningEffort: "xhigh",
 		serviceTier: "priority",
 		webSearchEnabled: true,
@@ -791,7 +791,7 @@ test.each([
 		workspaceId: fixture.workspaceId,
 		title: "Different automation title",
 		prompt: "Review the workspace.",
-		model: GPT_5_6_LUNA_MODEL_ID,
+		model: GPT_6_LUNA_MODEL_ID,
 		reasoningEffort: "low",
 		serviceTier: "auto",
 		webSearchEnabled: false,

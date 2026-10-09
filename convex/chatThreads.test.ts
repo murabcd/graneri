@@ -125,12 +125,15 @@ test("chat thread pages expose complete history newest first", async () => {
 	).resolves.toMatchObject({ historyOmittedBefore: true });
 });
 
-test("assistant message forks preserve source history and lineage", async () => {
-	const { asOwner, workspaceId } = await createWorkspace();
+test.each([
+	"gpt-6-astra",
+	"gpt-5.6-terra",
+] as const)("assistant message forks preserve history and normalize %s", async (storedModel) => {
+	const { asOwner, t, workspaceId } = await createWorkspace();
 	const sourceSettings = {
 		...DEFAULT_CHAT_SETTINGS,
 		chatMode: "plan" as const,
-		model: "gpt-5.6-terra" as const,
+		model: "gpt-6-astra" as const,
 		reasoningEffort: "high" as const,
 		serviceTier: "priority" as const,
 		webSearchEnabled: true,
@@ -156,6 +159,19 @@ test("assistant message forks preserve source history and lineage", async () => 
 			},
 		});
 	}
+
+	await t.run(async (ctx) => {
+		const source = await ctx.db
+			.query("chats")
+			.withIndex("by_ownerTokenIdentifier_and_chatId", (q) =>
+				q
+					.eq("ownerTokenIdentifier", ownerIdentity.tokenIdentifier)
+					.eq("chatId", "source-chat"),
+			)
+			.unique();
+		if (!source) throw new Error("Missing source fixture");
+		await ctx.db.patch(source._id, { model: storedModel });
+	});
 
 	const result = await asOwner.mutation(
 		api.chatThreads.forkFromAssistantMessage,

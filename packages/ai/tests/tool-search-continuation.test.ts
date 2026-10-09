@@ -56,7 +56,7 @@ it("replays the distinct hosted tool-search call and result after a generation b
 	);
 	await expect(
 		generateText({
-			model: provider("gpt-5.6-luna"),
+			model: provider("gpt-6-luna"),
 			tools,
 			messages,
 			maxRetries: 0,

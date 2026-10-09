@@ -1,3 +1,4 @@
+import { selectChatSettings } from "@workspace/ai/chat-settings";
 import {
 	paginationOptsValidator,
 	paginationResultValidator,
@@ -234,11 +235,7 @@ export const forkFromAssistantMessage = mutation({
 			starredSortOrder: now,
 			title,
 			preview: targetMessage.preview,
-			chatMode: sourceChat.chatMode,
-			model: sourceChat.model,
-			reasoningEffort: sourceChat.reasoningEffort,
-			serviceTier: sourceChat.serviceTier,
-			webSearchEnabled: sourceChat.webSearchEnabled,
+			...selectChatSettings(sourceChat),
 			isArchived: false,
 			archivedAt: undefined,
 			createdAt: now,

@@ -2,6 +2,7 @@ import {
 	type ChatSettings,
 	DEFAULT_CHAT_SETTINGS,
 	mergeNoteChatSettingsIntoDefaults,
+	type StoredChatSettings,
 	selectChatSettings,
 	selectNoteChatSettings,
 } from "@workspace/ai/chat-settings";
@@ -15,7 +16,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 
 type ChatSettingsArgs = {
 	chatId: string;
-	storedSettings: ChatSettings | null;
+	storedSettings: StoredChatSettings | null;
 	workspaceId: Id<"workspaces"> | null;
 };
 

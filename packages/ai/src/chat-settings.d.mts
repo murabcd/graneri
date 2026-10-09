@@ -1,5 +1,10 @@
 import type { ChatMode } from "./chat-mode.mjs";
-import type { ChatModelId, ReasoningEffort, ServiceTier } from "./models.mjs";
+import type {
+	ChatModelId,
+	LEGACY_CHAT_MODEL_IDS,
+	ReasoningEffort,
+	ServiceTier,
+} from "./models.mjs";
 
 export type ChatSettings = {
 	chatMode: ChatMode;
@@ -11,12 +16,16 @@ export type ChatSettings = {
 
 export declare const DEFAULT_CHAT_SETTINGS: Readonly<ChatSettings>;
 
+export type StoredChatSettings = Omit<ChatSettings, "model"> & {
+	model: ChatModelId | keyof typeof LEGACY_CHAT_MODEL_IDS;
+};
+
 export declare const selectChatSettings: (
-	settings: ChatSettings,
+	settings: StoredChatSettings,
 ) => ChatSettings;
 
 export declare const selectNoteChatSettings: (
-	settings: ChatSettings,
+	settings: StoredChatSettings,
 ) => ChatSettings;
 
 export declare const isNoteChatSettings: (settings: ChatSettings) => boolean;

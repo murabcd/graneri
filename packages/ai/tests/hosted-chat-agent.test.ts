@@ -54,7 +54,7 @@ describe("hosted document input", () => {
 		const { agent } = createHostedChatAgent({
 			provider,
 			enabledTools: {},
-			model: "gpt-5.6-luna",
+			model: "gpt-6-luna",
 			instructions: "Summarize documents.",
 		});
 		await expect(

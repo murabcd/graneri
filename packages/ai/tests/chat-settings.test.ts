@@ -10,6 +10,11 @@ import {
 } from "../src/chat-settings.mjs";
 
 describe("chat settings contract", () => {
+	it("upgrades a stored model without changing the other settings", () => {
+		expect(
+			selectChatSettings({ ...DEFAULT_CHAT_SETTINGS, model: "gpt-5.6-terra" }),
+		).toEqual({ ...DEFAULT_CHAT_SETTINGS, model: "gpt-6-astra" });
+	});
 	it("projects stored objects to the five-field contract", () => {
 		const storedSettings = {
 			...DEFAULT_CHAT_SETTINGS,
@@ -29,14 +34,14 @@ describe("chat settings contract", () => {
 		expect(
 			parseChatSettings({
 				chatMode: CHAT_MODE.PLAN,
-				model: "gpt-5.6-terra",
+				model: "gpt-6-astra",
 				reasoningEffort: "xhigh",
 				serviceTier: "priority",
 				webSearchEnabled: true,
 			}),
 		).toEqual({
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-terra",
+			model: "gpt-6-astra",
 			reasoningEffort: "xhigh",
 			serviceTier: "priority",
 			webSearchEnabled: true,
@@ -46,7 +51,7 @@ describe("chat settings contract", () => {
 	it("keeps note chats in default mode without web search", () => {
 		const noteSettings = selectNoteChatSettings({
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-terra",
+			model: "gpt-6-astra",
 			reasoningEffort: "xhigh",
 			serviceTier: "priority",
 			webSearchEnabled: true,
@@ -54,7 +59,7 @@ describe("chat settings contract", () => {
 
 		expect(noteSettings).toEqual({
 			chatMode: CHAT_MODE.DEFAULT,
-			model: "gpt-5.6-terra",
+			model: "gpt-6-astra",
 			reasoningEffort: "xhigh",
 			serviceTier: "priority",
 			webSearchEnabled: false,
@@ -68,14 +73,14 @@ describe("chat settings contract", () => {
 	it("updates visible note defaults without replacing hidden capabilities", () => {
 		const rememberedSettings = {
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-sol" as const,
+			model: "gpt-6-sol" as const,
 			reasoningEffort: "low" as const,
 			serviceTier: "auto" as const,
 			webSearchEnabled: true,
 		};
 		const noteSettings = selectNoteChatSettings({
 			...rememberedSettings,
-			model: "gpt-5.6-luna",
+			model: "gpt-6-luna",
 			reasoningEffort: "high",
 			serviceTier: "priority",
 		});
@@ -84,7 +89,7 @@ describe("chat settings contract", () => {
 			mergeNoteChatSettingsIntoDefaults(rememberedSettings, noteSettings),
 		).toEqual({
 			chatMode: CHAT_MODE.PLAN,
-			model: "gpt-5.6-luna",
+			model: "gpt-6-luna",
 			reasoningEffort: "high",
 			serviceTier: "priority",
 			webSearchEnabled: true,

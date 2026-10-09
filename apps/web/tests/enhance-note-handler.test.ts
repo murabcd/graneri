@@ -102,10 +102,11 @@ describe("enhance note handler", () => {
 
 		expect(response.statusCode).toBe(200);
 		const options = aiMocks.generateText.mock.calls[0]?.[0];
-		expect(options.model.modelId).toBe("gpt-5.6-terra");
+		expect(options.model.modelId).toBe("gpt-6-astra");
 		expect(options.providerOptions).toEqual({
 			openai: {
-				reasoningEffort: "none",
+				reasoningEffort: "low",
+				reasoningSummary: "auto",
 				safetyIdentifier: await createSafetyIdentifier(tokenIdentifier),
 			},
 		});

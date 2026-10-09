@@ -14,6 +14,22 @@ const ownerIdentity = {
 	email: "owner@example.com",
 };
 
+test("reads historical model preferences as GPT-6 settings", async () => {
+	const t = convexTest(schema, modules);
+	await t.run(async (ctx) => {
+		await ctx.db.insert("chatPreferences", {
+			...DEFAULT_CHAT_SETTINGS,
+			model: "gpt-5.6-terra",
+			ownerTokenIdentifier: ownerIdentity.tokenIdentifier,
+			createdAt: 1,
+			updatedAt: 1,
+		});
+	});
+	await expect(
+		t.withIdentity(ownerIdentity).query(api.chatPreferences.get, {}),
+	).resolves.toEqual({ ...DEFAULT_CHAT_SETTINGS, model: "gpt-6-astra" });
+});
+
 test("chat preferences default once and then remember the full settings contract", async () => {
 	const t = convexTest(schema, modules);
 	const asOwner = t.withIdentity(ownerIdentity);
@@ -24,7 +40,7 @@ test("chat preferences default once and then remember the full settings contract
 
 	const settings = {
 		chatMode: CHAT_MODE.PLAN,
-		model: "gpt-5.6-luna" as const,
+		model: "gpt-6-luna" as const,
 		reasoningEffort: "xhigh" as const,
 		serviceTier: "priority" as const,
 		webSearchEnabled: true,

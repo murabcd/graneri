@@ -4,6 +4,7 @@ import {
 	DEFAULT_CHAT_MODEL_ID,
 	DEFAULT_REASONING_EFFORT,
 	DEFAULT_SERVICE_TIER,
+	getChatModel,
 	isSupportedChatModel,
 } from "./models.mjs";
 
@@ -25,17 +26,15 @@ export const DEFAULT_CHAT_SETTINGS = Object.freeze({
 
 export const selectChatSettings = (settings) => ({
 	chatMode: settings.chatMode,
-	model: settings.model,
+	model: getChatModel(settings.model).id,
 	reasoningEffort: settings.reasoningEffort,
 	serviceTier: settings.serviceTier,
 	webSearchEnabled: settings.webSearchEnabled,
 });
 
 export const selectNoteChatSettings = (settings) => ({
+	...selectChatSettings(settings),
 	chatMode: CHAT_MODE.DEFAULT,
-	model: settings.model,
-	reasoningEffort: settings.reasoningEffort,
-	serviceTier: settings.serviceTier,
 	webSearchEnabled: false,
 });
 
