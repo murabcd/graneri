@@ -34,6 +34,14 @@ the continuation from the run-bound capability rather than current composer
 state, executes through Electron, and releases a failed continuation claim so a
 later reactive reattachment can retry delivery.
 
+## Panel layout activity
+
+Shared panel activity coordinates layout transitions without relying on globals after a renderer document is torn down.
+
+[[packages/ui/src/lib/panel-layout-activity.ts]] marks transitions for sidebar
+and docked panels. Its expiry timer retains the originating document element,
+so delayed cleanup cannot read a missing or replacement global document.
+
 ## Application navigation session
 
 One renderer session owns URL state, settings history, desktop synchronization, resource routes, and transient navigation intent.

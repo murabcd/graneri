@@ -65,7 +65,8 @@ describe("CalendarPage event management", () => {
 		});
 		renderCalendarPage(workspaceId);
 
-		await user.click(await screen.findByRole("button", { name: /^Planning,/ }));
+		await screen.findByText("Planning");
+		await user.click(screen.getByRole("button", { name: /^Planning,/ }));
 
 		const guests = await screen.findByRole("button", { name: "View 4 guests" });
 		const description = await screen.findByText(

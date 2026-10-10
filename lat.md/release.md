@@ -56,7 +56,10 @@ builds locally with `vercel build`, installs from the frozen Bun lockfile, and
 deploys only the prebuilt output.
 For pushes to `main`, `ci.yml` calls the deployment workflow only after all
 validation passes; an explicit manual dispatch is also available. Pull requests
-are validation-only. `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+are validation-only. The root `bun run test` command runs workspace test suites
+one package at a time before the Convex suite, keeping native compilation from
+starving jsdom workers in CI and local Git hooks.
+`VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
 `VERCEL_PROJECT_ID` are GitHub repository secrets. Public build-time values are
 non-sensitive Vercel config, while runtime credentials remain sensitive. The
 Vercel Git integration must remain disconnected so a second hosted builder

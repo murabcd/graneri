@@ -25,7 +25,7 @@
     "check:lat": "lat check",
     "format": "turbo run format",
     "prepare": "husky",
-    "test": "turbo run test && bun run test:convex",
+    "test": "turbo run test --concurrency=1 && bun run test:convex",
     "test:convex": "bun run --cwd convex test:once",
     "typecheck": "turbo run typecheck && bun run typecheck:convex",
     "typecheck:convex": "bun run --cwd convex typecheck",

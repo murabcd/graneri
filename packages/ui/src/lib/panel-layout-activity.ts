@@ -7,17 +7,15 @@ export const markPanelLayoutTransition = (durationMs: number) => {
 		return;
 	}
 
-	document.documentElement.dataset[PANEL_LAYOUT_TRANSITION_DATASET_KEY] =
-		"true";
+	const root = document.documentElement;
+	root.dataset[PANEL_LAYOUT_TRANSITION_DATASET_KEY] = "true";
 
 	if (clearPanelLayoutTransitionTimeoutId !== null) {
 		window.clearTimeout(clearPanelLayoutTransitionTimeoutId);
 	}
 
 	clearPanelLayoutTransitionTimeoutId = window.setTimeout(() => {
-		delete document.documentElement.dataset[
-			PANEL_LAYOUT_TRANSITION_DATASET_KEY
-		];
+		delete root.dataset[PANEL_LAYOUT_TRANSITION_DATASET_KEY];
 		clearPanelLayoutTransitionTimeoutId = null;
 	}, durationMs);
 };
