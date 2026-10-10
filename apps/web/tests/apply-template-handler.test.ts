@@ -82,11 +82,10 @@ describe("apply template handler", () => {
 		);
 
 		const options = aiMocks.generateText.mock.calls[0]?.[0];
-		expect(options.model.modelId).toBe("gpt-6-astra");
+		expect(options.model.modelId).toBe("gpt-6-luna");
 		expect(options.providerOptions).toEqual({
 			openai: {
-				reasoningEffort: "low",
-				reasoningSummary: "auto",
+				reasoningEffort: "none",
 				safetyIdentifier: await createSafetyIdentifier(tokenIdentifier),
 			},
 		});

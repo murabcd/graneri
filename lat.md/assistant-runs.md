@@ -531,8 +531,16 @@ settings writes accept only the current catalog. Chat forks use the same setting
 projection, and automation reads return the current model ID so edits can persist
 the successor without resubmitting a historical ID.
 The workspace pins `ai@7.0.137`, `@ai-sdk/react@4.0.140`, and
-`@ai-sdk/openai@4.0.91`; the provider supports GPT-6 reasoning and priority processing. Astra background requests use low
-reasoning because Astra does not support disabling reasoning.
+`@ai-sdk/openai@4.0.91`; the provider supports GPT-6 reasoning and priority processing.
+Requests to disable Astra reasoning normalize to low reasoning.
+
+Template-based note generation in [[apps/web/server/apply-template-handler.ts]]
+and project description generation in
+[[apps/web/server/generate-project-description-handler.ts]] use GPT-6 Luna with
+reasoning disabled. Note enhancement in [[apps/web/server/enhance-note-handler.ts]]
+uses GPT-6 Sol with reasoning disabled. These background roles have separate
+model constants in the shared model catalog. No background role defaults to
+Astra; chats, note discussions, and automation execution use their selected model.
 
 New drafts start
 from the account-scoped last-used settings in [[convex/chatPreferences.ts]],

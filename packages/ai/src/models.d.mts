@@ -17,6 +17,7 @@ export declare const LEGACY_CHAT_MODEL_IDS: Readonly<{
 }>;
 export declare const DEFAULT_CHAT_MODEL_ID: ChatModelId;
 export declare const NOTE_GENERATION_MODEL_ID: ChatModelId;
+export declare const NOTE_ENHANCEMENT_MODEL_ID: ChatModelId;
 export declare const MEETING_END_CLASSIFICATION_MODEL_ID: ChatModelId;
 export declare const PROJECT_DESCRIPTION_MODEL_ID: ChatModelId;
 export declare const CHAT_TITLE_MODEL_ID: ChatModelId;

@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { openai } from "@ai-sdk/openai";
 import {
 	getOpenAiModelProviderOptions,
-	NOTE_GENERATION_MODEL_ID,
+	NOTE_ENHANCEMENT_MODEL_ID,
 } from "@workspace/ai/models";
 import {
 	buildEnhancedNotePrompt,
@@ -132,11 +132,14 @@ export const handleEnhanceNoteRequest = async (
 	let output: z.infer<typeof structuredNoteSchema>;
 	try {
 		const result = await generateText({
-			model: openai(NOTE_GENERATION_MODEL_ID),
-			providerOptions: getOpenAiModelProviderOptions(NOTE_GENERATION_MODEL_ID, {
-				reasoningEffort: "none",
-				safetyIdentifier: admission.safetyIdentifier,
-			}),
+			model: openai(NOTE_ENHANCEMENT_MODEL_ID),
+			providerOptions: getOpenAiModelProviderOptions(
+				NOTE_ENHANCEMENT_MODEL_ID,
+				{
+					reasoningEffort: "none",
+					safetyIdentifier: admission.safetyIdentifier,
+				},
+			),
 			instructions: ENHANCED_NOTE_INSTRUCTIONS,
 			output: Output.object({
 				schema: structuredNoteSchema,
