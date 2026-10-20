@@ -39,6 +39,7 @@ function DialogOverlay({
 	return (
 		<DialogPrimitive.Overlay
 			data-slot="dialog-overlay"
+			data-app-region="no-drag"
 			className={cn(MODAL_OVERLAY_CLASS_NAME, className)}
 			{...props}
 		/>
@@ -60,6 +61,7 @@ function DialogContent({
 			<DialogOverlay className={overlayClassName} />
 			<DialogPrimitive.Content
 				data-slot="dialog-content"
+				data-app-region="no-drag"
 				className={cn(
 					"fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 p-4 duration-100 sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
 					MODAL_SURFACE_CLASS_NAME,

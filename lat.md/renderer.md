@@ -81,8 +81,11 @@ On macOS, Accessibility is separate from the initial microphone/system-audio
 onboarding but required for named-speaker attribution. After onboarding,
 [[apps/web/src/components/desktop/accessibility-permission-prompt.tsx]] offers
 it on the home view when no recording or imminent meeting is active. A reminder
-dismissal is local, time-bounded, and never counts as permission. The native
-request opens System Settings, where
+dismissal is local, time-bounded, and never counts as permission. The shared
+[[packages/ui/src/components/dialog.tsx]] marks both the viewport overlay and
+dialog surface as non-draggable so the native header cannot intercept modal
+controls, including reminders positioned outside the centered surface.
+The native request opens System Settings, where
 [[apps/web/src/components/desktop/accessibility-guide-screen.tsx]] provides
 the draggable app bundle. The Voice settings entry in
 [[apps/web/src/components/settings/voice-settings.tsx]] remains available after
