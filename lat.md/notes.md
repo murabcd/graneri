@@ -219,3 +219,18 @@ When note context exists, it is the authoritative description source and the
 previous description is omitted; without notes, the previous description is
 used as the rewrite source. Requests without either source are rejected before
 model generation.
+
+## Comment composer
+
+Comment creation, replies, and edits share a compact input group with emoji insertion and an up-arrow send control.
+
+[[apps/web/src/components/note/note-comment-composer-field.tsx]] keeps reply
+textareas growing within the panel. Short drafts keep inline controls; wrapped
+drafts use the full text width and place controls below. A hidden compact-width
+text measure keeps that layout stable across typing and panel resizing. Edits
+retain a single-line input. The shared lazy picker in
+[[apps/web/src/components/emoji-picker/emoji-picker-entry.tsx]] inserts Unicode
+at the current selection and returns focus to the draft. Enter submits only a
+nonempty idle draft, Shift+Enter preserves multiline replies, and IME
+composition never submits. Empty send controls stay mounted and use
+`aria-disabled` without dimming the whole input group.

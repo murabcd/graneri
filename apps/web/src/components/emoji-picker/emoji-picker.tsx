@@ -6,7 +6,7 @@ import EmojiPicker, {
 	Theme,
 } from "emoji-picker-react";
 import { Search } from "lucide-react";
-import "./project-emoji-picker.css";
+import "./emoji-picker.css";
 
 const EMOJI_CATEGORIES = [
 	{ category: Categories.SUGGESTED, name: "Frequently used" },
@@ -20,7 +20,7 @@ const EMOJI_CATEGORIES = [
 	{ category: Categories.FLAGS, name: "Flags" },
 ] satisfies NonNullable<PickerProps["categories"]>;
 
-export function ProjectEmojiPicker({
+export function GraneriEmojiPicker({
 	onSelect,
 }: {
 	onSelect: (emoji: string) => void;
@@ -31,11 +31,11 @@ export function ProjectEmojiPicker({
 		(theme === "system" && document.documentElement.classList.contains("dark"));
 
 	return (
-		<div className="project-emoji-picker-frame">
+		<div className="graneri-emoji-picker-frame">
 			<EmojiPicker
 				autoFocusSearch
 				categories={EMOJI_CATEGORIES}
-				className="project-emoji-picker"
+				className="graneri-emoji-picker"
 				emojiStyle={EmojiStyle.NATIVE}
 				height={320}
 				onEmojiClick={({ emoji }) => onSelect(emoji)}
@@ -45,10 +45,10 @@ export function ProjectEmojiPicker({
 				theme={isDark ? Theme.DARK : Theme.LIGHT}
 				width="100%"
 			/>
-			<Search aria-hidden="true" className="project-emoji-picker-search-icon" />
-			<div className="project-emoji-picker-empty">
-				<h2 className="project-emoji-picker-empty-heading">Search results</h2>
-				<p className="project-emoji-picker-empty-message">No emojis found.</p>
+			<Search aria-hidden="true" className="graneri-emoji-picker-search-icon" />
+			<div className="graneri-emoji-picker-empty">
+				<h2 className="graneri-emoji-picker-empty-heading">Search results</h2>
+				<p className="graneri-emoji-picker-empty-message">No emojis found.</p>
 			</div>
 		</div>
 	);

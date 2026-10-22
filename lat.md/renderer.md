@@ -302,9 +302,9 @@ symbol choice and searchable preset icons in the shared rename editor. The
 picker's frequently used icon and color pairs are counted in browser storage by
 [[apps/web/src/components/projects/project-appearance-usage.ts]]. The searchable
 emoji catalog in
-[[apps/web/src/components/projects/project-emoji-picker.tsx]] loads only after
-the Emoji tab is opened through
-[[apps/web/src/components/projects/project-emoji-picker-entry.tsx]]. The
+[[apps/web/src/components/emoji-picker/emoji-picker.tsx]] is shared with comment
+composers and loads only after an emoji picker is opened through
+[[apps/web/src/components/emoji-picker/emoji-picker-entry.tsx]]. The
 emoji picker keeps each frequently used skin-tone variant fixed while the
 active tone changes; [emoji-picker-react patch](../patches/emoji-picker-react@4.22.2.patch)
 enforces that rendering behavior. Appearance

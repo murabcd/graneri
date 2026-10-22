@@ -18,6 +18,7 @@ import {
 import { cn } from "cn";
 import { Search } from "lucide-react";
 import * as React from "react";
+import { EmojiPickerEntry } from "@/components/emoji-picker/emoji-picker-entry";
 import { MAX_PROJECT_NAME_LENGTH } from "@/lib/project-name";
 import {
 	isProjectPresetIcon,
@@ -30,7 +31,6 @@ import {
 	readFrequentlyUsedProjectAppearances,
 	recordProjectAppearanceUse,
 } from "./project-appearance-usage";
-import { ProjectEmojiPickerEntry } from "./project-emoji-picker-entry";
 import { ProjectIcon } from "./project-icon";
 import {
 	PROJECT_COLOR_NAMES,
@@ -264,7 +264,7 @@ function ProjectAppearancePicker({
 					</div>
 				) : (
 					<div className="h-80">
-						<ProjectEmojiPickerEntry
+						<EmojiPickerEntry
 							onSelect={(emoji) => {
 								handleAppearanceChange({
 									...appearance,
