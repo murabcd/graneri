@@ -5,18 +5,21 @@ import { pipeline } from "node:stream/promises";
 import { localProcessControlSchema } from "./local-process-protocol.mjs";
 
 let child;
+let processGroupStopped = false;
 let terminationReason;
 let deadline;
 let outputBytes = 0;
 const initializationDeadline = setTimeout(() => process.exit(1), 5_000);
 
 const killProcessGroup = () => {
-	if (!child?.pid) return;
+	if (!child?.pid || processGroupStopped) return;
 	try {
 		process.kill(-child.pid, "SIGKILL");
 	} catch (error) {
 		if (error.code !== "ESRCH") throw error;
 	}
+	// Output, stream errors, child exit, and supervisor exit can all request cleanup.
+	processGroupStopped = true;
 };
 
 const terminate = (reason) => {

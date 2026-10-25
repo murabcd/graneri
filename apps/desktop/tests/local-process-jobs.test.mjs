@@ -226,13 +226,65 @@ nativeTest(
 			{ maxOutputBytes: 1_500_000 },
 		);
 		const output = await readToCompletion(f.jobs, first);
-		assert.equal(output.status, "output_limit");
+		assert.equal(output.status, "output_limit", output.stderr);
 		assert.equal(output.truncated, true);
 		assert.equal(output.stdout.includes("�"), false);
 		assert.ok(Buffer.byteLength(first.stdout) <= 20_000);
 		assert.ok(Buffer.byteLength(output.stdout) <= 1_000_000);
 	},
 );
+
+nativeTest("supervisor kills a flooding process group only once", async (t) => {
+	const directory = await mkdtemp(join(tmpdir(), "graneri-supervisor-test-"));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const harnessPath = join(directory, "worker.mjs");
+	await writeFile(
+		harnessPath,
+		`import ${JSON.stringify(new URL("../src/local-process-worker.mjs", import.meta.url).href)};
+const kill = process.kill.bind(process);
+let groupKilled = false;
+process.kill = (pid, signal) => {
+ if (pid < 0 && signal === "SIGKILL") {
+  if (groupKilled) throw Object.assign(new Error("Process group already killed"), { code: "EPERM" });
+  groupKilled = true;
+ }
+ return kill(pid, signal);
+};`,
+	);
+	const worker = spawn(process.execPath, [harnessPath], {
+		env: {},
+		stdio: ["pipe", "pipe", "pipe", "ipc"],
+	});
+	t.after(() => worker.kill("SIGKILL"));
+	const events = [];
+	let stderr = "";
+	worker.on("message", (event) => events.push(event));
+	worker.stdout.resume();
+	worker.stderr.setEncoding("utf8").on("data", (text) => {
+		stderr += text;
+	});
+	worker.send({
+		type: "start",
+		setup: {
+			command: process.execPath,
+			args: [
+				"-e",
+				"process.stdout.write(Buffer.alloc(1_000_000)); setInterval(() => {}, 1000);",
+			],
+			cwd: directory,
+			env: {},
+			scratchPath: directory,
+			timeoutMs: 5000,
+			maxOutputBytes: 1024,
+		},
+	});
+	const [exitCode] = await once(worker, "close");
+	assert.equal(exitCode, 0, stderr);
+	assert.equal(
+		events.find((event) => event.type === "completed")?.status,
+		"output_limit",
+	);
+});
 
 nativeTest(
 	"capability receipts launch once and revocation stops the running job",
